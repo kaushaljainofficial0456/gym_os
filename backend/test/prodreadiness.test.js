@@ -1,0 +1,144 @@
+// ============================================================
+// PRODUCTION-READINESS regression tests.
+//   * SQL placeholder translation (? -> $n) for SQLite/PostgreSQL
+//   * schema portability lint (no SQLite-only DDL)
+//   * timezone resolution happens AFTER auth (bug fix)
+//   * rate limiting (429 beyond window)
+//   * storage abstraction (private files, never base64 in DB)
+// ============================================================
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, '..', '..');
+
+// ---------- SQL portability ----------
+test('translateSql converts ? placeholders to $n for PostgreSQL', async () => {
+  const { translateSql } = await import('../src/db.js');
+  assert.equal(translateSql('SELECT * FROM users WHERE id = ?'), 'SELECT * FROM users WHERE id = $1');
+  assert.equal(translateSql('WHERE a = ? AND b = ? AND c = ?'), 'WHERE a = $1 AND b = $2 AND c = $3');
+  assert.equal(translateSql('SELECT 1'), 'SELECT 1');
+  // contract: application SQL uses ? only for parameters (never inside string
+  // literals), so every ? is positional.
+  assert.equal(translateSql('IN (?, ?, ?)'), 'IN ($1, $2, $3)');
+});
+
+test('schema.sql contains no SQLite-only DDL (must run on PostgreSQL)', async () => {
+  const schema = fs.readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
+  for (const bad of ['COLLATE NOCASE', 'AUTOINCREMENT', 'PRAGMA', 'ON CONFLICT', '`', 'STRICT']) {
+    assert.ok(!schema.includes(bad), `schema must not contain ${bad}`);
+  }
+  assert.ok(!/datetime\(['"]now/i.test(schema), 'no SQLite datetime() in DDL');
+});
+
+// ---------- timezone resolution ----------
+test('getOrgTz resolves the authenticated org timezone, falling back to the default', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec('CREATE TABLE organizations (id TEXT PRIMARY KEY, name TEXT, slug TEXT, type TEXT, currency TEXT, timezone TEXT, created_at TEXT)');
+  db.exec("INSERT INTO organizations VALUES ('o1','US Gym','us','gym','USD','America/New_York','2026-01-01T00:00:00Z')");
+  const q = async (sql, p = []) => { const s = db.prepare(sql); return p.length ? s.all(...p) : s.all(); };
+  const { getOrgTz, DEFAULT_TZ } = await import('../src/utils/time.js');
+  assert.equal(await getOrgTz({ q1: async (sql, p) => (await q(sql, p))[0] || null }, 'o1'), 'America/New_York');
+  assert.equal(await getOrgTz({ q1: async () => null }, 'ghost-org'), DEFAULT_TZ);
+  assert.equal(await getOrgTz({}, null), DEFAULT_TZ, 'no auth context -> default, never a crash');
+});
+
+test('requireAuth attaches req.tz only after the token is verified (async, no auth -> 401)', async () => {
+  const { requireAuth, signToken } = await import('../src/auth.js');
+  const token = signToken({ id: 'u1', role: 'CLIENT', org_id: 'o1', name: 'T', email: 't@x.in' });
+  const res = { statusCode: 0, status(c) { this.statusCode = c; return this; }, json() { return this; } };
+  // no token -> 401, next NOT called, tz NOT set
+  let nexted = false;
+  await requireAuth({ headers: {} }, res, () => { nexted = true; });
+  assert.equal(res.statusCode, 401);
+  assert.equal(nexted, false);
+  // valid token -> user + tz populated, next called (regression: tz used to be
+  // computed pre-auth from req.user?.org and was always the default)
+  const req = { headers: { authorization: 'Bearer ' + token } };
+  let tz = null;
+  await requireAuth(req, { status() { return this; }, json() { return this; } }, () => { tz = req.tz; });
+  assert.equal(req.user.sub, 'u1');
+  assert.ok(typeof tz === 'string' && tz.length > 0, 'tz is a non-empty string after auth');
+});
+
+test('AsyncLocalStorage org context is request-scoped and drives RLS org id', async () => {
+  const { runWithOrg, currentOrg } = await import('../src/db.js');
+  assert.equal(currentOrg(), null, 'no context outside a request');
+  let inner = null;
+  await runWithOrg('org_a', async () => {
+    inner = currentOrg();
+    // nested async work keeps the context
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(currentOrg(), 'org_a', 'context survives awaits');
+  });
+  assert.equal(inner, 'org_a');
+  assert.equal(currentOrg(), null, 'context does not leak after the request');
+  // concurrent contexts never bleed into each other
+  const seen = [];
+  await Promise.all(['o1', 'o2', 'o3'].map((oid) => runWithOrg(oid, async () => {
+    await new Promise((r) => setTimeout(r, Math.random() * 10));
+    seen.push(currentOrg());
+  })));
+  assert.deepEqual([...seen].sort(), ['o1', 'o2', 'o3']);
+});
+
+test('RLS migration exists and only targets PostgreSQL-safe syntax', async () => {
+  const rls = fs.readFileSync(path.join(root, 'database', 'rls.sql'), 'utf8');
+  assert.ok(rls.includes('ENABLE ROW LEVEL SECURITY'), 'enables RLS');
+  assert.ok(rls.includes('FORCE ROW LEVEL SECURITY'), 'forces RLS for the app role');
+  assert.ok(rls.includes('app.org_id'), 'policies key off the app.org_id session variable');
+  for (const bad of ['COLLATE NOCASE', 'AUTOINCREMENT', 'PRAGMA', 'rowid']) {
+    assert.ok(!rls.toLowerCase().includes(bad.toLowerCase()), `RLS must not use ${bad}`);
+  }
+});
+
+test('no SQLite-only rowid ordering remains in application SQL', async () => {
+  const files = ['src/services/intelligence/aiContext.js', 'src/services/muscles.js'];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(root, 'backend', f), 'utf8');
+    assert.ok(!/rowid/i.test(src), `${f} must not reference rowid`);
+  }
+});
+
+// ---------- rate limiting ----------
+test('rate limiter allows up to max then returns 429 with Retry-After', async () => {
+  const { rateLimit } = await import('../src/rateLimit.js');
+  const limiter = rateLimit({ windowMs: 60_000, max: 2, keyFn: () => 'same-client' });
+  let nexted = 0;
+  const req = { ip: '1.2.3.4', user: { sub: 'c1' } };
+  const res = { statusCode: 0, headers: {}, set(k, v) { this.headers[k] = v; return this; }, status(c) { this.statusCode = c; return this; }, json() { return this; } };
+  limiter(req, res, () => nexted++);
+  limiter(req, res, () => nexted++);
+  limiter(req, res, () => nexted++);
+  assert.equal(nexted, 2, 'only max requests pass');
+  assert.equal(res.statusCode, 429);
+  assert.ok(Number(res.headers['Retry-After']) >= 1);
+});
+
+// ---------- storage abstraction ----------
+// valid 64x64 RGBA PNG (large enough to pass the dimension sanity check)
+const PNG_64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmElEQVR4nO3QoREAIBDAsB8CgWX/IWGMCCrie521z/3Z6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QHACfBLQ84XmAAAAAASUVORK5CYII=';
+
+test('saveImage writes a private file and returns a storage_key; deleteObject removes it', async () => {
+  const { saveImage, deleteObject, STORAGE_DRIVER } = await import('../src/storage.js');
+  assert.equal(STORAGE_DRIVER, 'local', 'default driver is local (no infra needed)');
+  const saved = await saveImage({ dataUrl: PNG_64, clientId: 'c1', scope: 'photos', fileId: 'pho1' });
+  assert.equal(saved.storage, 'local');
+  assert.ok(saved.storageKey.startsWith('photos/c1/'), saved.storageKey);
+  assert.ok(saved.storageKey.endsWith('.png'));
+  const abs = path.resolve(root, 'backend', 'data', 'uploads', saved.storageKey);
+  assert.ok(fs.existsSync(abs), 'file exists on disk');
+  await deleteObject(saved.storageKey);
+  assert.ok(!fs.existsSync(abs), 'file removed on delete');
+});
+
+test('saveImage rejects unsupported formats and oversized payloads', async () => {
+  const { saveImage } = await import('../src/storage.js');
+  await assert.rejects(() => saveImage({ dataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', clientId: 'c1' }), /Invalid or unsupported image/);
+  await assert.rejects(() => saveImage({ dataUrl: 'data:image/png;base64,' + 'A'.repeat(7 * 1024 * 1024), clientId: 'c1' }), /Invalid or unsupported image/);
+  await assert.rejects(() => saveImage({ dataUrl: 'not-a-data-url', clientId: 'c1' }), /Invalid or unsupported image/);
+});

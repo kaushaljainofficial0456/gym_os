@@ -1,0 +1,21 @@
+{
+  "name": "sk-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SK OS — B2B fitness coaching SaaS for gyms, trainers, and members.",
+  "scripts": {
+    "setup": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "db:init": "node backend/scripts/init-db.js",
+    "db:seed": "node backend/scripts/seed.js",
+    "db:reset": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js",
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "start": "npm run start --prefix backend",
+    "test": "npm test --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

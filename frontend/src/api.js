@@ -1,0 +1,35 @@
+const TOKEN_KEY = 'pos_token';
+const USER_KEY = 'pos_user';
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const getStoredUser = () => {
+  try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; }
+};
+export const setSession = ({ token, user }) => {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+};
+export const clearSession = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+};
+
+export async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  const token = getToken();
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch('/api' + path, { ...opts, headers });
+  if (res.status === 401) {
+    clearSession();
+    if (!location.pathname.startsWith('/login')) location.href = '/login';
+    throw new Error('Session expired');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || 'Request failed');
+    err.issues = data.issues;
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
