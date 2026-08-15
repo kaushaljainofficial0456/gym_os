@@ -8,6 +8,7 @@ backend/.env
 !.env.example
 
 backend/data/
+backend/data/exports/
 *.db
 *.sqlite
 *.sqlite3

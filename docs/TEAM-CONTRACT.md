@@ -170,3 +170,4 @@ IMPACT — Sambhav: the resolved value arrives as input.user.body_weight_kg. Man
 | 2026-08-15 | Calorie contract bumped to schema 0.2 (session/exercise/derived aggregates in `buildWorkoutCalorieInput`) | Kaushal |
 | 2026-08-15 | Timing hardened: client-supplied `started_at` rejected; `duration_min` measured-only | Kaushal |
 | 2026-08-15 | `/complete` returns 422 for `exercise_id` not belonging to the workout (no silent ignore) | Kaushal |
+| 2026-08-15 | Training-data export layer: `services/intelligence/trainingData.js` + `scripts/export-training-data.js` — contract-0.2 features from actual completed sets, `is_synthesized` excluded, reserved label slot (no ground truth yet). Contract: `docs/training-data-contract.md` | Kaushal |

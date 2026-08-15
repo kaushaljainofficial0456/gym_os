@@ -9,6 +9,7 @@
     "init": "node scripts/init-db.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/init-db.js --force && node scripts/seed.js",
+    "export:training": "node scripts/export-training-data.js",
     "test": "node --test",
     "pg:validate": "node scripts/pg-validate.js"
   },
