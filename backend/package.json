@@ -9,7 +9,8 @@
     "init": "node scripts/init-db.js",
     "seed": "node scripts/seed.js",
     "reset": "node scripts/init-db.js --force && node scripts/seed.js",
-    "test": "node --test"
+    "test": "node --test",
+    "pg:validate": "node scripts/pg-validate.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

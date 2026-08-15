@@ -180,7 +180,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'client_profiles','goals','weight_logs','measurements','progress_photos','workout_logs',
     'exercise_set_logs','personal_records','meal_logs','water_logs','sleep_logs','supplements',
-    'adherence_records','dashboard_preferences','client_workout_exercises','client_workout_schedule'
+    'adherence_records','dashboard_preferences','client_workout_schedule'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (
@@ -232,5 +232,16 @@ BEGIN
   ) WITH CHECK (
     NULLIF(current_setting('app.org_id', true), '') IS NULL
     OR meal_template_id IN (SELECT id FROM client_meal_templates WHERE org_id = current_setting('app.org_id', true))
+  );
+
+  -- client_workout_exercises has NO client_id column — its client/org is
+  -- derived via the parent row: workout_id -> client_workouts.org_id.
+  DROP POLICY IF EXISTS tenant_isolation ON client_workout_exercises;
+  CREATE POLICY tenant_isolation ON client_workout_exercises USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR workout_id IN (SELECT id FROM client_workouts WHERE org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR workout_id IN (SELECT id FROM client_workouts WHERE org_id = current_setting('app.org_id', true))
   );
 END $$;

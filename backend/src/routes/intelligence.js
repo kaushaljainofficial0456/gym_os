@@ -22,6 +22,7 @@ import { resolveFood, searchFoods } from '../services/intelligence/foodSearch.js
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 import { computeNutrition, sumNutrition } from '../services/intelligence/nutrition.js';
 import { generateProgram } from '../services/intelligence/generateProgram.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult } from '../services/intelligence/calorieModel.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { todayNutrition, lastPerformance, weightTrend, todayTraining, clientProfileContext } from '../services/intelligence/context.js';
 import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured, ping as aiPing, configSummary } from '../services/intelligence/aiProvider.js';
@@ -183,18 +184,19 @@ export default function intelligenceRoutes(db) {
       reps: Math.max(0, Math.min(200, Number(s.reps) || 0))
     })).filter((s) => s.reps > 0);
 
-    await db.tx(async (tx) => {
+    const t0 = now(); // NL-logged sessions have no measured duration — timestamps are set equal
+    const txResult = await db.tx(async (tx) => {
       await tx.run(
-        `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, source, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'completed', 'ai', ?)`,
-        [wId, c.org_id, c.id, name, name.slice(0, 40), d, now()]);
+        `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, source, created_at, started_at, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'completed', 'ai', ?, ?, ?)`,
+        [wId, c.org_id, c.id, name, name.slice(0, 40), d, t0, t0, t0]);
       const wxeId = id('wxe');
       await tx.run(
         `INSERT INTO workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, done)
          VALUES (?, ?, ?, 0, ?, ?, ?, ?, 90, 1)`,
         [wxeId, wId, ex?.id || null, name, cleanSets.length,
          cleanSets[0].reps, cleanSets[0].weight]);
-      const prs = ex ? await evaluatePRs(db, c.id, ex.id, cleanSets, d) : [];
+      const prs = ex ? await evaluatePRs(tx, c.id, ex.id, cleanSets, d) : [];
       const logId = id('wlg');
       const wgtBest = Math.max(...cleanSets.map((s) => s.weight));
       const repsBest = Math.max(...cleanSets.map((s) => s.reps));
@@ -205,15 +207,37 @@ export default function intelligenceRoutes(db) {
       for (let i = 0; i < cleanSets.length; i++) {
         const s = cleanSets[i];
         await tx.run(
-          `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, completed)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1)`,
+          `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, completed, is_synthesized)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, 0)`,
           [id('stl'), logId, c.id, ex?.id || null, i + 1, s.reps, s.reps, s.weight, s.weight]);
       }
+      // Calorie estimate from ACTUAL sets (user-confirmed NL input), never planned.
+      let calorie = null;
+      try {
+        const bodyWeightKg = await resolveBodyWeight(tx, c.id, d);
+        const input = buildWorkoutCalorieInput({
+          client: c,
+          workout: { id: wId },
+          exercises: ex ? [{
+            id: wxeId, exercise_id: ex.id, name, ex_type: ex.ex_type, movement: ex.movement,
+            equipment: ex.equipment, primary_muscle: ex.primary_muscle,
+            library: { ex_type: ex.ex_type, movement: ex.movement, equipment: ex.equipment, primary_muscle: ex.primary_muscle }
+          }] : [],
+          setsByExercise: ex ? { [wxeId]: cleanSets.map((s, i) => ({ set_number: i + 1, actual_reps: s.reps, actual_weight: s.weight, completed: 1 })) } : {},
+          durationSeconds: null,
+          bodyWeightKg
+        });
+        calorie = estimateWorkoutCalories(input);
+        if (calorie) await persistCalorieResult(tx, wId, calorie);
+      } catch {
+        calorie = null; // calorie estimation must never fail workout logging
+      }
+      return { prs, calorie };
     });
     await logEvent(db, c.org_id, c.id, 'workout', exercise_name || exercise_id,
       { exercise: name, sets: cleanSets.length }, { workoutId: wId }, 'confirm');
-    await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'intel_workout_logged', data: { clientId: c.id, workoutId: wId } });
-    res.json({ ok: true, workoutId: wId, name, setsLogged: cleanSets.length, date: d });
+    await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'intel_workout_logged', data: { clientId: c.id, workoutId: wId, estimatedKcal: txResult?.calorie?.estimated_active_kcal ?? null } });
+    res.json({ ok: true, workoutId: wId, name, setsLogged: cleanSets.length, date: d, calorie: txResult?.calorie ?? null });
   });
 
   // ---------------- food search / autocomplete ----------------

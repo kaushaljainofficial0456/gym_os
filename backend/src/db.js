@@ -109,7 +109,9 @@ async function createPg() {
     try {
       await c.query('BEGIN');
       const orgId = opts.orgId || currentOrg();
-      if (orgId) await c.query('SET LOCAL app.org_id = $1', [orgId]);
+      // PG does not accept parameter placeholders ($1) in SET — inline the
+      // literal (org ids are app-generated tokens; escaped defensively).
+      if (orgId) await c.query(`SET LOCAL app.org_id = '${String(orgId).replace(/'/g, "''")}'`);
       const txDb = {
         driver: 'postgres',
         async q(sql, params = []) { const r = await c.query(translateSql(sql), params); return r.rows; },

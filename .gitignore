@@ -1,6 +1,10 @@
 node_modules/
+
+# secrets — never commit credentials
 .env
+backend/.env
 .env.*
+*.env.local
 !.env.example
 
 backend/data/

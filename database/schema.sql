@@ -198,6 +198,16 @@ CREATE TABLE IF NOT EXISTS workouts (
   scheduled_date TEXT,
   status        TEXT NOT NULL DEFAULT 'assigned' CHECK (status IN ('assigned','completed','missed','draft')),
   completed_at  TEXT,
+  started_at    TEXT,             -- UTC ISO-8601: session start. Backend is the source of truth (set via POST /workouts/:id/start or lazily at completion).
+  duration_min  REAL,             -- backend-computed actual duration: completed_at - started_at (minutes). Never computed authoritatively by the frontend.
+  -- Calorie estimate — produced ONLY by services/intelligence/calorieModel.js and persisted here.
+  estimated_active_kcal REAL,     -- active calories burned this session (range midpoint)
+  lower_kcal            REAL,     -- low end of the estimate range
+  upper_kcal            REAL,     -- high end of the estimate range
+  model_version         TEXT,     -- calorie model version (e.g. 'skos-cal-baseline-v1')
+  schema_version        TEXT,     -- calorie input contract version (e.g. '0.1')
+  calorie_provider      TEXT,     -- baseline | mock | ml — which provider produced the estimate (never exposed to the frontend)
+  calorie_estimated_at  TEXT,     -- UTC ISO-8601 when the estimate was computed
   source        TEXT NOT NULL DEFAULT 'program',  -- program | trainer | gym_template | client_custom | ai
   notes         TEXT,
   created_at    TEXT NOT NULL
@@ -253,7 +263,8 @@ CREATE TABLE IF NOT EXISTS exercise_set_logs (
   actual_weight    REAL,
   rest_seconds     INTEGER,
   rir              INTEGER,
-  completed        INTEGER NOT NULL DEFAULT 1
+  completed        INTEGER NOT NULL DEFAULT 1,
+  is_synthesized   INTEGER NOT NULL DEFAULT 0   -- 1 => derived from a legacy aggregate log, NOT user-entered per-set data. ML training must filter these.
 );
 CREATE INDEX IF NOT EXISTS idx_setlogs_log ON exercise_set_logs(workout_log_id);
 CREATE INDEX IF NOT EXISTS idx_setlogs_client ON exercise_set_logs(client_id, exercise_id, workout_log_id);

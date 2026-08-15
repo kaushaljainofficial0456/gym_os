@@ -14,6 +14,34 @@ The client is not a passive recipient of a trainer's plan. Clients can customize
 
 Multi-tenant platform for personal trainers, fitness coaches, and gyms: client management, workout & nutrition program builders, adherence scoring, at-risk detection, AI coach insights, weekly reports, messaging, and a mobile-first client portal.
 
+## Database Policy
+
+**Official production database: PostgreSQL hosted on Neon.** SQLite is retained
+for local development and testing convenience — it is **NOT** the production
+database and is never used in staging or production.
+
+| Environment | Allowed database(s) | Behavior |
+|---|---|---|
+| **Development** | SQLite (default) · PostgreSQL optional | `DATABASE_URL` unset → local SQLite, zero setup |
+| **Testing** | SQLite (unit/regression) · PostgreSQL/Neon (integration & production-parity validation) | `npm test` uses in-memory SQLite; `npm run pg:validate` validates live PostgreSQL |
+| **Staging** | PostgreSQL / Neon **only** | App **refuses to start** if `DATABASE_URL` is missing |
+| **Production** | PostgreSQL / Neon **only** | App **refuses to start** if `DATABASE_URL` is missing |
+
+**Guards (enforced in `backend/src/config.js`, keyed on `NODE_ENV`):**
+
+- `NODE_ENV=staging` or `NODE_ENV=production` with no `DATABASE_URL` → the app
+  exits at startup with a FATAL error. It never silently falls back to SQLite.
+- The runtime connection must use the dedicated app role (`skos_app`, `NOBYPASSRLS`
+  — RLS enforced). Using the admin role (`neondb_owner`, which Neon creates with
+  `BYPASSRLS`) as `DATABASE_URL` → the app exits at startup.
+
+**Connection roles (keep separate — see "Local dev (SQLite) vs Neon" below):**
+
+| Role | Purpose | Used by |
+|---|---|---|
+| `skos_app` | Runtime application connection (`DATABASE_URL`) — `NOBYPASSRLS`, DML-only, no DDL | Running app + `pg:validate` checks |
+| `neondb_owner` | Admin: migrations, schema, RLS policies | `PG_ADMIN_URL` / `npm run db:init` — never the app runtime connection |
+
 ## Requirements
 
 - **Node.js ≥ 22** (uses built-in `node:sqlite` — no Postgres needed for local dev)
@@ -67,7 +95,7 @@ The login page also has one-tap demo buttons for all three roles.
 - **Location:** `backend/data/physique.db` (created on first init)
 - **Engine:** SQLite via Node 22's built-in `node:sqlite` (no separate install)
 - **Schema:** `database/schema.sql` (relational, 20+ tables with FKs and indexes)
-- **Prod path:** Swap to PostgreSQL by setting `DATABASE_URL` env var
+- **Prod path:** Activate PostgreSQL/Neon by setting `DATABASE_URL` to the **runtime role** connection (see "Local dev (SQLite) vs Neon" below). SQLite stays the default whenever `DATABASE_URL` is unset.
 
 ### Database commands
 
@@ -76,6 +104,46 @@ npm run db:init      # Create tables (safe — uses IF NOT EXISTS)
 npm run db:seed      # Insert demo data
 npm run db:reset     # Drop + recreate + reseed (caution: deletes all data)
 ```
+
+### Local dev (SQLite) vs Neon (PostgreSQL)
+
+The backend is dual-engine. SQLite is the zero-setup default; PostgreSQL is
+activated **only** when `DATABASE_URL` is set.
+
+| Mode | Setup | Role used |
+|---|---|---|
+| **SQLite (local dev / tests)** | `DATABASE_URL` unset → `backend/data/physique.db` via Node 22 `node:sqlite` | — |
+| **Neon (production)** | `DATABASE_URL` = **runtime role** connection | `skos_app` (runtime) |
+| **Migrations / RLS / validation init** | run `npm run db:init` / `pg:validate` with the **admin** connection | `neondb_owner` (admin) |
+
+**Runtime vs admin roles — keep them separate:**
+
+- **`skos_app` (runtime):** least-privilege — `NOBYPASSRLS` (RLS enforced),
+  `SELECT/INSERT/UPDATE/DELETE` on all tables, no DDL. This is the only role the
+  running backend connects as (`DATABASE_URL`).
+- **`neondb_owner` (admin):** schema, migrations, RLS policies only. Neon creates
+  this role with `BYPASSRLS`, so connecting the app as it would **silently
+  disable Row-Level Security** — never use it as the runtime connection.
+
+**Credentials policy:** never commit `.env` files or connection strings
+(`.gitignore` covers `.env`, `backend/.env`, `*.env.local`). Pass connection
+strings via your environment / secrets store and use `sslmode=verify-full`.
+
+#### PostgreSQL validation (live)
+
+`npm run pg:validate` smoke-tests a real PostgreSQL instance (use a **disposable**
+Neon database — it creates tables and seeds rows; `--clean` drops them after):
+
+```bash
+DATABASE_URL="postgresql://skos_app:...@<host>/neondb?sslmode=verify-full" \
+PG_ADMIN_URL="postgresql://neondb_owner:...@<host>/neondb?sslmode=verify-full" \
+npm run pg:validate
+```
+
+- `DATABASE_URL` → the **runtime** role (validates its privileges + RLS posture)
+- `PG_ADMIN_URL` → the **admin** role (runs schema + migrations + RLS first)
+- Expected result: **8/8 checks pass** (transactions, upserts, RLS isolation,
+  workout completion, calorie persistence, nutrition)
 
 ## NPM Scripts
 
@@ -89,6 +157,7 @@ npm run db:reset     # Drop + recreate + reseed (caution: deletes all data)
 | `npm run db:init` | Initialize database tables |
 | `npm run db:seed` | Seed demo data |
 | `npm run db:reset` | Force re-initialize + reseed |
+| `npm run pg:validate` | Live PostgreSQL validation against a real Neon DB (needs `DATABASE_URL` + `PG_ADMIN_URL`) |
 | `npm test` (backend) | Run business-logic test suite (`node --test`) |
 
 ## Environment Variables
@@ -105,7 +174,8 @@ TIMEZONE=Asia/Kolkata
 |---|---|---|---|
 | `PORT` | No | 4000 | Backend API port |
 | `JWT_SECRET` | Prod: **yes** | `dev-secret-change-me` | Token signing secret. In `NODE_ENV=production` the app **refuses to start** unless this is set to a strong secret (16+ chars) — the dev default is never used in prod |
-| `DATABASE_URL` | No | (none → SQLite) | PostgreSQL connection string for prod |
+| `DATABASE_URL` | No | (none → SQLite) | **Runtime** PostgreSQL connection string — must use the `skos_app` role (`NOBYPASSRLS`, RLS enforced). Leave unset for local SQLite dev |
+| `PG_ADMIN_URL` | Only for `pg:validate` | (none) | **Admin** connection (`neondb_owner`) — schema/migrations/RLS + validation init only; never used by the running app |
 | `TIMEZONE` | No | `Asia/Kolkata` | Default timezone for daily boundaries |
 | `NODE_ENV` | No | development | Set "production" for prod behavior (strong-secret gate + minimal error messages) |
 | `CORS_ORIGINS` | No | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allow-list. Never `*` — unlisted origins are rejected |
@@ -451,12 +521,21 @@ Ollama/vision provider + object storage.
 
 ### Deploying to Neon PostgreSQL
 
-1. Create a Neon project; copy its pooled connection string.
-2. `DATABASE_URL=postgres://... npm run db:init` — applies `database/schema.sql`
-   (idempotent `IF NOT EXISTS`, portable DDL). Add `?sslmode=require` per Neon.
-3. `DATABASE_URL=... npm run db:seed` **only for demo data** — real tenants
-   start empty and create their own gym via `/api/auth/setup-org`.
-4. `NODE_ENV=production JWT_SECRET=<strong-secret> CORS_ORIGINS=<frontend domain> npm start`.
+1. Create a Neon project. Neon's default owner role has `BYPASSRLS`, which
+   silently disables Row-Level Security — so create a dedicated **runtime role**
+   (`skos_app`) with `NOBYPASSRLS` plus `USAGE` on schema `public` and
+   `SELECT/INSERT/UPDATE/DELETE` on all tables. Keep `neondb_owner` as the
+   **admin** role for schema/migrations only.
+2. Apply schema + migrations + RLS with the **admin** role:
+   `DATABASE_URL=postgres://neondb_owner:... npm run db:init` (idempotent
+   `IF NOT EXISTS`, portable DDL). Add `?sslmode=verify-full` per Neon.
+3. `DATABASE_URL=postgres://neondb_owner:... npm run db:seed` **only for demo
+   data** — real tenants start empty and create their own gym via
+   `/api/auth/setup-org`.
+4. Run the app with the **runtime** role:
+   `DATABASE_URL=postgres://skos_app:... NODE_ENV=production JWT_SECRET=<strong-secret> CORS_ORIGINS=<frontend domain> npm start`.
+5. Validate the live setup:
+   `DATABASE_URL=<skos_app> PG_ADMIN_URL=<neondb_owner> npm run pg:validate` (expect 8/8).
 
 `pg` uses a connection pool internally (connections are released on every
 query/tx) — appropriate for the 2,500-client target; raise `PGPOOL_MAX` if
@@ -497,7 +576,8 @@ Rate limiting protects login, org setup, and all AI/upload endpoints.
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Neon PostgreSQL connection string (sets PG mode) |
+| `DATABASE_URL` | Neon PostgreSQL connection string — **runtime role `skos_app`** (`NOBYPASSRLS`); sets PG mode |
+| `PG_ADMIN_URL` | Admin connection (`neondb_owner`) — used only by `npm run pg:validate` for schema/migrations/RLS |
 | `JWT_SECRET` | **Required in production** — 16+ chars; startup fails without it |
 | `CORS_ORIGINS` | Comma-separated frontend domain(s) — never `*` |
 | `NODE_ENV` | `production` enables the secret gate + safe error messages |
@@ -510,8 +590,8 @@ Rate limiting protects login, org setup, and all AI/upload endpoints.
 - **WhatsApp:** Messages channel column is ready for WhatsApp Business API integration but not wired.
 - **Wearables:** Sleep data must be entered manually or via a future wearable integration.
 - **Photos:** New uploads use the private-file storage abstraction (local driver; S3-compatible slot documented). Legacy base64 rows remain readable for back-compat.
-- **PostgreSQL:** The `?` → `$n` adapter exists, the DDL is portable, RLS policies are in `database/rls.sql`, and all of it is unit-tested — but the production DB path has **not** been exercised against a live Postgres instance in this environment. Verify with a real Neon DB before going live (`npm run db:init` with `DATABASE_URL` set). SQLite remains the fully-verified default.
-- **RLS live behavior:** the policies are applied on PG only; the `SET LOCAL app.org_id` wiring is unit-tested via AsyncLocalStorage, but the actual PG enforcement is NOT VERIFIED here — confirm with a cross-gym test against Neon.
+- **PostgreSQL:** verified against a live Neon instance — `npm run pg:validate` passes **8/8** (schema, migrations, transactions, ON CONFLICT upserts, RLS tenant isolation, workout completion, calorie persistence). SQLite remains the default for local dev/tests.
+- **RLS live behavior:** verified — org isolation is enforced when the app connects as the `NOBYPASSRLS` runtime role (`skos_app`). Neon's default owner (`neondb_owner`) has `BYPASSRLS` and must never be used as the runtime connection.
 - **Real LLM / OCR / coaching:** All intelligence is deterministic by default. `AI_PROVIDER=ollama` (default) uses a local model when available; `openai|gemini` use hosted APIs (`LLM_API_KEY`). Without any provider, OCR label values are entered + confirmed by the user (LABEL_SCANNED), meal photos return "no vision provider" with an empty range, and SK Coach stays deterministic. **Meal-photo calories are always ESTIMATED ranges; the AI never calculates nutrition itself.**
 - **Ollama is optional for development.** If it isn't running, the app is fully functional: `GET /api/intel/coach/status` reports `available: false` and every coach surface uses the deterministic engine.
 - **Vision** needs a provider with vision support (Ollama multimodal models like `llava`, or a hosted vision API) — the provider abstraction makes this a config choice, not a rewrite.

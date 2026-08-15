@@ -7,6 +7,7 @@ import { dayKey } from '../utils/time.js';
 import { suggestNextTarget } from '../services/progressiveOverload.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { track } from '../services/events.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult } from '../services/intelligence/calorieModel.js';
 
 export default function workoutRoutes(db) {
   const r = Router();
@@ -159,67 +160,144 @@ export default function workoutRoutes(db) {
     res.json({ ok: true, done: !cur.done });
   });
 
+  // ---- start a workout: backend records the session start (source of truth) ----
+  // Idempotent — a second call returns the existing started_at.
+  r.post('/:id/start', async (req, res) => {
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    const client = await resolveClient(db, req, res, w.client_id);
+    if (!client) return;
+    if (w.status === 'completed') {
+      return res.json({ ok: true, workout_id: w.id, started_at: w.started_at, duration_min: w.duration_min, already_completed: true });
+    }
+    const startedAt = w.started_at || now();
+    if (!w.started_at) await db.run('UPDATE workouts SET started_at = ? WHERE id = ?', [startedAt, w.id]);
+    res.json({ ok: true, workout_id: w.id, started_at: startedAt });
+  });
+
   // ---- complete a workout with per-exercise, per-set logs ----
+  // Atomic: workout_logs + exercise_set_logs + PRs + status + duration + calorie
+  // estimate commit together (db.tx). Any failure rolls back EVERYTHING — a
+  // workout is never left partially completed. Pattern mirrors /intel/confirm-workout.
   r.post('/:id/complete', validate(z_workoutComplete()), async (req, res) => {
     const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });
     const client = await resolveClient(db, req, res, w.client_id);
     if (!client) return;
+    if (w.status === 'completed') {
+      // Idempotent retry (e.g. network drop after commit) — never double-log.
+      return res.json({ ok: true, workoutId: w.id, alreadyCompleted: true, prs: [], duration_min: w.duration_min, calorie: calorieView(w) });
+    }
     if (!Array.isArray(req.body.logs) || req.body.logs.length === 0) {
       return res.status(400).json({ error: 'logs required — log at least one set' });
     }
     const d = dayKey();
-    const prs = [];
-    for (const log of req.body.logs) {
-      const ex = await db.q1('SELECT * FROM workout_exercises WHERE id = ? AND workout_id = ?', [log.exercise_id, w.id]);
-      if (!ex) continue;
-      // normalize per-set rows (new shape) or synthesize from legacy aggregate
-      let sets = [];
-      if (Array.isArray(log.sets) && log.sets.length) {
-        sets = log.sets.map((s, i) => ({
-          actual_weight: Number(s.actual_weight ?? parseFloat(ex.weight) ?? 0),
-          actual_reps: Number(s.actual_reps ?? parseFloat(ex.reps) ?? 0),
-          rir: s.rir ?? null,
-          completed: s.completed === false ? 0 : 1
-        }));
-      } else {
-        const n = Math.max(1, log.sets_done ?? ex.sets ?? 1);
-        const wgt = Number(log.weight ?? parseFloat(ex.weight) ?? 0);
-        const reps = Number(log.reps ?? parseFloat(ex.reps) ?? 0);
-        sets = Array.from({ length: n }, () => ({ actual_weight: wgt, actual_reps: reps, rir: log.rir ?? null, completed: 1 }));
-      }
-      if (!sets.length) continue;
-      const wgtBest = Math.max(...sets.map(s => Number(s.actual_weight) || 0));
-      const repsBest = Math.max(...sets.map(s => Number(s.actual_reps) || 0));
-      // session-level summary (backward compatible with history readers)
-      const logId = id('wlg');
-      const newPrs = ex.exercise_id
-        ? await evaluatePRs(db, client.id, ex.exercise_id, sets, d)
-        : [];
-      await db.run(
-        `INSERT INTO workout_logs (id, client_id, workout_id, exercise_id, date, sets_done, reps, weight, rir, notes, is_pr)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [logId, client.id, w.id, ex.exercise_id || null, d, sets.length, repsBest, wgtBest,
-         log.rir ?? null, log.notes || null, newPrs.length ? 1 : 0]);
-      // per-set rows
-      const prescReps = parseFloat(ex.reps);
-      const prescWgt = parseFloat(ex.weight);
-      for (let i = 0; i < sets.length; i++) {
-        const s = sets[i];
-        await db.run(
-          `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, rir, completed)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id('stl'), logId, client.id, ex.exercise_id || null, i + 1,
-           Number.isFinite(prescReps) ? prescReps : null, s.actual_reps,
-           Number.isFinite(prescWgt) ? prescWgt : null, s.actual_weight,
-           ex.rest_sec || null, s.rir, s.completed]);
-      }
-      if (newPrs.length) prs.push({ name: ex.name, records: newPrs });
-      await db.run('UPDATE workout_exercises SET done = 1 WHERE id = ?', [ex.id]);
+    const completedAt = now();
+    // Backend is the source of truth for session timing: the DB started_at
+    // (from /:id/start) wins; otherwise accept the client-reported start so
+    // existing frontends keep working. duration_min is always computed here.
+    const startedAt = w.started_at || (typeof req.body.started_at === 'string' && req.body.started_at ? req.body.started_at : null);
+    let durationMin = null;
+    if (startedAt) {
+      const ms = Date.parse(completedAt) - Date.parse(startedAt);
+      if (Number.isFinite(ms)) durationMin = ms > 0 ? Math.round((ms / 60000) * 10) / 10 : 0;
     }
-    await db.run('UPDATE workouts SET status = ?, completed_at = ? WHERE id = ?', ['completed', now(), w.id]);
-    await track(db, { orgId: w.org_id, userId: req.user.sub, type: 'workout_completed', data: { clientId: client.id, workoutId: w.id, prCount: prs.length } });
-    res.json({ ok: true, prs, workoutId: w.id });
+
+    // Pre-fetch the session's exercises + library metadata once (kills the
+    // per-log N+1 and feeds the calorie input with actual exercise metadata).
+    const sessionExercises = await db.q(
+      `SELECT we.*, el.ex_type, el.movement, el.equipment AS lib_equipment, el.primary_muscle AS lib_primary_muscle
+         FROM workout_exercises we
+         LEFT JOIN exercise_library el ON el.id = we.exercise_id
+        WHERE we.workout_id = ?`, [w.id]);
+    const byId = new Map(sessionExercises.map((e) => [e.id, e]));
+
+    const prs = [];
+    const txResult = await db.tx(async (tx) => {
+      const allCompletedSets = []; // { exercise, set } — ACTUAL completed sets only
+      for (const log of req.body.logs) {
+        const ex = byId.get(log.exercise_id);
+        if (!ex) continue;
+        // normalize per-set rows (new shape) or synthesize from legacy aggregate
+        let sets = [];
+        let synthesized = 0;
+        if (Array.isArray(log.sets) && log.sets.length) {
+          sets = log.sets.map((s) => ({
+            actual_weight: Number(s.actual_weight ?? parseFloat(ex.weight) ?? 0),
+            actual_reps: Number(s.actual_reps ?? parseFloat(ex.reps) ?? 0),
+            rir: s.rir ?? null,
+            completed: s.completed === false ? 0 : 1
+          }));
+        } else {
+          // legacy aggregate shape → synthesized rows, excluded from ML training
+          synthesized = 1;
+          const n = Math.max(1, log.sets_done ?? ex.sets ?? 1);
+          const wgt = Number(log.weight ?? parseFloat(ex.weight) ?? 0);
+          const reps = Number(log.reps ?? parseFloat(ex.reps) ?? 0);
+          sets = Array.from({ length: n }, () => ({ actual_weight: wgt, actual_reps: reps, rir: log.rir ?? null, completed: 1 }));
+        }
+        if (!sets.length) continue;
+        const wgtBest = Math.max(...sets.map((s) => Number(s.actual_weight) || 0));
+        const repsBest = Math.max(...sets.map((s) => Number(s.actual_reps) || 0));
+        const logId = id('wlg');
+        const newPrs = ex.exercise_id ? await evaluatePRs(tx, client.id, ex.exercise_id, sets, d) : [];
+        if (newPrs.length) prs.push({ name: ex.name, records: newPrs });
+        await tx.run(
+          `INSERT INTO workout_logs (id, client_id, workout_id, exercise_id, date, sets_done, reps, weight, rir, notes, is_pr)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [logId, client.id, w.id, ex.exercise_id || null, d, sets.length, repsBest, wgtBest,
+           log.rir ?? null, log.notes || null, newPrs.length ? 1 : 0]);
+        const prescReps = parseFloat(ex.reps);
+        const prescWgt = parseFloat(ex.weight);
+        for (let i = 0; i < sets.length; i++) {
+          const s = sets[i];
+          await tx.run(
+            `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, rir, completed, is_synthesized)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id('stl'), logId, client.id, ex.exercise_id || null, i + 1,
+             Number.isFinite(prescReps) ? prescReps : null, s.actual_reps,
+             Number.isFinite(prescWgt) ? prescWgt : null, s.actual_weight,
+             ex.rest_sec || null, s.rir, s.completed, synthesized]);
+          if (s.completed !== 0 && s.completed !== false) allCompletedSets.push({ exercise: ex, set: s });
+        }
+        await tx.run('UPDATE workout_exercises SET done = 1 WHERE id = ?', [ex.id]);
+      }
+
+      await tx.run(
+        `UPDATE workouts SET status = 'completed', completed_at = ?, started_at = COALESCE(started_at, ?), duration_min = ? WHERE id = ?`,
+        [completedAt, startedAt || completedAt, durationMin, w.id]);
+
+      // Calorie estimate from ACTUAL completed sets — never planned workload
+      // (skipped exercises contribute 0 sets / 0 reps / 0 workload).
+      let calorie = null;
+      try {
+        const bodyWeightKg = await resolveBodyWeight(tx, client.id, d);
+        const setsByExercise = {};
+        for (const { exercise, set } of allCompletedSets) {
+          (setsByExercise[exercise.id] ||= []).push(set);
+        }
+        const input = buildWorkoutCalorieInput({
+          client,
+          workout: w,
+          exercises: sessionExercises.map((e) => ({
+            id: e.id, exercise_id: e.exercise_id, name: e.name, ex_type: e.ex_type, movement: e.movement,
+            equipment: e.lib_equipment, primary_muscle: e.lib_primary_muscle,
+            library: { ex_type: e.ex_type, movement: e.movement, equipment: e.lib_equipment, primary_muscle: e.lib_primary_muscle }
+          })),
+          setsByExercise,
+          durationSeconds: durationMin != null ? durationMin * 60 : null,
+          bodyWeightKg
+        });
+        calorie = estimateWorkoutCalories(input);
+        if (calorie) await persistCalorieResult(tx, w.id, calorie);
+      } catch {
+        calorie = null; // calorie estimation must never fail workout completion
+      }
+      return calorie;
+    });
+
+    await track(db, { orgId: w.org_id, userId: req.user.sub, type: 'workout_completed', data: { clientId: client.id, workoutId: w.id, prCount: prs.length, durationMin, estimatedKcal: txResult?.estimated_active_kcal ?? null } });
+    res.json({ ok: true, prs, workoutId: w.id, duration_min: durationMin, calorie: txResult });
   });
 
   // ---- progressive overload suggestion ----
@@ -233,8 +311,25 @@ export default function workoutRoutes(db) {
   return r;
 }
 
+// Shape a persisted calorie result for API responses (same shape as
+// todaySession's meta.calorie so the client contract stays consistent).
+function calorieView(w) {
+  if (!w || w.estimated_active_kcal == null) return null;
+  return {
+    schema_version: w.schema_version,
+    estimated_active_kcal: w.estimated_active_kcal,
+    lower_kcal: w.lower_kcal,
+    upper_kcal: w.upper_kcal,
+    model_version: w.model_version,
+    provider: w.calorie_provider,
+    source: 'persisted',
+    estimated_at: w.calorie_estimated_at
+  };
+}
+
 function z_workoutComplete() {
   return z.object({
+    started_at: z.string().max(40).optional(),
     logs: z.array(z.object({
       exercise_id: z.string().min(1),
       // per-set shape (preferred)

@@ -10,6 +10,7 @@ import { id, now } from '../ids.js';
 import { dayKey, weekDay, getOrgTz } from '../utils/time.js';
 import { suggestNextTarget } from './progressiveOverload.js';
 import { requiredItems, parseAvailable, suggestAlternatives } from './equipment.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, completedSetCount } from './intelligence/calorieModel.js';
 
 export async function getActiveProgram(db, clientId) {
   return db.q1(
@@ -85,7 +86,7 @@ export async function todaySession(db, clientId, tz) {
   const w = await ensureTodayWorkout(db, clientId, tz);
   if (!w) return null;
   const exercises = await db.q(
-    `SELECT we.*, el.primary_muscle, el.secondary_muscles, el.equipment, el.difficulty, el.cues, el.animation_key
+    `SELECT we.*, el.primary_muscle, el.secondary_muscles, el.equipment, el.ex_type, el.movement, el.difficulty, el.cues, el.animation_key
        FROM workout_exercises we
        LEFT JOIN exercise_library el ON el.id = we.exercise_id
       WHERE we.workout_id = ? ORDER BY we.position`, [w.id]);
@@ -103,7 +104,49 @@ export async function todaySession(db, clientId, tz) {
   // session meta
   const totalSets = exercises.reduce((s, e) => s + (e.sets || 0), 0);
   const estMinutes = Math.max(15, Math.round(totalSets * (1.6 + (exercises[0]?.rest_sec || 90) / 60)));
-  const estKcal = Math.round(totalSets * 6.5);
+
+  // Calorie estimate — single choke point: the calorieModel service.
+  //   completed -> PERSISTED estimate computed from ACTUAL set logs at
+  //                completion time (authoritative, never recomputed here)
+  //   pending   -> clearly-labelled PREVIEW from planned exercises; it is
+  //                never persisted and never treated as actual workload
+  let calorie = null;
+  if (w.status === 'completed' && w.estimated_active_kcal != null) {
+    calorie = {
+      schema_version: w.schema_version,
+      estimated_active_kcal: w.estimated_active_kcal,
+      lower_kcal: w.lower_kcal,
+      upper_kcal: w.upper_kcal,
+      model_version: w.model_version,
+      provider: w.calorie_provider,
+      source: 'persisted',
+      estimated_at: w.calorie_estimated_at
+    };
+  } else {
+    const client = await db.q1('SELECT age, sex, height_cm FROM clients WHERE id = ?', [clientId]);
+    const bodyWeightKg = await resolveBodyWeight(db, clientId, w.scheduled_date || undefined);
+    const previewInput = buildWorkoutCalorieInput({
+      client,
+      workout: w,
+      exercises: exercises.map((e) => ({
+        id: e.id, exercise_id: e.exercise_id, name: e.name, ex_type: e.ex_type, movement: e.movement,
+        equipment: e.equipment, primary_muscle: e.primary_muscle,
+        library: { ex_type: e.ex_type, movement: e.movement, equipment: e.equipment, primary_muscle: e.primary_muscle }
+      })),
+      setsByExercise: Object.fromEntries(exercises.map((e) => [e.id,
+        Array.from({ length: e.sets || 0 }, (_, i) => ({
+          set_number: i + 1, actual_reps: parseFloat(e.reps) || 0, actual_weight: parseFloat(e.weight) || 0, completed: 1
+        }))])),
+      durationSeconds: estMinutes * 60,
+      bodyWeightKg
+    });
+    calorie = {
+      ...estimateWorkoutCalories(previewInput),
+      source: 'preview',
+      completedSets: completedSetCount(previewInput)
+    };
+  }
+  const estKcal = calorie?.estimated_active_kcal ?? null;
 
   // progressive-overload next targets for exercises with history
   const suggestions = [];
@@ -129,7 +172,7 @@ export async function todaySession(db, clientId, tz) {
   return {
     workout: { ...w, exercises },
     focus,
-    meta: { totalSets, estMinutes, estKcal, exerciseCount: exercises.length, doneCount: exercises.filter(e => e.done).length },
+    meta: { totalSets, estMinutes, estKcal, calorie, exerciseCount: exercises.length, doneCount: exercises.filter(e => e.done).length },
     suggestions,
     equipment
   };

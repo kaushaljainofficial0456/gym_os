@@ -7,7 +7,7 @@
 // Targets come from muscles.target_sets_min/max (trainer guidance).
 // ============================================================
 import { daysAgoIso, round1 } from '../utils/time.js';
-import { getExerciseMuscles, MUSCLES } from './muscles.js';
+import { normalizeMuscle, MUSCLES } from './muscles.js';
 
 export const ROLE_WEIGHT = { PRIMARY: 1.0, SECONDARY: 0.5 };
 
@@ -20,12 +20,26 @@ export function statusFor(sets, [lo, hi]) {
   return 'BALANCED';
 }
 
-// sets done for a workout log: prefer completed per-set rows, else sets_done
-async function setsForLog(db, log) {
-  const rows = await db.q1(
-    `SELECT COUNT(*) AS n FROM exercise_set_logs WHERE workout_log_id = ? AND completed = 1`, [log.id]);
-  if (rows?.n > 0) return rows.n;
-  return log.sets_done || 0;
+// Fallback muscle derivation from legacy string columns — mirrors the fallback
+// inside muscles.getExerciseMuscles, kept pure here so weeklyVolume can batch
+// ALL muscle lookups in one query instead of one per log (N+1 fix).
+function deriveMusclesFallback(primary, secondary) {
+  const out = [];
+  const p = normalizeMuscle(primary);
+  if (p) {
+    const m = MUSCLES.find((x) => x.id === p);
+    out.push({ role: 'PRIMARY', id: p, name: m?.name, region: m?.region, view: m?.view });
+  }
+  if (secondary) {
+    for (const name of String(secondary).split(',')) {
+      const id = normalizeMuscle(name.trim());
+      if (id && id !== p) {
+        const m = MUSCLES.find((x) => x.id === id);
+        out.push({ role: 'SECONDARY', id, name: m?.name, region: m?.region, view: m?.view });
+      }
+    }
+  }
+  return out;
 }
 
 export async function weeklyVolume(db, clientId, { days = 7, targets = DEFAULT_TARGETS } = {}) {
@@ -34,18 +48,48 @@ export async function weeklyVolume(db, clientId, { days = 7, targets = DEFAULT_T
     `SELECT wl.id, wl.exercise_id, wl.date, wl.sets_done FROM workout_logs wl
       WHERE wl.client_id = ? AND wl.date >= ? ORDER BY wl.date`, [clientId, since]);
 
+  const logIds = logs.map((l) => l.id);
+  const exerciseIds = [...new Set(logs.map((l) => l.exercise_id).filter(Boolean))];
+  const inQ = (n) => n.map(() => '?').join(',');
+
+  // Batch 1: completed per-set counts for ALL logs in one query (kills the N+1).
+  const setCountRows = logIds.length
+    ? await db.q(
+        `SELECT workout_log_id, COUNT(*) AS n FROM exercise_set_logs
+          WHERE workout_log_id IN (${inQ(logIds)}) AND completed = 1 GROUP BY workout_log_id`, logIds)
+    : [];
+  const setsByLog = new Map(setCountRows.map((r) => [r.workout_log_id, Number(r.n)]));
+
+  // Batch 2: exercise metadata + muscle roles in two queries (kills per-log lookups).
+  const exRows = exerciseIds.length
+    ? await db.q(
+        `SELECT id, movement, name, primary_muscle, secondary_muscles FROM exercise_library
+          WHERE id IN (${inQ(exerciseIds)})`, exerciseIds)
+    : [];
+  const exById = new Map(exRows.map((e) => [e.id, e]));
+  const muscleRows = exerciseIds.length
+    ? await db.q(
+        `SELECT em.exercise_id, em.role, m.id, m.name, m.region, m.view
+           FROM exercise_muscles em JOIN muscles m ON m.id = em.muscle_id
+          WHERE em.exercise_id IN (${inQ(exerciseIds)})`, exerciseIds)
+    : [];
+  const musclesByEx = new Map();
+  for (const r of muscleRows) {
+    if (!musclesByEx.has(r.exercise_id)) musclesByEx.set(r.exercise_id, []);
+    musclesByEx.get(r.exercise_id).push({ role: r.role, id: r.id, name: r.name, region: r.region, view: r.view });
+  }
+
   const perMuscle = new Map();  // muscleId -> { sets, min, max, name, region, view }
   const perMovement = new Map();
   let totalSets = 0, weightedTotal = 0;
 
   for (const log of logs) {
-    const sets = await setsForLog(db, log);
+    // prefer completed per-set rows; else the aggregate sets_done
+    const sets = setsByLog.get(log.id) ?? log.sets_done ?? 0;
     if (!sets) continue;
     totalSets += sets;
-    const ex = log.exercise_id
-      ? await db.q1('SELECT movement, name FROM exercise_library WHERE id = ?', [log.exercise_id])
-      : null;
-    const muscles = await getExerciseMuscles(db, log.exercise_id);
+    const ex = log.exercise_id ? exById.get(log.exercise_id) || null : null;
+    const muscles = musclesByEx.get(log.exercise_id) || deriveMusclesFallback(ex?.primary_muscle, ex?.secondary_muscles);
     for (const m of muscles) {
       const w = ROLE_WEIGHT[m.role] || 0.5;
       const contrib = sets * w;

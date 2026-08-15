@@ -22,12 +22,91 @@ if (process.argv.includes('--force')) {
   console.log(`Removed dev database at ${dbPath}`);
 }
 
+// ============================================================
+// Guarded column migrations for existing databases (idempotent).
+// The SAME list runs on SQLite (PRAGMA existence check) and
+// PostgreSQL (ADD COLUMN IF NOT EXISTS). Existing data is never
+// dropped or rewritten — new columns only.
+// ============================================================
+const MIGRATIONS = [
+  ['foods', 'client_id', `client_id TEXT REFERENCES clients(id) ON DELETE CASCADE`],
+  ['foods', 'serving', `serving TEXT`],
+  ['foods', 'piece_g', `piece_g REAL`],
+  ['foods', 'brand', `brand TEXT`],
+  ['foods', 'fiber', `fiber REAL`],
+  ['foods', 'sugar', `sugar REAL`],
+  ['foods', 'sodium', `sodium REAL`],
+  ['foods', 'source', `source TEXT NOT NULL DEFAULT 'USER_ENTERED'`],
+  ['exercise_library', 'ex_type', `ex_type TEXT NOT NULL DEFAULT 'compound'`],
+  ['workouts', 'source', `source TEXT NOT NULL DEFAULT 'program'`],
+  ['progress_photos', 'storage_key', `storage_key TEXT`],
+  ['progress_photos', 'storage', `storage TEXT NOT NULL DEFAULT 'data_url'`],
+  ['workout_logs', 'created_at', `created_at TEXT`],
+  ['custom_metrics', 'type', `type TEXT NOT NULL DEFAULT 'number'`],
+  ['meal_logs', 'quantity', `quantity REAL`],
+  ['meal_logs', 'unit', `unit TEXT`],
+  ['meal_logs', 'unit_type', `unit_type TEXT`],
+  // --- workout session timing + calorie persistence (cross-team contract) ---
+  ['workouts', 'started_at', `started_at TEXT`],
+  ['workouts', 'duration_min', `duration_min REAL`],
+  ['workouts', 'estimated_active_kcal', `estimated_active_kcal REAL`],
+  ['workouts', 'lower_kcal', `lower_kcal REAL`],
+  ['workouts', 'upper_kcal', `upper_kcal REAL`],
+  ['workouts', 'model_version', `model_version TEXT`],
+  ['workouts', 'schema_version', `schema_version TEXT`],
+  ['workouts', 'calorie_provider', `calorie_provider TEXT`],
+  ['workouts', 'calorie_estimated_at', `calorie_estimated_at TEXT`],
+  // --- legacy set provenance: 1 => derived from aggregate logs, not user-entered ---
+  ['exercise_set_logs', 'is_synthesized', `is_synthesized INTEGER NOT NULL DEFAULT 0`]
+];
+
+// Backfill per-set rows for existing aggregate workout_logs (idempotent).
+// Synthesized rows are explicitly marked is_synthesized = 1 so ML training
+// can exclude them — they are NOT user-entered per-set data.
+function backfillSetLogs(exec, idExpr) {
+  exec(`
+    INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, completed, is_synthesized)
+    SELECT ${idExpr}, wl.id, wl.client_id, wl.exercise_id, s.n, wl.reps, wl.reps, wl.weight, wl.weight, NULL, 1, 1
+      FROM workout_logs wl
+      JOIN (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) s ON s.n <= COALESCE(wl.sets_done, 1)
+     WHERE NOT EXISTS (SELECT 1 FROM exercise_set_logs es WHERE es.workout_log_id = wl.id);
+  `);
+}
+
+function applySqliteMigrations(db) {
+  const hasCol = (table, col) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    return cols.some((c) => c.name === col);
+  };
+  const addCol = (table, col, ddl) => {
+    if (!hasCol(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  };
+  for (const [table, col, ddl] of MIGRATIONS) addCol(table, col, ddl);
+  // Backfill created_at for existing workout_logs (best-effort: date-based).
+  db.exec(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
+  backfillSetLogs((sql) => db.exec(sql), `'stl_' || lower(hex(randomblob(8)))`);
+}
+
+async function applyPgMigrations(pool) {
+  // PostgreSQL supports ADD COLUMN IF NOT EXISTS natively — same idempotent
+  // guard as the SQLite PRAGMA check. Never drops or rewrites data.
+  for (const [table, col, ddl] of MIGRATIONS) {
+    // Each ddl string already carries its column name (the same string SQLite
+    // appends after "ADD COLUMN"), so never re-insert ${col} here — PG's
+    // IF NOT EXISTS slot is: ADD COLUMN [IF NOT EXISTS] name type.
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${ddl}`);
+  }
+  await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
+  backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
+}
+
 if (config.databaseUrl) {
   // PostgreSQL: run the same DDL through pg.
   const { default: pg } = await import('pg');
   const pool = new pg.Pool({ connectionString: config.databaseUrl });
   const sql = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(sql);
+  await applyPgMigrations(pool);
   // Defense-in-depth: Row-Level Security policies (PG only; idempotent).
   const rlsPath = path.join(root, 'database', 'rls.sql');
   if (fs.existsSync(rlsPath)) {
@@ -43,41 +122,7 @@ if (config.databaseUrl) {
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(schemaPath, 'utf8'));
-  // --- Guarded column migrations for existing databases (idempotent) ---
-  const hasCol = (table, col) => {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-    return cols.some((c) => c.name === col);
-  };
-  const addCol = (table, col, ddl) => {
-    if (!hasCol(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
-  };
-  addCol('foods', 'client_id', `client_id TEXT REFERENCES clients(id) ON DELETE CASCADE`);
-  addCol('foods', 'serving', `serving TEXT`);
-  addCol('foods', 'piece_g', `piece_g REAL`);
-  addCol('foods', 'brand', `brand TEXT`);
-  addCol('foods', 'fiber', `fiber REAL`);
-  addCol('foods', 'sugar', `sugar REAL`);
-  addCol('foods', 'sodium', `sodium REAL`);
-  addCol('foods', 'source', `source TEXT NOT NULL DEFAULT 'USER_ENTERED'`);
-  addCol('exercise_library', 'ex_type', `ex_type TEXT NOT NULL DEFAULT 'compound'`);
-  addCol('workouts', 'source', `source TEXT NOT NULL DEFAULT 'program'`);
-  addCol('progress_photos', 'storage_key', `storage_key TEXT`);
-  addCol('progress_photos', 'storage', `storage TEXT NOT NULL DEFAULT 'data_url'`);
-  addCol('workout_logs', 'created_at', `created_at TEXT`);
-  // Backfill created_at for existing workout_logs (best-effort: date-based).
-  db.exec(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
-  addCol('custom_metrics', 'type', `type TEXT NOT NULL DEFAULT 'number'`);
-  addCol('meal_logs', 'quantity', `quantity REAL`);
-  addCol('meal_logs', 'unit', `unit TEXT`);
-  addCol('meal_logs', 'unit_type', `unit_type TEXT`);
-  // Backfill per-set rows for existing aggregate workout_logs (idempotent).
-  db.exec(`
-    INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, completed)
-    SELECT 'stl_' || lower(hex(randomblob(8))), wl.id, wl.client_id, wl.exercise_id, s.n, wl.reps, wl.reps, wl.weight, wl.weight, NULL, 1
-      FROM workout_logs wl
-      JOIN (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) s ON s.n <= COALESCE(wl.sets_done, 1)
-     WHERE NOT EXISTS (SELECT 1 FROM exercise_set_logs es WHERE es.workout_log_id = wl.id);
-  `);
+  applySqliteMigrations(db);
   db.close();
   console.log(`Schema applied to SQLite at ${dbPath}`);
 }
