@@ -1,0 +1,20 @@
+UNCERTAINTY QUANTIFICATION — Model E, group-split conformal intervals
+==============================================================================
+14 participants split 7/7 (calibration / coverage-test), seed=42
+Disjoint halves — coverage numbers below are a genuine, non-circular check.
+
+-- Target coverage: 80% --
+  Calibrated on 7 participants, checked on 7 participants (501 rows)
+  EMPIRICAL coverage achieved: 81.2%
+  Mean interval width: 4.01 kcal/min (median 4.01)
+  Calibration offsets: [-2.22, +1.79] kcal/min
+
+-- Target coverage: 90% --
+  Calibrated on 7 participants, checked on 7 participants (501 rows)
+  EMPIRICAL coverage achieved: 91.0%
+  Mean interval width: 5.72 kcal/min (median 5.72)
+  Calibration offsets: [-3.16, +2.55] kcal/min
+
+-- Stability check: swap which half is calibration vs test --
+  Target 80%: alt split -> empirical coverage 80.8%, mean width 3.84 kcal/min
+  Target 90%: alt split -> empirical coverage 88.2%, mean width 5.35 kcal/min

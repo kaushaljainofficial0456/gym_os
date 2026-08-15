@@ -1,0 +1,52 @@
+# ============================================================
+# SK OS — ml/ gitignore
+# Keep the repo free of local envs, caches, large/raw external data,
+# and trained-model binaries. Provenance docs, code, and small
+# processed/derived artifacts ARE meant to be tracked — only the
+# categories below are excluded.
+# ============================================================
+
+# --- Python environment ---
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- secrets / local config ---
+.env
+.env.*
+
+# --- external/raw data (per data-provenance rules: never commit
+#     third-party datasets themselves — only the provenance record
+#     and license status; re-fetch from source via the ingestion
+#     scripts) ---
+data/raw/
+data/external/
+
+# NOTE: data/processed/ is intentionally NOT ignored here — small,
+# documented, derived research artifacts (e.g. the unified audit
+# dataset, provenance-tagged) are meant to be tracked. If a processed
+# file becomes large, ignore that specific path explicitly rather than
+# blanket-ignoring the directory.
+
+# --- trained model artifacts / large binaries ---
+models/*.pkl
+models/*.joblib
+models/*.h5
+models/*.hdf5
+models/*.onnx
+models/*.pt
+models/*.pth
+models/*.ckpt
+models/*.cbm
+*.bin
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db

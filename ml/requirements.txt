@@ -1,0 +1,52 @@
+# ============================================================
+# SK OS — ML / Energy-Expenditure Research
+# Phase: DATA AUDIT (Section 36, "FIRST PHASE — DO NOT TRAIN YET")
+#
+# Scope discipline: this file lists ONLY what the audit/ingestion phase
+# needs — reading external datasets (csv/xlsx/pdf-adjacent metadata),
+# normalizing units, checking missingness, and writing up findings in
+# notebooks. It intentionally excludes modeling libraries (scikit-learn,
+# xgboost, lightgbm, catboost) because no training happens in this phase
+# (see project rule: "Do NOT install unnecessary packages just because
+# they may be useful later"). Those belong in a separate
+# requirements-model.txt introduced only when Phase 2 (baseline +
+# ML-correction modeling) is explicitly authorized.
+#
+# Versions are pinned to a compatible, currently-stable minor range
+# (not exact-pinned) so security patches can land without breaking
+# the audit notebooks. Re-pin exactly (==) once the research dataset
+# is frozen, for reproducibility (see project rule 34).
+# ============================================================
+
+# --- core data handling ---
+pandas>=2.2,<2.3          # dataset loading, joining, missingness analysis
+numpy>=1.26,<2.0          # numeric ops; pinned <2.0 for pandas/matplotlib compat
+
+# --- reading external dataset formats ---
+openpyxl>=3.1,<3.2         # .xlsx (Compendium of Physical Activities, many study supplements ship as Excel)
+
+# --- fetching / verifying external sources ---
+requests>=2.31,<3.0        # download supplementary datasets, check license/DOI pages, HTTP HEAD checks
+
+# --- audit notebooks ---
+jupyter>=1.0,<2.0          # notebooks/ for interactive dataset inspection (required project structure, Section 31)
+
+# --- audit visualization (missingness, participant/study counts — Section 36 items 13-14) ---
+matplotlib>=3.8,<3.9
+seaborn>=0.13,<0.14
+
+# --- exploratory modeling (Phase 3+: MET baseline is quantified, now
+#     comparing correction approaches per the model-selection rule —
+#     "experimentally compare, don't assume ML is better") ---
+scikit-learn>=1.4,<1.5     # LinearRegression + RandomForestRegressor for the
+                            # exploratory comparison, LeaveOneGroupOut for
+                            # participant-grouped validation
+
+# ============================================================
+# Still deliberately NOT included:
+#   xgboost, lightgbm, catboost  -> only if the simpler models in Model
+#       Selection Rule (Section 35) fail to beat baseline AND scikit-learn's
+#       RandomForest first — no justification yet with n=25 participants
+#   scipy   -> add if a specific statistical test is needed; not required yet
+#   shap    -> explainability phase, once a model is actually selected
+# ============================================================

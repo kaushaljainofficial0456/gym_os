@@ -1,0 +1,28 @@
+DEPLOYED BASELINE FORMULA — evaluation against measured research data
+========================================================================
+Formula: MET x 3.5 x body_weight_kg / 200  (rate form, kcal/min)
+Rows evaluated: 1001  (reis2017 + reis2019 only, see script docstring for why)
+
+-- OVERALL --
+MAE (kcal/min):  2.96
+MAPE:            36.5%
+Bias (pred-measured, mean signed error): -1.62 kcal/min
+
+-- BY MAPPED INTENSITY TIER --
+                           n   mae   mape  bias  mean_measured  mean_predicted
+mapped_intensity_rating                                                       
+hard                     112  9.41  41.37 -9.07          17.33            8.26
+light                    445  1.97  32.25 -1.23           5.36            4.13
+moderate                 444  2.32  39.44 -0.13           6.32            6.20
+
+-- BY EXERCISE --
+                         n   mae   mape  bias
+exercise_canonical_id                        
+INCLINE_BENCH_PRESS    122  2.08  24.26 -1.38
+BENCH_PRESS            126  1.29  25.35  0.41
+LEG_PRESS              124  3.10  29.96 -3.00
+LEG_EXTENSION          126  4.19  35.05 -3.91
+TRICEPS_EXTENSION      126  1.57  38.76  0.81
+BICEP_CURL             125  1.52  40.61  1.21
+LAT_PULLDOWN           126  1.61  42.05  1.18
+BARBELL_SQUAT          126  8.28  55.17 -8.28
