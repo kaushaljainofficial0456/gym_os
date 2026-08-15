@@ -17,13 +17,17 @@
 //   * label slot is null (no fabricated ground truth); persisted
 //     baseline estimate surfaced separately, never as a label
 //   * no PII / names / emails in the output; read-only extraction
+//   * Phase 3B Step 2 — optional org scoping: --org narrows the export
+//     to one organization (parameterized filter); omitted preserves the
+//     existing, documented cross-org default; an unknown org_id fails
+//     clearly via assertOrgExists rather than silently exporting nothing
 // ============================================================
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractTrainingDataset, TRAINING_SCHEMA_VERSION } from '../src/services/intelligence/trainingData.js';
+import { extractTrainingDataset, assertOrgExists, TRAINING_SCHEMA_VERSION } from '../src/services/intelligence/trainingData.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -64,13 +68,27 @@ async function seedBase(db) {
   }
 }
 
+// ---- Phase 3B Step 2: a second organization, for org-scoping tests ----
+// exercise_library rows are global (is_global=1, org_id NULL) so both
+// orgs share the same library — mirrors seedBase's own setup.
+const ORG2 = 'o2', USER2 = 'u2', CLIENT2 = 'c2';
+async function seedSecondOrg(db) {
+  await db.run('INSERT INTO organizations (id, name, slug, created_at) VALUES (?, ?, ?, ?)', [ORG2, 'Gym B', 'gym-b', '2026-01-01T00:00:00Z']);
+  await db.run(`INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at) VALUES (?, ?, ?, ?, 'CLIENT', ?, 1, ?)`,
+    [USER2, ORG2, 'c@b.in', 'x', 'Client Two', '2026-01-01T00:00:00Z']);
+  await db.run(`INSERT INTO clients (id, user_id, org_id, goal, age, sex, height_cm, start_weight, current_weight, created_at) VALUES (?, ?, ?, 'FAT_LOSS', ?, ?, ?, ?, ?, ?)`,
+    [CLIENT2, USER2, ORG2, 28, 'F', 165, 65, 63, '2026-01-01T00:00:00Z']);
+}
+
 // Insert a completed workout with planned exercises + per-set rows.
+// orgId/clientId default to the single-org fixture (ORG/CLIENT) so every
+// existing call site is unaffected; org-scoping tests pass them explicitly.
 // setLogs: [{ exercise_id (library id | null), actual_reps, actual_weight, completed?, is_synthesized? }]
-async function seedWorkout(db, { id = 'wko_1', startedAt = '2026-08-15T09:00:00Z', completedAt = '2026-08-15T09:30:00Z', persisted = null, exercises = [], setLogs = [] } = {}) {
+async function seedWorkout(db, { id = 'wko_1', orgId = ORG, clientId = CLIENT, startedAt = '2026-08-15T09:00:00Z', completedAt = '2026-08-15T09:30:00Z', persisted = null, exercises = [], setLogs = [] } = {}) {
   await db.run(
     `INSERT INTO workouts (id, org_id, client_id, name, scheduled_date, status, started_at, completed_at, created_at)
      VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?)`,
-    [id, ORG, CLIENT, 'Push Day', '2026-08-15', startedAt, completedAt, '2026-08-15T00:00:00Z']);
+    [id, orgId, clientId, 'Push Day', '2026-08-15', startedAt, completedAt, '2026-08-15T00:00:00Z']);
   if (persisted) {
     await db.run(
       `UPDATE workouts SET estimated_active_kcal = ?, lower_kcal = ?, upper_kcal = ?, model_version = ?, schema_version = ?, calorie_provider = ?, calorie_estimated_at = ?
@@ -89,11 +107,11 @@ async function seedWorkout(db, { id = 'wko_1', startedAt = '2026-08-15T09:00:00Z
     await db.run(
       `INSERT INTO workout_logs (id, client_id, workout_id, exercise_id, date, sets_done, reps, weight)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [logId, CLIENT, id, s.exercise_id, '2026-08-15', 1, s.actual_reps, s.actual_weight]);
+      [logId, clientId, id, s.exercise_id, '2026-08-15', 1, s.actual_reps, s.actual_weight]);
     await db.run(
       `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, actual_reps, actual_weight, rest_seconds, rir, completed, is_synthesized)
        VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
-      [id + '_s_' + Math.random().toString(36).slice(2, 10), logId, CLIENT, s.exercise_id,
+      [id + '_s_' + Math.random().toString(36).slice(2, 10), logId, clientId, s.exercise_id,
        s.actual_reps, s.actual_weight, s.rest_seconds ?? null, s.rir ?? null, s.completed ?? 1, s.is_synthesized ?? 0]);
   }
   return id;
@@ -387,4 +405,95 @@ test('extraction is read-only — database rows are unchanged', async () => {
   assert.equal(await count('workouts'), before.workouts);
   assert.equal(await count('exercise_set_logs'), before.setLogs);
   assert.equal(await count('workout_logs'), before.workoutLogs);
+});
+
+// ============================================================
+// Phase 3B Step 2 — organization scoping (docs/training-data-contract.md §1.1)
+//   * optional orgId narrows extractTrainingDataset to one organization
+//   * omitted orgId preserves the existing, documented cross-org default
+//   * unknown org_id fails clearly via assertOrgExists (the CLI turns
+//     this into a non-zero exit), never a silent empty dataset
+//   * no PII crosses organizations either way
+// ============================================================
+
+// Two-org fixture shared by the scoping tests below.
+async function seedTwoOrgWorkouts(db) {
+  await seedBase(db);
+  await seedSecondOrg(db);
+  await seedWorkout(db, {
+    id: 'wko_orgA',
+    exercises: [{ id: 'wxeA', exercise_id: 'libA', name: 'Bench Press', sets: 3, reps: '10', weight: '60' }],
+    setLogs: [{ exercise_id: 'libA', actual_reps: 10, actual_weight: 60 }]
+  });
+  await seedWorkout(db, {
+    id: 'wko_orgB',
+    orgId: ORG2,
+    clientId: CLIENT2,
+    exercises: [{ id: 'wxeB', exercise_id: 'libB', name: 'Lat Pulldown', sets: 3, reps: '12', weight: '50' }],
+    setLogs: [{ exercise_id: 'libB', actual_reps: 12, actual_weight: 50 }]
+  });
+}
+
+test('org A export (orgId scoped) contains only org A workouts', async () => {
+  const db = await memDb();
+  await seedTwoOrgWorkouts(db);
+  const { recs } = await collect(db, { orgId: ORG });
+  assert.equal(recs.length, 1, 'only org A workout returned');
+  assert.equal(recs[0].workout_id, 'wko_orgA');
+  assert.equal(recs[0].org_id, ORG);
+  assert.ok(!recs.some((r) => r.org_id === ORG2), 'org B never appears in an org A scoped export');
+});
+
+test('org B export (orgId scoped) contains only org B workouts', async () => {
+  const db = await memDb();
+  await seedTwoOrgWorkouts(db);
+  const { recs } = await collect(db, { orgId: ORG2 });
+  assert.equal(recs.length, 1, 'only org B workout returned');
+  assert.equal(recs[0].workout_id, 'wko_orgB');
+  assert.equal(recs[0].org_id, ORG2);
+  assert.ok(!recs.some((r) => r.org_id === ORG), 'org A never appears in an org B scoped export');
+});
+
+test('no org filter (orgId omitted) still exports both organizations — existing default preserved', async () => {
+  const db = await memDb();
+  await seedTwoOrgWorkouts(db);
+  const { recs } = await collect(db); // no orgId -> unchanged cross-org default
+  assert.equal(recs.length, 2, 'both workouts exported when no org filter is given');
+  assert.deepEqual([...new Set(recs.map((r) => r.org_id))].sort(), [ORG, ORG2].sort(), 'default export spans both organizations');
+});
+
+test('assertOrgExists: known organization resolves without throwing', async () => {
+  const db = await memDb();
+  await seedBase(db);
+  await assert.doesNotReject(() => assertOrgExists(db, ORG));
+});
+
+test('assertOrgExists: unknown organization throws — CLI turns this into a clear non-zero exit, never a silent empty dataset', async () => {
+  const db = await memDb();
+  await seedBase(db);
+  await assert.rejects(() => assertOrgExists(db, 'org_does_not_exist'), /unknown organization/);
+});
+
+test('org-scoped export introduces no PII across organizations', async () => {
+  const db = await memDb();
+  await seedTwoOrgWorkouts(db);
+  const { recs } = await collect(db, { orgId: ORG });
+  const json = JSON.stringify(recs);
+  for (const banned of ['Client One', 'Client Two', 'c@a.in', 'c@b.in', 'Gym A', 'Gym B', 'Push Day', 'Bench Press', 'Lat Pulldown']) {
+    assert.ok(!json.includes(banned), `org-scoped export must not contain ${banned}`);
+  }
+});
+
+test('org scoping does not change the JSONL record contract shape', async () => {
+  const db = await memDb();
+  await seedTwoOrgWorkouts(db);
+  const { recs } = await collect(db, { orgId: ORG });
+  const r = recs[0];
+  // Same top-level keys the unscoped contract test asserts — scoping is
+  // purely a WHERE-clause change, never a record-shape change.
+  assert.deepEqual(
+    Object.keys(r).sort(),
+    ['baseline_estimate', 'client_id', 'completed_at', 'duration_measured', 'features', 'label', 'org_id', 'schema_version', 'scheduled_date', 'synthesized_sets_excluded', 'workout_id'].sort()
+  );
+  assert.equal(r.schema_version, TRAINING_SCHEMA_VERSION);
 });

@@ -22,6 +22,10 @@
 //     are NOT training labels (contract doc §4)
 //   * no PII: names, emails, notes, instructions are never read
 //     into the output — only opaque app tokens are exported
+//   * cross-org by default (docs/training-data-contract.md §1.1) —
+//     RLS deliberately does not engage on this plain (non-tx) read
+//     path; an optional orgId narrows the SAME query to one tenant
+//     via a parameterized filter, never string interpolation
 // ============================================================
 import { dayKey } from '../../utils/time.js';
 import { buildWorkoutCalorieInput, resolveBodyWeight } from './calorieModel.js';
@@ -29,14 +33,28 @@ import { buildWorkoutCalorieInput, resolveBodyWeight } from './calorieModel.js';
 export const TRAINING_SCHEMA_VERSION = '0.2';
 export const DEFAULT_BATCH_SIZE = 100;
 
+// Validates an org id before a scoped export runs — never let a typo'd
+// --org silently produce an empty-but-"successful" dataset that reads as
+// "this org has no completed workouts". Throws a plain Error; callers
+// (the CLI) turn that into a clear non-zero exit.
+export async function assertOrgExists(db, orgId) {
+  const row = await db.q1('SELECT id FROM organizations WHERE id = ?', [orgId]);
+  if (!row) throw new Error(`unknown organization: ${orgId}`);
+}
+
 // Async generator over the dataset: yields one record per completed
 // workout with ≥ 1 real completed set. `db` is the shared adapter
 // (q / q1 surface). Workouts are paged by completed_at so memory
 // stays bounded on large databases.
 //
+// Optional `orgId` narrows the export to a single organization's
+// workouts (parameterized — never interpolated into SQL). Omitted =>
+// the existing, documented cross-org default (docs/training-data-contract.md
+// §1.1) — unchanged from before this option existed.
+//
 // Optional `stats` object is mutated with counts (scanned, written,
 // noRealSets, ambiguous, failed) for the CLI summary — never payloads.
-export async function* extractTrainingDataset(db, { limit = DEFAULT_BATCH_SIZE, offset = 0, stats = null } = {}) {
+export async function* extractTrainingDataset(db, { limit = DEFAULT_BATCH_SIZE, offset = 0, stats = null, orgId = null } = {}) {
   // Stats fields are defined once the object is passed, so callers can
   // rely on them being numbers (0 when nothing was counted).
   if (stats) {
@@ -46,17 +64,22 @@ export async function* extractTrainingDataset(db, { limit = DEFAULT_BATCH_SIZE, 
     stats.ambiguous = stats.ambiguous || 0;
     stats.failed = stats.failed || 0;
   }
+  // The WHERE clause text is a static, hardcoded string — only ever
+  // conditionally CONCATENATED, never built from orgId itself. The org
+  // id value always travels through a `?` placeholder.
+  const orgFilter = orgId ? ' AND org_id = ?' : '';
   let cursor = offset;
   for (;;) {
+    const params = orgId ? [orgId, limit, cursor] : [limit, cursor];
     const workouts = await db.q(
       `SELECT id, org_id, client_id, scheduled_date, status, completed_at, started_at,
               estimated_active_kcal, lower_kcal, upper_kcal, model_version,
               schema_version, calorie_provider
          FROM workouts
-        WHERE status = 'completed' AND completed_at IS NOT NULL
+        WHERE status = 'completed' AND completed_at IS NOT NULL${orgFilter}
         ORDER BY completed_at, id
         LIMIT ? OFFSET ?`,
-      [limit, cursor]);
+      params);
     if (!workouts.length) return;
     for (const w of workouts) {
       if (stats) stats.scanned = (stats.scanned || 0) + 1;
