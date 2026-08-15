@@ -44,24 +44,82 @@ export function resolveProvider() {
   return ['baseline', 'mock', 'ml'].includes(p) ? p : 'baseline';
 }
 
+// Sane upper bound for ACTIVE calories in a single resistance-training
+// session. Rationale: ~2 h at vigorous effort ≈ 6 MET × 3.5 × 120 kg ÷
+// 200 × 120 min ≈ 1512 kcal. Anything larger is a buggy provider, not a
+// real session — reject and fall back rather than persist garbage.
+export const MAX_ACTIVE_KCAL = 1500;
+
+// ------------------------------------------------------------------
+// VALIDATION GATE — the single place a provider result is checked
+// before it can ever be persisted. Runs inside estimateWorkoutCalories,
+// so every call site (workouts.js /:id/complete, intelligence.js
+// /confirm-workout) is protected: persistCalorieResult only ever
+// receives output that passed here. schema_version is stamped by the
+// backend — a model-provided value is never trusted.
+// ------------------------------------------------------------------
+export function validateCalorieResult(result = {}) {
+  const issues = [];
+  const { estimated_active_kcal, lower_kcal, upper_kcal, model_version, provider } = result;
+  const nonNegNum = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+  if (!nonNegNum(estimated_active_kcal)) {
+    issues.push('estimated_active_kcal must be a finite number >= 0');
+  } else if (estimated_active_kcal > MAX_ACTIVE_KCAL) {
+    issues.push(`estimated_active_kcal exceeds the documented sane maximum (${MAX_ACTIVE_KCAL})`);
+  }
+  if (!nonNegNum(lower_kcal)) issues.push('lower_kcal must be a finite number >= 0');
+  if (!nonNegNum(upper_kcal)) issues.push('upper_kcal must be a finite number >= 0');
+  if (nonNegNum(lower_kcal) && nonNegNum(estimated_active_kcal) && nonNegNum(upper_kcal)) {
+    if (lower_kcal > estimated_active_kcal || estimated_active_kcal > upper_kcal) {
+      issues.push('range violated: lower_kcal <= estimated_active_kcal <= upper_kcal');
+    }
+  }
+  if (typeof model_version !== 'string' || !model_version.trim()) {
+    issues.push('model_version must be a non-empty string');
+  }
+  if (!['baseline', 'mock', 'ml'].includes(provider)) {
+    issues.push('provider must be one of: baseline, mock, ml');
+  }
+  if (issues.length) return { ok: false, issues };
+  return { ok: true, result: { ...result, schema_version: CALORIE_SCHEMA_VERSION } };
+}
+
 // ------------------------------------------------------------------
 // ESTIMATE — public entry point. Always returns a well-formed result;
 // never throws for provider reasons (an unavailable ML provider falls
-// back to baseline).
+// back to baseline). Every provider result passes through
+// validateCalorieResult() first — invalid output (e.g. a buggy model)
+// is NEVER persisted raw: it falls back to the baseline estimate,
+// truthfully labeled provider 'baseline'.
 // ------------------------------------------------------------------
 export function estimateWorkoutCalories(input = {}) {
   const provider = resolveProvider();
-  if (provider === 'mock') return mockEstimate();
-  if (provider === 'ml') {
+  let result = null;
+  let note = null;
+  if (provider === 'mock') {
+    result = mockEstimate();
+  } else if (provider === 'ml') {
     try {
-      const r = mlEstimate(input);
-      if (r && Number.isFinite(r.estimated_active_kcal)) return { ...r, provider: 'ml', schema_version: CALORIE_SCHEMA_VERSION };
-    } catch (e) {
-      // fall through to baseline — the API must never break on ML availability
+      const r = mlImpl(input);
+      if (r) result = { ...r, provider: 'ml' };
+    } catch {
+      // fall through — the API must never break on ML availability
     }
-    return { ...baselineEstimate(input), provider: 'baseline', note: 'ml provider unavailable — baseline fallback' };
+    if (!result) {
+      note = 'ml provider unavailable — baseline fallback';
+      result = baselineEstimate(input);
+    }
+  } else {
+    result = baselineEstimate(input);
   }
-  return baselineEstimate(input);
+
+  const check = validateCalorieResult(result);
+  if (!check.ok) {
+    note = `invalid ${provider} output — baseline fallback (${check.issues.join('; ')})`;
+    return { ...baselineEstimate(input), note };
+  }
+  return { ...check.result, ...(note ? { note } : {}) };
 }
 
 // ------------------------------------------------------------------
@@ -108,10 +166,20 @@ function mockEstimate() {
 // wiring) with a call into the trained model, keeping the SAME output
 // shape: { estimated_active_kcal, lower_kcal, upper_kcal, model_version }.
 // The service stays the single choke point — routes and frontend do
-// not change when the model lands.
+// not change when the model lands. Output is validated by
+// validateCalorieResult() before it can ever be persisted.
 // ------------------------------------------------------------------
 function mlEstimate(/* input */) {
   throw new Error('calorie ml provider not implemented yet — using baseline fallback');
+}
+
+// Provider dispatch indirection + test hook (mirrors resetRateLimits() in
+// rateLimit.js): lets tests inject a fake ML provider to exercise the
+// invalid-output fallback path end-to-end. Production code never calls
+// this — Sambhav replaces mlEstimate() itself.
+let mlImpl = mlEstimate;
+export function __setMlEstimateForTests(fn) {
+  mlImpl = typeof fn === 'function' ? fn : mlEstimate;
 }
 
 // ------------------------------------------------------------------
