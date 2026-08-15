@@ -51,7 +51,6 @@ Body (zod-validated):
 
 ```jsonc
 {
-  "started_at": "2026-08-15T09:00:00.000Z",   // OPTIONAL — fallback when /start wasn't called
   "logs": [
     {
       "exercise_id": "wxeA",
@@ -64,6 +63,15 @@ Body (zod-validated):
 }
 ```
 
+> **Timing:** `started_at` comes from `POST /workouts/:id/start` — the backend is the
+> ONLY source. A client-supplied `started_at` is **not accepted** and cannot inflate
+> duration. If `/start` was never called, `duration_min` stays `null` (measured-only;
+> no estimated duration is substituted).
+>
+> **Unknown exercises:** any `exercise_id` not belonging to this workout returns
+> **422** (`exercise_id does not belong to this workout`) — never silently ignored.
+> The response only echoes the client's own input, so no cross-tenant data leaks.
+
 Response additions:
 
 ```jsonc
@@ -71,9 +79,9 @@ Response additions:
   "ok": true,
   "prs": [ /* existing PR records */ ],
   "workoutId": "wko_1",
-  "duration_min": 45,                  // NEW — backend-computed actual duration
+  "duration_min": 45,                  // NEW — backend-computed actual duration (null if no /start)
   "calorie": {                          // NEW — persisted estimate (actual sets only)
-    "schema_version": "0.1",
+    "schema_version": "0.2",
     "estimated_active_kcal": 285,
     "lower_kcal": 250,
     "upper_kcal": 320,
@@ -102,7 +110,7 @@ Response additions:
   "estMinutes": 19,
   "estKcal": 117,
   "calorie": {                          // NEW
-    "schema_version": "0.1",
+    "schema_version": "0.2",
     "estimated_active_kcal": 117,
     "lower_kcal": 99,
     "upper_kcal": 135,
@@ -125,10 +133,13 @@ stays null for these. Set rows are `is_synthesized = 0` (user-confirmed input).
 
 ## 6. Notes for Manavi
 
-- Nothing was removed — all changes are additive. Update the workout UI to call
-  `POST /workouts/:id/start` when the user begins; `duration_min` and `calorie` now come
-  back from the server (drop the client-side `Date.now() - startedAt` math as the
-  authoritative value).
+- Nothing was removed — all changes are additive. Call `POST /workouts/:id/start` when
+  the user begins; `duration_min` and `calorie` come back from the server (drop the
+  client-side `Date.now() - startedAt` math as the authoritative value).
+- **Do NOT send a client-computed `started_at` on /complete — the backend rejects
+  client start times; duration comes only from the server-side /start.**
 - `meta.calorie.source === 'preview'` → show as an estimate before the session;
   `'persisted'` → the authoritative number.
 - ML provider is invisible to the UI by design.
+- NL-logged sessions (`/intel/confirm-workout`) have no measured duration
+  (`duration_min: null`); don't render a duration for those.

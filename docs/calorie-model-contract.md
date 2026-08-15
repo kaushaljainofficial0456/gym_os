@@ -11,24 +11,27 @@ backend/src/services/intelligence/calorieModel.js
     estimateWorkoutCalories(input) -> result
 ```
 
-Feature extraction (actual `exercise_set_logs` → input) is done by the backend;
-**the model never touches PostgreSQL**. The backend persists the result.
+Feature extraction (actual `exercise_set_logs` → input) is done by the backend via
+`buildWorkoutCalorieInput()` — the **single feature-engineering choke point**. Routes
+and services never compute calorie features themselves. **The model never touches
+PostgreSQL.** The backend persists the result.
 
 ---
 
 ## 1. Versioning
 
-- `schema_version`: version of THIS input/output contract. Current: **`0.1`**.
+- `schema_version`: version of THIS input/output contract. Current: **`0.2`**.
+  (`0.1` added session/exercise/derived aggregates — see §2.1/§2.2; output shape unchanged.)
 - `model_version`: version of the model implementation (Sambhav's choice), e.g.
   `skos-cal-v1`. Persisted per-workout for traceability.
 - Changing the contract shape requires bumping `schema_version` (coordinate with
   Kaushal; see `docs/TEAM-CONTRACT.md` OLD/NEW/WHY/IMPACT).
 
-## 2. INPUT (schema_version 0.1)
+## 2. INPUT (schema_version 0.2)
 
 ```jsonc
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "user": {
     "age_years": 30,          // number | null
     "sex": "male",            // "male" | "female" | "other" | null
@@ -37,9 +40,21 @@ Feature extraction (actual `exercise_set_logs` → input) is done by the backend
   },
   "session": {
     "workout_id": "wko_abc",          // string | null
-    "duration_seconds": 1800,         // number | null (measured; null when unknown)
+    "duration_seconds": 1800,         // number | null (MEASURED only — see §2.3)
     "duration_minutes": 30,           // number | null (rounds to 1 decimal)
-    "intensity_rating": "moderate"    // "light" | "moderate" | "hard" | null
+    "intensity_rating": "moderate",   // "light" | "moderate" | "hard" | null
+    // --- v0.2 session aggregates (actual completed sets only) ---
+    "exercise_count": 4,              // exercises with ≥1 completed set (skipped = 0)
+    "total_sets": 12,                 // completed sets
+    "total_reps": 96,                 // completed reps
+    "total_volume_kg": 3240,          // completed volume (Σ reps × weight_kg)
+    // --- v0.2 derived features (null when denominator unknown — never fabricated) ---
+    "volume_per_minute": 108.0,       // total_volume_kg / duration_min
+    "sets_per_minute": 0.4,           // total_sets / duration_min
+    "reps_per_minute": 3.2,           // total_reps / duration_min
+    "relative_load": 0.77,            // average_load_kg / body_weight_kg
+    "compound_set_ratio": 0.75,       // compound sets / total sets
+    "isolation_set_ratio": 0.25       // isolation sets / total sets
   },
   "exercises": [
     {
@@ -58,27 +73,58 @@ Feature extraction (actual `exercise_set_logs` → input) is done by the backend
           "rest_seconds": 90,         // number | null
           "completed": 1              // always 1 (incomplete sets are excluded)
         }
-      ]
+      ],
+      // --- v0.2 per-exercise aggregates (actual completed sets only) ---
+      "sets": 3,                      // completed sets for this exercise
+      "total_reps": 30,
+      "total_volume_kg": 1800.0,      // Σ reps × weight_kg (1 decimal)
+      "average_load_kg": 60.0         // total_volume_kg / total_reps (1 decimal; 0 when no reps)
     }
   ]
 }
 ```
 
-### Semantics (read carefully)
+### 2.1 Session & per-exercise aggregates
 
-- **Only completed sets appear.** Skipped exercises appear with
-  `completed_sets: []` — they contribute 0 sets / 0 reps / 0 workload. The session
-  record keeps them so the model can see the full session if useful.
+- Computed **only from actual completed `exercise_set_logs`** (see §2.2). Planned
+  workload from `workout_exercises` is never used as actual calorie workload.
+- `exercise_count` counts exercises with ≥ 1 completed set — **skipped exercises
+  (0 completed sets) contribute 0 sets / 0 reps / 0 volume and are NOT counted**.
+- Exercises with zero completed sets still appear in the `exercises` array (with
+  `completed_sets: []` and aggregate values 0) so the model can see the full session.
+
+### 2.2 Actual-workout semantics (read carefully)
+
+- **Only completed sets appear.** Skipped exercises contribute `0 sets / 0 reps /
+  0 workload` and are not counted as completed work.
 - `weight_kg: 0` means bodyweight or unknown — do not treat as a zero load signal.
 - `exercise_id` is the shared canonical library id; it is `null` for name-only
   exercises (rare). Never invent a second exercise database.
-- `duration_*` are `null` when no measured duration exists (e.g. NL-logged sessions).
+- **Synthesized/legacy sets** (`exercise_set_logs.is_synthesized = 1`) are included
+  in the input but remain identifiable via the DB flag — **filter `is_synthesized = 0`
+  for training data**. A dedicated `is_synthesized` field is deliberately NOT added to
+  the contract input; provenance filtering happens in the training pipeline.
+- Missing values are never fabricated: optional fields are `null`, aggregates that
+  require a missing denominator are `null`, unknown weights become `0` (documented
+  bodyweight convention), and an empty workout yields `total_sets: 0`.
 
-## 3. OUTPUT (schema_version 0.1)
+### 2.3 Duration provenance (measured vs estimated)
+
+- `duration_seconds` / `duration_minutes` carry **measured duration only** — the
+  server-authoritative `completed_at − started_at` from `POST /workouts/:id/start` →
+  `/complete`. Client-supplied start times are **never accepted**.
+- When no measured duration exists (e.g. NL-logged sessions via
+  `/intel/confirm-workout`), `duration_*` are `null` — the input never substitutes an
+  estimated duration for a measured one.
+- `estimateDurationMinutes()` (baseline provider only) derives a **clearly-labeled
+  estimate** from completed sets when duration is absent; it is never presented as
+  measured and never feeds the contract's `duration_*` fields.
+
+## 3. OUTPUT (schema_version 0.2)
 
 ```jsonc
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "estimated_active_kcal": 285,   // number, integer — ACTIVE calories only
   "lower_kcal": 250,              // number, integer — low end of the range
   "upper_kcal": 320,              // number, integer — high end of the range
@@ -119,7 +165,7 @@ Order of preference (documented in `docs/TEAM-CONTRACT.md` §4.2):
 
 ```jsonc
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "estimated_active_kcal": 285,
   "lower_kcal": 250,
   "upper_kcal": 320,
@@ -144,6 +190,9 @@ for NL-logged sessions. `meta.estKcal` is kept in sync with
 - `CALORIE_MODEL_PROVIDER=mock` — fixed demo values (300/250/350), clearly labeled.
 - `CALORIE_MODEL_PROVIDER=ml` — Sambhav's model. **Until implemented, `estimateWorkoutCalories`
   falls back to baseline and marks `note: "ml provider unavailable — baseline fallback"`.**
+- **Provider honesty:** the persisted result always records the provider actually used
+  (`workouts.calorie_provider`) — a baseline result never appears to be an ML
+  prediction, and the provider is never exposed to the frontend.
 - **Error behavior:** the backend wraps estimation in try/catch at every call site.
   Estimation failure never fails workout completion/logging — the workout commits and
   the calorie result stays `null`. The model is expected to be robust to missing

@@ -133,7 +133,7 @@ test('workout completion persists status, duration and calorie result atomically
   assert.ok(r.json.duration_min !== null && r.json.duration_min >= 0, 'backend-computed duration');
   const cal = r.json.calorie;
   assert.ok(cal, 'calorie returned');
-  assert.equal(cal.schema_version, '0.1');
+  assert.equal(cal.schema_version, '0.2');
   assert.ok(cal.estimated_active_kcal > 0, 'estimate present');
   assert.ok(cal.lower_kcal <= cal.estimated_active_kcal && cal.estimated_active_kcal <= cal.upper_kcal, 'range wraps midpoint');
   assert.equal(cal.provider, 'baseline');
@@ -146,7 +146,7 @@ test('workout completion persists status, duration and calorie result atomically
   assert.equal(w.lower_kcal, cal.lower_kcal);
   assert.equal(w.upper_kcal, cal.upper_kcal);
   assert.equal(w.model_version, 'skos-cal-baseline-v1', 'model version persisted');
-  assert.equal(w.schema_version, '0.1');
+  assert.equal(w.schema_version, '0.2');
   assert.equal(w.calorie_provider, 'baseline');
   assert.ok(w.calorie_estimated_at, 'estimated_at persisted');
 
@@ -158,21 +158,43 @@ test('workout completion persists status, duration and calorie result atomically
   await api.close();
 });
 
-// ---------- duration from client-reported start ----------
-test('completion computes duration from client-reported started_at (backend source of truth)', async (t) => {
+// ---------- duration: client-reported started_at is NEVER trusted ----------
+test('completion ignores client-reported started_at — no /start means no measured duration', async (t) => {
   const { db, wId } = await workoutFixture();
   const api = await startWorkoutsApi(db, CLIENT);
   t.after(() => api.close());
-  const startedAt = new Date(Date.now() - 90 * 60000).toISOString();
+  // Client claims a start 90 minutes ago — must be ignored entirely.
+  const claimed = new Date(Date.now() - 90 * 60000).toISOString();
   const r = await api.call('POST', `/workouts/${wId}/complete`, {
-    started_at: startedAt,
+    started_at: claimed,
     logs: [{ exercise_id: 'wxeA', sets: [{ actual_reps: 10, actual_weight: 60 }] }]
   });
   assert.equal(r.status, 200);
-  assert.ok(Math.abs(r.json.duration_min - 90) < 0.1, `duration ≈ 90 min (got ${r.json.duration_min})`);
+  assert.equal(r.json.duration_min, null, 'client started_at must not create a duration');
   const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [wId]);
-  assert.equal(w.started_at, startedAt, 'client-reported start persisted as authoritative');
-  assert.equal(w.duration_min, r.json.duration_min);
+  assert.equal(w.started_at, null, 'no fabricated start time');
+  assert.equal(w.duration_min, null, 'no fabricated duration');
+  await api.close();
+});
+
+test('duration is measured from the server /start timestamp only (client input ignored)', async (t) => {
+  const { db, wId } = await workoutFixture();
+  const api = await startWorkoutsApi(db, CLIENT);
+  t.after(() => api.close());
+  await api.call('POST', `/workouts/${wId}/start`);
+  const claimed = new Date(Date.now() - 5 * 60000).toISOString(); // bogus client claim
+  const r = await api.call('POST', `/workouts/${wId}/complete`, {
+    started_at: claimed,
+    logs: [{ exercise_id: 'wxeA', sets: [{ actual_reps: 10, actual_weight: 60 }] }]
+  });
+  assert.equal(r.status, 200);
+  const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [wId]);
+  assert.ok(w.started_at, 'server /start persisted started_at');
+  assert.notEqual(w.started_at, claimed, 'client started_at is never persisted');
+  const ms = Date.parse(w.completed_at) - Date.parse(w.started_at);
+  const expected = ms > 0 ? Math.round((ms / 60000) * 10) / 10 : 0;
+  assert.equal(w.duration_min, expected, 'duration computed from server timestamps only');
+  assert.equal(r.json.duration_min, w.duration_min);
   await api.close();
 });
 

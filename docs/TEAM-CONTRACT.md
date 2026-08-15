@@ -53,10 +53,26 @@ NEW — workouts now have:
         3. complete persists duration_min + calorie estimate; backend computes it
 WHY — reliable actual session duration is required for calorie estimation and
       analytics. client_profiles.workout_duration is a user PREFERENCE, never used.
-IMPACT — Manavi: call /workouts/:id/start when the user begins a session. The complete
-      payload may also include `started_at` (ISO UTC) as a fallback when the start
-      endpoint wasn't called — the backend still computes and persists duration.
+IMPACT — Manavi: call /workouts/:id/start when the user begins a session. The backend
+      is the ONLY source of started_at — a client-supplied started_at is NEVER
+      accepted on /complete (it could inflate duration). Missing /start => duration_min
+      stays null; an estimated duration is never substituted for a measured session.
       `meta.calorie.source` in /tracking/me/today tells the UI preview vs persisted.
+```
+
+### 2.2 Duration provenance — measured vs estimated (NEW)
+
+```
+NEW — two duration classes, never conflated:
+      measured  = POST /workouts/:id/start → /complete (server computed_at − started_at)
+      estimated = baseline provider's estimateDurationMinutes() (from completed sets),
+                  used ONLY when no measured duration exists (e.g. NL-logged sessions)
+WHY — presenting an estimated duration as measured would poison calorie features and
+      analytics. The calorie input's duration_* fields carry MEASURED values only;
+      estimation stays internal to the baseline provider and is never persisted as
+      measured.
+IMPACT — Sambhav: input.session.duration_* is null for sessions without a real timer
+      (e.g. /intel/confirm-workout). Treat null as "no measured duration", never 0.
 ```
 
 ## 3. Workout data model (planned vs actual)
@@ -107,7 +123,7 @@ NEW — workouts columns:
         lower_kcal            REAL
         upper_kcal            REAL
         model_version         TEXT   e.g. skos-cal-baseline-v1
-        schema_version        TEXT   e.g. 0.1
+        schema_version        TEXT   e.g. 0.2 (calorie contract version)
         calorie_provider      TEXT   baseline | mock | ml (never exposed to the UI)
         calorie_estimated_at  TEXT
 WHY — the heuristic is replaced by the calorieModel service; results must persist so
@@ -151,3 +167,6 @@ IMPACT — Sambhav: the resolved value arrives as input.user.body_weight_kg. Man
 | 2026-08-15 | `exercise_set_logs.is_synthesized` (§3.1) | Kaushal |
 | 2026-08-15 | `calorieModel` service + provider architecture (§4) | Kaushal |
 | 2026-08-15 | Workout completion made transactional; `POST /api/workouts/:id/start` added | Kaushal |
+| 2026-08-15 | Calorie contract bumped to schema 0.2 (session/exercise/derived aggregates in `buildWorkoutCalorieInput`) | Kaushal |
+| 2026-08-15 | Timing hardened: client-supplied `started_at` rejected; `duration_min` measured-only | Kaushal |
+| 2026-08-15 | `/complete` returns 422 for `exercise_id` not belonging to the workout (no silent ignore) | Kaushal |

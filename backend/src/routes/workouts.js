@@ -193,10 +193,12 @@ export default function workoutRoutes(db) {
     }
     const d = dayKey();
     const completedAt = now();
-    // Backend is the source of truth for session timing: the DB started_at
-    // (from /:id/start) wins; otherwise accept the client-reported start so
-    // existing frontends keep working. duration_min is always computed here.
-    const startedAt = w.started_at || (typeof req.body.started_at === 'string' && req.body.started_at ? req.body.started_at : null);
+    // Server-authoritative timing: duration is measured ONLY from the DB
+    // started_at (POST /start). A client-supplied started_at is NEVER accepted
+    // — the client cannot influence duration. No /start => no measured duration
+    // (duration_min stays null; an estimated duration is never substituted for
+    // a measured session).
+    const startedAt = w.started_at || null;
     let durationMin = null;
     if (startedAt) {
       const ms = Date.parse(completedAt) - Date.parse(startedAt);
@@ -211,6 +213,12 @@ export default function workoutRoutes(db) {
          LEFT JOIN exercise_library el ON el.id = we.exercise_id
         WHERE we.workout_id = ?`, [w.id]);
     const byId = new Map(sessionExercises.map((e) => [e.id, e]));
+
+    // Reject exercises that do not belong to this workout — never silently
+    // ignore them. The response only echoes the client's own input, so no
+    // cross-tenant information is leaked.
+    const unknown = req.body.logs.find((l) => !byId.has(l.exercise_id));
+    if (unknown) return res.status(422).json({ error: 'exercise_id does not belong to this workout', exercise_id: unknown.exercise_id });
 
     const prs = [];
     const txResult = await db.tx(async (tx) => {
@@ -264,8 +272,8 @@ export default function workoutRoutes(db) {
       }
 
       await tx.run(
-        `UPDATE workouts SET status = 'completed', completed_at = ?, started_at = COALESCE(started_at, ?), duration_min = ? WHERE id = ?`,
-        [completedAt, startedAt || completedAt, durationMin, w.id]);
+        `UPDATE workouts SET status = 'completed', completed_at = ?, duration_min = ? WHERE id = ?`,
+        [completedAt, durationMin, w.id]);
 
       // Calorie estimate from ACTUAL completed sets — never planned workload
       // (skipped exercises contribute 0 sets / 0 reps / 0 workload).
@@ -329,7 +337,6 @@ function calorieView(w) {
 
 function z_workoutComplete() {
   return z.object({
-    started_at: z.string().max(40).optional(),
     logs: z.array(z.object({
       exercise_id: z.string().min(1),
       // per-set shape (preferred)

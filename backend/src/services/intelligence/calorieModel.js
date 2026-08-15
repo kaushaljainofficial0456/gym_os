@@ -22,11 +22,11 @@
 // layer records it (workouts.calorie_provider). Do not expose model
 // credentials or provider internals in any API response.
 //
-// INPUT CONTRACT (schema_version '0.1'): see docs/calorie-model-contract.md
+// INPUT CONTRACT (schema_version '0.2'): see docs/calorie-model-contract.md
 // ============================================================
 import { dayKey } from '../../utils/time.js';
 
-export const CALORIE_SCHEMA_VERSION = '0.1';
+export const CALORIE_SCHEMA_VERSION = '0.2';
 export const BASELINE_MODEL_VERSION = 'skos-cal-baseline-v1';
 export const MOCK_MODEL_VERSION = 'skos-cal-mock-v1';
 export const DEFAULT_BODY_WEIGHT_KG = 70;
@@ -36,6 +36,8 @@ export const DEFAULT_BODY_WEIGHT_KG = 70;
 export const INTENSITY_MET = { light: 3.0, moderate: 4.5, hard: 6.0 };
 
 const pos = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+const round1 = (v) => Math.round(v * 10) / 10;
+const round2 = (v) => Math.round(v * 100) / 100;
 
 export function resolveProvider() {
   const p = String(process.env.CALORIE_MODEL_PROVIDER || 'baseline').toLowerCase();
@@ -113,48 +115,92 @@ function mlEstimate(/* input */) {
 }
 
 // ------------------------------------------------------------------
-// Feature extraction — builds the structured INPUT contract from
-// ACTUAL per-set data (exercise_set_logs). Planned workload from
-// workout_exercises is NEVER used as actual calorie workload.
+// Feature extraction — builds the structured INPUT contract (schema 0.2)
+// from ACTUAL completed per-set data (exercise_set_logs). Planned workload
+// from workout_exercises is NEVER used as actual calorie workload:
+// skipped exercises contribute 0 sets / 0 reps / 0 volume.
+//
+// This function is the SINGLE feature-engineering choke point — routes and
+// services pass raw data here and never compute calorie features themselves.
 // ------------------------------------------------------------------
 export function buildWorkoutCalorieInput({ client, workout, exercises = [], setsByExercise = {}, durationSeconds = null, bodyWeightKg = null } = {}) {
   const allSets = [];
-  const mapped = exercises.map((we) => {
+  const agg = exercises.map((we) => {
     const lib = we.library || null;
+    // ACTUAL completed sets only — incomplete/skipped sets are never features.
     const completed = (setsByExercise[we.id] || []).filter((s) => s.completed !== 0 && s.completed !== false);
-    for (const s of completed) allSets.push(s);
+    const sets = completed.map((s, i) => ({
+      set_number: s.set_number ?? i + 1,
+      reps: pos(s.actual_reps) ?? 0,
+      weight_kg: pos(s.actual_weight) ?? 0,
+      rir: s.rir ?? null,
+      rest_seconds: s.rest_seconds ?? null,
+      completed: 1
+    }));
+    for (const st of sets) allSets.push(st);
+    const totalReps = sets.reduce((a, s) => a + s.reps, 0);
+    const totalVolume = sets.reduce((a, s) => a + s.reps * s.weight_kg, 0);
     return {
-      exercise_id: we.exercise_id || we.name || null,
-      exercise_type: lib?.ex_type || we.ex_type || 'compound',
-      muscle_group: normalizeMuscleName(lib?.primary_muscle || we.primary_muscle || null),
-      equipment: lib?.equipment || we.equipment || null,
-      movement_pattern: lib?.movement || we.movement || null,
-      compound_or_isolation: classifyCompound(lib?.ex_type || we.ex_type, lib?.movement || we.movement),
-      completed_sets: completed.map((s, i) => ({
-        set_number: s.set_number ?? i + 1,
-        reps: pos(s.actual_reps) ?? 0,
-        weight_kg: pos(s.actual_weight) ?? 0,
-        rir: s.rir ?? null,
-        rest_seconds: s.rest_seconds ?? null,
-        completed: 1
-      }))
+      base: {
+        exercise_id: we.exercise_id || we.name || null,
+        exercise_type: lib?.ex_type || we.ex_type || 'compound',
+        muscle_group: normalizeMuscleName(lib?.primary_muscle || we.primary_muscle || null),
+        equipment: lib?.equipment || we.equipment || null,
+        movement_pattern: lib?.movement || we.movement || null,
+        compound_or_isolation: classifyCompound(lib?.ex_type || we.ex_type, lib?.movement || we.movement),
+        completed_sets: sets
+      },
+      sets: sets.length,
+      totalReps,
+      totalVolume
     };
   });
 
+  const performed = agg.filter((a) => a.sets > 0);          // skipped exercises (0 sets) are excluded from session workload
+  const totalSets = performed.reduce((a, x) => a + x.sets, 0);
+  const totalReps = performed.reduce((a, x) => a + x.totalReps, 0);
+  const totalVolume = performed.reduce((a, x) => a + x.totalVolume, 0);
+  const compoundSets = performed.reduce((a, x) => a + (x.base.compound_or_isolation === 'compound' ? x.sets : 0), 0);
+  const isolationSets = performed.reduce((a, x) => a + (x.base.compound_or_isolation === 'isolation' ? x.sets : 0), 0);
+
   const durationMin = pos(durationSeconds) != null ? Math.round((durationSeconds / 60) * 10) / 10 : null;
+  const bodyWeight = pos(bodyWeightKg);
+  const avgLoad = totalReps > 0 ? totalVolume / totalReps : null;
+
+  const mapped = agg.map((x) => ({
+    ...x.base,
+    // --- v0.2 per-exercise aggregates (actual completed sets only) ---
+    sets: x.sets,
+    total_reps: x.totalReps,
+    total_volume_kg: round1(x.totalVolume),
+    average_load_kg: x.totalReps > 0 ? round1(x.totalVolume / x.totalReps) : 0
+  }));
+
   return {
     schema_version: CALORIE_SCHEMA_VERSION,
     user: {
       age_years: client?.age != null ? Number(client.age) : null,
       sex: client?.sex ? String(client.sex).toLowerCase() : null,
       height_cm: pos(client?.height_cm),
-      body_weight_kg: pos(bodyWeightKg)
+      body_weight_kg: bodyWeight
     },
     session: {
       workout_id: workout?.id || null,
       duration_seconds: pos(durationSeconds),
       duration_minutes: durationMin,
-      intensity_rating: inferIntensity(allSets)
+      intensity_rating: inferIntensity(allSets),
+      // --- v0.2 session aggregates ---
+      exercise_count: performed.length,
+      total_sets: totalSets,
+      total_reps: totalReps,
+      total_volume_kg: round1(totalVolume),
+      // --- v0.2 derived features (null when the denominator is unknown — never fabricated) ---
+      volume_per_minute: durationMin ? round2(totalVolume / durationMin) : null,
+      sets_per_minute: durationMin ? round2(totalSets / durationMin) : null,
+      reps_per_minute: durationMin ? round2(totalReps / durationMin) : null,
+      relative_load: bodyWeight && avgLoad != null ? round2(avgLoad / bodyWeight) : null,
+      compound_set_ratio: totalSets > 0 ? round2(compoundSets / totalSets) : null,
+      isolation_set_ratio: totalSets > 0 ? round2(isolationSets / totalSets) : null
     },
     exercises: mapped
   };
