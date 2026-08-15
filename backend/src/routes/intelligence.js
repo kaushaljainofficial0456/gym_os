@@ -227,7 +227,7 @@ export default function intelligenceRoutes(db) {
           durationSeconds: null,
           bodyWeightKg
         });
-        calorie = estimateWorkoutCalories(input);
+        calorie = await estimateWorkoutCalories(input);
         if (calorie) await persistCalorieResult(tx, wId, calorie);
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout logging.

@@ -140,8 +140,9 @@ export async function todaySession(db, clientId, tz) {
       durationSeconds: estMinutes * 60,
       bodyWeightKg
     });
+    const previewCalorie = await estimateWorkoutCalories(previewInput);
     calorie = {
-      ...estimateWorkoutCalories(previewInput),
+      ...previewCalorie,
       source: 'preview',
       completedSets: completedSetCount(previewInput)
     };

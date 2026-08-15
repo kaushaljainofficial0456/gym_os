@@ -18,6 +18,10 @@
 //   ml       — Sambhav's model. Not implemented yet; falls back to
 //              baseline until configured, so the API never breaks.
 //
+// estimateWorkoutCalories() is ASYNC and bounds the 'ml' provider to
+// ML_TIMEOUT_MS (see callMlProviderWithTimeout) — a slow/hanging remote
+// model can NEVER stall workout completion; it degrades to baseline.
+//
 // The frontend never learns which provider ran — only the persistence
 // layer records it (workouts.calorie_provider). Do not expose model
 // credentials or provider internals in any API response.
@@ -55,6 +59,36 @@ export function resolveProvider() {
 // 200 × 120 min ≈ 1512 kcal. Anything larger is a buggy provider, not a
 // real session — reject and fall back rather than persist garbage.
 export const MAX_ACTIVE_KCAL = 1500;
+
+// Hard timeout budget for a provider call (env CALORIE_MODEL_PROVIDER=ml).
+// Today's stub throws synchronously and never approaches this, but a real
+// model is very likely a network call — this bounds it so a slow/hanging
+// provider can NEVER stall workout completion
+// (POST /:id/complete, POST /intel/confirm-workout). Kept small and
+// explicit: those routes already do several sequential DB writes inside
+// one transaction, so the ML call itself must stay well under a second
+// budget that still feels instant to the caller.
+export const ML_TIMEOUT_MS = 3000;
+
+// Mutable budget actually used by callMlProviderWithTimeout — defaults to
+// ML_TIMEOUT_MS. Test hook below (mirrors __setMlEstimateForTests) lets
+// timeout-fallback tests use a tiny budget so they run fast and
+// deterministically instead of waiting out the real production timeout.
+// Production code never calls the setter.
+let mlTimeoutMs = ML_TIMEOUT_MS;
+export function __setMlTimeoutForTests(ms) {
+  mlTimeoutMs = Number.isFinite(ms) && ms > 0 ? ms : ML_TIMEOUT_MS;
+}
+
+// Distinguishes "the provider took too long" from any other provider
+// failure (throw, rejection, malformed output) so fallback observability
+// can log an accurate category. Never exposed to the frontend or persisted.
+export class MlTimeoutError extends Error {
+  constructor(ms) {
+    super(`calorie ml provider timed out after ${ms}ms`);
+    this.name = 'MlTimeoutError';
+  }
+}
 
 // ------------------------------------------------------------------
 // VALIDATION GATE — the single place a provider result is checked
@@ -96,7 +130,9 @@ export function validateCalorieResult(result = {}) {
 // a SAFE whitelist of fields: category, requested provider, opaque workout
 // id, model version when known, and the static validation issues from our
 // own gate. NEVER logs workout payloads, user data, body weight, set logs,
-// raw ML output, or credentials. Categories: ml_unavailable | invalid_output.
+// raw ML output, or credentials.
+// Categories: ml_unavailable (provider threw/rejected/returned nothing) |
+//             ml_timeout (provider exceeded ML_TIMEOUT_MS) | invalid_output.
 // ------------------------------------------------------------------
 function logCalorieFallback(category, meta = {}) {
   const fields = { category, provider: meta.provider || null, workout_id: meta.workout_id || null };
@@ -106,29 +142,61 @@ function logCalorieFallback(category, meta = {}) {
 }
 
 // ------------------------------------------------------------------
-// ESTIMATE — public entry point. Always returns a well-formed result;
-// never throws for provider reasons (an unavailable ML provider falls
-// back to baseline). Every provider result passes through
-// validateCalorieResult() first — invalid output (e.g. a buggy model)
-// is NEVER persisted raw: it falls back to the baseline estimate,
-// truthfully labeled provider 'baseline'.
+// Bounds a provider call to ML_TIMEOUT_MS and ALWAYS settles — a hanging
+// call can never hang this. mlImpl may be synchronous (today's stub,
+// which throws immediately) or asynchronous (a real network-bound model);
+// wrapping the call in Promise.resolve().then(...) normalizes both into
+// a promise so they race identically against the timeout. mlImpl
+// receives an AbortSignal so a future fetch-based implementation can
+// cancel its own in-flight request on timeout — today's stub ignores it.
+// On timeout the loser promise is left to settle in the background;
+// racing it here means Promise.race already attached a handler to it,
+// so a late resolution/rejection can never surface as an unhandled
+// rejection.
 // ------------------------------------------------------------------
-export function estimateWorkoutCalories(input = {}) {
+async function callMlProviderWithTimeout(input) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), mlTimeoutMs);
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => mlImpl(input, { signal: controller.signal })),
+      new Promise((_, reject) => {
+        controller.signal.addEventListener('abort', () => reject(new MlTimeoutError(mlTimeoutMs)));
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ------------------------------------------------------------------
+// ESTIMATE — public entry point. ASYNC so a real (network-bound) ML
+// provider can be awaited safely; always resolves a well-formed result
+// and never rejects for provider reasons — an unavailable, erroring, or
+// slow/hanging ML provider (bounded by ML_TIMEOUT_MS, see
+// callMlProviderWithTimeout) falls back to baseline. Every provider
+// result passes through validateCalorieResult() first — invalid output
+// (e.g. a buggy model) is NEVER persisted raw: it falls back to the
+// baseline estimate, truthfully labeled provider 'baseline'.
+// ------------------------------------------------------------------
+export async function estimateWorkoutCalories(input = {}) {
   const provider = resolveProvider();
   let result = null;
   let note = null;
   if (provider === 'mock') {
     result = mockEstimate();
   } else if (provider === 'ml') {
+    let timedOut = false;
     try {
-      const r = mlImpl(input);
+      const r = await callMlProviderWithTimeout(input);
       if (r) result = { ...r, provider: 'ml' };
-    } catch {
-      // fall through — the API must never break on ML availability
+    } catch (e) {
+      // fall through — the API must never break on ML availability or latency
+      timedOut = e instanceof MlTimeoutError;
     }
     if (!result) {
-      note = 'ml provider unavailable — baseline fallback';
-      logCalorieFallback('ml_unavailable', { provider, workout_id: input?.session?.workout_id || null });
+      note = timedOut ? 'ml provider timed out — baseline fallback' : 'ml provider unavailable — baseline fallback';
+      logCalorieFallback(timedOut ? 'ml_timeout' : 'ml_unavailable', { provider, workout_id: input?.session?.workout_id || null });
       result = baselineEstimate(input);
     }
   } else {
@@ -195,15 +263,23 @@ function mockEstimate() {
 // The service stays the single choke point — routes and frontend do
 // not change when the model lands. Output is validated by
 // validateCalorieResult() before it can ever be persisted.
+//
+// May be sync or async (a real model is very likely a network call —
+// return a Promise and it is awaited correctly by
+// callMlProviderWithTimeout). Receives an AbortSignal in the second
+// argument: pass it to fetch() (e.g. `fetch(url, { signal })`) so the
+// in-flight request is actually cancelled when ML_TIMEOUT_MS elapses,
+// rather than merely ignored.
 // ------------------------------------------------------------------
-function mlEstimate(/* input */) {
+function mlEstimate(/* input, { signal } = {} */) {
   throw new Error('calorie ml provider not implemented yet — using baseline fallback');
 }
 
 // Provider dispatch indirection + test hook (mirrors resetRateLimits() in
-// rateLimit.js): lets tests inject a fake ML provider to exercise the
-// invalid-output fallback path end-to-end. Production code never calls
-// this — Sambhav replaces mlEstimate() itself.
+// rateLimit.js): lets tests inject a fake ML provider (sync or async,
+// optionally honoring the AbortSignal) to exercise the invalid-output and
+// timeout fallback paths end-to-end. Production code never calls this —
+// Sambhav replaces mlEstimate() itself.
 let mlImpl = mlEstimate;
 export function __setMlEstimateForTests(fn) {
   mlImpl = typeof fn === 'function' ? fn : mlEstimate;

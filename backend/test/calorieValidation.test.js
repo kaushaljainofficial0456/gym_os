@@ -130,7 +130,7 @@ test('baseline output always passes the gate (behavior preserved)', () => {
 
 const OUT_SNIPPET = `
   const cal = await import('${MODULES.calorieModel}');
-  const out = cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
+  const out = await cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
   console.log('OUT:' + JSON.stringify({
     provider: out.provider, model_version: out.model_version,
     est: out.estimated_active_kcal, schema_version: out.schema_version,
@@ -152,7 +152,7 @@ test('invalid ML output falls back to baseline, never persisted raw', () => {
   const snippet = `
     const cal = await import('${MODULES.calorieModel}');
     cal.__setMlEstimateForTests(() => ({ estimated_active_kcal: -999, lower_kcal: 0, upper_kcal: 0, model_version: 'skos-cal-test-v1' }));
-    const out = cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
+    const out = await cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
     console.log('OUT:' + JSON.stringify({
       provider: out.provider, model_version: out.model_version,
       est: out.estimated_active_kcal, schema_version: out.schema_version,
@@ -173,7 +173,7 @@ test('valid ML output is accepted and stamped (gate does not break a real model)
   const snippet = `
     const cal = await import('${MODULES.calorieModel}');
     cal.__setMlEstimateForTests(() => ({ estimated_active_kcal: 310, lower_kcal: 260, upper_kcal: 360, model_version: 'skos-cal-mlv1' }));
-    const out = cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
+    const out = await cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
     console.log('OUT:' + JSON.stringify({
       provider: out.provider, model_version: out.model_version,
       est: out.estimated_active_kcal, schema_version: out.schema_version
@@ -208,7 +208,7 @@ test('invalid ML output is persisted as provider="baseline" (never raw)', () => 
     };
     const cal = await import('${MODULES.calorieModel}');
     cal.__setMlEstimateForTests(() => ({ estimated_active_kcal: Number.POSITIVE_INFINITY, lower_kcal: 0, upper_kcal: 0, model_version: '' }));
-    const out = cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
+    const out = await cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
     await cal.persistCalorieResult(adapter, 'wko_1', out);
     const w = await adapter.q1('SELECT estimated_active_kcal, lower_kcal, upper_kcal, model_version, schema_version, calorie_provider FROM workouts WHERE id = ?', ['wko_1']);
     console.log('ROW:' + JSON.stringify(w));

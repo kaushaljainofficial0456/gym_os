@@ -68,10 +68,10 @@ function fullSession() {
 }
 
 // ---------------- contract v0.2 ----------------
-test('input contract is schema_version 0.2', () => {
+test('input contract is schema_version 0.2', async () => {
   const input = fullSession();
   assert.equal(input.schema_version, '0.2');
-  const out = estimateWorkoutCalories(input);
+  const out = await estimateWorkoutCalories(input);
   assert.equal(out.schema_version, '0.2');
 });
 
@@ -147,7 +147,7 @@ test('incomplete sets are excluded (only completed sets are features)', () => {
   assert.equal(completedSetCount(input), 1);
 });
 
-test('zero/unknown weight (bodyweight) is not fabricated — volume 0, no crash', () => {
+test('zero/unknown weight (bodyweight) is not fabricated — volume 0, no crash', async () => {
   const input = buildWorkoutCalorieInput({
     client: CLIENT,
     workout: { id: 'wko_1' },
@@ -166,11 +166,11 @@ test('zero/unknown weight (bodyweight) is not fabricated — volume 0, no crash'
   assert.equal(e.total_volume_kg, 0);
   assert.equal(e.average_load_kg, 0);
   assert.equal(input.session.total_volume_kg, 0);
-  const out = estimateWorkoutCalories(input);
+  const out = await estimateWorkoutCalories(input);
   assert.ok(Number.isFinite(out.estimated_active_kcal));
 });
 
-test('empty workout — zeros, null ratios, estimate still returns a labeled baseline', () => {
+test('empty workout — zeros, null ratios, estimate still returns a labeled baseline', async () => {
   const input = buildWorkoutCalorieInput({
     client: CLIENT,
     workout: { id: 'wko_1' },
@@ -186,7 +186,7 @@ test('empty workout — zeros, null ratios, estimate still returns a labeled bas
   assert.equal(input.session.relative_load, null);
   assert.equal(input.session.compound_set_ratio, null);
   assert.equal(input.session.isolation_set_ratio, null);
-  const out = estimateWorkoutCalories(input);
+  const out = await estimateWorkoutCalories(input);
   assert.equal(out.provider, 'baseline');
   assert.equal(out.schema_version, '0.2');
 });
@@ -198,7 +198,7 @@ test('empty workout — zeros, null ratios, estimate still returns a labeled bas
 test('ML provider is a stub today — falls back to baseline and is clearly labeled', () => {
   const snippet = `
     const cal = await import('${MODULES.calorieModel}');
-    const out = cal.estimateWorkoutCalories({
+    const out = await cal.estimateWorkoutCalories({
       user: { age: 30, sex: 'male', height_cm: 175, body_weight_kg: 78 },
       session: { duration_minutes: 30, intensity_rating: 'moderate' },
       exercises: []
@@ -218,7 +218,7 @@ test('ML provider is a stub today — falls back to baseline and is clearly labe
 test('mock provider is clearly labeled as mock', () => {
   const snippet = `
     const cal = await import('${MODULES.calorieModel}');
-    const out = cal.estimateWorkoutCalories({
+    const out = await cal.estimateWorkoutCalories({
       user: { age: 30, sex: 'male', height_cm: 175, body_weight_kg: 78 },
       session: { duration_minutes: 30, intensity_rating: 'moderate' },
       exercises: []

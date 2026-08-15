@@ -266,7 +266,7 @@ test('skipped exercises contribute 0 sets — calorie input uses only completed 
 // is set before any import — the same boundary production uses.
 const PROVIDER_OUT_SNIPPET = `
   const cal = await import('${MODULES.calorieModel}');
-  const out = cal.estimateWorkoutCalories({
+  const out = await cal.estimateWorkoutCalories({
     user: { body_weight_kg: 78 },
     session: { duration_minutes: 60, intensity_rating: 'moderate' },
     exercises: []
@@ -301,11 +301,11 @@ test('calorie provider: mock is labeled; unknown provider never selects an unint
 // ---------- baseline math sanity ----------
 test('baseline estimate scales with body weight and duration', async (t) => {
   const { estimateWorkoutCalories } = await import('../src/services/intelligence/calorieModel.js');
-  const light = estimateWorkoutCalories({ user: { body_weight_kg: 60 }, session: { duration_minutes: 30, intensity_rating: 'light' }, exercises: [] });
-  const hard = estimateWorkoutCalories({ user: { body_weight_kg: 90 }, session: { duration_minutes: 90, intensity_rating: 'hard' }, exercises: [] });
+  const light = await estimateWorkoutCalories({ user: { body_weight_kg: 60 }, session: { duration_minutes: 30, intensity_rating: 'light' }, exercises: [] });
+  const hard = await estimateWorkoutCalories({ user: { body_weight_kg: 90 }, session: { duration_minutes: 90, intensity_rating: 'hard' }, exercises: [] });
   assert.ok(hard.estimated_active_kcal > light.estimated_active_kcal, 'heavier/longer/harder burns more');
   // MET 4.5 × 3.5 × 60 ÷ 200 × 30 = 141.75 → estimate 142; range from the unrounded value
-  const mod = estimateWorkoutCalories({ user: { body_weight_kg: 60 }, session: { duration_minutes: 30, intensity_rating: 'moderate' }, exercises: [] });
+  const mod = await estimateWorkoutCalories({ user: { body_weight_kg: 60 }, session: { duration_minutes: 30, intensity_rating: 'moderate' }, exercises: [] });
   assert.equal(mod.estimated_active_kcal, 142);
   assert.equal(mod.lower_kcal, Math.round(141.75 * 0.85));
   assert.equal(mod.upper_kcal, Math.round(141.75 * 1.15));

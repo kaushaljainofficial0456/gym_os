@@ -296,7 +296,7 @@ export default function workoutRoutes(db) {
           durationSeconds: durationMin != null ? durationMin * 60 : null,
           bodyWeightKg
         });
-        calorie = estimateWorkoutCalories(input);
+        calorie = await estimateWorkoutCalories(input);
         if (calorie) await persistCalorieResult(tx, w.id, calorie);
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout completion.
