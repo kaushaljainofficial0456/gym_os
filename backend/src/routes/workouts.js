@@ -7,7 +7,7 @@ import { dayKey } from '../utils/time.js';
 import { suggestNextTarget } from '../services/progressiveOverload.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { track } from '../services/events.js';
-import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult } from '../services/intelligence/calorieModel.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
 
 export default function workoutRoutes(db) {
   const r = Router();
@@ -208,7 +208,8 @@ export default function workoutRoutes(db) {
     // Pre-fetch the session's exercises + library metadata once (kills the
     // per-log N+1 and feeds the calorie input with actual exercise metadata).
     const sessionExercises = await db.q(
-      `SELECT we.*, el.ex_type, el.movement, el.equipment AS lib_equipment, el.primary_muscle AS lib_primary_muscle
+      `SELECT we.*, el.ex_type, el.movement, el.equipment AS lib_equipment, el.primary_muscle AS lib_primary_muscle,
+              el.animation_key AS lib_animation_key, el.is_global AS lib_is_global
          FROM workout_exercises we
          LEFT JOIN exercise_library el ON el.id = we.exercise_id
         WHERE we.workout_id = ?`, [w.id]);
@@ -296,7 +297,16 @@ export default function workoutRoutes(db) {
           durationSeconds: durationMin != null ? durationMin * 60 : null,
           bodyWeightKg
         });
-        calorie = await estimateWorkoutCalories(input);
+        // Exercise-ID canonicalization for the ml provider only (Phase 3B
+        // Step 3) — built from the SAME already-fetched, org-scoped rows;
+        // never trusts a custom (non-global) exercise's animation_key.
+        const mlExerciseCanonical = {};
+        for (const e of sessionExercises) {
+          if (!e.exercise_id) continue;
+          const token = mlCanonicalExerciseId({ animationKey: e.lib_animation_key, isGlobal: e.lib_is_global });
+          if (token) mlExerciseCanonical[e.exercise_id] = token;
+        }
+        calorie = await estimateWorkoutCalories(input, { mlExerciseCanonical });
         if (calorie) await persistCalorieResult(tx, w.id, calorie);
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout completion.

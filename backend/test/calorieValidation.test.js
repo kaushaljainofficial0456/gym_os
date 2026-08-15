@@ -169,21 +169,30 @@ test('invalid ML output falls back to baseline, never persisted raw', () => {
   assert.equal(out.schema_version, CALORIE_SCHEMA_VERSION);
 });
 
-test('valid ML output is accepted and stamped (gate does not break a real model)', () => {
+test('valid ML output is accepted, net-of-resting converted, and stamped (gate does not break a real model)', () => {
   const snippet = `
     const cal = await import('${MODULES.calorieModel}');
     cal.__setMlEstimateForTests(() => ({ estimated_active_kcal: 310, lower_kcal: 260, upper_kcal: 360, model_version: 'skos-cal-mlv1' }));
     const out = await cal.estimateWorkoutCalories(${JSON.stringify(INPUT())});
     console.log('OUT:' + JSON.stringify({
       provider: out.provider, model_version: out.model_version,
-      est: out.estimated_active_kcal, schema_version: out.schema_version
+      est: out.estimated_active_kcal, lower: out.lower_kcal, upper: out.upper_kcal, schema_version: out.schema_version
     }));
   `;
   const r = runWithProvider({ nodeEnv: 'development', provider: 'ml', snippet });
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.match(/OUT:(\{.*\})/)[1]);
   assert.equal(out.provider, 'ml');
-  assert.equal(out.est, 310);
+  // Phase 3B Step 3: net-of-resting applies uniformly to ANY provider
+  // result on the 'ml' branch (real model or a test double) — the raw
+  // gross 310/260/360 the fake returned gets the same resting-kcal
+  // subtracted as a real model's output would. INPUT() is bw=70kg,
+  // duration=30min -> resting = 1 MET x 3.5 x 70 / 200 x 30 = 36.75 kcal,
+  // so Math.round(310 - 36.75) = 273 (and likewise for lower/upper).
+  assert.equal(out.est, 273);
+  assert.equal(out.lower, 223);
+  assert.equal(out.upper, 323);
+  assert.ok(out.lower <= out.est && out.est <= out.upper, 'interval ordering preserved through conversion');
   assert.equal(out.model_version, 'skos-cal-mlv1');
   assert.equal(out.schema_version, CALORIE_SCHEMA_VERSION);
 });

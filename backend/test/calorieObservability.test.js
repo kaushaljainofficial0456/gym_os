@@ -51,8 +51,12 @@ function parse(r) {
 // ---------------- A: ml unavailable ----------------
 
 test('A. ml unavailable -> warn with category ml_unavailable, provider ml, workout_id', () => {
-  // default stub mlEstimate() throws -> ml_unavailable fallback
-  const r = runWithProvider({ nodeEnv: 'development', provider: 'ml', snippet: WARN_SNIPPET('') });
+  // Phase 3B Step 3: skos-cal-v1 is the real default provider now, so
+  // "unavailable" must be simulated explicitly (e.g. the model throwing
+  // for a reason unrelated to missing body_weight/duration) rather than
+  // relying on an unimplemented stub.
+  const setup = `cal.__setMlEstimateForTests(() => { throw new Error('simulated ml provider failure'); });`;
+  const r = runWithProvider({ nodeEnv: 'development', provider: 'ml', snippet: WARN_SNIPPET(setup) });
   assert.equal(r.status, 0, r.stderr);
   const { warns, result } = parse(r);
   assert.equal(result.provider, 'baseline', 'fallback still baseline');

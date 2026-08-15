@@ -15,8 +15,15 @@
 //   baseline — deterministic MET-based heuristic. Clearly a baseline,
 //              NOT ML. Always available.
 //   mock     — fixed demo values for UI/test development only.
-//   ml       — Sambhav's model. Not implemented yet; falls back to
-//              baseline until configured, so the API never breaks.
+//   ml       — Sambhav's skos-cal-v1 model (see mlModels/skosCalV1.js).
+//              Wired in as of Phase 3B Step 3. Default provider is still
+//              'baseline' (config.js) — 'ml' only runs when explicitly
+//              configured via CALORIE_MODEL_PROVIDER=ml, and per
+//              Sambhav's own pre-integration audit should only be
+//              enabled in dev/staging, never production, until his
+//              documented production blockers are separately resolved.
+//              Any failure (exception/timeout/invalid output) still
+//              falls back to baseline so the API never breaks.
 //
 // estimateWorkoutCalories() is ASYNC and bounds the 'ml' provider to
 // ML_TIMEOUT_MS (see callMlProviderWithTimeout) — a slow/hanging remote
@@ -27,9 +34,26 @@
 // credentials or provider internals in any API response.
 //
 // INPUT CONTRACT (schema_version '0.2'): see docs/calorie-model-contract.md
+//
+// ML PROVIDER (Phase 3B Step 3): wired to Sambhav's skos-cal-v1 model,
+// ported (ESM, mechanical, coefficients byte-for-byte unchanged) from
+// origin/ml-sambhav @ e9147e4 — see mlModels/skosCalV1.js. Two SK-OS-owned
+// adapter steps sit between the ported model and this file's own gate:
+//   1. toMlInput() — canonicalizes a KNOWN GLOBAL exercise's opaque
+//      backend exercise_id to Sambhav's canonical token (e.g. BENCH_PRESS)
+//      on a transient copy only; baseline/persistence/training-data export
+//      always see the real, unmapped exercise_id.
+//   2. toNetOfResting() — Sambhav's model computes GROSS energy
+//      expenditure; this contract defines estimated_active_kcal as energy
+//      ABOVE resting (§3 below) — converted at this boundary, reusing the
+//      SAME MET-based formula already used everywhere else in this file.
+// Neither step touches validateCalorieResult(), the timeout boundary, or
+// any fallback/observability behavior — all inherited unchanged from
+// Phase 3B Step 1.
 // ============================================================
 import { dayKey } from '../../utils/time.js';
 import { config, CALORIE_PROVIDERS } from '../../config.js';
+import { mlEstimate as skosCalV1Estimate } from './mlModels/skosCalV1.js';
 
 export const CALORIE_SCHEMA_VERSION = '0.2';
 export const BASELINE_MODEL_VERSION = 'skos-cal-baseline-v1';
@@ -142,6 +166,110 @@ function logCalorieFallback(category, meta = {}) {
 }
 
 // ------------------------------------------------------------------
+// EXERCISE CANONICALIZATION (Phase 3B Step 3) — maps a KNOWN GLOBAL
+// exercise's stable animation_key to Sambhav's trained canonical token.
+// Deliberately covers only the 6 unambiguous exact matches confirmed
+// against the real exercise_library seed data — INCLINE_BENCH_PRESS and
+// TRICEPS_EXTENSION are intentionally NOT mapped (multiple plausible
+// backend candidates, no source resolves which — never guessed; those
+// exercises correctly fall through to the model's own "unknown exercise"
+// path: zero correction, widened interval, flagged via note).
+//
+// SECURITY: animation_key is an org-settable free-text field on custom
+// (non-global) exercises (POST /exercises accepts it). Never trust it
+// for ML canonicalization unless the row is_global = 1 — otherwise a
+// gym could mislabel an unrelated custom exercise into a trained
+// correction it has nothing to do with.
+// ------------------------------------------------------------------
+const ANIMATION_KEY_TO_ML_CANONICAL = Object.freeze({
+  bench_press: 'BENCH_PRESS',
+  squat: 'BARBELL_SQUAT',
+  leg_press: 'LEG_PRESS',
+  leg_extension: 'LEG_EXTENSION',
+  lat_pulldown: 'LAT_PULLDOWN',
+  bicep_curl: 'BICEP_CURL'
+});
+
+// Returns the canonical token for a KNOWN GLOBAL exercise, or null when
+// unmapped/unsafe (custom exercise, or not one of the 6 confirmed exact
+// matches) — null means "use the model's own safe unknown-exercise
+// behavior," never a guess.
+export function mlCanonicalExerciseId({ animationKey, isGlobal } = {}) {
+  if (!isGlobal) return null; // never trust an org-custom exercise's animation_key
+  return ANIMATION_KEY_TO_ML_CANONICAL[String(animationKey || '').trim().toLowerCase()] || null;
+}
+
+// Builds a TRANSIENT copy of the contract-0.2 input for the ml provider
+// only — swaps exercises[].exercise_id to its canonical token wherever
+// exerciseCanonical (built by the caller from mlCanonicalExerciseId, see
+// routes/workouts.js, routes/intelligence.js, services/trainingProgram.js)
+// has a mapping. NEVER mutates `input` — baselineEstimate(input),
+// persistence, and the training-data export always see the real,
+// unmapped exercise_id. A no-op (returns `input` itself) when no map is
+// supplied, so every existing caller that doesn't pass one is unaffected.
+function toMlInput(input, exerciseCanonical) {
+  if (!exerciseCanonical || !Object.keys(exerciseCanonical).length) return input;
+  return {
+    ...input,
+    exercises: (input.exercises || []).map((e) => {
+      const mapped = exerciseCanonical[e.exercise_id];
+      return mapped ? { ...e, exercise_id: mapped } : e;
+    })
+  };
+}
+
+// ------------------------------------------------------------------
+// GROSS -> NET-OF-RESTING CONVERSION (Phase 3B Step 3).
+// Sambhav's skos-cal-v1 model computes GROSS energy expenditure during
+// the workout period (confirmed: no resting-rate subtraction anywhere in
+// his pipeline). This backend's contract defines estimated_active_kcal
+// as energy expended ABOVE resting (docs/calorie-model-contract.md §3).
+// Converts at this integration boundary by reusing the EXACT SAME
+// MET-based formula already used everywhere else in this file
+// (INTENSITY_MET / 3.5 / 200) — no new BMR formula invented. MET=1 is,
+// by definition, resting metabolic rate (ACSM standard; the same
+// resting-rate formula Sambhav's own audit independently used for this
+// exact purpose).
+//
+// Subtracts the SAME absolute resting-kcal amount from
+// estimated/lower/upper (a constant offset preserves interval width and
+// ordering exactly — see derivation in the integration audit), then
+// clamps each independently to >= 0 — but ONLY when the raw gross value
+// was itself already sane (>= 0). A gross value that is ALREADY negative
+// is never "fixed" by clamping — that would silently launder obviously
+// broken provider output (e.g. a buggy/adversarial model) into a
+// valid-looking 0 and defeat validateCalorieResult()'s garbage check,
+// which runs AFTER this conversion. Clamping only ever applies to the
+// legitimate case: a small-but-valid gross estimate that dips below the
+// resting subtraction (net effort can't be less than "zero extra"), and
+// can only ever pull a value UP to 0 — never past a sibling that stayed
+// unclamped — so lower <= estimated <= upper is provably preserved for
+// every input where the raw values were already sane.
+// Never mutates its input; passes the result through unchanged if body
+// weight/duration are somehow missing (defensive — Sambhav's own
+// mlEstimate already throws on that case before this ever runs).
+// ------------------------------------------------------------------
+const RESTING_MET = 1.0; // ACSM: 1 MET = resting metabolic rate, by definition
+
+function toNetOfResting(grossResult, input) {
+  const bw = pos(input?.user?.body_weight_kg);
+  const durationMin = pos(input?.session?.duration_minutes);
+  if (!bw || !durationMin) return grossResult;
+  const restingKcal = ((RESTING_MET * 3.5 * bw) / 200) * durationMin;
+  const netify = (v) => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return v; // not a number — let the gate's own type check catch it
+    if (v < 0) return v; // already-invalid gross value — never "fixed" here, must still fail validation
+    return Math.max(0, v - restingKcal);
+  };
+  return {
+    ...grossResult,
+    estimated_active_kcal: Math.round(netify(grossResult.estimated_active_kcal)),
+    lower_kcal: Math.round(netify(grossResult.lower_kcal)),
+    upper_kcal: Math.round(netify(grossResult.upper_kcal))
+  };
+}
+
+// ------------------------------------------------------------------
 // Bounds a provider call to ML_TIMEOUT_MS and ALWAYS settles — a hanging
 // call can never hang this. mlImpl may be synchronous (today's stub,
 // which throws immediately) or asynchronous (a real network-bound model);
@@ -178,8 +306,14 @@ async function callMlProviderWithTimeout(input) {
 // result passes through validateCalorieResult() first — invalid output
 // (e.g. a buggy model) is NEVER persisted raw: it falls back to the
 // baseline estimate, truthfully labeled provider 'baseline'.
+//
+// `mlExerciseCanonical` (optional, second arg): a plain
+// { exercise_id -> 'BENCH_PRESS' } map built by the caller via
+// mlCanonicalExerciseId() from already-fetched exercise_library rows.
+// Used ONLY to build the transient ml-provider input (toMlInput) —
+// omitted or empty is a safe no-op, unaffecting baseline/mock/persistence.
 // ------------------------------------------------------------------
-export async function estimateWorkoutCalories(input = {}) {
+export async function estimateWorkoutCalories(input = {}, { mlExerciseCanonical } = {}) {
   const provider = resolveProvider();
   let result = null;
   let note = null;
@@ -188,8 +322,9 @@ export async function estimateWorkoutCalories(input = {}) {
   } else if (provider === 'ml') {
     let timedOut = false;
     try {
-      const r = await callMlProviderWithTimeout(input);
-      if (r) result = { ...r, provider: 'ml' };
+      const mlInput = toMlInput(input, mlExerciseCanonical);
+      const r = await callMlProviderWithTimeout(mlInput);
+      if (r) result = { ...toNetOfResting(r, input), provider: 'ml' };
     } catch (e) {
       // fall through — the API must never break on ML availability or latency
       timedOut = e instanceof MlTimeoutError;
@@ -256,33 +391,25 @@ function mockEstimate() {
 }
 
 // ------------------------------------------------------------------
-// ML provider — Sambhav's integration point.
-// Implement by replacing this body (or the whole file's provider
-// wiring) with a call into the trained model, keeping the SAME output
-// shape: { estimated_active_kcal, lower_kcal, upper_kcal, model_version }.
-// The service stays the single choke point — routes and frontend do
-// not change when the model lands. Output is validated by
-// validateCalorieResult() before it can ever be persisted.
-//
-// May be sync or async (a real model is very likely a network call —
-// return a Promise and it is awaited correctly by
-// callMlProviderWithTimeout). Receives an AbortSignal in the second
-// argument: pass it to fetch() (e.g. `fetch(url, { signal })`) so the
-// in-flight request is actually cancelled when ML_TIMEOUT_MS elapses,
-// rather than merely ignored.
+// ML provider — Sambhav's skos-cal-v1 model (mlModels/skosCalV1.js),
+// wired in as of Phase 3B Step 3. skosCalV1Estimate is synchronous
+// (a local JSON lookup table, no network call) but callMlProviderWithTimeout
+// awaits it identically to a future async/network-bound model — the
+// AbortSignal it receives is unused today (nothing to cancel) but kept
+// in the call shape for forward compatibility with a v2 that might need
+// it. Output is GROSS energy expenditure; converted to net-of-resting by
+// toNetOfResting() before it ever reaches validateCalorieResult().
 // ------------------------------------------------------------------
-function mlEstimate(/* input, { signal } = {} */) {
-  throw new Error('calorie ml provider not implemented yet — using baseline fallback');
-}
 
 // Provider dispatch indirection + test hook (mirrors resetRateLimits() in
 // rateLimit.js): lets tests inject a fake ML provider (sync or async,
 // optionally honoring the AbortSignal) to exercise the invalid-output and
-// timeout fallback paths end-to-end. Production code never calls this —
-// Sambhav replaces mlEstimate() itself.
-let mlImpl = mlEstimate;
+// timeout fallback paths end-to-end. Production code never calls this
+// setter — resetting (no args / non-function) restores the real model,
+// not a stub, since skos-cal-v1 is now the actual configured provider.
+let mlImpl = skosCalV1Estimate;
 export function __setMlEstimateForTests(fn) {
-  mlImpl = typeof fn === 'function' ? fn : mlEstimate;
+  mlImpl = typeof fn === 'function' ? fn : skosCalV1Estimate;
 }
 
 // ------------------------------------------------------------------

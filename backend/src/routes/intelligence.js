@@ -22,7 +22,7 @@ import { resolveFood, searchFoods } from '../services/intelligence/foodSearch.js
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 import { computeNutrition, sumNutrition } from '../services/intelligence/nutrition.js';
 import { generateProgram } from '../services/intelligence/generateProgram.js';
-import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult } from '../services/intelligence/calorieModel.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { todayNutrition, lastPerformance, weightTrend, todayTraining, clientProfileContext } from '../services/intelligence/context.js';
 import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured, ping as aiPing, configSummary } from '../services/intelligence/aiProvider.js';
@@ -227,7 +227,15 @@ export default function intelligenceRoutes(db) {
           durationSeconds: null,
           bodyWeightKg
         });
-        calorie = await estimateWorkoutCalories(input);
+        // Exercise-ID canonicalization for the ml provider only (Phase 3B
+        // Step 3) — `ex` already carries animation_key/is_global via its
+        // SELECT * above; never trusts a custom (non-global) exercise.
+        const mlExerciseCanonical = {};
+        if (ex) {
+          const token = mlCanonicalExerciseId({ animationKey: ex.animation_key, isGlobal: ex.is_global });
+          if (token) mlExerciseCanonical[ex.id] = token;
+        }
+        calorie = await estimateWorkoutCalories(input, { mlExerciseCanonical });
         if (calorie) await persistCalorieResult(tx, wId, calorie);
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout logging.

@@ -195,7 +195,15 @@ test('empty workout — zeros, null ratios, estimate still returns a labeled bas
 // config.js resolves CALORIE_MODEL_PROVIDER ONCE at startup (single source of
 // truth), so provider-dependent behavior runs in subprocesses where the env
 // is set before any import — the same boundary production uses.
-test('ML provider is a stub today — falls back to baseline and is clearly labeled', () => {
+// Phase 3B Step 3: skos-cal-v1 is now wired in — a valid session (even
+// with zero completed exercises, which Sambhav's model handles as a
+// flagged baseline-only estimate, not a throw) succeeds as provider 'ml'.
+// The genuinely-unavailable case (throw/reject) is covered separately —
+// see calorieObservability.test.js "A. ml unavailable" and
+// workoutCalorie.test.js, both of which now explicitly inject a failing
+// provider via __setMlEstimateForTests rather than relying on an
+// unimplemented default.
+test('ML provider (skos-cal-v1) is wired in, clearly labeled, and net-of-resting', () => {
   const snippet = `
     const cal = await import('${MODULES.calorieModel}');
     const out = await cal.estimateWorkoutCalories({
@@ -203,16 +211,19 @@ test('ML provider is a stub today — falls back to baseline and is clearly labe
       session: { duration_minutes: 30, intensity_rating: 'moderate' },
       exercises: []
     });
-    console.log('OUT:' + JSON.stringify({ provider: out.provider, model_version: out.model_version, note: out.note || null }));
+    console.log('OUT:' + JSON.stringify({ provider: out.provider, model_version: out.model_version, est: out.estimated_active_kcal, lower: out.lower_kcal, upper: out.upper_kcal, note: out.note || null }));
   `;
   const r = runWithProvider({ nodeEnv: 'development', provider: 'ml', snippet });
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.match(/OUT:(\{.*\})/)[1]);
-  assert.equal(out.provider, 'baseline', 'unimplemented ml provider falls back to baseline');
-  assert.equal(out.model_version, 'skos-cal-baseline-v1');
-  assert.ok(out.note && out.note.includes('fallback'), 'fallback is explicitly labeled');
-  // never present a baseline result as an ML prediction
-  assert.notEqual(out.provider, 'ml');
+  assert.equal(out.provider, 'ml', 'the real skos-cal-v1 model runs, not a fallback');
+  assert.equal(out.model_version, 'skos-cal-v1');
+  assert.ok(out.note && out.note.includes('no completed exercises'), "Sambhav's model flags the empty session rather than presenting it as ordinary work");
+  // net-of-resting: gross (from the model) minus resting energy for the
+  // same duration/body-weight, per the v0.2 contract's "beyond resting"
+  // definition — never the raw gross value the model itself computes.
+  assert.equal(out.est, 143);
+  assert.ok(out.lower <= out.est && out.est <= out.upper, 'interval ordering preserved through the net-of-resting conversion');
 });
 
 test('mock provider is clearly labeled as mock', () => {

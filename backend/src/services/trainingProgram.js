@@ -10,7 +10,7 @@ import { id, now } from '../ids.js';
 import { dayKey, weekDay, getOrgTz } from '../utils/time.js';
 import { suggestNextTarget } from './progressiveOverload.js';
 import { requiredItems, parseAvailable, suggestAlternatives } from './equipment.js';
-import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, completedSetCount } from './intelligence/calorieModel.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, completedSetCount, mlCanonicalExerciseId } from './intelligence/calorieModel.js';
 
 export async function getActiveProgram(db, clientId) {
   return db.q1(
@@ -86,7 +86,7 @@ export async function todaySession(db, clientId, tz) {
   const w = await ensureTodayWorkout(db, clientId, tz);
   if (!w) return null;
   const exercises = await db.q(
-    `SELECT we.*, el.primary_muscle, el.secondary_muscles, el.equipment, el.ex_type, el.movement, el.difficulty, el.cues, el.animation_key
+    `SELECT we.*, el.primary_muscle, el.secondary_muscles, el.equipment, el.ex_type, el.movement, el.difficulty, el.cues, el.animation_key, el.is_global
        FROM workout_exercises we
        LEFT JOIN exercise_library el ON el.id = we.exercise_id
       WHERE we.workout_id = ? ORDER BY we.position`, [w.id]);
@@ -140,7 +140,16 @@ export async function todaySession(db, clientId, tz) {
       durationSeconds: estMinutes * 60,
       bodyWeightKg
     });
-    const previewCalorie = await estimateWorkoutCalories(previewInput);
+    // Exercise-ID canonicalization for the ml provider only (Phase 3B
+    // Step 3) — built from the SAME already-fetched rows; never trusts a
+    // custom (non-global) exercise's animation_key.
+    const mlExerciseCanonical = {};
+    for (const e of exercises) {
+      if (!e.exercise_id) continue;
+      const token = mlCanonicalExerciseId({ animationKey: e.animation_key, isGlobal: e.is_global });
+      if (token) mlExerciseCanonical[e.exercise_id] = token;
+    }
+    const previewCalorie = await estimateWorkoutCalories(previewInput, { mlExerciseCanonical });
     calorie = {
       ...previewCalorie,
       source: 'preview',

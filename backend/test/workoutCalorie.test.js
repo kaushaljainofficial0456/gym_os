@@ -274,13 +274,19 @@ const PROVIDER_OUT_SNIPPET = `
   console.log('OUT:' + JSON.stringify({ provider: out.provider, model_version: out.model_version, est: out.estimated_active_kcal, note: out.note || null }));
 `;
 
-test('calorie provider: ml falls back to baseline (isolated subprocess)', () => {
+// Phase 3B Step 3: skos-cal-v1 is wired in — a valid session now succeeds
+// as provider 'ml' (net-of-resting), clearly labeled with its real
+// model_version. The genuinely-unavailable case is covered explicitly
+// (via __setMlEstimateForTests forcing a throw) in
+// calorieObservability.test.js "A. ml unavailable".
+test('calorie provider: ml (skos-cal-v1) runs and is clearly labeled (isolated subprocess)', () => {
   const r = runWithProvider({ nodeEnv: 'development', provider: 'ml', snippet: PROVIDER_OUT_SNIPPET });
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.match(/OUT:(\{.*\})/)[1]);
-  assert.equal(out.provider, 'baseline', 'unimplemented ml provider falls back to baseline');
-  assert.equal(out.model_version, 'skos-cal-baseline-v1');
-  assert.ok(out.note && out.note.includes('fallback'), 'fallback clearly labeled');
+  assert.equal(out.provider, 'ml', 'the real skos-cal-v1 model runs');
+  assert.equal(out.model_version, 'skos-cal-v1');
+  assert.equal(out.est, 287, 'net-of-resting: gross model output minus resting energy for the same session');
+  assert.ok(out.note && out.note.includes('no completed exercises'), "Sambhav's model flags the empty session, not a fallback note");
 });
 
 test('calorie provider: mock is labeled; unknown provider never selects an unintended provider', () => {
