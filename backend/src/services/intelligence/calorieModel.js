@@ -25,6 +25,7 @@
 // INPUT CONTRACT (schema_version '0.2'): see docs/calorie-model-contract.md
 // ============================================================
 import { dayKey } from '../../utils/time.js';
+import { config, CALORIE_PROVIDERS } from '../../config.js';
 
 export const CALORIE_SCHEMA_VERSION = '0.2';
 export const BASELINE_MODEL_VERSION = 'skos-cal-baseline-v1';
@@ -39,9 +40,14 @@ const pos = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : nu
 const round1 = (v) => Math.round(v * 10) / 10;
 const round2 = (v) => Math.round(v * 100) / 100;
 
+// Provider resolution returns the SINGLE authoritative value resolved and
+// validated ONCE at startup by config.js (config.calorieModelProvider). It
+// never reads process.env itself — mutating CALORIE_MODEL_PROVIDER at
+// runtime has no effect on the running application. Missing/empty in any
+// environment -> safe baseline default; staging/production invalid values
+// already failed fast at startup; development invalid -> baseline + warning.
 export function resolveProvider() {
-  const p = String(process.env.CALORIE_MODEL_PROVIDER || 'baseline').toLowerCase();
-  return ['baseline', 'mock', 'ml'].includes(p) ? p : 'baseline';
+  return config.calorieModelProvider;
 }
 
 // Sane upper bound for ACTIVE calories in a single resistance-training
@@ -78,7 +84,7 @@ export function validateCalorieResult(result = {}) {
   if (typeof model_version !== 'string' || !model_version.trim()) {
     issues.push('model_version must be a non-empty string');
   }
-  if (!['baseline', 'mock', 'ml'].includes(provider)) {
+  if (!CALORIE_PROVIDERS.includes(provider)) {
     issues.push('provider must be one of: baseline, mock, ml');
   }
   if (issues.length) return { ok: false, issues };

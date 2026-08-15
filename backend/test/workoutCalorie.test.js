@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import jwt from 'jsonwebtoken';
 import express from 'express';
 import { config } from '../src/config.js';
+import { runWithProvider, MODULES } from './helpers/providerRunner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -259,35 +260,42 @@ test('skipped exercises contribute 0 sets — calorie input uses only completed 
   await api.close();
 });
 
-// ---------- calorie provider fallback + mock ----------
-test('calorie provider: ml falls back to baseline; mock is labeled; unknown → baseline', async (t) => {
-  const { estimateWorkoutCalories } = await import('../src/services/intelligence/calorieModel.js');
-  const input = {
+// ---------- calorie provider fallback + mock (isolated subprocesses) ----------
+// config.js resolves CALORIE_MODEL_PROVIDER ONCE at startup (single source of
+// truth), so provider-dependent behavior runs in subprocesses where the env
+// is set before any import — the same boundary production uses.
+const PROVIDER_OUT_SNIPPET = `
+  const cal = await import('${MODULES.calorieModel}');
+  const out = cal.estimateWorkoutCalories({
     user: { body_weight_kg: 78 },
     session: { duration_minutes: 60, intensity_rating: 'moderate' },
     exercises: []
-  };
-  const prev = process.env.CALORIE_MODEL_PROVIDER;
-  try {
-    process.env.CALORIE_MODEL_PROVIDER = 'ml';
-    const ml = estimateWorkoutCalories(input);
-    assert.equal(ml.provider, 'baseline', 'unimplemented ml provider falls back to baseline');
-    assert.equal(ml.model_version, 'skos-cal-baseline-v1');
-    assert.ok(ml.note && ml.note.includes('fallback'), 'fallback clearly labeled');
+  });
+  console.log('OUT:' + JSON.stringify({ provider: out.provider, model_version: out.model_version, est: out.estimated_active_kcal, note: out.note || null }));
+`;
 
-    process.env.CALORIE_MODEL_PROVIDER = 'mock';
-    const mock = estimateWorkoutCalories(input);
-    assert.equal(mock.provider, 'mock');
-    assert.equal(mock.model_version, 'skos-cal-mock-v1');
-    assert.equal(mock.estimated_active_kcal, 300);
+test('calorie provider: ml falls back to baseline (isolated subprocess)', () => {
+  const r = runWithProvider({ nodeEnv: 'development', provider: 'ml', snippet: PROVIDER_OUT_SNIPPET });
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout.match(/OUT:(\{.*\})/)[1]);
+  assert.equal(out.provider, 'baseline', 'unimplemented ml provider falls back to baseline');
+  assert.equal(out.model_version, 'skos-cal-baseline-v1');
+  assert.ok(out.note && out.note.includes('fallback'), 'fallback clearly labeled');
+});
 
-    process.env.CALORIE_MODEL_PROVIDER = 'bogus';
-    const b = estimateWorkoutCalories(input);
-    assert.equal(b.provider, 'baseline');
-  } finally {
-    if (prev === undefined) delete process.env.CALORIE_MODEL_PROVIDER;
-    else process.env.CALORIE_MODEL_PROVIDER = prev;
-  }
+test('calorie provider: mock is labeled; unknown provider never selects an unintended provider', () => {
+  const mock = runWithProvider({ nodeEnv: 'development', provider: 'mock', snippet: PROVIDER_OUT_SNIPPET });
+  assert.equal(mock.status, 0, mock.stderr);
+  const m = JSON.parse(mock.stdout.match(/OUT:(\{.*\})/)[1]);
+  assert.equal(m.provider, 'mock');
+  assert.equal(m.model_version, 'skos-cal-mock-v1');
+  assert.equal(m.est, 300);
+
+  // invalid value in development -> safe baseline (config warning covered in calorieProviderConfig.test.js)
+  const bogus = runWithProvider({ nodeEnv: 'development', provider: 'bogus', snippet: PROVIDER_OUT_SNIPPET });
+  assert.equal(bogus.status, 0, bogus.stderr);
+  const b = JSON.parse(bogus.stdout.match(/OUT:(\{.*\})/)[1]);
+  assert.equal(b.provider, 'baseline');
 });
 
 // ---------- baseline math sanity ----------

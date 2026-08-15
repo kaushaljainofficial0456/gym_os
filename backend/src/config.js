@@ -7,6 +7,39 @@ try {
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+// ---- calorie model provider: validated backend configuration ----
+// Centralized here so routes/services never re-implement provider string
+// logic. Supported: baseline | mock | ml. An invalid value must never
+// silently select an unintended provider — staging/production fail fast at
+// startup (below); development falls back to the documented safe default.
+export const CALORIE_PROVIDERS = Object.freeze(['baseline', 'mock', 'ml']);
+export const DEFAULT_CALORIE_PROVIDER = 'baseline';
+
+// Normalize + validate a raw provider value (trimmed, lowercased).
+//   { ok: true, value }                  valid provider
+//   { ok: false, reason: 'missing' }     absent or empty
+//   { ok: false, reason: 'invalid', raw } supplied but unsupported
+export function parseCalorieProvider(raw) {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (!value) return { ok: false, reason: 'missing' };
+  if (CALORIE_PROVIDERS.includes(value)) return { ok: true, value };
+  return { ok: false, reason: 'invalid', raw };
+}
+
+const providerParsed = parseCalorieProvider(process.env.CALORIE_MODEL_PROVIDER);
+// Staging/production: an invalid provider is a configuration error — fail
+// clearly instead of silently running an unintended provider. Missing is
+// allowed (the safe baseline default applies).
+if ((nodeEnv === 'staging' || nodeEnv === 'production') && providerParsed.reason === 'invalid') {
+  console.error(`[sk-os] FATAL: CALORIE_MODEL_PROVIDER must be one of: baseline, mock, ml (got '${providerParsed.raw}').`);
+  process.exit(1);
+}
+// Development: never crash — fall back to the documented safe default, but
+// make the fallback visible instead of silent.
+if (nodeEnv === 'development' && providerParsed.reason === 'invalid') {
+  console.warn(`[sk-os] WARN: CALORIE_MODEL_PROVIDER '${providerParsed.raw}' is invalid — using '${DEFAULT_CALORIE_PROVIDER}'.`);
+}
+
 // Production safety: refuse to boot with a default/known-weak JWT secret.
 const jwtSecret = process.env.JWT_SECRET || '';
 if (nodeEnv === 'production') {
@@ -42,6 +75,8 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   databaseUrl: process.env.DATABASE_URL || null,   // runtime PG connection (required in staging/production); unset => dev SQLite
   nodeEnv,
+  // Calorie model provider — validated above; missing/empty => safe baseline default.
+  calorieModelProvider: providerParsed.ok ? providerParsed.value : DEFAULT_CALORIE_PROVIDER,
   sqlitePath: process.env.SQLITE_PATH || 'backend/data/physique.db',
   // CORS: explicit allow-list. Empty in dev = localhost origins only.
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
