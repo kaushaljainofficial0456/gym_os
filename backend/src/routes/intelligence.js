@@ -229,8 +229,12 @@ export default function intelligenceRoutes(db) {
         });
         calorie = estimateWorkoutCalories(input);
         if (calorie) await persistCalorieResult(tx, wId, calorie);
-      } catch {
-        calorie = null; // calorie estimation must never fail workout logging
+      } catch (e) {
+        // Calorie estimation/persistence must NEVER fail workout logging.
+        // Log server-side only with safe correlation metadata (request id,
+        // workout id, error message) — never bodies, user data, or ML output.
+        calorie = null;
+        console.error('[sk-os] calorie estimate failed', { req: req.id || null, workout: wId, error: String(e?.message || e).slice(0, 500) });
       }
       return { prs, calorie };
     });

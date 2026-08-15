@@ -19,6 +19,7 @@ export const BACKEND_ROOT = path.resolve(__dirname, '..', '..');
 export const MODULES = {
   config: `file://${path.join(BACKEND_ROOT, 'src', 'config.js').replace(/\\/g, '/')}`,
   calorieModel: `file://${path.join(BACKEND_ROOT, 'src', 'services', 'intelligence', 'calorieModel.js').replace(/\\/g, '/')}`,
+  workouts: `file://${path.join(BACKEND_ROOT, 'src', 'routes', 'workouts.js').replace(/\\/g, '/')}`,
   schema: path.join(BACKEND_ROOT, '..', 'database', 'schema.sql').replace(/\\/g, '/')
 };
 

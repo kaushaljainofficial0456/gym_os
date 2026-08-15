@@ -92,6 +92,20 @@ export function validateCalorieResult(result = {}) {
 }
 
 // ------------------------------------------------------------------
+// Fallback observability — server-side only. Logs baseline fallbacks with
+// a SAFE whitelist of fields: category, requested provider, opaque workout
+// id, model version when known, and the static validation issues from our
+// own gate. NEVER logs workout payloads, user data, body weight, set logs,
+// raw ML output, or credentials. Categories: ml_unavailable | invalid_output.
+// ------------------------------------------------------------------
+function logCalorieFallback(category, meta = {}) {
+  const fields = { category, provider: meta.provider || null, workout_id: meta.workout_id || null };
+  if (meta.model_version) fields.model_version = meta.model_version;
+  if (Array.isArray(meta.issues) && meta.issues.length) fields.issues = meta.issues;
+  console.warn('[sk-os] calorie: baseline fallback', fields);
+}
+
+// ------------------------------------------------------------------
 // ESTIMATE — public entry point. Always returns a well-formed result;
 // never throws for provider reasons (an unavailable ML provider falls
 // back to baseline). Every provider result passes through
@@ -114,6 +128,7 @@ export function estimateWorkoutCalories(input = {}) {
     }
     if (!result) {
       note = 'ml provider unavailable — baseline fallback';
+      logCalorieFallback('ml_unavailable', { provider, workout_id: input?.session?.workout_id || null });
       result = baselineEstimate(input);
     }
   } else {
@@ -123,6 +138,12 @@ export function estimateWorkoutCalories(input = {}) {
   const check = validateCalorieResult(result);
   if (!check.ok) {
     note = `invalid ${provider} output — baseline fallback (${check.issues.join('; ')})`;
+    logCalorieFallback('invalid_output', {
+      provider,
+      workout_id: input?.session?.workout_id || null,
+      model_version: result?.model_version || null,
+      issues: check.issues
+    });
     return { ...baselineEstimate(input), note };
   }
   return { ...check.result, ...(note ? { note } : {}) };
