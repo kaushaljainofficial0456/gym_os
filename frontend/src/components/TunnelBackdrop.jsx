@@ -52,7 +52,7 @@ function usePrefersReducedMotion() {
 
 const vertexShader = `void main(){ gl_Position = vec4(position, 1.0); }`;
 
-function fragmentShader({ layers = 96, ringPoints = 128, pointA = '1.0,0.416,0.239', pointB = '1.0,0.761,0.294', speed = 0.7 }) {
+function fragmentShader({ layers = 96, ringPoints = 128, pointA = '0.031,0.498,0.482', pointB = '0.071,0.722,0.690', speed = 0.7 }) {
   return `
 uniform float iTime;
 uniform vec3 iResolution;
@@ -242,7 +242,7 @@ export default function TunnelBackdrop() {
         aria-hidden="true"
         style={{
           background:
-            'radial-gradient(70% 90% at 50% 115%, rgba(255,106,61,.22), transparent 62%), radial-gradient(55% 70% at 50% -10%, rgba(255,194,75,.14), transparent 60%)',
+            'radial-gradient(70% 90% at 50% 115%, rgba(18,184,176,.22), transparent 62%), radial-gradient(55% 70% at 50% -10%, rgba(8,127,123,.14), transparent 60%)',
         }}
       />
     );

@@ -20,6 +20,8 @@ export default function Nutrition() {
   const [mealForm, setMealForm] = useState({ slot: 'Meal', name: '', time: '', calories: '', protein: '', carbs: '', fat: '', foods: '' });
   const [saving, setSaving] = useState(false);
   const [openSection, setOpenSection] = useState(null); // 'foods' | 'meals'
+  const [supForm, setSupForm] = useState({ name: '', dose: '', schedule_time: '' });
+  const [savingSup, setSavingSup] = useState(false);
   // meal composer — build a meal from foods with quantities
   const [composing, setComposing] = useState(null); // meal object being composed
   const [items, setItems] = useState([]);
@@ -144,8 +146,8 @@ export default function Nutrition() {
             label={<span className="font-grotesk font-bold text-base">{eaten.calories}</span>}
             sub={<span className="text-[8px] text-mute">kcal</span>} />
           <div className="flex-1 space-y-2.5">
-            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} color="linear-gradient(92deg,#FF6A3D,#FFC24B)" right={`${eaten.protein}/${plan?.protein || 0} g`} height="h-1.5" />
-            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} color="linear-gradient(92deg,#FFC24B,#FFE9A8)" right={`${eaten.carbs}/${plan?.carbs || 0} g`} height="h-1.5" />
+            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} color="linear-gradient(92deg,#087F7B,#12B8B0)" right={`${eaten.protein}/${plan?.protein || 0} g`} height="h-1.5" />
+            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} color="linear-gradient(92deg,#12B8B0,#DDF7F2)" right={`${eaten.carbs}/${plan?.carbs || 0} g`} height="h-1.5" />
             <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1} color="linear-gradient(92deg,#35E0D8,#7BE8FF)" right={`${eaten.fat}/${plan?.fat || 0} g`} height="h-1.5" />
           </div>
         </div>
@@ -372,10 +374,10 @@ export default function Nutrition() {
       </div>
 
       {/* supplements */}
-      {supList?.length > 0 && (
-        <div className="card p-4">
-          <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">Supplements</div>
-          <div className="space-y-1.5">
+      <div className="card p-4">
+        <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">Supplements</div>
+        {supList?.length > 0 && (
+          <div className="space-y-1.5 mb-3">
             {supList.map((s) => {
               const taken = !!supTaken[s.id];
               return (
@@ -388,8 +390,25 @@ export default function Nutrition() {
               );
             })}
           </div>
+        )}
+        <div className="rounded-xl border border-line bg-white/[.03] p-3 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <input className="input" placeholder="Name" value={supForm.name} onChange={(e) => setSupForm((f) => ({ ...f, name: e.target.value }))} />
+            <input className="input" placeholder="Dose" value={supForm.dose} onChange={(e) => setSupForm((f) => ({ ...f, dose: e.target.value }))} />
+            <input className="input" type="time" placeholder="Time" value={supForm.schedule_time} onChange={(e) => setSupForm((f) => ({ ...f, schedule_time: e.target.value }))} />
+          </div>
+          <button className="btn-primary w-full" disabled={savingSup || !supForm.name.trim()} onClick={async () => {
+            setSavingSup(true);
+            try {
+              await api(`/tracking/clients/${clientId}/supplements`, { method: 'POST', body: JSON.stringify({ name: supForm.name.trim(), dose: supForm.dose || undefined, schedule_time: supForm.schedule_time || undefined }) });
+              setSupForm({ name: '', dose: '', schedule_time: '' });
+              api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {});
+              setToast('Supplement added');
+            } catch (e) { setToast(e.message); }
+            setSavingSup(false);
+          }}>Add supplement</button>
         </div>
-      )}
+      </div>
 
       {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
     </div>

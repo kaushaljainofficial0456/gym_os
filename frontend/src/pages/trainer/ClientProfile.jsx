@@ -60,7 +60,7 @@ export default function ClientProfile() {
         <div className="mt-6 relative">
           <div className="h-2 rounded-full bg-white/8 overflow-hidden">
             <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-[900ms] ease-out"
-              style={{ width: `${progress}%`, boxShadow: '0 0 14px rgba(255,106,61,.5)' }} />
+              style={{ width: `${progress}%`, boxShadow: '0 0 14px rgba(18,184,176,.5)' }} />
           </div>
           <div className="flex justify-between mt-2 text-[10px] text-faint font-grotesk">
             <span>Start {startW} kg</span>
@@ -556,8 +556,7 @@ function AITab({ clientId }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="card !p-0 overflow-hidden" style={{ padding: 1, background: 'linear-gradient(135deg, rgba(255,106,61,.55), rgba(255,194,75,.28) 45%, rgba(155,124,255,.4))', borderRadius: 19 }}>
+    <div className="space-y-4">       <div className="card !p-0 overflow-hidden" style={{ padding: 1, background: 'linear-gradient(135deg, rgba(8,127,123,.55), rgba(18,184,176,.28) 45%, rgba(155,124,255,.4))', borderRadius: 19 }}>
         <div className="bg-panel rounded-[18px] p-5 relative overflow-hidden">
           <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-violetx/10 blur-[80px] pointer-events-none" />
           <div className="flex items-center justify-between flex-wrap gap-3 relative">

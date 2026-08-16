@@ -101,21 +101,21 @@ export default function MuscleMap({ activeMuscles = [], selected = null, onSelec
                 fill: isSel
                   ? 'url(#burnGrad)'
                   : isActive
-                    ? 'rgba(255,106,61,.38)'
+                    ? 'rgba(18,184,176,.38)'
                     : isHover
                       ? 'rgba(255,255,255,.16)'
                       : 'rgba(255,255,255,.07)',
-                stroke: isSel ? 'rgba(255,194,75,.9)' : isActive ? 'rgba(255,106,61,.55)' : 'rgba(255,255,255,.05)',
+                stroke: isSel ? 'rgba(221,247,242,.9)' : isActive ? 'rgba(18,184,176,.55)' : 'rgba(255,255,255,.05)',
                 strokeWidth: isSel ? 1.6 : 1,
-                filter: isSel || isActive ? 'drop-shadow(0 0 6px rgba(255,106,61,.45))' : 'none'
+                filter: isSel || isActive ? 'drop-shadow(0 0 6px rgba(18,184,176,.45))' : 'none'
               }}
             />
           );
         })}
         <defs>
           <linearGradient id="burnGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#FF6A3D" />
-            <stop offset="100%" stopColor="#FFC24B" />
+            <stop offset="0%" stopColor="#087F7B" />
+            <stop offset="100%" stopColor="#12B8B0" />
           </linearGradient>
         </defs>
       </svg>

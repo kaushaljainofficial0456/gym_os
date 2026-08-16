@@ -26,7 +26,7 @@ const DASH_CARDS = [
   ['sleep', 'Sleep'], ['coach', 'SK Coach'], ['adherence', 'Adherence'], ['goal', 'My goal'], ['crowd', 'Gym crowd']
 ];
 
-function MiniSpark({ values, color = '#FF6A3D' }) {
+function MiniSpark({ values, color = '#12B8B0' }) {
   if (!values?.length) return <div className="text-[10px] text-faint">No entries yet</div>;
   const pts = values.slice(-8).map((v, i, a) => {
     const min = Math.min(...a), max = Math.max(...a);
@@ -65,6 +65,10 @@ export default function Profile() {
   const [gForm, setGForm] = useState(null);
   const [savingG, setSavingG] = useState(false);
   const [toast, setToast] = useState('');
+  // coach memory/preferences
+  const coachMem = useFetch(() => api('/intel/coach/memory'));
+  const [coachPrefs, setCoachPrefs] = useState({});
+  const [savingPrefs2, setSavingPrefs2] = useState(false);
 
   const data = home.data;
   const clientId = data?.client?.id;
@@ -96,6 +100,14 @@ export default function Profile() {
       api(`/messages?client_id=${clientId}`).then((r) => setMsgs(r.messages || [])).catch(() => {});
     }
   }, [clientId]);
+
+  useEffect(() => {
+    if (coachMem.data?.memory) {
+      const map = {};
+      for (const m of coachMem.data.memory) { map[m.key] = typeof m.value === 'object' ? JSON.stringify(m.value) : String(m.value ?? ''); }
+      setCoachPrefs(map);
+    }
+  }, [coachMem.data]);
 
   useEffect(() => {
     if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -366,8 +378,7 @@ export default function Profile() {
                     <button className="text-[10px] text-mute hover:text-ink" onClick={() => setEditingM({ id: m.id, name: m.name, unit: m.unit || '', frequency: m.frequency, target: m.target ?? '', type: m.type || 'number' })} aria-label={`Edit ${m.name}`}>Edit</button>
                     <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
                   </div>
-                </div>
-                <MiniSpark values={vals} color={m.color || '#FF6A3D'} />
+                </div>                 <MiniSpark values={vals} color={m.color || '#12B8B0'} />
                 {/* recent entries with delete */}
                 {(m.entries || []).slice(0, 4).length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -428,14 +439,42 @@ export default function Profile() {
         <button className="btn-primary w-full mt-2" onClick={savePrefs} disabled={savingPrefs}>{savingPrefs ? 'Saving…' : 'Save dashboard layout'}</button>
       </div>
 
+      {/* coach preferences */}
+      <div className="card p-4">
+        <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Coach preferences</div>
+        <div className="space-y-2">
+          {[['training_time', 'Preferred training time', 'text'], ['workout_duration', 'Workout duration (min)', 'number'],
+            ['equipment_pref', 'Equipment preference', 'text'], ['liked_foods', 'Liked foods', 'text'],
+            ['disliked_exercises', 'Disliked exercises', 'text'], ['note', 'Note for coach', 'text']
+          ].map(([key, label, type]) => (
+            <label key={key} className="block">
+              <span className="text-[10px] text-faint font-grotesk">{label.toUpperCase()}</span>
+              <input type={type} className="input mt-1" placeholder={label} value={coachPrefs[key] ?? ''}
+                onChange={(e) => setCoachPrefs((p) => ({ ...p, [key]: e.target.value }))} />
+            </label>
+          ))}
+        </div>
+        <button className="btn-primary w-full mt-3" disabled={savingPrefs2} onClick={async () => {
+          setSavingPrefs2(true);
+          try {
+            const entries = Object.entries(coachPrefs)
+              .filter(([, v]) => v !== '' && v != null)
+              .map(([key, value]) => ({ key, value }));
+            await api('/intel/coach/memory', { method: 'PUT', body: JSON.stringify({ entries }) });
+            coachMem.reload();
+            setToast('Coach preferences saved');
+          } catch (e) { setToast(e.message); }
+          setSavingPrefs2(false);
+        }}>{savingPrefs2 ? 'Saving…' : 'Save coach preferences'}</button>
+      </div>
+
       {/* adherence breakdown */}
       <div className="card p-4">
         <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">This week</div>
         <AdherenceBreakdown components={data.adherenceComponents} />
       </div>
 
-      {/* coach message */}
-      <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(255,106,61,.12), rgba(255,194,75,.05))', border: '1px solid rgba(255,106,61,.3)' }}>
+      {/* coach message */}       <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(8,127,123,.12), rgba(18,184,176,.05))', border: '1px solid rgba(8,127,123,.3)' }}>
         <div className="text-[10px] uppercase tracking-wider text-ember font-grotesk mb-1.5">Coach message</div>
         <p className="text-sm leading-relaxed">{data.coachMessage}</p>
       </div>

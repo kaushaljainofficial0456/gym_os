@@ -8,10 +8,10 @@ const GND = (y) => `<line x1="18" y1="${y}" x2="202" y2="${y}" stroke="rgba(255,
 
 const DEFS = `<defs>
   <linearGradient id="paAccent" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#FF6A3D"/><stop offset="100%" stop-color="#FFC24B"/>
+    <stop offset="0%" stop-color="#087F7B"/><stop offset="100%" stop-color="#12B8B0"/>
   </linearGradient>
   <radialGradient id="paGlow" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" stop-color="#FF6A3D" stop-opacity=".20"/><stop offset="100%" stop-color="#FF6A3D" stop-opacity="0"/>
+    <stop offset="0%" stop-color="#087F7B" stop-opacity=".20"/><stop offset="100%" stop-color="#087F7B" stop-opacity="0"/>
   </radialGradient>
 </defs>`;
 
@@ -170,7 +170,7 @@ export function exerciseAnim(key) {
 export default function ExerciseAnim({ anim, className = '', label, muscle }) {
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-line bg-gradient-to-b from-bg2 to-panel ${className}`}
-      style={{ backgroundImage: 'radial-gradient(120% 80% at 50% 110%, rgba(255,106,61,.10), transparent 55%)' }}>
+      style={{ backgroundImage: 'radial-gradient(120% 80% at 50% 110%, rgba(18,184,176,.10), transparent 55%)' }}>
       <div className="flex justify-center py-2" aria-hidden="true">
         <svg viewBox="0 0 220 240" className="h-44 md:h-52 w-auto max-w-full"
           dangerouslySetInnerHTML={{ __html: exerciseAnim(anim).replace(/^<svg[^>]*>/, '') }} />
