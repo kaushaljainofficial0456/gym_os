@@ -32,6 +32,7 @@ export default function Workout() {
   const [mode, setMode] = useState('browse'); // browse | execute | summary
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   // execution state
   const [exProgress, setExProgress] = useState({});
@@ -166,12 +167,46 @@ export default function Workout() {
     try { await api(`/workouts/${workout.id}/exercises/${ex.id}`, { method: 'PATCH' }); } catch { today.reload(); }
   };
 
+  // ---- restore from started_at (refresh-while-active) ----
+  useEffect(() => {
+    // Only restore if: still in browse mode, workout exists, has started_at, and is NOT completed
+    if (mode !== 'browse' || !workout?.started_at || workout?.status === 'completed') return;
+    // Workout was already started server-side but user refreshed — restore execution state
+    setExProgress(Object.fromEntries(state.map((e) => [e.id, 0])));
+    setExecInputs(Object.fromEntries(state.map((e) => [e.id, {
+      reps: parseFloat(e.reps) || 0,
+      weight: parseFloat(e.weight) || 0,
+      rir: null
+    }])));
+    // Reconstruct elapsed time from server started_at
+    setStartedAt(Date.parse(workout.started_at));
+    setMode('execute');
+  }, [workout?.started_at]); // intentionally runs once on mount when started_at exists
+
   // ---- execution ----
   const totalSets = state.reduce((s, e) => s + (e.sets || 0), 0);
   const doneSets = Object.values(exProgress).reduce((s, n) => s + n, 0);
   const currentEx = state.find((e) => (exProgress[e.id] || 0) < (e.sets || 0)) || null;
 
-  const startWorkout = () => {
+  const startWorkout = async () => {
+    if (starting) return; // prevent duplicate clicks
+    setStarting(true);
+    try {
+      // Notify backend: workout has started (server records started_at)
+      // POST /api/workouts/:id/start — no body; server is authoritative for timing.
+      const res = await api(`/workouts/${workout.id}/start`, { method: 'POST' });
+      // If workout was already completed, do not enter execute mode
+      if (res.already_completed) {
+        setStarting(false);
+        today.reload();
+        return;
+      }
+    } catch (e) {
+      setStarting(false);
+      setToast(e.message || 'Could not start workout');
+      return;
+    }
+    // API succeeded — proceed with local timer/UI
     setExProgress(Object.fromEntries(state.map((e) => [e.id, 0])));
     setExecInputs(Object.fromEntries(state.map((e) => [e.id, {
       reps: parseFloat(e.reps) || 0,
@@ -180,6 +215,7 @@ export default function Workout() {
     }])));
     setStartedAt(Date.now());
     setMode('execute');
+    setStarting(false);
   };
 
   const patchInput = (exId, k, v) => setExecInputs((inp) => ({ ...inp, [exId]: { ...(inp[exId] || {}), [k]: v } }));
@@ -213,10 +249,12 @@ export default function Workout() {
           }))
         };
       });
-      const { prs } = await api(`/workouts/${workout.id}/complete`, { method: 'POST', body: JSON.stringify({ logs }) });
+      const res = await api(`/workouts/${workout.id}/complete`, { method: 'POST', body: JSON.stringify({ logs }) });
       const volume = logs.reduce((s, l) => s + l.sets.reduce((a, st) => a + (st.actual_reps * st.actual_weight), 0), 0);
-      const durationMin = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
-      setResult({ prs: prs || [], volume, durationMin, exercises: state.length });
+      // duration_min is server-authoritative (completed_at − started_at).
+      // Fall back to local timer only if backend did not compute it.
+      const durationMin = res.duration_min ?? Math.max(1, Math.round((Date.now() - startedAt) / 60000));
+      setResult({ prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null });
       setMode('summary');
       today.reload(); hist.reload();
     } catch (e) {
@@ -261,7 +299,6 @@ export default function Workout() {
                 <div className="space-y-2.5">
                   {focus.slice(0, 5).map((f, i) => (
                     <Bar key={f.muscle} label={f.muscle} value={f.count} max={focus[0].count}
-                      color={i === 0 ? 'linear-gradient(92deg,#087F7B,#12B8B0)' : 'linear-gradient(92deg,rgba(18,184,176,.35),rgba(18,184,176,.18))'}
                       right={`${f.count}${f.count > 1 ? ' ex' : ' ex'}`} height="h-1.5" />
                   ))}
                 </div>
@@ -381,8 +418,8 @@ export default function Workout() {
             )}
 
             {/* start CTA */}
-            <button data-start-workout className="btn-primary w-full !py-4 text-sm" onClick={startWorkout} disabled={!exercises.length}>
-              🔥 START WORKOUT — {meta.totalSets || 0} sets
+            <button data-start-workout className="btn-primary w-full !py-4 text-sm" onClick={startWorkout} disabled={!exercises.length || starting}>
+              {starting ? 'Starting…' : `🔥 START WORKOUT — ${meta.totalSets || 0} sets`}
             </button>
           </>
         ) : (
@@ -798,7 +835,7 @@ export default function Workout() {
           <div className="text-xs text-mute mt-1">{workout?.name}</div>
           <div className="grid grid-cols-3 gap-2 mt-5">
             {[
-              ['Duration', `${result?.durationMin || '—'} min`],
+              ['Duration', result?.durationMin != null ? `${result.durationMin} min` : '—'],
               ['Volume', result?.volume ? `${Math.round(result.volume).toLocaleString()} kg` : '—'],
               ['Exercises', result?.exercises || '—']
             ].map(([l, v]) => (
@@ -822,6 +859,19 @@ export default function Workout() {
                   ))}
                 </div>
               ))}
+            </div>
+          )}
+          {!!result?.calorie && (
+            <div className="mt-3 rounded-xl border border-good/25 bg-good/5 px-4 py-3">
+              <div className="text-[10px] uppercase tracking-widest text-good font-grotesk mb-1">🔥 Calorie estimate</div>
+              <div className="font-grotesk font-bold text-lg">
+                {Math.round(result.calorie.estimated_active_kcal || 0)} kcal
+              </div>
+              {result.calorie.lower_kcal != null && result.calorie.upper_kcal != null && (
+                <div className="text-[10px] text-mute mt-0.5">
+                  Range: {Math.round(result.calorie.lower_kcal)}–{Math.round(result.calorie.upper_kcal)} kcal
+                </div>
+              )}
             </div>
           )}
           <button className="btn w-full mt-5" onClick={() => { setMode('browse'); setResult(null); setExProgress({}); }}>Done</button>

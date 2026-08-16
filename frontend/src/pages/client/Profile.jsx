@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
+import { useTheme } from '../../themeContext.jsx';
 import { Spinner, ErrorState, Ring } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
 
 const EQUIPMENT = [
-  { id: 'barbell', label: 'Barbell' },
-  { id: 'dumbbells', label: 'Dumbbells' },
-  { id: 'cable', label: 'Cable machine' },
-  { id: 'machine', label: 'Machine' },
-  { id: 'bench', label: 'Bench' },
-  { id: 'pull_up_bar', label: 'Pull-up bar' },
-  { id: 'bands', label: 'Resistance bands' },
-  { id: 'bodyweight', label: 'Bodyweight' },
-  { id: 'full_gym', label: 'Full gym' }
+  { id: 'barbell', label: 'Barbell' }, { id: 'dumbbells', label: 'Dumbbells' }, { id: 'cable', label: 'Cable machine' },
+  { id: 'machine', label: 'Machine' }, { id: 'bench', label: 'Bench' },
+  { id: 'pull_up_bar', label: 'Pull-up bar' }, { id: 'bands', label: 'Resistance bands' },
+  { id: 'bodyweight', label: 'Bodyweight' }, { id: 'full_gym', label: 'Full gym' }
 ];
 const GOALS = [
   ['FAT_LOSS', 'Fat loss'], ['MUSCLE_GAIN', 'Muscle gain'], ['RECOMP', 'Recomposition'],
@@ -24,6 +20,15 @@ const EXP = [['BEGINNER', 'Beginner'], ['INTERMEDIATE', 'Intermediate'], ['ADVAN
 const DASH_CARDS = [
   ['workout', "Today's workout"], ['fuel', 'Calories & macros'], ['water', 'Water'],
   ['sleep', 'Sleep'], ['coach', 'SK Coach'], ['adherence', 'Adherence'], ['goal', 'My goal'], ['crowd', 'Gym crowd']
+];
+
+const PROFILE_SECTIONS = [
+  { id: 'goal', label: 'Goal & Setup', icon: '🎯', desc: 'View progress and update your goals' },
+  { id: 'equipment', label: 'My Equipment', icon: '🏋️', desc: 'Manage your gym equipment' },
+  { id: 'metrics', label: 'My Metrics', icon: '📊', desc: 'Track personal measurements' },
+  { id: 'coach', label: 'Coach Preference', icon: '💬', desc: 'Coach settings and messages' },
+  { id: 'dashboard', label: 'Dashboard', icon: '📋', desc: 'Customize your home dashboard' },
+  { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
 ];
 
 function MiniSpark({ values, color = '#12B8B0' }) {
@@ -41,7 +46,91 @@ function MiniSpark({ values, color = '#12B8B0' }) {
   );
 }
 
+function BackButton({ onClick }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-2 transition-colors mb-4" style={{ color: 'var(--mute)' }}
+      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ink)'}
+      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--mute)'}>
+      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 3L5 8L10 13" />
+      </svg>
+      <span className="font-grotesk text-sm font-semibold">Back to Profile</span>
+    </button>
+  );
+}
+
+function HelpInline() {
+  const [expanded, setExpanded] = useState(null);
+  const HELP_SECTIONS = [
+    { id: 'overview', icon: '🏠', title: 'How SK OS Works', content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'SK OS analyzes your data and provides insights', 'Your coach gets real-time updates'] },
+    { id: 'workouts', icon: '💪', title: 'How Workouts Work', content: 'Your coach assigns structured workout plans with exercises, sets, reps, and weights.', items: ['Open a workout to see all exercises', 'Log your actual weights and reps', 'Rest timer helps track between sets', 'Complete all exercises to finish the session'] },
+    { id: 'nutrition', icon: '🥗', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask SK OS to quickly log foods', 'Take a meal photo for calorie estimates'] },
+    { id: 'progress', icon: '📈', title: 'Progress Tracking', content: 'Track your body transformation over time with weight, measurements, and photos.', items: ['Log weight regularly on Progress page', 'View weight trends with charts', 'Track body measurements', 'See your adherence score'] },
+    { id: 'coach', icon: '🤖', title: 'Coach & Intelligence', content: 'SK OS provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask SK OS natural language questions', 'Message your coach from Profile'] },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>Help</div>
+      {HELP_SECTIONS.map((section) => (
+        <div key={section.id} className="card overflow-hidden">
+          <button onClick={() => setExpanded(expanded === section.id ? null : section.id)} className="w-full flex items-center gap-3 p-4 text-left" style={{ color: 'var(--ink)' }}>
+            <span className="text-xl shrink-0">{section.icon}</span>
+            <span className="flex-1 font-grotesk font-bold text-sm">{section.title}</span>
+            <span className="text-lg transition-transform duration-200" style={{ color: 'var(--mute)', transform: expanded === section.id ? 'rotate(45deg)' : 'none' }}>+</span>
+          </button>
+          {expanded === section.id && (
+            <div className="px-4 pb-4 border-t border-line/40 pt-3 anim-fadeUp">
+              <p className="text-[13px] leading-relaxed mb-3" style={{ color: 'var(--mute)' }}>{section.content}</p>
+              <div className="space-y-2">
+                {section.items.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <span className="text-gold text-xs mt-0.5 shrink-0">•</span>
+                    <span className="text-[12px] leading-relaxed" style={{ color: 'var(--mute)' }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const isDark = theme === 'dark';
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>Appearance</div>
+          <div className="text-sm font-grotesk mt-0.5" style={{ color: 'var(--ink)' }}>{isDark ? 'Dark Mode' : 'Light Mode'}</div>
+        </div>
+        <button
+          onClick={toggle}
+          className="relative w-12 h-6 rounded-full transition-colors duration-200"
+          style={{ background: isDark ? 'linear-gradient(135deg, #0A8A85, #14C4BC)' : '#8C6A4D' }}
+          role="switch"
+          aria-checked={isDark}
+          aria-label="Toggle dark mode"
+        >
+          <span
+            className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-200 shadow-sm"
+            style={{
+              left: isDark ? 'calc(100% - 22px)' : '2px',
+              background: '#fff',
+            }}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile() {
+  const [activeSection, setActiveSection] = useState(null);
+
   const home = useFetch(() => api('/tracking/me/home'));
   const meDash = useFetch(() => api('/me/dashboard'));
   const metrics = useFetch(() => api('/me/metrics'));
@@ -53,10 +142,9 @@ export default function Profile() {
 
   // metric form
   const [mForm, setMForm] = useState({ name: '', unit: '', frequency: 'weekly', target: '', type: 'number' });
-  const [mLog, setMLog] = useState({});   // metricId -> { value, date }
+  const [mLog, setMLog] = useState({});
   const [savingM, setSavingM] = useState(false);
-  const [editingM, setEditingM] = useState(null); // { id, name, unit, frequency, target, type }
-  const [editingLog, setEditingLog] = useState(null); // { metricId, entryId }
+  const [editingM, setEditingM] = useState(null);
   // dashboard prefs
   const [order, setOrder] = useState([]);
   const [hidden, setHidden] = useState([]);
@@ -234,275 +322,357 @@ export default function Profile() {
 
   const visibleCards = (order.length ? order : DASH_CARDS.map((x) => x[0])).filter((k) => !hidden.includes(k));
 
+  // ── Profile section renderers ──
+
+  const renderSection = (sectionId) => {
+    const goBack = () => setActiveSection(null);
+
+    switch (sectionId) {
+      case 'goal':
+        return (
+          <div className="space-y-4 anim-fadeUp">
+            <BackButton onClick={goBack} />
+            {/* goal progress */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">Goal progress</div>
+                <div className="font-grotesk text-xs font-bold text-gold">{Math.round(progress)}%</div>
+              </div>
+              <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-2">
+                <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="flex justify-between text-[11px] text-mute font-grotesk">
+                <span>Start {c.startWeight} kg</span>
+                <span>Now {c.currentWeight} kg</span>
+                <span>Target {c.targetWeight} kg · {c.goalDate?.slice(0, 10) || '—'}</span>
+              </div>
+            </div>
+            {/* goal editor */}
+            <div className="card p-4">
+              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">My goal & setup</div>
+              {gForm && (
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-[10px] text-faint mb-1.5 font-grotesk">PRIMARY GOAL</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {GOALS.map(([v, l]) => (
+                        <button key={v} onClick={() => setGForm((f) => ({ ...f, goal: v }))}
+                          className={`chip ${gForm.goal === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-faint mb-1.5 font-grotesk">EXPERIENCE</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {EXP.map(([v, l]) => (
+                        <button key={v} onClick={() => setGForm((f) => ({ ...f, experience: v }))}
+                          className={`chip ${gForm.experience === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[10px] text-faint font-grotesk">TARGET WEIGHT (KG)</span>
+                      <input type="number" className="input mt-1" value={gForm.targetWeight ?? ''} onChange={(e) => setGForm((f) => ({ ...f, targetWeight: e.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-faint font-grotesk">TARGET DATE</span>
+                      <input type="date" className="input mt-1" value={gForm.goalDate || ''} onChange={(e) => setGForm((f) => ({ ...f, goalDate: e.target.value }))} />
+                    </label>
+                  </div>
+                  <button className="btn-primary w-full" onClick={saveGoal} disabled={savingG}>{savingG ? 'Saving…' : 'Save my goal'}</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'equipment':
+        return (
+          <div className="space-y-4 anim-fadeUp">
+            <BackButton onClick={goBack} />
+            <div className="card p-4">
+              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">My Equipment</div>
+              {gForm ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {EQUIPMENT.map((eq) => (
+                      <button key={eq.id} onClick={() => toggleEq(eq.id)}
+                        className={`chip ${gForm.equipment.includes(eq.id) ? '!border-cyanx/50 !text-cyanx bg-cyanx/10' : ''}`}>
+                        {gForm.equipment.includes(eq.id) ? '✓ ' : ''}{eq.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-faint">Select the equipment you have access to. This helps your coach plan your workouts.</div>
+                  <button className="btn-primary w-full" onClick={saveGoal} disabled={savingG}>{savingG ? 'Saving…' : 'Save equipment'}</button>
+                </div>
+              ) : (
+                <div className="text-xs text-mute py-3 text-center">Loading equipment data…</div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'metrics':
+        return (
+          <div className="space-y-4 anim-fadeUp">
+            <BackButton onClick={goBack} />
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">My metrics</div>
+                <span className="text-[10px] text-faint font-grotesk">track what matters to you</span>
+              </div>
+              {/* create form */}
+              <div className="rounded-xl border border-line bg-white/[.03] p-3 space-y-2 mt-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="input" placeholder="Metric name (e.g. Waist, Steps, Bench)" value={mForm.name} onChange={(e) => setMForm((f) => ({ ...f, name: e.target.value }))} />
+                  <input className="input" placeholder="Unit (cm, kg, steps…)" value={mForm.unit} onChange={(e) => setMForm((f) => ({ ...f, unit: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <select className="input" value={mForm.type} onChange={(e) => setMForm((f) => ({ ...f, type: e.target.value }))}>
+                    <option value="number">Number</option><option value="count">Count</option><option value="duration">Duration (h)</option><option value="boolean">Yes / No</option>
+                  </select>
+                  <select className="input" value={mForm.frequency} onChange={(e) => setMForm((f) => ({ ...f, frequency: e.target.value }))}>
+                    <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+                  </select>
+                  <input className="input" placeholder="Target (optional)" type="number" value={mForm.target} onChange={(e) => setMForm((f) => ({ ...f, target: e.target.value }))} />
+                </div>
+                <button className="btn-primary w-full" onClick={createMetric} disabled={savingM || !mForm.name.trim()}>Add tracking metric</button>
+              </div>
+              {/* edit metric form */}
+              {editingM && (
+                <div className="rounded-xl border border-gold/30 bg-gold/5 p-3 space-y-2 mt-2">
+                  <div className="text-[10px] text-gold font-grotesk uppercase tracking-wider">EDIT METRIC</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="input" value={editingM.name} onChange={(e) => setEditingM((f) => ({ ...f, name: e.target.value }))} />
+                    <input className="input" placeholder="Unit" value={editingM.unit || ''} onChange={(e) => setEditingM((f) => ({ ...f, unit: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select className="input" value={editingM.type} onChange={(e) => setEditingM((f) => ({ ...f, type: e.target.value }))}>
+                      <option value="number">Number</option><option value="count">Count</option><option value="duration">Duration (h)</option><option value="boolean">Yes / No</option>
+                    </select>
+                    <select className="input" value={editingM.frequency} onChange={(e) => setEditingM((f) => ({ ...f, frequency: e.target.value }))}>
+                      <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+                    </select>
+                    <input className="input" placeholder="Target" type="number" value={editingM.target ?? ''} onChange={(e) => setEditingM((f) => ({ ...f, target: e.target.value }))} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="btn flex-1" onClick={() => setEditingM(null)}>Cancel</button>
+                    <button className="btn-primary flex-1" onClick={saveMetricEdit} disabled={savingM}>Save</button>
+                  </div>
+                </div>
+              )}
+              {/* metric list */}
+              <div className="space-y-2 mt-3">
+                {(metrics.data?.metrics || []).map((m) => {
+                  const vals = (m.entries || []).map((e) => e.value).reverse();
+                  return (
+                    <div key={m.id} className="rounded-xl border border-line bg-white/[.03] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="font-grotesk text-sm font-bold">{m.name}</span>
+                          {m.unit && <span className="text-[10px] text-mute font-grotesk"> ({m.unit})</span>}
+                          {m.target != null && <span className="text-[10px] text-faint font-grotesk"> · target {m.target}</span>}
+                          {m.latest && <span className="block text-[11px] text-gold font-grotesk">latest {m.latest.value} {m.unit || ''} · {m.latest.date}</span>}
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button className="text-[10px] text-mute hover:text-ink" onClick={() => setEditingM({ id: m.id, name: m.name, unit: m.unit || '', frequency: m.frequency, target: m.target ?? '', type: m.type || 'number' })} aria-label={`Edit ${m.name}`}>Edit</button>
+                          <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
+                        </div>
+                      </div>
+                      <MiniSpark values={vals} color={m.color || '#12B8B0'} />
+                      {(m.entries || []).slice(0, 4).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {(m.entries || []).slice(0, 4).map((e) => (
+                            <span key={e.id} className="inline-flex items-center gap-1 chip border-line !px-2 !py-0.5 text-[10px]">
+                              {m.type === 'boolean' ? (e.value ? '✓ done' : '✗ no') : `${e.value}${m.unit ? ' ' + m.unit : ''}`} · {e.date}
+                              <button className="text-faint hover:text-bad" onClick={() => deleteEntry(m.id, e.id)} aria-label={`Delete entry ${e.date}`}>✕</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {m.type === 'boolean' ? (
+                        <div className="flex gap-2 mt-1.5">
+                          <button className="btn !py-1.5 !px-3 !text-[11px] flex-1" onClick={() => logBoolean(m.id, true)} disabled={savingM}>✓ Yes</button>
+                          <button className="btn !py-1.5 !px-3 !text-[11px] flex-1" onClick={() => logBoolean(m.id, false)} disabled={savingM}>✗ No</button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 mt-1.5">
+                          <input type="number" step="any" className="input !py-1.5 !text-xs flex-1" placeholder={`Value (${m.unit || '…'})`}
+                            value={mLog[m.id]?.value ?? ''} onChange={(e) => setMLog((x) => ({ ...x, [m.id]: { ...x[m.id], value: e.target.value } }))} />
+                          <input type="date" className="input !py-1.5 !text-xs" value={mLog[m.id]?.date || ''}
+                            onChange={(e) => setMLog((x) => ({ ...x, [m.id]: { ...x[m.id], date: e.target.value } }))} />
+                          <button className="btn !py-1.5 !px-3 !text-[11px] shrink-0" onClick={() => logEntry(m.id)} disabled={savingM}>Log</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {!metrics.data?.metrics?.length && <div className="text-center text-xs text-mute py-3">No personal metrics yet — create your first one above (e.g. waist, steps, bench press).</div>}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'coach':
+        return (
+          <div className="space-y-4 anim-fadeUp">
+            <BackButton onClick={goBack} />
+            {/* adherence breakdown */}
+            <div className="card p-4">
+              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">This week</div>
+              <AdherenceBreakdown components={data.adherenceComponents} />
+            </div>
+            {/* coach message */}
+            <div className="rounded-2xl p-4" style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)' }}>
+              <div className="text-[10px] uppercase tracking-wider text-ember font-grotesk mb-1.5">Coach message</div>
+              <p className="text-sm leading-relaxed">{data.coachMessage}</p>
+            </div>
+            {/* coach preferences */}
+            <div className="card p-4">
+              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Coach preferences</div>
+              <div className="space-y-2">
+                {[['training_time', 'Preferred training time', 'text'], ['workout_duration', 'Workout duration (min)', 'number'],
+                  ['equipment_pref', 'Equipment preference', 'text'], ['liked_foods', 'Liked foods', 'text'],
+                  ['disliked_exercises', 'Disliked exercises', 'text'], ['note', 'Note for coach', 'text']
+                ].map(([key, label, type]) => (
+                  <label key={key} className="block">
+                    <span className="text-[10px] text-faint font-grotesk">{label.toUpperCase()}</span>
+                    <input type={type} className="input mt-1" placeholder={label} value={coachPrefs[key] ?? ''}
+                      onChange={(e) => setCoachPrefs((p) => ({ ...p, [key]: e.target.value }))} />
+                  </label>
+                ))}
+              </div>
+              <button className="btn-primary w-full mt-3" disabled={savingPrefs2} onClick={async () => {
+                setSavingPrefs2(true);
+                try {
+                  const entries = Object.entries(coachPrefs)
+                    .filter(([, v]) => v !== '' && v != null)
+                    .map(([key, value]) => ({ key, value }));
+                  await api('/intel/coach/memory', { method: 'PUT', body: JSON.stringify({ entries }) });
+                  coachMem.reload();
+                  setToast('Coach preferences saved');
+                } catch (e) { setToast(e.message); }
+                setSavingPrefs2(false);
+              }}>{savingPrefs2 ? 'Saving…' : 'Save coach preferences'}</button>
+            </div>
+            {/* messages */}
+            <div className="card p-4">
+              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Message your coach</div>
+              <div className="h-44 overflow-y-auto space-y-2 pr-1 mb-3">
+                {(msgs || []).map((m) => {
+                  const mine = m.from_name === c.name || m.mine;
+                  return (
+                    <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30 rounded-br-md' : 'bg-white/[.05] border border-line rounded-bl-md'}`}>
+                        {!mine && <div className="text-[9px] text-mute font-grotesk mb-0.5">{m.from_name}</div>}
+                        <div>{m.body}</div>
+                        <div className="text-[8px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!msgs?.length && <div className="text-center text-xs text-mute py-6">No messages yet — say hi to your coach.</div>}
+                <div ref={endRef} />
+              </div>
+              <div className="flex gap-2">
+                <input className="input flex-1" placeholder="Type a message…" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
+                <button className="btn-primary shrink-0" onClick={send} disabled={sending || !body.trim()}>Send</button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'dashboard':
+        return (
+          <div className="space-y-4 anim-fadeUp">
+            <BackButton onClick={goBack} />
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">My dashboard</div>
+                <span className="text-[10px] text-faint font-grotesk">show · hide · reorder</span>
+              </div>
+              <div className="space-y-1.5">
+                {(order.length ? order : DASH_CARDS.map((x) => x[0])).map((key) => {
+                  const label = DASH_CARDS.find((d) => d[0] === key)?.[1] || key;
+                  const isHidden = hidden.includes(key);
+                  return (
+                    <div key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isHidden ? 'border-line opacity-45' : 'border-line bg-white/[.03]'}`}>
+                      <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, -1)} aria-label={`Move ${label} up`}>↑</button>
+                      <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, 1)} aria-label={`Move ${label} down`}>↓</button>
+                      <span className="flex-1 text-sm">{label}</span>
+                      <button
+                        onClick={() => setHidden((h) => (isHidden ? h.filter((x) => x !== key) : [...h, key]))}
+                        className={`chip !text-[10px] ${isHidden ? '!border-good/40 !text-good' : '!border-line text-mute'}`}>
+                        {isHidden ? 'Show' : 'Hide'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] text-faint mt-2">Currently showing: {visibleCards.join(' · ').replace(/_/g, ' ')}</div>
+              <button className="btn-primary w-full mt-2" onClick={savePrefs} disabled={savingPrefs}>{savingPrefs ? 'Saving…' : 'Save dashboard layout'}</button>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ── Main Profile View ──
+
   return (
     <div className="space-y-4">
-      {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-gold/40 bg-panel px-4 py-2 text-sm shadow-card anim-fadeUp">{toast}</div>}
+      {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-gold/40 px-4 py-2 text-sm shadow-card anim-fadeUp" style={{ background: 'var(--panel)', color: 'var(--ink)' }}>{toast}</div>}
 
-      {/* header */}
+      {/* Profile header — always visible */}
       <div className="card p-5 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg bg-gradient-to-br from-ember/40 to-gold/25 border border-line shrink-0">
+        <div className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg border shrink-0" style={{ background: 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.08))', borderColor: 'var(--line)' }}>
           {c.name[0]}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-grotesk font-bold text-lg">{c.name}</div>
-          <div className="text-xs text-mute">{c.goal.replace(/_/g, ' ')} · {c.currentWeight} kg now</div>
+          <div className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{c.name}</div>
+          <div className="text-xs" style={{ color: 'var(--mute)' }}>{c.goal.replace(/_/g, ' ')} · {c.currentWeight} kg now</div>
         </div>
-        <Ring value={data.adherence} max={100} size={72} stroke={7} label={<span className="font-grotesk font-bold text-sm">{data.adherence}%</span>} sub={<span className="text-[7px]">adh.</span>} />
+        <Ring value={data.adherence} max={100} size={72} stroke={7} label={<span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{data.adherence}%</span>} sub={<span className="text-[7px]" style={{ color: 'var(--mute)' }}>adh.</span>} />
       </div>
 
-      {/* goal progress */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">Goal progress</div>
-          <div className="font-grotesk text-xs font-bold text-gold">{Math.round(progress)}%</div>
-        </div>
-        <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-2">
-          <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="flex justify-between text-[11px] text-mute font-grotesk">
-          <span>Start {c.startWeight} kg</span>
-          <span>Now {c.currentWeight} kg</span>
-          <span>Target {c.targetWeight} kg · {c.goalDate?.slice(0, 10) || '—'}</span>
-        </div>
-      </div>
+      {/* Theme toggle */}
+      <ThemeToggle />
 
-      {/* my goal — client self-edit */}
-      <div className="card p-4">
-        <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">My goal & setup</div>
-        {gForm && (
-          <div className="space-y-3">
-            <div>
-              <div className="text-[10px] text-faint mb-1.5 font-grotesk">PRIMARY GOAL</div>
-              <div className="flex flex-wrap gap-1.5">
-                {GOALS.map(([v, l]) => (
-                  <button key={v} onClick={() => setGForm((f) => ({ ...f, goal: v }))}
-                    className={`chip ${gForm.goal === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-faint mb-1.5 font-grotesk">EXPERIENCE</div>
-              <div className="flex flex-wrap gap-1.5">
-                {EXP.map(([v, l]) => (
-                  <button key={v} onClick={() => setGForm((f) => ({ ...f, experience: v }))}
-                    className={`chip ${gForm.experience === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="text-[10px] text-faint font-grotesk">TARGET WEIGHT (KG)</span>
-                <input type="number" className="input mt-1" value={gForm.targetWeight ?? ''} onChange={(e) => setGForm((f) => ({ ...f, targetWeight: e.target.value }))} />
-              </label>
-              <label className="block">
-                <span className="text-[10px] text-faint font-grotesk">TARGET DATE</span>
-                <input type="date" className="input mt-1" value={gForm.goalDate || ''} onChange={(e) => setGForm((f) => ({ ...f, goalDate: e.target.value }))} />
-              </label>
-            </div>
-            <div>
-              <div className="text-[10px] text-faint mb-1.5 font-grotesk">MY EQUIPMENT</div>
-              <div className="flex flex-wrap gap-1.5">
-                {EQUIPMENT.map((e) => (
-                  <button key={e.id} onClick={() => toggleEq(e.id)}
-                    className={`chip ${gForm.equipment.includes(e.id) ? '!border-cyanx/50 !text-cyanx bg-cyanx/10' : ''}`}>
-                    {gForm.equipment.includes(e.id) ? '✓ ' : ''}{e.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button className="btn-primary w-full" onClick={saveGoal} disabled={savingG}>{savingG ? 'Saving…' : 'Save my goal'}</button>
-          </div>
-        )}
-      </div>
-
-      {/* my metrics */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">My metrics</div>
-          <span className="text-[10px] text-faint font-grotesk">track what matters to you</span>
+      {/* Active section or section list */}
+      {activeSection === 'help' ? (
+        <div className="anim-fadeUp">
+          <BackButton onClick={() => setActiveSection(null)} />
+          <HelpInline />
         </div>
-        {/* create form */}
-        <div className="rounded-xl border border-line bg-white/[.03] p-3 space-y-2 mt-2">
-          <div className="grid grid-cols-2 gap-2">
-            <input className="input" placeholder="Metric name (e.g. Waist, Steps, Bench)" value={mForm.name} onChange={(e) => setMForm((f) => ({ ...f, name: e.target.value }))} />
-            <input className="input" placeholder="Unit (cm, kg, steps…)" value={mForm.unit} onChange={(e) => setMForm((f) => ({ ...f, unit: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <select className="input" value={mForm.type} onChange={(e) => setMForm((f) => ({ ...f, type: e.target.value }))}>
-              <option value="number">Number</option><option value="count">Count</option><option value="duration">Duration (h)</option><option value="boolean">Yes / No</option>
-            </select>
-            <select className="input" value={mForm.frequency} onChange={(e) => setMForm((f) => ({ ...f, frequency: e.target.value }))}>
-              <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
-            </select>
-            <input className="input" placeholder="Target (optional)" type="number" value={mForm.target} onChange={(e) => setMForm((f) => ({ ...f, target: e.target.value }))} />
-          </div>
-          <button className="btn-primary w-full" onClick={createMetric} disabled={savingM || !mForm.name.trim()}>Add tracking metric</button>
-        </div>
-        {/* edit metric form */}
-        {editingM && (
-          <div className="rounded-xl border border-gold/30 bg-gold/5 p-3 space-y-2 mt-2">
-            <div className="text-[10px] text-gold font-grotesk uppercase tracking-wider">EDIT METRIC</div>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="input" value={editingM.name} onChange={(e) => setEditingM((f) => ({ ...f, name: e.target.value }))} />
-              <input className="input" placeholder="Unit" value={editingM.unit || ''} onChange={(e) => setEditingM((f) => ({ ...f, unit: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <select className="input" value={editingM.type} onChange={(e) => setEditingM((f) => ({ ...f, type: e.target.value }))}>
-                <option value="number">Number</option><option value="count">Count</option><option value="duration">Duration (h)</option><option value="boolean">Yes / No</option>
-              </select>
-              <select className="input" value={editingM.frequency} onChange={(e) => setEditingM((f) => ({ ...f, frequency: e.target.value }))}>
-                <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
-              </select>
-              <input className="input" placeholder="Target" type="number" value={editingM.target ?? ''} onChange={(e) => setEditingM((f) => ({ ...f, target: e.target.value }))} />
-            </div>
-            <div className="flex gap-2">
-              <button className="btn flex-1" onClick={() => setEditingM(null)}>Cancel</button>
-              <button className="btn-primary flex-1" onClick={saveMetricEdit} disabled={savingM}>Save</button>
-            </div>
-          </div>
-        )}
-        {/* metric list */}
-        <div className="space-y-2 mt-3">
-          {(metrics.data?.metrics || []).map((m) => {
-            const vals = (m.entries || []).map((e) => e.value).reverse();
-            return (
-              <div key={m.id} className="rounded-xl border border-line bg-white/[.03] p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="font-grotesk text-sm font-bold">{m.name}</span>
-                    {m.unit && <span className="text-[10px] text-mute font-grotesk"> ({m.unit})</span>}
-                    {m.target != null && <span className="text-[10px] text-faint font-grotesk"> · target {m.target}</span>}
-                    {m.latest && <span className="block text-[11px] text-gold font-grotesk">latest {m.latest.value} {m.unit || ''} · {m.latest.date}</span>}
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button className="text-[10px] text-mute hover:text-ink" onClick={() => setEditingM({ id: m.id, name: m.name, unit: m.unit || '', frequency: m.frequency, target: m.target ?? '', type: m.type || 'number' })} aria-label={`Edit ${m.name}`}>Edit</button>
-                    <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
-                  </div>
-                </div>                 <MiniSpark values={vals} color={m.color || '#12B8B0'} />
-                {/* recent entries with delete */}
-                {(m.entries || []).slice(0, 4).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {(m.entries || []).slice(0, 4).map((e) => (
-                      <span key={e.id} className="inline-flex items-center gap-1 chip border-line !px-2 !py-0.5 text-[10px]">
-                        {m.type === 'boolean' ? (e.value ? '✓ done' : '✗ no') : `${e.value}${m.unit ? ' ' + m.unit : ''}`} · {e.date}
-                        <button className="text-faint hover:text-bad" onClick={() => deleteEntry(m.id, e.id)} aria-label={`Delete entry ${e.date}`}>✕</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {m.type === 'boolean' ? (
-                  <div className="flex gap-2 mt-1.5">
-                    <button className="btn !py-1.5 !px-3 !text-[11px] flex-1" onClick={() => logBoolean(m.id, true)} disabled={savingM}>✓ Yes</button>
-                    <button className="btn !py-1.5 !px-3 !text-[11px] flex-1" onClick={() => logBoolean(m.id, false)} disabled={savingM}>✗ No</button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 mt-1.5">
-                    <input type="number" step="any" className="input !py-1.5 !text-xs flex-1" placeholder={`Value (${m.unit || '…'})`}
-                      value={mLog[m.id]?.value ?? ''} onChange={(e) => setMLog((x) => ({ ...x, [m.id]: { ...x[m.id], value: e.target.value } }))} />
-                    <input type="date" className="input !py-1.5 !text-xs" value={mLog[m.id]?.date || ''}
-                      onChange={(e) => setMLog((x) => ({ ...x, [m.id]: { ...x[m.id], date: e.target.value } }))} />
-                    <button className="btn !py-1.5 !px-3 !text-[11px] shrink-0" onClick={() => logEntry(m.id)} disabled={savingM}>Log</button>
-                  </div>
-                )}
+      ) : activeSection ? (
+        renderSection(activeSection)
+      ) : (
+        <div className="space-y-2 anim-fadeUp">
+          {PROFILE_SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => {
+                if (section.id === 'help') { window.location.href = '/app/client/help'; return; }
+                setActiveSection(section.id);
+              }}
+              className="w-full card p-4 flex items-center gap-4 text-left hover:border-gold/40 transition-colors group"
+            >
+              <span className="text-2xl shrink-0">{section.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{section.desc}</div>
               </div>
-            );
-          })}
-          {!metrics.data?.metrics?.length && <div className="text-center text-xs text-mute py-3">No personal metrics yet — create your first one above (e.g. waist, steps, bench press).</div>}
-        </div>
-      </div>
-
-      {/* my dashboard */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">My dashboard</div>
-          <span className="text-[10px] text-faint font-grotesk">show · hide · reorder</span>
-        </div>
-        <div className="space-y-1.5">
-          {(order.length ? order : DASH_CARDS.map((x) => x[0])).map((key) => {
-            const label = DASH_CARDS.find((d) => d[0] === key)?.[1] || key;
-            const isHidden = hidden.includes(key);
-            return (
-              <div key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isHidden ? 'border-line opacity-45' : 'border-line bg-white/[.03]'}`}>
-                <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, -1)} aria-label={`Move ${label} up`}>↑</button>
-                <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, 1)} aria-label={`Move ${label} down`}>↓</button>
-                <span className="flex-1 text-sm">{label}</span>
-                <button
-                  onClick={() => setHidden((h) => (isHidden ? h.filter((x) => x !== key) : [...h, key]))}
-                  className={`chip !text-[10px] ${isHidden ? '!border-good/40 !text-good' : '!border-line text-mute'}`}>
-                  {isHidden ? 'Show' : 'Hide'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <div className="text-[10px] text-faint mt-2">Currently showing: {visibleCards.join(' · ').replace(/_/g, ' ')}</div>
-        <button className="btn-primary w-full mt-2" onClick={savePrefs} disabled={savingPrefs}>{savingPrefs ? 'Saving…' : 'Save dashboard layout'}</button>
-      </div>
-
-      {/* coach preferences */}
-      <div className="card p-4">
-        <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Coach preferences</div>
-        <div className="space-y-2">
-          {[['training_time', 'Preferred training time', 'text'], ['workout_duration', 'Workout duration (min)', 'number'],
-            ['equipment_pref', 'Equipment preference', 'text'], ['liked_foods', 'Liked foods', 'text'],
-            ['disliked_exercises', 'Disliked exercises', 'text'], ['note', 'Note for coach', 'text']
-          ].map(([key, label, type]) => (
-            <label key={key} className="block">
-              <span className="text-[10px] text-faint font-grotesk">{label.toUpperCase()}</span>
-              <input type={type} className="input mt-1" placeholder={label} value={coachPrefs[key] ?? ''}
-                onChange={(e) => setCoachPrefs((p) => ({ ...p, [key]: e.target.value }))} />
-            </label>
+              <svg className="w-4 h-4 group-hover:text-gold transition-colors shrink-0" viewBox="0 0 16 16" fill="none" stroke="var(--faint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 3L11 8L6 13" />
+              </svg>
+            </button>
           ))}
         </div>
-        <button className="btn-primary w-full mt-3" disabled={savingPrefs2} onClick={async () => {
-          setSavingPrefs2(true);
-          try {
-            const entries = Object.entries(coachPrefs)
-              .filter(([, v]) => v !== '' && v != null)
-              .map(([key, value]) => ({ key, value }));
-            await api('/intel/coach/memory', { method: 'PUT', body: JSON.stringify({ entries }) });
-            coachMem.reload();
-            setToast('Coach preferences saved');
-          } catch (e) { setToast(e.message); }
-          setSavingPrefs2(false);
-        }}>{savingPrefs2 ? 'Saving…' : 'Save coach preferences'}</button>
-      </div>
-
-      {/* adherence breakdown */}
-      <div className="card p-4">
-        <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">This week</div>
-        <AdherenceBreakdown components={data.adherenceComponents} />
-      </div>
-
-      {/* coach message */}       <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(8,127,123,.12), rgba(18,184,176,.05))', border: '1px solid rgba(8,127,123,.3)' }}>
-        <div className="text-[10px] uppercase tracking-wider text-ember font-grotesk mb-1.5">Coach message</div>
-        <p className="text-sm leading-relaxed">{data.coachMessage}</p>
-      </div>
-
-      {/* messages */}
-      <div className="card p-4">
-        <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Message your coach</div>
-        <div className="h-44 overflow-y-auto space-y-2 pr-1 mb-3">
-          {(msgs || []).map((m) => {
-            const mine = m.from_name === c.name || m.mine;
-            return (
-              <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30 rounded-br-md' : 'bg-white/[.05] border border-line rounded-bl-md'}`}>
-                  {!mine && <div className="text-[9px] text-mute font-grotesk mb-0.5">{m.from_name}</div>}
-                  <div>{m.body}</div>
-                  <div className="text-[8px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
-                </div>
-              </div>
-            );
-          })}
-          {!msgs?.length && <div className="text-center text-xs text-mute py-6">No messages yet — say hi to your coach.</div>}
-          <div ref={endRef} />
-        </div>
-        <div className="flex gap-2">
-          <input className="input flex-1" placeholder="Type a message…" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
-          <button className="btn-primary shrink-0" onClick={send} disabled={sending || !body.trim()}>Send</button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
