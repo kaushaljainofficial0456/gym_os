@@ -19,9 +19,29 @@ Estimate **active calories burned** during a resistance-training workout on SK O
 Leave-One-Participant-Out (14 folds) for accuracy; group-split conformal prediction (7/7 disjoint calibration/test participants) for interval coverage, confirmed on two independent random splits. See `VALIDATION_REPORT.md` for full numbers and the model-comparison table (baseline vs. three correction approaches).
 
 ## Performance
+
+> **READ THIS BEFORE QUOTING ANY NUMBER BELOW.** All figures in this section are measured on **GROSS** energy expenditure (kcal/min, VO2-derived, no resting subtraction). The backend contract (`calorie-model-contract.md` §3) defines `estimated_active_kcal` as **NET of resting**, and `calorieModel.js`'s `toNetOfResting()` performs that conversion before any value reaches a user. **The gross figures do not transfer to the net output.** See "Accuracy of the shipped (net) output" below.
+
+**Gross metrics (what the model was validated on):**
 - MAE 1.35 kcal/min, MAPE 19.1% (out-of-sample, LOPO) — vs. 36.5% for the deployed generic baseline alone.
-- 90% interval: empirical coverage 91.0% / 88.2% on two independent test splits — genuinely validated, not asserted.
+- 90% interval: empirical coverage 91.0% / 88.2% on two independent test splits — genuinely validated, not asserted, **for isolated single-exercise bouts only**.
 - Context: published wearable-vs-calorimetry accuracy for resistance exercise runs 15-57% MAPE (Mitchell et al. 2024 systematic review) — this model is competitive with that range using workout-log features alone.
+
+### Accuracy of the shipped (net) output
+
+A constant resting subtraction leaves absolute error unchanged but shrinks the denominator, so percentage error grows. Measured across representative sessions (`SKOS_CALORIE_MODEL_VALIDATION_CALIBRATION_REPORT.md` §7.1):
+
+| Session | net/gross | Effective MAPE on net |
+|---|---|---|
+| 75kg, 60min, hard | 0.88 | 21.7% |
+| 100kg, 45min, moderate | 0.87 | 22.0% |
+| 75kg, 60min, moderate | 0.69 | 27.7% |
+| 65kg, 115min, moderate | 0.64 | 29.6% |
+| 50kg, 90min, light | 0.54 | 35.3% |
+
+**The defensible external claim is ~22–35% MAPE on shipped output, not 19.1%.** Degradation is worst for light-intensity, long-duration and low-body-weight sessions — i.e. beginners and lighter users, who are also the least represented in training.
+
+**Additionally**, all of the above was measured on isolated single-exercise lab bouts. Accuracy on real multi-exercise sessions is **unvalidated** and could be worse again. No number in this card has been validated against a real SK OS workout.
 
 ## Participant accounting (authoritative — see `V1_PRE_INTEGRATION_AUDIT.md` §10 for full derivation)
 

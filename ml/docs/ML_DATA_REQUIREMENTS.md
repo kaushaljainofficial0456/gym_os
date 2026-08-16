@@ -20,8 +20,42 @@ Consolidates everything learned across this project into one spec for Kaushal. W
 ## Needed for the model to stay honest as exercises/features evolve
 
 1. **New `exercise_library` entries should be flagged to us before they're used at scale.** `skos-cal-v1` only has corrections for 8 exercises (`model_v1.json`'s `exercise_attributes` keys). Any other `exercise_id` silently falls back to baseline-only with a widened interval — not wrong, but a real gym mostly doing untrained exercises would get systematically weaker estimates without anyone noticing unless someone's watching for it. Worth a periodic check: "what fraction of completed sets reference an exercise_id outside the trained 8?"
-2. **`is_synthesized` on `exercise_set_logs` must keep being set correctly.** Not used by v1 (which trains on external data only), but this is the single most important field for the *next* phase — the calibration cohort (Section 26/Phase 9) — since synthetic legacy rows must never quietly become training data.
-3. **`started_at`/`duration_min` must keep being backend-authoritative**, never client-supplied. Already true per `TEAM-CONTRACT.md` §2.1 — flagging because the whole MET-baseline-rate math (`kcal/min`) is meaningless if duration isn't real.
+
+### Expanding to a large exercise library (~100 exercises) — tested, 2026-08-16
+
+**Nothing breaks.** Adding any number of exercises is safe: unknown `exercise_id`s fall back to the MET baseline with a proportionally widened interval and an explicit `note`. No crash, no silent wrong answer.
+
+**The accuracy cost, measured:**
+
+| Exercise type | Expected MAPE |
+|---|---|
+| One of the trained 8 | **19.1%** (LOPO-validated, GROSS) |
+| Any other exercise | **~36.5%** (baseline-only, GROSS) |
+
+**Both figures are GROSS.** The shipped output is net of resting, which inflates percentage error to **~22-35%** for the trained 8 (see `MODEL_CARD.md`). The untrained figure degrades correspondingly.
+
+For context, ~36% still sits inside the published range for consumer wearables on resistance training (30–53%, see `VALIDATION_REPORT.md`) — so an untrained exercise is not catastrophic, just unremarkable.
+
+**We tested whether category attributes could close that gap. They can't — do not attempt it.** `scripts/exercise_coverage_experiment.py` runs nested leave-one-exercise-out × leave-one-participant-out (model has seen neither the exercise nor the person), predicting the correction from coarse attributes instead of exercise identity:
+
+| Approach | MAPE |
+|---|---|
+| Baseline-only (current behaviour) | 36.46% |
+| Coarse category (upper/lower + compound/isolation + tier) | **34.71%** |
+| Coarse + movement_pattern | 36.09% |
+
+A 1.8-point average gain — but **unstable in a way that disqualifies it**: BARBELL_SQUAT improves dramatically (55.2% → 28.2%) while LEG_PRESS gets *twice as bad* (30.0% → 63.8%). Trading a reliable 36% for an unpredictable 28–64% is a bad deal, so v1's honest "zero correction + widen the interval" fallback stays.
+
+**Two things the experiment revealed that are worth knowing:**
+- **`muscle_group` cannot generalise to new exercises at this sample size.** It has 6 distinct values across 8 exercises, 5 appearing in exactly one exercise — so it functions as a proxy for exercise identity, not a transferable attribute. (The first version of this experiment produced 1e14% MAPE from exactly this: holding out an exercise made its muscle_group unseen, the design matrix went singular, and unregularised OLS exploded. Regularisation fixed the arithmetic; it did not fix the underlying information problem.)
+- Only attributes with **several exercises per level** can transfer. Today that's just upper/lower body and compound/isolation.
+
+**So: add the 100 exercises. Just do these two things.**
+1. **Populate `muscle_group` and `compound_or_isolation` on every new entry.** Not used for correction today (see above), but required by the contract, and it's the field that makes future expansion possible once more measured exercises exist.
+2. **Track which `exercise_id`s users actually pick.** This is the genuinely valuable output: if a handful of untrained exercises dominate real usage, those are exactly the ones to prioritise measuring in a future calibration study. Usage data turns "which exercises should we measure?" from a guess into a ranked list.
+
+3. **`is_synthesized` on `exercise_set_logs` must keep being set correctly.** Not used by v1 (which trains on external data only), but this is the single most important field for the *next* phase — the calibration cohort (Section 26/Phase 9) — since synthetic legacy rows must never quietly become training data.
+4. **`started_at`/`duration_min` must keep being backend-authoritative**, never client-supplied. Already true per `TEAM-CONTRACT.md` §2.1 — flagging because the whole MET-baseline-rate math (`kcal/min`) is meaningless if duration isn't real.
 
 ## For the future calibration cohort specifically (not needed now)
 

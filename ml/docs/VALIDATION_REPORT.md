@@ -67,6 +67,30 @@ Note the mean %-error (19.1%) and the mean *signed* %-error (+5.2%) differ from 
 
 **Context for whether this is "good":** the systematic review found in the data audit (Mitchell et al. 2024) reports that consumer wearables validated against indirect calorimetry run **15–57% MAPE** for resistance exercise specifically. This model's 19.1% sits at the good end of that published range — competitive with, not worse than, commercial wearable calorie estimates, using only workout-log features and no heart-rate/wearable input at all.
 
+### Device-level comparison (compiled 2026-08-16) — read the caveats before quoting this
+
+| Source | Device / model | Activity | Reported MAPE |
+|---|---|---|---|
+| skos-cal-v1 | **This model** | Resistance (isolated bouts) | **19.1%** |
+| Deployed baseline | Flat MET formula | Resistance (isolated bouts) | 36.5% |
+| Published validation | Polar A360 | Resistance training | **52.95%** (82% of participants overestimated) |
+| Umbrella review of systematic reviews | All major brands | Energy expenditure generally | **>30% for every brand** |
+| Multi-device validation | Apple Watch 6 | Across activities | 14.9–47.8% (best case 14.9%, running) |
+| Multi-device validation | Polar (across studies) | Various | 29–80% |
+| Multi-device validation | Apple Watch / Garmin | Walking | 19.8% / 32% |
+| Multi-device validation | Apple Watch / Garmin | Running | 24.4% / 21.8% |
+| 2026 study, 62 men, 4 smartwatches | Apple, Galaxy, Fitbit, Garmin | **Resistance protocol** | Correlation with calorimetry **collapsed to r = 0.10–0.34**, reliability ICC < 0.45 |
+
+**The pattern that matters more than any single number:** wearables perform acceptably on steady-state cardio and degrade sharply on resistance training. The 2026 four-device study is the clearest statement of it — during lifting, correlation with true energy expenditure fell to r = 0.10–0.34, i.e. barely related to reality, *despite* those devices measuring heart rate accurately. Resistance training is genuinely the hard case, which is why this project exists.
+
+**Caveats — mandatory when citing the comparison above:**
+1. **This is not a head-to-head test.** Different studies, populations, protocols and equipment. Nobody has run skos-cal-v1 and an Apple Watch on the same person in the same session.
+2. **The comparison currently flatters us.** V1's 19.1% comes from *isolated single-exercise bouts*; several wearable figures come from full or circuit sessions, which are harder. V1's accuracy on real multi-exercise sessions is **unvalidated** (`V1_PRE_INTEGRATION_AUDIT.md` #3/#9) and could be worse.
+3. **Different populations.** V1: 14 young men. Wearable studies often span wider demographics.
+4. **V1 uses no heart-rate or wearable input at all** — only workout-log fields. That is a genuine architectural advantage (nothing to strap on, no sensor drift), and worth stating plainly, but it is not the same as being independently proven more accurate.
+
+**Defensible claim:** "competitive with, and plausibly better than, consumer wearables for resistance training specifically — using only workout-log data." **Not defensible:** "more accurate than Apple Watch/Fitbit/Garmin." The first is supported; the second requires a head-to-head study nobody has run.
+
 **Why this isn't going to reach single-digit error, and shouldn't be pushed there artificially:** three real constraints, not a lack of effort — (1) n=14 participants is a hard ceiling on how finely the model can be tuned before any further "improvement" would just be memorizing this specific cohort rather than learning generalizable physiology; (2) inter-individual metabolic variability is a real, physiological source of noise no feature set fully removes — the same exercise at the same relative intensity genuinely costs different people different amounts of energy; (3) indirect calorimetry itself, the "ground truth" this is validated against, has its own measurement error (not perfect either). Chasing the reported number toward 0% would mean overfitting to this specific 14-person sample, which is exactly the failure mode the whole project was designed to avoid.
 
 ## Step 3 — The feature-availability question (does production's missing %1RM matter?)

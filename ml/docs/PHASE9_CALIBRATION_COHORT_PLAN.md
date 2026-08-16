@@ -52,6 +52,15 @@ Option 1 is the recommended starting point — cheapest, and the existing litera
 - Not a marketing/PR study — framed and run as a measurement study first; any product messaging is a secondary output, not the design driver (keeps the protocol scientifically honest rather than optimized for a headline number).
 - Not a replacement for eventual real-user beta feedback — this produces training/validation data, not user-satisfaction data.
 
-## Status: design only
+## Status: design complete, execution blocked on lab selection
 
-No lab contacted, no budget requested, no timeline set. This document exists so that whenever the go-ahead is given, the shape of the study is already thought through rather than improvised — consistent with how every other phase of this project has been scoped before execution, not during it.
+**Update (2026-08-16):** this plan is no longer the only Phase 9 artifact. Since it was written:
+
+- **`PHASE9_STUDY_PROTOCOL.md`** — the full study protocol a partner lab can actually evaluate and cost. Sample size derived empirically (bootstrapped from V1's own per-participant LOPO residuals, `scripts/phase9_sample_size_analysis.py`): **20 participants minimum, 30 target**. Stratified recruitment targets, measurement sequence, equipment spec, backend export requirements, and a pre-specified analysis plan.
+- **`src/v2/calibration_cohort_ingestion.py`** — the ingestion module, with arrival-validation checks written and unit-tested *now* (12 tests) rather than hastily when data lands: individual body weight present, named device, realistic session durations, n≥20, women ≥30%, no namespace collision with V1's cohorts, and lab↔app session alignment with a clock-drift bound.
+
+**Why this data would be GOLD when all five published candidates are only SILVER:** every one of Rustaden / João / Nakagata / Benito / Adeel publishes group means without individual body weight. This study records it by design — along with separately-measured resting EE (resolving the gross-vs-net question, audit #2) and whole-session gas collection including rest periods (resolving the duration-extrapolation defect, audit #3).
+
+**Update 2 (2026-08-16): the paid lab-partnership route is not fundable.** See **`PHASE9_ZERO_BUDGET_ALTERNATIVES.md`** — the protocol itself is unaffected (a student researcher needs the same protocol a paid lab would), but the route changes from *buying lab time* to *supplying the missing half of someone else's research project*. Recommended path is now an **MPT Sports Physiotherapy student dissertation collaboration** — those programmes require a dissertation, cover VO2/metabolic assessment, and already own the equipment; what they lack is participants and a defined question, both of which SK OS has. Sri Ramachandra is the first target: it runs an MPT Sports Physiotherapy programme *and* has the Metamax analyser identified above.
+
+Everything below about equipment, ground-truth standards, and leakage design still applies unchanged — the evidence bar does not move because the budget did.

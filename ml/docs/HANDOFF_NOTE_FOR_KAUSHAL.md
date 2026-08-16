@@ -3,7 +3,7 @@
 Drafted for review before sending — not yet delivered to Kaushal.
 
 **2026-08-16 update:** a full pre-integration audit was run before this went out (`docs/V1_PRE_INTEGRATION_AUDIT.md` — 20 checks, 10 CRITICAL/6 WARNING/4 PASS originally). Everything fixable without retraining has been fixed — see that doc's Fix Log. Two things are still genuinely open and need Kaushal/product input, not more ML work:
-1. **Confirm `estimated_active_kcal`'s exact intended meaning** against the real `calorie-model-contract.md` (gross exercise-period energy, or net-of-resting?) — the two readings differ by real money (≈83 kcal/hour at cohort-mean body weight). Not guessed at; flagged in code and here.
+1. ~~Confirm `estimated_active_kcal`'s exact intended meaning~~ — **RESOLVED 2026-08-16.** The backend defines it as net-of-resting (`calorie-model-contract.md` §3) and implements the conversion in `calorieModel.js`'s `toNetOfResting()`. Verified correct in `SKOS_CALORIE_MODEL_VALIDATION_CALIBRATION_REPORT.md` §1. **Consequence:** the headline accuracy figure changed — see Headline numbers below.
 2. **Watch the new `note` field in staging.** It now fires whenever an estimate is low-confidence (rate capped, extrapolated beyond the measured bout length, out-of-range body weight, unrecognized intensity, or an empty session) — worth a product decision on how it surfaces in the UI before real users see it.
 
 ## What's ready
@@ -16,7 +16,8 @@ Drafted for review before sending — not yet delivered to Kaushal.
 
 ## Headline numbers
 
-- 19.1% MAPE out-of-sample (LOPO-validated), vs. 36.5% for the currently-deployed flat MET formula.
+- 19.1% MAPE out-of-sample (LOPO-validated) on **GROSS** kcal, vs. 36.5% for the currently-deployed flat MET formula.
+- **The shipped output is NET of resting**, and the gross figure does not transfer: effective accuracy on net output is **~22-35% MAPE** depending on session profile (worst for light/long/low-body-weight). Quote this range externally, never 19.1%. See `MODEL_CARD.md` -> "Accuracy of the shipped (net) output".
 - Competitive with published consumer-wearable accuracy for resistance training (15-57% MAPE per Mitchell et al. 2024) — using only workout-log fields, no HR/wearable input.
 - Covers 8 exercises with real trained corrections; anything outside that list falls back to baseline-only with a widened interval (not wrong, just less precise) — see `ML_DATA_REQUIREMENTS.md` item 1 for the "flag new exercises before they're used at scale" ask.
 

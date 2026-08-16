@@ -79,7 +79,53 @@ function mlEstimate(input) {
     throw new Error('skos-cal-v1 requires body_weight_kg and duration_minutes — falling back to baseline');
   }
 
+  // ---- TWO-TIER SCOPE GATE (2026-08-17) ----
+  // estimable_range = hard gate. Outside it we REFUSE and the caller's
+  // existing baseline fallback takes over -- baseline is less accurate but
+  // never absurd, and out here the correction demonstrably is
+  // (SKOS_CALORIE_MODEL_VALIDATION_CALIBRATION_REPORT.md sections 3 and 4).
+  // validated_range = the narrower band actually covered by evidence.
+  // Between the two the estimate still runs but is flagged, so an
+  // out-of-evidence number can never look as trustworthy as an in-evidence one.
+  // Both bands live in the artifact, never hardcoded here.
+  const hard = MODEL.estimable_range;
+  if (hard) {
+    const bwR = hard.body_weight_kg;
+    if (bwR && (bw < bwR.min || bw > bwR.max)) {
+      throw new Error(
+        `skos-cal-v1 out of scope: body_weight_kg ${bw} outside estimable range ` +
+        `[${bwR.min}, ${bwR.max}] — falling back to baseline (see model_v1.json estimable_range)`
+      );
+    }
+    const durR = hard.duration_minutes;
+    if (durR && (durationMin < durR.min || durationMin > durR.max)) {
+      throw new Error(
+        `skos-cal-v1 out of scope: duration_minutes ${durationMin} outside estimable range ` +
+        `[${durR.min}, ${durR.max}] — falling back to baseline (see model_v1.json estimable_range)`
+      );
+    }
+  }
+
   const notes = [];
+
+  // Extended-zone flags: inside the hard gate but outside the evidence base.
+  const valid = MODEL.validated_range;
+  if (valid) {
+    if (valid.body_weight_kg && (bw < valid.body_weight_kg.min || bw > valid.body_weight_kg.max)) {
+      notes.push(
+        `body_weight_kg (${bw}) is outside the validated range ` +
+        `[${valid.body_weight_kg.min}, ${valid.body_weight_kg.max}] — estimate is allowed but ` +
+        `outside the evidence base; the correction term does not scale with body weight`
+      );
+    }
+    if (valid.duration_minutes && durationMin > valid.duration_minutes.max) {
+      notes.push(
+        `session duration (${durationMin}min) exceeds the longest independently measured ` +
+        `resistance session (${valid.duration_minutes.max}min) — the constant-rate assumption ` +
+        `has no external corroboration beyond this point and most likely over-estimates`
+      );
+    }
+  }
 
   const { tier, wasDefaulted } = normalizeTier(input?.session?.intensity_rating);
   if (wasDefaulted) {
@@ -141,7 +187,21 @@ function mlEstimate(input) {
     notes.push(`session duration (${durationMin}min) exceeds the longest continuous bout this tier was ever measured on (${maxSourceBoutMin}min) — rate is extrapolated, not directly validated for this duration`);
   }
 
-  const rawActiveRate = Math.max(0, baselineRate + correctionRate); // never negative
+  // Floor symmetric with the plausibility CAP below: a negative correction must
+  // never drive the estimate below the least demanding resistance exercise ever
+  // independently measured (1.30 METs — Adeel 2021 shoulder press, untrained).
+  // Verified not to trigger anywhere in the 45-125kg estimable range; this is
+  // insurance against unenumerated exercise/tier/weight combinations.
+  const minMet = MODEL.plausibility_guardrails?.min_active_rate_met;
+  const floorRate = minMet != null ? (minMet * 3.5 * bw) / 200 : 0;
+  const rawActiveRate = Math.max(floorRate, baselineRate + correctionRate);
+  const wasFloored = floorRate > 0 && baselineRate + correctionRate < floorRate;
+  if (wasFloored) {
+    notes.push(
+      `estimated rate fell below the lowest independently measured resistance-exercise ` +
+      `intensity (${minMet} METs) and was floored — treat this estimate as low-confidence`
+    );
+  }
 
   // Plausibility guardrail (audit #3/#4/#5/#6): cap the rate at a
   // documented physiological ceiling. This is a safety net against

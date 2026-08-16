@@ -139,6 +139,16 @@ def main():
             "flag_above_kg": round(COHORT_MEAN_WEIGHT_KG + 2 * COHORT_SD_WEIGHT_KG, 1),
         },
         "plausibility_guardrails": {
+            "min_active_rate_met": 1.30,
+            "min_active_rate_rationale": (
+                "Lowest resistance-exercise MET independently measured in any source we hold "
+                "(Adeel et al. 2021, shoulder press, untrained group, Cortex Metalyzer 3B). "
+                "Acts as a floor symmetric with max_active_rate_kcal_min: a negative correction "
+                "must never drive the estimate below the least demanding resistance exercise "
+                "ever measured. Does not trigger anywhere in the 45-125kg estimable range "
+                "(verified) - it is insurance against unenumerated exercise/tier/weight "
+                "combinations, not an active adjustment."
+            ),
             "max_active_rate_kcal_min": 20.0,
             "rationale": (
                 "Conservative sustained-rate ceiling (~20-24 kcal/min is roughly the range "
@@ -150,6 +160,77 @@ def main():
                 "net, not a scientific fix — it prevents physiologically-impossible numbers "
                 "from reaching a user; it does not make the underlying rate accurate for long "
                 "durations. Real fix needs real multi-set session data (Phase 9)."
+            ),
+        },
+        # ---- Added 2026-08-17: hard gating bounds (free actions 2 & 3) ----
+        # These convert two documented WARNINGS into REFUSALS. Outside these
+        # bounds mlEstimate throws, and the caller's existing baseline-fallback
+        # path handles it -- baseline is less accurate but never implausible,
+        # whereas the correction demonstrably IS implausible out here
+        # (SKOS_CALORIE_MODEL_VALIDATION_CALIBRATION_REPORT.md sections 3 and 4).
+        # No fitted coefficient is involved; this is a scope restriction.
+        # TWO-TIER SCOPE (2026-08-17, widened on product decision):
+        #   validated_range -> full confidence; inside the evidence base.
+        #   estimable_range -> hard gate; ML refuses beyond it and the caller's
+        #                      baseline fallback takes over.
+        # Between the two, ML still runs but confidence is downgraded and the
+        # reason is surfaced -- the estimate stays physically plausible there,
+        # it is simply outside what the evidence covers. Widening the OUTER
+        # bound is a product call; the INNER bound stays evidence-anchored so
+        # the distinction never gets lost.
+        "validated_range": {
+            "body_weight_kg": {
+                "min": round(COHORT_MEAN_WEIGHT_KG - 2 * COHORT_SD_WEIGHT_KG, 1),
+                "max": round(COHORT_MEAN_WEIGHT_KG + 2 * COHORT_SD_WEIGHT_KG, 1),
+            },
+            "duration_minutes": {"min": 1, "max": 120},
+            "rationale": (
+                "Body weight: training cohort mean +/- 2SD. Duration: 120min is the longest "
+                "resistance session with ANY independent whole-session measurement behind it "
+                "(Adeel 2021 116min; Joao 2021 116min). Inside these bounds the estimate sits "
+                "within the evidence base."
+            ),
+        },
+        "estimable_range": {
+            "body_weight_kg": {
+                "min": 45.0,
+                "max": 125.0,
+                "rationale": (
+                    "Both bounds widened by product decision beyond the validated band. "
+                    "Checked before accepting: at 45kg the WORST-CASE combination (most negative "
+                    "correction, 60-min session) still implies 1.70-1.91 METs, which is ABOVE the "
+                    "lowest resistance-exercise MET independently measured in any source we hold "
+                    "(1.30, Adeel 2021 shoulder press, untrained). So 45kg output is low but "
+                    "physiologically defensible. Below ~40kg it is not: the constant correction "
+                    "dominates (-213% of net) and sessions clamp toward zero, which is why the "
+                    "hard floor sits at 45 and not lower. On the upper side the correction's "
+                    "relative influence SHRINKS as weight rises (-28% of net at 125kg vs -53% at "
+                    "the 78.67kg fit weight), so plausibility is not the binding constraint there. "
+                    "45-57.3kg and 100.1-125kg are allowed but confidence-downgraded."
+                ),
+            },
+            "duration_minutes": {
+                "min": 1,
+                "max": 150.0,
+                "rationale": (
+                    "Extended to 150min by product decision to cover genuine long sessions "
+                    "(2-2.5h powerlifting/bodybuilding work is real). 120-150min has NO external "
+                    "corroboration -- the flat-rate assumption is least reliable there and most "
+                    "likely to over-estimate, since rest accumulates. Allowed but "
+                    "confidence-downgraded; beyond 150min ML refuses."
+                ),
+            },
+        },
+        "external_plausibility_envelope_kcal_min_per_kg": {
+            "min": 0.0593,
+            "max": 0.0665,
+            "note": (
+                "Independent whole-session measurements, normalised per kg so body weight cancels: "
+                "Rustaden 2020 (0.0593), Benito 2016 (0.0603), Adeel 2021 (0.0598), Nakagata 2019 "
+                "(0.0630-0.0665). Four labs, four countries. A session-level estimate outside this "
+                "band is not necessarily wrong, but is outside everything independently measured -- "
+                "used to downgrade confidence, never to alter the estimate. "
+                "See scripts/external_plausibility_envelope.py."
             ),
         },
         "source_measured_bout_duration_minutes": {
