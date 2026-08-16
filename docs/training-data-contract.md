@@ -31,6 +31,7 @@ node scripts/export-training-data.js --out ../data/exports/calories.jsonl
 - Without `--out`, records stream to stdout (summary always goes to stderr, counts
   only — never payloads).
 - `--limit n` sets the page size for the batched read (default 100).
+- `--org <org_id>` optionally scopes the export to one organization — see §1.2.
 - Output directories are gitignored (`backend/data/exports/`) — datasets are
   generated artifacts, never committed.
 
@@ -43,6 +44,28 @@ rows are visible; the app SQL filters by org"). A training dataset is intentiona
 cross-org, so no `SET LOCAL app.org_id` is issued and **no RLS or role change is
 required**. If an ops deployment ever tightens the unset-org policy, re-run the
 export with a read-elevated connection instead of changing application code.
+
+### 1.2 Organization scoping (optional, Phase 3B Step 2)
+
+- **Default (no `--org`): unchanged.** The export remains intentionally cross-org,
+  exactly as documented in §1.1 — this was the only behavior before this option
+  existed and still is whenever `--org` is omitted.
+- **`--org <org_id>`** narrows `extractTrainingDataset()`'s query to
+  `workouts.org_id = ?` — a parameterized filter; the org id value is never
+  interpolated into SQL text. Every other filtering rule in §3 applies identically
+  within that org. The JSONL record shape (§2) is unaffected either way — scoping
+  only changes which workouts are selected, never how a record is built.
+- **Unknown `--org`** fails clearly: the CLI validates the org exists
+  (`assertOrgExists(db, orgId)`, a parameterized `SELECT id FROM organizations WHERE
+  id = ?`) *before* the export loop starts, so an unknown org id exits non-zero and
+  writes zero JSONL lines — never a silently empty "successful" file.
+- **`--org` with no value** (a bare flag) also fails immediately, non-zero, before
+  the database is even connected — it can never silently fall back to the
+  all-organizations default.
+- **Tenant isolation:** this CLI has no in-app authorization model, same as every
+  other script in `backend/scripts/` — its real trust boundary is server/ops access
+  to `DATABASE_URL`, unchanged by this option. `--org` is strictly narrowing; it can
+  never widen what a given run returns beyond the existing cross-org default.
 
 ## 2. Record schema (one JSON object per line)
 

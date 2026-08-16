@@ -136,8 +136,15 @@ PostgreSQL.** The backend persists the result.
 
 - `estimated_active_kcal` must equal the range midpoint: `lower ≤ est ≤ upper`.
 - Active calories = energy expended during the session beyond resting; do not include
-  BMR/total daily expenditure unless agreed otherwise.
-- Values are never negative; lower bound ≥ 0.
+  BMR/total daily expenditure unless agreed otherwise. The `ml` provider's underlying
+  model computes **gross** workout-period expenditure — the backend converts gross to
+  net at the integration boundary (`calorieModel.js: toNetOfResting()`, reusing the
+  same MET-based formula as §7's baseline, with `MET=1` as the ACSM definition of
+  resting rate) before any result reaches this contract or `validateCalorieResult()`.
+  `estimated_active_kcal` is therefore always net-of-resting, regardless of provider.
+- Values are never negative; lower bound ≥ 0. A gross value that is already invalid
+  (e.g. negative) is never "fixed" by the conversion — it still fails validation and
+  falls back to `baseline`, per §7.
 
 ## 4. Enums
 
@@ -186,10 +193,21 @@ for NL-logged sessions. `meta.estKcal` is kept in sync with
 
 - `CALORIE_MODEL_PROVIDER=baseline` (default) — deterministic MET heuristic:
   `MET × 3.5 × body_weight_kg ÷ 200 × duration_min`, `MET ∈ {light 3.0, moderate 4.5,
-  hard 6.0}`, range ±15%. Explicitly **not ML**.
+  hard 6.0}`, range ±15%. Explicitly **not ML**. This is the only provider running in
+  production today, and remains the default in every environment unless
+  `CALORIE_MODEL_PROVIDER=ml` is explicitly set — `ml` is opt-in, never automatic.
 - `CALORIE_MODEL_PROVIDER=mock` — fixed demo values (300/250/350), clearly labeled.
-- `CALORIE_MODEL_PROVIDER=ml` — Sambhav's model. **Until implemented, `estimateWorkoutCalories`
-  falls back to baseline and marks `note: "ml provider unavailable — baseline fallback"`.**
+- `CALORIE_MODEL_PROVIDER=ml` — **implemented (Phase 3B Step 3).** Sambhav's
+  `skos-cal-v1` artifact, ported into
+  `backend/src/services/intelligence/mlModels/skosCalV1.js` (+ `skosCalV1.model.json`)
+  from `origin/ml-sambhav`; see §8. **Dev/staging only** — per Sambhav's own
+  `V1_PRE_INTEGRATION_AUDIT.md`, the model's known production limitations are still
+  unresolved (the correction terms do not scale with body weight; multi-exercise
+  session interval coverage is unvalidated beyond single-exercise research bouts).
+  `ml` must not be enabled in production until those are separately resolved. Any ML
+  failure (exception, timeout, or invalid output) still falls back to `baseline` and
+  marks a `note` explaining why — that fallback behavior is unchanged from before this
+  provider was implemented.
 - **Provider honesty:** the persisted result always records the provider actually used
   (`workouts.calorie_provider`) — a baseline result never appears to be an ML
   prediction, and the provider is never exposed to the frontend.
@@ -200,10 +218,28 @@ for NL-logged sessions. `meta.estKcal` is kept in sync with
 
 ## 8. Where Sambhav plugs in
 
-Replace the body of `mlEstimate(input)` (or the provider wiring) in
-`backend/src/services/intelligence/calorieModel.js`, keeping the §3 output shape.
-Routes, persistence, and the frontend do NOT change. Coordinate `model_version`
-naming and any `schema_version` bumps with Kaushal.
+**Implemented (Phase 3B Step 3).** `mlEstimate(input, { signal })` in
+`backend/src/services/intelligence/calorieModel.js` delegates to the ported
+`skos-cal-v1` logic in `mlModels/skosCalV1.js` — a mechanical CommonJS→ESM port of
+`origin/ml-sambhav`'s `mlEstimate.reference.js`; `mlModels/skosCalV1.model.json` is
+`model_v1.json` copied byte-for-byte from the same branch, no fitted coefficient
+changed. Two backend-owned adapter steps sit between the ported model and this
+contract's gate, both internal to `calorieModel.js`:
+- **Exercise-ID canonicalization** — a known **global** exercise's `animation_key`
+  maps to one of Sambhav's 6 confirmed canonical tokens (`bench_press → BENCH_PRESS`,
+  `squat → BARBELL_SQUAT`, `leg_press → LEG_PRESS`, `leg_extension → LEG_EXTENSION`,
+  `lat_pulldown → LAT_PULLDOWN`, `bicep_curl → BICEP_CURL`); a custom (non-global)
+  exercise's `animation_key` is never trusted. `INCLINE_BENCH_PRESS` and
+  `TRICEPS_EXTENSION` are intentionally left unmapped (multiple plausible backend
+  candidates, no source resolves which) — never guessed.
+- **Gross → net-of-resting conversion** (§3) — applied to whatever the `ml` branch
+  produces before validation, so `mlModels/skosCalV1.js` stays a clean, minimally-
+  diffed port of Sambhav's original (gross-computing) logic.
+
+Routes, persistence, `validateCalorieResult()`, and the frontend did **not** change.
+A future model version (`skos-cal-v2` or later) follows the same drop-in path: replace
+or extend `mlModels/skosCalV1.js`'s logic, keep the §3 output shape, coordinate
+`model_version` naming and any `schema_version` bump with Kaushal.
 
 ## 9. Constraints (from TEAM-CONTRACT)
 
