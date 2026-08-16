@@ -1,10 +1,10 @@
 import { Modal } from './UI.jsx';
 
 const CROWD_STYLE = {
-  LOW: { label: 'QUIET', color: '#34D399' },
-  MODERATE: { label: 'MODERATE', color: '#14C4BC' },
-  HIGH: { label: 'BUSY', color: '#0A8A85' },
-  VERY_HIGH: { label: 'PACKED', color: '#F87171' }
+  LOW: { label: 'QUIET', color: '#8C6A4D' },
+  MODERATE: { label: 'MODERATE', color: '#8C6A4D' },
+  HIGH: { label: 'BUSY', color: '#A07855' },
+  VERY_HIGH: { label: 'PACKED', color: '#DC6B6B' }
 };
 
 const TYPICAL_HOURLY = [
@@ -14,7 +14,7 @@ const TYPICAL_HOURLY = [
 function CrowdBar({ hour, value, max, label }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
   const level = value < 10 ? 'LOW' : value < 25 ? 'MODERATE' : value < 35 ? 'HIGH' : 'VERY_HIGH';
-  const color = CROWD_STYLE[level]?.color || '#14C4BC';
+  const color = CROWD_STYLE[level]?.color || '#8C6A4D';
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
       <div className="w-full h-16 flex items-end">
@@ -48,12 +48,12 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
         <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--line)', background: 'var(--bg2)' }}>
           <div>
             <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>Current crowd</div>
-            <div className="font-display font-bold text-3xl mt-1" style={{ color: CROWD_STYLE[crowd.status]?.color }}>
+            <div className="font-display font-bold text-3xl mt-1" style={{ color: 'var(--accent)' }}>
               {crowd.current}
               <span className="text-sm font-normal ml-1" style={{ color: 'var(--mute)' }}>/ {crowd.capacity}</span>
             </div>
           </div>
-          <span className="chip text-sm font-grotesk font-bold" style={{ borderColor: `${CROWD_STYLE[crowd.status]?.color}55`, color: CROWD_STYLE[crowd.status]?.color }}>
+          <span className="chip text-sm font-grotesk font-bold" style={{ borderColor: 'var(--accent-soft)', color: 'var(--accent)' }}>
             {CROWD_STYLE[crowd.status]?.label}
           </span>
         </div>
@@ -82,11 +82,11 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
 
         {/* Peak & quiet hours */}
         <div className="flex gap-3">
-          <div className="flex-1 rounded-xl border border-bad/30 p-3" style={{ background: 'rgba(248,113,113,.04)' }}>
+          <div className="flex-1 rounded-xl border border-bad/30 p-3" style={{ background: 'rgba(220,107,107,.04)' }}>
             <div className="font-grotesk text-[10px] uppercase tracking-wider text-bad font-medium">Peak hours</div>
             <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>5:00 PM — 7:00 PM</div>
           </div>
-          <div className="flex-1 rounded-xl border border-good/30 p-3" style={{ background: 'rgba(52,211,153,.04)' }}>
+          <div className="flex-1 rounded-xl border border-good/30 p-3" style={{ background: 'rgba(140,106,77,.04)' }}>
             <div className="font-grotesk text-[10px] uppercase tracking-wider text-good font-medium">Quiet hours</div>
             <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>10:00 PM — 6:00 AM</div>
           </div>
@@ -107,7 +107,7 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
         </div>
 
         {crowd.status !== 'LOW' && (
-          <div className="rounded-xl border border-good/30 p-3.5" style={{ background: 'rgba(52,211,153,.04)' }}>
+          <div className="rounded-xl border border-good/30 p-3.5" style={{ background: 'rgba(140,106,77,.04)' }}>
             <div className="font-grotesk text-[10px] text-good uppercase tracking-wider mb-1">💡 Recommended time</div>
             <div className="text-[12px]" style={{ color: 'var(--mute)' }}>
               Try visiting around <strong className="text-good">{hourlyLabels[recommendedHour]}</strong> for the least crowded experience.

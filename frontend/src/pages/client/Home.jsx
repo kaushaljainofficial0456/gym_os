@@ -6,10 +6,10 @@ import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
 
 const CROWD_STYLE = {
-  LOW: { label: 'QUIET', color: '#34D399' },
-  MODERATE: { label: 'MODERATE', color: '#14C4BC' },
-  HIGH: { label: 'BUSY', color: '#0A8A85' },
-  VERY_HIGH: { label: 'PACKED', color: '#F87171' }
+  LOW: { label: 'QUIET', color: '#8C6A4D' },
+  MODERATE: { label: 'MODERATE', color: '#8C6A4D' },
+  HIGH: { label: 'BUSY', color: '#A07855' },
+  VERY_HIGH: { label: 'PACKED', color: '#DC6B6B' }
 };
 
 export default function Home() {
@@ -120,19 +120,19 @@ export default function Home() {
         >
           <div className="flex items-center justify-between mb-2">
             <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>Gym crowd</div>
-            <span className="text-[9px] font-grotesk group-hover:text-gold transition-colors" style={{ color: 'var(--faint)' }}>Tap for details →</span>
+            <span className="text-[9px] font-grotesk group-hover:text-gold transition-colors" style={{ color: 'var(--accent)' }}>Tap for details →</span>
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <span className="font-display font-bold text-2xl" style={{ color: CROWD_STYLE[crowd.status]?.color || '#14C4BC' }}>{crowd.current}</span>
+              <span className="font-display font-bold text-2xl" style={{ color: 'var(--accent)' }}>{crowd.current}</span>
               <span className="text-xs" style={{ color: 'var(--mute)' }}> / {crowd.capacity} now</span>
             </div>
-            <span className="chip" style={{ borderColor: `${CROWD_STYLE[crowd.status]?.color}55`, color: CROWD_STYLE[crowd.status]?.color }}>
+            <span className="chip" style={{ borderColor: 'var(--accent-soft)', color: 'var(--accent)' }}>
               {CROWD_STYLE[crowd.status]?.label || crowd.status}
             </span>
           </div>
           <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${crowd.pct}%`, background: CROWD_STYLE[crowd.status]?.color || '#14C4BC' }} />
+            <div className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-ember to-gold" style={{ width: `${crowd.pct}%` }} />
           </div>
           <div className="text-[10px] mt-1.5 font-grotesk" style={{ color: 'var(--faint)' }}>Live from the gym access system · {crowd.pct}% of capacity</div>
         </button>

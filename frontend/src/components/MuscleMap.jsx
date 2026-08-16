@@ -6,6 +6,7 @@
 // anatomy chart — it communicates muscle targeting at a glance.
 // ============================================================
 import { useState, useEffect } from 'react';
+import { useTheme } from '../themeContext.jsx';
 
 // canonical region keys
 export const MUSCLE_REGIONS = {
@@ -52,10 +53,42 @@ export function regionForMuscle(muscle) {
   return null;
 }
 
+// Theme-aware color palettes
+const MAP_THEMES = {
+  dark: {
+    silhouetteFill: 'rgba(255,255,255,.045)',
+    activeFill: 'rgba(18,184,176,.38)',
+    activeStroke: 'rgba(18,184,176,.55)',
+    hoverFill: 'rgba(255,255,255,.16)',
+    idleFill: 'rgba(255,255,255,.07)',
+    idleStroke: 'rgba(255,255,255,.05)',
+    selectedStroke: 'rgba(221,247,242,.9)',
+    gradStart: '#087F7B',
+    gradEnd: '#12B8B0',
+    filterActive: 'drop-shadow(0 0 6px rgba(18,184,176,.45))',
+    gradientId: 'burnGrad',
+  },
+  light: {
+    silhouetteFill: 'rgba(61,48,38,.12)',
+    activeFill: 'rgba(140,106,77,.35)',
+    activeStroke: 'rgba(140,106,77,.60)',
+    hoverFill: 'rgba(61,48,38,.16)',
+    idleFill: 'rgba(61,48,38,.08)',
+    idleStroke: 'rgba(61,48,38,.10)',
+    selectedStroke: 'rgba(61,48,38,.90)',
+    gradStart: '#8C6A4D',
+    gradEnd: '#A07855',
+    filterActive: 'drop-shadow(0 0 8px rgba(140,106,77,.35))',
+    gradientId: 'burnGradLight',
+  }
+};
+
 export default function MuscleMap({ activeMuscles = [], selected = null, onSelect, size = 260, className = '' }) {
   const regions = activeMuscles.map(regionForMuscle).filter(Boolean);
   const [view, setView] = useState(() => (regions.some(r => BACK_ONLY.has(r)) ? 'back' : 'front'));
   const [hover, setHover] = useState(null);
+  const { theme } = useTheme();
+  const t = MAP_THEMES[theme] || MAP_THEMES.dark;
 
   useEffect(() => {
     if (regions.some(r => BACK_ONLY.has(r))) setView('back');
@@ -69,8 +102,11 @@ export default function MuscleMap({ activeMuscles = [], selected = null, onSelec
   return (
     <div className={`flex flex-col items-center ${className}`}>
       <svg viewBox="0 0 200 400" width={size} height={size * 2} role="img" aria-label="Muscle map">
+        {/* warm circular background */}
+        <circle cx="100" cy="200" r="90" fill="rgba(140,106,77,.06)" />
+        <circle cx="100" cy="200" r="70" fill="rgba(140,106,77,.04)" />
         {/* base silhouette */}
-        <g fill="rgba(255,255,255,.045)">
+        <g fill={t.silhouetteFill}>
           <circle cx="100" cy="26" r="15" />
           <rect x="92" y="42" width="16" height="16" rx="4" />
           <path d="M70 58 Q100 44 130 58 L126 214 Q100 226 74 214 Z" />
@@ -99,23 +135,23 @@ export default function MuscleMap({ activeMuscles = [], selected = null, onSelec
               className="cursor-pointer transition-all duration-300"
               style={{
                 fill: isSel
-                  ? 'url(#burnGrad)'
+                  ? `url(#${t.gradientId})`
                   : isActive
-                    ? 'rgba(18,184,176,.38)'
+                    ? t.activeFill
                     : isHover
-                      ? 'rgba(255,255,255,.16)'
-                      : 'rgba(255,255,255,.07)',
-                stroke: isSel ? 'rgba(221,247,242,.9)' : isActive ? 'rgba(18,184,176,.55)' : 'rgba(255,255,255,.05)',
+                      ? t.hoverFill
+                      : t.idleFill,
+                stroke: isSel ? t.selectedStroke : isActive ? t.activeStroke : t.idleStroke,
                 strokeWidth: isSel ? 1.6 : 1,
-                filter: isSel || isActive ? 'drop-shadow(0 0 6px rgba(18,184,176,.45))' : 'none'
+                filter: isSel || isActive ? t.filterActive : 'none'
               }}
             />
           );
         })}
         <defs>
-          <linearGradient id="burnGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#087F7B" />
-            <stop offset="100%" stopColor="#12B8B0" />
+          <linearGradient id={t.gradientId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={t.gradStart} />
+            <stop offset="100%" stopColor={t.gradEnd} />
           </linearGradient>
         </defs>
       </svg>

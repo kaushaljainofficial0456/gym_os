@@ -75,6 +75,22 @@ export default function Workout() {
     return () => clearTimeout(h);
   }, [rest]);
 
+  // ---- restore from started_at (refresh-while-active) ----
+  useEffect(() => {
+    // Only restore if: still in browse mode, workout exists, has started_at, and is NOT completed
+    if (mode !== 'browse' || !workout?.started_at || workout?.status === 'completed') return;
+    // Workout was already started server-side but user refreshed — restore execution state
+    setExProgress(Object.fromEntries(state.map((e) => [e.id, 0])));
+    setExecInputs(Object.fromEntries(state.map((e) => [e.id, {
+      reps: parseFloat(e.reps) || 0,
+      weight: parseFloat(e.weight) || 0,
+      rir: null
+    }])));
+    // Reconstruct elapsed time from server started_at
+    setStartedAt(Date.parse(workout.started_at));
+    setMode('execute');
+  }, [workout?.started_at]); // intentionally runs once on mount when started_at exists
+
   // ---- personal workout planner helpers ----
   const loadPlanner = async () => {
     try { setPlanner(await api('/me/planner')); }
@@ -166,22 +182,6 @@ export default function Workout() {
     setExState(state.map((x) => (x.id === ex.id ? { ...x, done: next } : x)));
     try { await api(`/workouts/${workout.id}/exercises/${ex.id}`, { method: 'PATCH' }); } catch { today.reload(); }
   };
-
-  // ---- restore from started_at (refresh-while-active) ----
-  useEffect(() => {
-    // Only restore if: still in browse mode, workout exists, has started_at, and is NOT completed
-    if (mode !== 'browse' || !workout?.started_at || workout?.status === 'completed') return;
-    // Workout was already started server-side but user refreshed — restore execution state
-    setExProgress(Object.fromEntries(state.map((e) => [e.id, 0])));
-    setExecInputs(Object.fromEntries(state.map((e) => [e.id, {
-      reps: parseFloat(e.reps) || 0,
-      weight: parseFloat(e.weight) || 0,
-      rir: null
-    }])));
-    // Reconstruct elapsed time from server started_at
-    setStartedAt(Date.parse(workout.started_at));
-    setMode('execute');
-  }, [workout?.started_at]); // intentionally runs once on mount when started_at exists
 
   // ---- execution ----
   const totalSets = state.reduce((s, e) => s + (e.sets || 0), 0);
