@@ -86,7 +86,7 @@ export default function Reports() {
             <AdherenceBreakdown components={report.adherence.components} />
 
             <div className="mt-5 grid sm:grid-cols-2 gap-3">
-              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(255,106,61,.12), rgba(255,194,75,.05))', border: '1px solid rgba(255,106,61,.3)' }}>
+              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(8,127,123,.12), rgba(18,184,176,.05))', border: '1px solid rgba(8,127,123,.3)' }}>
                 <div className="text-[10px] uppercase tracking-wider text-ember font-grotesk mb-1.5">Coach summary</div>
                 <p className="text-sm leading-relaxed">{report.coachSummary}</p>
               </div>

@@ -7,8 +7,8 @@ import AskSK from '../../components/AskSK.jsx';
 
 const CROWD_STYLE = {
   LOW: { label: 'QUIET', color: '#4ADE80' },
-  MODERATE: { label: 'MODERATE', color: '#FFC24B' },
-  HIGH: { label: 'BUSY', color: '#FF6A3D' },
+  MODERATE: { label: 'MODERATE', color: '#12B8B0' },
+  HIGH: { label: 'BUSY', color: '#087F7B' },
   VERY_HIGH: { label: 'PACKED', color: '#FF5C5C' }
 };
 
@@ -17,8 +17,11 @@ export default function Home() {
   const prefsFetch = useFetch(() => api('/me/dashboard'));
   const crowdFetch = useFetch(() => api('/me/crowd'));
   const briefFetch = useFetch(() => api('/intel/coach/brief'));
+  const weeklyFetch = useFetch(() => api('/intel/coach/weekly'));
   const [meals, setMeals] = useState(null);
   const [water, setWater] = useState(null);
+  const [sleepForm, setSleepForm] = useState({ duration_h: '', bed_time: '', wake_time: '' });
+  const [savingSleep, setSavingSleep] = useState(false);
 
   const data = home.data;
   const mealState = meals || data?.nutrition?.meals || [];
@@ -136,8 +139,8 @@ export default function Home() {
             label={<span className="font-grotesk font-bold text-lg">{eaten.calories}</span>}
             sub={<span className="text-[8px] text-mute">of {plan?.calories || 0} kcal</span>} />
           <div className="flex-1 space-y-3">
-            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} color="linear-gradient(92deg,#FF6A3D,#FFC24B)" right={`${eaten.protein}/${plan?.protein || 0} g`} />
-            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} color="linear-gradient(92deg,#FFC24B,#FFE9A8)" right={`${eaten.carbs}/${plan?.carbs || 0} g`} />
+            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} color="linear-gradient(92deg,#087F7B,#12B8B0)" right={`${eaten.protein}/${plan?.protein || 0} g`} />
+            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} color="linear-gradient(92deg,#12B8B0,#DDF7F2)" right={`${eaten.carbs}/${plan?.carbs || 0} g`} />
             <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1} color="linear-gradient(92deg,#35E0D8,#7BE8FF)" right={`${eaten.fat}/${plan?.fat || 0} g`} />
           </div>
         </div>
@@ -176,8 +179,24 @@ export default function Home() {
             <div className="text-[10px] text-faint mt-1 font-grotesk">{data.sleep.duration_h >= 8 ? 'Goal met ✓' : `${Math.round((8 - data.sleep.duration_h) * 60)}m short of 8h`}</div>
           </>
         ) : (
-          <div className="text-xs text-mute mt-2">No sleep logged yet.</div>
+          <div className="text-xs text-mute">No sleep logged yet.</div>
         )}
+        <div className="mt-2.5 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <input className="input !py-1.5 !text-[11px]" type="number" step="0.5" min="0" max="24" placeholder="Hours" value={sleepForm.duration_h} onChange={(e) => setSleepForm((f) => ({ ...f, duration_h: e.target.value }))} />
+            <input className="input !py-1.5 !text-[11px]" type="time" placeholder="Bed" value={sleepForm.bed_time} onChange={(e) => setSleepForm((f) => ({ ...f, bed_time: e.target.value }))} />
+            <input className="input !py-1.5 !text-[11px]" type="time" placeholder="Wake" value={sleepForm.wake_time} onChange={(e) => setSleepForm((f) => ({ ...f, wake_time: e.target.value }))} />
+          </div>
+          <button className="btn-primary w-full !py-2 !text-[11px]" disabled={savingSleep || !sleepForm.duration_h} onClick={async () => {
+            setSavingSleep(true);
+            try {
+              await api(`/tracking/clients/${c.id}/sleep`, { method: 'POST', body: JSON.stringify({ duration_h: Number(sleepForm.duration_h), bed_time: sleepForm.bed_time || undefined, wake_time: sleepForm.wake_time || undefined, source: 'manual' }) });
+              setSleepForm({ duration_h: '', bed_time: '', wake_time: '' });
+              home.reload();
+            } catch (e) { /* keep form */ }
+            setSavingSleep(false);
+          }}>{savingSleep ? 'Saving…' : 'Log sleep'}</button>
+        </div>
       </div>
     ),
     crowd: crowd?.enabled ? (
@@ -185,7 +204,7 @@ export default function Home() {
         <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2">Gym crowd</div>
         <div className="flex items-end justify-between">
           <div>
-            <span className="font-grotesk font-bold text-2xl" style={{ color: CROWD_STYLE[crowd.status]?.color || '#FFC24B' }}>{crowd.current}</span>
+            <span className="font-grotesk font-bold text-2xl" style={{ color: CROWD_STYLE[crowd.status]?.color || '#12B8B0' }}>{crowd.current}</span>
             <span className="text-xs text-mute"> / {crowd.capacity} now</span>
           </div>
           <span className="chip" style={{ borderColor: `${CROWD_STYLE[crowd.status]?.color}55`, color: CROWD_STYLE[crowd.status]?.color }}>
@@ -193,7 +212,7 @@ export default function Home() {
           </span>
         </div>
         <div className="mt-2 h-1.5 rounded-full bg-white/8 overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${crowd.pct}%`, background: CROWD_STYLE[crowd.status]?.color || '#FFC24B' }} />
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${crowd.pct}%`, background: CROWD_STYLE[crowd.status]?.color || '#12B8B0' }} />
         </div>
         <div className="text-[10px] text-faint mt-1.5 font-grotesk">Live from the gym access system · {crowd.pct}% of capacity</div>
       </div>
@@ -250,6 +269,51 @@ export default function Home() {
             ))}
           </div>
           <div className="text-[9px] text-faint mt-2">{briefFetch.data.note}</div>
+          <div className="flex gap-1.5 mt-2.5">
+            {['helpful', 'not_helpful', 'not_relevant'].map((fb) => (
+              <button key={fb} className="chip border-line text-[9px] text-mute hover:text-gold hover:border-gold/40" onClick={async () => {
+                try {
+                  await api('/intel/coach/feedback', { method: 'POST', body: JSON.stringify({ feedback: fb, target_type: 'brief', target_id: briefFetch.data.priority?.title || 'daily' }) });
+                } catch { /* ignore */ }
+              }}>{fb === 'not_helpful' ? 'Not helpful' : fb === 'not_relevant' ? 'Not relevant' : 'Helpful ✓'}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Weekly Coach Review */}
+      {weeklyFetch.data?.ok && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="font-grotesk font-bold text-sm">Weekly Review</span>
+              {weeklyFetch.data.ai_framed && <span className="chip border-violetx/40 text-violetx !px-1.5 !py-0 text-[8px]">OLLAMA</span>}
+            </div>
+            <button onClick={() => weeklyFetch.reload()} aria-label="Refresh weekly review" className="text-mute hover:text-gold text-sm">⟳</button>
+          </div>
+          {weeklyFetch.data.went_well?.length > 0 && (
+            <div className="mb-2.5">
+              <div className="text-[9px] uppercase tracking-[.14em] text-good font-grotesk mb-1">What went well</div>
+              {weeklyFetch.data.went_well.map((item, i) => (
+                <div key={i} className="text-[12px] text-ink/85 leading-relaxed">✓ {typeof item === 'string' ? item : item.message || item.title || ''}</div>
+              ))}
+            </div>
+          )}
+          {weeklyFetch.data.needs_attention?.length > 0 && (
+            <div className="mb-2.5">
+              <div className="text-[9px] uppercase tracking-[.14em] text-warn font-grotesk mb-1">Needs attention</div>
+              {weeklyFetch.data.needs_attention.map((item, i) => (
+                <div key={i} className="text-[12px] text-ink/85 leading-relaxed">⚠ {typeof item === 'string' ? item : item.message || item.title || ''}</div>
+              ))}
+            </div>
+          )}
+          {weeklyFetch.data.next_week_priority && (
+            <div className="rounded-xl border border-gold/30 bg-gold/5 px-3 py-2.5 mt-2">
+              <div className="text-[9px] uppercase tracking-[.14em] text-gold font-grotesk">Next week priority</div>
+              <div className="font-grotesk text-[13px] font-semibold mt-0.5">{weeklyFetch.data.next_week_priority.title || weeklyFetch.data.next_week_priority}</div>
+              {weeklyFetch.data.next_week_priority.message && <div className="text-[11px] text-mute mt-0.5">{weeklyFetch.data.next_week_priority.message}</div>}
+            </div>
+          )}
         </div>
       )}
 

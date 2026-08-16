@@ -8,7 +8,7 @@ html, body, #root { min-height: 100%; }
 
 body {
   @apply bg-bg text-ink font-body antialiased;
-  background-color: #070A11;
+  background-color: #071116;
   overflow-x: hidden;
 }
 
@@ -20,10 +20,10 @@ body::before {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(50rem 36rem at 12% -10%, rgba(255,107,62,.13), transparent 60%),
-    radial-gradient(42rem 32rem at 94% 2%, rgba(155,124,255,.10), transparent 58%),
-    radial-gradient(52rem 38rem at 38% 122%, rgba(53,215,255,.06), transparent 60%),
-    radial-gradient(30rem 22rem at 78% 62%, rgba(255,194,75,.04), transparent 62%);
+    radial-gradient(50rem 36rem at 12% -10%, rgba(8,127,123,.13), transparent 60%),
+    radial-gradient(42rem 32rem at 94% 2%, rgba(18,184,176,.10), transparent 58%),
+    radial-gradient(52rem 38rem at 38% 122%, rgba(18,184,176,.06), transparent 60%),
+    radial-gradient(30rem 22rem at 78% 62%, rgba(221,247,242,.04), transparent 62%);
   animation: ambientDrift 52s ease-in-out infinite alternate;
 }
 body::after {
@@ -40,10 +40,10 @@ body::after {
   100% { transform: translate3d(2.5%, 1.5%, 0) scale(1.06); }
 }
 
-::selection { background: rgba(255,107,62,.38); }
+::selection { background: rgba(18,184,176,.38); }
 
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid rgba(255,194,75,.9);
+  outline: 2px solid rgba(18,184,176,.9);
   outline-offset: 2px;
   border-radius: 10px;
 }
@@ -53,7 +53,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
-@keyframes ringPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,62,.28); } 50% { box-shadow: 0 0 0 7px rgba(255,107,62,0); } }
+@keyframes ringPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(18,184,176,.28); } 50% { box-shadow: 0 0 0 7px rgba(18,184,176,0); } }
 @keyframes softPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @keyframes checkPop { 0% { transform: scale(.6); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @keyframes waterRise { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -68,19 +68,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .anim-pop { animation: checkPop .35s cubic-bezier(.22,.8,.3,1) both; }
 .anim-toast { animation: toastIn .3s cubic-bezier(.22,.8,.3,1) both; }
 .anim-pulse-soft { animation: softPulse 1.6s ease-in-out infinite; }
-.shadow-glow { box-shadow: 0 0 20px rgba(255,107,62,.5), 0 0 0 1px rgba(255,194,75,.28); }
+.shadow-glow { box-shadow: 0 0 20px rgba(18,184,176,.5), 0 0 0 1px rgba(18,184,176,.28); }
 
 @layer components {
   .card {
     @apply bg-panel rounded-card border border-line shadow-card;
-    background-image: linear-gradient(168deg, rgba(255,255,255,.05), rgba(255,255,255,.01) 62%);
+    background-image: linear-gradient(168deg, rgba(255,255,255,.04), rgba(255,255,255,.01) 62%);
     transition: transform .25s cubic-bezier(.22,.8,.3,1), border-color .25s ease, box-shadow .25s ease, background-color .25s ease;
   }
   .card-hover:hover {
     transform: translateY(-2px);
-    border-color: rgba(255,255,255,.16);
-    box-shadow: 0 34px 66px -34px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.05), 0 0 44px -20px rgba(255,107,62,.2);
-    background-image: linear-gradient(168deg, rgba(255,255,255,.07), rgba(255,255,255,.015) 62%);
+    border-color: rgba(18,184,176,.20);
+    box-shadow: 0 34px 66px -34px rgba(0,0,0,.9), 0 0 0 1px rgba(18,184,176,.08), 0 0 44px -20px rgba(18,184,176,.15);
+    background-image: linear-gradient(168deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 62%);
   }
   .kicker {
     @apply font-grotesk text-[10.5px] font-semibold uppercase tracking-[.18em] text-mute flex items-center gap-2 mb-3.5;
@@ -88,11 +88,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .kicker::before {
     content: '';
     @apply w-1.5 h-1.5 rounded-full bg-gradient-to-r from-ember to-gold;
-    box-shadow: 0 0 12px rgba(255,107,62,.8);
+    box-shadow: 0 0 12px rgba(18,184,176,.8);
   }
   .kicker.cyan::before { @apply bg-cyanx; box-shadow: 0 0 12px rgba(53,215,255,.8); }
   .kicker.violet::before { @apply bg-violetx; box-shadow: 0 0 12px rgba(155,124,255,.8); }
-  .kicker.gold::before { @apply bg-gold; box-shadow: 0 0 12px rgba(255,194,75,.8); }
+  .kicker.gold::before { @apply bg-gold; box-shadow: 0 0 12px rgba(18,184,176,.8); }
 
   .btn {
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold tracking-wide px-4 py-2.5 rounded-full border border-line bg-white/5 text-ink transition-all duration-200;
@@ -102,18 +102,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .btn:active { transform: scale(.97); }
   .btn-primary {
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold tracking-wide px-4 py-2.5 rounded-full text-bg transition-all duration-200 relative overflow-hidden;
-    background: linear-gradient(94deg, #FF6B3E 0%, #FF9547 45%, #FFC24B 100%);
-    box-shadow: 0 8px 26px -10px rgba(255,107,62,.65), inset 0 1px 0 rgba(255,255,255,.35);
+    background: linear-gradient(94deg, #087F7B 0%, #10A8A0 45%, #12B8B0 100%);
+    box-shadow: 0 8px 26px -10px rgba(8,127,123,.65), inset 0 1px 0 rgba(255,255,255,.15);
   }
   .btn-primary::after {
     content: '';
     position: absolute;
     top: 0; bottom: 0; width: 34%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.38), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
     transform: translateX(-120%) skewX(-18deg);
   }
   .btn-primary:hover::after { animation: sheen .7s ease; }
-  .btn-primary:hover { filter: brightness(1.08); box-shadow: 0 10px 32px -10px rgba(255,107,62,.8), inset 0 1px 0 rgba(255,255,255,.4); }
+  .btn-primary:hover { filter: brightness(1.08); box-shadow: 0 10px 32px -10px rgba(8,127,123,.8), inset 0 1px 0 rgba(255,255,255,.2); }
   .btn-primary:active { transform: scale(.97); }
   .btn-ghost { @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold px-3 py-2 rounded-full text-mute transition-colors; }
   .btn-ghost:hover { @apply text-ink bg-white/5; }
@@ -123,7 +123,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
     transition: border-color .2s ease, box-shadow .2s ease;
   }
-  .input:focus { @apply outline-none border-gold/70; box-shadow: 0 0 0 3px rgba(255,194,75,.14), inset 0 1px 2px rgba(0,0,0,.35); }
+  .input:focus { @apply outline-none border-gold/70; box-shadow: 0 0 0 3px rgba(18,184,176,.14), inset 0 1px 2px rgba(0,0,0,.35); }
 
   .chip {
     @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full border border-line bg-white/4 text-mute;
@@ -133,17 +133,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     @apply relative font-grotesk text-xs font-semibold px-3.5 py-2 rounded-full text-mute transition-colors whitespace-nowrap;
   }
   .tab:hover { @apply text-ink; }
-  .tab.active { @apply text-bg; background: linear-gradient(94deg, #FF6B3E, #FFC24B); box-shadow: 0 5px 18px -6px rgba(255,107,62,.65), inset 0 1px 0 rgba(255,255,255,.3); }
+  .tab.active { @apply text-bg; background: linear-gradient(94deg, #087F7B, #12B8B0); box-shadow: 0 5px 18px -6px rgba(8,127,123,.65), inset 0 1px 0 rgba(255,255,255,.15); }
   .navlink {
     @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-grotesk text-[13px] font-medium text-mute transition-all duration-200;
   }
   .navlink:hover { @apply text-ink bg-white/5 translate-x-0.5; }
   .navlink.active {
     @apply text-ink;
-    background: linear-gradient(94deg, rgba(255,107,62,.12), rgba(255,194,75,.04) 70%);
-    box-shadow: inset 2px 0 0 #FF6B3E, 0 0 26px -10px rgba(255,107,62,.45);
+    background: linear-gradient(94deg, rgba(8,127,123,.12), rgba(18,184,176,.04) 70%);
+    box-shadow: inset 2px 0 0 #087F7B, 0 0 26px -10px rgba(8,127,123,.45);
   }
-  .navlink.active svg, .navlink.active span:first-child { color: #FFC24B; }
+  .navlink.active svg, .navlink.active span:first-child { color: #12B8B0; }
 
   /* skeleton shimmer */
   .skeleton {

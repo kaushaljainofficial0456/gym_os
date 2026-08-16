@@ -2,7 +2,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { WEEKDAY } from '../utils.js';
 
 const tooltipStyle = {
-  background: '#10151F', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12,
+  background: '#111C21', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12,
   fontSize: 12, fontFamily: 'Space Grotesk', color: '#F5F7FC',
   boxShadow: '0 24px 48px -20px rgba(0,0,0,.8)', padding: '8px 12px'
 };
@@ -15,21 +15,21 @@ export function WeightChart({ data }) {
       <AreaChart data={rows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="wGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FF6A3D" stopOpacity={.35} />
-            <stop offset="100%" stopColor="#FF6A3D" stopOpacity={0} />
+            <stop offset="0%" stopColor="#12B8B0" stopOpacity={.35} />
+            <stop offset="100%" stopColor="#12B8B0" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 6" stroke="rgba(255,255,255,.05)" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: 'rgba(242,244,250,.35)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} />
         <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fill: 'rgba(242,244,250,.35)', fontSize: 10 }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} kg`, 'Weight']} labelFormatter={(l) => data[l]?.date} />
-        <Area type="monotone" dataKey="weight" stroke="#FF6A3D" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: '#FFC24B' }} />
+        <Area type="monotone" dataKey="weight" stroke="#12B8B0" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: '#DDF7F2' }} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-export function TrendChart({ data, color = '#FFC24B', domain }) {
+export function TrendChart({ data, color = '#12B8B0', domain }) {
   if (!data || !data.length) return null;
   return (
     <ResponsiveContainer width="100%" height={150}>
@@ -71,8 +71,8 @@ export function WeekBars({ days, valueKey, max = 10, color = '#9B7CFF', format }
 
 export function AdherenceBreakdown({ components }) {
   const rows = [
-    ['Workout', components?.workout, '#FF6A3D'],
-    ['Nutrition', components?.nutrition, '#FFC24B'],
+    ['Workout', components?.workout, '#087F7B'],
+    ['Nutrition', components?.nutrition, '#12B8B0'],
     ['Protein', components?.protein, '#FF9A7A'],
     ['Water', components?.water, '#35D7FF'],
     ['Sleep', components?.sleep, '#9B7CFF'],

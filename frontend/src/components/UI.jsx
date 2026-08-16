@@ -65,13 +65,13 @@ export function Ring({ value, max, size = 170, stroke = 12, color = 'url(#ringGr
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#FF6A3D" /><stop offset="100%" stopColor="#FFC24B" />
+            <stop offset="0%" stopColor="#087F7B" /><stop offset="100%" stopColor="#12B8B0" />
           </linearGradient>
         </defs>
         <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke={color} strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)}
-          style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,.8,.3,1)', filter: 'drop-shadow(0 0 8px rgba(255,106,61,.45))' }} />
+          style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,.8,.3,1)', filter: 'drop-shadow(0 0 8px rgba(18,184,176,.45))' }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div className="font-grotesk font-bold text-[28px] leading-none">{label}</div>
@@ -81,7 +81,7 @@ export function Ring({ value, max, size = 170, stroke = 12, color = 'url(#ringGr
   );
 }
 
-export function Bar({ value, max, color = 'linear-gradient(92deg,#FF6A3D,#FFC24B)', label, right, height = 'h-2' }) {
+export function Bar({ value, max, color = 'linear-gradient(92deg,#087F7B,#12B8B0)', label, right, height = 'h-2' }) {
   const frac = max > 0 ? Math.min(1, value / max) : 0;
   return (
     <div>

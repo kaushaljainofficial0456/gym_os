@@ -31,6 +31,11 @@ export default function Business() {
   const [subOpen, setSubOpen] = useState(false);
   const [pkgForm, setPkgForm] = useState({ name: '', amount: '', period_days: 30, features: '' });
   const [subForm, setSubForm] = useState({ client_id: '', package_id: '', start_date: '' });
+  const [payOpen, setPayOpen] = useState(false);
+  const [payForm, setPayForm] = useState({ client_id: '', amount: '', method: 'cash' });
+  const [attDate, setAttDate] = useState(new Date().toISOString().slice(0, 10));
+  const [attList, setAttList] = useState(null);
+  const [loadingAtt, setLoadingAtt] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -59,6 +64,30 @@ export default function Business() {
       await api('/admin/subscriptions', { method: 'POST', body: JSON.stringify({ ...subForm, start_date: subForm.start_date || undefined }) });
       setSubOpen(false); setSubForm({ client_id: '', package_id: '', start_date: '' });
       setToast('Subscription created'); ov.reload(); members.reload();
+    } catch (e) { setToast(e.message); }
+  };
+
+  const addPayment = async () => {
+    try {
+      await api('/admin/payments', { method: 'POST', body: JSON.stringify({ client_id: payForm.client_id, amount: Number(payForm.amount), method: payForm.method }) });
+      setPayOpen(false); setPayForm({ client_id: '', amount: '', method: 'cash' });
+      setToast('Payment recorded'); ov.reload();
+    } catch (e) { setToast(e.message); }
+  };
+
+  const loadAttendance = async (date) => {
+    setLoadingAtt(true);
+    try {
+      const r = await api(`/admin/attendance?date=${date || attDate}`);
+      setAttList(r.attendance || []);
+    } catch { setAttList([]); }
+    setLoadingAtt(false);
+  };
+
+  const toggleAtt = async (clientId, present) => {
+    try {
+      await api('/admin/attendance', { method: 'POST', body: JSON.stringify({ client_id: clientId, present }) });
+      loadAttendance();
     } catch (e) { setToast(e.message); }
   };
 
@@ -164,6 +193,61 @@ export default function Business() {
         )}
       </Card>
 
+      {/* attendance */}
+      <Card>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <Kicker>Attendance</Kicker>
+          <div className="flex items-center gap-2">
+            <input type="date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
+            {!attList && <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => loadAttendance()}>Load</button>}
+          </div>
+        </div>
+        {attList && (
+          <div className="space-y-1.5 mt-3">
+            {loadingAtt && <div className="text-xs text-mute py-4 text-center">Loading…</div>}
+            {!loadingAtt && !attList.length && <div className="text-xs text-mute py-4 text-center">No attendance records for this date.</div>}
+            {attList.map((a) => (
+              <div key={a.client_id} className="flex items-center justify-between rounded-xl border border-line bg-white/[.03] px-3 py-2">
+                <span className="font-grotesk text-sm font-semibold">{a.client_name}</span>
+                <button className={`chip text-[10px] ${a.present ? 'border-good/40 text-good bg-good/10' : 'border-bad/40 text-bad bg-bad/10'}`} onClick={() => toggleAtt(a.client_id, !a.present)}>
+                  {a.present ? 'Present ✓' : 'Absent ✕'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* payments */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <Kicker>Payments</Kicker>
+          <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => setPayOpen(true)}>+ Record payment</button>
+        </div>
+        {(d.recentPayments || []).length > 0 ? (
+          <div className="overflow-x-auto mt-2">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-mute font-grotesk border-b border-line">
+                  <th className="py-2 pr-3 font-semibold">Date</th>
+                  <th className="py-2 pr-3 font-semibold">Amount</th>
+                  <th className="py-2 pr-3 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.recentPayments.map((p, i) => (
+                  <tr key={i} className="border-b border-line/50 last:border-0">
+                    <td className="py-2 pr-3 text-xs text-mute">{p.paid_at?.slice(0, 10) || '—'}</td>
+                    <td className="py-2 pr-3 font-grotesk font-bold">₹{fmtK(p.amount)}</td>
+                    <td className="py-2 pr-3"><span className="chip text-[10px] text-good border-good/40 bg-good/10">PAID</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="text-sm text-mute py-4 text-center">No payments recorded yet.</div>}
+      </Card>
+
       {/* members */}
       <Card>
         <Kicker>Members</Kicker>
@@ -223,6 +307,25 @@ export default function Business() {
           </select>
           <input type="date" className="input" value={subForm.start_date} onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))} />
           <button className="btn-primary w-full" onClick={addSub}>Create subscription</button>
+        </div>
+      </Modal>
+
+      <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Record payment">
+        <div className="space-y-3">
+          <select className="input" value={payForm.client_id} onChange={(e) => setPayForm((f) => ({ ...f, client_id: e.target.value }))}>
+            <option value="">Choose member…</option>
+            {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <div className="grid grid-cols-2 gap-3">
+            <input className="input" type="number" placeholder="Amount ₹" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
+            <select className="input" value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}>
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="card">Card</option>
+              <option value="bank_transfer">Bank transfer</option>
+            </select>
+          </div>
+          <button className="btn-primary w-full" onClick={addPayment}>Record payment</button>
         </div>
       </Modal>
 

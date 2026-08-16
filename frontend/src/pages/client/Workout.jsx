@@ -261,7 +261,7 @@ export default function Workout() {
                 <div className="space-y-2.5">
                   {focus.slice(0, 5).map((f, i) => (
                     <Bar key={f.muscle} label={f.muscle} value={f.count} max={focus[0].count}
-                      color={i === 0 ? 'linear-gradient(92deg,#FF6A3D,#FFC24B)' : 'linear-gradient(92deg,rgba(255,106,61,.35),rgba(255,194,75,.35))'}
+                      color={i === 0 ? 'linear-gradient(92deg,#087F7B,#12B8B0)' : 'linear-gradient(92deg,rgba(18,184,176,.35),rgba(18,184,176,.18))'}
                       right={`${f.count}${f.count > 1 ? ' ex' : ' ex'}`} height="h-1.5" />
                   ))}
                 </div>
