@@ -19,6 +19,34 @@
   --accent-soft: rgba(20,196,188,.10);
   --card-shadow: 0 24px 48px -24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
   --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
+
+  /* ── Design-system tokens (src/design/tokens.js) ──
+     CHANNEL form (`R G B`, no rgb() wrapper) is required so Tailwind can
+     inject opacity modifiers: `bg-accent/30` compiles to
+     `rgb(var(--accent-rgb) / .3)`. A hex value cannot do that.
+     NOTE: --line/--mute/--faint are deliberately NOT channel-based; they
+     bake in an alpha and are consumed both bare and with modifiers. See
+     the long note in src/design/tokens.js before changing them. */
+  --accent-rgb: 20 196 188;
+  --accent-deep-rgb: 10 138 133;
+  --accent-contrast: #FFFFFF;
+  --bg-rgb: 8 12 16;
+  --bg2-rgb: 14 20 24;
+  --panel-rgb: 17 25 32;
+  --panel2-rgb: 22 33 40;
+  --ink-rgb: 240 244 243;
+  --cyan-rgb: 56 216 255;
+  --violet-rgb: 160 128 255;
+  --good-rgb: 52 211 153;
+  --warn-rgb: 251 191 36;
+  --bad-rgb: 248 113 113;
+
+  /* The brand gradient, defined ONCE. Previously this exact gradient was
+     hardcoded in .btn-primary, .tab.active and .navlink.active, then
+     overridden three more times with !important for light mode. */
+  --accent-grad: linear-gradient(135deg, #0A8A85, #14C4BC);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(10,138,133,.45);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(10,138,133,.55);
 }
 
 /* ═══════════════════════════════════════════════
@@ -38,6 +66,28 @@
   --accent-soft: rgba(140,106,77,.10);
   --card-shadow: 0 1px 2px rgba(91,70,54,.04), 0 4px 12px rgba(91,70,54,.03);
   --card-gradient: none;
+
+  /* ── Design-system tokens, light theme ──
+     Only the VALUES change here. No Tailwind class is overridden and no
+     !important is needed, because every consumer references the variable.
+     This is the pattern that should eventually replace the ~102 `.light
+     .some-class { ... !important }` rules further down this file. */
+  --accent-rgb: 140 106 77;
+  --accent-deep-rgb: 177 134 99;
+  --accent-contrast: #FFFFFF;
+  --bg-rgb: 247 243 238;
+  --bg2-rgb: 239 230 222;
+  --panel-rgb: 255 255 255;
+  --panel2-rgb: 245 237 228;
+  --ink-rgb: 61 48 38;
+  --cyan-rgb: 62 124 140;
+  --violet-rgb: 122 106 156;
+  /* Status colours intentionally identical across themes -- "danger" must
+     not change hue with the theme or users learn the colour twice. */
+
+  --accent-grad: linear-gradient(135deg, #8C6A4D, #B18663);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(140,106,77,.30);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(140,106,77,.40);
 }
 
 html, body, #root { min-height: 100%; }
@@ -317,14 +367,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
   .btn-primary {
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold tracking-wide px-4 py-2.5 rounded-full transition-all duration-200 relative overflow-hidden;
-    background: linear-gradient(135deg, #0A8A85, #14C4BC);
-    box-shadow: 0 4px 14px -4px rgba(10,138,133,.45);
-    color: #FFFFFF;
-  }
-  .light .btn-primary {
-    background: #8C6A4D !important;
-    box-shadow: 0 4px 14px -4px rgba(140,106,77,.30) !important;
-    color: #FFFFFF !important;
+    /* Token-driven: light mode needs NO override -- it redefines the var.
+       Replaces a 3-line `.light .btn-primary { ... !important }` block. */
+    background: var(--accent-grad);
+    box-shadow: var(--accent-grad-shadow);
+    color: var(--accent-contrast);
   }
   .btn-primary::after {
     content: '';
@@ -334,9 +381,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     transform: translateX(-120%) skewX(-18deg);
   }
   .btn-primary:hover::after { animation: sheen .6s ease; }
-  .btn-primary:hover { filter: brightness(1.06); }
-  .dark .btn-primary:hover { box-shadow: 0 6px 20px -4px rgba(10,138,133,.55); }
-  .light .btn-primary:hover { background: #B18663 !important; box-shadow: 0 6px 20px -4px rgba(140,106,77,.40) !important; }
+  .btn-primary:hover { filter: brightness(1.06); box-shadow: var(--accent-grad-shadow-hover); }
   .btn-primary:active { transform: scale(.97); }
 
   .btn-ghost {
@@ -373,13 +418,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
   .tab:hover { color: var(--ink); }
   .tab.active {
-    @apply text-white;
-    background: linear-gradient(135deg, #0A8A85, #14C4BC);
-    box-shadow: 0 4px 14px -4px rgba(10,138,133,.5);
-  }
-  .light .tab.active {
-    background: #8C6A4D !important;
-    box-shadow: 0 4px 14px -4px rgba(140,106,77,.30) !important;
+    background: var(--accent-grad);
+    box-shadow: var(--accent-grad-shadow);
+    color: var(--accent-contrast);
   }
 
   .navlink {
@@ -388,15 +429,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
   .dark .navlink:hover { color: var(--ink); background: rgba(255,255,255,.04); }
   .light .navlink:hover { color: var(--ink); background: rgba(91,70,54,.04); }
-  .navlink.active { color: var(--ink); }
-  .dark .navlink.active {
-    background: linear-gradient(135deg, rgba(10,138,133,.10), rgba(20,196,188,.03) 70%);
-    box-shadow: inset 2px 0 0 #0A8A85;
-  }
-  .light .navlink.active {
-    background: rgba(140,106,77,.06);
-    box-shadow: inset 2px 0 0 #8C6A4D;
-    color: #3D3026;
+  /* Token-driven tint: the channel vars let one rule serve both themes,
+     replacing a `.dark` + `.light` pair. */
+  .navlink.active {
+    color: var(--ink);
+    background: linear-gradient(135deg, rgb(var(--accent-deep-rgb) / .10), rgb(var(--accent-rgb) / .03) 70%);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   .skeleton {

@@ -5,22 +5,55 @@ export default {
   theme: {
     extend: {
       colors: {
-        /* ── Dark mode (default) ── */
-        bg: { DEFAULT: '#080C10', light: '#F7F3EE' },
-        bg2: { DEFAULT: '#0E1418', light: '#EFE6DE' },
-        panel: { DEFAULT: '#111920', light: '#FFFFFF' },
-        panel2: { DEFAULT: '#162128', light: '#F5EDE4' },
-        line: { DEFAULT: 'rgba(255,255,255,.07)', light: 'rgba(91,70,54,.10)' },
-        ink: { DEFAULT: '#F0F4F3', light: '#3D2B1A' },
-        mute: { DEFAULT: 'rgba(240,244,243,.55)', light: 'rgba(61,43,26,.55)' },
-        faint: { DEFAULT: 'rgba(240,244,243,.30)', light: 'rgba(61,43,26,.32)' },
-        ember: '#0A8A85',
-        gold: '#14C4BC',
-        cyanx: '#38D8FF',
-        violetx: '#A080FF',
-        good: '#34D399',
-        warn: '#FBBF24',
-        bad: '#F87171',
+        /* ══════════════════════════════════════════════════════════════
+           TOKEN-DRIVEN COLOURS — see src/design/tokens.js for the rules.
+
+           `rgb(var(--x-rgb) / <alpha-value>)` is what makes BOTH of these
+           work off one definition:
+             bg-panel      -> rgb(var(--panel-rgb) / 1)
+             bg-panel/90   -> rgb(var(--panel-rgb) / .9)
+           and it themes automatically, because light mode redefines the
+           variable rather than overriding the class.
+
+           These previously carried a `light:` sibling (e.g.
+           `bg: { DEFAULT: '#080C10', light: '#F7F3EE' }`) which generated
+           unused `bg-bg-light` classes -- light mode was actually being
+           applied by !important overrides in theme.css instead. The
+           variable is now the single mechanism.
+           ══════════════════════════════════════════════════════════════ */
+        bg: 'rgb(var(--bg-rgb) / <alpha-value>)',
+        bg2: 'rgb(var(--bg2-rgb) / <alpha-value>)',
+        panel: 'rgb(var(--panel-rgb) / <alpha-value>)',
+        panel2: 'rgb(var(--panel2-rgb) / <alpha-value>)',
+        ink: 'rgb(var(--ink-rgb) / <alpha-value>)',
+
+        /* Brand. `accent` is the correct name; `ember`/`gold` are kept as
+           ALIASES because ~120 existing usages depend on them, but their
+           names had drifted badly from their values (`ember` was a teal,
+           `gold` was a cyan). New code should use accent/accent-deep. */
+        accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
+        'accent-deep': 'rgb(var(--accent-deep-rgb) / <alpha-value>)',
+        ember: 'rgb(var(--accent-deep-rgb) / <alpha-value>)',  // alias, deprecated
+        gold: 'rgb(var(--accent-rgb) / <alpha-value>)',        // alias, deprecated
+        cyanx: 'rgb(var(--cyan-rgb) / <alpha-value>)',
+        violetx: 'rgb(var(--violet-rgb) / <alpha-value>)',
+
+        good: 'rgb(var(--good-rgb) / <alpha-value>)',
+        warn: 'rgb(var(--warn-rgb) / <alpha-value>)',
+        bad: 'rgb(var(--bad-rgb) / <alpha-value>)',
+
+        /* DELIBERATE EXCEPTION — do not "fix" these into channel form.
+           These bake in an alpha and are used BOTH bare (`border-line`,
+           which must stay a .07 hairline) and with modifiers
+           (`border-line/40`). A channel token cannot serve both: Tailwind
+           substitutes <alpha-value> with 1 when no modifier is present,
+           which would turn every hairline into solid white. Left literal
+           so Tailwind's rgba parser handles the modifier; they are themed
+           by the existing overrides in theme.css. Full reasoning in
+           src/design/tokens.js. */
+        line: 'rgba(255,255,255,.07)',
+        mute: 'rgba(240,244,243,.55)',
+        faint: 'rgba(240,244,243,.30)',
       },
       fontFamily: {
         brand: ['"DM Sans"', 'sans-serif'],
