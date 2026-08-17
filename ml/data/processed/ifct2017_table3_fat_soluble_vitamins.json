@@ -1,0 +1,4746 @@
+[
+  {
+    "food_code": "A001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 58.67,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_beta_mg": 0.28,
+    "tocopherol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.17,
+    "vitamin_k1_ug": 1.8
+  },
+  {
+    "food_code": "A002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 53.98,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_beta_mg": 0.22,
+    "tocopherol_gamma_mg": 0.03,
+    "vitamin_e_mg": 0.15,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "A003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 5.65,
+    "tocopherol_alpha_mg": 0.1,
+    "tocopherol_gamma_mg": 1.42,
+    "vitamin_e_mg": 0.24,
+    "vitamin_k1_ug": 2.85
+  },
+  {
+    "food_code": "A004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 1.85
+  },
+  {
+    "food_code": "A005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.96,
+    "tocopherol_alpha_mg": 0.04,
+    "tocopherol_gamma_mg": 0.27,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 43.82
+  },
+  {
+    "food_code": "A006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 33.6,
+    "tocopherol_alpha_mg": 0.21,
+    "tocopherol_gamma_mg": 1.29,
+    "tocopherol_delta_mg": 0.38,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.36,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "A007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 42.34,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_gamma_mg": 0.4,
+    "tocopherol_delta_mg": 0.03,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 2.0
+  },
+  {
+    "food_code": "A008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 16.94,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 0.3,
+    "tocopherol_delta_mg": 0.03,
+    "vitamin_e_mg": 0.1,
+    "vitamin_k1_ug": 1.8
+  },
+  {
+    "food_code": "A009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.08,
+    "tocopherol_beta_mg": 0.06,
+    "tocopherol_gamma_mg": 2.85,
+    "vitamin_e_mg": 2.39,
+    "vitamin_k1_ug": 2.0
+  },
+  {
+    "food_code": "A010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 41.46,
+    "tocopherol_alpha_mg": 0.09,
+    "tocopherol_gamma_mg": 0.66,
+    "vitamin_e_mg": 0.16,
+    "vitamin_k1_ug": 3.0
+  },
+  {
+    "food_code": "A011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 1.0
+  },
+  {
+    "food_code": "A012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 1.0
+  },
+  {
+    "food_code": "A013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.62,
+    "tocopherol_beta_mg": 0.05,
+    "tocopherol_gamma_mg": 0.42,
+    "tocotrienol_alpha_mg": 0.03,
+    "tocotrienol_gamma_mg": 0.05,
+    "tocotrienol_delta_mg": 0.02,
+    "vitamin_e_mg": 0.69,
+    "vitamin_k1_ug": 2.0
+  },
+  {
+    "food_code": "A014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 0.13,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 1.5
+  },
+  {
+    "food_code": "A015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.04,
+    "tocopherol_gamma_mg": 0.06,
+    "tocotrienol_alpha_mg": 0.03,
+    "tocotrienol_gamma_mg": 0.05,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 1.5
+  },
+  {
+    "food_code": "A016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.75,
+    "tocopherol_alpha_mg": 0.28,
+    "tocopherol_beta_mg": 0.67,
+    "tocotrienol_gamma_mg": 0.28,
+    "vitamin_e_mg": 0.55,
+    "vitamin_k1_ug": 4.47
+  },
+  {
+    "food_code": "A017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.03,
+    "tocopherol_gamma_mg": 0.43,
+    "tocotrienol_gamma_mg": 0.19,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 3.75
+  },
+  {
+    "food_code": "A018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.73,
+    "tocopherol_alpha_mg": 0.05,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 1.0
+  },
+  {
+    "food_code": "A019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 13.43,
+    "tocopherol_alpha_mg": 0.21,
+    "tocopherol_beta_mg": 0.06,
+    "tocotrienol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.26,
+    "vitamin_k1_ug": 1.5
+  },
+  {
+    "food_code": "A020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 17.49,
+    "tocopherol_alpha_mg": 0.6,
+    "tocopherol_beta_mg": 0.37,
+    "tocotrienol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.77,
+    "vitamin_k1_ug": 1.75
+  },
+  {
+    "food_code": "A021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.27,
+    "tocopherol_alpha_mg": 0.2,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.21,
+    "vitamin_k1_ug": 1.5
+  },
+  {
+    "food_code": "A022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 8.19,
+    "tocopherol_alpha_mg": 0.16,
+    "tocopherol_beta_mg": 0.07,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.2,
+    "vitamin_k1_ug": 1.2
+  },
+  {
+    "food_code": "A023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.06,
+    "tocopherol_alpha_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 1.0
+  },
+  {
+    "food_code": "A024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.21,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 1.0
+  },
+  {
+    "food_code": "B001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.75,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 1.13,
+    "tocopherol_delta_mg": 0.03,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 1.5
+  },
+  {
+    "food_code": "B002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.93,
+    "tocopherol_alpha_mg": 1.59,
+    "tocopherol_gamma_mg": 1.33,
+    "tocopherol_delta_mg": 0.08,
+    "vitamin_e_mg": 1.72,
+    "vitamin_k1_ug": 2.1
+  },
+  {
+    "food_code": "B003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 8.42,
+    "tocopherol_alpha_mg": 0.04,
+    "tocopherol_gamma_mg": 1.29,
+    "tocopherol_delta_mg": 0.05,
+    "vitamin_e_mg": 0.17,
+    "vitamin_k1_ug": 8.3
+  },
+  {
+    "food_code": "B004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 16.84,
+    "tocopherol_alpha_mg": 0.09,
+    "tocopherol_gamma_mg": 1.35,
+    "tocopherol_delta_mg": 0.08,
+    "vitamin_e_mg": 0.23,
+    "vitamin_k1_ug": 10.8
+  },
+  {
+    "food_code": "B005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.92,
+    "tocopherol_alpha_mg": 0.33,
+    "tocopherol_gamma_mg": 3.5,
+    "tocopherol_delta_mg": 2.44,
+    "vitamin_e_mg": 0.7,
+    "vitamin_k1_ug": 1.75
+  },
+  {
+    "food_code": "B006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.93,
+    "tocopherol_alpha_mg": 0.32,
+    "tocopherol_gamma_mg": 3.06,
+    "tocopherol_delta_mg": 2.7,
+    "vitamin_e_mg": 0.65,
+    "vitamin_k1_ug": 1.7
+  },
+  {
+    "food_code": "B007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.35,
+    "tocopherol_alpha_mg": 0.24,
+    "tocopherol_gamma_mg": 2.69,
+    "tocopherol_delta_mg": 0.07,
+    "vitamin_e_mg": 0.51,
+    "vitamin_k1_ug": 21.5
+  },
+  {
+    "food_code": "B008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.24,
+    "tocopherol_alpha_mg": 0.25,
+    "tocopherol_gamma_mg": 2.74,
+    "tocopherol_delta_mg": 0.06,
+    "vitamin_e_mg": 0.53,
+    "vitamin_k1_ug": 20.7
+  },
+  {
+    "food_code": "B009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.26,
+    "tocopherol_alpha_mg": 0.25,
+    "tocopherol_gamma_mg": 2.65,
+    "tocopherol_delta_mg": 0.07,
+    "vitamin_e_mg": 0.52,
+    "vitamin_k1_ug": 22.65
+  },
+  {
+    "food_code": "B010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.05,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 1.66,
+    "vitamin_e_mg": 0.23,
+    "vitamin_k1_ug": 8.3
+  },
+  {
+    "food_code": "B011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.15,
+    "tocopherol_alpha_mg": 0.13,
+    "tocopherol_gamma_mg": 2.08,
+    "tocotrienol_delta_mg": 0.26,
+    "vitamin_e_mg": 0.33,
+    "vitamin_k1_ug": 12.63
+  },
+  {
+    "food_code": "B012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.8,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 2.06,
+    "vitamin_e_mg": 0.27,
+    "vitamin_k1_ug": 10.24
+  },
+  {
+    "food_code": "B013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.31,
+    "tocopherol_alpha_mg": 0.02,
+    "tocopherol_gamma_mg": 1.37,
+    "tocopherol_delta_mg": 0.23,
+    "vitamin_e_mg": 0.16,
+    "vitamin_k1_ug": 3.75
+  },
+  {
+    "food_code": "B014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 14.52,
+    "tocopherol_alpha_mg": 0.03,
+    "tocopherol_gamma_mg": 1.64,
+    "tocopherol_delta_mg": 0.3,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 7.27
+  },
+  {
+    "food_code": "B015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 17.68,
+    "tocopherol_alpha_mg": 0.03,
+    "tocopherol_gamma_mg": 1.58,
+    "tocopherol_delta_mg": 0.3,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 5.25
+  },
+  {
+    "food_code": "B016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 9.77,
+    "tocopherol_alpha_mg": 0.29,
+    "tocopherol_gamma_mg": 5.04,
+    "tocopherol_delta_mg": 0.26,
+    "vitamin_e_mg": 0.79,
+    "vitamin_k1_ug": 22.75
+  },
+  {
+    "food_code": "B017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 15.21,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 2.5,
+    "vitamin_e_mg": 0.32,
+    "vitamin_k1_ug": 11.45
+  },
+  {
+    "food_code": "B018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 27.98,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_gamma_mg": 1.62,
+    "vitamin_e_mg": 0.21,
+    "vitamin_k1_ug": 5.05
+  },
+  {
+    "food_code": "B019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 25.82,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 1.58,
+    "vitamin_e_mg": 0.23,
+    "vitamin_k1_ug": 5.5
+  },
+  {
+    "food_code": "B020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 26.73,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 1.56,
+    "vitamin_e_mg": 0.23,
+    "vitamin_k1_ug": 4.9
+  },
+  {
+    "food_code": "B021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.12,
+    "tocopherol_alpha_mg": 0.13,
+    "tocopherol_gamma_mg": 0.63,
+    "tocopherol_delta_mg": 0.06,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 42.25
+  },
+  {
+    "food_code": "B022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.78,
+    "tocopherol_alpha_mg": 0.65,
+    "tocopherol_gamma_mg": 1.53,
+    "tocopherol_delta_mg": 0.11,
+    "vitamin_e_mg": 0.8,
+    "vitamin_k1_ug": 91.83
+  },
+  {
+    "food_code": "B023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 8.26,
+    "tocopherol_alpha_mg": 0.9,
+    "tocopherol_gamma_mg": 1.43,
+    "tocotrienol_alpha_mg": 0.05,
+    "tocotrienol_gamma_mg": 0.18,
+    "vitamin_e_mg": 1.06,
+    "vitamin_k1_ug": 21.85
+  },
+  {
+    "food_code": "B024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 66.22,
+    "tocopherol_alpha_mg": 1.04,
+    "tocopherol_gamma_mg": 2.28,
+    "tocopherol_delta_mg": 0.58,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 1.29,
+    "vitamin_k1_ug": 45.8
+  },
+  {
+    "food_code": "B025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 69.81,
+    "tocopherol_alpha_mg": 1.06,
+    "tocopherol_gamma_mg": 2.5,
+    "tocopherol_delta_mg": 0.3,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 1.33,
+    "vitamin_k1_ug": 46.2
+  },
+  {
+    "food_code": "C001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.02,
+    "tocopherol_alpha_mg": 1.48,
+    "tocopherol_beta_mg": 0.22,
+    "tocopherol_gamma_mg": 0.18,
+    "tocotrienol_alpha_mg": 0.6,
+    "tocotrienol_gamma_mg": 0.18,
+    "vitamin_e_mg": 1.77,
+    "vitamin_k1_ug": 269.0
+  },
+  {
+    "food_code": "C002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 16.01,
+    "tocopherol_alpha_mg": 0.41,
+    "tocopherol_gamma_mg": 0.26,
+    "vitamin_e_mg": 0.44,
+    "vitamin_k1_ug": 280.0
+  },
+  {
+    "food_code": "C003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 15.1,
+    "tocopherol_alpha_mg": 0.44,
+    "tocopherol_gamma_mg": 0.21,
+    "vitamin_e_mg": 0.46,
+    "vitamin_k1_ug": 312.0
+  },
+  {
+    "food_code": "C004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 15.25,
+    "tocopherol_alpha_mg": 0.42,
+    "tocopherol_gamma_mg": 0.25,
+    "vitamin_e_mg": 0.45,
+    "vitamin_k1_ug": 284.0
+  },
+  {
+    "food_code": "C005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 15.23,
+    "tocopherol_alpha_mg": 0.28,
+    "tocopherol_gamma_mg": 0.03,
+    "vitamin_e_mg": 0.28,
+    "vitamin_k1_ug": 443.0
+  },
+  {
+    "food_code": "C006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 15.04,
+    "tocopherol_alpha_mg": 0.28,
+    "tocopherol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.28,
+    "vitamin_k1_ug": 448.0
+  },
+  {
+    "food_code": "C007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 9.18,
+    "tocopherol_alpha_mg": 0.15,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.16,
+    "vitamin_k1_ug": 236.0
+  },
+  {
+    "food_code": "C008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.01,
+    "tocopherol_alpha_mg": 0.25,
+    "vitamin_e_mg": 0.25,
+    "vitamin_k1_ug": 224.0
+  },
+  {
+    "food_code": "C009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.65,
+    "tocopherol_alpha_mg": 0.15,
+    "tocopherol_beta_mg": 0.17,
+    "vitamin_e_mg": 0.21,
+    "vitamin_k1_ug": 69.45
+  },
+  {
+    "food_code": "C010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.78,
+    "tocopherol_alpha_mg": 0.04,
+    "tocopherol_gamma_mg": 0.05,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 207.0
+  },
+  {
+    "food_code": "C011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.27,
+    "tocopherol_alpha_mg": 0.02,
+    "tocopherol_gamma_mg": 0.05,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 204.0
+  },
+  {
+    "food_code": "C012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.26,
+    "tocopherol_alpha_mg": 0.21,
+    "vitamin_e_mg": 0.21,
+    "vitamin_k1_ug": 23.6
+  },
+  {
+    "food_code": "C013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.39,
+    "tocopherol_alpha_mg": 0.25,
+    "vitamin_e_mg": 0.25,
+    "vitamin_k1_ug": 111.0
+  },
+  {
+    "food_code": "C014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.18,
+    "tocopherol_alpha_mg": 0.2,
+    "vitamin_e_mg": 0.2,
+    "vitamin_k1_ug": 125.0
+  },
+  {
+    "food_code": "C015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.21,
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 113.0
+  },
+  {
+    "food_code": "C016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.19,
+    "tocopherol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 117.0
+  },
+  {
+    "food_code": "C017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.15,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_delta_mg": 0.11,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 144.0
+  },
+  {
+    "food_code": "C018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.7,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 318.0
+  },
+  {
+    "food_code": "C019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 14.33,
+    "tocopherol_alpha_mg": 0.3,
+    "tocopherol_gamma_mg": 0.05,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.31,
+    "vitamin_k1_ug": 479.0
+  },
+  {
+    "food_code": "C020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.36,
+    "tocopherol_alpha_mg": 0.36,
+    "vitamin_e_mg": 0.36,
+    "vitamin_k1_ug": 428.0
+  },
+  {
+    "food_code": "C021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.55,
+    "tocopherol_alpha_mg": 0.74,
+    "vitamin_e_mg": 0.74,
+    "vitamin_k1_ug": 458.0
+  },
+  {
+    "food_code": "C022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.28,
+    "tocopherol_alpha_mg": 0.46,
+    "tocopherol_gamma_mg": 0.43,
+    "vitamin_e_mg": 0.5,
+    "vitamin_k1_ug": 433.0
+  },
+  {
+    "food_code": "C023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.27,
+    "tocopherol_alpha_mg": 0.47,
+    "tocopherol_gamma_mg": 0.32,
+    "vitamin_e_mg": 0.5,
+    "vitamin_k1_ug": 438.0
+  },
+  {
+    "food_code": "C024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.59,
+    "tocopherol_alpha_mg": 0.53,
+    "vitamin_e_mg": 0.53,
+    "vitamin_k1_ug": 295.0
+  },
+  {
+    "food_code": "C025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.1,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 91.08
+  },
+  {
+    "food_code": "C026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 5.4,
+    "tocopherol_alpha_mg": 0.56,
+    "tocopherol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.57,
+    "vitamin_k1_ug": 192.0
+  },
+  {
+    "food_code": "C027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.1,
+    "tocopherol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 39.85
+  },
+  {
+    "food_code": "C028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 5.55,
+    "tocopherol_alpha_mg": 0.35,
+    "vitamin_e_mg": 0.35,
+    "vitamin_k1_ug": 322.0
+  },
+  {
+    "food_code": "C029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.65,
+    "tocopherol_alpha_mg": 0.52,
+    "tocopherol_beta_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.54,
+    "vitamin_k1_ug": 574.0
+  },
+  {
+    "food_code": "C030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.19,
+    "tocopherol_alpha_mg": 1.24,
+    "tocopherol_beta_mg": 0.28,
+    "tocopherol_gamma_mg": 3.25,
+    "tocotrienol_alpha_mg": 0.02,
+    "tocotrienol_beta_mg": 0.03,
+    "vitamin_e_mg": 1.69,
+    "vitamin_k1_ug": 243.0
+  },
+  {
+    "food_code": "C031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.39,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_beta_mg": 0.04,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 185.0
+  },
+  {
+    "food_code": "C032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.1,
+    "tocopherol_alpha_mg": 0.46,
+    "tocopherol_beta_mg": 0.03,
+    "tocopherol_gamma_mg": 0.45,
+    "tocopherol_delta_mg": 0.18,
+    "vitamin_e_mg": 0.51,
+    "vitamin_k1_ug": 126.0
+  },
+  {
+    "food_code": "C033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.26,
+    "tocopherol_alpha_mg": 1.27,
+    "tocopherol_beta_mg": 0.01,
+    "tocopherol_gamma_mg": 0.06,
+    "tocopherol_delta_mg": 0.03,
+    "vitamin_e_mg": 1.29,
+    "vitamin_k1_ug": 325.0
+  },
+  {
+    "food_code": "C034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.62,
+    "tocopherol_alpha_mg": 0.69,
+    "tocopherol_gamma_mg": 1.18,
+    "vitamin_e_mg": 0.81,
+    "vitamin_k1_ug": 249.0
+  },
+  {
+    "food_code": "D001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.35,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_gamma_mg": 0.13,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 27.15
+  },
+  {
+    "food_code": "D002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.41,
+    "tocopherol_gamma_mg": 0.01,
+    "tocopherol_delta_mg": 0.05,
+    "vitamin_k1_ug": 1.13
+  },
+  {
+    "food_code": "D003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.4,
+    "tocopherol_alpha_mg": 0.15,
+    "vitamin_e_mg": 0.15,
+    "vitamin_k1_ug": 60.1
+  },
+  {
+    "food_code": "D004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.92,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_beta_mg": 0.03,
+    "tocotrienol_beta_mg": 0.11,
+    "tocotrienol_delta_mg": 0.07,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 4.55
+  },
+  {
+    "food_code": "D005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.9,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_beta_mg": 0.04,
+    "tocotrienol_beta_mg": 0.11,
+    "tocotrienol_delta_mg": 0.08,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 4.85
+  },
+  {
+    "food_code": "D006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.83,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_beta_mg": 0.03,
+    "tocotrienol_beta_mg": 0.09,
+    "tocotrienol_delta_mg": 0.1,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 4.7
+  },
+  {
+    "food_code": "D007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.74,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 2.1
+  },
+  {
+    "food_code": "D008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.7,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 2.06
+  },
+  {
+    "food_code": "D009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.6,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 1.8
+  },
+  {
+    "food_code": "D010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.85,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 10.3
+  },
+  {
+    "food_code": "D011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.01,
+    "tocopherol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.11,
+    "vitamin_k1_ug": 11.45
+  },
+  {
+    "food_code": "D012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.19,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 12.25
+  },
+  {
+    "food_code": "D013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.05,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 12.75
+  },
+  {
+    "food_code": "D014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.61,
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1,
+    "vitamin_k1_ug": 13.05
+  },
+  {
+    "food_code": "D015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.14,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 21.45
+  },
+  {
+    "food_code": "D016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.84,
+    "tocopherol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 13.14
+  },
+  {
+    "food_code": "D017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.97,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 13.94
+  },
+  {
+    "food_code": "D018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.02,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 14.05
+  },
+  {
+    "food_code": "D019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.88,
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 14.25
+  },
+  {
+    "food_code": "D020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.01,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 14.46
+  },
+  {
+    "food_code": "D021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.87,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 14.32
+  },
+  {
+    "food_code": "D022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.06,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 14.29
+  },
+  {
+    "food_code": "D023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.89,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 14.58
+  },
+  {
+    "food_code": "D024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.12,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 14.04
+  },
+  {
+    "food_code": "D025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.76,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 13.37
+  },
+  {
+    "food_code": "D026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.33,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 12.75
+  },
+  {
+    "food_code": "D027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.01,
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 13.67
+  },
+  {
+    "food_code": "D028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.06,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 11.48
+  },
+  {
+    "food_code": "D029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.02,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 10.94
+  },
+  {
+    "food_code": "D030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.84,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 10.5
+  },
+  {
+    "food_code": "D031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.04,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 13.53
+  },
+  {
+    "food_code": "D032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 11.58,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_beta_mg": 0.02,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 93.2
+  },
+  {
+    "food_code": "D033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.7,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 24.66
+  },
+  {
+    "food_code": "D034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.52,
+    "tocopherol_alpha_mg": 0.19,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 28.42
+  },
+  {
+    "food_code": "D035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.89,
+    "tocopherol_alpha_mg": 0.18,
+    "vitamin_e_mg": 0.18,
+    "vitamin_k1_ug": 35.25
+  },
+  {
+    "food_code": "D036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.32,
+    "tocopherol_alpha_mg": 0.02,
+    "tocopherol_delta_mg": 0.09,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 14.33
+  },
+  {
+    "food_code": "D037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.39,
+    "tocopherol_alpha_mg": 0.03,
+    "tocopherol_delta_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 25.87
+  },
+  {
+    "food_code": "D038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 5.46,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_gamma_mg": 0.57,
+    "tocotrienol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 1.78
+  },
+  {
+    "food_code": "D039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 13.72,
+    "tocopherol_alpha_mg": 0.77,
+    "tocopherol_gamma_mg": 0.31,
+    "tocopherol_delta_mg": 0.04,
+    "tocotrienol_gamma_mg": 0.06,
+    "vitamin_e_mg": 0.81,
+    "vitamin_k1_ug": 23.7
+  },
+  {
+    "food_code": "D040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.21,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 35.75
+  },
+  {
+    "food_code": "D041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.14,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 33.68
+  },
+  {
+    "food_code": "D042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 31.2,
+    "tocopherol_alpha_mg": 0.13,
+    "vitamin_e_mg": 0.13,
+    "vitamin_k1_ug": 75.05
+  },
+  {
+    "food_code": "D043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.26,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 8.2
+  },
+  {
+    "food_code": "D044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.36,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 8.0
+  },
+  {
+    "food_code": "D045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.59,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 7.5
+  },
+  {
+    "food_code": "D046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.67,
+    "tocopherol_alpha_mg": 0.31,
+    "vitamin_e_mg": 0.31,
+    "vitamin_k1_ug": 358.0
+  },
+  {
+    "food_code": "D047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.14,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 0.25,
+    "tocopherol_delta_mg": 0.06,
+    "tocotrienol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.11,
+    "vitamin_k1_ug": 26.45
+  },
+  {
+    "food_code": "D048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.2,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 0.25,
+    "tocopherol_delta_mg": 0.06,
+    "tocotrienol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.1,
+    "vitamin_k1_ug": 26.35
+  },
+  {
+    "food_code": "D049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.82,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 0.12,
+    "tocopherol_delta_mg": 0.09,
+    "tocotrienol_gamma_mg": 0.03,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 15.12
+  },
+  {
+    "food_code": "D050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.85,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 0.13,
+    "tocopherol_delta_mg": 0.08,
+    "tocotrienol_gamma_mg": 0.08,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 15.14
+  },
+  {
+    "food_code": "D051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.84,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_delta_mg": 0.06,
+    "tocotrienol_beta_mg": 0.08,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 22.3
+  },
+  {
+    "food_code": "D052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.4,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_delta_mg": 0.06,
+    "tocotrienol_beta_mg": 0.07,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 13.56
+  },
+  {
+    "food_code": "D053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.32,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_gamma_mg": 1.61,
+    "tocopherol_delta_mg": 0.05,
+    "vitamin_e_mg": 0.17,
+    "vitamin_k1_ug": 8.9
+  },
+  {
+    "food_code": "D054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.25,
+    "tocopherol_alpha_mg": 0.7,
+    "tocopherol_gamma_mg": 0.14,
+    "vitamin_e_mg": 0.72,
+    "vitamin_k1_ug": 19.15
+  },
+  {
+    "food_code": "D055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.06,
+    "tocopherol_alpha_mg": 0.68,
+    "tocopherol_gamma_mg": 0.13,
+    "vitamin_e_mg": 0.7,
+    "vitamin_k1_ug": 19.1
+  },
+  {
+    "food_code": "D056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.46,
+    "tocopherol_alpha_mg": 0.48,
+    "tocopherol_gamma_mg": 0.12,
+    "vitamin_e_mg": 0.5,
+    "vitamin_k1_ug": 21.52
+  },
+  {
+    "food_code": "D057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.68,
+    "tocopherol_alpha_mg": 0.9,
+    "tocopherol_gamma_mg": 0.17,
+    "vitamin_e_mg": 0.91,
+    "vitamin_k1_ug": 14.42
+  },
+  {
+    "food_code": "D058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.81,
+    "tocopherol_alpha_mg": 0.81,
+    "vitamin_e_mg": 0.81,
+    "vitamin_k1_ug": 44.33
+  },
+  {
+    "food_code": "D059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.8,
+    "tocopherol_alpha_mg": 0.04,
+    "tocotrienol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 2.45
+  },
+  {
+    "food_code": "D060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.69,
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 8.37
+  },
+  {
+    "food_code": "D061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 12.91,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_gamma_mg": 1.59,
+    "vitamin_e_mg": 0.21,
+    "vitamin_k1_ug": 44.22
+  },
+  {
+    "food_code": "D062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.29,
+    "tocopherol_alpha_mg": 0.19,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 3.38
+  },
+  {
+    "food_code": "D063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.27,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 17.42
+  },
+  {
+    "food_code": "D064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.32,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "D065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.07,
+    "tocopherol_alpha_mg": 0.86,
+    "tocopherol_beta_mg": 0.02,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 0.87,
+    "vitamin_k1_ug": 80.8
+  },
+  {
+    "food_code": "D066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.4,
+    "tocopherol_alpha_mg": 0.59,
+    "tocopherol_beta_mg": 0.02,
+    "tocotrienol_gamma_mg": 0.06,
+    "vitamin_e_mg": 0.6,
+    "vitamin_k1_ug": 83.7
+  },
+  {
+    "food_code": "D067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 28.96,
+    "tocopherol_alpha_mg": 0.89,
+    "tocopherol_gamma_mg": 0.46,
+    "tocopherol_delta_mg": 0.43,
+    "vitamin_e_mg": 0.94,
+    "vitamin_k1_ug": 14.9
+  },
+  {
+    "food_code": "D068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.37,
+    "tocopherol_alpha_mg": 0.02,
+    "tocotrienol_gamma_mg": 0.05,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 11.23
+  },
+  {
+    "food_code": "D069",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.34,
+    "tocopherol_alpha_mg": 0.02,
+    "tocotrienol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 11.57
+  },
+  {
+    "food_code": "D070",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.67,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 8.35
+  },
+  {
+    "food_code": "D071",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.08,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.05,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 8.4
+  },
+  {
+    "food_code": "D072",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.12,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.05,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 8.3
+  },
+  {
+    "food_code": "D073",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.76,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_gamma_mg": 0.03,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 2.73
+  },
+  {
+    "food_code": "D074",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.1,
+    "tocopherol_alpha_mg": 0.37,
+    "tocopherol_gamma_mg": 0.11,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.39,
+    "vitamin_k1_ug": 16.1
+  },
+  {
+    "food_code": "D075",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 11.83,
+    "tocopherol_alpha_mg": 0.14,
+    "tocopherol_gamma_mg": 0.67,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.22,
+    "vitamin_k1_ug": 24.12
+  },
+  {
+    "food_code": "D076",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 12.24,
+    "tocopherol_alpha_mg": 0.19,
+    "tocopherol_gamma_mg": 0.75,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.27,
+    "vitamin_k1_ug": 17.18
+  },
+  {
+    "food_code": "D077",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.4,
+    "tocopherol_alpha_mg": 3.9,
+    "tocopherol_gamma_mg": 0.05,
+    "vitamin_e_mg": 3.9,
+    "vitamin_k1_ug": 41.05
+  },
+  {
+    "food_code": "D078",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.38,
+    "tocopherol_alpha_mg": 1.47,
+    "tocopherol_gamma_mg": 0.15,
+    "vitamin_e_mg": 1.48,
+    "vitamin_k1_ug": 53.28
+  },
+  {
+    "food_code": "E001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.46,
+    "tocopherol_alpha_mg": 0.15,
+    "vitamin_e_mg": 0.15,
+    "vitamin_k1_ug": 3.65
+  },
+  {
+    "food_code": "E002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.45,
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1,
+    "vitamin_k1_ug": 2.13
+  },
+  {
+    "food_code": "E003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.86,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 2.18
+  },
+  {
+    "food_code": "E004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.04,
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 2.55
+  },
+  {
+    "food_code": "E005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.98,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 0.07,
+    "tocopherol_delta_mg": 0.29,
+    "tocotrienol_alpha_mg": 0.09,
+    "tocotrienol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.11,
+    "vitamin_k1_ug": 5.17
+  },
+  {
+    "food_code": "E006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.31,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_gamma_mg": 0.01,
+    "tocopherol_delta_mg": 0.07,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 6.14
+  },
+  {
+    "food_code": "E007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.1,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 38.74
+  },
+  {
+    "food_code": "E008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.6,
+    "tocopherol_alpha_mg": 0.6,
+    "vitamin_e_mg": 0.6,
+    "vitamin_k1_ug": 4.5
+  },
+  {
+    "food_code": "E009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.2,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 0.07,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 2.2
+  },
+  {
+    "food_code": "E010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.24,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 2.6
+  },
+  {
+    "food_code": "E011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.21,
+    "tocopherol_alpha_mg": 0.09,
+    "tocopherol_gamma_mg": 0.06,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 1.9
+  },
+  {
+    "food_code": "E012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.22,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 0.05,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 2.8
+  },
+  {
+    "food_code": "E013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 14.65,
+    "tocopherol_alpha_mg": 0.49,
+    "tocotrienol_alpha_mg": 0.07,
+    "tocotrienol_beta_mg": 0.05,
+    "vitamin_e_mg": 0.52,
+    "vitamin_k1_ug": 1.82
+  },
+  {
+    "food_code": "E014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.3,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 5.56
+  },
+  {
+    "food_code": "E015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.01,
+    "tocopherol_alpha_mg": 0.45,
+    "vitamin_e_mg": 0.45,
+    "vitamin_k1_ug": 27.52
+  },
+  {
+    "food_code": "E016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.18,
+    "tocopherol_alpha_mg": 0.19,
+    "tocopherol_beta_mg": 0.01,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 58.0
+  },
+  {
+    "food_code": "E017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.6,
+    "tocopherol_alpha_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 3.34
+  },
+  {
+    "food_code": "E018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.68,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 4.53
+  },
+  {
+    "food_code": "E019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.83,
+    "tocopherol_alpha_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 4.93
+  },
+  {
+    "food_code": "E020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.47,
+    "tocopherol_alpha_mg": 0.42,
+    "tocopherol_gamma_mg": 1.17,
+    "vitamin_e_mg": 0.54,
+    "vitamin_k1_ug": 5.75
+  },
+  {
+    "food_code": "E021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.27,
+    "tocopherol_alpha_mg": 0.11,
+    "tocopherol_gamma_mg": 0.01,
+    "tocopherol_delta_mg": 0.06,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.12,
+    "vitamin_k1_ug": 1.64
+  },
+  {
+    "food_code": "E022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.19,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_gamma_mg": 0.02,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 3.65
+  },
+  {
+    "food_code": "E023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.59,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 0.03,
+    "tocotrienol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 7.26
+  },
+  {
+    "food_code": "E024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.87,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 5.2
+  },
+  {
+    "food_code": "E025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.42,
+    "tocopherol_alpha_mg": 0.05,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 3.4
+  },
+  {
+    "food_code": "E026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.54,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 0.02,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 7.15
+  },
+  {
+    "food_code": "E027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 6.23,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 3.0
+  },
+  {
+    "food_code": "E028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.68,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_beta_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.04,
+    "tocotrienol_gamma_mg": 0.03,
+    "tocotrienol_delta_mg": 0.74,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 3.68
+  },
+  {
+    "food_code": "E029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.93,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_beta_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.09,
+    "tocotrienol_gamma_mg": 0.01,
+    "tocotrienol_delta_mg": 0.25,
+    "vitamin_e_mg": 0.11,
+    "vitamin_k1_ug": 5.35
+  },
+  {
+    "food_code": "E030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.49,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_delta_mg": 0.06,
+    "tocotrienol_beta_mg": 0.09,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 37.0
+  },
+  {
+    "food_code": "E031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.82,
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 7.94
+  },
+  {
+    "food_code": "E032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.43,
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "E033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.39,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 1.8
+  },
+  {
+    "food_code": "E034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.3,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 2.2
+  },
+  {
+    "food_code": "E035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.33,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 7.81
+  },
+  {
+    "food_code": "E036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.71,
+    "tocopherol_alpha_mg": 0.26,
+    "tocopherol_gamma_mg": 0.2,
+    "vitamin_e_mg": 0.28,
+    "vitamin_k1_ug": 4.77
+  },
+  {
+    "food_code": "E037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.91,
+    "tocopherol_alpha_mg": 0.19,
+    "tocopherol_gamma_mg": 0.16,
+    "vitamin_e_mg": 0.2,
+    "vitamin_k1_ug": 4.8
+  },
+  {
+    "food_code": "E038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.73,
+    "tocopherol_alpha_mg": 0.29,
+    "tocopherol_gamma_mg": 0.2,
+    "vitamin_e_mg": 0.31,
+    "vitamin_k1_ug": 4.4
+  },
+  {
+    "food_code": "E039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.68,
+    "tocopherol_alpha_mg": 0.24,
+    "tocopherol_gamma_mg": 0.2,
+    "vitamin_e_mg": 0.26,
+    "vitamin_k1_ug": 4.75
+  },
+  {
+    "food_code": "E040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.72,
+    "tocopherol_alpha_mg": 0.24,
+    "tocopherol_gamma_mg": 0.19,
+    "vitamin_e_mg": 0.29,
+    "vitamin_k1_ug": 5.0
+  },
+  {
+    "food_code": "E041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.62,
+    "tocopherol_alpha_mg": 0.35,
+    "tocopherol_gamma_mg": 0.2,
+    "vitamin_e_mg": 0.37,
+    "vitamin_k1_ug": 4.8
+  },
+  {
+    "food_code": "E042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.77,
+    "tocopherol_alpha_mg": 0.27,
+    "tocopherol_gamma_mg": 0.26,
+    "vitamin_e_mg": 0.3,
+    "vitamin_k1_ug": 4.6
+  },
+  {
+    "food_code": "E043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 5.5
+  },
+  {
+    "food_code": "E044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.38,
+    "vitamin_e_mg": 0.38,
+    "vitamin_k1_ug": 33.18
+  },
+  {
+    "food_code": "E045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.41,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 5.7
+  },
+  {
+    "food_code": "E046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.33,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 1.74
+  },
+  {
+    "food_code": "E047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.34,
+    "tocopherol_alpha_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "E048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 3.6
+  },
+  {
+    "food_code": "E049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 11.47,
+    "tocopherol_alpha_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 2.59
+  },
+  {
+    "food_code": "E050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.41,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 4.4
+  },
+  {
+    "food_code": "E051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.48,
+    "tocopherol_alpha_mg": 0.29,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.3,
+    "vitamin_k1_ug": 12.57
+  },
+  {
+    "food_code": "E052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.34,
+    "tocopherol_alpha_mg": 0.87,
+    "tocopherol_gamma_mg": 0.58,
+    "vitamin_e_mg": 0.93,
+    "vitamin_k1_ug": 5.36
+  },
+  {
+    "food_code": "E053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.21,
+    "tocopherol_alpha_mg": 0.36,
+    "tocotrienol_alpha_mg": 0.31,
+    "vitamin_e_mg": 0.45,
+    "vitamin_k1_ug": 2.4
+  },
+  {
+    "food_code": "E054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.32,
+    "tocopherol_alpha_mg": 0.5,
+    "vitamin_e_mg": 0.5,
+    "vitamin_k1_ug": 8.5
+  },
+  {
+    "food_code": "E055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 109.0,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 18.5
+  },
+  {
+    "food_code": "E056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.98,
+    "tocopherol_alpha_mg": 0.46,
+    "tocopherol_beta_mg": 0.03,
+    "vitamin_e_mg": 0.47,
+    "vitamin_k1_ug": 4.88
+  },
+  {
+    "food_code": "E057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.76,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 1.63
+  },
+  {
+    "food_code": "E058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 11.87,
+    "tocopherol_alpha_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 1.71
+  },
+  {
+    "food_code": "E059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.4,
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08,
+    "vitamin_k1_ug": 19.7
+  },
+  {
+    "food_code": "E060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.65,
+    "tocopherol_alpha_mg": 0.25,
+    "vitamin_e_mg": 0.25,
+    "vitamin_k1_ug": 4.3
+  },
+  {
+    "food_code": "E061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.24,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 2.6
+  },
+  {
+    "food_code": "E062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.96,
+    "tocopherol_alpha_mg": 0.4,
+    "vitamin_e_mg": 0.4,
+    "vitamin_k1_ug": 2.0
+  },
+  {
+    "food_code": "E063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.95,
+    "tocopherol_alpha_mg": 0.26,
+    "vitamin_e_mg": 0.26,
+    "vitamin_k1_ug": 19.81
+  },
+  {
+    "food_code": "E064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 25.65,
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1,
+    "vitamin_k1_ug": 1.67
+  },
+  {
+    "food_code": "E065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.56,
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04,
+    "vitamin_k1_ug": 2.1
+  },
+  {
+    "food_code": "E066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.56,
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 2.8
+  },
+  {
+    "food_code": "E067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 28.71,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_beta_mg": 0.15,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 6.8
+  },
+  {
+    "food_code": "E068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 16.7,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "F001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.18,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 2.98
+  },
+  {
+    "food_code": "F002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.36,
+    "tocopherol_alpha_mg": 0.19,
+    "tocopherol_gamma_mg": 0.18,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.21,
+    "vitamin_k1_ug": 18.35
+  },
+  {
+    "food_code": "F003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.39,
+    "tocopherol_alpha_mg": 0.19,
+    "tocopherol_gamma_mg": 0.2,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.22,
+    "vitamin_k1_ug": 18.75
+  },
+  {
+    "food_code": "F004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.27,
+    "tocopherol_alpha_mg": 0.32,
+    "tocopherol_gamma_mg": 0.08,
+    "tocopherol_delta_mg": 0.12,
+    "vitamin_e_mg": 0.33,
+    "vitamin_k1_ug": 3.15
+  },
+  {
+    "food_code": "F005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.27,
+    "tocopherol_alpha_mg": 0.73,
+    "vitamin_e_mg": 0.73,
+    "vitamin_k1_ug": 44.45
+  },
+  {
+    "food_code": "F006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.19,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 2.12
+  },
+  {
+    "food_code": "F007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.22,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 1.8
+  },
+  {
+    "food_code": "F008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.2,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 2.3
+  },
+  {
+    "food_code": "F009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.04,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 2.1
+  },
+  {
+    "food_code": "F010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.05,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "F011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.05,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 2.6
+  },
+  {
+    "food_code": "F012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.04,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 1.9
+  },
+  {
+    "food_code": "F013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.26,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 3.0
+  },
+  {
+    "food_code": "F014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.64,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 3.5
+  },
+  {
+    "food_code": "F015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.13,
+    "tocopherol_alpha_mg": 0.19,
+    "vitamin_e_mg": 0.19,
+    "vitamin_k1_ug": 2.8
+  },
+  {
+    "food_code": "F016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.2,
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09,
+    "vitamin_k1_ug": 3.5
+  },
+  {
+    "food_code": "F017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.3,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_beta_mg": 0.69,
+    "tocotrienol_alpha_mg": 0.03,
+    "tocotrienol_gamma_mg": 0.17,
+    "vitamin_e_mg": 0.34,
+    "vitamin_k1_ug": 4.8
+  },
+  {
+    "food_code": "F018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.23,
+    "tocopherol_alpha_mg": 0.23,
+    "tocopherol_beta_mg": 0.35,
+    "tocotrienol_alpha_mg": 0.04,
+    "tocotrienol_gamma_mg": 0.43,
+    "vitamin_e_mg": 0.39,
+    "vitamin_k1_ug": 5.5
+  },
+  {
+    "food_code": "F019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.18,
+    "tocopherol_alpha_mg": 0.4,
+    "tocopherol_beta_mg": 0.28,
+    "tocotrienol_alpha_mg": 0.05,
+    "tocotrienol_gamma_mg": 0.13,
+    "vitamin_e_mg": 0.53,
+    "vitamin_k1_ug": 6.0
+  },
+  {
+    "food_code": "G001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.14,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 1.93,
+    "vitamin_e_mg": 0.26,
+    "vitamin_k1_ug": 20.12
+  },
+  {
+    "food_code": "G002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.49,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 2.1,
+    "vitamin_e_mg": 0.27,
+    "vitamin_k1_ug": 19.51
+  },
+  {
+    "food_code": "G003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.17,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 2.03,
+    "vitamin_e_mg": 0.26,
+    "vitamin_k1_ug": 18.05
+  },
+  {
+    "food_code": "G004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.87,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 2.27,
+    "vitamin_e_mg": 0.3,
+    "vitamin_k1_ug": 22.16
+  },
+  {
+    "food_code": "G005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.26,
+    "tocopherol_alpha_mg": 0.08,
+    "tocopherol_gamma_mg": 1.73,
+    "vitamin_e_mg": 0.25,
+    "vitamin_k1_ug": 15.7
+  },
+  {
+    "food_code": "G006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.19,
+    "tocopherol_alpha_mg": 0.07,
+    "tocopherol_gamma_mg": 2.46,
+    "vitamin_e_mg": 0.31,
+    "vitamin_k1_ug": 18.0
+  },
+  {
+    "food_code": "G007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.43,
+    "tocopherol_alpha_mg": 0.04,
+    "tocopherol_gamma_mg": 1.8,
+    "vitamin_e_mg": 0.22,
+    "vitamin_k1_ug": 19.5
+  },
+  {
+    "food_code": "G008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.11,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_gamma_mg": 2.04,
+    "vitamin_e_mg": 0.27,
+    "vitamin_k1_ug": 19.18
+  },
+  {
+    "food_code": "G009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.55,
+    "tocopherol_alpha_mg": 0.42,
+    "tocotrienol_alpha_mg": 0.12,
+    "tocotrienol_gamma_mg": 0.07,
+    "vitamin_e_mg": 0.46,
+    "vitamin_k1_ug": 274.0
+  },
+  {
+    "food_code": "G010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 117.0,
+    "tocopherol_alpha_mg": 1.71,
+    "tocopherol_delta_mg": 0.82,
+    "tocotrienol_alpha_mg": 0.34,
+    "vitamin_e_mg": 1.82,
+    "vitamin_k1_ug": 275.0
+  },
+  {
+    "food_code": "G011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.88,
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07,
+    "vitamin_k1_ug": 2.8
+  },
+  {
+    "food_code": "G012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.97,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 3.2
+  },
+  {
+    "food_code": "G013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.89,
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 4.5
+  },
+  {
+    "food_code": "G014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 4.09,
+    "tocopherol_alpha_mg": 0.28,
+    "tocopherol_gamma_mg": 0.47,
+    "vitamin_e_mg": 0.32,
+    "vitamin_k1_ug": 25.55
+  },
+  {
+    "food_code": "G015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.1,
+    "tocopherol_alpha_mg": 0.35,
+    "tocotrienol_alpha_mg": 0.79,
+    "vitamin_e_mg": 0.59,
+    "vitamin_k1_ug": 27.71
+  },
+  {
+    "food_code": "G016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.37,
+    "tocopherol_alpha_mg": 0.45,
+    "tocopherol_gamma_mg": 0.07,
+    "vitamin_e_mg": 0.46,
+    "vitamin_k1_ug": 164.0
+  },
+  {
+    "food_code": "G017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.73,
+    "tocopherol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.05,
+    "vitamin_k1_ug": 4.5
+  },
+  {
+    "food_code": "G018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.12,
+    "tocopherol_alpha_mg": 0.06,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 5.3
+  },
+  {
+    "food_code": "G019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 12.59,
+    "tocopherol_alpha_mg": 0.73,
+    "tocotrienol_alpha_mg": 0.12,
+    "vitamin_e_mg": 0.77,
+    "vitamin_k1_ug": 46.56
+  },
+  {
+    "food_code": "G020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 43.72,
+    "tocopherol_alpha_mg": 0.14,
+    "tocopherol_beta_mg": 1.13,
+    "tocotrienol_alpha_mg": 0.59,
+    "vitamin_e_mg": 0.77,
+    "vitamin_k1_ug": 6.81
+  },
+  {
+    "food_code": "G021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 43.55,
+    "tocopherol_alpha_mg": 0.36,
+    "tocopherol_beta_mg": 0.83,
+    "tocotrienol_alpha_mg": 1.38,
+    "vitamin_e_mg": 1.1,
+    "vitamin_k1_ug": 5.74
+  },
+  {
+    "food_code": "G022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 24.36,
+    "tocopherol_alpha_mg": 0.69,
+    "tocopherol_gamma_mg": 2.91,
+    "vitamin_e_mg": 0.98,
+    "vitamin_k1_ug": 274.0
+  },
+  {
+    "food_code": "G023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 45.07,
+    "tocopherol_alpha_mg": 0.46,
+    "tocopherol_beta_mg": 0.77,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.77,
+    "vitamin_k1_ug": 161.0
+  },
+  {
+    "food_code": "G024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.31,
+    "tocopherol_alpha_mg": 0.91,
+    "tocotrienol_alpha_mg": 0.32,
+    "tocotrienol_gamma_mg": 0.47,
+    "tocotrienol_delta_mg": 0.24,
+    "vitamin_e_mg": 1.01,
+    "vitamin_k1_ug": 35.7
+  },
+  {
+    "food_code": "G025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 12.1,
+    "tocopherol_alpha_mg": 1.49,
+    "vitamin_e_mg": 1.49,
+    "vitamin_k1_ug": 146.0
+  },
+  {
+    "food_code": "G026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.98,
+    "tocopherol_alpha_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 1.5
+  },
+  {
+    "food_code": "G027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 44.92,
+    "tocopherol_alpha_mg": 1.05,
+    "tocotrienol_alpha_mg": 10.36,
+    "vitamin_e_mg": 4.16,
+    "vitamin_k1_ug": 70.44
+  },
+  {
+    "food_code": "G028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 46.67,
+    "tocopherol_alpha_mg": 1.18,
+    "tocotrienol_alpha_mg": 0.09,
+    "vitamin_e_mg": 1.21,
+    "vitamin_k1_ug": 60.92
+  },
+  {
+    "food_code": "G029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.62,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_delta_mg": 0.41,
+    "tocotrienol_delta_mg": 0.11,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 30.36
+  },
+  {
+    "food_code": "G030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 118.0,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_gamma_mg": 0.26,
+    "vitamin_e_mg": 0.03,
+    "vitamin_k1_ug": 93.45
+  },
+  {
+    "food_code": "G031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 25.68,
+    "tocopherol_alpha_mg": 0.59,
+    "tocopherol_beta_mg": 1.58,
+    "tocopherol_gamma_mg": 0.45,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 1.27,
+    "vitamin_k1_ug": 171.0
+  },
+  {
+    "food_code": "G032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 33.92,
+    "tocopherol_alpha_mg": 1.66,
+    "tocopherol_gamma_mg": 0.1,
+    "vitamin_e_mg": 1.67,
+    "vitamin_k1_ug": 95.18
+  },
+  {
+    "food_code": "G033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 18.67,
+    "tocopherol_alpha_mg": 2.63,
+    "tocopherol_beta_mg": 0.28,
+    "tocotrienol_alpha_mg": 0.6,
+    "vitamin_e_mg": 2.92,
+    "vitamin_k1_ug": 12.8
+  },
+  {
+    "food_code": "H001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.61,
+    "tocopherol_alpha_mg": 24.88,
+    "tocopherol_beta_mg": 1.87,
+    "tocopherol_gamma_mg": 1.68,
+    "tocopherol_delta_mg": 0.08,
+    "tocotrienol_alpha_mg": 0.21,
+    "vitamin_e_mg": 25.86,
+    "vitamin_k1_ug": 8.4
+  },
+  {
+    "food_code": "H002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 12.77,
+    "tocopherol_alpha_mg": 0.06,
+    "tocopherol_beta_mg": 0.22,
+    "tocopherol_gamma_mg": 0.03,
+    "vitamin_e_mg": 0.15,
+    "vitamin_k1_ug": 3.78
+  },
+  {
+    "food_code": "H003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 12.6,
+    "tocopherol_alpha_mg": 0.04,
+    "tocopherol_beta_mg": 0.27,
+    "tocopherol_gamma_mg": 0.04,
+    "vitamin_e_mg": 0.15,
+    "vitamin_k1_ug": 3.9
+  },
+  {
+    "food_code": "H004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 11.03,
+    "tocopherol_alpha_mg": 0.01,
+    "tocopherol_beta_mg": 0.13,
+    "tocopherol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.06,
+    "vitamin_k1_ug": 3.71
+  },
+  {
+    "food_code": "H005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 3.85,
+    "tocopherol_alpha_mg": 1.05,
+    "tocopherol_beta_mg": 0.05,
+    "tocopherol_gamma_mg": 5.26,
+    "vitamin_e_mg": 1.6,
+    "vitamin_k1_ug": 1.83
+  },
+  {
+    "food_code": "H006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 6.02,
+    "tocopherol_gamma_mg": 0.44,
+    "vitamin_e_mg": 6.06,
+    "vitamin_k1_ug": 2.88
+  },
+  {
+    "food_code": "H007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.39,
+    "tocopherol_beta_mg": 0.05,
+    "tocopherol_gamma_mg": 3.19,
+    "vitamin_e_mg": 2.72,
+    "vitamin_k1_ug": 23.22
+  },
+  {
+    "food_code": "H008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.92,
+    "tocopherol_alpha_mg": 1.07,
+    "vitamin_e_mg": 1.07,
+    "vitamin_k1_ug": 24.66
+  },
+  {
+    "food_code": "H009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 67.83,
+    "tocopherol_alpha_mg": 1.08,
+    "tocotrienol_alpha_mg": 0.03,
+    "vitamin_e_mg": 1.09,
+    "vitamin_k1_ug": 110.0
+  },
+  {
+    "food_code": "H010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 76.51,
+    "tocopherol_alpha_mg": 1.22,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 1.23,
+    "vitamin_k1_ug": 113.0
+  },
+  {
+    "food_code": "H011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 62.74,
+    "tocopherol_alpha_mg": 1.24,
+    "tocotrienol_alpha_mg": 0.07,
+    "vitamin_e_mg": 1.26,
+    "vitamin_k1_ug": 106.0
+  },
+  {
+    "food_code": "H012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 7.1,
+    "tocopherol_alpha_mg": 4.26,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 4.28,
+    "vitamin_k1_ug": 2.5
+  },
+  {
+    "food_code": "H013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 31.79,
+    "tocopherol_alpha_mg": 1.44,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 1.45,
+    "vitamin_k1_ug": 8.2
+  },
+  {
+    "food_code": "H014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.55,
+    "tocopherol_alpha_mg": 7.79,
+    "tocopherol_gamma_mg": 1.51,
+    "tocotrienol_alpha_mg": 1.12,
+    "vitamin_e_mg": 8.28,
+    "vitamin_k1_ug": 19.17
+  },
+  {
+    "food_code": "H015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.52,
+    "tocopherol_alpha_mg": 2.59,
+    "tocopherol_gamma_mg": 7.79,
+    "tocopherol_delta_mg": 1.05,
+    "tocotrienol_beta_mg": 1.08,
+    "vitamin_e_mg": 3.44,
+    "vitamin_k1_ug": 110.0
+  },
+  {
+    "food_code": "H016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 2.7,
+    "tocopherol_alpha_mg": 2.18,
+    "tocopherol_gamma_mg": 4.18,
+    "tocopherol_delta_mg": 1.25,
+    "tocotrienol_beta_mg": 1.12,
+    "vitamin_e_mg": 2.66,
+    "vitamin_k1_ug": 105.0
+  },
+  {
+    "food_code": "H017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.61,
+    "tocopherol_alpha_mg": 4.01,
+    "vitamin_e_mg": 4.01,
+    "vitamin_k1_ug": 44.55
+  },
+  {
+    "food_code": "H018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.8,
+    "tocopherol_alpha_mg": 31.41,
+    "tocopherol_beta_mg": 4.1,
+    "tocopherol_gamma_mg": 8.48,
+    "tocopherol_delta_mg": 1.55,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 33.92,
+    "vitamin_k1_ug": 18.65
+  },
+  {
+    "food_code": "H019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.91,
+    "tocopherol_alpha_mg": 31.74,
+    "tocopherol_beta_mg": 5.88,
+    "tocopherol_gamma_mg": 9.62,
+    "tocopherol_delta_mg": 1.98,
+    "tocotrienol_alpha_mg": 0.06,
+    "vitamin_e_mg": 35.09,
+    "vitamin_k1_ug": 8.8
+  },
+  {
+    "food_code": "H020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 1.54,
+    "tocopherol_alpha_mg": 21.39,
+    "tocopherol_beta_mg": 3.42,
+    "tocopherol_gamma_mg": 3.41,
+    "vitamin_e_mg": 23.1,
+    "vitamin_k1_ug": 9.2
+  },
+  {
+    "food_code": "H021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 46.31,
+    "tocopherol_alpha_mg": 2.65,
+    "tocopherol_beta_mg": 3.5,
+    "tocopherol_gamma_mg": 0.43,
+    "tocopherol_delta_mg": 0.16,
+    "tocotrienol_alpha_mg": 0.1,
+    "vitamin_e_mg": 4.12,
+    "vitamin_k1_ug": 84.92
+  },
+  {
+    "food_code": "I001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.47,
+    "tocopherol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.04
+  },
+  {
+    "food_code": "I002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.41,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02
+  },
+  {
+    "food_code": "J001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 20.54,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 12.5
+  },
+  {
+    "food_code": "J002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 27.58,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02,
+    "vitamin_k1_ug": 16.29
+  },
+  {
+    "food_code": "J003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 36.4,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 12.5
+  },
+  {
+    "food_code": "J004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 109.0,
+    "tocopherol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.01,
+    "vitamin_k1_ug": 11.8
+  },
+  {
+    "food_code": "K001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.01
+  },
+  {
+    "food_code": "K002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.45,
+    "vitamin_e_mg": 0.45,
+    "vitamin_k1_ug": 2.69
+  },
+  {
+    "food_code": "L001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.12,
+    "tocopherol_beta_mg": 0.09,
+    "tocotrienol_alpha_mg": 0.1,
+    "tocotrienol_gamma_mg": 0.08,
+    "vitamin_e_mg": 0.19
+  },
+  {
+    "food_code": "L002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.14,
+    "tocopherol_beta_mg": 0.11,
+    "tocotrienol_alpha_mg": 0.15,
+    "tocotrienol_gamma_mg": 0.08,
+    "vitamin_e_mg": 0.22
+  },
+  {
+    "food_code": "L003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.13,
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02
+  },
+  {
+    "food_code": "L004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "vitamin_d2_ug": 0.12,
+    "tocopherol_alpha_mg": 0.03,
+    "vitamin_e_mg": 0.03
+  },
+  {
+    "food_code": "M001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.47,
+    "tocopherol_beta_mg": 0.05,
+    "tocopherol_gamma_mg": 0.02,
+    "tocopherol_delta_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.07,
+    "tocotrienol_beta_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.02,
+    "vitamin_e_mg": 1.51
+  },
+  {
+    "food_code": "M002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "M003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.94,
+    "tocopherol_beta_mg": 0.02,
+    "tocopherol_gamma_mg": 0.01,
+    "tocopherol_delta_mg": 0.04,
+    "tocotrienol_alpha_mg": 0.06,
+    "tocotrienol_beta_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 2.97
+  },
+  {
+    "food_code": "M004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.31,
+    "tocopherol_beta_mg": 0.04,
+    "tocopherol_gamma_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.03,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 1.34
+  },
+  {
+    "food_code": "M005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "M006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.77,
+    "tocopherol_beta_mg": 0.02,
+    "tocopherol_gamma_mg": 0.01,
+    "tocopherol_delta_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.05,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 2.8
+  },
+  {
+    "food_code": "M007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.82,
+    "tocopherol_beta_mg": 0.06,
+    "tocopherol_gamma_mg": 0.03,
+    "tocopherol_delta_mg": 0.25,
+    "tocotrienol_alpha_mg": 0.11,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 1.88
+  },
+  {
+    "food_code": "M008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.05,
+    "tocopherol_beta_mg": 0.06,
+    "tocopherol_gamma_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.08,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 2.1
+  },
+  {
+    "food_code": "M009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.0,
+    "tocopherol_beta_mg": 0.05,
+    "tocopherol_gamma_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.08,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 2.05
+  },
+  {
+    "food_code": "M010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.7,
+    "tocopherol_beta_mg": 0.07,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_alpha_mg": 0.18,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 2.79
+  },
+  {
+    "food_code": "M011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.04,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 2.06
+  },
+  {
+    "food_code": "M012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.45,
+    "tocopherol_gamma_mg": 0.04,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 2.47
+  },
+  {
+    "food_code": "M013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.62,
+    "tocopherol_gamma_mg": 0.06,
+    "tocotrienol_alpha_mg": 0.11,
+    "vitamin_e_mg": 2.66
+  },
+  {
+    "food_code": "M014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.98,
+    "tocopherol_gamma_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.05,
+    "vitamin_e_mg": 0.99
+  },
+  {
+    "food_code": "M015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.82,
+    "tocopherol_gamma_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.04,
+    "vitamin_e_mg": 0.84
+  },
+  {
+    "food_code": "N001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.6,
+    "tocopherol_gamma_mg": 0.1,
+    "tocotrienol_alpha_mg": 0.02,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 0.61
+  },
+  {
+    "food_code": "N002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.65,
+    "tocopherol_gamma_mg": 0.1,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_beta_mg": 0.02,
+    "vitamin_e_mg": 0.66
+  },
+  {
+    "food_code": "N003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.29,
+    "tocopherol_gamma_mg": 0.05,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.29
+  },
+  {
+    "food_code": "N004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.57,
+    "tocopherol_gamma_mg": 0.08,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.58
+  },
+  {
+    "food_code": "N005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.72,
+    "tocopherol_gamma_mg": 0.1,
+    "vitamin_e_mg": 0.73
+  },
+  {
+    "food_code": "N006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.63,
+    "vitamin_e_mg": 0.63
+  },
+  {
+    "food_code": "N007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.69,
+    "tocopherol_gamma_mg": 0.1,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_beta_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 0.7
+  },
+  {
+    "food_code": "N008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.54,
+    "tocopherol_gamma_mg": 0.1,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_beta_mg": 0.02,
+    "vitamin_e_mg": 0.55
+  },
+  {
+    "food_code": "N009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.35,
+    "tocopherol_gamma_mg": 0.06,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_beta_mg": 0.02,
+    "vitamin_e_mg": 0.36
+  },
+  {
+    "food_code": "N010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.57,
+    "tocopherol_gamma_mg": 0.08,
+    "tocotrienol_alpha_mg": 0.01,
+    "tocotrienol_gamma_mg": 0.02,
+    "vitamin_e_mg": 0.58
+  },
+  {
+    "food_code": "N011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.7,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.7
+  },
+  {
+    "food_code": "N012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.4,
+    "tocopherol_gamma_mg": 0.15,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.42
+  },
+  {
+    "food_code": "N013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.75,
+    "tocopherol_gamma_mg": 1.3,
+    "tocotrienol_gamma_mg": 0.01,
+    "vitamin_e_mg": 1.88
+  },
+  {
+    "food_code": "N014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.52,
+    "tocopherol_gamma_mg": 0.15,
+    "tocotrienol_beta_mg": 0.01,
+    "vitamin_e_mg": 1.54
+  },
+  {
+    "food_code": "N015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.59,
+    "tocopherol_gamma_mg": 0.81,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 1.67
+  },
+  {
+    "food_code": "N016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.72,
+    "tocopherol_gamma_mg": 0.01,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.72
+  },
+  {
+    "food_code": "N017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.62,
+    "tocopherol_gamma_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.63
+  },
+  {
+    "food_code": "N018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.56,
+    "tocopherol_gamma_mg": 0.03,
+    "tocotrienol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.57
+  },
+  {
+    "food_code": "N019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.43,
+    "tocopherol_gamma_mg": 0.02,
+    "tocotrienol_alpha_mg": 0.01,
+    "vitamin_e_mg": 0.44
+  },
+  {
+    "food_code": "O001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.35,
+    "vitamin_e_mg": 0.35
+  },
+  {
+    "food_code": "O002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.15,
+    "vitamin_e_mg": 0.15
+  },
+  {
+    "food_code": "O003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09
+  },
+  {
+    "food_code": "O004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.07
+  },
+  {
+    "food_code": "O005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08
+  },
+  {
+    "food_code": "O006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08
+  },
+  {
+    "food_code": "O007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09
+  },
+  {
+    "food_code": "O008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.61,
+    "vitamin_e_mg": 0.61
+  },
+  {
+    "food_code": "O009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08
+  },
+  {
+    "food_code": "O011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09
+  },
+  {
+    "food_code": "O012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.19,
+    "vitamin_e_mg": 0.13
+  },
+  {
+    "food_code": "O013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09
+  },
+  {
+    "food_code": "O014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.31,
+    "vitamin_e_mg": 0.31
+  },
+  {
+    "food_code": "O015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08
+  },
+  {
+    "food_code": "O017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.09,
+    "vitamin_e_mg": 0.09
+  },
+  {
+    "food_code": "O018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.07,
+    "vitamin_e_mg": 0.07
+  },
+  {
+    "food_code": "O019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08
+  },
+  {
+    "food_code": "O020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.15,
+    "vitamin_e_mg": 0.15
+  },
+  {
+    "food_code": "O021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.6,
+    "vitamin_e_mg": 0.6
+  },
+  {
+    "food_code": "O022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.2,
+    "vitamin_e_mg": 0.2
+  },
+  {
+    "food_code": "O023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.4,
+    "vitamin_e_mg": 0.4
+  },
+  {
+    "food_code": "O026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.4,
+    "vitamin_e_mg": 0.4
+  },
+  {
+    "food_code": "O028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.11
+  },
+  {
+    "food_code": "O030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.11
+  },
+  {
+    "food_code": "O031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.6,
+    "vitamin_e_mg": 0.6
+  },
+  {
+    "food_code": "O033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.41,
+    "vitamin_e_mg": 0.41
+  },
+  {
+    "food_code": "O034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.08,
+    "vitamin_e_mg": 0.08
+  },
+  {
+    "food_code": "O036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.2,
+    "vitamin_e_mg": 0.2
+  },
+  {
+    "food_code": "O039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.5,
+    "vitamin_e_mg": 0.5
+  },
+  {
+    "food_code": "O043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.2,
+    "vitamin_e_mg": 0.2
+  },
+  {
+    "food_code": "O047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.11
+  },
+  {
+    "food_code": "O050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.2,
+    "vitamin_e_mg": 0.2
+  },
+  {
+    "food_code": "O051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.11
+  },
+  {
+    "food_code": "O052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "O053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.85,
+    "vitamin_e_mg": 0.85
+  },
+  {
+    "food_code": "O054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "O055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.17,
+    "vitamin_e_mg": 0.17
+  },
+  {
+    "food_code": "O056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.19,
+    "vitamin_e_mg": 0.19
+  },
+  {
+    "food_code": "O057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.2,
+    "vitamin_e_mg": 0.2
+  },
+  {
+    "food_code": "O058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.46,
+    "tocotrienol_delta_mg": 0.58,
+    "vitamin_e_mg": 1.46
+  },
+  {
+    "food_code": "O059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.73,
+    "tocotrienol_delta_mg": 0.69,
+    "vitamin_e_mg": 1.73
+  },
+  {
+    "food_code": "O060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.44,
+    "tocotrienol_delta_mg": 0.58,
+    "vitamin_e_mg": 1.44
+  },
+  {
+    "food_code": "O061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.22,
+    "tocotrienol_delta_mg": 0.49,
+    "vitamin_e_mg": 1.22
+  },
+  {
+    "food_code": "O062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.83,
+    "tocotrienol_delta_mg": 0.33,
+    "vitamin_e_mg": 0.83
+  },
+  {
+    "food_code": "O063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.72,
+    "tocotrienol_delta_mg": 0.29,
+    "vitamin_e_mg": 0.72
+  },
+  {
+    "food_code": "P001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.02,
+    "vitamin_e_mg": 1.02
+  },
+  {
+    "food_code": "P002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.0,
+    "vitamin_e_mg": 1.0
+  },
+  {
+    "food_code": "P003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.73,
+    "vitamin_e_mg": 0.73
+  },
+  {
+    "food_code": "P004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "P005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.38,
+    "vitamin_e_mg": 0.38
+  },
+  {
+    "food_code": "P006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.51,
+    "vitamin_e_mg": 0.51
+  },
+  {
+    "food_code": "P007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.75,
+    "vitamin_e_mg": 0.75
+  },
+  {
+    "food_code": "P008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.54,
+    "vitamin_e_mg": 0.54
+  },
+  {
+    "food_code": "P009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.38,
+    "vitamin_e_mg": 0.38
+  },
+  {
+    "food_code": "P010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.72,
+    "vitamin_e_mg": 0.72
+  },
+  {
+    "food_code": "P011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.09,
+    "vitamin_e_mg": 1.09
+  },
+  {
+    "food_code": "P012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.41,
+    "vitamin_e_mg": 0.41
+  },
+  {
+    "food_code": "P013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.2,
+    "vitamin_e_mg": 1.2
+  },
+  {
+    "food_code": "P014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.1,
+    "vitamin_e_mg": 0.1
+  },
+  {
+    "food_code": "P015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.89,
+    "vitamin_e_mg": 0.89
+  },
+  {
+    "food_code": "P016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.34,
+    "vitamin_e_mg": 0.34
+  },
+  {
+    "food_code": "P017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.35,
+    "vitamin_e_mg": 1.35
+  },
+  {
+    "food_code": "P018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.62,
+    "vitamin_e_mg": 0.62
+  },
+  {
+    "food_code": "P019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.49,
+    "vitamin_e_mg": 1.49
+  },
+  {
+    "food_code": "P020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.12,
+    "vitamin_e_mg": 0.12
+  },
+  {
+    "food_code": "P021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.58,
+    "vitamin_e_mg": 0.58
+  },
+  {
+    "food_code": "P022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.82,
+    "vitamin_e_mg": 0.82
+  },
+  {
+    "food_code": "P023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.33,
+    "vitamin_e_mg": 0.33
+  },
+  {
+    "food_code": "P024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.59,
+    "vitamin_e_mg": 0.59
+  },
+  {
+    "food_code": "P025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.7,
+    "vitamin_e_mg": 0.7
+  },
+  {
+    "food_code": "P026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.37,
+    "vitamin_e_mg": 0.37
+  },
+  {
+    "food_code": "P027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.12,
+    "vitamin_e_mg": 0.12
+  },
+  {
+    "food_code": "P028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.75,
+    "vitamin_e_mg": 0.75
+  },
+  {
+    "food_code": "P029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.35,
+    "vitamin_e_mg": 0.35
+  },
+  {
+    "food_code": "P030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.24,
+    "vitamin_e_mg": 0.24
+  },
+  {
+    "food_code": "P031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.63,
+    "vitamin_e_mg": 0.63
+  },
+  {
+    "food_code": "P032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.05,
+    "vitamin_e_mg": 1.05
+  },
+  {
+    "food_code": "P033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.03,
+    "vitamin_e_mg": 1.03
+  },
+  {
+    "food_code": "P034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.71,
+    "vitamin_e_mg": 0.71
+  },
+  {
+    "food_code": "P035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.16,
+    "vitamin_e_mg": 0.16
+  },
+  {
+    "food_code": "P036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.61,
+    "vitamin_e_mg": 0.61
+  },
+  {
+    "food_code": "P037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.86,
+    "vitamin_e_mg": 1.86
+  },
+  {
+    "food_code": "P038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.2,
+    "vitamin_e_mg": 1.2
+  },
+  {
+    "food_code": "P039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.53,
+    "vitamin_e_mg": 0.53
+  },
+  {
+    "food_code": "P040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.44,
+    "vitamin_e_mg": 0.44
+  },
+  {
+    "food_code": "P041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.53,
+    "vitamin_e_mg": 0.53
+  },
+  {
+    "food_code": "P042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.11,
+    "vitamin_e_mg": 0.11
+  },
+  {
+    "food_code": "P043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.9,
+    "vitamin_e_mg": 0.9
+  },
+  {
+    "food_code": "P044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "P045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.25,
+    "vitamin_e_mg": 0.25
+  },
+  {
+    "food_code": "P046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.44,
+    "vitamin_e_mg": 0.44
+  },
+  {
+    "food_code": "P047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.55,
+    "vitamin_e_mg": 0.55
+  },
+  {
+    "food_code": "P048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.47,
+    "vitamin_e_mg": 0.47
+  },
+  {
+    "food_code": "P049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.55,
+    "vitamin_e_mg": 0.55
+  },
+  {
+    "food_code": "P050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.3,
+    "vitamin_e_mg": 0.3
+  },
+  {
+    "food_code": "P051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.26,
+    "vitamin_e_mg": 0.26
+  },
+  {
+    "food_code": "P052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.1,
+    "vitamin_e_mg": 1.1
+  },
+  {
+    "food_code": "P053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.58,
+    "vitamin_e_mg": 0.58
+  },
+  {
+    "food_code": "P054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.37,
+    "vitamin_e_mg": 0.37
+  },
+  {
+    "food_code": "P055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.6,
+    "vitamin_e_mg": 0.6
+  },
+  {
+    "food_code": "P056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.54,
+    "vitamin_e_mg": 1.54
+  },
+  {
+    "food_code": "P057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.26,
+    "vitamin_e_mg": 1.26
+  },
+  {
+    "food_code": "P058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.42,
+    "vitamin_e_mg": 0.42
+  },
+  {
+    "food_code": "P059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.82,
+    "vitamin_e_mg": 0.82
+  },
+  {
+    "food_code": "P060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.4,
+    "vitamin_e_mg": 0.4
+  },
+  {
+    "food_code": "P061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.52,
+    "vitamin_e_mg": 0.52
+  },
+  {
+    "food_code": "P062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.02,
+    "vitamin_e_mg": 0.02
+  },
+  {
+    "food_code": "P063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.65,
+    "vitamin_e_mg": 1.65
+  },
+  {
+    "food_code": "P064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.33,
+    "vitamin_e_mg": 0.33
+  },
+  {
+    "food_code": "P065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.41,
+    "vitamin_e_mg": 0.41
+  },
+  {
+    "food_code": "P066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.85,
+    "vitamin_e_mg": 0.85
+  },
+  {
+    "food_code": "P067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.52,
+    "vitamin_e_mg": 0.52
+  },
+  {
+    "food_code": "P068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.58,
+    "vitamin_e_mg": 0.58
+  },
+  {
+    "food_code": "P069",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.36,
+    "vitamin_e_mg": 0.36
+  },
+  {
+    "food_code": "P070",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.07,
+    "vitamin_e_mg": 1.07
+  },
+  {
+    "food_code": "P071",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.38,
+    "vitamin_e_mg": 0.38
+  },
+  {
+    "food_code": "P072",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.22,
+    "vitamin_e_mg": 0.22
+  },
+  {
+    "food_code": "P073",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.78,
+    "vitamin_e_mg": 0.78
+  },
+  {
+    "food_code": "P074",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.19,
+    "vitamin_e_mg": 0.19
+  },
+  {
+    "food_code": "P075",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.36,
+    "vitamin_e_mg": 0.36
+  },
+  {
+    "food_code": "P076",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.48,
+    "vitamin_e_mg": 0.48
+  },
+  {
+    "food_code": "P077",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.72,
+    "vitamin_e_mg": 0.72
+  },
+  {
+    "food_code": "P078",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.6,
+    "vitamin_e_mg": 0.6
+  },
+  {
+    "food_code": "P079",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.18,
+    "vitamin_e_mg": 0.18
+  },
+  {
+    "food_code": "P080",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.28,
+    "vitamin_e_mg": 0.28
+  },
+  {
+    "food_code": "P081",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.52,
+    "vitamin_e_mg": 0.52
+  },
+  {
+    "food_code": "P082",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.6,
+    "vitamin_e_mg": 0.6
+  },
+  {
+    "food_code": "P083",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.86,
+    "vitamin_e_mg": 1.86
+  },
+  {
+    "food_code": "P084",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.57,
+    "vitamin_e_mg": 0.57
+  },
+  {
+    "food_code": "P085",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.14,
+    "vitamin_e_mg": 0.14
+  },
+  {
+    "food_code": "P086",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.31,
+    "vitamin_e_mg": 0.31
+  },
+  {
+    "food_code": "P087",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.67,
+    "vitamin_e_mg": 0.67
+  },
+  {
+    "food_code": "P088",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.44,
+    "vitamin_e_mg": 0.44
+  },
+  {
+    "food_code": "P089",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.65,
+    "vitamin_e_mg": 0.65
+  },
+  {
+    "food_code": "P090",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.17,
+    "vitamin_e_mg": 0.17
+  },
+  {
+    "food_code": "P091",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.76,
+    "vitamin_e_mg": 0.76
+  },
+  {
+    "food_code": "P092",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.28,
+    "vitamin_e_mg": 0.28
+  },
+  {
+    "food_code": "Q001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 6.33,
+    "vitamin_e_mg": 6.33
+  },
+  {
+    "food_code": "Q002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.06,
+    "vitamin_e_mg": 2.06
+  },
+  {
+    "food_code": "Q003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.35,
+    "vitamin_e_mg": 1.35
+  },
+  {
+    "food_code": "Q004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.52,
+    "vitamin_e_mg": 0.52
+  },
+  {
+    "food_code": "Q005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.34,
+    "vitamin_e_mg": 2.34
+  },
+  {
+    "food_code": "Q006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.11,
+    "vitamin_e_mg": 1.11
+  },
+  {
+    "food_code": "Q007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 3.04,
+    "vitamin_e_mg": 3.04
+  },
+  {
+    "food_code": "Q008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.87,
+    "vitamin_e_mg": 2.87
+  },
+  {
+    "food_code": "R001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.7,
+    "vitamin_e_mg": 2.7
+  },
+  {
+    "food_code": "R002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.21,
+    "vitamin_e_mg": 1.21
+  },
+  {
+    "food_code": "R003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.66,
+    "vitamin_e_mg": 0.66
+  },
+  {
+    "food_code": "R004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.68,
+    "vitamin_e_mg": 0.68
+  },
+  {
+    "food_code": "R005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.55,
+    "vitamin_e_mg": 0.55
+  },
+  {
+    "food_code": "R006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.47,
+    "vitamin_e_mg": 0.47
+  },
+  {
+    "food_code": "R007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.66,
+    "vitamin_e_mg": 0.66
+  },
+  {
+    "food_code": "S001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 0.38,
+    "vitamin_e_mg": 0.38
+  },
+  {
+    "food_code": "S002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.35,
+    "vitamin_e_mg": 2.35
+  },
+  {
+    "food_code": "S003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.8,
+    "vitamin_e_mg": 1.8
+  },
+  {
+    "food_code": "S004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.1,
+    "vitamin_e_mg": 2.1
+  },
+  {
+    "food_code": "S005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.8,
+    "vitamin_e_mg": 2.8
+  },
+  {
+    "food_code": "S006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.4,
+    "vitamin_e_mg": 2.4
+  },
+  {
+    "food_code": "S007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 4.85,
+    "vitamin_e_mg": 4.85
+  },
+  {
+    "food_code": "S008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 2.85
+  },
+  {
+    "food_code": "S009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.75,
+    "vitamin_e_mg": 1.75
+  },
+  {
+    "food_code": "S010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "tocopherol_alpha_mg": 1.65,
+    "vitamin_e_mg": 1.65
+  }
+]

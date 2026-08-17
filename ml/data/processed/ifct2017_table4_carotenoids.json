@@ -1,0 +1,2925 @@
+[
+  {
+    "food_code": "A001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 10.25,
+    "total_carotenoids_ug": 121.0
+  },
+  {
+    "food_code": "A002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.11,
+    "total_carotenoids_ug": 59.68
+  },
+  {
+    "food_code": "A003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 29.69,
+    "zeaxanthin_ug": 9.3,
+    "beta_carotene_ug": 28.23,
+    "total_carotenoids_ug": 293.0
+  },
+  {
+    "food_code": "A004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.39,
+    "zeaxanthin_ug": 1.9,
+    "total_carotenoids_ug": 69.87
+  },
+  {
+    "food_code": "A005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 9.08,
+    "zeaxanthin_ug": 7.48,
+    "beta_carotene_ug": 8.29,
+    "total_carotenoids_ug": 212.0
+  },
+  {
+    "food_code": "A006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 186.0,
+    "zeaxanthin_ug": 42.4,
+    "beta_cryptoxanthin_ug": 110.0,
+    "beta_carotene_ug": 186.0,
+    "total_carotenoids_ug": 893.0
+  },
+  {
+    "food_code": "A007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 110.0,
+    "zeaxanthin_ug": 26.53,
+    "beta_cryptoxanthin_ug": 37.26,
+    "beta_carotene_ug": 36.27,
+    "total_carotenoids_ug": 1428.0
+  },
+  {
+    "food_code": "A008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 108.0,
+    "zeaxanthin_ug": 28.19,
+    "beta_cryptoxanthin_ug": 58.41,
+    "beta_carotene_ug": 47.01,
+    "total_carotenoids_ug": 1035.0
+  },
+  {
+    "food_code": "A009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 11.88,
+    "zeaxanthin_ug": 10.05,
+    "beta_carotene_ug": 5.12,
+    "total_carotenoids_ug": 153.0
+  },
+  {
+    "food_code": "A010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 25.53,
+    "zeaxanthin_ug": 1.45,
+    "beta_carotene_ug": 1.53,
+    "total_carotenoids_ug": 154.0
+  },
+  {
+    "food_code": "A011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1.46,
+    "total_carotenoids_ug": 33.61
+  },
+  {
+    "food_code": "A012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1.51,
+    "total_carotenoids_ug": 50.46
+  },
+  {
+    "food_code": "A013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 13.15,
+    "total_carotenoids_ug": 159.0
+  },
+  {
+    "food_code": "A014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1.46,
+    "total_carotenoids_ug": 46.9
+  },
+  {
+    "food_code": "A015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1.49,
+    "total_carotenoids_ug": 16.87
+  },
+  {
+    "food_code": "A016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7.82,
+    "zeaxanthin_ug": 5.24,
+    "beta_carotene_ug": 1.91,
+    "total_carotenoids_ug": 120.0
+  },
+  {
+    "food_code": "A017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 59.4,
+    "zeaxanthin_ug": 3.91,
+    "beta_carotene_ug": 1.41,
+    "total_carotenoids_ug": 272.0
+  },
+  {
+    "food_code": "A018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 24.41,
+    "zeaxanthin_ug": 1.3,
+    "beta_carotene_ug": 1.97,
+    "total_carotenoids_ug": 270.0
+  },
+  {
+    "food_code": "A019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 42.12,
+    "zeaxanthin_ug": 1.31,
+    "beta_carotene_ug": 2.67,
+    "total_carotenoids_ug": 284.0
+  },
+  {
+    "food_code": "A020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 52.56,
+    "zeaxanthin_ug": 1.47,
+    "beta_carotene_ug": 3.03,
+    "total_carotenoids_ug": 287.0
+  },
+  {
+    "food_code": "A021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 47.67,
+    "zeaxanthin_ug": 1.06,
+    "beta_carotene_ug": 2.55,
+    "total_carotenoids_ug": 191.0
+  },
+  {
+    "food_code": "A022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 29.94,
+    "zeaxanthin_ug": 1.13,
+    "beta_carotene_ug": 1.6,
+    "total_carotenoids_ug": 276.0
+  },
+  {
+    "food_code": "A023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.31,
+    "zeaxanthin_ug": 0.89,
+    "beta_carotene_ug": 1.68,
+    "total_carotenoids_ug": 39.54
+  },
+  {
+    "food_code": "A024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 12.89,
+    "zeaxanthin_ug": 1.08,
+    "beta_carotene_ug": 0.92,
+    "total_carotenoids_ug": 21.33
+  },
+  {
+    "food_code": "B001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 314.0,
+    "zeaxanthin_ug": 1.05,
+    "beta_carotene_ug": 165.0,
+    "total_carotenoids_ug": 1018.0
+  },
+  {
+    "food_code": "B002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 385.0,
+    "zeaxanthin_ug": 24.74,
+    "beta_carotene_ug": 172.0,
+    "total_carotenoids_ug": 999.0
+  },
+  {
+    "food_code": "B003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 83.87,
+    "beta_carotene_ug": 10.11,
+    "total_carotenoids_ug": 279.0
+  },
+  {
+    "food_code": "B004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 95.42,
+    "beta_carotene_ug": 12.8,
+    "total_carotenoids_ug": 463.0
+  },
+  {
+    "food_code": "B005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 83.34,
+    "beta_carotene_ug": 7.08,
+    "total_carotenoids_ug": 218.0
+  },
+  {
+    "food_code": "B006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 78.52,
+    "beta_carotene_ug": 8.21,
+    "total_carotenoids_ug": 250.0
+  },
+  {
+    "food_code": "B007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 48.99,
+    "total_carotenoids_ug": 207.0
+  },
+  {
+    "food_code": "B008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 53.18,
+    "total_carotenoids_ug": 254.0
+  },
+  {
+    "food_code": "B009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 58.47,
+    "total_carotenoids_ug": 256.0
+  },
+  {
+    "food_code": "B010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 113.0,
+    "zeaxanthin_ug": 2.98,
+    "beta_carotene_ug": 122.0,
+    "total_carotenoids_ug": 619.0
+  },
+  {
+    "food_code": "B011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 187.0,
+    "zeaxanthin_ug": 5.63,
+    "beta_carotene_ug": 137.0,
+    "total_carotenoids_ug": 889.0
+  },
+  {
+    "food_code": "B012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 67.26,
+    "zeaxanthin_ug": 2.92,
+    "beta_carotene_ug": 58.57,
+    "total_carotenoids_ug": 267.0
+  },
+  {
+    "food_code": "B013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.92,
+    "beta_carotene_ug": 6.34,
+    "total_carotenoids_ug": 812.0
+  },
+  {
+    "food_code": "B014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.85,
+    "beta_carotene_ug": 10.29,
+    "total_carotenoids_ug": 924.0
+  },
+  {
+    "food_code": "B015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7.76,
+    "beta_carotene_ug": 12.64,
+    "total_carotenoids_ug": 939.0
+  },
+  {
+    "food_code": "B016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 148.0,
+    "beta_carotene_ug": 3.57,
+    "total_carotenoids_ug": 622.0
+  },
+  {
+    "food_code": "B017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 474.0,
+    "zeaxanthin_ug": 23.41,
+    "beta_carotene_ug": 65.71,
+    "total_carotenoids_ug": 933.0
+  },
+  {
+    "food_code": "B018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.38,
+    "beta_carotene_ug": 1.95,
+    "total_carotenoids_ug": 86.67
+  },
+  {
+    "food_code": "B019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7.18,
+    "beta_carotene_ug": 2.16,
+    "total_carotenoids_ug": 90.26
+  },
+  {
+    "food_code": "B020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.76,
+    "beta_carotene_ug": 1.6,
+    "total_carotenoids_ug": 103.0
+  },
+  {
+    "food_code": "B021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 11.69,
+    "beta_carotene_ug": 127.0,
+    "total_carotenoids_ug": 484.0
+  },
+  {
+    "food_code": "B022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 25.25,
+    "beta_carotene_ug": 149.0,
+    "total_carotenoids_ug": 579.0
+  },
+  {
+    "food_code": "B023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.88,
+    "total_carotenoids_ug": 29.02
+  },
+  {
+    "food_code": "B024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 35.47,
+    "beta_carotene_ug": 3.5,
+    "total_carotenoids_ug": 262.0
+  },
+  {
+    "food_code": "B025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.5,
+    "beta_carotene_ug": 2.82,
+    "total_carotenoids_ug": 282.0
+  },
+  {
+    "food_code": "C001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 12941.0,
+    "zeaxanthin_ug": 559.0,
+    "beta_carotene_ug": 12582.0,
+    "total_carotenoids_ug": 36087.0
+  },
+  {
+    "food_code": "C002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8397.0,
+    "zeaxanthin_ug": 164.0,
+    "beta_carotene_ug": 8553.0,
+    "total_carotenoids_ug": 20473.0
+  },
+  {
+    "food_code": "C003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7439.0,
+    "zeaxanthin_ug": 118.0,
+    "beta_carotene_ug": 8457.0,
+    "total_carotenoids_ug": 21449.0
+  },
+  {
+    "food_code": "C004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7390.0,
+    "zeaxanthin_ug": 148.0,
+    "beta_carotene_ug": 8464.0,
+    "total_carotenoids_ug": 20181.0
+  },
+  {
+    "food_code": "C005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1861.0,
+    "zeaxanthin_ug": 126.0,
+    "beta_carotene_ug": 1594.0,
+    "total_carotenoids_ug": 4174.0
+  },
+  {
+    "food_code": "C006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1748.0,
+    "zeaxanthin_ug": 160.0,
+    "beta_carotene_ug": 1487.0,
+    "total_carotenoids_ug": 4540.0
+  },
+  {
+    "food_code": "C007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2962.0,
+    "zeaxanthin_ug": 241.0,
+    "beta_carotene_ug": 2473.0,
+    "total_carotenoids_ug": 5824.0
+  },
+  {
+    "food_code": "C008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1795.0,
+    "zeaxanthin_ug": 132.0,
+    "beta_carotene_ug": 1075.0,
+    "total_carotenoids_ug": 3469.0
+  },
+  {
+    "food_code": "C009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1495.0,
+    "zeaxanthin_ug": 146.0,
+    "beta_carotene_ug": 1703.0,
+    "total_carotenoids_ug": 3340.97
+  },
+  {
+    "food_code": "C010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4253.0,
+    "zeaxanthin_ug": 60.31,
+    "alpha_carotene_ug": 191.0,
+    "beta_carotene_ug": 4186.0,
+    "total_carotenoids_ug": 13735.0
+  },
+  {
+    "food_code": "C011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5783.0,
+    "zeaxanthin_ug": 79.8,
+    "alpha_carotene_ug": 427.0,
+    "beta_carotene_ug": 4676.0,
+    "total_carotenoids_ug": 16563.0
+  },
+  {
+    "food_code": "C012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1653.0,
+    "zeaxanthin_ug": 35.64,
+    "beta_carotene_ug": 360.0,
+    "total_carotenoids_ug": 2564.0
+  },
+  {
+    "food_code": "C013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 58.0,
+    "zeaxanthin_ug": 1.5,
+    "beta_carotene_ug": 5.5,
+    "total_carotenoids_ug": 103.0
+  },
+  {
+    "food_code": "C014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 143.0,
+    "zeaxanthin_ug": 2.68,
+    "beta_carotene_ug": 104.0,
+    "total_carotenoids_ug": 358.0
+  },
+  {
+    "food_code": "C015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3.98,
+    "beta_carotene_ug": 20.48,
+    "total_carotenoids_ug": 273.0
+  },
+  {
+    "food_code": "C016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 44.5,
+    "zeaxanthin_ug": 2.2,
+    "beta_carotene_ug": 31.17,
+    "total_carotenoids_ug": 339.0
+  },
+  {
+    "food_code": "C017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 152.0,
+    "zeaxanthin_ug": 1.97,
+    "beta_carotene_ug": 146.0,
+    "total_carotenoids_ug": 1742.0
+  },
+  {
+    "food_code": "C018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5222.0,
+    "zeaxanthin_ug": 136.0,
+    "beta_carotene_ug": 5758.0,
+    "total_carotenoids_ug": 26820.0
+  },
+  {
+    "food_code": "C019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 15580.0,
+    "zeaxanthin_ug": 235.0,
+    "beta_carotene_ug": 17542.0,
+    "total_carotenoids_ug": 38765.0
+  },
+  {
+    "food_code": "C020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2275.0,
+    "zeaxanthin_ug": 28.28,
+    "beta_carotene_ug": 9245.0,
+    "total_carotenoids_ug": 12755.0
+  },
+  {
+    "food_code": "C021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1354.0,
+    "zeaxanthin_ug": 16.63,
+    "beta_carotene_ug": 88.72,
+    "total_carotenoids_ug": 5048.0
+  },
+  {
+    "food_code": "C022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5276.0,
+    "zeaxanthin_ug": 18.72,
+    "beta_carotene_ug": 5285.0,
+    "total_carotenoids_ug": 16088.0
+  },
+  {
+    "food_code": "C023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4782.0,
+    "zeaxanthin_ug": 20.5,
+    "beta_carotene_ug": 5143.0,
+    "total_carotenoids_ug": 15934.0
+  },
+  {
+    "food_code": "C024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 15.62,
+    "zeaxanthin_ug": 2.77,
+    "beta_carotene_ug": 12.04,
+    "total_carotenoids_ug": 154.0
+  },
+  {
+    "food_code": "C025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1858.0,
+    "zeaxanthin_ug": 5.64,
+    "beta_carotene_ug": 1285.0,
+    "total_carotenoids_ug": 7532.0
+  },
+  {
+    "food_code": "C026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2939.0,
+    "zeaxanthin_ug": 8.13,
+    "beta_carotene_ug": 2619.0,
+    "total_carotenoids_ug": 6397.0
+  },
+  {
+    "food_code": "C027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2655.0,
+    "zeaxanthin_ug": 5.5,
+    "beta_carotene_ug": 2450.0,
+    "total_carotenoids_ug": 5111.0
+  },
+  {
+    "food_code": "C028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3574.0,
+    "zeaxanthin_ug": 11.92,
+    "beta_carotene_ug": 2710.0,
+    "total_carotenoids_ug": 6558.0
+  },
+  {
+    "food_code": "C029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5201.0,
+    "zeaxanthin_ug": 105.0,
+    "beta_carotene_ug": 5288.0,
+    "total_carotenoids_ug": 24206.0
+  },
+  {
+    "food_code": "C030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6139.0,
+    "zeaxanthin_ug": 45.28,
+    "beta_carotene_ug": 1455.0,
+    "total_carotenoids_ug": 8247.0
+  },
+  {
+    "food_code": "C031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1741.0,
+    "zeaxanthin_ug": 22.71,
+    "beta_carotene_ug": 2591.0,
+    "total_carotenoids_ug": 9339.0
+  },
+  {
+    "food_code": "C032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2370.0,
+    "zeaxanthin_ug": 18.98,
+    "beta_carotene_ug": 2754.0,
+    "total_carotenoids_ug": 8290.0
+  },
+  {
+    "food_code": "C033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3850.0,
+    "zeaxanthin_ug": 17.23,
+    "beta_carotene_ug": 2605.0,
+    "total_carotenoids_ug": 9553.0
+  },
+  {
+    "food_code": "C034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 58.83,
+    "zeaxanthin_ug": 1.88,
+    "beta_carotene_ug": 168.0,
+    "total_carotenoids_ug": 4002.0
+  },
+  {
+    "food_code": "D001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 18.29,
+    "zeaxanthin_ug": 5.76,
+    "total_carotenoids_ug": 66.67
+  },
+  {
+    "food_code": "D002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.5,
+    "total_carotenoids_ug": 11.6
+  },
+  {
+    "food_code": "D003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 98.51,
+    "zeaxanthin_ug": 2.67,
+    "beta_carotene_ug": 35.52,
+    "total_carotenoids_ug": 1055.0
+  },
+  {
+    "food_code": "D004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 282.0,
+    "zeaxanthin_ug": 5.83,
+    "beta_carotene_ug": 122.0,
+    "total_carotenoids_ug": 717.0
+  },
+  {
+    "food_code": "D005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 244.0,
+    "zeaxanthin_ug": 6.96,
+    "beta_carotene_ug": 126.0,
+    "total_carotenoids_ug": 505.0
+  },
+  {
+    "food_code": "D006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 313.0,
+    "zeaxanthin_ug": 7.2,
+    "beta_carotene_ug": 130.0,
+    "total_carotenoids_ug": 481.0
+  },
+  {
+    "food_code": "D007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.88,
+    "beta_carotene_ug": 44.05,
+    "total_carotenoids_ug": 95.12
+  },
+  {
+    "food_code": "D008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 29.64,
+    "zeaxanthin_ug": 8.6,
+    "beta_carotene_ug": 47.13,
+    "total_carotenoids_ug": 92.56
+  },
+  {
+    "food_code": "D009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.98,
+    "zeaxanthin_ug": 2.5,
+    "beta_carotene_ug": 44.82,
+    "total_carotenoids_ug": 97.02
+  },
+  {
+    "food_code": "D010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 126.0,
+    "zeaxanthin_ug": 1.9,
+    "beta_carotene_ug": 126.0,
+    "total_carotenoids_ug": 186.0
+  },
+  {
+    "food_code": "D011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 130.0,
+    "zeaxanthin_ug": 2.8,
+    "beta_carotene_ug": 130.0,
+    "total_carotenoids_ug": 167.0
+  },
+  {
+    "food_code": "D012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 131.0,
+    "zeaxanthin_ug": 3.29,
+    "beta_carotene_ug": 138.0,
+    "total_carotenoids_ug": 155.0
+  },
+  {
+    "food_code": "D013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 142.0,
+    "zeaxanthin_ug": 3.9,
+    "beta_carotene_ug": 140.0,
+    "total_carotenoids_ug": 138.0
+  },
+  {
+    "food_code": "D014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 122.0,
+    "zeaxanthin_ug": 2.78,
+    "beta_carotene_ug": 123.0,
+    "total_carotenoids_ug": 136.0
+  },
+  {
+    "food_code": "D015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 126.0,
+    "zeaxanthin_ug": 4.16,
+    "beta_carotene_ug": 129.0,
+    "total_carotenoids_ug": 168.0
+  },
+  {
+    "food_code": "D016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 155.0,
+    "zeaxanthin_ug": 4.5,
+    "beta_carotene_ug": 155.0,
+    "total_carotenoids_ug": 166.0
+  },
+  {
+    "food_code": "D017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 162.0,
+    "zeaxanthin_ug": 3.77,
+    "beta_carotene_ug": 162.0,
+    "total_carotenoids_ug": 190.0
+  },
+  {
+    "food_code": "D018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 160.0,
+    "zeaxanthin_ug": 2.89,
+    "beta_carotene_ug": 158.0,
+    "total_carotenoids_ug": 232.0
+  },
+  {
+    "food_code": "D019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 161.0,
+    "zeaxanthin_ug": 2.39,
+    "beta_carotene_ug": 161.0,
+    "total_carotenoids_ug": 162.0
+  },
+  {
+    "food_code": "D020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 152.0,
+    "zeaxanthin_ug": 2.02,
+    "beta_carotene_ug": 162.0,
+    "total_carotenoids_ug": 227.0
+  },
+  {
+    "food_code": "D021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 147.0,
+    "zeaxanthin_ug": 2.89,
+    "beta_carotene_ug": 144.0,
+    "total_carotenoids_ug": 217.0
+  },
+  {
+    "food_code": "D022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 138.0,
+    "zeaxanthin_ug": 3.9,
+    "beta_carotene_ug": 138.0,
+    "total_carotenoids_ug": 116.0
+  },
+  {
+    "food_code": "D023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 137.0,
+    "zeaxanthin_ug": 4.12,
+    "beta_carotene_ug": 134.0,
+    "total_carotenoids_ug": 493.0
+  },
+  {
+    "food_code": "D024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 169.0,
+    "zeaxanthin_ug": 4.35,
+    "beta_carotene_ug": 162.0,
+    "total_carotenoids_ug": 346.0
+  },
+  {
+    "food_code": "D025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 155.0,
+    "zeaxanthin_ug": 1.8,
+    "beta_carotene_ug": 155.0,
+    "total_carotenoids_ug": 364.0
+  },
+  {
+    "food_code": "D026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 146.0,
+    "zeaxanthin_ug": 1.9,
+    "beta_carotene_ug": 146.0,
+    "total_carotenoids_ug": 564.0
+  },
+  {
+    "food_code": "D027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 128.0,
+    "zeaxanthin_ug": 2.88,
+    "beta_carotene_ug": 130.0,
+    "total_carotenoids_ug": 364.0
+  },
+  {
+    "food_code": "D028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 119.0,
+    "zeaxanthin_ug": 3.68,
+    "beta_carotene_ug": 119.0,
+    "total_carotenoids_ug": 552.0
+  },
+  {
+    "food_code": "D029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 139.0,
+    "zeaxanthin_ug": 4.08,
+    "beta_carotene_ug": 139.0,
+    "total_carotenoids_ug": 651.0
+  },
+  {
+    "food_code": "D030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 156.0,
+    "zeaxanthin_ug": 4.44,
+    "beta_carotene_ug": 155.0,
+    "total_carotenoids_ug": 670.0
+  },
+  {
+    "food_code": "D031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 144.0,
+    "zeaxanthin_ug": 3.21,
+    "beta_carotene_ug": 146.0,
+    "total_carotenoids_ug": 309.0
+  },
+  {
+    "food_code": "D032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 106.0,
+    "zeaxanthin_ug": 24.25,
+    "beta_carotene_ug": 6.38,
+    "total_carotenoids_ug": 574.0
+  },
+  {
+    "food_code": "D033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 164.0,
+    "zeaxanthin_ug": 21.41,
+    "beta_carotene_ug": 328.0,
+    "total_carotenoids_ug": 2511.0
+  },
+  {
+    "food_code": "D034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 165.0,
+    "zeaxanthin_ug": 18.28,
+    "beta_carotene_ug": 246.0,
+    "total_carotenoids_ug": 3047.0
+  },
+  {
+    "food_code": "D035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 280.0,
+    "zeaxanthin_ug": 17.95,
+    "beta_carotene_ug": 166.0,
+    "total_carotenoids_ug": 2717.0
+  },
+  {
+    "food_code": "D036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 31.3,
+    "zeaxanthin_ug": 5.77,
+    "beta_carotene_ug": 1.59,
+    "total_carotenoids_ug": 50.48
+  },
+  {
+    "food_code": "D037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 161.0,
+    "zeaxanthin_ug": 2.61,
+    "beta_carotene_ug": 465.0,
+    "total_carotenoids_ug": 2439.0
+  },
+  {
+    "food_code": "D038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.56,
+    "zeaxanthin_ug": 1.8,
+    "beta_carotene_ug": 1.57,
+    "total_carotenoids_ug": 24.53
+  },
+  {
+    "food_code": "D039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 538.0,
+    "zeaxanthin_ug": 21.49,
+    "beta_carotene_ug": 241.0,
+    "total_carotenoids_ug": 1192.0
+  },
+  {
+    "food_code": "D040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 97.12,
+    "zeaxanthin_ug": 5.3,
+    "beta_carotene_ug": 4.97,
+    "total_carotenoids_ug": 631.0
+  },
+  {
+    "food_code": "D041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 99.6,
+    "zeaxanthin_ug": 1.96,
+    "beta_carotene_ug": 2.3,
+    "total_carotenoids_ug": 597.0
+  },
+  {
+    "food_code": "D042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.79,
+    "zeaxanthin_ug": 1.9,
+    "beta_carotene_ug": 1.52,
+    "total_carotenoids_ug": 72.89
+  },
+  {
+    "food_code": "D043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.22,
+    "beta_carotene_ug": 5.33,
+    "total_carotenoids_ug": 171.0
+  },
+  {
+    "food_code": "D044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.86,
+    "beta_carotene_ug": 4.8,
+    "total_carotenoids_ug": 172.0
+  },
+  {
+    "food_code": "D045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3.19,
+    "beta_carotene_ug": 5.55,
+    "total_carotenoids_ug": 134.0
+  },
+  {
+    "food_code": "D046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 145.0,
+    "zeaxanthin_ug": 5.52,
+    "beta_carotene_ug": 17.28,
+    "total_carotenoids_ug": 350.0
+  },
+  {
+    "food_code": "D047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 467.0,
+    "zeaxanthin_ug": 21.54,
+    "alpha_carotene_ug": 83.48,
+    "beta_carotene_ug": 555.0,
+    "total_carotenoids_ug": 1738.0
+  },
+  {
+    "food_code": "D048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 297.0,
+    "zeaxanthin_ug": 2.79,
+    "alpha_carotene_ug": 74.32,
+    "beta_carotene_ug": 556.0,
+    "total_carotenoids_ug": 1837.0
+  },
+  {
+    "food_code": "D049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 235.0,
+    "zeaxanthin_ug": 21.21,
+    "alpha_carotene_ug": 3.57,
+    "beta_carotene_ug": 413.0,
+    "total_carotenoids_ug": 1501.0
+  },
+  {
+    "food_code": "D050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 228.0,
+    "zeaxanthin_ug": 13.35,
+    "alpha_carotene_ug": 3.18,
+    "beta_carotene_ug": 388.0,
+    "total_carotenoids_ug": 1449.0
+  },
+  {
+    "food_code": "D051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.86,
+    "zeaxanthin_ug": 2.92,
+    "total_carotenoids_ug": 17.66
+  },
+  {
+    "food_code": "D052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.13,
+    "zeaxanthin_ug": 1.56,
+    "total_carotenoids_ug": 19.63
+  },
+  {
+    "food_code": "D053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.51,
+    "zeaxanthin_ug": 1.55,
+    "total_carotenoids_ug": 28.82
+  },
+  {
+    "food_code": "D054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 170.0,
+    "zeaxanthin_ug": 5.74,
+    "beta_carotene_ug": 134.0,
+    "total_carotenoids_ug": 498.0
+  },
+  {
+    "food_code": "D055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 157.0,
+    "zeaxanthin_ug": 4.5,
+    "beta_carotene_ug": 147.0,
+    "total_carotenoids_ug": 586.0
+  },
+  {
+    "food_code": "D056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 798.0,
+    "zeaxanthin_ug": 3.53,
+    "beta_carotene_ug": 69.1,
+    "total_carotenoids_ug": 1223.0
+  },
+  {
+    "food_code": "D057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 122.0,
+    "zeaxanthin_ug": 1.52,
+    "beta_cryptoxanthin_ug": 11.94,
+    "beta_carotene_ug": 72.37,
+    "total_carotenoids_ug": 517.0
+  },
+  {
+    "food_code": "D058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 575.0,
+    "zeaxanthin_ug": 2.43,
+    "beta_carotene_ug": 700.0,
+    "total_carotenoids_ug": 3488.0
+  },
+  {
+    "food_code": "D059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 266.0,
+    "zeaxanthin_ug": 7.88,
+    "beta_cryptoxanthin_ug": 76.8,
+    "beta_carotene_ug": 164.0,
+    "total_carotenoids_ug": 548.0
+  },
+  {
+    "food_code": "D060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 322.0,
+    "zeaxanthin_ug": 10.77,
+    "beta_carotene_ug": 13.1,
+    "total_carotenoids_ug": 965.0
+  },
+  {
+    "food_code": "D061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 68.6,
+    "zeaxanthin_ug": 11.4,
+    "beta_carotene_ug": 121.0,
+    "total_carotenoids_ug": 1286.0
+  },
+  {
+    "food_code": "D062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 75.7,
+    "zeaxanthin_ug": 5.9,
+    "beta_carotene_ug": 35.36,
+    "total_carotenoids_ug": 149.0
+  },
+  {
+    "food_code": "D063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.9,
+    "zeaxanthin_ug": 3.45,
+    "beta_carotene_ug": 3.01,
+    "total_carotenoids_ug": 224.0
+  },
+  {
+    "food_code": "D064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 26.3,
+    "zeaxanthin_ug": 3.68,
+    "beta_carotene_ug": 2.39,
+    "total_carotenoids_ug": 69.31
+  },
+  {
+    "food_code": "D065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 394.0,
+    "zeaxanthin_ug": 26.6,
+    "alpha_carotene_ug": 63.91,
+    "beta_carotene_ug": 363.0,
+    "total_carotenoids_ug": 1319.0
+  },
+  {
+    "food_code": "D066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 161.0,
+    "zeaxanthin_ug": 34.91,
+    "alpha_carotene_ug": 90.74,
+    "beta_carotene_ug": 149.0,
+    "total_carotenoids_ug": 1449.0
+  },
+  {
+    "food_code": "D067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 190.0,
+    "beta_carotene_ug": 165.0,
+    "total_carotenoids_ug": 495.0
+  },
+  {
+    "food_code": "D068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 129.0,
+    "zeaxanthin_ug": 19.5,
+    "beta_carotene_ug": 348.0,
+    "total_carotenoids_ug": 838.0
+  },
+  {
+    "food_code": "D069",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 127.0,
+    "zeaxanthin_ug": 18.83,
+    "beta_carotene_ug": 349.0,
+    "total_carotenoids_ug": 851.0
+  },
+  {
+    "food_code": "D070",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 38.9,
+    "zeaxanthin_ug": 3.67,
+    "beta_carotene_ug": 61.29,
+    "total_carotenoids_ug": 190.0
+  },
+  {
+    "food_code": "D071",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 39.6,
+    "zeaxanthin_ug": 5.41,
+    "beta_carotene_ug": 61.64,
+    "total_carotenoids_ug": 188.0
+  },
+  {
+    "food_code": "D072",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 32.75,
+    "zeaxanthin_ug": 4.5,
+    "beta_carotene_ug": 62.84,
+    "total_carotenoids_ug": 188.0
+  },
+  {
+    "food_code": "D073",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.19,
+    "zeaxanthin_ug": 2.22,
+    "beta_carotene_ug": 7.96,
+    "total_carotenoids_ug": 49.81
+  },
+  {
+    "food_code": "D074",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 38.9,
+    "zeaxanthin_ug": 2.48,
+    "lycopene_ug": 35.97,
+    "gamma_carotene_ug": 5.8,
+    "beta_carotene_ug": 32.33,
+    "total_carotenoids_ug": 546.0
+  },
+  {
+    "food_code": "D075",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1568.0,
+    "zeaxanthin_ug": 10.96,
+    "lycopene_ug": 2481.0,
+    "gamma_carotene_ug": 7.32,
+    "beta_carotene_ug": 1513.0,
+    "total_carotenoids_ug": 5826.0
+  },
+  {
+    "food_code": "D076",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 965.0,
+    "zeaxanthin_ug": 17.52,
+    "lycopene_ug": 1736.0,
+    "gamma_carotene_ug": 9.37,
+    "beta_carotene_ug": 905.0,
+    "total_carotenoids_ug": 4656.0
+  },
+  {
+    "food_code": "D077",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 87.86,
+    "zeaxanthin_ug": 16.23,
+    "beta_carotene_ug": 85.79,
+    "total_carotenoids_ug": 963.0
+  },
+  {
+    "food_code": "D078",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 294.0,
+    "zeaxanthin_ug": 25.6,
+    "beta_carotene_ug": 69.9,
+    "total_carotenoids_ug": 1177.0
+  },
+  {
+    "food_code": "E001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 36.4,
+    "zeaxanthin_ug": 1.9,
+    "beta_carotene_ug": 2.41,
+    "total_carotenoids_ug": 229.0
+  },
+  {
+    "food_code": "E002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 40.2,
+    "zeaxanthin_ug": 1.91,
+    "beta_carotene_ug": 2.2,
+    "total_carotenoids_ug": 196.0
+  },
+  {
+    "food_code": "E003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 38.8,
+    "zeaxanthin_ug": 1.71,
+    "beta_carotene_ug": 2.08,
+    "total_carotenoids_ug": 198.0
+  },
+  {
+    "food_code": "E004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 46.26,
+    "zeaxanthin_ug": 1.98,
+    "beta_carotene_ug": 2.11,
+    "total_carotenoids_ug": 344.0
+  },
+  {
+    "food_code": "E005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.98,
+    "zeaxanthin_ug": 2.33,
+    "beta_carotene_ug": 1806.0,
+    "total_carotenoids_ug": 4313.0
+  },
+  {
+    "food_code": "E006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3.07,
+    "zeaxanthin_ug": 1.98,
+    "beta_carotene_ug": 1372.0,
+    "total_carotenoids_ug": 3357.0
+  },
+  {
+    "food_code": "E007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 25.13,
+    "zeaxanthin_ug": 2.5,
+    "beta_carotene_ug": 12.0,
+    "total_carotenoids_ug": 321.0
+  },
+  {
+    "food_code": "E008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 36.12,
+    "zeaxanthin_ug": 2.2,
+    "beta_carotene_ug": 2.5,
+    "total_carotenoids_ug": 172.0
+  },
+  {
+    "food_code": "E009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 47.32,
+    "zeaxanthin_ug": 1.9,
+    "alpha_carotene_ug": 3.57,
+    "beta_carotene_ug": 53.06,
+    "total_carotenoids_ug": 260.0
+  },
+  {
+    "food_code": "E010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 34.67,
+    "zeaxanthin_ug": 2.75,
+    "alpha_carotene_ug": 1.71,
+    "beta_carotene_ug": 57.33,
+    "total_carotenoids_ug": 252.0
+  },
+  {
+    "food_code": "E011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 47.08,
+    "zeaxanthin_ug": 2.5,
+    "alpha_carotene_ug": 2.12,
+    "beta_carotene_ug": 51.52,
+    "total_carotenoids_ug": 261.0
+  },
+  {
+    "food_code": "E012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 26.9,
+    "zeaxanthin_ug": 2.33,
+    "alpha_carotene_ug": 3.57,
+    "beta_carotene_ug": 56.78,
+    "total_carotenoids_ug": 314.0
+  },
+  {
+    "food_code": "E013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 105.0,
+    "zeaxanthin_ug": 2.37,
+    "beta_carotene_ug": 52.32,
+    "total_carotenoids_ug": 166.0
+  },
+  {
+    "food_code": "E014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 92.9,
+    "zeaxanthin_ug": 5.69,
+    "beta_carotene_ug": 40.78,
+    "total_carotenoids_ug": 259.0
+  },
+  {
+    "food_code": "E015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 242.0,
+    "zeaxanthin_ug": 12.9,
+    "beta_carotene_ug": 62.48,
+    "total_carotenoids_ug": 453.0
+  },
+  {
+    "food_code": "E016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 12.45,
+    "zeaxanthin_ug": 1.8,
+    "total_carotenoids_ug": 142.0
+  },
+  {
+    "food_code": "E017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 281.0,
+    "zeaxanthin_ug": 8.95,
+    "beta_carotene_ug": 2700.0,
+    "total_carotenoids_ug": 3483.0
+  },
+  {
+    "food_code": "E018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 285.0,
+    "zeaxanthin_ug": 4.83,
+    "beta_carotene_ug": 2705.0,
+    "total_carotenoids_ug": 3280.0
+  },
+  {
+    "food_code": "E019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 305.0,
+    "zeaxanthin_ug": 86.34,
+    "beta_carotene_ug": 2781.0,
+    "total_carotenoids_ug": 3288.0
+  },
+  {
+    "food_code": "E020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.0,
+    "zeaxanthin_ug": 2.01,
+    "beta_carotene_ug": 2.4,
+    "total_carotenoids_ug": 454.0
+  },
+  {
+    "food_code": "E021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 38.7,
+    "zeaxanthin_ug": 2.86,
+    "beta_carotene_ug": 1.58,
+    "total_carotenoids_ug": 62.01
+  },
+  {
+    "food_code": "E022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 27.8,
+    "zeaxanthin_ug": 3.59,
+    "beta_carotene_ug": 29.36,
+    "total_carotenoids_ug": 213.0
+  },
+  {
+    "food_code": "E023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 31.3,
+    "zeaxanthin_ug": 4.06,
+    "beta_carotene_ug": 30.77,
+    "total_carotenoids_ug": 208.0
+  },
+  {
+    "food_code": "E024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 17.2,
+    "zeaxanthin_ug": 7.58,
+    "beta_carotene_ug": 19.94,
+    "total_carotenoids_ug": 314.0
+  },
+  {
+    "food_code": "E025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.4,
+    "zeaxanthin_ug": 8.14,
+    "beta_carotene_ug": 19.73,
+    "total_carotenoids_ug": 321.0
+  },
+  {
+    "food_code": "E026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 25.8,
+    "zeaxanthin_ug": 6.82,
+    "beta_carotene_ug": 25.46,
+    "total_carotenoids_ug": 216.0
+  },
+  {
+    "food_code": "E027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 16.1,
+    "zeaxanthin_ug": 7.95,
+    "beta_carotene_ug": 20.58,
+    "total_carotenoids_ug": 232.0
+  },
+  {
+    "food_code": "E028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.7,
+    "zeaxanthin_ug": 5.92,
+    "beta_carotene_ug": 298.0,
+    "total_carotenoids_ug": 996.0
+  },
+  {
+    "food_code": "E029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 90.3,
+    "zeaxanthin_ug": 8.94,
+    "lycopene_ug": 2843.0,
+    "beta_carotene_ug": 267.0,
+    "total_carotenoids_ug": 4078.0
+  },
+  {
+    "food_code": "E030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.3,
+    "zeaxanthin_ug": 2.42,
+    "beta_carotene_ug": 23.53,
+    "total_carotenoids_ug": 59.61
+  },
+  {
+    "food_code": "E031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 18.49,
+    "zeaxanthin_ug": 5.68,
+    "beta_carotene_ug": 1.55,
+    "total_carotenoids_ug": 66.5
+  },
+  {
+    "food_code": "E032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.12,
+    "zeaxanthin_ug": 1.14,
+    "beta_carotene_ug": 15.64,
+    "total_carotenoids_ug": 55.89
+  },
+  {
+    "food_code": "E033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 9.68,
+    "zeaxanthin_ug": 1.72,
+    "beta_carotene_ug": 2.62,
+    "total_carotenoids_ug": 85.99
+  },
+  {
+    "food_code": "E034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 13.2,
+    "zeaxanthin_ug": 1.89,
+    "beta_carotene_ug": 2.54,
+    "total_carotenoids_ug": 85.13
+  },
+  {
+    "food_code": "E035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 27.33,
+    "zeaxanthin_ug": 1.61,
+    "beta_carotene_ug": 1.47,
+    "total_carotenoids_ug": 129.0
+  },
+  {
+    "food_code": "E036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3.19,
+    "zeaxanthin_ug": 1.62,
+    "beta_cryptoxanthin_ug": 2.72,
+    "beta_carotene_ug": 1168.0,
+    "total_carotenoids_ug": 1424.0
+  },
+  {
+    "food_code": "E037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.18,
+    "zeaxanthin_ug": 1.64,
+    "beta_cryptoxanthin_ug": 4.58,
+    "beta_carotene_ug": 666.0,
+    "total_carotenoids_ug": 1350.0
+  },
+  {
+    "food_code": "E038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.26,
+    "zeaxanthin_ug": 1.19,
+    "beta_cryptoxanthin_ug": 5.6,
+    "beta_carotene_ug": 1181.0,
+    "total_carotenoids_ug": 1423.0
+  },
+  {
+    "food_code": "E039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 3.71,
+    "zeaxanthin_ug": 2.33,
+    "beta_cryptoxanthin_ug": 6.96,
+    "beta_carotene_ug": 1264.0,
+    "total_carotenoids_ug": 1438.0
+  },
+  {
+    "food_code": "E040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.95,
+    "zeaxanthin_ug": 1.67,
+    "beta_cryptoxanthin_ug": 2.51,
+    "beta_carotene_ug": 1291.0,
+    "total_carotenoids_ug": 1376.0
+  },
+  {
+    "food_code": "E041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.51,
+    "zeaxanthin_ug": 7.19,
+    "beta_cryptoxanthin_ug": 2.49,
+    "beta_carotene_ug": 1061.0,
+    "total_carotenoids_ug": 1210.0
+  },
+  {
+    "food_code": "E042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 13.27,
+    "zeaxanthin_ug": 2.86,
+    "beta_cryptoxanthin_ug": 4.56,
+    "beta_carotene_ug": 602.0,
+    "total_carotenoids_ug": 1632.0
+  },
+  {
+    "food_code": "E043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 16.81,
+    "zeaxanthin_ug": 5.4,
+    "beta_carotene_ug": 1.8,
+    "total_carotenoids_ug": 181.0
+  },
+  {
+    "food_code": "E044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 36.5,
+    "zeaxanthin_ug": 10.5,
+    "beta_carotene_ug": 2.2,
+    "total_carotenoids_ug": 154.0
+  },
+  {
+    "food_code": "E045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 20.17,
+    "zeaxanthin_ug": 2.52,
+    "beta_carotene_ug": 771.0,
+    "total_carotenoids_ug": 925.0
+  },
+  {
+    "food_code": "E046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.48,
+    "zeaxanthin_ug": 2.69,
+    "beta_carotene_ug": 6.87,
+    "total_carotenoids_ug": 92.15
+  },
+  {
+    "food_code": "E047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 13.8,
+    "zeaxanthin_ug": 31.88,
+    "beta_cryptoxanthin_ug": 44.02,
+    "alpha_carotene_ug": 5.76,
+    "beta_carotene_ug": 31.94,
+    "total_carotenoids_ug": 675.0
+  },
+  {
+    "food_code": "E048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.8,
+    "zeaxanthin_ug": 1.5,
+    "total_carotenoids_ug": 50.0
+  },
+  {
+    "food_code": "E049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.43,
+    "zeaxanthin_ug": 280.0,
+    "lycopene_ug": 833.0,
+    "beta_cryptoxanthin_ug": 648.0,
+    "beta_carotene_ug": 694.0,
+    "total_carotenoids_ug": 2472.0
+  },
+  {
+    "food_code": "E050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.8,
+    "zeaxanthin_ug": 1.5,
+    "total_carotenoids_ug": 50.0
+  },
+  {
+    "food_code": "E051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 14.7,
+    "zeaxanthin_ug": 2.77,
+    "beta_cryptoxanthin_ug": 1.44,
+    "beta_carotene_ug": 13.16,
+    "total_carotenoids_ug": 92.3
+  },
+  {
+    "food_code": "E052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 157.0,
+    "zeaxanthin_ug": 3.11,
+    "alpha_carotene_ug": 5.68,
+    "beta_carotene_ug": 1.71,
+    "total_carotenoids_ug": 396.0
+  },
+  {
+    "food_code": "E053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.11,
+    "zeaxanthin_ug": 1.8,
+    "beta_carotene_ug": 31.21,
+    "total_carotenoids_ug": 86.31
+  },
+  {
+    "food_code": "E054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.67,
+    "zeaxanthin_ug": 2.39,
+    "beta_carotene_ug": 1.32,
+    "total_carotenoids_ug": 430.0
+  },
+  {
+    "food_code": "E055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 27.8,
+    "zeaxanthin_ug": 2.51,
+    "beta_carotene_ug": 2.05,
+    "total_carotenoids_ug": 47.28
+  },
+  {
+    "food_code": "E056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.5,
+    "zeaxanthin_ug": 5.9,
+    "beta_cryptoxanthin_ug": 10.43,
+    "beta_carotene_ug": 1.55,
+    "total_carotenoids_ug": 337.0
+  },
+  {
+    "food_code": "E057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 9.13,
+    "zeaxanthin_ug": 2.18,
+    "beta_carotene_ug": 3.71,
+    "total_carotenoids_ug": 207.0
+  },
+  {
+    "food_code": "E058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.3,
+    "zeaxanthin_ug": 3.53,
+    "beta_carotene_ug": 2.53,
+    "total_carotenoids_ug": 272.0
+  },
+  {
+    "food_code": "E059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 16.8,
+    "zeaxanthin_ug": 2.5,
+    "beta_carotene_ug": 2.9,
+    "total_carotenoids_ug": 175.0
+  },
+  {
+    "food_code": "E060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.6,
+    "zeaxanthin_ug": 2.09,
+    "beta_carotene_ug": 80.7,
+    "total_carotenoids_ug": 229.0
+  },
+  {
+    "food_code": "E061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 29.8,
+    "zeaxanthin_ug": 5.3,
+    "beta_carotene_ug": 2.2,
+    "total_carotenoids_ug": 78.0
+  },
+  {
+    "food_code": "E062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 26.8,
+    "zeaxanthin_ug": 2.6,
+    "beta_carotene_ug": 1.4,
+    "total_carotenoids_ug": 152.0
+  },
+  {
+    "food_code": "E063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.3,
+    "zeaxanthin_ug": 1.45,
+    "beta_carotene_ug": 2.19,
+    "total_carotenoids_ug": 218.0
+  },
+  {
+    "food_code": "E064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.4,
+    "zeaxanthin_ug": 11.61,
+    "beta_carotene_ug": 1.54,
+    "total_carotenoids_ug": 188.0
+  },
+  {
+    "food_code": "E065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 914.0,
+    "zeaxanthin_ug": 25.95,
+    "lycopene_ug": 1477.0,
+    "beta_carotene_ug": 605.0,
+    "total_carotenoids_ug": 4176.0
+  },
+  {
+    "food_code": "E066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 981.0,
+    "zeaxanthin_ug": 23.4,
+    "lycopene_ug": 1257.0,
+    "beta_carotene_ug": 576.0,
+    "total_carotenoids_ug": 4300.0
+  },
+  {
+    "food_code": "E067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 11.0,
+    "zeaxanthin_ug": 2.57,
+    "beta_carotene_ug": 3.81,
+    "total_carotenoids_ug": 77.06
+  },
+  {
+    "food_code": "E068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 10.7,
+    "zeaxanthin_ug": 1.6,
+    "beta_carotene_ug": 1.5,
+    "total_carotenoids_ug": 76.8
+  },
+  {
+    "food_code": "F001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 28.6,
+    "zeaxanthin_ug": 4.57,
+    "beta_carotene_ug": 10.14,
+    "total_carotenoids_ug": 12.88
+  },
+  {
+    "food_code": "F002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 257.0,
+    "zeaxanthin_ug": 13.93,
+    "lycopene_ug": 157.0,
+    "alpha_carotene_ug": 2654.0,
+    "beta_carotene_ug": 5423.0,
+    "total_carotenoids_ug": 9377.0
+  },
+  {
+    "food_code": "F003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 224.0,
+    "zeaxanthin_ug": 15.49,
+    "lycopene_ug": 871.0,
+    "alpha_carotene_ug": 1128.0,
+    "beta_carotene_ug": 2706.0,
+    "total_carotenoids_ug": 7570.0
+  },
+  {
+    "food_code": "F004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.87,
+    "zeaxanthin_ug": 2.07,
+    "beta_carotene_ug": 6.5,
+    "total_carotenoids_ug": 21.72
+  },
+  {
+    "food_code": "F005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 13.0,
+    "total_carotenoids_ug": 156.0
+  },
+  {
+    "food_code": "F006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.07,
+    "zeaxanthin_ug": 122.0,
+    "total_carotenoids_ug": 208.0
+  },
+  {
+    "food_code": "F007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7.86,
+    "zeaxanthin_ug": 125.0,
+    "total_carotenoids_ug": 224.0
+  },
+  {
+    "food_code": "F008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.12,
+    "zeaxanthin_ug": 123.0,
+    "total_carotenoids_ug": 226.0
+  },
+  {
+    "food_code": "F009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.68,
+    "zeaxanthin_ug": 2.38,
+    "beta_carotene_ug": 1.62,
+    "total_carotenoids_ug": 17.61
+  },
+  {
+    "food_code": "F010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.34,
+    "zeaxanthin_ug": 2.08,
+    "total_carotenoids_ug": 10.6
+  },
+  {
+    "food_code": "F011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7.8,
+    "zeaxanthin_ug": 2.5,
+    "beta_carotene_ug": 1.2,
+    "total_carotenoids_ug": 13.07
+  },
+  {
+    "food_code": "F012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.36,
+    "zeaxanthin_ug": 1.66,
+    "total_carotenoids_ug": 23.69
+  },
+  {
+    "food_code": "F013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 282.0,
+    "zeaxanthin_ug": 146.0,
+    "beta_carotene_ug": 5376.0,
+    "total_carotenoids_ug": 8653.0
+  },
+  {
+    "food_code": "F014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 208.0,
+    "zeaxanthin_ug": 133.0,
+    "beta_carotene_ug": 11.12,
+    "total_carotenoids_ug": 695.0
+  },
+  {
+    "food_code": "F015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.93,
+    "zeaxanthin_ug": 2.38,
+    "total_carotenoids_ug": 60.9
+  },
+  {
+    "food_code": "F016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.12,
+    "zeaxanthin_ug": 2.5,
+    "total_carotenoids_ug": 93.08
+  },
+  {
+    "food_code": "F017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 168.0,
+    "zeaxanthin_ug": 10.43,
+    "alpha_carotene_ug": 32.32,
+    "beta_carotene_ug": 176.0,
+    "total_carotenoids_ug": 599.0
+  },
+  {
+    "food_code": "F018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 273.0,
+    "zeaxanthin_ug": 8.69,
+    "beta_carotene_ug": 158.0,
+    "total_carotenoids_ug": 51.04
+  },
+  {
+    "food_code": "F019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 11.39,
+    "zeaxanthin_ug": 1.2,
+    "alpha_carotene_ug": 8.95,
+    "beta_carotene_ug": 230.0,
+    "total_carotenoids_ug": 94.53
+  },
+  {
+    "food_code": "G001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 255.0,
+    "zeaxanthin_ug": 18.92,
+    "beta_carotene_ug": 31.69,
+    "total_carotenoids_ug": 1135.0
+  },
+  {
+    "food_code": "G002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 283.0,
+    "zeaxanthin_ug": 24.48,
+    "beta_carotene_ug": 232.0,
+    "total_carotenoids_ug": 1336.0
+  },
+  {
+    "food_code": "G003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 285.0,
+    "zeaxanthin_ug": 34.74,
+    "beta_carotene_ug": 158.0,
+    "total_carotenoids_ug": 1107.0
+  },
+  {
+    "food_code": "G004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 207.0,
+    "zeaxanthin_ug": 45.64,
+    "beta_carotene_ug": 67.84,
+    "total_carotenoids_ug": 1761.0
+  },
+  {
+    "food_code": "G005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 278.0,
+    "zeaxanthin_ug": 41.4,
+    "beta_carotene_ug": 45.41,
+    "total_carotenoids_ug": 1539.0
+  },
+  {
+    "food_code": "G006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 234.0,
+    "zeaxanthin_ug": 35.5,
+    "beta_carotene_ug": 508.0,
+    "total_carotenoids_ug": 1478.0
+  },
+  {
+    "food_code": "G007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 294.0,
+    "zeaxanthin_ug": 28.5,
+    "beta_carotene_ug": 44.0,
+    "total_carotenoids_ug": 1891.0
+  },
+  {
+    "food_code": "G008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 261.0,
+    "zeaxanthin_ug": 31.47,
+    "beta_carotene_ug": 125.0,
+    "total_carotenoids_ug": 1347.0
+  },
+  {
+    "food_code": "G009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6351.0,
+    "zeaxanthin_ug": 28.3,
+    "beta_carotene_ug": 3808.0,
+    "total_carotenoids_ug": 13808.0
+  },
+  {
+    "food_code": "G010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2945.0,
+    "zeaxanthin_ug": 36.13,
+    "alpha_carotene_ug": 144.0,
+    "beta_carotene_ug": 7663.0,
+    "total_carotenoids_ug": 21862.0
+  },
+  {
+    "food_code": "G011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.02,
+    "zeaxanthin_ug": 1.55,
+    "total_carotenoids_ug": 33.91
+  },
+  {
+    "food_code": "G012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.09,
+    "zeaxanthin_ug": 1.57,
+    "total_carotenoids_ug": 30.48
+  },
+  {
+    "food_code": "G013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.52,
+    "zeaxanthin_ug": 1.36,
+    "total_carotenoids_ug": 26.58
+  },
+  {
+    "food_code": "G014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 15.0,
+    "zeaxanthin_ug": 5.97,
+    "beta_carotene_ug": 88.85,
+    "total_carotenoids_ug": 329.0
+  },
+  {
+    "food_code": "G015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 23.6,
+    "zeaxanthin_ug": 3.09,
+    "beta_carotene_ug": 76.62,
+    "total_carotenoids_ug": 250.0
+  },
+  {
+    "food_code": "G016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2526.0,
+    "zeaxanthin_ug": 300.0,
+    "beta_carotene_ug": 4602.0,
+    "total_carotenoids_ug": 18693.0
+  },
+  {
+    "food_code": "G017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1.77,
+    "zeaxanthin_ug": 1.81,
+    "beta_carotene_ug": 1.08,
+    "total_carotenoids_ug": 89.1
+  },
+  {
+    "food_code": "G018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 15.3,
+    "zeaxanthin_ug": 1.69,
+    "beta_carotene_ug": 1.1,
+    "total_carotenoids_ug": 31.04
+  },
+  {
+    "food_code": "G019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 23.8,
+    "zeaxanthin_ug": 1.52,
+    "beta_carotene_ug": 6.42,
+    "total_carotenoids_ug": 168.0
+  },
+  {
+    "food_code": "G020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 37.0,
+    "zeaxanthin_ug": 32.85,
+    "beta_carotene_ug": 21.91,
+    "total_carotenoids_ug": 366.0
+  },
+  {
+    "food_code": "G021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 56.9,
+    "zeaxanthin_ug": 10.31,
+    "beta_carotene_ug": 77.48,
+    "total_carotenoids_ug": 1137.0
+  },
+  {
+    "food_code": "G022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 1843.0,
+    "zeaxanthin_ug": 2712.0,
+    "lycopene_ug": 36.44,
+    "beta_cryptoxanthin_ug": 1599.0,
+    "beta_carotene_ug": 1542.0,
+    "total_carotenoids_ug": 101812.0
+  },
+  {
+    "food_code": "G023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 16.9,
+    "zeaxanthin_ug": 1.55,
+    "alpha_carotene_ug": 8.55,
+    "beta_carotene_ug": 73.51,
+    "total_carotenoids_ug": 356.0
+  },
+  {
+    "food_code": "G024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 225.0,
+    "zeaxanthin_ug": 10.96,
+    "beta_carotene_ug": 122.0,
+    "total_carotenoids_ug": 996.0
+  },
+  {
+    "food_code": "G025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 170.0,
+    "zeaxanthin_ug": 42.6,
+    "beta_carotene_ug": 89.19,
+    "total_carotenoids_ug": 553.0
+  },
+  {
+    "food_code": "G026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 586.0,
+    "zeaxanthin_ug": 201.0,
+    "beta_carotene_ug": 142.0,
+    "total_carotenoids_ug": 1210.0
+  },
+  {
+    "food_code": "G027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 135.0,
+    "zeaxanthin_ug": 196.0,
+    "beta_carotene_ug": 2322.0,
+    "total_carotenoids_ug": 9203.0
+  },
+  {
+    "food_code": "G028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.01,
+    "zeaxanthin_ug": 1.33,
+    "beta_carotene_ug": 15.37,
+    "total_carotenoids_ug": 80.91
+  },
+  {
+    "food_code": "G029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 494.0,
+    "zeaxanthin_ug": 8.3,
+    "beta_cryptoxanthin_ug": 51.37,
+    "beta_carotene_ug": 746.0,
+    "total_carotenoids_ug": 1836.0
+  },
+  {
+    "food_code": "G030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 666.0,
+    "zeaxanthin_ug": 479.0,
+    "beta_cryptoxanthin_ug": 110.0,
+    "alpha_carotene_ug": 278.0,
+    "beta_carotene_ug": 545.0,
+    "total_carotenoids_ug": 2401.0
+  },
+  {
+    "food_code": "G031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 650.0,
+    "zeaxanthin_ug": 158.0,
+    "beta_cryptoxanthin_ug": 165.0,
+    "alpha_carotene_ug": 157.0,
+    "beta_carotene_ug": 767.0,
+    "total_carotenoids_ug": 2219.0
+  },
+  {
+    "food_code": "G032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 23.5,
+    "zeaxanthin_ug": 1.76,
+    "beta_carotene_ug": 3.51,
+    "total_carotenoids_ug": 34.45
+  },
+  {
+    "food_code": "G033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 99.8,
+    "zeaxanthin_ug": 3.56,
+    "beta_carotene_ug": 55.2,
+    "total_carotenoids_ug": 427.0
+  },
+  {
+    "food_code": "H001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.93,
+    "zeaxanthin_ug": 1.79,
+    "total_carotenoids_ug": 11.31
+  },
+  {
+    "food_code": "H002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 21.3,
+    "zeaxanthin_ug": 3.83,
+    "total_carotenoids_ug": 41.96
+  },
+  {
+    "food_code": "H003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 27.5,
+    "zeaxanthin_ug": 3.12,
+    "total_carotenoids_ug": 63.72
+  },
+  {
+    "food_code": "H004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 31.65,
+    "zeaxanthin_ug": 6.23,
+    "total_carotenoids_ug": 47.78
+  },
+  {
+    "food_code": "H005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.87,
+    "zeaxanthin_ug": 3.21,
+    "total_carotenoids_ug": 16.94
+  },
+  {
+    "food_code": "H006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 62.5,
+    "zeaxanthin_ug": 3.12,
+    "total_carotenoids_ug": 176.0
+  },
+  {
+    "food_code": "H007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 122.0,
+    "zeaxanthin_ug": 4.84,
+    "beta_carotene_ug": 2.66,
+    "total_carotenoids_ug": 204.0
+  },
+  {
+    "food_code": "H008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.5,
+    "zeaxanthin_ug": 33.93,
+    "total_carotenoids_ug": 559.0
+  },
+  {
+    "food_code": "H009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.9,
+    "zeaxanthin_ug": 2.67,
+    "beta_carotene_ug": 13.09,
+    "total_carotenoids_ug": 60.78
+  },
+  {
+    "food_code": "H010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 17.0,
+    "zeaxanthin_ug": 2.4,
+    "beta_carotene_ug": 5.41,
+    "total_carotenoids_ug": 86.72
+  },
+  {
+    "food_code": "H011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.7,
+    "zeaxanthin_ug": 1.88,
+    "beta_carotene_ug": 12.94,
+    "total_carotenoids_ug": 57.06
+  },
+  {
+    "food_code": "H012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.42,
+    "zeaxanthin_ug": 8.07,
+    "beta_carotene_ug": 22.75,
+    "total_carotenoids_ug": 82.8
+  },
+  {
+    "food_code": "H013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 192.0,
+    "zeaxanthin_ug": 6.54,
+    "beta_carotene_ug": 36.72,
+    "total_carotenoids_ug": 675.0
+  },
+  {
+    "food_code": "H014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.67,
+    "zeaxanthin_ug": 7.22,
+    "beta_carotene_ug": 1.05,
+    "total_carotenoids_ug": 92.0
+  },
+  {
+    "food_code": "H015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.1,
+    "zeaxanthin_ug": 9.61,
+    "beta_carotene_ug": 2.15,
+    "total_carotenoids_ug": 295.0
+  },
+  {
+    "food_code": "H016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 6.0,
+    "zeaxanthin_ug": 2.38,
+    "beta_cryptoxanthin_ug": 2.73,
+    "beta_carotene_ug": 8.49,
+    "total_carotenoids_ug": 187.0
+  },
+  {
+    "food_code": "H017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 97.0,
+    "zeaxanthin_ug": 11.55,
+    "beta_carotene_ug": 1.98,
+    "total_carotenoids_ug": 297.0
+  },
+  {
+    "food_code": "H018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 171.0,
+    "beta_carotene_ug": 110.0,
+    "total_carotenoids_ug": 519.0
+  },
+  {
+    "food_code": "H019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 27.6,
+    "zeaxanthin_ug": 11.04,
+    "beta_carotene_ug": 2.07,
+    "total_carotenoids_ug": 142.0
+  },
+  {
+    "food_code": "H020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 20.0,
+    "zeaxanthin_ug": 2.48,
+    "beta_carotene_ug": 8.15,
+    "total_carotenoids_ug": 249.0
+  },
+  {
+    "food_code": "H021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 21.7,
+    "zeaxanthin_ug": 2.3,
+    "beta_cryptoxanthin_ug": 4.94,
+    "beta_carotene_ug": 9.53,
+    "total_carotenoids_ug": 122.0
+  },
+  {
+    "food_code": "I001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 5.9,
+    "total_carotenoids_ug": 18.49
+  },
+  {
+    "food_code": "I002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.36,
+    "beta_carotene_ug": 7.87,
+    "total_carotenoids_ug": 41.23
+  },
+  {
+    "food_code": "J001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "J002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "J003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "J004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "K001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "K002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 4.53,
+    "total_carotenoids_ug": 46.12
+  },
+  {
+    "food_code": "L001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 8.78,
+    "beta_carotene_ug": 8.42,
+    "total_carotenoids_ug": 80.87
+  },
+  {
+    "food_code": "L002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 9.62,
+    "zeaxanthin_ug": 5.01,
+    "beta_carotene_ug": 13.67,
+    "total_carotenoids_ug": 200.0
+  },
+  {
+    "food_code": "L003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 7.58,
+    "beta_carotene_ug": 4.39,
+    "total_carotenoids_ug": 194.0
+  },
+  {
+    "food_code": "L004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 2.7,
+    "beta_carotene_ug": 3.52,
+    "total_carotenoids_ug": 190.0
+  },
+  {
+    "food_code": "M001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 17.61,
+    "zeaxanthin_ug": 37.23,
+    "beta_cryptoxanthin_ug": 0.97,
+    "beta_carotene_ug": 13.6,
+    "total_carotenoids_ug": 135.0
+  },
+  {
+    "food_code": "M002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw"
+  },
+  {
+    "food_code": "M003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 27.29,
+    "zeaxanthin_ug": 56.6,
+    "beta_cryptoxanthin_ug": 2.09,
+    "beta_carotene_ug": 88.87,
+    "total_carotenoids_ug": 241.0
+  },
+  {
+    "food_code": "M004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 14.69,
+    "zeaxanthin_ug": 26.29,
+    "beta_cryptoxanthin_ug": 1.07,
+    "beta_carotene_ug": 13.19,
+    "total_carotenoids_ug": 136.0
+  },
+  {
+    "food_code": "M005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "total_carotenoids_ug": 5.3
+  },
+  {
+    "food_code": "M006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 19.36,
+    "zeaxanthin_ug": 54.75,
+    "beta_cryptoxanthin_ug": 1.69,
+    "beta_carotene_ug": 68.59,
+    "total_carotenoids_ug": 218.0
+  },
+  {
+    "food_code": "M007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 14.47,
+    "zeaxanthin_ug": 19.03,
+    "beta_cryptoxanthin_ug": 0.75,
+    "beta_carotene_ug": 11.36,
+    "total_carotenoids_ug": 111.0
+  },
+  {
+    "food_code": "M008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 26.86,
+    "zeaxanthin_ug": 47.26,
+    "beta_cryptoxanthin_ug": 1.56,
+    "beta_carotene_ug": 18.55,
+    "total_carotenoids_ug": 191.0
+  },
+  {
+    "food_code": "M009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 23.61,
+    "zeaxanthin_ug": 37.85,
+    "beta_cryptoxanthin_ug": 1.06,
+    "beta_carotene_ug": 17.45,
+    "total_carotenoids_ug": 166.0
+  },
+  {
+    "food_code": "M010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 20.55,
+    "zeaxanthin_ug": 30.85,
+    "beta_cryptoxanthin_ug": 0.95,
+    "beta_carotene_ug": 14.75,
+    "total_carotenoids_ug": 161.0
+  },
+  {
+    "food_code": "M011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 22.21,
+    "zeaxanthin_ug": 10.16,
+    "beta_cryptoxanthin_ug": 9.25,
+    "beta_carotene_ug": 34.59,
+    "total_carotenoids_ug": 228.0
+  },
+  {
+    "food_code": "M012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 29.5,
+    "zeaxanthin_ug": 17.96,
+    "beta_cryptoxanthin_ug": 11.08,
+    "beta_carotene_ug": 35.66,
+    "total_carotenoids_ug": 249.0
+  },
+  {
+    "food_code": "M013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 20.05,
+    "zeaxanthin_ug": 9.55,
+    "beta_cryptoxanthin_ug": 8.98,
+    "beta_carotene_ug": 30.08,
+    "total_carotenoids_ug": 213.0
+  },
+  {
+    "food_code": "M014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 14.83,
+    "zeaxanthin_ug": 28.48,
+    "beta_cryptoxanthin_ug": 3.57,
+    "beta_carotene_ug": 12.96,
+    "total_carotenoids_ug": 242.0
+  },
+  {
+    "food_code": "M015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "lutein_ug": 12.55,
+    "zeaxanthin_ug": 14.75,
+    "beta_cryptoxanthin_ug": 1.86,
+    "beta_carotene_ug": 10.55,
+    "total_carotenoids_ug": 230.0
+  }
+]

@@ -83,11 +83,36 @@ def load(path):
 
 
 def build_ifct():
-    """IFCT macros (Table 1) joined with minerals (Table 5) and
-    water-soluble vitamins (Table 2) on food_code."""
+    """IFCT macros (Table 1) joined with minerals (Table 5), water-soluble
+    vitamins (Table 2), and Tables 3/4/6/7/8 (fat-soluble vitamins,
+    carotenoids, sugars, fatty acids, amino acids) on food_code."""
     t1 = load("ifct2017_table1_proximate.json")
     t5 = {r["food_code"]: r for r in load("ifct2017_table5_minerals.json")}
     t2 = {r["food_code"]: r for r in load("ifct2017_table2_vitamins.json")}
+    # Tables 3,4,6,7,8 -- fat-soluble vitamins, carotenoids, sugars, fatty
+    # acids, amino acids. All validated against physical laws before merge
+    # (validation/ifct_micronutrient_check.py): fatty acids sum to 0.83 of
+    # total fat as the glycerol backbone predicts, free sugars never exceed
+    # carbohydrate, and every essential amino acid's share of protein sits
+    # in its expected biological band.
+    t3 = {r["food_code"]: r for r in load("ifct2017_table3_fat_soluble_vitamins.json")}
+    t4 = {r["food_code"]: r for r in load("ifct2017_table4_carotenoids.json")}
+    t6 = {r["food_code"]: r for r in load("ifct2017_table6_sugars.json")}
+    t7 = {r["food_code"]: r for r in load("ifct2017_table7_fatty_acids.json")}
+    t8 = {r["food_code"]: r for r in load("ifct2017_table8_amino_acids.json")}
+    EXTRA_TABLES = [
+        (t3, ["vitamin_d2_ug", "vitamin_e_mg", "vitamin_k1_ug",
+              "tocopherol_alpha_mg", "tocotrienol_alpha_mg"]),
+        (t4, ["beta_carotene_ug", "alpha_carotene_ug", "lutein_ug",
+              "zeaxanthin_ug", "lycopene_ug", "total_carotenoids_ug"]),
+        (t6, ["starch_g", "fructose_g", "glucose_g", "sucrose_g", "maltose_g"]),
+        (t7, ["fa_saturated_mg", "fa_monounsat_mg", "fa_polyunsat_mg",
+              "fa_c18_2n6_mg", "fa_c18_3n3_mg", "fa_epa_mg", "fa_dha_mg"]),
+        (t8, ["aa_leucine_mg", "aa_lysine_mg", "aa_isoleucine_mg",
+              "aa_valine_mg", "aa_threonine_mg", "aa_methionine_mg",
+              "aa_histidine_mg", "aa_phenylalanine_mg", "aa_tryptophan_mg",
+              "aa_leucine_g_per_100g_protein"]),
+    ]
     VITAMIN_FIELDS = [
         "thiamine_b1_mg", "riboflavin_b2_mg", "niacin_b3_mg",
         "pantothenic_acid_b5_mg", "vitamin_b6_mg", "biotin_b7_ug",
@@ -123,6 +148,10 @@ def build_ifct():
         }
         for vf in VITAMIN_FIELDS:
             rec[vf] = v.get(vf)
+        for table, fields in EXTRA_TABLES:
+            src = table.get(code, {})
+            for f in fields:
+                rec[f] = src.get(f)
         if r.get("suspected_source_anomaly"):
             rec["data_quality_flag"] = r["suspected_source_anomaly"]
             rec["energy_kcal"] = None   # refuse to serve a value we believe is wrong

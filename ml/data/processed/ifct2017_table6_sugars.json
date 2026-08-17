@@ -1,0 +1,2698 @@
+[
+  {
+    "food_code": "A001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 55.83,
+    "fructose_g": 0.1,
+    "glucose_g": 0.22,
+    "sucrose_g": 0.46,
+    "maltose_g": 0.1
+  },
+  {
+    "food_code": "A002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 59.33,
+    "fructose_g": 0.1,
+    "glucose_g": 0.22,
+    "sucrose_g": 0.48
+  },
+  {
+    "food_code": "A003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 55.21,
+    "fructose_g": 0.21,
+    "glucose_g": 0.6
+  },
+  {
+    "food_code": "A004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 72.67,
+    "glucose_g": 0.06
+  },
+  {
+    "food_code": "A005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 59.7,
+    "fructose_g": 0.57,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.6
+  },
+  {
+    "food_code": "A006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 59.35,
+    "fructose_g": 0.16,
+    "glucose_g": 0.8,
+    "sucrose_g": 0.7
+  },
+  {
+    "food_code": "A007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.88,
+    "fructose_g": 0.27,
+    "glucose_g": 0.8,
+    "sucrose_g": 0.4
+  },
+  {
+    "food_code": "A008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 7.45,
+    "fructose_g": 0.91,
+    "glucose_g": 0.97,
+    "sucrose_g": 2.79
+  },
+  {
+    "food_code": "A009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 48.41,
+    "glucose_g": 1.41
+  },
+  {
+    "food_code": "A010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 62.13,
+    "glucose_g": 0.25,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "A011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 68.06,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "A012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 69.25,
+    "glucose_g": 0.49,
+    "sucrose_g": 0.15
+  },
+  {
+    "food_code": "A013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 71.31,
+    "glucose_g": 0.55,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "A014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 76.14,
+    "glucose_g": 0.51,
+    "sucrose_g": 0.16
+  },
+  {
+    "food_code": "A015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 75.7,
+    "glucose_g": 0.54,
+    "sucrose_g": 0.15
+  },
+  {
+    "food_code": "A016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 56.07,
+    "glucose_g": 0.24,
+    "sucrose_g": 0.13
+  },
+  {
+    "food_code": "A017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 64.96,
+    "glucose_g": 0.89,
+    "sucrose_g": 0.4
+  },
+  {
+    "food_code": "A018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 70.03,
+    "fructose_g": 0.64,
+    "glucose_g": 0.75,
+    "sucrose_g": 0.4
+  },
+  {
+    "food_code": "A019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 56.82,
+    "fructose_g": 0.72,
+    "glucose_g": 0.78,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "A020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 57.53,
+    "fructose_g": 0.74,
+    "glucose_g": 0.73,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "A021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 60.54,
+    "fructose_g": 0.32,
+    "glucose_g": 0.55,
+    "sucrose_g": 0.33
+  },
+  {
+    "food_code": "A022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 58.2,
+    "fructose_g": 0.6,
+    "glucose_g": 0.55,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "A023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 55.31,
+    "fructose_g": 0.6,
+    "glucose_g": 0.58,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "A024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 54.55,
+    "fructose_g": 0.63,
+    "glucose_g": 1.01,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "B001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 40.49,
+    "fructose_g": 0.1,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.63,
+    "maltose_g": 0.2
+  },
+  {
+    "food_code": "B002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 35.69,
+    "fructose_g": 0.1,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.69,
+    "maltose_g": 0.1
+  },
+  {
+    "food_code": "B003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 47.89,
+    "fructose_g": 0.2,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.44
+  },
+  {
+    "food_code": "B004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 42.19,
+    "fructose_g": 0.1,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "B005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 45.49,
+    "fructose_g": 0.3,
+    "glucose_g": 0.61,
+    "sucrose_g": 0.68
+  },
+  {
+    "food_code": "B006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 46.33,
+    "fructose_g": 0.13,
+    "glucose_g": 0.39,
+    "sucrose_g": 0.67
+  },
+  {
+    "food_code": "B007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 40.07,
+    "fructose_g": 0.2,
+    "glucose_g": 0.53,
+    "sucrose_g": 0.42
+  },
+  {
+    "food_code": "B008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 42.3,
+    "fructose_g": 0.2,
+    "glucose_g": 0.29,
+    "sucrose_g": 0.68
+  },
+  {
+    "food_code": "B009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 42.25,
+    "fructose_g": 0.1,
+    "glucose_g": 0.41,
+    "sucrose_g": 0.56
+  },
+  {
+    "food_code": "B010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 41.06,
+    "fructose_g": 0.1,
+    "glucose_g": 0.3,
+    "sucrose_g": 0.55
+  },
+  {
+    "food_code": "B011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 39.21,
+    "fructose_g": 0.1,
+    "glucose_g": 0.14,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "B012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 47.96,
+    "fructose_g": 0.1,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "B013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 44.44,
+    "fructose_g": 0.8,
+    "glucose_g": 0.3,
+    "sucrose_g": 0.85
+  },
+  {
+    "food_code": "B014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 41.41,
+    "fructose_g": 0.78,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.71
+  },
+  {
+    "food_code": "B015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 42.08,
+    "fructose_g": 0.5,
+    "glucose_g": 0.23,
+    "sucrose_g": 0.77
+  },
+  {
+    "food_code": "B016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 46.64,
+    "fructose_g": 0.1,
+    "glucose_g": 0.62,
+    "sucrose_g": 0.64
+  },
+  {
+    "food_code": "B017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 43.04,
+    "fructose_g": 0.61,
+    "glucose_g": 0.48,
+    "sucrose_g": 0.94
+  },
+  {
+    "food_code": "B018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 38.45,
+    "glucose_g": 0.18,
+    "sucrose_g": 1.84
+  },
+  {
+    "food_code": "B019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 38.05,
+    "glucose_g": 0.39,
+    "sucrose_g": 1.88
+  },
+  {
+    "food_code": "B020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 38.55,
+    "glucose_g": 0.23,
+    "sucrose_g": 1.29
+  },
+  {
+    "food_code": "B021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 48.53,
+    "fructose_g": 0.1,
+    "glucose_g": 0.2,
+    "sucrose_g": 1.78
+  },
+  {
+    "food_code": "B022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 38.97,
+    "fructose_g": 0.1,
+    "glucose_g": 0.2,
+    "sucrose_g": 1.0
+  },
+  {
+    "food_code": "B023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 44.05,
+    "fructose_g": 0.2,
+    "glucose_g": 0.73,
+    "sucrose_g": 0.4
+  },
+  {
+    "food_code": "B024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.65,
+    "fructose_g": 0.2,
+    "glucose_g": 0.63,
+    "sucrose_g": 1.68
+  },
+  {
+    "food_code": "B025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 7.26,
+    "fructose_g": 0.2,
+    "glucose_g": 0.56,
+    "sucrose_g": 1.44
+  },
+  {
+    "food_code": "C001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.72,
+    "fructose_g": 0.1,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.03
+  },
+  {
+    "food_code": "C002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.7,
+    "fructose_g": 0.09,
+    "glucose_g": 0.19,
+    "sucrose_g": 0.04
+  },
+  {
+    "food_code": "C003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.77,
+    "fructose_g": 0.24,
+    "glucose_g": 0.04
+  },
+  {
+    "food_code": "C004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.95,
+    "fructose_g": 0.03,
+    "glucose_g": 0.12
+  },
+  {
+    "food_code": "C005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.69,
+    "fructose_g": 0.01,
+    "glucose_g": 0.13
+  },
+  {
+    "food_code": "C006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.73,
+    "fructose_g": 0.01,
+    "glucose_g": 0.12
+  },
+  {
+    "food_code": "C007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.67,
+    "fructose_g": 0.01,
+    "glucose_g": 0.01,
+    "sucrose_g": 0.01
+  },
+  {
+    "food_code": "C008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.07,
+    "fructose_g": 0.01,
+    "glucose_g": 0.51
+  },
+  {
+    "food_code": "C009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.05,
+    "fructose_g": 0.03,
+    "glucose_g": 0.1
+  },
+  {
+    "food_code": "C010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.24,
+    "fructose_g": 0.2,
+    "glucose_g": 0.17
+  },
+  {
+    "food_code": "C011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 5.14,
+    "fructose_g": 0.2,
+    "glucose_g": 0.2
+  },
+  {
+    "food_code": "C012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.31,
+    "fructose_g": 0.04,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.08
+  },
+  {
+    "food_code": "C013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.0,
+    "fructose_g": 0.2,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "C014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.59,
+    "fructose_g": 0.41,
+    "glucose_g": 0.24,
+    "sucrose_g": 0.11
+  },
+  {
+    "food_code": "C015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.53,
+    "fructose_g": 0.52,
+    "glucose_g": 0.26,
+    "sucrose_g": 0.23
+  },
+  {
+    "food_code": "C016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.54,
+    "fructose_g": 0.43,
+    "glucose_g": 0.18,
+    "sucrose_g": 0.19
+  },
+  {
+    "food_code": "C017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.53,
+    "fructose_g": 0.32,
+    "glucose_g": 0.24,
+    "sucrose_g": 0.05
+  },
+  {
+    "food_code": "C018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.1,
+    "fructose_g": 0.2,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.33
+  },
+  {
+    "food_code": "C019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.49,
+    "glucose_g": 0.02
+  },
+  {
+    "food_code": "C020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.6,
+    "fructose_g": 0.71,
+    "glucose_g": 0.17
+  },
+  {
+    "food_code": "C021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.25,
+    "fructose_g": 0.1,
+    "glucose_g": 0.72,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "C022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.15,
+    "glucose_g": 0.01
+  },
+  {
+    "food_code": "C023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.16,
+    "glucose_g": 0.01
+  },
+  {
+    "food_code": "C024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.47,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.05
+  },
+  {
+    "food_code": "C025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.5,
+    "fructose_g": 0.17,
+    "glucose_g": 0.05
+  },
+  {
+    "food_code": "C026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.41,
+    "glucose_g": 0.02,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "C027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.1,
+    "fructose_g": 0.1,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.22
+  },
+  {
+    "food_code": "C028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.36,
+    "fructose_g": 0.29,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "C029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.66,
+    "fructose_g": 0.11,
+    "glucose_g": 0.33
+  },
+  {
+    "food_code": "C030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.1,
+    "glucose_g": 0.1
+  },
+  {
+    "food_code": "C031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.8,
+    "fructose_g": 0.14,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "C032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.1,
+    "fructose_g": 0.11,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "C033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.38,
+    "fructose_g": 0.07,
+    "glucose_g": 0.18
+  },
+  {
+    "food_code": "C034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.85,
+    "fructose_g": 0.05,
+    "glucose_g": 0.12
+  },
+  {
+    "food_code": "D001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.01,
+    "fructose_g": 0.12,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "D002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.51,
+    "fructose_g": 0.07,
+    "glucose_g": 0.02
+  },
+  {
+    "food_code": "D003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.53,
+    "fructose_g": 0.38,
+    "glucose_g": 0.51,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "D004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.92,
+    "fructose_g": 0.04
+  },
+  {
+    "food_code": "D005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.93,
+    "fructose_g": 0.06
+  },
+  {
+    "food_code": "D006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.87,
+    "fructose_g": 0.08
+  },
+  {
+    "food_code": "D007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.67,
+    "fructose_g": 0.23,
+    "glucose_g": 0.13
+  },
+  {
+    "food_code": "D008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.67,
+    "fructose_g": 0.25,
+    "glucose_g": 0.1
+  },
+  {
+    "food_code": "D009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.58,
+    "fructose_g": 0.33,
+    "glucose_g": 0.06
+  },
+  {
+    "food_code": "D010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.04,
+    "fructose_g": 0.66,
+    "glucose_g": 0.03,
+    "sucrose_g": 0.19
+  },
+  {
+    "food_code": "D011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.01,
+    "fructose_g": 0.79,
+    "glucose_g": 0.04,
+    "sucrose_g": 0.15
+  },
+  {
+    "food_code": "D012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.51,
+    "fructose_g": 0.52,
+    "glucose_g": 0.32,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "D013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.97,
+    "fructose_g": 0.55,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.17
+  },
+  {
+    "food_code": "D014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.85,
+    "fructose_g": 0.67,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.22
+  },
+  {
+    "food_code": "D015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.36,
+    "fructose_g": 0.52,
+    "glucose_g": 0.26,
+    "sucrose_g": 0.23
+  },
+  {
+    "food_code": "D016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.89,
+    "fructose_g": 1.01,
+    "glucose_g": 0.3,
+    "sucrose_g": 0.07
+  },
+  {
+    "food_code": "D017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.98,
+    "fructose_g": 0.41,
+    "glucose_g": 0.11,
+    "sucrose_g": 0.27
+  },
+  {
+    "food_code": "D018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.54,
+    "fructose_g": 0.47,
+    "glucose_g": 0.23,
+    "sucrose_g": 0.21
+  },
+  {
+    "food_code": "D019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.29,
+    "fructose_g": 0.5,
+    "glucose_g": 0.23,
+    "sucrose_g": 0.13
+  },
+  {
+    "food_code": "D020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.76,
+    "fructose_g": 0.54,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "D021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.75,
+    "fructose_g": 0.82,
+    "glucose_g": 0.14,
+    "sucrose_g": 0.27
+  },
+  {
+    "food_code": "D022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.12,
+    "fructose_g": 0.59,
+    "glucose_g": 0.37,
+    "sucrose_g": 0.19
+  },
+  {
+    "food_code": "D023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.92,
+    "fructose_g": 0.4,
+    "glucose_g": 0.28,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "D024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.08,
+    "fructose_g": 0.4,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.27
+  },
+  {
+    "food_code": "D025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.61,
+    "fructose_g": 0.54,
+    "glucose_g": 0.13,
+    "sucrose_g": 0.32
+  },
+  {
+    "food_code": "D026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.62,
+    "fructose_g": 0.4,
+    "glucose_g": 0.26,
+    "sucrose_g": 0.19
+  },
+  {
+    "food_code": "D027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.28,
+    "fructose_g": 0.95,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.29
+  },
+  {
+    "food_code": "D028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.05,
+    "fructose_g": 0.5,
+    "glucose_g": 0.32,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "D029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.08,
+    "fructose_g": 0.42,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "D030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.08,
+    "fructose_g": 0.7,
+    "glucose_g": 0.07,
+    "sucrose_g": 0.15
+  },
+  {
+    "food_code": "D031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.31,
+    "fructose_g": 0.55,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.22
+  },
+  {
+    "food_code": "D032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.84,
+    "fructose_g": 0.61,
+    "glucose_g": 0.41,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "D033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.31,
+    "fructose_g": 0.42,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.23
+  },
+  {
+    "food_code": "D034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.08,
+    "fructose_g": 0.34,
+    "glucose_g": 0.26,
+    "sucrose_g": 0.33
+  },
+  {
+    "food_code": "D035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.12,
+    "fructose_g": 0.38,
+    "glucose_g": 0.25,
+    "sucrose_g": 0.35
+  },
+  {
+    "food_code": "D036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.59,
+    "fructose_g": 0.27,
+    "glucose_g": 0.14,
+    "sucrose_g": 0.06
+  },
+  {
+    "food_code": "D037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.68,
+    "fructose_g": 0.15,
+    "glucose_g": 0.25,
+    "sucrose_g": 0.35
+  },
+  {
+    "food_code": "D038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.17,
+    "fructose_g": 0.4,
+    "glucose_g": 0.25,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "D039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.42,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "D040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.55,
+    "fructose_g": 0.37,
+    "glucose_g": 0.16
+  },
+  {
+    "food_code": "D041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.89,
+    "fructose_g": 0.09,
+    "glucose_g": 0.16
+  },
+  {
+    "food_code": "D042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.12,
+    "fructose_g": 0.2,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "D043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.5,
+    "fructose_g": 0.25,
+    "glucose_g": 0.02
+  },
+  {
+    "food_code": "D044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.58,
+    "fructose_g": 0.19,
+    "glucose_g": 0.02
+  },
+  {
+    "food_code": "D045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.53,
+    "fructose_g": 0.18,
+    "glucose_g": 0.05
+  },
+  {
+    "food_code": "D046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.31,
+    "fructose_g": 1.02,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.24
+  },
+  {
+    "food_code": "D047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.68,
+    "fructose_g": 0.68,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.06
+  },
+  {
+    "food_code": "D048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.51,
+    "fructose_g": 0.59,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "D049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.75,
+    "fructose_g": 0.6,
+    "glucose_g": 0.12,
+    "sucrose_g": 0.12,
+    "maltose_g": 0.22
+  },
+  {
+    "food_code": "D050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.77,
+    "fructose_g": 0.65,
+    "glucose_g": 0.14,
+    "sucrose_g": 0.1,
+    "maltose_g": 0.12
+  },
+  {
+    "food_code": "D051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.02,
+    "fructose_g": 1.21,
+    "glucose_g": 0.26,
+    "sucrose_g": 0.55
+  },
+  {
+    "food_code": "D052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.54,
+    "fructose_g": 1.45,
+    "glucose_g": 0.67,
+    "sucrose_g": 0.11
+  },
+  {
+    "food_code": "D053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.51,
+    "fructose_g": 0.05,
+    "glucose_g": 0.11,
+    "sucrose_g": 0.27
+  },
+  {
+    "food_code": "D054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.22,
+    "fructose_g": 0.74,
+    "glucose_g": 0.06,
+    "maltose_g": 0.19
+  },
+  {
+    "food_code": "D055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.12,
+    "fructose_g": 0.83,
+    "glucose_g": 0.1,
+    "maltose_g": 0.14
+  },
+  {
+    "food_code": "D056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.89,
+    "fructose_g": 0.4,
+    "glucose_g": 0.07,
+    "sucrose_g": 0.05
+  },
+  {
+    "food_code": "D057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 5.8,
+    "fructose_g": 1.84,
+    "glucose_g": 0.52
+  },
+  {
+    "food_code": "D058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.1,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.06,
+    "maltose_g": 0.31
+  },
+  {
+    "food_code": "D059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 2.64,
+    "glucose_g": 0.99
+  },
+  {
+    "food_code": "D060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.9,
+    "fructose_g": 0.31,
+    "glucose_g": 0.06
+  },
+  {
+    "food_code": "D061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.92,
+    "fructose_g": 0.41,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.36
+  },
+  {
+    "food_code": "D062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.86,
+    "fructose_g": 0.13,
+    "glucose_g": 0.04
+  },
+  {
+    "food_code": "D063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.43,
+    "fructose_g": 0.76,
+    "glucose_g": 0.1
+  },
+  {
+    "food_code": "D064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.51,
+    "glucose_g": 0.65
+  },
+  {
+    "food_code": "D065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.2,
+    "fructose_g": 1.03,
+    "glucose_g": 1.01,
+    "sucrose_g": 0.86
+  },
+  {
+    "food_code": "D066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.33,
+    "fructose_g": 1.9,
+    "glucose_g": 0.33,
+    "sucrose_g": 0.74
+  },
+  {
+    "food_code": "D067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 14.02,
+    "fructose_g": 0.22,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.23
+  },
+  {
+    "food_code": "D068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.81,
+    "fructose_g": 0.45,
+    "glucose_g": 0.08,
+    "sucrose_g": 0.03,
+    "maltose_g": 0.06
+  },
+  {
+    "food_code": "D069",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.79,
+    "fructose_g": 0.32,
+    "glucose_g": 0.06,
+    "sucrose_g": 0.02,
+    "maltose_g": 0.01
+  },
+  {
+    "food_code": "D070",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.78,
+    "fructose_g": 0.31,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.01,
+    "maltose_g": 0.05
+  },
+  {
+    "food_code": "D071",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.74,
+    "fructose_g": 0.3,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.01,
+    "maltose_g": 0.04
+  },
+  {
+    "food_code": "D072",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.72,
+    "fructose_g": 0.31,
+    "glucose_g": 0.12,
+    "sucrose_g": 0.01,
+    "maltose_g": 0.01
+  },
+  {
+    "food_code": "D073",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.64,
+    "fructose_g": 0.25,
+    "glucose_g": 0.07,
+    "maltose_g": 0.12
+  },
+  {
+    "food_code": "D074",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.48,
+    "fructose_g": 0.41,
+    "glucose_g": 0.42
+  },
+  {
+    "food_code": "D075",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.65,
+    "glucose_g": 0.18
+  },
+  {
+    "food_code": "D076",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.16,
+    "glucose_g": 0.18
+  },
+  {
+    "food_code": "D077",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.47,
+    "fructose_g": 0.12,
+    "glucose_g": 0.02
+  },
+  {
+    "food_code": "D078",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.07,
+    "fructose_g": 0.19,
+    "glucose_g": 0.1
+  },
+  {
+    "food_code": "E001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 8.36,
+    "glucose_g": 1.03,
+    "sucrose_g": 0.14
+  },
+  {
+    "food_code": "E002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.19,
+    "glucose_g": 1.08,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "E003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 8.52,
+    "glucose_g": 1.17,
+    "sucrose_g": 0.11
+  },
+  {
+    "food_code": "E004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.18,
+    "glucose_g": 1.6,
+    "sucrose_g": 0.37
+  },
+  {
+    "food_code": "E005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 44.38,
+    "fructose_g": 16.52,
+    "glucose_g": 6.98,
+    "sucrose_g": 2.21
+  },
+  {
+    "food_code": "E006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.99,
+    "fructose_g": 1.33,
+    "glucose_g": 0.43,
+    "sucrose_g": 2.6
+  },
+  {
+    "food_code": "E007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.1,
+    "fructose_g": 1.0,
+    "glucose_g": 0.44,
+    "sucrose_g": 0.21
+  },
+  {
+    "food_code": "E008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 7.2,
+    "fructose_g": 9.58,
+    "glucose_g": 2.65,
+    "sucrose_g": 4.12
+  },
+  {
+    "food_code": "E009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.32,
+    "fructose_g": 6.32,
+    "glucose_g": 7.68,
+    "sucrose_g": 0.9
+  },
+  {
+    "food_code": "E010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.72,
+    "fructose_g": 5.43,
+    "glucose_g": 6.12,
+    "sucrose_g": 0.99
+  },
+  {
+    "food_code": "E011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.96,
+    "fructose_g": 6.03,
+    "glucose_g": 4.05,
+    "sucrose_g": 4.49
+  },
+  {
+    "food_code": "E012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 5.29,
+    "fructose_g": 6.5,
+    "glucose_g": 4.05,
+    "sucrose_g": 3.1
+  },
+  {
+    "food_code": "E013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.47,
+    "glucose_g": 2.5,
+    "sucrose_g": 0.64
+  },
+  {
+    "food_code": "E014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 5.91,
+    "glucose_g": 4.61,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "E015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.56,
+    "fructose_g": 2.98,
+    "glucose_g": 2.85,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "E016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.34,
+    "fructose_g": 9.1,
+    "glucose_g": 4.25
+  },
+  {
+    "food_code": "E017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.87,
+    "fructose_g": 14.9,
+    "glucose_g": 6.15,
+    "sucrose_g": 45.58
+  },
+  {
+    "food_code": "E018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.99,
+    "fructose_g": 15.04,
+    "glucose_g": 6.26,
+    "sucrose_g": 47.54
+  },
+  {
+    "food_code": "E019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.78,
+    "fructose_g": 22.34,
+    "glucose_g": 5.0,
+    "sucrose_g": 29.62
+  },
+  {
+    "food_code": "E020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.15,
+    "fructose_g": 5.89,
+    "glucose_g": 1.2,
+    "sucrose_g": 1.55
+  },
+  {
+    "food_code": "E021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.56,
+    "fructose_g": 2.1,
+    "glucose_g": 1.29
+  },
+  {
+    "food_code": "E022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.1,
+    "glucose_g": 2.77,
+    "sucrose_g": 0.15
+  },
+  {
+    "food_code": "E023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.11,
+    "glucose_g": 2.38,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "E024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.8,
+    "glucose_g": 2.57,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "E025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.08,
+    "glucose_g": 2.01,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "E026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.35,
+    "glucose_g": 2.15,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "E027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.49,
+    "glucose_g": 3.29,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "E028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.63,
+    "fructose_g": 2.0,
+    "glucose_g": 1.9,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "E029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.7,
+    "fructose_g": 4.01,
+    "glucose_g": 3.6,
+    "sucrose_g": 0.18
+  },
+  {
+    "food_code": "E030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.5,
+    "fructose_g": 4.12,
+    "glucose_g": 3.33,
+    "sucrose_g": 4.76
+  },
+  {
+    "food_code": "E031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.48,
+    "fructose_g": 4.47,
+    "glucose_g": 2.21,
+    "sucrose_g": 0.16
+  },
+  {
+    "food_code": "E032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.8,
+    "fructose_g": 1.19,
+    "glucose_g": 0.56
+  },
+  {
+    "food_code": "E033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.01,
+    "glucose_g": 1.28,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "E034",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.52,
+    "fructose_g": 0.7,
+    "glucose_g": 2.6,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "E035",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.05,
+    "glucose_g": 2.17,
+    "sucrose_g": 3.08
+  },
+  {
+    "food_code": "E036",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 2.38,
+    "glucose_g": 0.73,
+    "sucrose_g": 4.66
+  },
+  {
+    "food_code": "E037",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 3.9,
+    "glucose_g": 2.6,
+    "sucrose_g": 1.63
+  },
+  {
+    "food_code": "E038",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.5,
+    "glucose_g": 0.55,
+    "sucrose_g": 3.01
+  },
+  {
+    "food_code": "E039",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.8,
+    "glucose_g": 2.65,
+    "sucrose_g": 1.55
+  },
+  {
+    "food_code": "E040",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.42,
+    "glucose_g": 2.71,
+    "sucrose_g": 0.81
+  },
+  {
+    "food_code": "E041",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.95,
+    "glucose_g": 2.46,
+    "sucrose_g": 1.07
+  },
+  {
+    "food_code": "E042",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 7.33,
+    "glucose_g": 1.05,
+    "sucrose_g": 0.86
+  },
+  {
+    "food_code": "E043",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.5,
+    "fructose_g": 5.12,
+    "glucose_g": 1.67,
+    "sucrose_g": 2.12
+  },
+  {
+    "food_code": "E044",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.5,
+    "fructose_g": 3.45,
+    "glucose_g": 4.12,
+    "sucrose_g": 4.56
+  },
+  {
+    "food_code": "E045",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 0.62,
+    "glucose_g": 0.71,
+    "sucrose_g": 1.65
+  },
+  {
+    "food_code": "E046",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 0.51,
+    "glucose_g": 0.84,
+    "sucrose_g": 1.01
+  },
+  {
+    "food_code": "E047",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 2.86,
+    "glucose_g": 1.21,
+    "sucrose_g": 2.79
+  },
+  {
+    "food_code": "E048",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.84,
+    "fructose_g": 0.17,
+    "glucose_g": 0.02
+  },
+  {
+    "food_code": "E049",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 2.44,
+    "glucose_g": 1.15,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "E050",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.15,
+    "glucose_g": 0.89,
+    "sucrose_g": 4.61,
+    "maltose_g": 0.3
+  },
+  {
+    "food_code": "E051",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 3.51,
+    "glucose_g": 2.74,
+    "sucrose_g": 1.12
+  },
+  {
+    "food_code": "E052",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.75,
+    "fructose_g": 6.12,
+    "glucose_g": 4.66,
+    "sucrose_g": 2.22
+  },
+  {
+    "food_code": "E053",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.21,
+    "glucose_g": 3.12,
+    "sucrose_g": 4.23
+  },
+  {
+    "food_code": "E054",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 3.5,
+    "glucose_g": 3.42,
+    "sucrose_g": 3.21
+  },
+  {
+    "food_code": "E055",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.01,
+    "glucose_g": 1.74,
+    "sucrose_g": 8.12
+  },
+  {
+    "food_code": "E056",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.46,
+    "fructose_g": 2.09,
+    "glucose_g": 1.44,
+    "sucrose_g": 0.86
+  },
+  {
+    "food_code": "E057",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.29,
+    "fructose_g": 23.12,
+    "glucose_g": 16.22,
+    "sucrose_g": 22.17
+  },
+  {
+    "food_code": "E058",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.05,
+    "fructose_g": 26.54,
+    "glucose_g": 15.58,
+    "sucrose_g": 15.0
+  },
+  {
+    "food_code": "E059",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 8.78,
+    "glucose_g": 6.0,
+    "sucrose_g": 1.02
+  },
+  {
+    "food_code": "E060",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 8.6,
+    "glucose_g": 2.85,
+    "sucrose_g": 0.85
+  },
+  {
+    "food_code": "E061",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.12,
+    "fructose_g": 7.99,
+    "glucose_g": 1.66,
+    "sucrose_g": 0.18
+  },
+  {
+    "food_code": "E062",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 2.22,
+    "glucose_g": 1.73
+  },
+  {
+    "food_code": "E063",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.1,
+    "fructose_g": 1.9,
+    "glucose_g": 1.6,
+    "sucrose_g": 0.07
+  },
+  {
+    "food_code": "E064",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 12.31,
+    "glucose_g": 14.53,
+    "sucrose_g": 26.04
+  },
+  {
+    "food_code": "E065",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.91,
+    "glucose_g": 0.31,
+    "sucrose_g": 1.44
+  },
+  {
+    "food_code": "E066",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 2.57,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.22
+  },
+  {
+    "food_code": "E067",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.79,
+    "fructose_g": 1.38,
+    "glucose_g": 1.41,
+    "sucrose_g": 1.02
+  },
+  {
+    "food_code": "E068",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 4.3,
+    "glucose_g": 2.98,
+    "sucrose_g": 1.01
+  },
+  {
+    "food_code": "F001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.69,
+    "fructose_g": 1.67,
+    "glucose_g": 1.46,
+    "sucrose_g": 1.21
+  },
+  {
+    "food_code": "F002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.24,
+    "fructose_g": 0.11,
+    "glucose_g": 1.15,
+    "sucrose_g": 1.98
+  },
+  {
+    "food_code": "F003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.39,
+    "fructose_g": 1.08,
+    "glucose_g": 1.13,
+    "sucrose_g": 1.75
+  },
+  {
+    "food_code": "F004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 13.88,
+    "fructose_g": 0.54,
+    "glucose_g": 0.25,
+    "sucrose_g": 0.12
+  },
+  {
+    "food_code": "F005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 13.22,
+    "fructose_g": 0.07,
+    "glucose_g": 0.11,
+    "sucrose_g": 0.07
+  },
+  {
+    "food_code": "F006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 11.47,
+    "fructose_g": 0.24,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.04
+  },
+  {
+    "food_code": "F007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 10.29,
+    "fructose_g": 0.26,
+    "glucose_g": 0.08,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "F008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 13.08,
+    "fructose_g": 0.22,
+    "glucose_g": 0.1,
+    "sucrose_g": 0.05
+  },
+  {
+    "food_code": "F009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.41,
+    "fructose_g": 0.48,
+    "glucose_g": 0.27,
+    "sucrose_g": 0.4
+  },
+  {
+    "food_code": "F010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.59,
+    "fructose_g": 0.31,
+    "glucose_g": 0.03,
+    "sucrose_g": 0.62
+  },
+  {
+    "food_code": "F011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.64,
+    "fructose_g": 0.38,
+    "glucose_g": 0.18,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "F012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.3,
+    "fructose_g": 0.36,
+    "glucose_g": 0.3,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "F013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 18.82,
+    "fructose_g": 0.46,
+    "glucose_g": 0.71,
+    "sucrose_g": 2.47
+  },
+  {
+    "food_code": "F014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 19.88,
+    "fructose_g": 0.9,
+    "glucose_g": 0.97,
+    "sucrose_g": 2.16
+  },
+  {
+    "food_code": "F015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.36,
+    "fructose_g": 0.13,
+    "glucose_g": 0.29,
+    "sucrose_g": 1.72
+  },
+  {
+    "food_code": "F016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.93,
+    "fructose_g": 0.12,
+    "glucose_g": 0.32,
+    "sucrose_g": 1.51
+  },
+  {
+    "food_code": "F017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 14.36,
+    "fructose_g": 0.7,
+    "glucose_g": 0.16,
+    "sucrose_g": 0.72
+  },
+  {
+    "food_code": "F018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 14.94,
+    "fructose_g": 0.42,
+    "glucose_g": 0.11,
+    "sucrose_g": 0.62
+  },
+  {
+    "food_code": "F019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.35,
+    "fructose_g": 0.62,
+    "glucose_g": 0.12,
+    "sucrose_g": 0.8
+  },
+  {
+    "food_code": "G001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.31,
+    "fructose_g": 0.54,
+    "glucose_g": 0.16,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "G002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.96,
+    "fructose_g": 0.93,
+    "glucose_g": 0.11,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "G003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.85,
+    "fructose_g": 0.45,
+    "glucose_g": 0.08,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "G004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.65,
+    "fructose_g": 0.47,
+    "glucose_g": 0.14,
+    "sucrose_g": 0.01
+  },
+  {
+    "food_code": "G005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.84,
+    "fructose_g": 0.42,
+    "glucose_g": 0.02,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "G006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.7,
+    "fructose_g": 0.43,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.01
+  },
+  {
+    "food_code": "G007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 2.48,
+    "fructose_g": 0.66,
+    "glucose_g": 0.05,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "G008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.96,
+    "fructose_g": 0.55,
+    "glucose_g": 0.11,
+    "sucrose_g": 0.02
+  },
+  {
+    "food_code": "G009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.06,
+    "fructose_g": 0.07,
+    "glucose_g": 0.06,
+    "sucrose_g": 0.05
+  },
+  {
+    "food_code": "G010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.08,
+    "fructose_g": 0.41,
+    "glucose_g": 0.2
+  },
+  {
+    "food_code": "G011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 14.84,
+    "fructose_g": 4.2,
+    "glucose_g": 1.2,
+    "sucrose_g": 0.57
+  },
+  {
+    "food_code": "G012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 14.86,
+    "fructose_g": 1.48,
+    "glucose_g": 1.08,
+    "sucrose_g": 2.28
+  },
+  {
+    "food_code": "G013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 17.53,
+    "fructose_g": 1.21,
+    "glucose_g": 1.05,
+    "sucrose_g": 1.47
+  },
+  {
+    "food_code": "G014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.8,
+    "fructose_g": 1.0,
+    "glucose_g": 0.15,
+    "sucrose_g": 0.17
+  },
+  {
+    "food_code": "G015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.79,
+    "fructose_g": 1.11,
+    "glucose_g": 0.81,
+    "sucrose_g": 0.5
+  },
+  {
+    "food_code": "G016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.02,
+    "fructose_g": 0.01,
+    "glucose_g": 0.07
+  },
+  {
+    "food_code": "G017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.8,
+    "fructose_g": 1.89,
+    "glucose_g": 1.47,
+    "sucrose_g": 2.52
+  },
+  {
+    "food_code": "G018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.75,
+    "fructose_g": 1.44,
+    "glucose_g": 1.63,
+    "sucrose_g": 2.55
+  },
+  {
+    "food_code": "G019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 36.83,
+    "fructose_g": 0.21,
+    "glucose_g": 0.47,
+    "sucrose_g": 0.25
+  },
+  {
+    "food_code": "G020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 29.47,
+    "fructose_g": 1.84,
+    "glucose_g": 1.89,
+    "sucrose_g": 0.55
+  },
+  {
+    "food_code": "G021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 29.04,
+    "fructose_g": 1.37,
+    "glucose_g": 0.76,
+    "sucrose_g": 0.17
+  },
+  {
+    "food_code": "G022",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.75,
+    "fructose_g": 2.68,
+    "glucose_g": 1.82,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "G023",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 8.57,
+    "fructose_g": 1.68,
+    "glucose_g": 0.43
+  },
+  {
+    "food_code": "G024",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.07,
+    "fructose_g": 1.61,
+    "glucose_g": 0.77
+  },
+  {
+    "food_code": "G025",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 14.46,
+    "fructose_g": 0.63,
+    "glucose_g": 0.75
+  },
+  {
+    "food_code": "G026",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.66,
+    "fructose_g": 0.31,
+    "glucose_g": 0.12,
+    "sucrose_g": 0.11,
+    "maltose_g": 0.01
+  },
+  {
+    "food_code": "G027",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 22.85,
+    "fructose_g": 0.2,
+    "glucose_g": 0.28,
+    "sucrose_g": 0.38
+  },
+  {
+    "food_code": "G028",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 24.49,
+    "fructose_g": 0.29,
+    "glucose_g": 0.59,
+    "sucrose_g": 0.2
+  },
+  {
+    "food_code": "G029",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.75,
+    "fructose_g": 2.07,
+    "glucose_g": 0.47,
+    "sucrose_g": 0.22
+  },
+  {
+    "food_code": "G030",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 31.72,
+    "fructose_g": 1.24,
+    "glucose_g": 0.51,
+    "sucrose_g": 1.0
+  },
+  {
+    "food_code": "G031",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 35.35,
+    "fructose_g": 0.09,
+    "glucose_g": 0.23
+  },
+  {
+    "food_code": "G032",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 10.43,
+    "fructose_g": 0.78,
+    "glucose_g": 0.77,
+    "sucrose_g": 0.3
+  },
+  {
+    "food_code": "G033",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 44.44,
+    "glucose_g": 0.49,
+    "sucrose_g": 0.75
+  },
+  {
+    "food_code": "H001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.01,
+    "fructose_g": 1.2,
+    "glucose_g": 0.76,
+    "sucrose_g": 0.27
+  },
+  {
+    "food_code": "H002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 66.56,
+    "fructose_g": 0.5,
+    "glucose_g": 0.71,
+    "sucrose_g": 0.55
+  },
+  {
+    "food_code": "H003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 67.33,
+    "fructose_g": 0.6,
+    "glucose_g": 0.83,
+    "sucrose_g": 0.36
+  },
+  {
+    "food_code": "H004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 35.38,
+    "fructose_g": 3.24,
+    "glucose_g": 1.06,
+    "sucrose_g": 0.43
+  },
+  {
+    "food_code": "H005",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 20.11,
+    "fructose_g": 1.97,
+    "glucose_g": 1.05,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "H006",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.37,
+    "glucose_g": 1.0,
+    "sucrose_g": 4.57
+  },
+  {
+    "food_code": "H007",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 1.0,
+    "glucose_g": 0.89,
+    "sucrose_g": 4.31
+  },
+  {
+    "food_code": "H008",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 30.12,
+    "fructose_g": 0.09,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.61
+  },
+  {
+    "food_code": "H009",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 8.54,
+    "fructose_g": 0.31,
+    "glucose_g": 0.47,
+    "sucrose_g": 0.21
+  },
+  {
+    "food_code": "H010",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 7.92,
+    "fructose_g": 0.5,
+    "glucose_g": 0.21,
+    "sucrose_g": 0.68
+  },
+  {
+    "food_code": "H011",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 7.94,
+    "fructose_g": 0.09,
+    "glucose_g": 0.33,
+    "sucrose_g": 0.26
+  },
+  {
+    "food_code": "H012",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 10.19,
+    "fructose_g": 0.6,
+    "glucose_g": 0.25,
+    "sucrose_g": 3.57
+  },
+  {
+    "food_code": "H013",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 9.05,
+    "fructose_g": 1.13,
+    "glucose_g": 1.4,
+    "sucrose_g": 2.55
+  },
+  {
+    "food_code": "H014",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 7.55,
+    "fructose_g": 0.2,
+    "glucose_g": 0.4
+  },
+  {
+    "food_code": "H015",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 15.01,
+    "fructose_g": 1.34,
+    "glucose_g": 0.31,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "H016",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 16.34,
+    "fructose_g": 0.11,
+    "glucose_g": 0.2,
+    "sucrose_g": 0.1
+  },
+  {
+    "food_code": "H017",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 17.93,
+    "fructose_g": 1.55,
+    "glucose_g": 1.0,
+    "sucrose_g": 2.12
+  },
+  {
+    "food_code": "H018",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.65,
+    "fructose_g": 4.11,
+    "glucose_g": 2.65,
+    "sucrose_g": 1.15
+  },
+  {
+    "food_code": "H019",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 25.48,
+    "fructose_g": 0.8,
+    "glucose_g": 0.52,
+    "sucrose_g": 1.35
+  },
+  {
+    "food_code": "H020",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 3.97,
+    "fructose_g": 0.74,
+    "glucose_g": 0.6,
+    "sucrose_g": 1.48
+  },
+  {
+    "food_code": "H021",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 6.63,
+    "fructose_g": 1.1,
+    "glucose_g": 0.36,
+    "sucrose_g": 1.76
+  },
+  {
+    "food_code": "I001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 22.31,
+    "glucose_g": 3.79,
+    "sucrose_g": 58.23
+  },
+  {
+    "food_code": "I002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 0.55,
+    "glucose_g": 2.27,
+    "sucrose_g": 10.03
+  },
+  {
+    "food_code": "J001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 0.7,
+    "fructose_g": 0.1
+  },
+  {
+    "food_code": "J002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 1.86,
+    "fructose_g": 0.1
+  },
+  {
+    "food_code": "J003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 4.31,
+    "fructose_g": 0.2
+  },
+  {
+    "food_code": "J004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "starch_g": 21.32,
+    "fructose_g": 0.68
+  },
+  {
+    "food_code": "K001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 5.73
+  },
+  {
+    "food_code": "K002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 3.06
+  },
+  {
+    "food_code": "L001",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "fructose_g": 0.24,
+    "glucose_g": 0.39,
+    "sucrose_g": 0.59
+  },
+  {
+    "food_code": "L002",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "glucose_g": 0.18,
+    "sucrose_g": 0.24,
+    "fructose_g": 0.2
+  },
+  {
+    "food_code": "L003",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "glucose_g": 1.11,
+    "sucrose_g": 0.84,
+    "fructose_g": 0.5
+  },
+  {
+    "food_code": "L004",
+    "source": "IFCT2017_NIN_PDF",
+    "basis": "raw",
+    "glucose_g": 1.57,
+    "sucrose_g": 0.91,
+    "fructose_g": 0.8
+  }
+]

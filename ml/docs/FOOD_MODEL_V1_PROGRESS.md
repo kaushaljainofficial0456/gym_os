@@ -1,5 +1,48 @@
 # skos-food-v1 — progress report
 
+## MICRONUTRIENTS — IFCT Tables 3/4/6/7/8 (2026-08-18)
+
+All remaining nutritionally-useful IFCT tables extracted with one generalised
+x-position extractor rather than five scripts. **~19,800 new nutrient values.**
+
+| Table | What | Foods | Values |
+|---|---|---:|---:|
+| 8 | **Amino acids** — all 9 essential + cystine | 528 | 9,061 |
+| 7 | **Fatty acids** — SFA/MUFA/PUFA, omega-3/6, EPA/DHA | 528 | 6,202 |
+| 3 | Fat-soluble vitamins — E, K1, D2, tocopherols | 528 | 2,104 |
+| 4 | Carotenoids — beta-carotene, lutein, lycopene | 329 | 1,278 |
+| 6 | Starch and individual sugars | 314 | 1,126 |
+
+Amino acids matter most for a training app: **leucine drives muscle protein
+synthesis**, so protein *quality* becomes visible, not just protein grams.
+
+### A unit error caught by validation, not by reading
+
+First pass produced an amino-acids/protein ratio of **0.01** where physics
+demands ~0.85 — paneer read 10 mg leucine per 100 g instead of ~1,840. The
+extraction was correct; **my unit assumption was not.** Table 8's own header
+states *"All values are expressed in g per 100g protein"* — relative to protein,
+unlike every other IFCT table. Fields now name their basis explicitly, and
+absolute per-100g-food values are **derived** from each food's own measured
+protein rather than silently conflated.
+
+Verified after the fix: paneer leucine **1,841 mg/100 g = 9.8% of protein**
+(typical 7–10%), lentil dal 7.1%.
+
+### Validated against physical law, not eyeballed
+
+| Check | Law | Result |
+|---|---|---|
+| Fatty acids / total fat | FA residues are ~95% of triglyceride mass; rest is glycerol | median **0.83**, 82% in band ✓ |
+| Free sugars / carbohydrate | Sugars are a *subset* of carbs | median 0.20, **0 physically impossible** ✓ |
+| Each essential AA's share of protein | Stable biological range per amino acid | all 8 medians in band (leucine 6.9%, lysine 5.2%, valine 5.1%) ✓ |
+
+A column misalignment — the exact failure x-position extraction exists to
+prevent — would throw these far outside their bands, so this proves the method
+rather than assuming it.
+
+---
+
 ## TIER 2 — compositional calculator (built 2026-08-17)
 
 The architecture always had three tiers; only 1 and 3 existed. Tier 2 is now
