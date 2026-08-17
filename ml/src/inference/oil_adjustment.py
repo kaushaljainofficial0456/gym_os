@@ -93,6 +93,51 @@ CLASS_PATTERNS = [
 COMPILED = [(k, re.compile(p, re.I)) for k, p in CLASS_PATTERNS]
 
 
+# Fatty-acid composition of the cooking fats Indian kitchens actually use,
+# from IFCT Table 12 (% of total fatty acid methyl ester, n=14). Every one
+# sums to exactly 100%, which is the validation: SFA+MUFA+PUFA IS the whole
+# composition by definition.
+#
+# These do NOT change calories -- every cooking fat is ~900 kcal/100 g. They
+# let the app report fat QUALITY, which is the real difference between
+# choosing ghee and choosing sunflower oil at identical energy.
+OIL_FATTY_ACID_PROFILE = {
+    "coconut oil":   {"sfa": 90.9, "mufa":  7.2, "pufa":  1.9},
+    "corn oil":      {"sfa": 16.6, "mufa": 33.7, "pufa": 49.7},
+    "cottonseed oil":{"sfa": 28.2, "mufa": 19.7, "pufa": 52.2},
+    "gingelly oil":  {"sfa": 16.2, "mufa": 41.4, "pufa": 42.3},
+    "sesame oil":    {"sfa": 16.2, "mufa": 41.4, "pufa": 42.3},
+    "groundnut oil": {"sfa": 18.9, "mufa": 53.9, "pufa": 27.2},
+    "peanut oil":    {"sfa": 18.9, "mufa": 53.9, "pufa": 27.2},
+    "mustard oil":   {"sfa":  5.7, "mufa": 67.1, "pufa": 27.2},
+    "palm oil":      {"sfa": 45.0, "mufa": 43.5, "pufa": 11.5},
+    "rice bran oil": {"sfa": 23.8, "mufa": 44.1, "pufa": 32.1},
+    "safflower oil": {"sfa":  9.2, "mufa": 14.0, "pufa": 76.8},
+    "soyabean oil":  {"sfa": 16.0, "mufa": 24.1, "pufa": 60.0},
+    "soybean oil":   {"sfa": 16.0, "mufa": 24.1, "pufa": 60.0},
+    "sunflower oil": {"sfa": 11.4, "mufa": 26.0, "pufa": 62.6},
+    "ghee":          {"sfa": 71.0, "mufa": 26.4, "pufa":  2.5},
+    "vanaspati":     {"sfa": 61.4, "mufa": 33.9, "pufa":  4.7},
+}
+
+
+def fatty_acid_split(oil_type, oil_grams):
+    """Grams of SFA/MUFA/PUFA contributed by `oil_grams` of `oil_type`.
+    Returns None for an unknown oil rather than defaulting to a generic
+    profile -- coconut (90.9% saturated) and mustard (5.7%) differ by 16x,
+    so a wrong default would be worse than no answer."""
+    prof = OIL_FATTY_ACID_PROFILE.get((oil_type or "").strip().lower())
+    if not prof or not oil_grams:
+        return None
+    return {
+        "oil_type": oil_type,
+        "saturated_g": round(oil_grams * prof["sfa"] / 100.0, 2),
+        "monounsaturated_g": round(oil_grams * prof["mufa"] / 100.0, 2),
+        "polyunsaturated_g": round(oil_grams * prof["pufa"] / 100.0, 2),
+        "source": "IFCT2017 Table 12",
+    }
+
+
 class OilAdjuster:
     def __init__(self, oil_path=OIL_PATH):
         self.by_code = {}
@@ -139,7 +184,7 @@ class OilAdjuster:
 
     # ---------- adjustment ----------
     def adjust(self, food, level="moderate", custom_oil_g_per_100g=None,
-               portion_g=None):
+               portion_g=None, oil_type=None):
         """Re-price a food for a different oil level.
 
         `level` is one of OIL_LEVELS, or "custom" with
@@ -225,6 +270,18 @@ class OilAdjuster:
             out["portion_g"] = portion_g
             out["portion_kcal_original"] = round(base_kcal * portion_g / 100.0, 1)
             out["portion_kcal_adjusted"] = round(adj_kcal * portion_g / 100.0, 1)
+
+        # If the user named their oil, report the fat-quality split too.
+        if oil_type and delta_g > 0:
+            split = fatty_acid_split(oil_type, delta_g)
+            if split:
+                out["added_fat_profile"] = split
+            else:
+                out["added_fat_profile_note"] = (
+                    f"no measured fatty-acid profile for '{oil_type}'; "
+                    "calories are unaffected, but the saturated/unsaturated "
+                    "split is not reported rather than guessed"
+                )
 
         if provenance.startswith("class_estimate"):
             out["caveat"] = (

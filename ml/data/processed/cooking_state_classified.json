@@ -1,0 +1,17 @@
+{
+  "classified": 6081,
+  "left_unspecified": 6025,
+  "distribution": {
+    "unspecified": 6025,
+    "ready_to_eat": 3941,
+    "cooked": 8646,
+    "raw": 2766
+  },
+  "evidence_counts": {
+    "ready_to_eat: packaged/processed product": 2905,
+    "ready_to_eat: ingredient with no meaningful cooking state": 1036,
+    "cooked: dish form implies cooking": 1695,
+    "cooked: explicit cooking verb in name": 308,
+    "raw: explicit raw/fresh in name": 137
+  }
+}

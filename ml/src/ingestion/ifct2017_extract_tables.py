@@ -93,6 +93,27 @@ TABLES = {
         "GLY": "aa_glycine_g_per_100g_protein", "PRO": "aa_proline_g_per_100g_protein",
         "SER": "aa_serine_g_per_100g_protein", "TYR": "aa_tyrosine_g_per_100g_protein",
     }, "ifct2017_table8_amino_acids.json"),
+
+    # Table 12 -- fatty acid profile of the 14 edible oils and fats Indian
+    # cooking actually uses (coconut, mustard, gingelly, rice bran, ghee,
+    # vanaspati...). Units are "% of total fatty acid methyl ester", i.e.
+    # composition SHARES, not per-100g mass -- every cooking fat is ~900
+    # kcal/100 g regardless, so this adds fat QUALITY, not calories.
+    # It matters because the oil feature lets a user pick their oil, and
+    # ghee vs sunflower is a real difference in saturated fat even at
+    # identical energy.
+    12: (range(473, 475), {
+        "F4D0": "fa_pct_c4_0", "F6D0": "fa_pct_c6_0", "F8D0": "fa_pct_c8_0",
+        "F10D0": "fa_pct_c10_0", "F12D0": "fa_pct_c12_0", "F14D0": "fa_pct_c14_0",
+        "F16D0": "fa_pct_c16_0", "F18D0": "fa_pct_c18_0", "F20D0": "fa_pct_c20_0",
+        "F22D0": "fa_pct_c22_0", "F24D0": "fa_pct_c24_0",
+        "F14D1": "fa_pct_c14_1", "F16D1": "fa_pct_c16_1",
+        "F18D1TN9": "fa_pct_c18_1_trans_n9", "F18D1N9": "fa_pct_c18_1n9",
+        "F20D1N9": "fa_pct_c20_1n9", "F22D1N9": "fa_pct_c22_1n9",
+        "F18D2N6": "fa_pct_c18_2n6", "F18D3N3": "fa_pct_c18_3n3",
+        "FASAT": "fa_pct_saturated", "FAMS": "fa_pct_monounsat",
+        "FAPU": "fa_pct_polyunsat",
+    }, "ifct2017_table12_edible_oils.json"),
 }
 
 
