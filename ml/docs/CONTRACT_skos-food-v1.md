@@ -152,6 +152,46 @@ food colour) are excluded deliberately and are not errors.
 per-serving error vs 25.7% for main dishes, because a "serving" of chutney is a
 teaspoon of a batch. Whole-batch totals stay reliable; show the caveat.
 
+### 3.4b `portions` — how users actually log food
+
+Every `FoodMatch` carries a `portions` array sized **for that food**. Users log
+"1 katori", not "150 g", and the app should offer both a weighing-scale gram
+entry *and* these.
+
+```json
+"portions": [
+  { "key": "medium_bowl", "label": "Medium bowl", "group": "bowl",
+    "basis": "volume", "volume_ml": 250, "grams": 250.0,
+    "observed_range_g": [166, 354] },
+  { "key": "tablespoon", "label": "Tablespoon", "group": "spoon",
+    "basis": "volume", "volume_ml": 25, "grams": 25.0,
+    "observed_range_g": [16, 26] },
+  { "key": "roti", "label": "Roti / chapati", "group": "count",
+    "basis": "count", "grams": 40 }
+]
+```
+
+**`grams` is food-specific and you must not cache it across foods.** A portion
+is a VOLUME: a medium bowl of dal is 250 g and of spinach 62 g, because their
+densities differ ~4x. Publishing "1 bowl = 250 g" globally would be wrong by
+that factor on most foods.
+
+Groups for UI layout: `spoon` (teaspoon, tablespoon, serving spoon, ladle),
+`bowl` (small/medium/large/soup, katori), `plate` (quarter/half/regular/full),
+`glass` (small/glass/tall/tea cup/cup/mug), `count` (roti, dosa, idli, egg...),
+`misc` (handful, pinch). Count portions appear only for foods that come in that
+form — no "1 idli" option on dal.
+
+**Show `observed_range_g` where present.** A "bowl" is not a defined unit; real
+bowls span 166–354 g in the measured data. Presenting a single number as exact
+would be false precision. The catalogue is calibrated against ~900 real INDB
+serving weights — overall bias 0.94, bowl 0.95, plate 0.98.
+
+Resolution order when converting a chosen portion to grams:
+1. the food's **own measured serving weight**, if it has one;
+2. a **count** reference weight (one roti is 40 g);
+3. **volume x the food's density**.
+
 ### 3.5 `oil_level` — user-selectable, product decision
 
 ```json

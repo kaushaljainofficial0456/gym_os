@@ -18,6 +18,7 @@ const {
   FoodSearch, normalize, toGrams, densityFor,
   expectedState, moistureMismatch,
   adjustOil, fattyAcidSplit, scaleNutrition,
+  listPortions, portionToGrams, canonicalPortion, effectiveDensity,
   OIL_LEVELS, OIL_FATTY_ACID_PROFILE, KCAL_PER_G_OIL, MAX_PLAUSIBLE_KCAL
 } = require('./foodEstimate.reference.js');
 
@@ -253,6 +254,68 @@ check('portion scaling is linear and preserves nulls', () => {
 check('zero or negative portion returns null', () => {
   assert(scaleNutrition({ energy_kcal: 100 }, 0) === null);
   assert(scaleNutrition({ energy_kcal: 100 }, -5) === null);
+});
+
+// ----------------------------------------------------------- portions --
+check('same portion differs by food density (bowl of dal vs spinach)', () => {
+  const dal = portionToGrams('medium_bowl', 1, { foodName: 'Dal makhani', cookingState: 'cooked' }).grams;
+  const spinach = portionToGrams('medium_bowl', 1, { foodName: 'Spinach' }).grams;
+  assert(dal > 2 * spinach, `dal ${dal}g vs spinach ${spinach}g — density ignored`);
+});
+
+check('portions scale linearly with count', () => {
+  const one = portionToGrams('medium_bowl', 1, { foodName: 'Dal' }).grams;
+  const three = portionToGrams('medium_bowl', 3, { foodName: 'Dal' }).grams;
+  assertClose(three, 3 * one, 0.5, 'portion scaling');
+});
+
+check('portion sizes are ordered (small < medium < large)', () => {
+  const f = { foodName: 'Dal makhani', cookingState: 'cooked' };
+  const bowls = ['small_bowl', 'medium_bowl', 'large_bowl'].map((k) => portionToGrams(k, 1, f).grams);
+  for (let i = 1; i < bowls.length; i += 1) assert(bowls[i] >= bowls[i - 1], `bowls ${bowls}`);
+  const plates = ['quarter_plate', 'half_plate', 'plate', 'full_plate'].map((k) => portionToGrams(k, 1, f).grams);
+  for (let i = 1; i < plates.length; i += 1) assert(plates[i] >= plates[i - 1], `plates ${plates}`);
+});
+
+check('portion aliases resolve to canonical keys', () => {
+  const pairs = [['tbsp', 'tablespoon'], ['big bowl', 'large_bowl'],
+    ['regular plate', 'plate'], ['half plate', 'half_plate'], ['serving spoon', 'serving_spoon']];
+  for (const [alias, expected] of pairs) {
+    assert(canonicalPortion(alias) === expected, `${alias} -> ${canonicalPortion(alias)}`);
+  }
+});
+
+check('unknown portion and bad counts are rejected, not guessed', () => {
+  assert(portionToGrams('bucket', 1, {}).grams === null);
+  assert(portionToGrams('bowl', 0, {}).grams === null);
+  assert(portionToGrams('bowl', -2, {}).grams === null);
+});
+
+check("food's own measured serving beats the generic figure", () => {
+  const r = portionToGrams('bowl', 2, { foodName: 'Some dish', foodServingGrams: 180 });
+  assert(r.basis === 'measured_serving', `basis ${r.basis}`);
+  assertClose(r.grams, 360, 0.5, 'measured serving');
+});
+
+check('count portions use ITEM weight, not INDB dish weight', () => {
+  const r = portionToGrams('egg', 2, { foodName: 'Egg' });
+  assert(r.basis === 'count');
+  assertClose(r.grams, 100, 0.5, '2 eggs');
+});
+
+check('cooked wet dish is denser than its dry ingredient', () => {
+  assert(effectiveDensity('Dal makhani', 'cooked') > effectiveDensity('Dal', null));
+});
+
+check('listPortions offers the expected household set with ranges', () => {
+  const ps = listPortions('Dal makhani', 'cooked');
+  const keys = new Set(ps.map((p) => p.key));
+  for (const k of ['teaspoon', 'tablespoon', 'serving_spoon', 'small_bowl',
+    'medium_bowl', 'large_bowl', 'half_plate', 'plate', 'glass']) {
+    assert(keys.has(k), `missing portion ${k}`);
+  }
+  const bowl = ps.find((p) => p.key === 'bowl');
+  assert(Array.isArray(bowl.observed_range_g), 'bowl must carry its observed spread');
 });
 
 // ------------------------------------------------------- normalisation --

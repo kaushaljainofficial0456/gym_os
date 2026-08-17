@@ -90,6 +90,31 @@ STATE_NOT_APPLICABLE_RE = re.compile(
     r"flour|atta|maida|besan|semolina|water)\b", re.I)
 
 
+# ---- second-pass categories (see step 5 in classify()) ----
+BAKED_GOOD_RE = re.compile(
+    "scone|pastry|danish|croissant|bagel|doughnut|donut|brownie|"
+    "cupcake|tart|strudel|eclair|profiterole|shortbread|"
+    "focaccia|baguette|ciabatta|pretzel|crumpet|stuffing", re.I)
+
+ASSEMBLED_DISH_RE = re.compile(
+    "ravioli|lasagna|lasagne|cannelloni|tortellini|gnocchi|ramen|"
+    "pho|udon|chow mein|lo mein|burrito|taco|enchilada|quesadilla|"
+    "pupusa|empanada|dumpling|momo|spring roll|samosa|"
+    "with .*sauce|with gravy|home recipe|restaurant|"
+    "stir.fry|hot pot|platter|thali|combo meal", re.I)
+
+CURED_DAIRY_RE = re.compile(
+    "deli.?meat|salami|pepperoni|bologna|prosciutto|pastrami|"
+    "cured|fermented|natto|tempeh|kimchi|sauerkraut|"
+    "cheese|yogh?urt|yogourt|dahi|paneer|quark|kefir|"
+    "cottage cheese|cream cheese|milk", re.I)
+
+DRY_STAPLE_RE = re.compile(
+    "(pasta|noodle|noodles|macaroni|spaghetti|vermicelli|rice|lentil|"
+    "bean|beans|pea|peas|gram|dal|oats|barley|quinoa|couscous)"
+    ".{0,30}(dry|dried|uncooked|raw)", re.I)
+
+
 def classify(name):
     """Return (state, evidence) or (None, reason) when undetermined."""
     n = name or ""
@@ -118,7 +143,23 @@ def classify(name):
     if STATE_NOT_APPLICABLE_RE.search(n):
         return "ready_to_eat", "ingredient with no meaningful cooking state"
 
-    # 5) no evidence -- do NOT guess
+    # 5) SECOND PASS -- categories a first reading missed. Added after
+    # sampling the remaining 6,013 unspecified rows and finding real
+    # evidence still present: baked goods, assembled dishes, cured meats,
+    # dairy products and explicitly-dry staples. Each rule below is one
+    # where the inference is reliable, not merely plausible.
+    if BAKED_GOOD_RE.search(n):
+        return "cooked", "baked good"
+    if ASSEMBLED_DISH_RE.search(n):
+        return "cooked", "assembled/prepared dish"
+    if CURED_DAIRY_RE.search(n):
+        return "ready_to_eat", "cured, fermented or dairy product eaten as sold"
+    if DRY_STAPLE_RE.search(n):
+        # "Pasta, egg noodles, DRY" is an uncooked staple, not a finished
+        # food -- the opposite of the packaged/ready reading.
+        return "raw", "explicitly dry/uncooked staple"
+
+    # 6) no evidence -- do NOT guess
     return None, "no cooking-state evidence in name"
 
 

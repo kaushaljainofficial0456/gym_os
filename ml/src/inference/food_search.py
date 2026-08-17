@@ -34,8 +34,12 @@ ALIAS_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "food_
 
 try:
     from .cooking_state import expected_state, CookingStateResolver, moisture_mismatch
+    from .portion_catalog import list_portions
+    from .portion_units import density_for
 except ImportError:  # running as a script rather than a package
     from cooking_state import expected_state, CookingStateResolver, moisture_mismatch
+    from portion_catalog import list_portions
+    from portion_units import density_for
 
 SOURCE_RANK = {"INDB": 0, "IFCT2017": 1, "USDA_FDC": 2, "OPEN_FOOD_FACTS": 3}
 
@@ -396,6 +400,13 @@ class FoodSearch:
             else:
                 conf = "low"
             out[-1]["confidence"] = conf
+
+            # Household portions sized FOR THIS FOOD. Users log "1 katori",
+            # not "150 g", and a portion is a volume -- a bowl of dal and a
+            # bowl of salad differ ~3x in mass -- so the gram figure has to
+            # be computed per food rather than published as a constant.
+            out[-1]["portions"] = list_portions(
+                f.get("food_name"), density_for, f.get("cooking_state"))
         return out
 
 

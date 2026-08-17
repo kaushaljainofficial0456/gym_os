@@ -456,6 +456,150 @@ function fattyAcidSplit(oilType, grams) {
   };
 }
 
+// --------------------------------------------------------- portions -----
+// Household portions users actually think in. A portion is a VOLUME, not a
+// mass: one medium bowl of dal, of rice and of salad are three different
+// weights. Volumes are CALIBRATED against ~900 real INDB serving weights
+// (ml/src/validation/portion_calibration.py) -- overall bias 0.94, bowl
+// 0.95, plate 0.98, i.e. essentially unbiased.
+const VOLUME_PORTIONS = {
+  teaspoon:      { ml: 5,    label: 'Teaspoon',      group: 'spoon' },
+  tablespoon:    { ml: 25,   label: 'Tablespoon',    group: 'spoon' },
+  serving_spoon: { ml: 45,   label: 'Serving spoon', group: 'spoon' },
+  ladle:         { ml: 90,   label: 'Ladle',         group: 'spoon' },
+  small_bowl:    { ml: 220,  label: 'Small bowl',    group: 'bowl' },
+  katori:        { ml: 150,  label: 'Katori',        group: 'bowl' },
+  medium_bowl:   { ml: 250,  label: 'Medium bowl',   group: 'bowl' },
+  bowl:          { ml: 250,  label: 'Bowl',          group: 'bowl' },
+  large_bowl:    { ml: 400,  label: 'Large bowl',    group: 'bowl' },
+  soup_bowl:     { ml: 350,  label: 'Soup bowl',     group: 'bowl' },
+  quarter_plate: { ml: 120,  label: 'Quarter plate', group: 'plate' },
+  half_plate:    { ml: 200,  label: 'Half plate',    group: 'plate' },
+  plate:         { ml: 350,  label: 'Regular plate', group: 'plate' },
+  full_plate:    { ml: 500,  label: 'Full plate',    group: 'plate' },
+  small_glass:   { ml: 150,  label: 'Small glass',   group: 'glass' },
+  glass:         { ml: 330,  label: 'Glass',         group: 'glass' },
+  tall_glass:    { ml: 350,  label: 'Tall glass',    group: 'glass' },
+  tea_cup:       { ml: 150,  label: 'Tea cup',       group: 'glass' },
+  cup:           { ml: 240,  label: 'Cup',           group: 'glass' },
+  mug:           { ml: 300,  label: 'Mug',           group: 'glass' },
+  handful:       { ml: 60,   label: 'Handful',       group: 'misc' },
+  pinch:         { ml: 0.35, label: 'Pinch',         group: 'misc' }
+};
+
+// Counted items. NOT calibrated against INDB: its "1 egg" for boiled egg is
+// 151 g (the whole dish with accompaniments) while one egg is ~50 g. Fitting
+// to that figure would make every bare-egg entry wrong.
+const COUNT_PORTIONS = {
+  piece:   { label: 'Piece', group: 'count' },
+  slice:   { label: 'Slice', group: 'count' },
+  roti:    { label: 'Roti / chapati', group: 'count', grams: 40 },
+  paratha: { label: 'Paratha', group: 'count', grams: 85 },
+  dosa:    { label: 'Dosa', group: 'count', grams: 85 },
+  idli:    { label: 'Idli', group: 'count', grams: 45 },
+  poori:   { label: 'Poori', group: 'count', grams: 119 },
+  samosa:  { label: 'Samosa', group: 'count', grams: 68 },
+  vada:    { label: 'Vada', group: 'count', grams: 60 },
+  ladoo:   { label: 'Ladoo', group: 'count', grams: 36 },
+  biscuit: { label: 'Biscuit', group: 'count', grams: 19 },
+  egg:     { label: 'Egg', group: 'count', grams: 50 },
+  banana:  { label: 'Banana', group: 'count', grams: 120 },
+  apple:   { label: 'Apple', group: 'count', grams: 180 }
+};
+
+// Real spread of measured servings, shown as a RANGE so the UI does not
+// imply a precision that does not exist. A "bowl" is not a defined unit.
+const OBSERVED_SPREAD = {
+  bowl: [166, 354], medium_bowl: [166, 354], small_bowl: [181, 343],
+  soup_bowl: [307, 398], plate: [236, 554], tall_glass: [304, 423],
+  glass: [203, 411], cup: [191, 486], tablespoon: [16, 26],
+  piece: [50, 234], slice: [73, 184]
+};
+
+const PORTION_ALIAS = {
+  tbsp: 'tablespoon', tsp: 'teaspoon', bowls: 'bowl', plates: 'plate',
+  'big bowl': 'large_bowl', 'regular plate': 'plate', 'half plate': 'half_plate',
+  'serving spoon': 'serving_spoon', 'small glass': 'small_glass',
+  'tall glass': 'tall_glass', 'tea cup': 'tea_cup', 'medium bowl': 'medium_bowl',
+  'small bowl': 'small_bowl', 'large bowl': 'large_bowl', 'soup bowl': 'soup_bowl',
+  'quarter plate': 'quarter_plate', 'full plate': 'full_plate'
+};
+
+// A cooked wet dish is not its dry ingredient: "Dal makhani" matches the dry
+// dal density (0.85) but is served as a curry (~1.0). Ignoring this was the
+// residual bias calibration found on bowls (0.87, corrected to 0.95).
+const WET_DISH_RE = /curry|gravy|dal|daal|sambar|rasam|soup|stew|kadhi|korma|makhani|rajma|chole|kheer|halwa|raita|lassi|khichdi|porridge|upma|poha|pulao|biryani|rice/i;
+const DRY_FINISHED_RE = /roasted|fried|papad|chips|namkeen|bhujia|biscuit|cookie|cracker|khakhra|toast|rusk|wafer/i;
+
+function canonicalPortion(key) {
+  const k = String(key || '').trim().toLowerCase().replace(/\s+/g, '_');
+  const spaced = k.replace(/_/g, ' ');
+  if (VOLUME_PORTIONS[k] || COUNT_PORTIONS[k]) return k;
+  if (PORTION_ALIAS[spaced]) return PORTION_ALIAS[spaced];
+  if (PORTION_ALIAS[k]) return PORTION_ALIAS[k];
+  return null;
+}
+
+function effectiveDensity(foodName, cookingState) {
+  const base = densityFor(foodName);
+  if (cookingState === 'cooked' && WET_DISH_RE.test(foodName || '') &&
+      !DRY_FINISHED_RE.test(foodName || '')) return Math.max(base, 1.0);
+  return base;
+}
+
+/** Portions to offer for THIS food, each with the grams it would mean. */
+function listPortions(foodName, cookingState) {
+  const density = effectiveDensity(foodName, cookingState);
+  const out = [];
+  for (const key of Object.keys(VOLUME_PORTIONS)) {
+    const spec = VOLUME_PORTIONS[key];
+    const e = {
+      key, label: spec.label, group: spec.group, basis: 'volume',
+      volume_ml: spec.ml, grams: Math.round(spec.ml * density * 10) / 10
+    };
+    if (OBSERVED_SPREAD[key]) e.observed_range_g = OBSERVED_SPREAD[key];
+    out.push(e);
+  }
+  for (const key of Object.keys(COUNT_PORTIONS)) {
+    const spec = COUNT_PORTIONS[key];
+    // a count portion only makes sense for a food that comes in that form:
+    // offering "1 idli" for dal would be nonsense
+    if (key !== 'piece' && key !== 'slice' &&
+        !new RegExp(key, 'i').test(foodName || '')) continue;
+    const e = { key, label: spec.label, group: spec.group, basis: 'count',
+      grams: spec.grams === undefined ? null : spec.grams };
+    if (OBSERVED_SPREAD[key]) e.observed_range_g = OBSERVED_SPREAD[key];
+    out.push(e);
+  }
+  return out;
+}
+
+/** (portion, count) -> grams. Prefers the food's OWN measured serving where
+ *  it has one, then a count reference, then volume x density. */
+function portionToGrams(portionKey, count, opts) {
+  const { foodName = '', cookingState = null, foodServingGrams = null } = opts || {};
+  const key = canonicalPortion(portionKey);
+  if (!key) return { grams: null, basis: 'unknown_portion', note: `'${portionKey}' is not a known portion` };
+  const n = Number(count);
+  if (!Number.isFinite(n) || n <= 0) return { grams: null, basis: 'bad_count', note: `bad count '${count}'` };
+
+  if (foodServingGrams && ['bowl', 'katori', 'plate', 'piece', 'medium_bowl'].indexOf(key) !== -1) {
+    return { grams: Math.round(n * foodServingGrams * 10) / 10, basis: 'measured_serving',
+      note: 'this food publishes its own serving weight' };
+  }
+  if (COUNT_PORTIONS[key]) {
+    const g = COUNT_PORTIONS[key].grams;
+    if (g === undefined || g === null) {
+      return { grams: null, basis: 'unknown_piece_weight', note: `no reference weight for one '${key}'` };
+    }
+    return { grams: Math.round(n * g * 10) / 10, basis: 'count', note: `${n} x ${g} g` };
+  }
+  const spec = VOLUME_PORTIONS[key];
+  const d = effectiveDensity(foodName, cookingState);
+  return { grams: Math.round(n * spec.ml * d * 10) / 10, basis: 'volume',
+    note: `${n} x ${spec.ml}ml x ${d} g/ml` };
+}
+
 // -------------------------------------------------------- nutrition ------
 const NUTRIENT_FIELDS = ['energy_kcal', 'protein_g', 'fat_g', 'carb_g', 'fiber_g',
   'sugar_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'potassium_mg'];
@@ -481,6 +625,8 @@ module.exports = {
   FoodSearch, normalize, toGrams, densityFor,
   expectedState, moistureMismatch,
   adjustOil, fattyAcidSplit, scaleNutrition,
+  listPortions, portionToGrams, canonicalPortion, effectiveDensity,
   OIL_LEVELS, OIL_FATTY_ACID_PROFILE, KCAL_PER_G_OIL, MAX_PLAUSIBLE_KCAL,
+  VOLUME_PORTIONS, COUNT_PORTIONS, OBSERVED_SPREAD,
   SOURCE_RANK
 };

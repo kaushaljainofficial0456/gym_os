@@ -26,6 +26,9 @@ sys.path.insert(0, str(ML_ROOT / "src"))
 from inference.food_search import FoodSearch, normalize                      # noqa: E402
 from inference.cooking_state import expected_state, moisture_mismatch        # noqa: E402
 from inference.portion_units import to_grams, density_for                    # noqa: E402
+from inference.portion_catalog import (portion_to_grams, canonical,          # noqa: E402
+                                       effective_density, VOLUME_PORTIONS,
+                                       COUNT_PORTIONS)
 from inference.oil_adjustment import (OilAdjuster, OIL_LEVELS,               # noqa: E402
                                       KCAL_PER_G_OIL, fatty_acid_split,
                                       OIL_FATTY_ACID_PROFILE)
@@ -455,6 +458,86 @@ class TestCompositionalCalculator(unittest.TestCase):
         ], servings=8, dish_name="Jalebi")
         per100 = r["per_100g_cooked"]["energy_kcal"]
         self.assertTrue(250 < per100 < 500, f"jalebi {per100} kcal/100g")
+
+
+class TestPortionCatalog(unittest.TestCase):
+    """Household portions are how users actually log food. A portion is a
+    VOLUME, so the same portion is a different mass for different foods --
+    getting that wrong scales the whole entry."""
+
+    def test_same_portion_differs_by_food_density(self):
+        """A medium bowl of dal and of spinach are not the same mass."""
+        dal = portion_to_grams("medium_bowl", 1, "Dal makhani",
+                               density_for, cooking_state="cooked")[0]
+        spinach = portion_to_grams("medium_bowl", 1, "Spinach", density_for)[0]
+        self.assertGreater(dal, 2 * spinach,
+                           f"dal {dal}g vs spinach {spinach}g — density ignored")
+
+    def test_portions_scale_linearly_with_count(self):
+        one = portion_to_grams("medium_bowl", 1, "Dal", density_for)[0]
+        three = portion_to_grams("medium_bowl", 3, "Dal", density_for)[0]
+        self.assertAlmostEqual(three, 3 * one, places=1)
+
+    def test_portion_sizes_are_ordered(self):
+        food = "Dal makhani"
+        sizes = [portion_to_grams(k, 1, food, density_for)[0]
+                 for k in ("small_bowl", "medium_bowl", "large_bowl")]
+        self.assertEqual(sizes, sorted(sizes), f"bowl sizes not ordered: {sizes}")
+        plates = [portion_to_grams(k, 1, food, density_for)[0]
+                  for k in ("quarter_plate", "half_plate", "plate", "full_plate")]
+        self.assertEqual(plates, sorted(plates), f"plate sizes not ordered: {plates}")
+
+    def test_aliases_resolve_to_canonical_portions(self):
+        for alias, expected in (("tbsp", "tablespoon"), ("big bowl", "large_bowl"),
+                                ("regular plate", "plate"), ("half plate", "half_plate"),
+                                ("serving spoon", "serving_spoon")):
+            self.assertEqual(canonical(alias), expected, alias)
+
+    def test_unknown_portion_is_rejected_not_guessed(self):
+        grams, basis, _ = portion_to_grams("bucket", 1, "Dal", density_for)
+        self.assertIsNone(grams)
+        self.assertEqual(basis, "unknown_portion")
+
+    def test_bad_count_rejected(self):
+        self.assertIsNone(portion_to_grams("bowl", 0, "Dal", density_for)[0])
+        self.assertIsNone(portion_to_grams("bowl", -2, "Dal", density_for)[0])
+
+    def test_measured_serving_beats_the_generic_figure(self):
+        """When the food publishes its own serving weight, that wins."""
+        grams, basis, _ = portion_to_grams("bowl", 2, "Some dish", density_for,
+                                           food_serving_grams=180.0)
+        self.assertEqual(basis, "measured_serving")
+        self.assertAlmostEqual(grams, 360.0, places=1)
+
+    def test_count_portions_use_item_weight_not_dish_weight(self):
+        """INDB's '1 egg' for boiled egg is 151 g (the dish). One egg is
+        ~50 g, and fitting to 151 would corrupt every bare-egg entry."""
+        grams, basis, _ = portion_to_grams("egg", 2, "Egg", density_for)
+        self.assertEqual(basis, "count")
+        self.assertAlmostEqual(grams, 100.0, places=1)
+
+    def test_cooked_wet_dish_is_denser_than_its_dry_ingredient(self):
+        """'Dal makhani' matches dry-dal density but is served as a curry."""
+        dry = effective_density("Dal", None, density_for)
+        wet = effective_density("Dal makhani", "cooked", density_for)
+        self.assertGreater(wet, dry)
+
+    def test_search_results_carry_food_specific_portions(self):
+        r = first("dal makhani")
+        self.assertIsNotNone(r)
+        self.assertIn("portions", r)
+        keys = {p["key"] for p in r["portions"]}
+        for expected in ("teaspoon", "tablespoon", "medium_bowl", "plate", "glass"):
+            self.assertIn(expected, keys)
+
+    def test_observed_range_is_reported_where_known(self):
+        """A 'bowl' is not a defined unit; the real spread must travel with
+        it so the UI does not imply false precision."""
+        r = first("dal makhani")
+        bowl = next(p for p in r["portions"] if p["key"] == "bowl")
+        self.assertIn("observed_range_g", bowl)
+        lo, hi = bowl["observed_range_g"]
+        self.assertLess(lo, hi)
 
 
 class TestNormalisation(unittest.TestCase):

@@ -1,0 +1,4234 @@
+[
+  {
+    "food_name": "Hot tea (Garam Chai)",
+    "portion": "tea_cup",
+    "predicted_g": 75.0,
+    "measured_g": 210.5,
+    "ratio": 0.356,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Instant coffee",
+    "portion": "tea_cup",
+    "predicted_g": 150.0,
+    "measured_g": 450.0,
+    "ratio": 0.333,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Espreso coffee",
+    "portion": "tea_cup",
+    "predicted_g": 150.0,
+    "measured_g": 158.5,
+    "ratio": 0.946,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Iced tea",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 320.0,
+    "ratio": 1.094,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Raw mango drink (Aam panna)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 268.5,
+    "ratio": 1.304,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Fruit Punch (with fresh juices)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 544.3,
+    "ratio": 0.643,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Fruit Punch (with squashes)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 502.8,
+    "ratio": 0.696,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lemonade",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 349.2,
+    "ratio": 0.945,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lem-o-gin",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 356.8,
+    "ratio": 0.925,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cumin infused water (Jeere/Zeere ka pani)",
+    "portion": "glass",
+    "predicted_g": 165.0,
+    "measured_g": 338.9,
+    "ratio": 0.487,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Coco pine cooler",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 432.2,
+    "ratio": 0.81,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Summer cooler",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 494.7,
+    "ratio": 0.707,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot cocoa",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 191.0,
+    "ratio": 1.257,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cold coffee with ice cream",
+    "portion": "tall_glass",
+    "predicted_g": 346.5,
+    "measured_g": 301.5,
+    "ratio": 1.149,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Banana milkshake (Kele milkshake)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 345.5,
+    "ratio": 1.013,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mango milkshake (Aam milkshake)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 355.5,
+    "ratio": 0.985,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pineapple milkshake (Ananas milkshake)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 364.5,
+    "ratio": 0.96,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Orange milkshake (Narangi milkshake)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 319.5,
+    "ratio": 1.095,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Egg nog",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 303.5,
+    "ratio": 1.153,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweet Lassi (Meethi lassi)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 442.5,
+    "ratio": 0.791,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lassi (salted)",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 423.2,
+    "ratio": 0.827,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cracked wheat porridge (Meetha daliya)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 403.0,
+    "ratio": 0.62,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina porridge (Suji/Rava daliya)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 278.0,
+    "ratio": 0.899,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Oatmeal Porridge",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 398.0,
+    "ratio": 0.628,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cornflakes with milk",
+    "portion": "bowl",
+    "predicted_g": 257.5,
+    "measured_g": 278.0,
+    "ratio": 0.926,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Rice flakes (Chiwda/Aval)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 278.0,
+    "ratio": 0.899,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Wheat flakes",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 278.0,
+    "ratio": 0.899,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Murmura (Puffed rice)",
+    "portion": "bowl",
+    "predicted_g": 212.5,
+    "measured_g": 278.0,
+    "ratio": 0.764,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Puffed wheat (Murmure/Moori)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 278.0,
+    "ratio": 0.899,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Boiled egg (Ubla anda)",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 151.0,
+    "ratio": 0.331,
+    "basis": "count"
+  },
+  {
+    "food_name": "Fried Egg",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 57.8,
+    "ratio": 0.865,
+    "basis": "count"
+  },
+  {
+    "food_name": "Poached egg",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 56.0,
+    "ratio": 0.893,
+    "basis": "count"
+  },
+  {
+    "food_name": "Scrambled egg (Ande ki bhurji)",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 70.0,
+    "ratio": 0.714,
+    "basis": "count"
+  },
+  {
+    "food_name": "Baked egg",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 101.0,
+    "ratio": 0.495,
+    "basis": "count"
+  },
+  {
+    "food_name": "Brown stock",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 486.1,
+    "ratio": 0.494,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable stock",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 415.4,
+    "ratio": 0.578,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken stock",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 376.0,
+    "ratio": 0.638,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cream of tomato soup",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 462.4,
+    "ratio": 0.757,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cream of green peas soup",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 408.5,
+    "ratio": 0.857,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cream of spinach soup",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 462.6,
+    "ratio": 0.757,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cream of mushroom soup",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 375.0,
+    "ratio": 0.933,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chinese cabbage and meat ball soup",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 465.5,
+    "ratio": 0.752,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot and sour soup",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 393.0,
+    "ratio": 0.891,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cold cucumber soup (Thanda kheere ka soup)",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 187.7,
+    "ratio": 1.865,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Poori",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 124.9,
+    "ratio": 0.953,
+    "basis": "count"
+  },
+  {
+    "food_name": "Spinach poori (Palak poori)",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 135.0,
+    "ratio": 0.881,
+    "basis": "count"
+  },
+  {
+    "food_name": "Methi poori",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 130.0,
+    "ratio": 0.915,
+    "basis": "count"
+  },
+  {
+    "food_name": "Dal stuffed poori",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 118.8,
+    "ratio": 1.002,
+    "basis": "count"
+  },
+  {
+    "food_name": "Potato stuffed poori (Aloo ki poori)",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 119.2,
+    "ratio": 0.998,
+    "basis": "count"
+  },
+  {
+    "food_name": "Boiled rice (Uble chawal)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 300.0,
+    "ratio": 1.167,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Plain pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 307.9,
+    "ratio": 1.137,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mixed vegetable pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 438.4,
+    "ratio": 0.798,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mushroom pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 358.4,
+    "ratio": 0.977,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sprouted moong pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 407.9,
+    "ratio": 0.858,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 837.9,
+    "ratio": 0.418,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Peanut pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 357.9,
+    "ratio": 0.978,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Navratan pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 183.1,
+    "ratio": 1.912,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Green chickpeas pulao (Choliya pulao/Hare chane ka pulao)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 357.9,
+    "ratio": 0.978,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mutton biryani/biriyani",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 207.8,
+    "ratio": 1.684,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable biryani/biriyani",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 301.6,
+    "ratio": 1.16,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lemon rice (Pulihora, Elumichai sadam, Chitranna)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 319.2,
+    "ratio": 1.096,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweet rice (Meethe chawal)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 347.8,
+    "ratio": 1.006,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Curd rice (Dahi bhaat/Dahi chawal/ Perugu annam/Daddojanam/Thayir saadam)",
+    "portion": "plate",
+    "predicted_g": 360.5,
+    "measured_g": 216.2,
+    "ratio": 1.667,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tamarind rice (Chintapandu pulihora/Puliyodharai/Puli sadam/Huli anna)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 127.8,
+    "ratio": 2.739,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spanish rice",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 217.5,
+    "ratio": 1.609,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chinese fried rice",
+    "portion": "plate",
+    "predicted_g": 297.5,
+    "measured_g": 351.3,
+    "ratio": 0.847,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable chowmein",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 299.6,
+    "ratio": 1.168,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken chowmein",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 344.3,
+    "ratio": 1.017,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cheese noodle ring",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 397.5,
+    "ratio": 0.881,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spaghetti and cheese balls in tomato sauce",
+    "portion": "plate",
+    "predicted_g": 192.5,
+    "measured_g": 965.6,
+    "ratio": 0.199,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Penne platter",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 261.5,
+    "ratio": 1.338,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pasta hot pot",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 831.4,
+    "ratio": 0.421,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken lasagne",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 514.5,
+    "ratio": 0.68,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Fettuccine with spinach sauce",
+    "portion": "plate",
+    "predicted_g": 87.5,
+    "measured_g": 355.1,
+    "ratio": 0.246,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Idli",
+    "portion": "idli",
+    "predicted_g": 45.0,
+    "measured_g": 25.1,
+    "ratio": 1.793,
+    "basis": "count"
+  },
+  {
+    "food_name": "Masala dosa",
+    "portion": "dosa",
+    "predicted_g": 85.0,
+    "measured_g": 209.7,
+    "ratio": 0.405,
+    "basis": "count"
+  },
+  {
+    "food_name": "Semolina dosa (Suji/Rava dosa)",
+    "portion": "dosa",
+    "predicted_g": 85.0,
+    "measured_g": 73.4,
+    "ratio": 1.158,
+    "basis": "count"
+  },
+  {
+    "food_name": "Makki ki roti",
+    "portion": "roti",
+    "predicted_g": 40.0,
+    "measured_g": 85.0,
+    "ratio": 0.471,
+    "basis": "count"
+  },
+  {
+    "food_name": "Washed moong dal (Dhuli moong ki dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 277.0,
+    "ratio": 0.903,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Washed urad dal (Dhuli urad ki dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 296.0,
+    "ratio": 0.845,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Split bengal gram with bottle gourd (Channa dal with ghiya/lauki)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 278.8,
+    "ratio": 0.897,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dry washed urad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 143.2,
+    "ratio": 1.746,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mixed dal",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 297.8,
+    "ratio": 0.839,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Whole moong (Moong ki dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 342.3,
+    "ratio": 0.73,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Whole masoor (Masoor ki dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 342.3,
+    "ratio": 0.73,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Whole moth (Moth ki dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 342.3,
+    "ratio": 0.73,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Whole urad (Urad ki dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 339.3,
+    "ratio": 0.737,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Moti mahal dal (Urad rajmah mix dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 286.7,
+    "ratio": 0.872,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Black channa curry/Bengal gram curry (Kale chane ki curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 119.9,
+    "ratio": 2.085,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chickpeas curry (Safed channa curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 119.9,
+    "ratio": 2.085,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lobia curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 119.9,
+    "ratio": 2.085,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Soyabean curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 119.9,
+    "ratio": 2.085,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kidney bean curry (Rajmah curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 119.9,
+    "ratio": 2.085,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sambar",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 257.3,
+    "ratio": 0.972,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Besan kadhi with pakodies",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 586.8,
+    "ratio": 0.426,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Khatta channa",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 157.1,
+    "ratio": 1.591,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sprouted moong dal chat",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 256.5,
+    "ratio": 1.365,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato cauliflower (Aloo gobhi)",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 175.8,
+    "ratio": 0.782,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato capsicum (Shimla mirch aloo)",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 150.7,
+    "ratio": 0.912,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cabbage and peas (Pattagobhi aur matar)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 166.2,
+    "ratio": 1.504,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Carrot and fenugreek leaves (Gajar methi)",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 190.8,
+    "ratio": 0.328,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato fenugreek (Aloo methi)",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 204.3,
+    "ratio": 0.306,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Brinjal bhartha (Baingan ka bhartha)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 325.8,
+    "ratio": 0.767,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dry potato (Sookhe aloo)",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 105.7,
+    "ratio": 1.301,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Beans with coconut (Nariyal aur sem/phali; Beans thoran)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 149.5,
+    "ratio": 1.672,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower with coconut (Nariyal ke saath phoolgobhi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 149.5,
+    "ratio": 1.672,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Carrot and cabbage with coconut (Nariyal ke saath pattagobhi aur gajar)",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 199.5,
+    "ratio": 0.689,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Raw turnip with coconut",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 149.5,
+    "ratio": 1.672,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Raw papaya with coconut (Papaya thoran)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 149.5,
+    "ratio": 1.672,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Stuffed okra (Bharwa bhindi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 110.5,
+    "ratio": 2.262,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Stuffed round gourd (Bharwa tinde)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 248.2,
+    "ratio": 1.007,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea potato curry (Aloo matar)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 277.3,
+    "ratio": 0.902,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea paneer curry (Matar paneer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 277.3,
+    "ratio": 0.902,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea mushroom curry (Matar mushroom)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 277.3,
+    "ratio": 0.902,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea curry (Matar ki sabzi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 277.3,
+    "ratio": 0.902,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea vadi curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 287.3,
+    "ratio": 0.87,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 202.3,
+    "ratio": 1.236,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lotus stem curry (Kamal kakdi curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 202.3,
+    "ratio": 1.236,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Gravy for kofta",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 139.2,
+    "ratio": 1.796,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea kofta curry (Matar kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 780.5,
+    "ratio": 0.32,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach kofta curry (Palak kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 806.2,
+    "ratio": 0.31,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer kofta curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 701.0,
+    "ratio": 0.357,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lotus stem kofta curry (Kamal kakdi kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 731.2,
+    "ratio": 0.342,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Raw banana kofta curry (Kela kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 727.2,
+    "ratio": 0.344,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower kofta curry (Phoolgobhi kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 711.2,
+    "ratio": 0.352,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cabbage kofta curry (Pattagobhi kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 713.2,
+    "ratio": 0.351,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Ghiya/Lauki Kofta Curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 713.2,
+    "ratio": 0.351,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach paneer kofta curry (Palak paneer kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 762.5,
+    "ratio": 0.328,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetarian egg kofta curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 741.0,
+    "ratio": 0.337,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked vegetables",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 302.5,
+    "ratio": 0.826,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower musallam (Phoolgobhi musallam)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 216.0,
+    "ratio": 1.157,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked vegetables with spinach",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 423.5,
+    "ratio": 0.148,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked potato with skin",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 78.4,
+    "ratio": 1.754,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Shepherd's pie (vegetarian)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 270.7,
+    "ratio": 0.924,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked brinjal in tomato sauce",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 430.9,
+    "ratio": 0.319,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dum aloo",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 670.6,
+    "ratio": 0.373,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach paneer (Palak paneer)",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 295.5,
+    "ratio": 0.212,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Methi chaman",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 1001.5,
+    "ratio": 0.062,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sarson ka saag",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 141.5,
+    "ratio": 1.767,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Jackfruit sabzi (Kathal ki sabzi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 361.2,
+    "ratio": 0.692,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Avial",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 335.1,
+    "ratio": 0.746,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Al yakhani",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 232.0,
+    "ratio": 1.078,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Shahi paneer",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 259.3,
+    "ratio": 0.964,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer in butter sauce",
+    "portion": "bowl",
+    "predicted_g": 227.5,
+    "measured_g": 156.8,
+    "ratio": 1.451,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Methi malai paneer",
+    "portion": "bowl",
+    "predicted_g": 247.5,
+    "measured_g": 193.4,
+    "ratio": 1.28,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chilli paneer",
+    "portion": "bowl",
+    "predicted_g": 125.0,
+    "measured_g": 296.9,
+    "ratio": 0.421,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer makhana korma",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 607.0,
+    "ratio": 0.412,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kadhai Paneer",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 318.1,
+    "ratio": 0.786,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Roghan josh",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 236.0,
+    "ratio": 1.059,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach mutton (Palak mutton)",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 486.0,
+    "ratio": 0.129,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pea keema curry (Matar keema ki sabzi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 343.8,
+    "ratio": 0.727,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mutton yakhni",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 232.1,
+    "ratio": 1.077,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken yakhni",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 252.1,
+    "ratio": 0.992,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mutton do piaza",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 329.0,
+    "ratio": 0.76,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 247.9,
+    "ratio": 1.008,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chilli chicken",
+    "portion": "bowl",
+    "predicted_g": 125.0,
+    "measured_g": 386.8,
+    "ratio": 0.323,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Fish curry (Machli curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 254.0,
+    "ratio": 0.984,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tomato fish",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 967.9,
+    "ratio": 0.142,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked fish with cheese sauce",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 353.8,
+    "ratio": 0.707,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer, apple and pineapple salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 257.8,
+    "ratio": 0.97,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Russian salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 316.5,
+    "ratio": 0.79,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pasta salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 215.8,
+    "ratio": 1.158,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Deviled egg",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 159.7,
+    "ratio": 0.313,
+    "basis": "count"
+  },
+  {
+    "food_name": "Hawain salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 389.6,
+    "ratio": 0.642,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mixed pulse and vegetable salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 169.9,
+    "ratio": 1.471,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sprouted moong salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 203.8,
+    "ratio": 1.227,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tossed salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 341.0,
+    "ratio": 0.733,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mixed vegetable salad with curd sauce",
+    "portion": "bowl",
+    "predicted_g": 257.5,
+    "measured_g": 215.4,
+    "ratio": 1.195,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato salad (Aloo ka salaad)",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 236.0,
+    "ratio": 0.583,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Waldroff salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 246.5,
+    "ratio": 1.014,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Coleslaw",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 152.5,
+    "ratio": 1.639,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Fruit salad (Phalon ka salaad)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 304.0,
+    "ratio": 0.822,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tomato onion raita (Tamatar aur pyaaz ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 177.7,
+    "ratio": 1.407,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Peanut raita (Mungfali ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 122.7,
+    "ratio": 2.037,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sprouted moong raita",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 152.7,
+    "ratio": 1.637,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bottle gourd raita (Ghiya/Lauki ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 152.7,
+    "ratio": 1.637,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cucumber raita (Kheere ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 152.7,
+    "ratio": 1.637,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Carrot and spinach raita (Gajar aur palak ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 177.7,
+    "ratio": 1.407,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mint raita (Pudinay ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 104.7,
+    "ratio": 2.388,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato raita (Aloo ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 157.7,
+    "ratio": 1.585,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Boondi raita",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 328.9,
+    "ratio": 0.76,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweet raita (Meetha raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 192.0,
+    "ratio": 1.302,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dahi vadas/Dahi bhalla",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 172.3,
+    "ratio": 0.348,
+    "basis": "count"
+  },
+  {
+    "food_name": "Saunth/Sonth chutney with tamarind/imli",
+    "portion": "teaspoon",
+    "predicted_g": 5.0,
+    "measured_g": 17.7,
+    "ratio": 0.282,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Rice kheer (Chawal ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 401.1,
+    "ratio": 0.623,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Makhana kheer",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 278.1,
+    "ratio": 0.899,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vermicelli kheer (Semiya/Seviyan ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 232.4,
+    "ratio": 1.076,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina kheer (Suji/Rava kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 230.4,
+    "ratio": 1.085,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer kheer",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 289.4,
+    "ratio": 0.864,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cabbage kheer (Pattagobhi ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 254.4,
+    "ratio": 0.983,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Carrot kheer (Gajar ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 254.4,
+    "ratio": 0.983,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower kheer (Phoolgobhi ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 304.4,
+    "ratio": 0.821,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Moong dal kheer",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 405.4,
+    "ratio": 0.617,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Phirni",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 290.2,
+    "ratio": 0.861,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina halwa (Suji ka halwa)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 159.6,
+    "ratio": 1.566,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Shahi suji halwa",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 98.3,
+    "ratio": 2.543,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Carrot halwa (Gajar ka halwa)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 167.8,
+    "ratio": 1.49,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Egg halwa (Ande ka halwa)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 96.5,
+    "ratio": 2.591,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato halwa (Aloo ka halwa)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 158.0,
+    "ratio": 1.582,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pumpkin halwa (Kaddu ka halwa)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 155.0,
+    "ratio": 1.613,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Moong dal halwa",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 95.4,
+    "ratio": 2.621,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Caramel custard (steamed)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 232.0,
+    "ratio": 1.078,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked custard",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 213.0,
+    "ratio": 1.174,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Soft Custard (stirred)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 249.5,
+    "ratio": 1.002,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Apple mousse",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 365.0,
+    "ratio": 0.685,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Rich chocolate mousse",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 210.5,
+    "ratio": 1.14,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mango mousse",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 279.0,
+    "ratio": 0.86,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Orange and pineapple cream",
+    "portion": "bowl",
+    "predicted_g": 247.5,
+    "measured_g": 89.1,
+    "ratio": 2.778,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Charlotte rousse",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 253.0,
+    "ratio": 0.988,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Triffle pudding",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 292.2,
+    "ratio": 0.856,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Snow flakes pudding",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 318.0,
+    "ratio": 0.786,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Meringue and rice pudding",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 224.0,
+    "ratio": 1.116,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bread and butter pudding",
+    "portion": "plate",
+    "predicted_g": 318.5,
+    "measured_g": 123.2,
+    "ratio": 2.585,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Date and nut pie",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 226.0,
+    "ratio": 1.106,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot orange souffle",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 122.0,
+    "ratio": 2.049,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot chocolate souffle",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 142.0,
+    "ratio": 1.761,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot vanilla souffle",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 127.5,
+    "ratio": 1.961,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina ladoo with khoya (Suji/Rava aur khoye ke ladoo )",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 29.4,
+    "ratio": 1.224,
+    "basis": "count"
+  },
+  {
+    "food_name": "Semolina ladoo with coconut (Suji/Rava aur nariyal ke ladoo )",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 36.4,
+    "ratio": 0.989,
+    "basis": "count"
+  },
+  {
+    "food_name": "Gram flour ladoo (Besan ladoo)",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 35.3,
+    "ratio": 1.02,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sesame ladoo (Til ke ladoo)",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 27.5,
+    "ratio": 1.309,
+    "basis": "count"
+  },
+  {
+    "food_name": "Chenna murki",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 90.1,
+    "ratio": 2.775,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato pakora/pakoda (Aloo pakoda)",
+    "portion": "plate",
+    "predicted_g": 192.5,
+    "measured_g": 674.5,
+    "ratio": 0.285,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Onion pakora/pakoda (Pyaaz ke pakode)",
+    "portion": "plate",
+    "predicted_g": 192.5,
+    "measured_g": 674.5,
+    "ratio": 0.285,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower pakora/pakoda (Phoolgobhi ke pakode)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 674.5,
+    "ratio": 0.519,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mixed vegetable pakora/pakoda",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 674.5,
+    "ratio": 0.519,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach pakora/pakoda (Palak pakoda)",
+    "portion": "plate",
+    "predicted_g": 87.5,
+    "measured_g": 634.5,
+    "ratio": 0.138,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Methi pakora/pakoda (Methi ke pakode)",
+    "portion": "plate",
+    "predicted_g": 87.5,
+    "measured_g": 634.5,
+    "ratio": 0.138,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Egg pakora/pakoda (Ande ke pakode)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 644.5,
+    "ratio": 0.543,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bread pakora/pakoda",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 654.5,
+    "ratio": 0.535,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer pakora/pakoda",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 646.7,
+    "ratio": 0.541,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato samosa (Aloo ka samosa)",
+    "portion": "samosa",
+    "predicted_g": 68.0,
+    "measured_g": 140.9,
+    "ratio": 0.483,
+    "basis": "count"
+  },
+  {
+    "food_name": "Minced meat samosa (Keema ka samosa)",
+    "portion": "samosa",
+    "predicted_g": 68.0,
+    "measured_g": 134.9,
+    "ratio": 0.504,
+    "basis": "count"
+  },
+  {
+    "food_name": "Paneer and pea samosa (Paneer matar ka samosa)",
+    "portion": "samosa",
+    "predicted_g": 68.0,
+    "measured_g": 134.9,
+    "ratio": 0.504,
+    "basis": "count"
+  },
+  {
+    "food_name": "Masala vada",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 269.7,
+    "ratio": 0.222,
+    "basis": "count"
+  },
+  {
+    "food_name": "Peanut sago vada (Sabudana mungfali vada)",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 305.6,
+    "ratio": 0.196,
+    "basis": "count"
+  },
+  {
+    "food_name": "Paneer shaslik/tikka",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 438.7,
+    "ratio": 0.798,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dry mango chutney (Sookhe aam ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 27.7,
+    "ratio": 0.903,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Peanut chutney (Mungfali ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 15.0,
+    "measured_g": 21.0,
+    "ratio": 0.714,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Coconut chutney (Nariyal ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 25.3,
+    "ratio": 0.988,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mint and coriander chutney (Pudinay aur dhaniye ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 12.5,
+    "measured_g": 26.3,
+    "ratio": 0.475,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot cheese souffle",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 296.7,
+    "ratio": 0.843,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot potato souffle",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 366.7,
+    "ratio": 0.375,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot fish souffle",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 366.8,
+    "ratio": 0.682,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot spinach souffle",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 396.8,
+    "ratio": 0.158,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweet plain biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 14.3,
+    "ratio": 1.329,
+    "basis": "count"
+  },
+  {
+    "food_name": "Chocolate biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 15.1,
+    "ratio": 1.258,
+    "basis": "count"
+  },
+  {
+    "food_name": "Coconut biscuit (Nariyal ke biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 18.7,
+    "ratio": 1.016,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sweet and salty biscuit (Meethay aur namkeen biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 10.7,
+    "ratio": 1.776,
+    "basis": "count"
+  },
+  {
+    "food_name": "Peanut biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 17.8,
+    "ratio": 1.067,
+    "basis": "count"
+  },
+  {
+    "food_name": "Pin wheel biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 19.9,
+    "ratio": 0.955,
+    "basis": "count"
+  },
+  {
+    "food_name": "Saffron biscuit (Kesar biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 11.0,
+    "ratio": 1.727,
+    "basis": "count"
+  },
+  {
+    "food_name": "Masala biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 16.2,
+    "ratio": 1.173,
+    "basis": "count"
+  },
+  {
+    "food_name": "Ginger bread man",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 29.7,
+    "ratio": 0.64,
+    "basis": "count"
+  },
+  {
+    "food_name": "Danish cookies",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 12.6,
+    "ratio": 1.508,
+    "basis": "count"
+  },
+  {
+    "food_name": "Short bread cookies",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 17.6,
+    "ratio": 1.08,
+    "basis": "count"
+  },
+  {
+    "food_name": "Coffee biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 17.2,
+    "ratio": 1.105,
+    "basis": "count"
+  },
+  {
+    "food_name": "Melting moments",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 16.6,
+    "ratio": 1.145,
+    "basis": "count"
+  },
+  {
+    "food_name": "Ginger biscuit (Adarak ke biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 13.5,
+    "ratio": 1.407,
+    "basis": "count"
+  },
+  {
+    "food_name": "Soyabean namak paras",
+    "portion": "plate",
+    "predicted_g": 420.0,
+    "measured_g": 273.6,
+    "ratio": 1.535,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach peanut namak paras (Palak moongfali namak paras)",
+    "portion": "plate",
+    "predicted_g": 420.0,
+    "measured_g": 316.1,
+    "ratio": 1.329,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Split bengal gram sweet rice (Channa dal sweet rice)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 220.0,
+    "ratio": 1.591,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweet poori (Meethi poori)",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 152.5,
+    "ratio": 0.78,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sweet split chickpea roti (Sweet channa dal roti/Puranpoli)",
+    "portion": "roti",
+    "predicted_g": 40.0,
+    "measured_g": 53.4,
+    "ratio": 0.749,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sprouted moong daliya",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 316.0,
+    "ratio": 1.108,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sprouted moong poha",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 191.3,
+    "ratio": 1.83,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pearl millet ladoo (Bajra ladoo)",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 47.5,
+    "ratio": 0.758,
+    "basis": "count"
+  },
+  {
+    "food_name": "Paushtik ladoo",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 35.0,
+    "ratio": 1.029,
+    "basis": "count"
+  },
+  {
+    "food_name": "Paushtik roti",
+    "portion": "roti",
+    "predicted_g": 40.0,
+    "measured_g": 42.9,
+    "ratio": 0.932,
+    "basis": "count"
+  },
+  {
+    "food_name": "Semolina carrot vada (Suji gajar vada)",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 162.7,
+    "ratio": 0.369,
+    "basis": "count"
+  },
+  {
+    "food_name": "Kashmiri tea (Kehwa)",
+    "portion": "tea_cup",
+    "predicted_g": 150.0,
+    "measured_g": 256.7,
+    "ratio": 0.584,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Steeped hot coffee",
+    "portion": "tea_cup",
+    "predicted_g": 150.0,
+    "measured_g": 202.0,
+    "ratio": 0.743,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot chocolate",
+    "portion": "tea_cup",
+    "predicted_g": 150.0,
+    "measured_g": 190.5,
+    "ratio": 0.787,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cold coffee (with cream)",
+    "portion": "tall_glass",
+    "predicted_g": 346.5,
+    "measured_g": 250.5,
+    "ratio": 1.383,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Banana milkshake with ice cream (Kele ka milkshake ice cream ke saath)",
+    "portion": "tall_glass",
+    "predicted_g": 346.5,
+    "measured_g": 340.0,
+    "ratio": 1.019,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Flavoured milkshake",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 285.0,
+    "ratio": 1.228,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Gingo",
+    "portion": "tall_glass",
+    "predicted_g": 350.0,
+    "measured_g": 291.0,
+    "ratio": 1.203,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mintade",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 570.0,
+    "ratio": 0.579,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Canjee",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 170.3,
+    "ratio": 1.938,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower canjee (Phoolgobhi ki canjee)",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 178.6,
+    "ratio": 1.848,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato canjee (Aloo canjee)",
+    "portion": "glass",
+    "predicted_g": 181.5,
+    "measured_g": 195.2,
+    "ratio": 0.93,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vermicelli porridge (Semiya/Seviyan porridge)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 396.5,
+    "ratio": 0.631,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina upma (Suji/Rava upma)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 106.3,
+    "ratio": 2.352,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vermicelli upma (Semiya/Seviyan upma)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 106.3,
+    "ratio": 2.352,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Rice upma",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 106.3,
+    "ratio": 2.352,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bread upma",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 106.3,
+    "ratio": 2.352,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable upma",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 235.7,
+    "ratio": 1.485,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Poha",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 54.6,
+    "ratio": 4.579,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable poha",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 97.8,
+    "ratio": 2.556,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Indian style egg bhujia (Anda bhujia (Indian style))",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 126.0,
+    "ratio": 1.746,
+    "basis": "volume"
+  },
+  {
+    "food_name": "French omelette/omlet",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 68.0,
+    "ratio": 0.735,
+    "basis": "count"
+  },
+  {
+    "food_name": "Puffy omelette/omlet",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 76.0,
+    "ratio": 0.658,
+    "basis": "count"
+  },
+  {
+    "food_name": "Orange omelette/omlet",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 76.0,
+    "ratio": 0.658,
+    "basis": "count"
+  },
+  {
+    "food_name": "Cheese and mushroom omelette/omlet",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 128.0,
+    "ratio": 0.391,
+    "basis": "count"
+  },
+  {
+    "food_name": "Spanish omelette/omlet",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 152.0,
+    "ratio": 0.329,
+    "basis": "count"
+  },
+  {
+    "food_name": "Mixed stock",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 910.0,
+    "ratio": 0.264,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Meat stock",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 870.0,
+    "ratio": 0.276,
+    "basis": "volume"
+  },
+  {
+    "food_name": "White stock",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 765.0,
+    "ratio": 0.314,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cold cucumber cream soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 382.5,
+    "ratio": 0.654,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cold tomato soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 274.5,
+    "ratio": 0.911,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken stew",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 296.9,
+    "ratio": 0.842,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Veg paneer stew",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 236.9,
+    "ratio": 1.055,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bathua poori",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 90.9,
+    "ratio": 1.309,
+    "basis": "count"
+  },
+  {
+    "food_name": "Gram flour poori (Besan poori)",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 75.3,
+    "ratio": 1.58,
+    "basis": "count"
+  },
+  {
+    "food_name": "Beetroot poori (Chukandar ki poori)",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 102.9,
+    "ratio": 1.156,
+    "basis": "count"
+  },
+  {
+    "food_name": "Peas poori (Matar ki poori)",
+    "portion": "poori",
+    "predicted_g": 119.0,
+    "measured_g": 83.8,
+    "ratio": 1.42,
+    "basis": "count"
+  },
+  {
+    "food_name": "Eggplant/Brinjal rice (Vangi bhat)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 291.2,
+    "ratio": 1.202,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kashmiri 'tahar'",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 325.7,
+    "ratio": 1.075,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cumin pulao (Jeera/Zeera pulao)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 270.5,
+    "ratio": 1.294,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Peas pulao (Matar pulao)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 471.9,
+    "ratio": 0.742,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Split bengal gram dal and vegetable pulao (Channa dal and vegetable pulao)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 441.9,
+    "ratio": 0.792,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Black channa pulao/ Bengal gram pulao (Kale chane ka pulao)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 396.9,
+    "ratio": 0.882,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mutton pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 662.6,
+    "ratio": 0.528,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken pulao",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 668.1,
+    "ratio": 0.524,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mexican rice",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 517.8,
+    "ratio": 0.676,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Plain khitchdi (Plain khichri/khichdi)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 574.0,
+    "ratio": 0.383,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Instant idli (with semolina)",
+    "portion": "idli",
+    "predicted_g": 45.0,
+    "measured_g": 35.3,
+    "ratio": 1.275,
+    "basis": "count"
+  },
+  {
+    "food_name": "Plain dosa",
+    "portion": "dosa",
+    "predicted_g": 85.0,
+    "measured_g": 36.1,
+    "ratio": 2.355,
+    "basis": "count"
+  },
+  {
+    "food_name": "Masala dosa mixed vegetable fillings",
+    "portion": "dosa",
+    "predicted_g": 85.0,
+    "measured_g": 277.3,
+    "ratio": 0.307,
+    "basis": "count"
+  },
+  {
+    "food_name": "Masala dosa paneer fillings",
+    "portion": "dosa",
+    "predicted_g": 85.0,
+    "measured_g": 197.3,
+    "ratio": 0.431,
+    "basis": "count"
+  },
+  {
+    "food_name": "Beans and macaroni",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 254.3,
+    "ratio": 1.376,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Green gram whole with baghar (Sabut moong dal with tadka)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 225.7,
+    "ratio": 1.108,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Urad sabut special",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 441.8,
+    "ratio": 0.566,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kabuli channa curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 355.6,
+    "ratio": 0.703,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Besan gatte curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 255.7,
+    "ratio": 0.978,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mutton korma",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 366.5,
+    "ratio": 0.682,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Shahi keema kofta curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 617.1,
+    "ratio": 0.405,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Minced meat ball curry",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 373.1,
+    "ratio": 0.67,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Soya chunks sweet and sour (Nutrinugget sweet and sour)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 461.6,
+    "ratio": 0.542,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Soya chunks korma (Nutrinugget korma)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 248.7,
+    "ratio": 1.005,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mushroom matar",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 262.9,
+    "ratio": 0.951,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Soya chunks and peas (Nutrinugget matar)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 222.9,
+    "ratio": 1.122,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable yakhni",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 573.7,
+    "ratio": 0.436,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach mushroom (Palak mushroom)",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 295.1,
+    "ratio": 0.212,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Shahi chicken masala",
+    "portion": "bowl",
+    "predicted_g": 125.0,
+    "measured_g": 349.1,
+    "ratio": 0.358,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tomato chicken",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 176.3,
+    "ratio": 0.78,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Creamy chicken",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 217.4,
+    "ratio": 1.15,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Broccoli chicken ala king",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 236.1,
+    "ratio": 1.059,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Ginger chicken",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 383.9,
+    "ratio": 0.651,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken sweet and sour",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 561.6,
+    "ratio": 0.445,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken korma",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 347.0,
+    "ratio": 0.72,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bengal fish curry (Bengali machli curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 310.5,
+    "ratio": 0.805,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Prawn curry (with coconut) (Jhinga curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 286.1,
+    "ratio": 0.874,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato curry (Aloo ki sabzi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 201.6,
+    "ratio": 1.24,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Egg curry (Anda curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 151.6,
+    "ratio": 1.649,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable curry with coconut",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 371.6,
+    "ratio": 0.673,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Curd with potatoes (Dahi aloo)",
+    "portion": "bowl",
+    "predicted_g": 257.5,
+    "measured_g": 379.3,
+    "ratio": 0.679,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato kofta curry (Aloo kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 1020.1,
+    "ratio": 0.245,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Yam kofta curry (Zimikand/Suran kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 750.3,
+    "ratio": 0.333,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Jackfruit kofta curry (Kathal ka kofta curry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 750.3,
+    "ratio": 0.333,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach and potato (Palak aloo)",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 335.1,
+    "ratio": 0.187,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mooli bhujia",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 198.4,
+    "ratio": 1.26,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bathua bhujia",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 198.4,
+    "ratio": 1.26,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dry arbi (Sookhi arbi)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 200.6,
+    "ratio": 1.246,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Masala arbi",
+    "portion": "bowl",
+    "predicted_g": 125.0,
+    "measured_g": 116.2,
+    "ratio": 1.076,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Peas brinjal bhartha (Matar baingan bhartha)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 261.7,
+    "ratio": 0.841,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Okra/Lady's fingers fry (Bhindi sabzi/sabji/subji)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 166.3,
+    "ratio": 1.503,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Crispy okra/Crispy lady's fingers (Karare bhindi)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 342.8,
+    "ratio": 0.642,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Beans foogath",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 181.2,
+    "ratio": 1.214,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Stuffed bittergourd (wet) (Bharwa karele)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 156.5,
+    "ratio": 1.597,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Jackfruit/Kathal (dry)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 483.4,
+    "ratio": 0.517,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Yam fried (Zimikand/Suran fried)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 483.4,
+    "ratio": 0.517,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower, pea and potato bhujia (Phoolgobhi, matar aur aloo bhujia)",
+    "portion": "bowl",
+    "predicted_g": 212.5,
+    "measured_g": 191.2,
+    "ratio": 1.111,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable jalfrezi",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 100.6,
+    "ratio": 2.485,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetables stir fry",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 388.5,
+    "ratio": 0.566,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Broccoli delight",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 199.5,
+    "ratio": 1.253,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dhansak (vegetarian)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 241.0,
+    "ratio": 1.037,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Parsley potato",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 108.5,
+    "ratio": 1.267,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Creamed spinach and mushroom",
+    "portion": "bowl",
+    "predicted_g": 62.5,
+    "measured_g": 595.0,
+    "ratio": 0.105,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower au gratin",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 336.3,
+    "ratio": 0.743,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach souffle",
+    "portion": "small_bowl",
+    "predicted_g": 55.0,
+    "measured_g": 200.3,
+    "ratio": 0.275,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Beetroot and egg salad (Chukandar aur ande ka salad)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 222.5,
+    "ratio": 0.989,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sour cream potato salad",
+    "portion": "small_bowl",
+    "predicted_g": 217.8,
+    "measured_g": 226.8,
+    "ratio": 0.96,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tossed green salad",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 218.0,
+    "ratio": 1.009,
+    "basis": "volume"
+  },
+  {
+    "food_name": "French dressing",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 201.3,
+    "ratio": 1.192,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mayonnaise without eggs",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 387.2,
+    "ratio": 0.62,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Curd dressing",
+    "portion": "cup",
+    "predicted_g": 247.2,
+    "measured_g": 209.2,
+    "ratio": 1.182,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Carrot raita (Gajar ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 157.7,
+    "ratio": 1.585,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pumpkin raita (Kaddu ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 170.0,
+    "ratio": 1.471,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mint and peanut raita (Pudinay aur moongfali ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 133.2,
+    "ratio": 1.877,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spinach raita (Palak ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 203.2,
+    "ratio": 1.23,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bathua raita",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 203.2,
+    "ratio": 1.23,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pineapple raita (Ananas ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 158.8,
+    "ratio": 1.574,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Banana raita (Kele ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 158.8,
+    "ratio": 1.574,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mango raita (Aam ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 158.8,
+    "ratio": 1.574,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Guava raita (Amarood ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 158.8,
+    "ratio": 1.574,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Grapes raita (Angoor ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 158.8,
+    "ratio": 1.574,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bottle gourd kheer (Ghiya/Lauki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 267.7,
+    "ratio": 0.934,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pumpkin kheer (Kaddu ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 267.7,
+    "ratio": 0.934,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Apple kheer (Seb ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 332.7,
+    "ratio": 0.751,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Caramel custard (baked)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 225.5,
+    "ratio": 0.976,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chocolate sauce",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 16.7,
+    "ratio": 1.497,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Crunchy butterscotch",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 187.4,
+    "ratio": 1.281,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Stewed fruit (with pear)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 120.5,
+    "ratio": 2.075,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Hot lemon souffle",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 121.5,
+    "ratio": 2.058,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable samosa",
+    "portion": "samosa",
+    "predicted_g": 68.0,
+    "measured_g": 100.9,
+    "ratio": 0.674,
+    "basis": "count"
+  },
+  {
+    "food_name": "Plain urad dal vada (Uzunne vada/Minapa garelu/Ulundu vadai/Medu vada)",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 78.9,
+    "ratio": 0.76,
+    "basis": "count"
+  },
+  {
+    "food_name": "Masala urad dal vada",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 85.5,
+    "ratio": 0.702,
+    "basis": "count"
+  },
+  {
+    "food_name": "Tomato ginger chutney (Tamatar adarak ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 13.8,
+    "measured_g": 16.4,
+    "ratio": 0.841,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mint tomato chutney (Pudinay aur tamatar ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 6.2,
+    "measured_g": 18.9,
+    "ratio": 0.328,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Coriander chutney (Hare dhaniye ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 12.5,
+    "measured_g": 18.9,
+    "ratio": 0.661,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Gooseberry chutney (Amla chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 16.0,
+    "ratio": 1.562,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Walnut chutney (Akhrot ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 15.0,
+    "measured_g": 12.4,
+    "ratio": 1.21,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Saunth/Sonth chutney with ginger",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 32.9,
+    "ratio": 0.76,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Gun powder chutney",
+    "portion": "tablespoon",
+    "predicted_g": 12.5,
+    "measured_g": 13.9,
+    "ratio": 0.899,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dessicated coconut chutney (Sookhe kase nariyal ki chutney)",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 10.8,
+    "ratio": 2.315,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Curd mint dip",
+    "portion": "tablespoon",
+    "predicted_g": 25.8,
+    "measured_g": 33.0,
+    "ratio": 0.782,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Curd vegetable dip",
+    "portion": "tablespoon",
+    "predicted_g": 25.8,
+    "measured_g": 27.8,
+    "ratio": 0.928,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mayonnaise vegetable dip",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 42.8,
+    "ratio": 0.584,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Tomato and cucumber sandwich (Tamatar aur kheere ka sandwich)",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 78.8,
+    "ratio": 0.99,
+    "basis": "count"
+  },
+  {
+    "food_name": "Tomato sandwich (grilled)",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 76.8,
+    "ratio": 1.016,
+    "basis": "count"
+  },
+  {
+    "food_name": "French sandwich (toasted)",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 111.6,
+    "ratio": 0.699,
+    "basis": "count"
+  },
+  {
+    "food_name": "Peanut butter cucumber sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 55.3,
+    "ratio": 1.41,
+    "basis": "count"
+  },
+  {
+    "food_name": "Mint and peanut sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 49.1,
+    "ratio": 1.589,
+    "basis": "count"
+  },
+  {
+    "food_name": "Spicy chutney sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 57.7,
+    "ratio": 1.352,
+    "basis": "count"
+  },
+  {
+    "food_name": "Chicken walnut sandwich (Chicken aur akhrot ke sandwich)",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 66.6,
+    "ratio": 1.171,
+    "basis": "count"
+  },
+  {
+    "food_name": "Rolled sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 22.0,
+    "ratio": 3.545,
+    "basis": "count"
+  },
+  {
+    "food_name": "Cheese open sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 55.0,
+    "ratio": 1.418,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sunset and sunrise open sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 82.8,
+    "ratio": 0.942,
+    "basis": "count"
+  },
+  {
+    "food_name": "Danish luncheon sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 86.4,
+    "ratio": 0.903,
+    "basis": "count"
+  },
+  {
+    "food_name": "Chicken and corn open sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 108.4,
+    "ratio": 0.72,
+    "basis": "count"
+  },
+  {
+    "food_name": "Lemon curd filling",
+    "portion": "tablespoon",
+    "predicted_g": 25.8,
+    "measured_g": 25.0,
+    "ratio": 1.032,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Jam filling",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 16.3,
+    "ratio": 1.534,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chocolate glace icing",
+    "portion": "tablespoon",
+    "predicted_g": 25.0,
+    "measured_g": 23.9,
+    "ratio": 1.046,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Butter icing",
+    "portion": "tablespoon",
+    "predicted_g": 22.8,
+    "measured_g": 16.2,
+    "ratio": 1.407,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chocolate butter icing",
+    "portion": "tablespoon",
+    "predicted_g": 22.8,
+    "measured_g": 19.4,
+    "ratio": 1.175,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Almond biscuit (Badam ke biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 18.6,
+    "ratio": 1.022,
+    "basis": "count"
+  },
+  {
+    "food_name": "Orange biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 60.5,
+    "ratio": 0.314,
+    "basis": "count"
+  },
+  {
+    "food_name": "Christmas biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 20.7,
+    "ratio": 0.918,
+    "basis": "count"
+  },
+  {
+    "food_name": "Christmas wreath biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 22.0,
+    "ratio": 0.864,
+    "basis": "count"
+  },
+  {
+    "food_name": "Christmas bell biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 20.8,
+    "ratio": 0.913,
+    "basis": "count"
+  },
+  {
+    "food_name": "Christmas star biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 37.2,
+    "ratio": 0.511,
+    "basis": "count"
+  },
+  {
+    "food_name": "Christmas tree biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 22.0,
+    "ratio": 0.864,
+    "basis": "count"
+  },
+  {
+    "food_name": "Jelly biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 17.9,
+    "ratio": 1.061,
+    "basis": "count"
+  },
+  {
+    "food_name": "Butterfly biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 12.1,
+    "ratio": 1.57,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sesame biscuit (Til ke biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 14.5,
+    "ratio": 1.31,
+    "basis": "count"
+  },
+  {
+    "food_name": "Fermented bengal gram vada (Khameerikrit/Ufna hua channa dal ka vada)",
+    "portion": "vada",
+    "predicted_g": 60.0,
+    "measured_g": 90.1,
+    "ratio": 0.666,
+    "basis": "count"
+  },
+  {
+    "food_name": "Wheat flour and nuts ladoos (Atta nuts ladoos)",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 36.2,
+    "ratio": 0.994,
+    "basis": "count"
+  },
+  {
+    "food_name": "Soya roti",
+    "portion": "roti",
+    "predicted_g": 40.0,
+    "measured_g": 50.3,
+    "ratio": 0.795,
+    "basis": "count"
+  },
+  {
+    "food_name": "Poshtik khichdi/khichri",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 360.3,
+    "ratio": 0.971,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Namkeen daliya",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 117.3,
+    "ratio": 2.984,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sprouts upma",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 95.3,
+    "ratio": 3.673,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina idli (Suji/Rava idli)",
+    "portion": "idli",
+    "predicted_g": 45.0,
+    "measured_g": 29.6,
+    "ratio": 1.52,
+    "basis": "count"
+  },
+  {
+    "food_name": "Stuffed bittergourd (dry) (Bharwa karela)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 106.1,
+    "ratio": 2.356,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cauliflower potato canjee",
+    "portion": "glass",
+    "predicted_g": 181.5,
+    "measured_g": 211.9,
+    "ratio": 0.857,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Creamed spinach",
+    "portion": "small_bowl",
+    "predicted_g": 55.0,
+    "measured_g": 385.6,
+    "ratio": 0.143,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mango milkshake with ice cream (Aam milkshake ice cream\u00a0ke\u00a0saath)",
+    "portion": "tall_glass",
+    "predicted_g": 346.5,
+    "measured_g": 340.0,
+    "ratio": 1.019,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pineapple milkshake with ice cream (Ananas milkshake ice cream\u00a0ke\u00a0saath)",
+    "portion": "tall_glass",
+    "predicted_g": 346.5,
+    "measured_g": 340.0,
+    "ratio": 1.019,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Orange milkshake with ice cream (Narangi milkshake ice cream\u00a0ke\u00a0saath)",
+    "portion": "tall_glass",
+    "predicted_g": 346.5,
+    "measured_g": 340.0,
+    "ratio": 1.019,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Woodapple juice (Bel ka sharbat)",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 351.3,
+    "ratio": 0.939,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sattu drink",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 534.2,
+    "ratio": 0.618,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Apple and honey sorbet (Seb aur shehad ka sharbat)",
+    "portion": "cup",
+    "predicted_g": 340.8,
+    "measured_g": 162.4,
+    "ratio": 2.099,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Thandai",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 253.5,
+    "ratio": 1.302,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cucumber sharbat (Kheere ka sharbat)",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 411.0,
+    "ratio": 0.803,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Apple oats chia seed smoothie",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 628.5,
+    "ratio": 0.525,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Nannari sharbat",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 1115.0,
+    "ratio": 0.215,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina milk drink (Thari kanji)",
+    "portion": "cup",
+    "predicted_g": 247.2,
+    "measured_g": 263.5,
+    "ratio": 0.938,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Saffron milk (Kesariya doodh)",
+    "portion": "glass",
+    "predicted_g": 339.9,
+    "measured_g": 262.7,
+    "ratio": 1.294,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Black rice kheer (Chak-hao kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 207.7,
+    "ratio": 1.204,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Coconut kheer (Nariyal ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 650.4,
+    "ratio": 0.384,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Apple sago payasam (Seb aur sabudana ki kheer)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 331.1,
+    "ratio": 0.755,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kesari bath",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 176.7,
+    "ratio": 1.415,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Mango vanilla custard",
+    "portion": "glass",
+    "predicted_g": 330.0,
+    "measured_g": 203.2,
+    "ratio": 1.624,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kiwi granola pudding",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 524.0,
+    "ratio": 0.477,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Amaranth ladoo (Rajgira ladoo)",
+    "portion": "ladoo",
+    "predicted_g": 36.0,
+    "measured_g": 43.9,
+    "ratio": 0.82,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sweet couscous dessert",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 230.2,
+    "ratio": 1.086,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweetened yogurt (Shrikhand)",
+    "portion": "bowl",
+    "predicted_g": 257.5,
+    "measured_g": 304.6,
+    "ratio": 0.845,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Thickened sweetened milk (Rabri)",
+    "portion": "bowl",
+    "predicted_g": 257.5,
+    "measured_g": 220.3,
+    "ratio": 1.169,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Prawn sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 228.0,
+    "ratio": 0.342,
+    "basis": "count"
+  },
+  {
+    "food_name": "Fish sandwich",
+    "portion": "sandwich",
+    "predicted_g": 78.0,
+    "measured_g": 260.6,
+    "ratio": 0.299,
+    "basis": "count"
+  },
+  {
+    "food_name": "Finger millet biscuit (Ragi biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 75.3,
+    "ratio": 0.252,
+    "basis": "count"
+  },
+  {
+    "food_name": "Buttermilk biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 128.5,
+    "ratio": 0.148,
+    "basis": "count"
+  },
+  {
+    "food_name": "Sweet potato biscuit (Shakarkand ke biscuit)",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 150.9,
+    "ratio": 0.126,
+    "basis": "count"
+  },
+  {
+    "food_name": "Olive biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 47.3,
+    "ratio": 0.402,
+    "basis": "count"
+  },
+  {
+    "food_name": "Tutti fruitti biscuit",
+    "portion": "biscuit",
+    "predicted_g": 19.0,
+    "measured_g": 108.7,
+    "ratio": 0.175,
+    "basis": "count"
+  },
+  {
+    "food_name": "Date pickle (Khajoor ka achaar)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 138.2,
+    "ratio": 1.592,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Small onion pickle",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 112.2,
+    "ratio": 1.225,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Potato pickle (Aloo ka achaar)",
+    "portion": "bowl",
+    "predicted_g": 137.5,
+    "measured_g": 46.9,
+    "ratio": 2.932,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Afghani chicken",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 189.8,
+    "ratio": 1.844,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken manchurian",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 444.7,
+    "ratio": 0.787,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Handi chicken",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 231.9,
+    "ratio": 1.509,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lemon chicken",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 286.6,
+    "ratio": 1.221,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked eggs in tomato sauce",
+    "portion": "plate",
+    "predicted_g": 192.5,
+    "measured_g": 497.5,
+    "ratio": 0.387,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Egg in a pepper",
+    "portion": "egg",
+    "predicted_g": 50.0,
+    "measured_g": 582.0,
+    "ratio": 0.086,
+    "basis": "count"
+  },
+  {
+    "food_name": "Spinach mushroom scrambled egg (Palak mushroom bhurji)",
+    "portion": "plate",
+    "predicted_g": 87.5,
+    "measured_g": 116.4,
+    "ratio": 0.752,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paaner do pyaza",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 231.9,
+    "ratio": 1.078,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cabbage manchurian (Pattagobhi manchurian)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 740.4,
+    "ratio": 0.338,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Gobi 65",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 857.5,
+    "ratio": 0.408,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer lababdar",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 382.3,
+    "ratio": 0.654,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sauteed radishes with green beans",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 96.6,
+    "ratio": 3.623,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Garlic chutney/Poondu chutney (Lahasun ki chutney)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 79.4,
+    "ratio": 2.771,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Onion chutney (Pyaaz ki chutney/Vengaya chutney)",
+    "portion": "cup",
+    "predicted_g": 132.0,
+    "measured_g": 52.5,
+    "ratio": 2.514,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dates chutney (Khajoor ki chutney)",
+    "portion": "small_bowl",
+    "predicted_g": 220.0,
+    "measured_g": 263.8,
+    "ratio": 0.834,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Chicken salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 247.0,
+    "ratio": 1.012,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Macaroni salad",
+    "portion": "cup",
+    "predicted_g": 240.0,
+    "measured_g": 161.0,
+    "ratio": 1.491,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Cabbage raita (Pattagobhi raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 232.1,
+    "ratio": 1.077,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pomegranate raita (Anaar ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 144.2,
+    "ratio": 1.734,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Onion raita (Pyaaz ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 156.5,
+    "ratio": 1.597,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Green chilli raita (Hari mirch ka raita)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 102.5,
+    "ratio": 2.439,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Kale salad",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 53.7,
+    "ratio": 4.655,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sago khitchdi/khichri (Sabudana khitchdi/khichri)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 271.4,
+    "ratio": 0.921,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Vegetable namkeen jave",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 365.3,
+    "ratio": 0.958,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Quinoa khichdi/khichri",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 318.2,
+    "ratio": 0.786,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Khakhra chaat",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 835.5,
+    "ratio": 0.419,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Veg manchurian",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 194.9,
+    "ratio": 1.796,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bhel puri",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 700.9,
+    "ratio": 0.499,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Semolina dhokla (Suji/Rava dhokla)",
+    "portion": "plate",
+    "predicted_g": 262.5,
+    "measured_g": 100.2,
+    "ratio": 2.62,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Spicy corn chaat",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 554.2,
+    "ratio": 0.632,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Banana chips (Kele ke chips)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 170.4,
+    "ratio": 1.467,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Ham and Bean soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 150.8,
+    "ratio": 1.658,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Whey soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 223.4,
+    "ratio": 1.119,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Bottle gourd soup (Ghiya/Lauki soup)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 295.1,
+    "ratio": 0.847,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Baked potato soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 523.5,
+    "ratio": 0.478,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Pumpkin soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 318.4,
+    "ratio": 0.785,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sweet corn soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 392.2,
+    "ratio": 0.637,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Paneer soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 610.7,
+    "ratio": 0.409,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Lemon coriander soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 48.6,
+    "ratio": 5.144,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Garlic soup",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 144.0,
+    "ratio": 1.736,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dal makhani",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 353.4,
+    "ratio": 0.707,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dalma",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 263.8,
+    "ratio": 0.948,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Split bengal gram dal (Channa dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 292.2,
+    "ratio": 0.856,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Horsegram dal (Kulthi dal)",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 360.8,
+    "ratio": 0.693,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Panchmel dal",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 300.8,
+    "ratio": 0.831,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Dal dhokli",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 336.7,
+    "ratio": 0.743,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Sev (Omapodi/Karapusa)",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 136.9,
+    "ratio": 2.557,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Papdi",
+    "portion": "plate",
+    "predicted_g": 350.0,
+    "measured_g": 173.7,
+    "ratio": 2.015,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Jowar dosa",
+    "portion": "dosa",
+    "predicted_g": 85.0,
+    "measured_g": 33.0,
+    "ratio": 2.576,
+    "basis": "count"
+  },
+  {
+    "food_name": "Maa chaane ki dal",
+    "portion": "bowl",
+    "predicted_g": 250.0,
+    "measured_g": 81.1,
+    "ratio": 3.083,
+    "basis": "volume"
+  },
+  {
+    "food_name": "Garlic chickpea soup (Lahasun aur chane ka shoraba)",
+    "portion": "soup_bowl",
+    "predicted_g": 350.0,
+    "measured_g": 318.2,
+    "ratio": 1.1,
+    "basis": "volume"
+  }
+]
