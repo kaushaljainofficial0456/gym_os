@@ -203,6 +203,29 @@ to invent a replacement. When one is the only match, show the reason
 
 ---
 
+## 5b. `per_100g_unreliable` — a SCOPED flag, weaker than `trustworthy: false`
+
+Distinct from §5 and must not be conflated with it.
+
+94 INDB rows have an implausible per-100 g basis, detected by checking each
+derived serving mass against reference piece weights — a dosa is not 33 g, a
+bowl of poha is not 55 g. INDB publishes per-serving energy *directly* but
+DERIVES serving grams from per-100 g, so an implausible mass is the fingerprint
+of a wrong per-100 g value.
+
+**What this means for the UI:**
+
+| Logging | Affected? |
+|---|---|
+| "1 dosa", "1 bowl poha" (per serving) | **No** — per-serving energy is published directly and stays reliable |
+| "100 g dosa" (per 100 g) | **Yes** — show the caveat or prefer the serving basis |
+
+So when `per_100g_unreliable` is present, **prefer the serving-based path** and
+avoid presenting a per-100g figure as firm. The row is otherwise fine — this is
+not `trustworthy: false`, which means do not present the value at all.
+
+---
+
 ## 6. Work split
 
 ### Kaushal — backend

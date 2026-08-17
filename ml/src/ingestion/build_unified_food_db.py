@@ -267,6 +267,16 @@ def build_indb():
     for f in load("indb_frying_bath_flags.json"):
         bath_flags[f["source_id"]] = "; ".join(f["reasons"])
 
+    # Rows whose PER-100g basis is implausible, detected by checking the
+    # derived serving mass against reference piece weights (a dosa is not
+    # 33 g). This is a DIFFERENT and weaker problem than the frying-bath
+    # flag: per-serving energy is published directly by INDB and stays
+    # usable, so these rows are marked on the per-100g basis only rather
+    # than being withheld entirely. Conflating the two would either throw
+    # away good serving data or serve a bad per-100g value.
+    serving_flags = {f["source_id"]: f["reason"]
+                     for f in load("indb_serving_flags.json")}
+
     out = []
     for r in load("indb_dishes.json"):
         rec = {
@@ -300,6 +310,10 @@ def build_indb():
             existing = rec.get("data_quality_flag")
             msg = "frying-bath contamination: " + bath_flags[r["source_id"]]
             rec["data_quality_flag"] = f"{existing}; {msg}" if existing else msg
+        if r.get("source_id") in serving_flags:
+            # Scoped flag: the per-100g basis is suspect, the per-serving
+            # values are not. Callers logging "1 dosa" are unaffected.
+            rec["per_100g_unreliable"] = serving_flags[r["source_id"]]
         out.append(rec)
     return out
 

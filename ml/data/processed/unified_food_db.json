@@ -8569,6 +8569,7 @@
     "serving_description": "slice",
     "serving_grams": 177.1,
     "serving_energy_kcal": 458.283,
+    "per_100g_unreliable": "derived serving mass 177.1 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (458.283 kcal) is published directly and remains usable.",
     "search_name": "apple cinnamon pie"
   },
   {
@@ -9137,6 +9138,7 @@
     "serving_grams": 628.5,
     "serving_energy_kcal": 538.278,
     "data_quality_flag": "frying-bath contamination: 1 glass derived as 628 g, above a sane maximum of 500 g for that unit",
+    "per_100g_unreliable": "derived serving mass 628.5 g is too large for 'glass' (reference 140-320 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (538.278 kcal) is published directly and remains usable.",
     "search_name": "apple oats chia seed smoothie"
   },
   {
@@ -28818,6 +28820,7 @@
     "serving_grams": 290.4,
     "serving_energy_kcal": 1364.198,
     "data_quality_flag": "frying-bath contamination: 81% of energy is fat (42.5 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 290.4 g is too large for 'appam' (reference 35-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1364.198 kcal) is published directly and remains usable.",
     "search_name": "banana appam"
   },
   {
@@ -30595,6 +30598,7 @@
     "serving_grams": 90.9,
     "serving_energy_kcal": 544.238,
     "data_quality_flag": "frying-bath contamination: 89% of energy is fat (59.1 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 90.9 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (544.238 kcal) is published directly and remains usable.",
     "search_name": "bathua poori"
   },
   {
@@ -69355,6 +69359,7 @@
     "serving_grams": 102.9,
     "serving_energy_kcal": 543.136,
     "data_quality_flag": "frying-bath contamination: 89% of energy is fat (52.2 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 102.9 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (543.136 kcal) is published directly and remains usable.",
     "search_name": "beetroot poori"
   },
   {
@@ -94418,6 +94423,7 @@
     "serving_grams": 486.1,
     "serving_energy_kcal": 103.655,
     "data_quality_flag": "frying-bath contamination: 1 cup derived as 486 g, above a sane maximum of 400 g for that unit",
+    "per_100g_unreliable": "derived serving mass 486.1 g is too large for 'cup' (reference 110-280 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (103.655 kcal) is published directly and remains usable.",
     "search_name": "brown stock"
   },
   {
@@ -97810,6 +97816,7 @@
     "serving_grams": 128.5,
     "serving_energy_kcal": 414.461,
     "data_quality_flag": "frying-bath contamination: 1 biscuit derived as 128 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 128.5 g is too large for 'biscuit' (reference 6-40 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (414.461 kcal) is published directly and remains usable.",
     "search_name": "buttermilk biscuit"
   },
   {
@@ -97997,6 +98004,7 @@
     "serving_grams": 713.2,
     "serving_energy_kcal": 4562.953,
     "data_quality_flag": "frying-bath contamination: 98% of energy is fat (69.4 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 713 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 713.2 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4562.953 kcal) is published directly and remains usable.",
     "search_name": "cabbage kofta curry"
   },
   {
@@ -98024,6 +98032,7 @@
     "serving_grams": 740.4,
     "serving_energy_kcal": 1660.411,
     "data_quality_flag": "frying-bath contamination: 90% of energy is fat (22.5 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 740 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 740.4 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1660.411 kcal) is published directly and remains usable.",
     "search_name": "cabbage manchurian"
   },
   {
@@ -112115,6 +112124,7 @@
     "serving_grams": 218.6,
     "serving_energy_kcal": 875.47,
     "data_quality_flag": "frying-bath contamination: 1 cookie derived as 219 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 218.6 g is too large for 'cookie' (reference 8-60 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (875.47 kcal) is published directly and remains usable.",
     "search_name": "cardamom cookies"
   },
   {
@@ -115143,6 +115153,7 @@
     "serving_grams": 711.2,
     "serving_energy_kcal": 4559.308,
     "data_quality_flag": "frying-bath contamination: 98% of energy is fat (69.6 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 711 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 711.2 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4559.308 kcal) is published directly and remains usable.",
     "search_name": "cauliflower kofta curry"
   },
   {
@@ -162636,6 +162647,7 @@
     "serving_description": "slice",
     "serving_grams": 184.3,
     "serving_energy_kcal": 395.69,
+    "per_100g_unreliable": "derived serving mass 184.3 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (395.69 kcal) is published directly and remains usable.",
     "search_name": "chocolate meringue pie"
   },
   {
@@ -163122,6 +163134,7 @@
     "serving_description": "large slice",
     "serving_grams": 165.7,
     "serving_energy_kcal": 351.197,
+    "per_100g_unreliable": "derived serving mass 165.7 g is too large for 'large slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (351.197 kcal) is published directly and remains usable.",
     "search_name": "chocolate pudding"
   },
   {
@@ -164463,6 +164476,7 @@
     "serving_grams": 311.7,
     "serving_energy_kcal": 405.443,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 312 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 311.7 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (405.443 kcal) is published directly and remains usable.",
     "search_name": "chum chum"
   },
   {
@@ -173291,6 +173305,7 @@
     "serving_grams": 769.9,
     "serving_energy_kcal": 213.745,
     "data_quality_flag": "stated energy (27.763 kcal/100g) contradicts stated macros (P12.493/F10.658/C1.491 implies ~152 kcal/100g, ratio 0.18); verified present in INDB source workbook, not an extraction error; frying-bath contamination: 1 bowl derived as 770 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 769.9 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (213.745 kcal) is published directly and remains usable.",
     "search_name": "consomme au julienne"
   },
   {
@@ -191934,6 +191949,7 @@
     "serving_grams": 185.8,
     "serving_energy_kcal": 506.136,
     "data_quality_flag": "frying-bath contamination: 1 cookie derived as 186 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 185.8 g is too large for 'cookie' (reference 8-60 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (506.136 kcal) is published directly and remains usable.",
     "search_name": "cranberry cookies"
   },
   {
@@ -198993,6 +199009,7 @@
     "serving_grams": 172.3,
     "serving_energy_kcal": 1150.159,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (70.4 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 172.3 g is too large for 'vada' (reference 25-100 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1150.159 kcal) is published directly and remains usable.",
     "search_name": "dahi vadas dahi bhalla"
   },
   {
@@ -199551,6 +199568,7 @@
     "serving_grams": 118.8,
     "serving_energy_kcal": 932.648,
     "data_quality_flag": "frying-bath contamination: 94% of energy is fat (81.7 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 118.8 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (932.648 kcal) is published directly and remains usable.",
     "search_name": "dal stuffed poori"
   },
   {
@@ -207886,6 +207904,7 @@
     "serving_grams": 311.7,
     "serving_energy_kcal": 405.443,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 312 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 311.7 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (405.443 kcal) is published directly and remains usable.",
     "search_name": "dil bahar"
   },
   {
@@ -213162,6 +213181,7 @@
     "serving_grams": 203.3,
     "serving_energy_kcal": 1169.221,
     "data_quality_flag": "frying-bath contamination: 94% of energy is fat (60.2 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 203 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 203.3 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1169.221 kcal) is published directly and remains usable.",
     "search_name": "egg cutlet"
   },
   {
@@ -231692,6 +231712,7 @@
     "serving_description": "biscuit",
     "serving_grams": 75.3,
     "serving_energy_kcal": 345.413,
+    "per_100g_unreliable": "derived serving mass 75.3 g is too large for 'biscuit' (reference 6-40 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (345.413 kcal) is published directly and remains usable.",
     "search_name": "finger millet biscuit"
   },
   {
@@ -232152,6 +232173,7 @@
     "serving_grams": 349.0,
     "serving_energy_kcal": 2284.432,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (70.1 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 349 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 349.0 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2284.432 kcal) is published directly and remains usable.",
     "search_name": "fish cutlet"
   },
   {
@@ -246814,6 +246836,7 @@
     "serving_grams": 331.3,
     "serving_energy_kcal": 2325.015,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (73.9 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 331 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 331.3 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2325.015 kcal) is published directly and remains usable.",
     "search_name": "flattened rice cutlet"
   },
   {
@@ -249763,6 +249786,7 @@
     "serving_grams": 353.5,
     "serving_energy_kcal": 2327.953,
     "data_quality_flag": "frying-bath contamination: 94% of energy is fat (68.9 g/100 g) -- implies the frying bath was counted as consumed; 1 piece derived as 354 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 353.5 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2327.953 kcal) is published directly and remains usable.",
     "search_name": "fried fish"
   },
   {
@@ -252617,6 +252641,7 @@
     "serving_grams": 233.0,
     "serving_energy_kcal": 241.172,
     "data_quality_flag": "frying-bath contamination: 1 slice derived as 233 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 233.0 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (241.172 kcal) is published directly and remains usable.",
     "search_name": "frozen frosty fruit salad"
   },
   {
@@ -264023,6 +264048,7 @@
     "serving_grams": 713.2,
     "serving_energy_kcal": 4555.065,
     "data_quality_flag": "frying-bath contamination: 98% of energy is fat (69.4 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 713 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 713.2 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4555.065 kcal) is published directly and remains usable.",
     "search_name": "ghiya lauki kofta curry"
   },
   {
@@ -266116,6 +266142,7 @@
     "serving_grams": 857.5,
     "serving_energy_kcal": 2386.475,
     "data_quality_flag": "frying-bath contamination: 94% of energy is fat (29.1 g/100 g) -- implies the frying bath was counted as consumed; 1 plate derived as 858 g, above a sane maximum of 700 g for that unit",
+    "per_100g_unreliable": "derived serving mass 857.5 g is too large for 'plate' (reference 140-520 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2386.475 kcal) is published directly and remains usable.",
     "search_name": "gobi 65"
   },
   {
@@ -281523,6 +281550,7 @@
     "serving_description": "kebab",
     "serving_grams": 178.5,
     "serving_energy_kcal": 268.248,
+    "per_100g_unreliable": "derived serving mass 178.5 g is too large for 'kebab' (reference 25-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (268.248 kcal) is published directly and remains usable.",
     "search_name": "hariyali fish tikka"
   },
   {
@@ -283506,6 +283534,7 @@
     "serving_description": "slice",
     "serving_grams": 163.7,
     "serving_energy_kcal": 546.05,
+    "per_100g_unreliable": "derived serving mass 163.7 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (546.05 kcal) is published directly and remains usable.",
     "search_name": "honey cake"
   },
   {
@@ -294406,6 +294435,7 @@
     "serving_grams": 450.0,
     "serving_energy_kcal": 104.201,
     "data_quality_flag": "frying-bath contamination: 1 tea cup derived as 450 g, above a sane maximum of 300 g for that unit",
+    "per_100g_unreliable": "derived serving mass 450.0 g is too large for 'tea cup' (reference 80-220 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (104.201 kcal) is published directly and remains usable.",
     "search_name": "instant coffee"
   },
   {
@@ -295132,6 +295162,7 @@
     "serving_grams": 750.3,
     "serving_energy_kcal": 2408.956,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (33.8 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 750 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 750.3 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2408.956 kcal) is published directly and remains usable.",
     "search_name": "jackfruit kofta curry"
   },
   {
@@ -296817,6 +296848,7 @@
     "serving_description": "dosa",
     "serving_grams": 33.0,
     "serving_energy_kcal": 97.248,
+    "per_100g_unreliable": "derived serving mass 33.0 g is too small for 'dosa' (reference 55-160 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (97.248 kcal) is published directly and remains usable.",
     "search_name": "jowar dosa"
   },
   {
@@ -298245,6 +298277,7 @@
     "serving_description": "bowl",
     "serving_grams": 53.7,
     "serving_energy_kcal": 95.355,
+    "per_100g_unreliable": "derived serving mass 53.7 g is too small for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (95.355 kcal) is published directly and remains usable.",
     "search_name": "kale salad"
   },
   {
@@ -300606,6 +300639,7 @@
     "serving_grams": 835.5,
     "serving_energy_kcal": 2996.462,
     "data_quality_flag": "frying-bath contamination: 1 plate derived as 836 g, above a sane maximum of 700 g for that unit",
+    "per_100g_unreliable": "derived serving mass 835.5 g is too large for 'plate' (reference 140-520 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2996.462 kcal) is published directly and remains usable.",
     "search_name": "khakhra chaat"
   },
   {
@@ -315726,6 +315760,7 @@
     "serving_grams": 156.5,
     "serving_energy_kcal": 617.357,
     "data_quality_flag": "frying-bath contamination: 1 cookie derived as 156 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 156.5 g is too large for 'cookie' (reference 8-60 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (617.357 kcal) is published directly and remains usable.",
     "search_name": "lemon cookies"
   },
   {
@@ -315752,6 +315787,7 @@
     "serving_description": "bowl",
     "serving_grams": 48.6,
     "serving_energy_kcal": 52.524,
+    "per_100g_unreliable": "derived serving mass 48.6 g is too small for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (52.524 kcal) is published directly and remains usable.",
     "search_name": "lemon coriander soup"
   },
   {
@@ -316109,6 +316145,7 @@
     "serving_description": "slice",
     "serving_grams": 156.9,
     "serving_energy_kcal": 352.069,
+    "per_100g_unreliable": "derived serving mass 156.9 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (352.069 kcal) is published directly and remains usable.",
     "search_name": "lemon meringue pie"
   },
   {
@@ -321292,6 +321329,7 @@
     "serving_grams": 362.5,
     "serving_energy_kcal": 1343.244,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 362 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 362.5 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1343.244 kcal) is published directly and remains usable.",
     "search_name": "lotus seed halwa"
   },
   {
@@ -321345,6 +321383,7 @@
     "serving_grams": 731.2,
     "serving_energy_kcal": 4632.431,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (67.8 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 731 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 731.2 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4632.431 kcal) is published directly and remains usable.",
     "search_name": "lotus stem kofta curry"
   },
   {
@@ -325042,6 +325081,7 @@
     "serving_description": "slice",
     "serving_grams": 174.2,
     "serving_energy_kcal": 265.564,
+    "per_100g_unreliable": "derived serving mass 174.2 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (265.564 kcal) is published directly and remains usable.",
     "search_name": "mango cheesecake"
   },
   {
@@ -325190,6 +325230,7 @@
     "serving_grams": 456.0,
     "serving_energy_kcal": 573.128,
     "data_quality_flag": "frying-bath contamination: 1 ice-cream cup derived as 456 g, above a sane maximum of 400 g for that unit",
+    "per_100g_unreliable": "derived serving mass 456.0 g is too large for 'ice-cream cup' (reference 110-280 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (573.128 kcal) is published directly and remains usable.",
     "search_name": "mango ice cream"
   },
   {
@@ -325280,6 +325321,7 @@
     "serving_grams": 392.9,
     "serving_energy_kcal": 1314.714,
     "data_quality_flag": "frying-bath contamination: 82% of energy is fat (30.7 g/100 g) -- implies the frying bath was counted as consumed; 1 piece derived as 393 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 392.9 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1314.714 kcal) is published directly and remains usable.",
     "search_name": "mango malpua"
   },
   {
@@ -331982,6 +332024,7 @@
     "serving_grams": 870.0,
     "serving_energy_kcal": 213.0,
     "data_quality_flag": "frying-bath contamination: 1 cup derived as 870 g, above a sane maximum of 400 g for that unit",
+    "per_100g_unreliable": "derived serving mass 870.0 g is too large for 'cup' (reference 110-280 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (213.0 kcal) is published directly and remains usable.",
     "search_name": "meat stock"
   },
   {
@@ -332849,6 +332892,7 @@
     "serving_grams": 1001.5,
     "serving_energy_kcal": 4763.379,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (50.9 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 1002 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 1001.5 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4763.379 kcal) is published directly and remains usable.",
     "search_name": "methi chaman"
   },
   {
@@ -332955,6 +332999,7 @@
     "serving_grams": 130.0,
     "serving_energy_kcal": 923.026,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (74.6 g/100 g) -- implies the frying bath was counted as consumed; 1 poori derived as 130 g, above a sane maximum of 120 g for that unit",
+    "per_100g_unreliable": "derived serving mass 130.0 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (923.026 kcal) is published directly and remains usable.",
     "search_name": "methi poori"
   },
   {
@@ -333402,6 +333447,7 @@
     "serving_grams": 287.3,
     "serving_energy_kcal": 365.98,
     "data_quality_flag": "frying-bath contamination: 1 slice derived as 287 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 287.3 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (365.98 kcal) is published directly and remains usable.",
     "search_name": "milk cake"
   },
   {
@@ -333450,6 +333496,7 @@
     "serving_grams": 124.8,
     "serving_energy_kcal": 573.575,
     "data_quality_flag": "frying-bath contamination: 1 cookie derived as 125 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 124.8 g is too large for 'cookie' (reference 8-60 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (573.575 kcal) is published directly and remains usable.",
     "search_name": "milk cookies"
   },
   {
@@ -337389,6 +337436,7 @@
     "serving_grams": 233.3,
     "serving_energy_kcal": 1241.007,
     "data_quality_flag": "frying-bath contamination: 92% of energy is fat (54.5 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 233 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 233.3 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1241.007 kcal) is published directly and remains usable.",
     "search_name": "minced meat cutlet"
   },
   {
@@ -337842,6 +337890,7 @@
     "serving_grams": 570.0,
     "serving_energy_kcal": 229.836,
     "data_quality_flag": "frying-bath contamination: 1 glass derived as 570 g, above a sane maximum of 500 g for that unit",
+    "per_100g_unreliable": "derived serving mass 570.0 g is too large for 'glass' (reference 140-320 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (229.836 kcal) is published directly and remains usable.",
     "search_name": "mintade"
   },
   {
@@ -338734,6 +338783,7 @@
     "serving_grams": 910.0,
     "serving_energy_kcal": 229.252,
     "data_quality_flag": "frying-bath contamination: 1 cup derived as 910 g, above a sane maximum of 400 g for that unit",
+    "per_100g_unreliable": "derived serving mass 910.0 g is too large for 'cup' (reference 110-280 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (229.252 kcal) is published directly and remains usable.",
     "search_name": "mixed stock"
   },
   {
@@ -340963,6 +341013,7 @@
     "serving_description": "cheela",
     "serving_grams": 227.3,
     "serving_energy_kcal": 352.1,
+    "per_100g_unreliable": "derived serving mass 227.3 g is too large for 'cheela' (reference 40-130 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (352.1 kcal) is published directly and remains usable.",
     "search_name": "moong dal stuffed cheela chilla"
   },
   {
@@ -348516,6 +348567,7 @@
     "serving_grams": 1115.0,
     "serving_energy_kcal": 990.007,
     "data_quality_flag": "frying-bath contamination: 1 cup derived as 1115 g, above a sane maximum of 400 g for that unit",
+    "per_100g_unreliable": "derived serving mass 1115.0 g is too large for 'cup' (reference 110-280 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (990.007 kcal) is published directly and remains usable.",
     "search_name": "nannari sharbat"
   },
   {
@@ -366265,6 +366317,7 @@
     "serving_grams": 180.8,
     "serving_energy_kcal": 1215.565,
     "data_quality_flag": "frying-bath contamination: 93% of energy is fat (69.4 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 180.8 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1215.565 kcal) is published directly and remains usable.",
     "search_name": "paneer cutlet"
   },
   {
@@ -366370,6 +366423,7 @@
     "serving_grams": 701.0,
     "serving_energy_kcal": 4703.084,
     "data_quality_flag": "frying-bath contamination: 97% of energy is fat (72.1 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 701 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 701.0 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4703.084 kcal) is published directly and remains usable.",
     "search_name": "paneer kofta curry"
   },
   {
@@ -366555,6 +366609,7 @@
     "serving_grams": 343.3,
     "serving_energy_kcal": 2309.881,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (71.4 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 343 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 343.3 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2309.881 kcal) is published directly and remains usable.",
     "search_name": "paneer potato cutlet"
   },
   {
@@ -366582,6 +366637,7 @@
     "serving_grams": 837.9,
     "serving_energy_kcal": 4875.841,
     "data_quality_flag": "frying-bath contamination: 93% of energy is fat (59.8 g/100 g) -- implies the frying bath was counted as consumed; 1 plate derived as 838 g, above a sane maximum of 700 g for that unit",
+    "per_100g_unreliable": "derived serving mass 837.9 g is too large for 'plate' (reference 140-520 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4875.841 kcal) is published directly and remains usable.",
     "search_name": "paneer pulao"
   },
   {
@@ -366661,6 +366717,7 @@
     "serving_description": "cheela",
     "serving_grams": 212.3,
     "serving_energy_kcal": 435.678,
+    "per_100g_unreliable": "derived serving mass 212.3 g is too large for 'cheela' (reference 40-130 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (435.678 kcal) is published directly and remains usable.",
     "search_name": "paneer stuffed cheela chilla"
   },
   {
@@ -374074,6 +374131,7 @@
     "serving_grams": 780.5,
     "serving_energy_kcal": 4649.164,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (63.4 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 780 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 780.5 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4649.164 kcal) is published directly and remains usable.",
     "search_name": "pea kofta curry"
   },
   {
@@ -377000,6 +377058,7 @@
     "serving_grams": 338.8,
     "serving_energy_kcal": 2367.666,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (74.0 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 339 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 338.8 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2367.666 kcal) is published directly and remains usable.",
     "search_name": "peanut cutlet"
   },
   {
@@ -377238,6 +377297,7 @@
     "serving_grams": 305.6,
     "serving_energy_kcal": 2291.538,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (79.8 g/100 g) -- implies the frying bath was counted as consumed; 1 vada derived as 306 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 305.6 g is too large for 'vada' (reference 25-100 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2291.538 kcal) is published directly and remains usable.",
     "search_name": "peanut sago vada"
   },
   {
@@ -380060,6 +380120,7 @@
     "serving_grams": 83.8,
     "serving_energy_kcal": 496.793,
     "data_quality_flag": "frying-bath contamination: 88% of energy is fat (57.7 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 83.8 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (496.793 kcal) is published directly and remains usable.",
     "search_name": "peas poori"
   },
   {
@@ -389479,6 +389540,7 @@
     "serving_grams": 513.0,
     "serving_energy_kcal": 1003.282,
     "data_quality_flag": "frying-bath contamination: 1 slice derived as 513 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 513.0 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1003.282 kcal) is published directly and remains usable.",
     "search_name": "pineapple cake"
   },
   {
@@ -391386,6 +391448,7 @@
     "serving_grams": 297.3,
     "serving_energy_kcal": 436.348,
     "data_quality_flag": "frying-bath contamination: 1 slice derived as 297 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 297.3 g is too large for 'slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (436.348 kcal) is published directly and remains usable.",
     "search_name": "pizza"
   },
   {
@@ -395605,6 +395668,7 @@
     "serving_grams": 574.0,
     "serving_energy_kcal": 327.355,
     "data_quality_flag": "frying-bath contamination: 1 small bowl derived as 574 g, above a sane maximum of 350 g for that unit",
+    "per_100g_unreliable": "derived serving mass 574.0 g is too large for 'small bowl' (reference 80-260 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (327.355 kcal) is published directly and remains usable.",
     "search_name": "plain khitchdi"
   },
   {
@@ -398441,6 +398505,7 @@
     "serving_description": "bowl",
     "serving_grams": 54.6,
     "serving_energy_kcal": 160.781,
+    "per_100g_unreliable": "derived serving mass 54.6 g is too small for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (160.781 kcal) is published directly and remains usable.",
     "search_name": "poha"
   },
   {
@@ -399232,6 +399297,7 @@
     "serving_grams": 124.9,
     "serving_energy_kcal": 921.306,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (77.6 g/100 g) -- implies the frying bath was counted as consumed; 1 poori derived as 125 g, above a sane maximum of 120 g for that unit",
+    "per_100g_unreliable": "derived serving mass 124.9 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (921.306 kcal) is published directly and remains usable.",
     "search_name": "poori"
   },
   {
@@ -416518,6 +416584,7 @@
     "serving_grams": 240.8,
     "serving_energy_kcal": 1195.625,
     "data_quality_flag": "frying-bath contamination: 92% of energy is fat (50.9 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 241 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 240.8 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1195.625 kcal) is published directly and remains usable.",
     "search_name": "poshtik cutlet"
   },
   {
@@ -417779,6 +417846,7 @@
     "serving_grams": 1020.1,
     "serving_energy_kcal": 4645.418,
     "data_quality_flag": "frying-bath contamination: 97% of energy is fat (49.1 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 1020 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 1020.1 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4645.418 kcal) is published directly and remains usable.",
     "search_name": "potato kofta curry"
   },
   {
@@ -419039,6 +419107,7 @@
     "serving_grams": 119.2,
     "serving_energy_kcal": 925.872,
     "data_quality_flag": "frying-bath contamination: 94% of energy is fat (81.4 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 119.2 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (925.872 kcal) is published directly and remains usable.",
     "search_name": "potato stuffed poori"
   },
   {
@@ -433661,6 +433730,7 @@
     "serving_grams": 325.7,
     "serving_energy_kcal": 432.986,
     "data_quality_flag": "frying-bath contamination: 1 large slice derived as 326 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 325.7 g is too large for 'large slice' (reference 18-90 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (432.986 kcal) is published directly and remains usable.",
     "search_name": "queen of pudding"
   },
   {
@@ -436048,6 +436118,7 @@
     "serving_grams": 314.5,
     "serving_energy_kcal": 420.546,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 314 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 314.5 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (420.546 kcal) is published directly and remains usable.",
     "search_name": "rajbogh"
   },
   {
@@ -436874,6 +436945,7 @@
     "serving_grams": 311.7,
     "serving_energy_kcal": 405.443,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 312 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 311.7 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (405.443 kcal) is published directly and remains usable.",
     "search_name": "rasbhari"
   },
   {
@@ -436901,6 +436973,7 @@
     "serving_grams": 341.8,
     "serving_energy_kcal": 405.443,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 342 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 341.8 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (405.443 kcal) is published directly and remains usable.",
     "search_name": "rasgulla"
   },
   {
@@ -436928,6 +437001,7 @@
     "serving_grams": 317.4,
     "serving_energy_kcal": 430.28,
     "data_quality_flag": "frying-bath contamination: 1 piece derived as 317 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 317.4 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (430.28 kcal) is published directly and remains usable.",
     "search_name": "rasmalai"
   },
   {
@@ -437903,6 +437977,7 @@
     "serving_grams": 727.2,
     "serving_energy_kcal": 4561.33,
     "data_quality_flag": "frying-bath contamination: 98% of energy is fat (68.0 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 727 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 727.2 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4561.33 kcal) is published directly and remains usable.",
     "search_name": "raw banana kofta curry"
   },
   {
@@ -449969,6 +450044,7 @@
     "serving_grams": 210.8,
     "serving_energy_kcal": 1178.051,
     "data_quality_flag": "frying-bath contamination: 92% of energy is fat (57.0 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 211 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 210.8 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1178.051 kcal) is published directly and remains usable.",
     "search_name": "sago cutlet vadas"
   },
   {
@@ -455433,6 +455509,7 @@
     "serving_grams": 534.2,
     "serving_energy_kcal": 124.874,
     "data_quality_flag": "frying-bath contamination: 1 glass derived as 534 g, above a sane maximum of 500 g for that unit",
+    "per_100g_unreliable": "derived serving mass 534.2 g is too large for 'glass' (reference 140-320 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (124.874 kcal) is published directly and remains usable.",
     "search_name": "sattu drink"
   },
   {
@@ -461427,6 +461504,7 @@
     "serving_grams": 342.5,
     "serving_energy_kcal": 2318.052,
     "data_quality_flag": "frying-bath contamination: 97% of energy is fat (72.6 g/100 g) -- implies the frying bath was counted as consumed; 1 piece derived as 342 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 342.5 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2318.052 kcal) is published directly and remains usable.",
     "search_name": "scotch egg"
   },
   {
@@ -464856,6 +464934,7 @@
     "serving_grams": 162.7,
     "serving_energy_kcal": 1138.483,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (74.1 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 162.7 g is too large for 'vada' (reference 25-100 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1138.483 kcal) is published directly and remains usable.",
     "search_name": "semolina carrot vada"
   },
   {
@@ -491395,6 +491474,7 @@
     "serving_grams": 165.6,
     "serving_energy_kcal": 1156.343,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (74.0 g/100 g) -- implies the frying bath was counted as consumed",
+    "per_100g_unreliable": "derived serving mass 165.6 g is too large for 'tikki' (reference 30-100 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1156.343 kcal) is published directly and remains usable.",
     "search_name": "soyabean tikki"
   },
   {
@@ -495954,6 +496034,7 @@
     "serving_grams": 327.8,
     "serving_energy_kcal": 2255.597,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (73.6 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 328 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 327.8 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2255.597 kcal) is published directly and remains usable.",
     "search_name": "spinach chickpeas cutlet"
   },
   {
@@ -496076,6 +496157,7 @@
     "serving_grams": 806.2,
     "serving_energy_kcal": 4609.487,
     "data_quality_flag": "frying-bath contamination: 97% of energy is fat (61.5 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 806 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 806.2 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4609.487 kcal) is published directly and remains usable.",
     "search_name": "spinach kofta curry"
   },
   {
@@ -496234,6 +496316,7 @@
     "serving_grams": 762.5,
     "serving_energy_kcal": 4620.942,
     "data_quality_flag": "frying-bath contamination: 97% of energy is fat (65.4 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 762 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 762.5 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4620.942 kcal) is published directly and remains usable.",
     "search_name": "spinach paneer kofta curry"
   },
   {
@@ -496314,6 +496397,7 @@
     "serving_grams": 135.0,
     "serving_energy_kcal": 923.743,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (71.9 g/100 g) -- implies the frying bath was counted as consumed; 1 poori derived as 135 g, above a sane maximum of 120 g for that unit",
+    "per_100g_unreliable": "derived serving mass 135.0 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (923.743 kcal) is published directly and remains usable.",
     "search_name": "spinach poori"
   },
   {
@@ -506089,6 +506173,7 @@
     "serving_grams": 183.3,
     "serving_energy_kcal": 954.302,
     "data_quality_flag": "frying-bath contamination: 1 cookie derived as 183 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 183.3 g is too large for 'cookie' (reference 8-60 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (954.302 kcal) is published directly and remains usable.",
     "search_name": "sunflower cookies"
   },
   {
@@ -507422,6 +507507,7 @@
     "serving_grams": 152.5,
     "serving_energy_kcal": 1193.687,
     "data_quality_flag": "frying-bath contamination: 92% of energy is fat (79.6 g/100 g) -- implies the frying bath was counted as consumed; 1 poori derived as 152 g, above a sane maximum of 120 g for that unit",
+    "per_100g_unreliable": "derived serving mass 152.5 g is too large for 'poori' (reference 12-50 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (1193.687 kcal) is published directly and remains usable.",
     "search_name": "sweet poori"
   },
   {
@@ -507449,6 +507535,7 @@
     "serving_grams": 150.9,
     "serving_energy_kcal": 447.314,
     "data_quality_flag": "frying-bath contamination: 1 biscuit derived as 151 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 150.9 g is too large for 'biscuit' (reference 6-40 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (447.314 kcal) is published directly and remains usable.",
     "search_name": "sweet potato biscuit"
   },
   {
@@ -521799,6 +521886,7 @@
     "serving_grams": 967.9,
     "serving_energy_kcal": 4740.807,
     "data_quality_flag": "frying-bath contamination: 95% of energy is fat (51.9 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 968 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 967.9 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4740.807 kcal) is published directly and remains usable.",
     "search_name": "tomato fish"
   },
   {
@@ -537565,6 +537653,7 @@
     "serving_grams": 108.7,
     "serving_energy_kcal": 457.39,
     "data_quality_flag": "frying-bath contamination: 1 biscuit derived as 109 g, above a sane maximum of 100 g for that unit",
+    "per_100g_unreliable": "derived serving mass 108.7 g is too large for 'biscuit' (reference 6-40 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (457.39 kcal) is published directly and remains usable.",
     "search_name": "tutti fruitti biscuit"
   },
   {
@@ -545133,6 +545222,7 @@
     "serving_grams": 337.8,
     "serving_energy_kcal": 2247.572,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (71.3 g/100 g) -- implies the frying bath was counted as consumed; 1 cutlet derived as 338 g, above a sane maximum of 200 g for that unit",
+    "per_100g_unreliable": "derived serving mass 337.8 g is too large for 'cutlet' (reference 30-110 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2247.572 kcal) is published directly and remains usable.",
     "search_name": "vegetable cutlet"
   },
   {
@@ -547491,6 +547581,7 @@
     "serving_grams": 741.0,
     "serving_energy_kcal": 4649.077,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (67.2 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 741 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 741.0 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (4649.077 kcal) is published directly and remains usable.",
     "search_name": "vegetarian egg kofta curry"
   },
   {
@@ -547662,6 +547753,7 @@
     "serving_grams": 334.1,
     "serving_energy_kcal": 2277.342,
     "data_quality_flag": "frying-bath contamination: 96% of energy is fat (72.8 g/100 g) -- implies the frying bath was counted as consumed; 1 piece derived as 334 g, above a sane maximum of 250 g for that unit",
+    "per_100g_unreliable": "derived serving mass 334.1 g is too large for 'piece' (reference 12-180 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2277.342 kcal) is published directly and remains usable.",
     "search_name": "vegeterian scotch egg"
   },
   {
@@ -556093,6 +556185,7 @@
     "serving_grams": 765.0,
     "serving_energy_kcal": 53.452,
     "data_quality_flag": "frying-bath contamination: 1 cup derived as 765 g, above a sane maximum of 400 g for that unit",
+    "per_100g_unreliable": "derived serving mass 765.0 g is too large for 'cup' (reference 110-280 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (53.452 kcal) is published directly and remains usable.",
     "search_name": "white stock"
   },
   {
@@ -558347,6 +558440,7 @@
     "serving_grams": 750.3,
     "serving_energy_kcal": 2422.436,
     "data_quality_flag": "frying-bath contamination: 94% of energy is fat (33.8 g/100 g) -- implies the frying bath was counted as consumed; 1 bowl derived as 750 g, above a sane maximum of 600 g for that unit",
+    "per_100g_unreliable": "derived serving mass 750.3 g is too large for 'bowl' (reference 120-420 g). Serving mass is derived from the per-100 g basis, so an implausible mass indicates the per-100 g value is wrong for this row. Per-SERVING energy (2422.436 kcal) is published directly and remains usable.",
     "search_name": "yam kofta curry"
   },
   {
