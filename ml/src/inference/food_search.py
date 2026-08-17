@@ -41,7 +41,12 @@ except ImportError:  # running as a script rather than a package
     from portion_catalog import list_portions
     from portion_units import density_for
 
-SOURCE_RANK = {"INDB": 0, "IFCT2017": 1, "USDA_FDC": 2, "OPEN_FOOD_FACTS": 3}
+# CNF_CANADA was added to the merge but originally omitted here, so its
+# 4,944 rows silently fell to the unknown-source default (rank 5) instead of
+# their intended rank 3 -- caught by JS/Python parity testing, not by
+# reading either file. Both implementations must list every source.
+SOURCE_RANK = {"INDB": 0, "IFCT2017": 1, "USDA_FDC": 2, "CNF_CANADA": 3,
+               "OPEN_FOOD_FACTS": 4}
 
 # Name markers that signal "this is NOT the generic food the user meant".
 # Each is a real failure observed in the pre-ranking baseline, not a guess.
@@ -64,6 +69,14 @@ BRANDY_PENALTIES = [
     (re.compile(r"\b(feet|foot|skins?|giblets?|gizzards?|necks?|backs?|tails?|"
                 r"livers?|hearts?|brains?|tripe|offal|bones?|cartilage|"
                 r"combs?|blood|marrow|rinds?|trimmings)\b", re.I), 55),
+    # Deli/processed forms: water-added, reformed sandwich meats at roughly
+    # half the energy of the cut they are named after -- "chicken breast"
+    # returned an oven-roasted deli slice at 79 kcal against a real breast's
+    # 168. Kept HERE as a name penalty (precomputed, like every other entry)
+    # rather than inside score(): it is a property of the food, not of the
+    # query, and the in-score version silently failed to fire.
+    (re.compile(r"\b(deli|luncheon|oven.roasted|honey.roasted|cold cut|"
+                r"reformed|water added)\b", re.I), 160),
 ]
 
 # Uncommon species/variants. "egg" should default to a hen's egg, not a
@@ -75,6 +88,24 @@ UNCOMMON_VARIANTS = {
     "squirrel", "raccoon", "opossum", "beaver", "seal", "whale", "caribou",
     "navajo", "alaska", "apache", "shoshone", "hopi",
 }
+
+# COMPONENTS of a food, not the food. Caught by comparing model output
+# against lab values on ordinary queries: "egg" returned "Egg, chicken,
+# YOLK, cooked" at 351 kcal against a whole egg's 135 -- a +160% error on
+# one of the most commonly logged foods in existence. A yolk is part of an
+# egg, not an egg; likewise egg white, wheat bran, and milk fat.
+COMPONENT_PARTS = {
+    "yolk", "yolks", "white", "whites", "albumen", "bran", "germ",
+    "husk", "peel", "rind", "pulp", "juice", "solids", "curds", "whey",
+}
+
+# Processed/deli forms sold ready-to-eat. "chicken breast" returned an
+# oven-roasted deli slice at 79 kcal against real chicken breast at 168 --
+# these are water-added, sliced sandwich meats, not the cut itself.
+DELI_FORM_RE = re.compile(
+    r"\b(deli|luncheon|oven.roasted|honey.roasted|smoked sliced|"
+    r"sandwich (meat|slice)|cold cut|processed|reformed|"
+    r"water added|sliced, prepackaged)\b", re.I)
 
 STOPWORDS = {"raw", "fresh", "whole", "the", "and", "with", "without", "of", "in", "a"}
 
@@ -221,6 +252,22 @@ class FoodSearch:
         # uncommon species/regional variants the user did not ask for
         rare_hits = sum(1 for t in tokens if t in UNCOMMON_VARIANTS and t not in q_set)
         score -= rare_hits * 40
+
+        # a COMPONENT of the food is not the food ("egg" != egg yolk)
+        part_hits = sum(1 for t in tokens if t in COMPONENT_PARTS and t not in q_set)
+        score -= part_hits * 90
+
+        # A bare one-word query is asking for the INGREDIENT, not a dish made
+        # from it. INDB is ranked first overall (right for "masala dosa"), but
+        # that made "brinjal" return "Brinjal bhartha" -- 65 kcal for a dish
+        # against 25 for the vegetable, a +157% error. Only applies when the
+        # query is a single word and the row is a composite dish, so
+        # multi-word dish queries are untouched.
+        if len(q_tokens) == 1 and food.get("category") == "indian_dish" \
+                and len(tokens) > len(q_tokens):
+            score -= 120
+
+        # deli/processed forms when the user asked for the plain cut
 
         # "Rice, cooked, WITH MILK" is rice plus something else. For a bare
         # "rice" query the plain entry is the better default, so added

@@ -190,7 +190,14 @@ const BRAND_PENALTIES = [
   [/\balcoholic beverage\b/i, 50],
   [/\b(vinegar|extract|flavou?ring|seasoning mix)\b/i, 30],
   [/\b(feet|foot|skins?|giblets?|gizzards?|necks?|tails?|livers?|hearts?|brains?|tripe|offal)\b/i, 55],
-  [/\bnfs\b/i, 8]
+  [/\bnfs\b/i, 8],
+  // Deli/processed forms: water-added, reformed sandwich meats at roughly
+  // half the energy of the cut they are named after ("chicken breast"
+  // returned an oven-roasted deli slice at 79 kcal against a real breast's
+  // 168). Applied as a NAME penalty (precomputed in the constructor, like
+  // every other entry here) rather than inside score(): a deli slice is a
+  // property of the food, not of the query.
+  [/\b(deli|luncheon|oven.roasted|honey.roasted|cold cut|reformed|water added)\b/i, 160]
 ];
 
 const PREP_WORDS = new Set(['creamed', 'deviled', 'benedict', 'fried', 'scrambled',
@@ -203,6 +210,16 @@ const UNCOMMON = new Set(['duck', 'quail', 'goose', 'emu', 'ostrich', 'turkey',
   'capon', 'venison', 'bison', 'elk', 'rabbit', 'navajo', 'alaska', 'apache']);
 
 const STOPWORDS = new Set(['raw', 'fresh', 'whole', 'the', 'and', 'with', 'without', 'of', 'in', 'a']);
+
+// A COMPONENT of a food is not the food. Caught by comparing model output to
+// lab values: "egg" returned "Egg, chicken, YOLK, cooked" at 351 kcal against
+// a whole egg's 135 -- a +160% error on one of the most-logged foods there is.
+const COMPONENT_PARTS = new Set(['yolk', 'yolks', 'white', 'whites', 'albumen',
+  'bran', 'germ', 'husk', 'peel', 'rind', 'pulp', 'juice', 'solids', 'curds', 'whey']);
+
+// Deli/processed forms sold ready-sliced. "chicken breast" returned an
+// oven-roasted deli slice at 79 kcal against real breast at 168.
+const DELI_FORM_RE = /(deli|luncheon|oven.roasted|honey.roasted|cold cut|processed|reformed|water added)/i;
 
 class FoodSearch {
   /**
@@ -278,6 +295,14 @@ class FoodSearch {
     const qSet = new Set(qTokens);
     score -= tokens.filter((t) => PREP_WORDS.has(t) && !qSet.has(t)).length * 45;
     score -= tokens.filter((t) => UNCOMMON.has(t) && !qSet.has(t)).length * 40;
+    score -= tokens.filter((t) => COMPONENT_PARTS.has(t) && !qSet.has(t)).length * 90;
+
+    // A bare one-word query wants the INGREDIENT, not a dish made from it.
+    // "brinjal" returned "Brinjal bhartha" -- 65 kcal for a dish against 25
+    // for the vegetable. Multi-word dish queries are untouched.
+    if (qTokens.length === 1 && food.category === 'indian_dish' && tokens.length > 1) {
+      score -= 120;
+    }
 
     const rawName = String(food.food_name || '').toLowerCase();
     if (/\b(with|w\/)\b/.test(rawName)) {
