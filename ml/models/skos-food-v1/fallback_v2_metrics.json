@@ -1,0 +1,125 @@
+{
+  "model_version": "skos-food-v1-fallback-v2",
+  "validation": "GroupShuffleSplit on name stem (unseen food families)",
+  "all_methods": {
+    "energy_kcal": {
+      "A_regression_text": {
+        "mae": 77.91,
+        "mape": 50.4,
+        "median_ape": 27.6
+      },
+      "B_knn_retrieval": {
+        "mae": 67.78,
+        "mape": 57.7,
+        "median_ape": 22.3
+      },
+      "C_regression_classfeat": {
+        "mae": 77.82,
+        "mape": 46.4,
+        "median_ape": 27.6
+      },
+      "D_blend": {
+        "mae": 68.1,
+        "mape": 48.5,
+        "median_ape": 24.0
+      }
+    },
+    "protein_g": {
+      "A_regression_text": {
+        "mae": 7.0,
+        "mape": 54.5,
+        "median_ape": 50.8
+      },
+      "B_knn_retrieval": {
+        "mae": 3.25,
+        "mape": 52.0,
+        "median_ape": 18.8
+      },
+      "C_regression_classfeat": {
+        "mae": 4.89,
+        "mape": 43.7,
+        "median_ape": 33.4
+      },
+      "D_blend": {
+        "mae": 3.62,
+        "mape": 42.8,
+        "median_ape": 23.0
+      }
+    },
+    "fat_g": {
+      "A_regression_text": {
+        "mae": 6.86,
+        "mape": 58.1,
+        "median_ape": 48.2
+      },
+      "B_knn_retrieval": {
+        "mae": 6.28,
+        "mape": 85.1,
+        "median_ape": 39.6
+      },
+      "C_regression_classfeat": {
+        "mae": 6.39,
+        "mape": 54.7,
+        "median_ape": 45.9
+      },
+      "D_blend": {
+        "mae": 5.92,
+        "mape": 63.3,
+        "median_ape": 41.0
+      }
+    },
+    "carb_g": {
+      "A_regression_text": {
+        "mae": 8.79,
+        "mape": 74.5,
+        "median_ape": 46.3
+      },
+      "B_knn_retrieval": {
+        "mae": 7.64,
+        "mape": 92.3,
+        "median_ape": 36.3
+      },
+      "C_regression_classfeat": {
+        "mae": 8.73,
+        "mape": 70.4,
+        "median_ape": 45.8
+      },
+      "D_blend": {
+        "mae": 7.77,
+        "mape": 76.4,
+        "median_ape": 39.2
+      }
+    }
+  },
+  "best_per_target": {
+    "energy_kcal": {
+      "method": "B_knn_retrieval",
+      "mae": 67.78,
+      "mape": 57.7,
+      "median_ape": 22.3
+    },
+    "protein_g": {
+      "method": "B_knn_retrieval",
+      "mae": 3.25,
+      "mape": 52.0,
+      "median_ape": 18.8
+    },
+    "fat_g": {
+      "method": "B_knn_retrieval",
+      "mae": 6.28,
+      "mape": 85.1,
+      "median_ape": 39.6
+    },
+    "carb_g": {
+      "method": "B_knn_retrieval",
+      "mae": 7.64,
+      "mape": 92.3,
+      "median_ape": 36.3
+    }
+  },
+  "energy_interval_80": {
+    "lo_offset": -152.8,
+    "hi_offset": 63.1
+  },
+  "note": "median_ape is the honest headline: mean MAPE is inflated by a handful of near-zero-calorie foods where any absolute error is a huge ratio. Name-only prediction has an irreducible floor -- the same dish name spans a wide real range - so this tier must be labelled an estimate, never presented like a measured value."
+}

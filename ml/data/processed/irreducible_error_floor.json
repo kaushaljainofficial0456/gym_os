@@ -1,0 +1,17 @@
+{
+  "identical_name_variance": {
+    "description": "Rows sharing an identical normalised food name. A perfect name-only model must output one value for all of them, so this spread is unavoidable error.",
+    "groups": 41,
+    "pairs": 67,
+    "median_ape_pct": 5.1,
+    "p75_ape_pct": 15.0,
+    "p90_ape_pct": 37.0
+  },
+  "same_head_noun_variance": {
+    "description": "Foods sharing a head noun but differing in qualifiers (the situation when a user types a shorter phrase than the database stores). Deviation from the group median.",
+    "groups": 808,
+    "samples": 6412,
+    "median_ape_pct": 16.9,
+    "p75_ape_pct": 43.6
+  }
+}

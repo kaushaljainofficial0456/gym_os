@@ -1,0 +1,15 @@
+{
+  "dishes_computed": 906,
+  "per_serving": {
+    "n": 906,
+    "median_ape": 27.5,
+    "within_25": 48.0,
+    "within_50": 61.5
+  },
+  "per_100g": {
+    "n": 906,
+    "median_ape": 28.1,
+    "within_25": 47.1,
+    "within_50": 68.5
+  }
+}

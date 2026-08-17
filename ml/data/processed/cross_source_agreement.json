@@ -1,0 +1,102 @@
+[
+  {
+    "food": "lemon meringue pie",
+    "cooking_state": "cooked",
+    "sources": {
+      "INDB": 224.426,
+      "USDA_FDC": 268.0
+    },
+    "ratio": 1.19,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "pineapple",
+    "cooking_state": "raw",
+    "sources": {
+      "IFCT2017": 43.0,
+      "USDA_FDC": 50.0
+    },
+    "ratio": 1.16,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "cake sponge",
+    "cooking_state": "cooked",
+    "sources": {
+      "USDA_FDC": 290.0,
+      "INDB": 253.771
+    },
+    "ratio": 1.14,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "popcorn",
+    "cooking_state": "unspecified",
+    "sources": {
+      "OPEN_FOOD_FACTS": 559,
+      "USDA_FDC": 518.0
+    },
+    "ratio": 1.08,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "honey",
+    "cooking_state": "unspecified",
+    "sources": {
+      "USDA_FDC": 304.0,
+      "OPEN_FOOD_FACTS": 320
+    },
+    "ratio": 1.05,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "oats",
+    "cooking_state": "unspecified",
+    "sources": {
+      "OPEN_FOOD_FACTS": 407,
+      "USDA_FDC": 389.0
+    },
+    "ratio": 1.05,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "cream ice vanilla",
+    "cooking_state": "unspecified",
+    "sources": {
+      "USDA_FDC": 207.0,
+      "OPEN_FOOD_FACTS": 215
+    },
+    "ratio": 1.04,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "butter peanut",
+    "cooking_state": "unspecified",
+    "sources": {
+      "USDA_FDC": 598.0,
+      "OPEN_FOOD_FACTS": 619
+    },
+    "ratio": 1.04,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "chia seeds",
+    "cooking_state": "unspecified",
+    "sources": {
+      "USDA_FDC": 486.0,
+      "OPEN_FOOD_FACTS": 490
+    },
+    "ratio": 1.01,
+    "agreement": "corroborated"
+  },
+  {
+    "food": "coconut oil",
+    "cooking_state": "unspecified",
+    "sources": {
+      "OPEN_FOOD_FACTS": 900,
+      "USDA_FDC": 892.0
+    },
+    "ratio": 1.01,
+    "agreement": "corroborated"
+  }
+]

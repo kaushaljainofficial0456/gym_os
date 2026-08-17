@@ -1,0 +1,37 @@
+{
+  "model_version": "skos-food-v1-fallback",
+  "tier": 3,
+  "usage_rule": "ONLY for foods with no exact, alias, or compositional match. Never overrides a measured database value.",
+  "trained_rows": 14519,
+  "validation": "GroupShuffleSplit on leading name token (unseen food families)",
+  "metrics": {
+    "energy_kcal": {
+      "mae": 77.91,
+      "median_baseline_mae": 112.75,
+      "improvement_vs_baseline_pct": 30.9,
+      "mape_pct": 50.4,
+      "interval_80": {
+        "lo_offset": -178.7,
+        "hi_offset": 55.8
+      }
+    },
+    "protein_g": {
+      "mae": 7.0,
+      "median_baseline_mae": 9.85,
+      "improvement_vs_baseline_pct": 29.0,
+      "mape_pct": 54.5
+    },
+    "fat_g": {
+      "mae": 6.86,
+      "median_baseline_mae": 8.62,
+      "improvement_vs_baseline_pct": 20.4,
+      "mape_pct": 58.1
+    },
+    "carb_g": {
+      "mae": 8.79,
+      "median_baseline_mae": 17.62,
+      "improvement_vs_baseline_pct": 50.1,
+      "mape_pct": 74.5
+    }
+  }
+}

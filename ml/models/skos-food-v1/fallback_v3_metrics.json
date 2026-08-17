@@ -1,0 +1,38 @@
+{
+  "model_version": "skos-food-v1-fallback-v3",
+  "method": "similarity-weighted kNN retrieval over measured foods",
+  "validation": "GroupShuffleSplit on name stem (unseen food families)",
+  "best_config": {
+    "class_weight": 0.5,
+    "k": 5,
+    "weighting": "similarity"
+  },
+  "scores": {
+    "energy_kcal": {
+      "med_ape": 21.6,
+      "mean_ape": 54.7,
+      "mae": 66.87
+    },
+    "protein_g": {
+      "med_ape": 18.4,
+      "mean_ape": 46.5,
+      "mae": 3.16
+    },
+    "fat_g": {
+      "med_ape": 39.9,
+      "mean_ape": 87.6,
+      "mae": 6.18
+    },
+    "carb_g": {
+      "med_ape": 34.1,
+      "mean_ape": 80.4,
+      "mae": 7.16
+    }
+  },
+  "abstention_recommendation": null,
+  "energy_interval_80": {
+    "lo_offset": -115.7,
+    "hi_offset": 96.7
+  },
+  "irreducible_floor_note": "Remaining error is dominated by genuine within-name variance: the same dish name spans a wide real range (oil absorption in fried foods, cream/ghee in curries, syrup uptake in sweets). No name-only model can recover information the string does not contain, so this tier must always be labelled an estimate."
+}
