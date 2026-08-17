@@ -332,14 +332,61 @@ SOURCE_RANK = {"INDB": 0, "IFCT2017": 1, "USDA_FDC": 2, "CNF_CANADA": 3,
                "OPEN_FOOD_FACTS": 4}
 
 
+# Pure fat is ~900 kcal/100 g, so nothing edible exceeds it. Crowd-sourced
+# rows occasionally carry unit-entry errors (a muesli at 955 kcal/100 g was
+# caught by the test suite, not by inspection).
+MAX_PLAUSIBLE_KCAL = 902.0
+
+
+def sanitize(rec):
+    """Final plausibility pass applied to EVERY source, so a per-source
+    filter cannot be forgotten -- the 955 kcal muesli slipped in because the
+    bulk path capped energy and the API path did not.
+
+    Returns None to drop the row outright, otherwise the cleaned row."""
+    e = rec.get("energy_kcal")
+    if e is not None and not (0 <= e <= MAX_PLAUSIBLE_KCAL):
+        return None
+
+    for field in ("protein_g", "fat_g", "carb_g", "fiber_g", "sugar_g"):
+        v = rec.get(field)
+        if v is None:
+            continue
+        if v < 0:
+            # "Carbohydrate by difference" is 100 - water - protein - fat -
+            # ash, so accumulated rounding can push it a hair below zero
+            # (observed: -0.15 g). A small negative is an arithmetic
+            # artefact and clamps to 0; a large one means the row is wrong.
+            if v > -1.0:
+                rec[field] = 0.0
+                rec["macro_clamped"] = True
+            else:
+                return None
+    return rec
+
+
 def merge(records):
     """Dedupe on (search_key, cooking_state). Lower SOURCE_RANK wins.
     Branded items are keyed with their brand so two different brands of
     the same product don't collapse into one row."""
+    # source_id must be unique: it is the identity callers persist, and a
+    # duplicate silently splits or collides a user's saved log. The OFF API
+    # pull and the OFF bulk export overlap by barcode, so the same product
+    # can arrive twice -- keep the first (bulk is merged first and is the
+    # more complete record).
+    seen_ids = set()
     buckets = defaultdict(list)
     for r in records:
         if not r.get("food_name") or r.get("energy_kcal") is None:
             continue
+        r = sanitize(r)
+        if r is None:
+            continue
+        sid = r.get("source_id")
+        if sid in seen_ids:
+            continue
+        if sid:
+            seen_ids.add(sid)
         key_name = r["food_name"]
         if r.get("brand"):
             key_name = f"{r['brand']} {key_name}"

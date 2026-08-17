@@ -3,6 +3,12 @@
 **Owner of this document:** Sambhav (ML, `ml-sambhav`)
 **Binding on:** Kaushal (backend, `origin/backend`) · Manavi (frontend, `origin/ui-manavi`)
 **Status:** proposed — nothing below is implemented in `backend/` or `frontend/` yet.
+**Kaushal:** a **JS reference implementation** now ships at
+`ml/models/skos-food-v1/foodEstimate.reference.js` covering tiers 1-2, ranking,
+confidence, portion units and oil. Port from it rather than reimplementing; its
+33 parity tests mirror the Python suite so divergence fails loudly. Tier 3 (kNN)
+is intentionally not ported - it is the least accurate tier and needs a
+vectoriser + index; omit it and report "not found", which this contract allows.
 **Schema version:** `food-v1` — breaking changes get a new version, never a silent edit.
 
 This exists so three branches can build against the same shapes without waiting
@@ -258,6 +264,10 @@ I will not touch `database/`.
 
 | Thing | Path (branch `ml-sambhav`) |
 |---|---|
+| **Model card** (scope, limits, do-not-use) | `ml/models/skos-food-v1/MODEL_CARD.md` |
+| **JS reference implementation** (Kaushal: port from this) | `ml/models/skos-food-v1/foodEstimate.reference.js` |
+| JS parity tests | `ml/models/skos-food-v1/foodEstimate.test.js` |
+| Python test suite (59 checks) | `ml/tests/test_food_model.py` |
 | Full results, method, caveats | `ml/docs/FOOD_MODEL_V1_PROGRESS.md` |
 | Database (21,378 foods) | `ml/data/processed/unified_food_db.json` |
 | Search + ranking + confidence | `ml/src/inference/food_search.py` |

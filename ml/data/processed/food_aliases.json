@@ -1,7 +1,7 @@
 {
   "generated_from": "unified_food_db.json",
-  "alias_count": 3999,
-  "mapping_count": 6243,
+  "alias_count": 3997,
+  "mapping_count": 6239,
   "aliases": {
     "0 4 m f": [
       "cnf:27"
@@ -2043,7 +2043,6 @@
     ],
     "asafoetida": [
       "off:8901192226150",
-      "off:0840222000149",
       "off:0840222000149"
     ],
     "asian chicken or turkey garden salad chicken and": [
@@ -11110,12 +11109,6 @@
     "primary safflower oil of commerce": [
       "usda:171027"
     ],
-    "pringles pizza flavour aloo crisps": [
-      "off:8886467122415"
-    ],
-    "pringles sour cream onion flavour aloo crisps": [
-      "off:8886467122408"
-    ],
     "pristipomoides filamentosus": [
       "ifct:P014"
     ],
@@ -13776,7 +13769,6 @@
       "indb:BFP132"
     ],
     "vanilla": [
-      "off:8992760221028",
       "off:8992760221028"
     ],
     "vanilla flavour": [

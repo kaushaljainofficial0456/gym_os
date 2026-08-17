@@ -96,9 +96,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Yoga Bar",
-    "merged_from": [
-      "off:8904335601951"
-    ],
     "search_name": "100 rolled oats"
   },
   {
@@ -170,29 +167,6 @@
   },
   {
     "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8992760221028",
-    "food_name": "17000725 Oreo Original (Vanilla)",
-    "category": "Chocolate sandwich cookies",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 471.014492753623,
-    "protein_g": 3.6231884057971,
-    "fat_g": 21.7391304347826,
-    "carb_g": 72.463768115942,
-    "fiber_g": 3.6231884057971,
-    "sugar_g": 39.8550724637681,
-    "sodium_mg": 507.2,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "BABYMONSTER OREO",
-    "search_name": "17000725 oreo original"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
     "source_id": "off:8906151143073",
     "food_name": "1mg Ultra Clean Whey Protein- Hazelnut Chocolate",
     "category": "Dairies",
@@ -252,31 +226,6 @@
       "off:0941458000290"
     ],
     "search_name": "2 minute noodles"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901058023787",
-    "food_name": "2-minute noodles masala taste",
-    "category": "Herbs and spices",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 384,
-    "protein_g": 8.2,
-    "fat_g": 12.5,
-    "carb_g": 59.6,
-    "fiber_g": null,
-    "sugar_g": 1.8,
-    "sodium_mg": 1000,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Maggi",
-    "search_name": "2 minute noodles masala taste",
-    "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
   },
   {
     "source": "OPEN_FOOD_FACTS",
@@ -474,9 +423,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202318078"
-    ],
     "search_name": "5 star chocolate bar",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -542,9 +488,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury Bournville",
-    "merged_from": [
-      "off:7622202325991"
-    ],
     "search_name": "50 dark chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -566,9 +509,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063367173"
-    ],
     "search_name": "5050 maska chaska"
   },
   {
@@ -668,9 +608,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Galaxy",
-    "merged_from": [
-      "off:8902433005763"
-    ],
     "search_name": "70 cocoa"
   },
   {
@@ -973,9 +910,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "dark fantasy",
-    "merged_from": [
-      "off:8909081005053"
-    ],
     "search_name": "8909081005053"
   },
   {
@@ -1119,9 +1053,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Aashirvaad",
-    "merged_from": [
-      "off:8901725016838"
-    ],
     "search_name": "aashirvaad superior mp atta",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -1412,9 +1343,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "ACT II",
-    "merged_from": [
-      "off:8901512540102"
-    ],
     "search_name": "act ii classic salted"
   },
   {
@@ -1476,9 +1404,6 @@
     "calcium_mg": 18.0,
     "iron_mg": null,
     "brand": "Real",
-    "merged_from": [
-      "off:8901207037795"
-    ],
     "search_name": "activ 100 coconut water",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -5048,8 +4973,7 @@
     "iron_mg": null,
     "brand": "Haldiram's",
     "merged_from": [
-      "off:8904004402032",
-      "off:8904004402056"
+      "off:8904004402032"
     ],
     "search_name": "all in one"
   },
@@ -6042,9 +5966,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram",
-    "merged_from": [
-      "off:8904004400755"
-    ],
     "search_name": "aloo bhujia sev",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -6943,9 +6864,6 @@
     "calcium_mg": 0.34,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262020039"
-    ],
     "search_name": "amul cheese"
   },
   {
@@ -6988,9 +6906,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262172448"
-    ],
     "search_name": "amul chocolate brownie",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -7159,9 +7074,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262030243"
-    ],
     "search_name": "amul gee"
   },
   {
@@ -7181,9 +7093,6 @@
     "calcium_mg": 82.2,
     "iron_mg": 0.1,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262030151"
-    ],
     "search_name": "amul ghee 1ltr",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -7394,9 +7303,6 @@
     "calcium_mg": 80.0,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262200189"
-    ],
     "search_name": "amul lassi 200ml",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -7418,9 +7324,6 @@
     "calcium_mg": 8.0,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262151696"
-    ],
     "search_name": "amul lassi 250 ml",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -7461,9 +7364,6 @@
     "calcium_mg": 150.0,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262200622"
-    ],
     "search_name": "amul masti"
   },
   {
@@ -7502,9 +7402,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262200196"
-    ],
     "search_name": "amul masti spiced buttermilk 200ml"
   },
   {
@@ -7654,9 +7551,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262173599"
-    ],
     "search_name": "amul rajbhog"
   },
   {
@@ -7754,9 +7648,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262071048"
-    ],
     "search_name": "amul sugar free chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -7778,9 +7669,6 @@
     "calcium_mg": 110.0,
     "iron_mg": 0.03,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262150064"
-    ],
     "search_name": "amul taaza 1ltr"
   },
   {
@@ -12323,9 +12211,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Nutraj",
-    "merged_from": [
-      "off:8906019776092"
-    ],
     "search_name": "arabian premium dates"
   },
   {
@@ -15347,9 +15232,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "ITC Limied",
-    "merged_from": [
-      "off:8901725100025"
-    ],
     "search_name": "b natural mixed fruit 1ltr tpk"
   },
   {
@@ -27513,7 +27395,6 @@
     "iron_mg": null,
     "brand": "Chitale",
     "merged_from": [
-      "off:0846203004878",
       "off:0846203081923",
       "off:0846203004885"
     ],
@@ -28105,9 +27986,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji Namkeen",
-    "merged_from": [
-      "off:8906010500078"
-    ],
     "search_name": "balaji farali chivda"
   },
   {
@@ -28128,8 +28006,7 @@
     "iron_mg": null,
     "brand": "Balaji",
     "merged_from": [
-      "off:8906010500559",
-      "off:8906010500238"
+      "off:8906010500559"
     ],
     "search_name": "balaji mung dal",
     "cooking_state_evidence": "dish form implies cooking",
@@ -28152,9 +28029,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji",
-    "merged_from": [
-      "off:8906010503512"
-    ],
     "search_name": "balaji wafers"
   },
   {
@@ -28266,9 +28140,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji Wafers",
-    "merged_from": [
-      "off:8906010500245"
-    ],
     "search_name": "balaji wafers masala sev murmura",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -28338,9 +28209,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji Wafers",
-    "merged_from": [
-      "off:8906010500214"
-    ],
     "search_name": "balaji wafers sev murmura",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -28410,9 +28278,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:8906010500498"
-    ],
     "search_name": "balaji wafers tomato twist"
   },
   {
@@ -30419,9 +30284,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Alteza",
-    "merged_from": [
-      "off:8480024754288"
-    ],
     "search_name": "barritas de platano y chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -30616,9 +30478,6 @@
     "calcium_mg": 60.97,
     "iron_mg": 1.16,
     "brand": "BAT",
-    "merged_from": [
-      "off:8908002506969"
-    ],
     "search_name": "bat shamim dates"
   },
   {
@@ -70521,9 +70380,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Laxmi Narayan",
-    "merged_from": [
-      "off:8906151420389"
-    ],
     "search_name": "best misal farsan"
   },
   {
@@ -77928,9 +77784,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram's",
-    "merged_from": [
-      "off:8904063200051"
-    ],
     "search_name": "bhujia",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -79176,7 +79029,7 @@
     "energy_kcal": 164.411779,
     "protein_g": 19.88125,
     "fat_g": 8.88,
-    "carb_g": -0.14955,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 55.7,
@@ -79187,6 +79040,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "bison ground raw"
   },
   {
@@ -83152,9 +83006,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:09141209"
-    ],
     "search_name": "bourn vita 500gram pauch"
   },
   {
@@ -83212,9 +83063,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202325960"
-    ],
     "search_name": "bournville intense 70 dark"
   },
   {
@@ -90854,9 +90702,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Yoga Bar",
-    "merged_from": [
-      "off:8908005144359"
-    ],
     "search_name": "breakfast protein bar"
   },
   {
@@ -92468,9 +92313,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063139213"
-    ],
     "search_name": "brit bourbon 150g"
   },
   {
@@ -92490,9 +92332,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063142664"
-    ],
     "search_name": "britannia"
   },
   {
@@ -92535,9 +92374,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063139350"
-    ],
     "search_name": "britannia bourbon 500g"
   },
   {
@@ -92697,9 +92533,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063001022"
-    ],
     "search_name": "britannia nutri choice"
   },
   {
@@ -92847,33 +92680,7 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063032446"
-    ],
     "search_name": "britannia treat croissant coco cream bauli"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901063014299",
-    "food_name": "Britannia Vita Marie Gold Biscuits",
-    "category": "Biscuits",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 449,
-    "protein_g": 7.3,
-    "fat_g": 11.4,
-    "carb_g": 79.3,
-    "fiber_g": null,
-    "sugar_g": 25.5,
-    "sodium_mg": 255.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Britannia Industries Ltd.",
-    "search_name": "britannia vita marie gold biscuits"
   },
   {
     "source": "OPEN_FOOD_FACTS",
@@ -95316,9 +95123,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Budhani Bros",
-    "merged_from": [
-      "off:8906010450021"
-    ],
     "search_name": "budhani bros potato wafers"
   },
   {
@@ -95446,29 +95250,6 @@
     "iron_mg": null,
     "brand": "Samyang",
     "search_name": "buldak hot chicken flavor ramen"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8801073115378",
-    "food_name": "Buldak HOT Chicken Flavor Ros\u00e9 Ramen",
-    "category": "Instant noodles",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 407.142857142857,
-    "protein_g": 10,
-    "fat_g": 14.2857142857143,
-    "carb_g": 60,
-    "fiber_g": 2.42857142857143,
-    "sugar_g": 8.57142857142857,
-    "sodium_mg": 814.3,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Samyang",
-    "search_name": "buldak hot chicken flavor rose ramen"
   },
   {
     "source": "USDA_FDC",
@@ -99610,9 +99391,6 @@
     "calcium_mg": 48.42,
     "iron_mg": 9.03,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202325939"
-    ],
     "search_name": "cadbury bournville"
   },
   {
@@ -99632,9 +99410,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202216916"
-    ],
     "search_name": "cadbury chocobakes 17gm"
   },
   {
@@ -99656,7 +99431,6 @@
     "brand": "Cadbury",
     "merged_from": [
       "off:7622202272639",
-      "off:7622202245558",
       "off:7622202346385"
     ],
     "search_name": "cadbury dairy milk"
@@ -104166,9 +103940,6 @@
     "calcium_mg": 0.0,
     "iron_mg": 0.0,
     "brand": "Campa Cola",
-    "merged_from": [
-      "off:8904132948198"
-    ],
     "search_name": "campa lemon"
   },
   {
@@ -114987,9 +114758,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:8901192215864"
-    ],
     "search_name": "catch peri peri"
   },
   {
@@ -129702,8 +129470,7 @@
     "iron_mg": null,
     "brand": "Balaji wafers",
     "merged_from": [
-      "off:8906010503949",
-      "off:8906010500894"
+      "off:8906010503949"
     ],
     "search_name": "chataka pataka"
   },
@@ -138066,9 +137833,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cheetos",
-    "merged_from": [
-      "off:8901491003537"
-    ],
     "search_name": "cheetos masala balls",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -138090,9 +137854,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "VEEBA",
-    "merged_from": [
-      "off:8906069403412"
-    ],
     "search_name": "chef s special tomato ketchup",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -147780,7 +147541,7 @@
     "energy_kcal": 132.8359,
     "protein_g": 21.40625,
     "fat_g": 4.777,
-    "carb_g": -0.42825,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 48.07,
@@ -147791,6 +147552,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "chicken breast meat and skin raw"
   },
   {
@@ -155489,7 +155251,7 @@
     "energy_kcal": 130.121544,
     "protein_g": 18.35625,
     "fat_g": 5.94,
-    "carb_g": -0.47505,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 90.98,
@@ -155500,6 +155262,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "chicken drumstick meat and skin raw"
   },
   {
@@ -158073,7 +157836,7 @@
     "energy_kcal": 192.792919,
     "protein_g": 17.10625,
     "fat_g": 13.35,
-    "carb_g": -0.17255,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 63.55,
@@ -158084,6 +157847,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "chicken thigh meat and skin raw"
   },
   {
@@ -158264,7 +158028,7 @@
     "energy_kcal": 172.792125,
     "protein_g": 18.40625,
     "fat_g": 10.64,
-    "carb_g": -0.45875,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 84.14,
@@ -158275,6 +158039,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "chicken wing meat and skin raw"
   },
   {
@@ -159704,9 +159469,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "10",
-    "merged_from": [
-      "off:8901491363020"
-    ],
     "search_name": "chilli chatka"
   },
   {
@@ -159745,9 +159507,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kurkure",
-    "merged_from": [
-      "off:8901491100533"
-    ],
     "search_name": "chilli chatka 20rs"
   },
   {
@@ -161774,9 +161533,6 @@
     "calcium_mg": null,
     "iron_mg": 0.0,
     "brand": "Munch",
-    "merged_from": [
-      "off:1234567890128"
-    ],
     "search_name": "chocolat en poudre"
   },
   {
@@ -163886,9 +163642,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kellogg's",
-    "merged_from": [
-      "off:8901499008169"
-    ],
     "search_name": "chocos"
   },
   {
@@ -163908,9 +163661,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kellogg's",
-    "merged_from": [
-      "off:8901499010742"
-    ],
     "search_name": "chocos crunchy bites"
   },
   {
@@ -164513,9 +164263,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji",
-    "merged_from": [
-      "off:8906010503529"
-    ],
     "search_name": "chrunchem masala masti",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -164880,9 +164627,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Dabur",
-    "merged_from": [
-      "off:8901207040337"
-    ],
     "search_name": "chyawanprash awaleha"
   },
   {
@@ -165557,9 +165301,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "saffola",
-    "merged_from": [
-      "off:8901088129824"
-    ],
     "search_name": "classic masala",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -166721,9 +166462,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca-Cola",
-    "merged_from": [
-      "off:8901764012273"
-    ],
     "search_name": "coca cola coke brand 750ml",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -166770,9 +166508,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca cola",
-    "merged_from": [
-      "off:3948764012273"
-    ],
     "search_name": "coca cola soft drink 750ml",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -166824,31 +166559,6 @@
     "phosphorus_mg": null,
     "brand": "Coca-Cola",
     "search_name": "coca cola zero sugar 300ml",
-    "cooking_state_evidence": "packaged/processed product",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:5449000000996",
-    "food_name": "coca-cola",
-    "category": "Colas",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 42,
-    "protein_g": 0,
-    "fat_g": 0,
-    "carb_g": 10.6,
-    "fiber_g": null,
-    "sugar_g": 10.6,
-    "sodium_mg": 0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Coca-Cola",
-    "search_name": "coca cola",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
   },
@@ -166940,9 +166650,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca Cola",
-    "merged_from": [
-      "off:3948764011252"
-    ],
     "search_name": "cocacola"
   },
   {
@@ -166981,9 +166688,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cocacola",
-    "merged_from": [
-      "off:3948764012914"
-    ],
     "search_name": "cocacola zero"
   },
   {
@@ -167178,9 +166882,6 @@
     "calcium_mg": 140.0,
     "iron_mg": 48.5,
     "brand": "HERSHEY'S",
-    "merged_from": [
-      "off:8901071211161"
-    ],
     "search_name": "cocoa powder medium fat cocoa powder",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -167941,8 +167642,7 @@
     "iron_mg": 0.04,
     "brand": "Parachute",
     "merged_from": [
-      "off:89002940",
-      "off:8901088000345"
+      "off:89002940"
     ],
     "search_name": "coconut oil",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
@@ -168035,8 +167735,7 @@
     "iron_mg": 0.04,
     "brand": "RAW Pressery",
     "merged_from": [
-      "off:8904258703848",
-      "off:8904258701707"
+      "off:8904258703848"
     ],
     "search_name": "coconut water",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
@@ -181799,9 +181498,6 @@
     "calcium_mg": 4.48,
     "iron_mg": 0.01,
     "brand": "Kellogg's",
-    "merged_from": [
-      "off:8901499008183"
-    ],
     "search_name": "corn flakes original"
   },
   {
@@ -194961,29 +194657,6 @@
     "search_name": "crem treat vanilla crem bun"
   },
   {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8904043554716",
-    "food_name": "Crem Treat Vanilla Crem bun",
-    "category": "Bread rolls",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 356.7,
-    "protein_g": 6.9,
-    "fat_g": 11.93,
-    "carb_g": 55.5,
-    "fiber_g": 3.84,
-    "sugar_g": 24.58,
-    "sodium_mg": 235.2,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Bimbo",
-    "search_name": "crem treat vanilla crem bun"
-  },
-  {
     "source": "USDA_FDC",
     "source_id": "usda:2705684",
     "food_name": "Creme brulee",
@@ -199198,9 +198871,6 @@
     "calcium_mg": 138.0,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262200028"
-    ],
     "search_name": "dahi"
   },
   {
@@ -199342,9 +199012,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262202220"
-    ],
     "search_name": "dahi yogurt"
   },
   {
@@ -199364,9 +199031,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Yoga Bar",
-    "merged_from": [
-      "off:8904335602392"
-    ],
     "search_name": "daily 10g protein bar"
   },
   {
@@ -199515,14 +199179,13 @@
     "protein_g": 7.9,
     "fat_g": 29.0,
     "carb_g": 60.4,
-    "fiber_g": 0,
+    "fiber_g": 1,
     "sugar_g": 57.0,
     "sodium_mg": 129.0,
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
     "merged_from": [
-      "off:7622202334009",
       "off:7622202025426"
     ],
     "search_name": "dairy milk",
@@ -199546,9 +199209,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:7622202324260"
-    ],
     "search_name": "dairy milk chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -199672,9 +199332,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202271861"
-    ],
     "search_name": "dairy milk silk bubbly chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -199792,9 +199449,6 @@
     "calcium_mg": null,
     "iron_mg": 0.0,
     "brand": "Kohinoor",
-    "merged_from": [
-      "off:8901047816208"
-    ],
     "search_name": "dal makhani",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -200578,7 +200232,6 @@
     "iron_mg": null,
     "brand": "Yoga Bar",
     "merged_from": [
-      "off:8908005144632",
       "off:8908005144632"
     ],
     "search_name": "dark chocolate and cranberry muesli",
@@ -200872,9 +200525,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Sunfeast",
-    "merged_from": [
-      "off:8901725016296"
-    ],
     "search_name": "dark fantasy bourbon biscuit",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -200963,9 +200613,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Ching's Secret",
-    "merged_from": [
-      "off:8901595862726"
-    ],
     "search_name": "dark soy sauce"
   },
   {
@@ -201531,9 +201178,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Del Monte",
-    "merged_from": [
-      "off:8901246003492"
-    ],
     "search_name": "del monte"
   },
   {
@@ -207947,9 +207591,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262020558"
-    ],
     "search_name": "diced cheese"
   },
   {
@@ -207969,9 +207610,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coke",
-    "merged_from": [
-      "off:54491496"
-    ],
     "search_name": "diet coke"
   },
   {
@@ -209110,9 +208748,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "20rs",
-    "merged_from": [
-      "off:8901491000192"
-    ],
     "search_name": "doritod cheese flavor"
   },
   {
@@ -212127,9 +211762,6 @@
     "calcium_mg": 79.0,
     "iron_mg": 0.0,
     "brand": "bfgfg",
-    "merged_from": [
-      "off:12345678"
-    ],
     "search_name": "dsdsds"
   },
   {
@@ -222655,9 +222287,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Enerzal",
-    "merged_from": [
-      "off:8902346050560"
-    ],
     "search_name": "enerzal orange flavour"
   },
   {
@@ -223935,9 +223564,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "The Coca-cola company",
-    "merged_from": [
-      "off:8901764022272"
-    ],
     "search_name": "fanta orange flv 750ml"
   },
   {
@@ -223999,9 +223625,6 @@
     "calcium_mg": 154.0,
     "iron_mg": null,
     "brand": "Milky Mist",
-    "merged_from": [
-      "off:8904083303077"
-    ],
     "search_name": "farm fresh sahi plain yoghurt",
     "cooking_state_evidence": "explicit raw/fresh in name",
     "cooking_state_inferred": true
@@ -224027,31 +223650,6 @@
       "off:8906120109918"
     ],
     "search_name": "farmley date bites"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8906163830640",
-    "food_name": "Farmley Makha Shaka Masala Stix",
-    "category": "Snacks",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 429.5,
-    "protein_g": 7.7,
-    "fat_g": 9.7,
-    "carb_g": 76.1,
-    "fiber_g": 3.6,
-    "sugar_g": 2.6,
-    "sodium_mg": 716.8,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Farmley",
-    "search_name": "farmley makha shaka masala stix",
-    "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
   },
   {
     "source": "OPEN_FOOD_FACTS",
@@ -247071,9 +246669,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:8906010502294"
-    ],
     "search_name": "flaming hot nachos"
   },
   {
@@ -248286,9 +247881,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Princes",
-    "merged_from": [
-      "off:5000232192202"
-    ],
     "search_name": "food"
   },
   {
@@ -250662,29 +250254,6 @@
   },
   {
     "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8902579103170",
-    "food_name": "Frooti",
-    "category": "Fruit juices",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 62.9,
-    "protein_g": 0,
-    "fat_g": 0,
-    "carb_g": 15.7,
-    "fiber_g": 0,
-    "sugar_g": 15.6,
-    "sodium_mg": 25.4,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Frooti",
-    "search_name": "frooti"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
     "source_id": "off:8902579001599",
     "food_name": "Frooti",
     "category": "Sweetened beverages",
@@ -250723,9 +250292,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Frooti",
-    "merged_from": [
-      "off:8902579001360"
-    ],
     "search_name": "frooti 125ml"
   },
   {
@@ -257147,9 +256713,6 @@
     "calcium_mg": 109.0,
     "iron_mg": null,
     "brand": "Milky Mist",
-    "merged_from": [
-      "off:8904083302100"
-    ],
     "search_name": "fruit yogurt blueberry"
   },
   {
@@ -257570,9 +257133,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202324871"
-    ],
     "search_name": "gadour dairy milk chocolate fruit nut",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -264176,9 +263736,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202216695"
-    ],
     "search_name": "gems"
   },
   {
@@ -265325,9 +264882,6 @@
     "calcium_mg": 170.0,
     "iron_mg": null,
     "brand": "Glucon-D",
-    "merged_from": [
-      "off:8901542016226"
-    ],
     "search_name": "glucon d regular"
   },
   {
@@ -267003,9 +266557,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:8904071700192"
-    ],
     "search_name": "golden potato chips",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -267047,7 +266598,6 @@
     "iron_mg": null,
     "brand": "Britannia",
     "merged_from": [
-      "off:8901063093522",
       "off:8901063093287"
     ],
     "search_name": "good day cashew cookies"
@@ -267092,9 +266642,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063092853"
-    ],
     "search_name": "good day cashew cookie",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -275962,8 +275509,7 @@
     "brand": "Milky Mist",
     "merged_from": [
       "off:8904083302339",
-      "off:8904083302346",
-      "off:8904083302292"
+      "off:8904083302346"
     ],
     "search_name": "greek yogurt"
   },
@@ -276774,9 +276320,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kurkure",
-    "merged_from": [
-      "off:8901491103084"
-    ],
     "search_name": "green chutney style"
   },
   {
@@ -279128,9 +278671,6 @@
     "calcium_mg": 629.37,
     "iron_mg": 0.0,
     "brand": "Gits",
-    "merged_from": [
-      "off:8901155101210"
-    ],
     "search_name": "gulab jamun"
   },
   {
@@ -279493,9 +279033,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "haldiram",
-    "merged_from": [
-      "off:8904004401073"
-    ],
     "search_name": "haldiram khatta mitha"
   },
   {
@@ -279566,9 +279103,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram's",
-    "merged_from": [
-      "off:8904004400779"
-    ],
     "search_name": "haldiram s aloo bhujia",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -279659,9 +279193,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram",
-    "merged_from": [
-      "off:8904004401134"
-    ],
     "search_name": "haldiram s khatta sweet and salty mix"
   },
   {
@@ -279681,9 +279212,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram's",
-    "merged_from": [
-      "off:8904004405415"
-    ],
     "search_name": "haldiram s soan papdi"
   },
   {
@@ -279784,7 +279312,7 @@
     "energy_kcal": 81.3345,
     "protein_g": 19.0625,
     "fat_g": 0.5917,
-    "carb_g": -0.0602,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 108.3,
@@ -279795,6 +279323,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "halibut frozen wild caught"
   },
   {
@@ -281606,9 +281135,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Ferrero",
-    "merged_from": [
-      "off:4008400351926"
-    ],
     "search_name": "hanuta minis"
   },
   {
@@ -281647,9 +281173,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Parle",
-    "merged_from": [
-      "off:8901719129988"
-    ],
     "search_name": "happy happy parl"
   },
   {
@@ -282486,9 +282009,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Hell",
-    "merged_from": [
-      "off:5999884034469"
-    ],
     "search_name": "hell"
   },
   {
@@ -282649,9 +282169,6 @@
     "calcium_mg": 126.0,
     "iron_mg": null,
     "brand": "heritage",
-    "merged_from": [
-      "off:8904089920490"
-    ],
     "search_name": "heritage total curd"
   },
   {
@@ -282810,9 +282327,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Hershey's",
-    "merged_from": [
-      "off:8901071211307"
-    ],
     "search_name": "hershey s syrup",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -283308,9 +282822,6 @@
     "calcium_mg": null,
     "iron_mg": 6.8,
     "brand": "Pintola",
-    "merged_from": [
-      "off:8906136651968"
-    ],
     "search_name": "high protein oats chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -283469,9 +282980,6 @@
     "calcium_mg": 61.4,
     "iron_mg": 6.5,
     "brand": "Alpino",
-    "merged_from": [
-      "off:8906127550850"
-    ],
     "search_name": "high protein super oats chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -283871,7 +283379,6 @@
     "merged_from": [
       "off:8901207042935",
       "off:8901207051173",
-      "off:8901207025365",
       "off:8901207005374"
     ],
     "search_name": "honey",
@@ -284160,9 +283667,6 @@
     "calcium_mg": 13.0,
     "iron_mg": 1.5,
     "brand": "Dabur",
-    "merged_from": [
-      "off:8901207005527"
-    ],
     "search_name": "honey squeezy",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -297157,9 +296661,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063029255"
-    ],
     "search_name": "jimjam 57g"
   },
   {
@@ -300264,35 +299765,7 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kellogg's",
-    "merged_from": [
-      "off:8901499009043"
-    ],
     "search_name": "kelloggs chocos multigrain"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901499010483",
-    "food_name": "Kelloggs Muesli",
-    "category": "Cereal flakes",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 397.5,
-    "protein_g": 8,
-    "fat_g": 6,
-    "carb_g": 80,
-    "fiber_g": 5,
-    "sugar_g": 16,
-    "sodium_mg": 60.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Kellogg's",
-    "search_name": "kelloggs muesli",
-    "cooking_state_evidence": "packaged/processed product",
-    "cooking_state_inferred": true
   },
   {
     "source": "OPEN_FOOD_FACTS",
@@ -300572,9 +300045,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Keyafood",
-    "merged_from": [
-      "off:8906066202476"
-    ],
     "search_name": "keya piri piri"
   },
   {
@@ -301296,29 +300766,6 @@
     "search_name": "khenaizi dates"
   },
   {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:6291100213160",
-    "food_name": "Khenaizi Dates",
-    "category": "Dried fruits",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 325,
-    "protein_g": 4.4,
-    "fat_g": 0.43,
-    "carb_g": 76,
-    "fiber_g": 6.8,
-    "sugar_g": 66,
-    "sodium_mg": 144.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Date Crown",
-    "search_name": "khenaizi dates"
-  },
-  {
     "source": "IFCT2017",
     "source_id": "ifct:L004",
     "food_name": "Khoa",
@@ -302025,9 +301472,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Ferrero",
-    "merged_from": [
-      "off:80135890"
-    ],
     "search_name": "kinder joy boy"
   },
   {
@@ -302346,9 +301790,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "kissan",
-    "merged_from": [
-      "off:8901030831690"
-    ],
     "search_name": "kissan mixed fruit jam",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -302437,9 +301878,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "NESTLE",
-    "merged_from": [
-      "off:8901058905113"
-    ],
     "search_name": "kit kat"
   },
   {
@@ -302561,9 +301999,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "KitKat",
-    "merged_from": [
-      "off:8901058005233"
-    ],
     "search_name": "kitkat mini chocolate coated wafer",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -302604,9 +302039,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "nestle",
-    "merged_from": [
-      "off:8901058903164"
-    ],
     "search_name": "kitkat win gold"
   },
   {
@@ -303027,9 +302459,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Knorr",
-    "merged_from": [
-      "off:8901030902369"
-    ],
     "search_name": "knorr hot sour veg soup",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -303051,9 +302480,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Knorr",
-    "merged_from": [
-      "off:8901030987007"
-    ],
     "search_name": "knorr schezwan sauce 200 g"
   },
   {
@@ -303619,9 +303045,7 @@
     "iron_mg": null,
     "brand": "Parle",
     "merged_from": [
-      "off:8901719135248",
-      "off:8901719135248",
-      "off:8901719135217"
+      "off:8901719135248"
     ],
     "search_name": "krackjack"
   },
@@ -304189,7 +303613,6 @@
     "iron_mg": null,
     "brand": "Kurkure",
     "merged_from": [
-      "off:8901491100519",
       "off:8901491367219"
     ],
     "search_name": "kurkure"
@@ -304216,31 +303639,6 @@
     "phosphorus_mg": null,
     "brand": null,
     "search_name": "kurkure green chutney"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901491361026",
-    "food_name": "Kurkure Masala Munch",
-    "category": "Crisps",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 558,
-    "protein_g": 6.4,
-    "fat_g": 34.7,
-    "carb_g": 55.2,
-    "fiber_g": 0,
-    "sugar_g": 1,
-    "sodium_mg": 892.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Kurkure",
-    "search_name": "kurkure masala munch",
-    "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
   },
   {
     "source": "OPEN_FOOD_FACTS",
@@ -304305,9 +303703,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kurkure",
-    "merged_from": [
-      "off:8901491366229"
-    ],
     "search_name": "kurkure solid masti masala twisteez crisps",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -308007,6 +307402,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "merged_from": [
       "usda:2727570"
     ],
@@ -315197,9 +314593,6 @@
     "calcium_mg": null,
     "iron_mg": 0.5,
     "brand": "Lay's",
-    "merged_from": [
-      "off:8901491101844"
-    ],
     "search_name": "lay s potato chips",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -315267,9 +314660,6 @@
     "calcium_mg": 0.0,
     "iron_mg": 0.0,
     "brand": "Lay's",
-    "merged_from": [
-      "off:8901491101820"
-    ],
     "search_name": "lays"
   },
   {
@@ -315312,9 +314702,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Lay's",
-    "merged_from": [
-      "off:8901491000772"
-    ],
     "search_name": "lays american onion 80gm"
   },
   {
@@ -315363,34 +314750,6 @@
   },
   {
     "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901491503020",
-    "food_name": "Lays India's Magic Masala",
-    "category": "Flavoured potato crisps",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 531,
-    "protein_g": 6.6,
-    "fat_g": 33,
-    "carb_g": 51.9,
-    "fiber_g": null,
-    "sugar_g": 1.6,
-    "sodium_mg": 677.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Lay's",
-    "merged_from": [
-      "off:8901491000789"
-    ],
-    "search_name": "lays india s magic masala",
-    "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
     "source_id": "off:8901491001038",
     "food_name": "Lays Spanish 50",
     "category": "Plant-based foods and beverages",
@@ -315407,29 +314766,6 @@
     "iron_mg": null,
     "brand": "Lays",
     "search_name": "lays spanish 50"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901491001038",
-    "food_name": "Lays Spanish Tomato Tango",
-    "category": "Potato crisps",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 525,
-    "protein_g": 6.4,
-    "fat_g": 31.9,
-    "carb_g": 53.1,
-    "fiber_g": null,
-    "sugar_g": 5.6,
-    "sodium_mg": 659.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Lay's",
-    "search_name": "lays spanish tomato tango"
   },
   {
     "source": "OPEN_FOOD_FACTS",
@@ -318932,31 +318268,6 @@
     "cooking_state_inferred": true
   },
   {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:0840222000149",
-    "food_name": "LG Hing Powder (asafoetida)",
-    "category": "asafoetida",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 348,
-    "protein_g": 10.14,
-    "fat_g": 1.6,
-    "carb_g": 73.28,
-    "fiber_g": null,
-    "sugar_g": 0,
-    "sodium_mg": 20.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "L.G.",
-    "search_name": "lg hing powder",
-    "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
-  },
-  {
     "source": "INDB",
     "source_id": "indb:ASC495",
     "food_name": "Lichi squash",
@@ -319841,9 +319152,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pepsi",
-    "merged_from": [
-      "off:8901764052910"
-    ],
     "search_name": "limca"
   },
   {
@@ -322754,9 +322062,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "coco-cola",
-    "merged_from": [
-      "off:3948764092800"
-    ],
     "search_name": "maaza"
   },
   {
@@ -322776,32 +322081,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca-Cola",
-    "merged_from": [
-      "off:8901764175015"
-    ],
-    "search_name": "maaza"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901764092206",
-    "food_name": "Maaza",
-    "category": "Juices and nectars",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 63,
-    "protein_g": 0,
-    "fat_g": 0,
-    "carb_g": 15.8,
-    "fiber_g": null,
-    "sugar_g": 14.9,
-    "sodium_mg": 24.9,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Mazza",
     "search_name": "maaza"
   },
   {
@@ -324304,9 +323583,9 @@
     "merged_from": [
       "off:8901058023800",
       "off:8901058851335",
-      "off:8901058017687",
       "off:8901058000269",
-      "off:8901058008050"
+      "off:8901058008050",
+      "off:8901058005608"
     ],
     "search_name": "maggi"
   },
@@ -324455,31 +323734,6 @@
   },
   {
     "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901058023800",
-    "food_name": "Maggi 2-minute noodles Masala",
-    "category": "Instant noodles",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 310,
-    "protein_g": 6,
-    "fat_g": 13,
-    "carb_g": 43,
-    "fiber_g": 2,
-    "sugar_g": 4,
-    "sodium_mg": 970.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Maggi",
-    "search_name": "maggi 2 minute noodles masala",
-    "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
     "source_id": "off:8901058027129",
     "food_name": "Maggi 2-minute noodles with limited edition bowl",
     "category": "Plant-based foods and beverages",
@@ -324537,9 +323791,6 @@
     "calcium_mg": null,
     "iron_mg": 6.9,
     "brand": "Maggi",
-    "merged_from": [
-      "off:8901058017670"
-    ],
     "search_name": "maggi 280g"
   },
   {
@@ -324604,8 +323855,7 @@
     "iron_mg": 240.0,
     "brand": "Maggi",
     "merged_from": [
-      "off:89080795",
-      "off:89080153"
+      "off:89080795"
     ],
     "search_name": "maggi masala magic",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
@@ -324652,8 +323902,7 @@
     "iron_mg": 3700.0,
     "brand": "Nestle",
     "merged_from": [
-      "off:8901058851304",
-      "off:8901058000306"
+      "off:8901058851304"
     ],
     "search_name": "maggi noodles masala",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
@@ -324676,29 +323925,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Fssai",
-    "search_name": "maggie"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901058010749",
-    "food_name": "Maggie",
-    "category": "Confectioneries",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 384,
-    "protein_g": 8.2,
-    "fat_g": 12.5,
-    "carb_g": 59.6,
-    "fiber_g": null,
-    "sugar_g": 1.8,
-    "sodium_mg": 1000,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Fassi",
     "search_name": "maggie"
   },
   {
@@ -325123,9 +324349,6 @@
     "calcium_mg": 480.0,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262180115"
-    ],
     "search_name": "malai paneer fresh",
     "cooking_state_evidence": "explicit raw/fresh in name",
     "cooking_state_inferred": true
@@ -325231,9 +324454,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Mayora",
-    "merged_from": [
-      "off:8996001312506"
-    ],
     "search_name": "malkist cheese flavoured crunchy layered cracker biscuits",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -326239,9 +325459,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pravin",
-    "merged_from": [
-      "off:8903241110038"
-    ],
     "search_name": "mango pickle"
   },
   {
@@ -326261,9 +325478,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Ram Bandhu",
-    "merged_from": [
-      "off:8903553601460"
-    ],
     "search_name": "mango pickle"
   },
   {
@@ -329275,9 +328489,6 @@
     "calcium_mg": 150.0,
     "iron_mg": 2.9,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063162914"
-    ],
     "search_name": "marie gold biscuit",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -329944,9 +329155,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji wafers",
-    "merged_from": [
-      "off:8906010501259"
-    ],
     "search_name": "masala sev murmura",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -330074,8 +329282,7 @@
     "iron_mg": 6.62,
     "brand": "Maggi",
     "merged_from": [
-      "off:8901058022872",
-      "off:8901058009729"
+      "off:8901058022872"
     ],
     "search_name": "masala veg atta noodles",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
@@ -330479,9 +329686,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Ritebite",
-    "merged_from": [
-      "off:8906009532363"
-    ],
     "search_name": "max protein bar"
   },
   {
@@ -330807,9 +330011,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Mayora",
-    "merged_from": [
-      "off:8996001312490"
-    ],
     "search_name": "mayora malkist chocolate flavored sandwich cracker biscuits",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -333310,9 +332511,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Parle",
-    "merged_from": [
-      "off:8901719130854"
-    ],
     "search_name": "melody chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -337603,9 +336801,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Nestl\u00e9",
-    "merged_from": [
-      "off:8901058861921"
-    ],
     "search_name": "milky bar"
   },
   {
@@ -337667,8 +336862,7 @@
       "off:8901058028959",
       "off:8901058029949",
       "off:8901058875577",
-      "off:89008492",
-      "off:8901058018639"
+      "off:89008492"
     ],
     "search_name": "milkybar"
   },
@@ -338385,9 +337579,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:12111202"
-    ],
     "search_name": "minis mix eggs"
   },
   {
@@ -339218,31 +338409,6 @@
   },
   {
     "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901030831706",
-    "food_name": "Mixed Fruit Jam",
-    "category": "Mixed fruit jams",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 285,
-    "protein_g": 0.3,
-    "fat_g": 0.1,
-    "carb_g": 70.5,
-    "fiber_g": 0.8,
-    "sugar_g": 68.1,
-    "sodium_mg": 51.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Hindustan Unilever Limited",
-    "search_name": "mixed fruit jam",
-    "cooking_state_evidence": "packaged/processed product",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
     "source_id": "off:8906029450548",
     "food_name": "Mixed Fruit Jam",
     "category": "Jams",
@@ -339808,9 +338974,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Modern",
-    "merged_from": [
-      "off:8904043551548"
-    ],
     "search_name": "modern 100 whole wheat bread",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -339857,9 +339020,6 @@
     "calcium_mg": 7.2,
     "iron_mg": 0.11,
     "brand": "Sappe Public Company Limited",
-    "merged_from": [
-      "off:8850389100684"
-    ],
     "search_name": "mogu lychee"
   },
   {
@@ -339879,9 +339039,6 @@
     "calcium_mg": 15.62,
     "iron_mg": null,
     "brand": "Sappe Public Company Limited",
-    "merged_from": [
-      "off:8850389100691"
-    ],
     "search_name": "mogu mogu strawberry juice",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -341449,9 +340606,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Monster",
-    "merged_from": [
-      "off:4897036691427"
-    ],
     "search_name": "monster energy drink 350ml",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -341492,9 +340646,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Monster",
-    "merged_from": [
-      "off:4897036692455"
-    ],
     "search_name": "monster energy ultra"
   },
   {
@@ -341679,8 +340830,7 @@
     "iron_mg": null,
     "brand": "Haldiram's",
     "merged_from": [
-      "off:8904004403718",
-      "off:8904004403725"
+      "off:8904004403718"
     ],
     "search_name": "moong dal",
     "cooking_state_evidence": "dish form implies cooking",
@@ -342498,8 +341648,7 @@
     "brand": "Pepsico",
     "merged_from": [
       "off:8902080364022",
-      "off:8902080364589",
-      "off:8902080364053"
+      "off:8902080364589"
     ],
     "search_name": "mountain dew"
   },
@@ -342866,18 +342015,18 @@
   },
   {
     "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901499010513",
+    "source_id": "off:8901499023339",
     "food_name": "Muesli Fruit, Nut & Seeds",
-    "category": "Mueslis with fruits",
+    "category": "Seeds",
     "cuisine": "PACKAGED",
     "cooking_state": "ready_to_eat",
-    "energy_kcal": 955,
+    "energy_kcal": 382,
     "protein_g": 8.1,
-    "fat_g": 5.1,
-    "carb_g": 80,
-    "fiber_g": 6.4,
-    "sugar_g": 21.8,
-    "sodium_mg": 140.0,
+    "fat_g": 5.2,
+    "carb_g": 79,
+    "fiber_g": 6.5,
+    "sugar_g": 21.6,
+    "sodium_mg": 130.0,
     "calcium_mg": null,
     "iron_mg": null,
     "potassium_mg": null,
@@ -342885,9 +342034,6 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": "Kellogg's",
-    "merged_from": [
-      "off:8901499023339"
-    ],
     "search_name": "muesli fruit nut seeds",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -345349,9 +344495,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Nestl\u00e9",
-    "merged_from": [
-      "off:8901058005080"
-    ],
     "search_name": "munch max"
   },
   {
@@ -349543,9 +348686,6 @@
     "calcium_mg": 75.0,
     "iron_mg": 3.4,
     "brand": "ALPINO",
-    "merged_from": [
-      "off:8906127550010"
-    ],
     "search_name": "natural peanut butter crunch",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -349588,9 +348728,6 @@
     "calcium_mg": 36.58,
     "iron_mg": 2.82,
     "brand": "Nature valley",
-    "merged_from": [
-      "off:8410076601445"
-    ],
     "search_name": "nature valley crunchy"
   },
   {
@@ -349781,9 +348918,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Nestl\u00e9",
-    "merged_from": [
-      "off:8901058015171"
-    ],
     "search_name": "nestle kitkat"
   },
   {
@@ -350114,9 +349248,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "7up",
-    "merged_from": [
-      "off:8902080003075"
-    ],
     "search_name": "nimbooz"
   },
   {
@@ -350357,9 +349488,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Shin Ramyun",
-    "merged_from": [
-      "off:8801043018470"
-    ],
     "search_name": "nongsp gourmet spicy spicy creamy flavour toom"
   },
   {
@@ -350964,9 +350092,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "nutella",
-    "merged_from": [
-      "off:3017620425035"
-    ],
     "search_name": "nutella"
   },
   {
@@ -351226,7 +350351,6 @@
     "iron_mg": 2.09,
     "brand": "Britannia Digestive",
     "merged_from": [
-      "off:8901063142015",
       "off:8901063142466"
     ],
     "search_name": "nutri choice"
@@ -356166,9 +355290,6 @@
     "calcium_mg": null,
     "iron_mg": 3.7,
     "brand": "Saffola",
-    "merged_from": [
-      "off:8901088055772"
-    ],
     "search_name": "oats"
   },
   {
@@ -356189,7 +355310,6 @@
     "iron_mg": 2.9,
     "brand": "Quaker",
     "merged_from": [
-      "off:8901491103800",
       "off:8901491702188"
     ],
     "search_name": "oats"
@@ -356249,29 +355369,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "True Elements",
-    "search_name": "oats"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901491103794",
-    "food_name": "Oats",
-    "category": "Rolled oats",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 407,
-    "protein_g": 11.8,
-    "fat_g": 9.5,
-    "carb_g": 68.5,
-    "fiber_g": 10,
-    "sugar_g": 1.8,
-    "sodium_mg": 9.5,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Pepsico",
     "search_name": "oats"
   },
   {
@@ -361323,7 +360420,7 @@
     "source": "OPEN_FOOD_FACTS",
     "source_id": "off:8902346012353",
     "food_name": "Oral Rehydration Salts I.P. Electral",
-    "category": "Non food products",
+    "category": null,
     "cuisine": "PACKAGED",
     "cooking_state": "unspecified",
     "energy_kcal": 250.0,
@@ -361336,9 +360433,6 @@
     "calcium_mg": 347.22,
     "iron_mg": null,
     "brand": "FDC LIMITED",
-    "merged_from": [
-      "off:8902346012353"
-    ],
     "search_name": "oral rehydration salts i p electral"
   },
   {
@@ -363114,9 +362208,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202253638"
-    ],
     "search_name": "oreo 5 pack"
   },
   {
@@ -363475,9 +362566,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Cadbury",
-    "merged_from": [
-      "off:7622202225512"
-    ],
     "search_name": "original oreo"
   },
   {
@@ -366919,9 +366007,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram's",
-    "merged_from": [
-      "off:8904004402834"
-    ],
     "search_name": "panchathanthra mix"
   },
   {
@@ -368417,9 +367502,6 @@
     "calcium_mg": 0.0,
     "iron_mg": 0.04,
     "brand": "Parachute",
-    "merged_from": [
-      "off:8901088000451"
-    ],
     "search_name": "parachnute 100 pure coconut oil",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -368588,9 +367670,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Parle",
-    "merged_from": [
-      "off:8901719101038"
-    ],
     "search_name": "parle g"
   },
   {
@@ -368610,9 +367689,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Parle",
-    "merged_from": [
-      "off:8901719126468"
-    ],
     "search_name": "parle 20 20"
   },
   {
@@ -368679,8 +367755,7 @@
     "iron_mg": null,
     "brand": "Parle",
     "merged_from": [
-      "off:8901719134845",
-      "off:8901719134852"
+      "off:8901719134845"
     ],
     "search_name": "parle g biscuit",
     "cooking_state_evidence": "dish form implies cooking",
@@ -368940,9 +368015,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Parle",
-    "merged_from": [
-      "off:8901719135767"
-    ],
     "search_name": "parle g royale"
   },
   {
@@ -369542,9 +368614,6 @@
     "calcium_mg": 119.41,
     "iron_mg": 0.03,
     "brand": "Passendale",
-    "merged_from": [
-      "off:5410942104158"
-    ],
     "search_name": "passendale classic"
   },
   {
@@ -374152,9 +373221,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Gokul",
-    "merged_from": [
-      "off:8908000794023"
-    ],
     "search_name": "pasteurised full cream milk"
   },
   {
@@ -376486,9 +375552,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Sundrop",
-    "merged_from": [
-      "off:8901512144805"
-    ],
     "search_name": "peanut butter",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -376654,9 +375717,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pintola",
-    "merged_from": [
-      "off:8908010900063"
-    ],
     "search_name": "peanut butter all natural creamy unsweetened",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -377016,9 +376076,6 @@
     "calcium_mg": 68.47,
     "iron_mg": 3.1,
     "brand": "Disano",
-    "merged_from": [
-      "off:8904320015398"
-    ],
     "search_name": "peanut butter creamy",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -385146,9 +384203,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pepsico",
-    "merged_from": [
-      "off:8902080104024"
-    ],
     "search_name": "pepsi cola",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -385404,9 +384458,6 @@
     "calcium_mg": 250.0,
     "iron_mg": null,
     "brand": "Jaouda",
-    "merged_from": [
-      "off:6111242100992"
-    ],
     "search_name": "perly"
   },
   {
@@ -385605,31 +384656,6 @@
     "phosphorus_mg": null,
     "brand": null,
     "search_name": "persimmons native raw"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:00001569",
-    "food_name": "Personalized Protein Powder",
-    "category": "Protein powders",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 382,
-    "protein_g": 83,
-    "fat_g": 3,
-    "carb_g": 4,
-    "fiber_g": 0,
-    "sugar_g": 0,
-    "sodium_mg": 1133.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Herbalife",
-    "search_name": "personalized protein powder",
-    "cooking_state_evidence": "packaged/processed product",
-    "cooking_state_inferred": true
   },
   {
     "source": "USDA_FDC",
@@ -391804,9 +390830,6 @@
     "calcium_mg": null,
     "iron_mg": 6.8,
     "brand": "Pintola",
-    "merged_from": [
-      "off:8906136651951"
-    ],
     "search_name": "pintola high protein oats dark chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -402798,7 +401821,7 @@
     "energy_kcal": 385.36225,
     "protein_g": 15.2,
     "fat_g": 35.83,
-    "carb_g": -0.705,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 49.7,
@@ -402809,6 +401832,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "pork belly with skin raw"
   },
   {
@@ -402927,7 +401951,7 @@
     "energy_kcal": 144.617,
     "protein_g": 22.8125,
     "fat_g": 5.475,
-    "carb_g": -0.5625,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 39.3,
@@ -402938,6 +401962,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "pork chop center cut raw"
   },
   {
@@ -417854,9 +416879,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Uncle Chipps",
-    "merged_from": [
-      "off:8901491435109"
-    ],
     "search_name": "potato chips 20rs",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -417899,9 +416921,6 @@
     "calcium_mg": 5.84,
     "iron_mg": 0.27,
     "brand": "Bingo",
-    "merged_from": [
-      "off:8901725007096"
-    ],
     "search_name": "potato chips salted",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -427611,9 +426630,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Suhana",
-    "merged_from": [
-      "off:8903241110793"
-    ],
     "search_name": "pravin"
   },
   {
@@ -427633,9 +426649,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pravin",
-    "merged_from": [
-      "off:8903241110076"
-    ],
     "search_name": "pravin mango pickle"
   },
   {
@@ -429043,8 +428056,7 @@
     "brand": "Pringles",
     "merged_from": [
       "off:8886467122415",
-      "off:8886467122866",
-      "off:8886467122392"
+      "off:8886467122866"
     ],
     "search_name": "pringles"
   },
@@ -429087,9 +428099,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pringles",
-    "merged_from": [
-      "off:8886467122446"
-    ],
     "search_name": "pringles south african style periperi flavour"
   },
   {
@@ -429109,61 +428118,8 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Pringles",
-    "merged_from": [
-      "off:8886467122439"
-    ],
     "search_name": "pringles desi masala tadka flavour",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8886467122415",
-    "food_name": "Pringles Pizza Flavour Potato Crisps",
-    "category": "Stacked extruded potato crisps",
-    "cuisine": "PACKAGED",
-    "cooking_state": "cooked",
-    "energy_kcal": 514,
-    "protein_g": 5.7,
-    "fat_g": 27.4,
-    "carb_g": 61.1,
-    "fiber_g": null,
-    "sugar_g": 2.4,
-    "sodium_mg": 677.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Pringles",
-    "search_name": "pringles pizza flavour potato crisps",
-    "cooking_state_evidence": "dish form implies cooking",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8886467122408",
-    "food_name": "Pringles Sour Cream & Onion Flavour Potato Crisps",
-    "category": "Stacked extruded potato crisps",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 541,
-    "protein_g": 5,
-    "fat_g": 30.9,
-    "carb_g": 57.6,
-    "fiber_g": null,
-    "sugar_g": 3.2,
-    "sodium_mg": 642.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Pringles",
-    "search_name": "pringles sour cream onion flavour potato crisps",
-    "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
   },
   {
@@ -429183,9 +428139,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:8886467124723"
-    ],
     "search_name": "pringles sour cream 40g"
   },
   {
@@ -432410,7 +431363,6 @@
     "iron_mg": null,
     "brand": "Kurkure",
     "merged_from": [
-      "off:8901491366052",
       "off:8901491365703"
     ],
     "search_name": "puffcorn"
@@ -433943,9 +432895,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Amul",
-    "merged_from": [
-      "off:8901262020046"
-    ],
     "search_name": "pure milk cheese slices"
   },
   {
@@ -435376,7 +434325,6 @@
     "iron_mg": 5.6,
     "brand": "Lion",
     "merged_from": [
-      "off:8906006720107",
       "off:8906006720114"
     ],
     "search_name": "qyno dates"
@@ -438462,9 +437410,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji Wafers",
-    "merged_from": [
-      "off:8906010500306"
-    ],
     "search_name": "ratlami sev",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -439273,9 +438218,6 @@
     "calcium_mg": 111.11,
     "iron_mg": null,
     "brand": "137 Degrees",
-    "merged_from": [
-      "off:8854761951413"
-    ],
     "search_name": "real almond milk"
   },
   {
@@ -439295,9 +438237,6 @@
     "calcium_mg": 6.0,
     "iron_mg": 0.1,
     "brand": null,
-    "merged_from": [
-      "off:8901888040350"
-    ],
     "search_name": "real fruit power mixed fruit 1ktr tpk"
   },
   {
@@ -439362,8 +438301,7 @@
     "iron_mg": null,
     "brand": "Hellmann\u2019s",
     "merged_from": [
-      "off:8901030877131",
-      "off:8901030872693"
+      "off:8901030877131"
     ],
     "search_name": "real mayonnaise",
     "cooking_state_evidence": "packaged/processed product",
@@ -439387,31 +438325,6 @@
     "iron_mg": null,
     "brand": "Real",
     "search_name": "real orange fruit juice",
-    "cooking_state_evidence": "packaged/processed product",
-    "cooking_state_inferred": true
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:90162602",
-    "food_name": "Red Bull Energy Drink",
-    "category": "Sodas",
-    "cuisine": "PACKAGED",
-    "cooking_state": "ready_to_eat",
-    "energy_kcal": 45,
-    "protein_g": 0,
-    "fat_g": 0,
-    "carb_g": 11,
-    "fiber_g": null,
-    "sugar_g": 11,
-    "sodium_mg": 39.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Red Bull",
-    "search_name": "red bull energy drink",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
   },
@@ -447394,9 +446307,6 @@
     "calcium_mg": 83.9,
     "iron_mg": 0.37,
     "brand": "Ritter Sport",
-    "merged_from": [
-      "off:4000417224002"
-    ],
     "search_name": "ritter sport noir noisettes entieres"
   },
   {
@@ -447773,9 +446683,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Dmart Premia",
-    "merged_from": [
-      "off:8903363008275"
-    ],
     "search_name": "roasted yellow chana",
     "cooking_state_evidence": "explicit cooking verb in name",
     "cooking_state_inferred": true
@@ -455325,9 +454232,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Chheda's",
-    "merged_from": [
-      "off:8904071700024"
-    ],
     "search_name": "salt n pepper banana chips",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -455351,9 +454255,7 @@
     "brand": "Haldiram's",
     "merged_from": [
       "off:8904004404661",
-      "off:8904004404630",
-      "off:8904004404661",
-      "off:8904004404647"
+      "off:8904004404630"
     ],
     "search_name": "salted peanuts"
   },
@@ -462032,7 +460934,6 @@
     "iron_mg": 0.1,
     "brand": "Ching's Secret",
     "merged_from": [
-      "off:8901595862962",
       "off:8901595863280"
     ],
     "search_name": "schezwan chutney"
@@ -462474,9 +461375,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji Wafers",
-    "merged_from": [
-      "off:8906010501228"
-    ],
     "search_name": "scoopitos masala flavour",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -468461,9 +467359,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Balaji Wafers",
-    "merged_from": [
-      "off:8906010500863"
-    ],
     "search_name": "shing bhujiya nimbu chatka"
   },
   {
@@ -471324,9 +470219,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "PEPSICO INDIA HOLDINGS PVT LTD.",
-    "merged_from": [
-      "off:8902080404117"
-    ],
     "search_name": "slice"
   },
   {
@@ -471834,15 +470726,12 @@
     "protein_g": 0.6,
     "fat_g": 0.0,
     "carb_g": 2.0,
-    "fiber_g": 2.2,
+    "fiber_g": null,
     "sugar_g": 0.0,
     "sodium_mg": 0.0,
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Smith and Jones",
-    "merged_from": [
-      "off:8901595873258"
-    ],
     "search_name": "smith jones ginger garlic paste"
   },
   {
@@ -471929,9 +470818,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Parle Agro",
-    "merged_from": [
-      "off:8902579002299"
-    ],
     "search_name": "smoodh chocolate",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -478244,9 +477130,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "SNICKERS",
-    "merged_from": [
-      "off:8902433003134"
-    ],
     "search_name": "snickers butterscotch flavour"
   },
   {
@@ -492380,7 +491263,6 @@
     "iron_mg": null,
     "brand": "Bikaji",
     "merged_from": [
-      "off:8906005505040",
       "off:8906005505040"
     ],
     "search_name": "soya sticks"
@@ -499122,9 +498004,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca-Cola Company",
-    "merged_from": [
-      "off:3948764032707"
-    ],
     "search_name": "sprite"
   },
   {
@@ -499145,9 +498024,7 @@
     "iron_mg": null,
     "brand": "Coca-Cola",
     "merged_from": [
-      "off:8901764032912",
       "off:8901764032707",
-      "off:8901764032905",
       "off:3948764032271"
     ],
     "search_name": "sprite"
@@ -499216,29 +498093,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "\u0915\u094b\u0915\u093e \u0915\u094b\u0932\u093e \u0915",
-    "search_name": "sprite lemon lime flv coke brand 2ltr"
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:8901764032400",
-    "food_name": "Sprite Lemon Lime flv Coke Brand 2ltr",
-    "category": "Sodas",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 49,
-    "protein_g": null,
-    "fat_g": null,
-    "carb_g": 12.2,
-    "fiber_g": null,
-    "sugar_g": 11.7,
-    "sodium_mg": 10260.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "The Coca-Cola Company",
     "search_name": "sprite lemon lime flv coke brand 2ltr"
   },
   {
@@ -503409,9 +502263,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Sting",
-    "merged_from": [
-      "off:8902080000227"
-    ],
     "search_name": "sting energy"
   },
   {
@@ -503700,9 +502551,6 @@
     "calcium_mg": 24.0,
     "iron_mg": null,
     "brand": "Storia Foods & Beverages",
-    "merged_from": [
-      "off:8904272600291"
-    ],
     "search_name": "storia 100 tender coconut water 1l",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -503724,9 +502572,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "storia",
-    "merged_from": [
-      "off:8904272600895"
-    ],
     "search_name": "storia pomegranate 750ml"
   },
   {
@@ -503746,9 +502591,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Storia",
-    "merged_from": [
-      "off:8904272600154"
-    ],
     "search_name": "storia tender coconut water",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -513124,9 +511966,6 @@
     "calcium_mg": 7.22,
     "iron_mg": 0.03,
     "brand": "Paper Boat",
-    "merged_from": [
-      "off:8906080604690"
-    ],
     "search_name": "swing coconut water",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -517537,9 +516376,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram's",
-    "merged_from": [
-      "off:8904004403633"
-    ],
     "search_name": "tasty nuts"
   },
   {
@@ -517559,9 +516395,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Haldiram's",
-    "merged_from": [
-      "off:8904004403671"
-    ],
     "search_name": "tasty nuts shing bhujia",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -520397,9 +519230,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:3948764042904"
-    ],
     "search_name": "thumbs up"
   },
   {
@@ -520464,9 +519294,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Thumps up",
-    "merged_from": [
-      "off:3948764042270"
-    ],
     "search_name": "thumbs up 750ml pet"
   },
   {
@@ -520486,9 +519313,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "thumsup",
-    "merged_from": [
-      "off:3948764042911"
-    ],
     "search_name": "thums up"
   },
   {
@@ -520557,9 +519381,6 @@
     "calcium_mg": 0.0,
     "iron_mg": 0.0,
     "brand": "Coca Cola",
-    "merged_from": [
-      "off:8901764041259"
-    ],
     "search_name": "thums up 300ml can"
   },
   {
@@ -520579,9 +519400,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca-Cola",
-    "merged_from": [
-      "off:8901764042904"
-    ],
     "search_name": "thumsup"
   },
   {
@@ -521179,9 +519997,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Britannia",
-    "merged_from": [
-      "off:8901063325227"
-    ],
     "search_name": "toast tea rusk"
   },
   {
@@ -523291,9 +522106,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Del Monte",
-    "merged_from": [
-      "off:8901246005373"
-    ],
     "search_name": "tomato ketchup classic blend",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -523976,9 +522788,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": null,
-    "merged_from": [
-      "off:8906010503482"
-    ],
     "search_name": "tomato twist"
   },
   {
@@ -525382,9 +524191,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Too Yumm!",
-    "merged_from": [
-      "off:8906090574556"
-    ],
     "search_name": "too yumm namkeen all in one",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -528435,7 +527241,7 @@
     "energy_kcal": 101.8695,
     "protein_g": 24.7,
     "fat_g": 0.3875,
-    "carb_g": -0.1045,
+    "carb_g": 0.0,
     "fiber_g": null,
     "sugar_g": null,
     "sodium_mg": 94.37,
@@ -528446,6 +527252,7 @@
     "zinc_mg": null,
     "phosphorus_mg": null,
     "brand": null,
+    "macro_clamped": true,
     "search_name": "tuna ahi or yellowfin frozen wild caught"
   },
   {
@@ -539108,7 +537915,6 @@
     "iron_mg": null,
     "brand": null,
     "merged_from": [
-      "off:8906010500429",
       "off:8906010500429"
     ],
     "search_name": "unknown product"
@@ -539607,9 +538413,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kwality Walls",
-    "merged_from": [
-      "off:8901030735097"
-    ],
     "search_name": "vanilla ice cream",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -550772,9 +549575,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Nabati",
-    "merged_from": [
-      "off:8908008674808"
-    ],
     "search_name": "wafer",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -550796,9 +549596,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Nabati",
-    "merged_from": [
-      "off:8908008674785"
-    ],
     "search_name": "wafer richeese",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -553565,9 +552362,6 @@
     "calcium_mg": 5.92,
     "iron_mg": 0.37,
     "brand": "Weikfield",
-    "merged_from": [
-      "off:8901808000068"
-    ],
     "search_name": "weikfield"
   },
   {
@@ -555745,9 +554539,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "BALAJI WAFERS",
-    "merged_from": [
-      "off:8906010501242"
-    ],
     "search_name": "wheelos masala flavour",
     "cooking_state_evidence": "ingredient with no meaningful cooking state",
     "cooking_state_inferred": true
@@ -558205,9 +556996,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "John West",
-    "merged_from": [
-      "off:5000171010025"
-    ],
     "search_name": "wild pacific red salmon"
   },
   {
@@ -560056,9 +558844,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Coca Cola",
-    "merged_from": [
-      "off:0850006000012"
-    ],
     "search_name": "yaourt nature sucres u"
   },
   {
@@ -560455,8 +559240,6 @@
     "merged_from": [
       "off:8909081005251",
       "off:8909081006388",
-      "off:8909081005251",
-      "off:8901725018016",
       "off:8901725005887"
     ],
     "search_name": "yippee noodles",
@@ -560518,9 +559301,6 @@
     "calcium_mg": null,
     "iron_mg": 3.9,
     "brand": "Yoga bar",
-    "merged_from": [
-      "off:8904335601869"
-    ],
     "search_name": "yoga bar 23g protein muesli choco almond cranberry",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -560542,9 +559322,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Yoga bar",
-    "merged_from": [
-      "off:8904335601890"
-    ],
     "search_name": "yoga bar high protein muesli",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -560591,9 +559368,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Yoga Bar",
-    "merged_from": [
-      "off:8904335602385"
-    ],
     "search_name": "yoga bar protein bar"
   },
   {
@@ -560613,9 +559387,6 @@
     "calcium_mg": 37.25,
     "iron_mg": 4.0,
     "brand": "Yoga Bar",
-    "merged_from": [
-      "off:8908005144618"
-    ],
     "search_name": "yoga bar super muesli 0 added sugar",
     "cooking_state_evidence": "packaged/processed product",
     "cooking_state_inferred": true
@@ -564837,9 +563608,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "The Health Factory",
-    "merged_from": [
-      "off:8908009059185"
-    ],
     "search_name": "zero maida whole wheat bread",
     "cooking_state_evidence": "dish form implies cooking",
     "cooking_state_inferred": true
@@ -565187,29 +563955,6 @@
     "calcium_mg": null,
     "iron_mg": null,
     "brand": "Kinder",
-    "search_name": ""
-  },
-  {
-    "source": "OPEN_FOOD_FACTS",
-    "source_id": "off:80768258",
-    "food_name": "\u5065\u9054\u5947\u8da3\u86cb(\u5973\u5b69\u7248)",
-    "category": "Chocolate candies",
-    "cuisine": "PACKAGED",
-    "cooking_state": "unspecified",
-    "energy_kcal": 550,
-    "protein_g": 10,
-    "fat_g": 30,
-    "carb_g": 55,
-    "fiber_g": 0,
-    "sugar_g": 50,
-    "sodium_mg": 624.0,
-    "calcium_mg": null,
-    "iron_mg": null,
-    "potassium_mg": null,
-    "magnesium_mg": null,
-    "zinc_mg": null,
-    "phosphorus_mg": null,
-    "brand": "Ferrero",
     "search_name": ""
   }
 ]
