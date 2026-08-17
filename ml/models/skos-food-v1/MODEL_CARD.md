@@ -80,7 +80,7 @@ NIN's own PDF — the risk buys nothing.
 3. **Condiments have weak per-serving figures** — 52.4% median error vs 25.7%
    for main dishes, because a "serving" of chutney is a teaspoon of a batch.
    Whole-batch totals remain reliable; flagged via `serving_caveat`.
-4. **28.2% of foods have no cooking state.** Left unspecified deliberately —
+4. **19.1% of foods have no cooking state.** Left unspecified deliberately —
    a wrong state is worse than a missing one, because search acts on it.
 5. **223 rows are flagged `trustworthy: false`**, mostly INDB dishes that count
    the deep-frying oil bath as eaten (Dum aloo reads 4,576 kcal/serving). They
@@ -121,12 +121,29 @@ Consequently: **nothing is invented to fill a gap.** Missing nutrients stay
 null; unresolvable ingredients are reported, not substituted; terms with no
 trustworthy match are left unmapped rather than pointed at an approximation.
 
+## 7b. Portion sizes
+
+Users log "1 katori", not "150 g", so the model offers a weighing-scale gram
+entry **and** ~22 household portions (spoons, bowls, plates, glassware, counted
+items like roti/dosa/egg).
+
+A portion is a **volume**, so grams are computed per food: a medium bowl of dal
+is 250 g and of spinach 62 g. Volumes are calibrated against ~900 real INDB
+serving weights — overall bias **0.94** (bowl 0.95, plate 0.98, tablespoon 0.93).
+
+**Precision is reported honestly.** A "bowl" is not a defined unit; real ones
+span 166–354 g in the measured data, and that spread ships as
+`observed_range_g` rather than being hidden behind a single number.
+
+Count portions are deliberately **not** calibrated against INDB, because its
+"1 egg" for boiled egg is 151 g — the dish with accompaniments, not one egg.
+
 ## 8. Tests
 
 | Suite | Checks |
 |---|---|
-| `ml/tests/test_food_model.py` | **59** — database integrity, ranking, units, oil, ingredient resolution, regex guards |
-| `ml/models/skos-food-v1/foodEstimate.test.js` | **33** — same invariants in JS, so Python/JS divergence fails loudly |
+| `ml/tests/test_food_model.py` | **70** — database integrity, ranking, units, portions, oil, ingredient resolution, regex guards |
+| `ml/models/skos-food-v1/foodEstimate.test.js` | **42** — same invariants in JS, so Python/JS divergence fails loudly |
 
 The Python suite found three real data bugs on its first run (impossible energy,
 duplicate `source_id`s, negative carbohydrate), all fixed before this release.
