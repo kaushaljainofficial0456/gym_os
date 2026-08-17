@@ -32,6 +32,7 @@ plus a three-tier estimator, already built, measured, and committed on
 | **1 — database match** | Food is in the DB | The lab value itself | Show plainly |
 | **2 — compositional** | User gives ingredients | 25.7% median (main dishes), **bias 1.01× i.e. none** | Show plainly, list ingredients |
 | **3 — name-only fallback** | Nothing matched | 14.9%–21.6% median APE | **Must be labelled an estimate** |
+| **barcode — exact scan** | Barcode matched | The product's own label values; not a ranked guess | Show plainly (§3.6) |
 
 **Measured, not claimed.** End-to-end benchmark holds IFCT 2017 (506 lab-measured
 Indian foods) out of the database entirely and queries by common name:
@@ -214,6 +215,82 @@ conserved — adding 10 g oil adds 10 g of mass, not only 88 kcal.
 
 ---
 
+### 3.6 Barcode scan — auto-log to daily total (`tier: "barcode"`)
+
+**This is a different retrieval mode from §3.1-3.4, not a variant of it.** Text
+search is fuzzy — it ranks candidates and can be wrong. A barcode is an EXACT
+key: `dict[barcode] -> product`, or a miss. There is no ranking and no
+confidence *calibration* question the way §3.2 means it for search, which is
+why `confidence` below is a fixed constant, not a measured value.
+
+**Flow:** user scans a barcode → app calls the lookup → on a hit, show a
+confirm screen defaulted to **1 of the product's own serving size** → user taps
+confirm → log directly to the daily total. No search, no picking a portion —
+the product defines its own unit.
+
+Request/response shape:
+```json
+// GET /intelligence/foods/barcode/:code?servings=1
+{
+  "schema_version": "food-v1",
+  "tier": "barcode",
+  "match_kind": "barcode_exact",
+  "food": {
+    "source": "OPEN_FOOD_FACTS",
+    "barcode": "8901234567895",
+    "source_id": "off:8901234567895",
+    "food_name": "...",
+    "brand": "...",
+    "serving_size_label": "1 bar (40 g)",
+    "serving_grams": 40.0,
+    "energy_kcal": 450.0, "protein_g": 30.0, "fat_g": 15.0, "carb_g": 40.0,
+    "fiber_g": null, "sugar_g": 10.0, "sodium_mg": 200.0
+  },
+  "quantity": {
+    "servings": 1, "grams": 40.0,
+    "serving_grams_each": 40.0, "serving_grams_known": true
+  },
+  "totals": { "energy_kcal": 180.0, "protein_g": 12.0, "fat_g": 6.0, "carb_g": 16.0 },
+  "confidence": "high",
+  "notes": []
+}
+```
+
+A miss (barcode not indexed) is a plain **404**, not a guessed food — the
+frontend should fall back to name search or manual entry, exactly as it would
+for a food nobody has heard of.
+
+| Field | Notes |
+|---|---|
+| `confidence` | **Always `"high"`.** The *identity* match is exact by construction — this is not the calibrated §3.2 field and must not be compared to it. |
+| `quantity.serving_grams_known` | **The field that actually needs UI attention.** `false` means the product publishes no serving size and the response defaulted to 100 g — see below. |
+| `notes` | Non-empty only when `serving_grams_known: false`; surface it, same as `unresolved` in §3.4. |
+
+**`serving_grams_known: false` must not be silently logged as-is, and it is
+not a rare case.** Measured: only **45.6%** of indexed products carry a usable
+serving size (1,861 of 4,078) — the other **54.4%** fall back to 100 g.
+Defaulting to 100 g and logging it without telling the user is a guess
+presented as a fact for *most* barcode-only products, not an edge case — show
+the note and let the user adjust grams before confirming, the same honesty
+rule as an `unreliable` search result in §3.2.
+
+**Coverage is intentionally broader than text search's OFF data.** §3.1's OFF
+rows are restricted to `countries_tags=india` because text search ranks by
+name plausibility and a noisy net can out-score a good match. Barcode lookup
+carries no such risk — a code either matches or it doesn't — so the barcode
+index additionally includes any product whose barcode starts with **`890`**,
+the GS1 company-prefix block issued to India, which catches Indian-made
+products even when OFF's crowd-sourced country tag is missing or wrong.
+**Consequence: a product findable by barcode is not guaranteed to also be
+findable by name search.** These are two different datasets on purpose.
+
+**Leading-zero handling is done for you.** A UPC-A scan (12 digits) and an
+EAN-13 scan (13 digits) of the *same* physical product are numerically the
+same code with/without a leading zero. The backend does not need to normalize
+this — both forms are indexed and either resolves.
+
+---
+
 ## 4. Cooking state — the largest single error source
 
 Rice is **358 kcal/100 g raw** and **129 cooked**. Logging "150 g rice" against
@@ -279,13 +356,20 @@ not `trustworthy: false`, which means do not present the value at all.
    **Keep `id`/`name` populated** so `Nutrition.jsx` keeps working unchanged.
 3. **New:** `POST /intelligence/foods/compositional` → §3.4.
 4. **Pass through `oil_level`** on meal-item create/update.
-5. **Do not** re-derive confidence, re-rank results, or convert units server-side —
-   all three are already measured and calibrated in the ML layer.
+5. **New:** `GET /intelligence/foods/barcode/:code?servings=N` → §3.6. Look the
+   cleaned code up in `off_barcode_index.json` (or your DB copy of it); 404 on
+   a miss. Accept both a 12- and 13-digit scan for the same product — the data
+   already carries both forms, no server-side normalization needed.
+6. **Do not** re-derive confidence, re-rank results, convert units, or invent a
+   serving size server-side — all are already measured/calibrated in the ML
+   layer, including the barcode `serving_grams_known: false` fallback.
 
 Ingestion path: `ml/data/processed/unified_food_db.json` (13.9 MB, 21,378 rows)
 is committed on `ml-sambhav`. Load it into the existing `foods` table or read it
 directly — your call. Column mapping is 1:1 with `foods` except the extra
-micronutrient fields.
+micronutrient fields. `off_barcode_index.json` (§3.6) is a **separate** file —
+keyed by barcode, not merged into `foods` — since it is a different retrieval
+mode with a different (broader) source filter; see §3.6's coverage note.
 
 **Schema note:** `foods` has no `cooking_state`, `serving_grams`, `confidence`, or
 `source_id` column. I have **not** proposed a migration — that is your call, and
@@ -300,11 +384,18 @@ I will not touch `database/`.
 4. **Cooking-state toggle** (§4) — only when `alternative` is present.
 5. **Ingredient entry for tier 2** (§3.4) — name / amount / unit rows, and
    **show `unresolved` prominently**: those calories are missing, not approximate.
-6. **Never render `null` as 0.** A missing nutrient is unknown, not zero.
+6. **Barcode scan** (§3.6) — camera scan → call the lookup → confirm screen
+   defaulted to 1 serving → "Add to today" logs it directly, no portion picker
+   needed (the product defines its own unit). On a miss, fall back to name
+   search. **Always show the `serving_grams_known: false` note** when present
+   and let the user correct the grams before confirming — do not silently log
+   an assumed 100 g as if it were the real serving.
+7. **Never render `null` as 0.** A missing nutrient is unknown, not zero.
 
 ### Sambhav — ML
 
-- Owns `unified_food_db.json`, ranking, confidence calibration, tier 2/3, oil model.
+- Owns `unified_food_db.json`, `off_barcode_index.json`, ranking, confidence
+  calibration, tier 2/3, oil model, barcode lookup.
 - Will not modify `backend/`, `database/`, or `frontend/`.
 - Any change to a §3 shape ships as `food-v2` with notice, never edited in place.
 
@@ -316,10 +407,17 @@ I will not touch `database/`.
 2. **3 dishes absent from all sources** (`rogan josh`, `vindaloo`, `jalebi`) —
    tier 2 handles them when the user supplies ingredients.
 3. **Condiment per-serving figures are weak** (52.4%) — flagged via `serving_caveat`.
-4. **OFF bulk covers 1,723 usable India products**, not the 22,504 the API
-   advertises; most India entries have no nutrition panel at all.
+4. **OFF bulk covers 1,723 usable India products** for TEXT SEARCH, not the
+   22,504 the API advertises; most India entries have no nutrition panel at
+   all. The BARCODE index (§3.6) is a separate, broader pull — see its own
+   coverage note; the two are not the same file or the same count.
 5. **Tier 3 must never be shown unlabelled.** It beats guessing but is not a
    measurement, and a 50%-error number next to lab values discredits both.
+6. **Barcode coverage is real but partial** — Open Food Facts is
+   crowd-sourced, so a physical product in a user's hand can still be a
+   miss. This is a coverage gap, not a wrong-answer risk (§3.6 has none) —
+   the frontend's fallback to name search / manual entry is load-bearing,
+   not an edge case to skip.
 
 ---
 
@@ -339,6 +437,12 @@ I will not touch `database/`.
 | Cooking-state rules | `ml/src/inference/cooking_state.py` |
 | Unit → grams | `ml/src/inference/portion_units.py` |
 | End-to-end benchmark | `ml/src/validation/end_to_end_benchmark.py` |
+| **Barcode index** (§3.6) | `ml/data/processed/off_barcode_index.json` |
+| Barcode index builder | `ml/src/ingestion/build_barcode_index.py` |
+| Barcode lookup (Python) | `ml/src/inference/barcode_lookup.py` |
+| Barcode lookup (JS reference) | `ml/models/skos-food-v1/barcodeLookup.reference.js` |
+| Barcode JS parity tests | `ml/models/skos-food-v1/barcodeLookup.test.js` |
+| Barcode Python tests | `ml/tests/test_barcode_lookup.py` |
 
 Questions on a shape: ask before building around it. Changing it later costs all
 three of us more than a message does now.

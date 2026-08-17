@@ -760,3 +760,63 @@ model would have had tier-3 accuracy **everywhere**.
 | `src/ingestion/build_unified_food_db.py` | Merge, dedupe, source priority |
 | `src/inference/food_search.py` | Ranked retrieval |
 | `data/processed/unified_food_db.json` | 14,863 foods |
+
+---
+
+## Barcode scan — auto-log lookup added (post-launch, this session)
+
+Distinct feature from everything above: an EXACT-key lookup for barcode-scan
+auto-logging, not a change to text search or ranking. Requested explicitly
+so a scanned product can be added to a user's daily total using the
+product's own serving size, no search step required.
+
+**Coverage decision.** Text search restricts OFF rows to
+`countries_tags=india` because a noisy net can out-rank a good match in
+FUZZY retrieval. Barcode lookup has no ranking step — a code matches or it
+doesn't — so this carries none of that risk, and coverage was deliberately
+widened instead: kept a row if EITHER `countries_tags` mentions India OR the
+barcode starts with **890**, the GS1 company-prefix block issued to India
+(catches Indian-manufactured products whose crowd-sourced country tag is
+missing/wrong, which the tag alone cannot). Verified before running the full
+build: a count-only pass over the same 4,535,553-row bulk export found 4,080
+matching rows (1,725 via country tag, 3,775 via the GS1 prefix, 1,420
+overlap) — the full build's actual yield, 4,078 kept products, landed within
+2 of that estimate, confirming the filter behaves as designed rather than
+silently exploding to the whole global catalogue.
+
+One build-time surprise worth recording: the incremental progress log showed
+almost nothing kept through the first ~90% of the scan (244 of the eventual
+4,078 by row 4,000,000) and then a jump to the final total in the last
+500,000 rows. Checked before treating it as a bug: this is the bulk export's
+own row ordering clustering 890-prefixed codes toward the end (consistent
+with numeric-code sort order, since 890xxxxxxxxxx sits in roughly the top
+decile of the 13-digit barcode space) — not a filtering defect. The
+count-only pre-check (which scans to completion regardless of ordering) is
+what actually validated the number; the progress log was a red herring.
+
+**Serving size.** OFF publishes both a pre-parsed numeric `serving_quantity`
+(trusted first) and free-text `serving_size` (parsed locally as a fallback).
+Measured after building: only **45.6%** of the 4,078 indexed products (1,861)
+carry a usable serving size; the rest fall back to 100 g with an explicit
+`serving_grams_known: false` flag the frontend must surface, not hide — this
+is the majority-minority split reported to Manavi/Kaushal, corrected from an
+initial (wrong, pre-measurement) guess of "roughly 1 in 5" once the real
+number was checked against the built index rather than assumed.
+
+**Leading-zero handling.** A UPC-A scan (12 digits) and an EAN-13 scan (13
+digits) of the same physical product are the same code with/without a
+leading zero — real scanning hardware returns either. Every product is
+indexed under both its raw code and its zero-padded 13-digit canonical form
+(4,120 total keys for 4,078 unique products), so either scan resolves.
+
+**Parity.** `barcode_lookup.py` / `barcodeLookup.reference.js` ship together,
+tested against the same fixture records (26 Python checks, 24 JS checks —
+the JS count is 1 higher because it includes a JS-only default-argument
+check that Python's keyword-default already covers implicitly).
+
+Full shapes: `CONTRACT_skos-food-v1.md` §3.6. Not merged into
+`unified_food_db.json` — kept as its own artifact (`off_barcode_index.json`)
+since it is a different retrieval mode with a deliberately different (wider)
+source filter than text search draws on; a product findable by barcode is
+not guaranteed to also be findable by name search, and that asymmetry is
+documented rather than silently left for someone to discover.

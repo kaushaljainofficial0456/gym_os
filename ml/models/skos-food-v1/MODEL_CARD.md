@@ -70,6 +70,12 @@ is **AGPL-3.0**. For a closed-source backend served over a network that can
 oblige releasing the entire backend, and it offers **no data advantage** over
 NIN's own PDF — the risk buys nothing.
 
+**Barcode index (separate artifact, not part of the row counts above):**
+`off_barcode_index.json`, 4,078 unique products keyed by barcode, built from
+the same OFF bulk export with a deliberately BROADER filter than the
+text-search row above — see §5 and `CONTRACT_skos-food-v1.md` §3.6 for why a
+wider net is safe for exact-key lookup but would not be for ranked search.
+
 ## 5. Known limitations
 
 1. **Not lab-grade, and no name-based system can be.** A samosa varies ~2× on
@@ -91,6 +97,13 @@ NIN's own PDF — the risk buys nothing.
 7. **3 dishes are absent from every source** (`rogan josh`, `vindaloo`,
    `jalebi`). Tier 2 handles them when the user supplies ingredients.
 8. **Tier 3 is not ported to JS** — the JS reference covers tiers 1–2 and oil.
+9. **Barcode coverage is real but partial, and serving size more often
+   unknown than known.** 4,078 products indexed; Open Food Facts is
+   crowd-sourced so a physical product in hand can still be a miss (coverage
+   gap, not a wrong-answer risk — barcode is an exact-key lookup). Of indexed
+   products, only **45.6%** publish a usable serving size — the other 54.4%
+   fall back to 100 g, flagged via `serving_grams_known: false`, and the
+   frontend must show that rather than silently logging it.
 
 ## 6. Do not use this for
 
@@ -144,6 +157,8 @@ Count portions are deliberately **not** calibrated against INDB, because its
 |---|---|
 | `ml/tests/test_food_model.py` | **70** — database integrity, ranking, units, portions, oil, ingredient resolution, regex guards |
 | `ml/models/skos-food-v1/foodEstimate.test.js` | **42** — same invariants in JS, so Python/JS divergence fails loudly |
+| `ml/tests/test_barcode_lookup.py` | **26** — leading-zero UPC-A/EAN-13 collision, unknown-serving fallback, null-macro scaling, real-index self-consistency |
+| `ml/models/skos-food-v1/barcodeLookup.test.js` | **24** — same barcode invariants in JS, same fixtures as the Python suite |
 
 The Python suite found three real data bugs on its first run (impossible energy,
 duplicate `source_id`s, negative carbohydrate), all fixed before this release.
@@ -155,6 +170,8 @@ duplicate `source_id`s, negative carbohydrate), all fixed before this release.
 | Integration contract | `ml/docs/CONTRACT_skos-food-v1.md` |
 | Full results and method | `ml/docs/FOOD_MODEL_V1_PROGRESS.md` |
 | Database (21,353 foods) | `ml/data/processed/unified_food_db.json` |
+| Barcode index (4,078 products) | `ml/data/processed/off_barcode_index.json` |
 | JS reference implementation | `ml/models/skos-food-v1/foodEstimate.reference.js` |
+| JS barcode reference implementation | `ml/models/skos-food-v1/barcodeLookup.reference.js` |
 | Python inference | `ml/src/inference/` |
 | Benchmarks | `ml/src/validation/` |

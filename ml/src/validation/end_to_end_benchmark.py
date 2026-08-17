@@ -56,16 +56,50 @@ def clean_query(name):
     """Turn an IFCT catalogue name into what a user would actually type.
     'Rajmah, red (P haseolus vu lgaris)' -> 'rajmah red'
     Scientific names and catalogue qualifiers are dropped; this is the
-    query, not the matching key."""
+    query, not the matching key.
+
+    FOUND BY A FULL-CATALOGUE SWEEP, NOT ASSUMED: an earlier version kept
+    only the first two comma segments and blanket-stripped "dried"/"whole"
+    as generic qualifiers. That is wrong for foods where the word IS the
+    identity -- "Egg, poultry, white, raw" lost "white" entirely (query
+    became "egg poultry", a 3.8x error), and "Apricot, dried" became
+    "apricot" (a 6.5x error, since dried and fresh apricot are different
+    foods at 315 vs 48 kcal). Manually verified the SEARCH was already
+    correct for "egg white" and "dried apricot" -- the bug was only in
+    this benchmark's query construction, which understated measured
+    accuracy on foods it queried incorrectly.
+
+    IDENTITY_QUALIFIERS below are kept because dropping them changes what
+    food is being asked for. GENERIC_QUALIFIERS are dropped because they
+    describe presentation, not identity, and a real user rarely types them.
+    """
     n = unicodedata.normalize("NFKD", name or "")
     n = "".join(c for c in n if not unicodedata.combining(c))
     n = re.sub(r"\([^)]*\)", " ", n)          # drop Latin binomial
     n = n.lower()
     n = re.sub(r"[^a-z0-9\s,]", " ", n)
-    # keep only the head noun plus first qualifier -- users type short
     parts = [p.strip() for p in n.split(",") if p.strip()]
-    q = " ".join(parts[:2]) if parts else n
-    q = re.sub(r"\b(all varieties|whole|raw|fresh|dried|type|var)\b", " ", q)
+
+    identity_qualifiers = {
+        "white", "yolk", "whole", "dried", "green", "red", "black", "brown",
+        "yellow", "big", "small", "processed", "sweet", "bitter",
+    }
+    generic_qualifiers = {"all varieties", "raw", "fresh", "type", "var"}
+
+    kept = [parts[0]] if parts else []
+    for p in parts[1:]:
+        if p in generic_qualifiers:
+            continue
+        kept.append(p)
+        # stop once we have the head noun plus one real identity qualifier
+        # -- users type short queries, and this keeps the FIRST qualifier
+        # that actually distinguishes the food, wherever it falls, rather
+        # than a positional first-two-segments cut.
+        if p in identity_qualifiers or len(kept) >= 3:
+            break
+
+    q = " ".join(kept) if kept else n
+    q = re.sub(r"\b(all varieties|raw|fresh|type|var)\b", " ", q)
     return re.sub(r"\s+", " ", q).strip()
 
 

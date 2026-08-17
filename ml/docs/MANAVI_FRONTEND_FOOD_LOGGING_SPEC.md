@@ -139,6 +139,48 @@ the batch is actually eaten.
 
 ---
 
+## 5b. Barcode scan — auto-log, not search
+
+New capability, full shapes in `CONTRACT_skos-food-v1.md` §3.6. This is
+**not** a variant of the search UI — a barcode is an exact key, so there's no
+ranking, no "did we get the right food" ambiguity, and no portion picker: the
+product defines its own serving.
+
+**Flow:**
+
+1. User taps a scan button (camera). Any standard barcode-scanning
+   library works — this spec doesn't prescribe one, that's your call.
+2. On a decoded code, call the barcode lookup. Two outcomes:
+   - **Hit** → confirm screen, defaulted to **1 × the product's own serving**
+     (`quantity.servings: 1`, `quantity.grams` already resolved). Show the
+     product name, brand, and totals for that 1 serving plainly — `confidence`
+     is always `"high"` here, it's an exact match, not a ranked guess.
+   - **Miss** (404) → fall back to the existing name-search flow. Don't show
+     an error state that dead-ends; a miss just means "we don't have this
+     product yet," same tone as any other unmatched query.
+3. User can bump the servings count (steps the way tier-1 quantity already
+   does) before tapping **"Add to today."**
+
+**The one thing that needs real UI attention:** `quantity.serving_grams_known`.
+Build the `false` case first — measured, it's the **majority** case (54.4% of
+indexed products), not a rare fallback.
+
+- `false` (54.4% of products) → the product publishes no serving size at all,
+  and the response defaulted to 100 g. **Show this plainly** — e.g. *"No
+  serving size listed — showing per 100 g. Adjust if needed."* — and let the
+  user edit the grams before confirming. Do not silently log the 100 g default
+  as if it were the product's real serving; that's a guess wearing a fact's
+  clothes, same rule as `unresolved` ingredients in §5.
+- `true` (45.6% of products) → just show the resolved grams, nothing else
+  needed.
+
+A miss does not mean the product doesn't exist — Open Food Facts is
+crowd-sourced, so real products a user has in hand can still be unindexed.
+That's a coverage gap, not a wrong-answer risk; keep the name-search fallback
+easy to reach rather than treating a miss as a dead end.
+
+---
+
 ## 6. Nutrition display
 
 Beyond calories/protein/carbs/fat, results may carry:
@@ -161,6 +203,8 @@ rule: absent means unmeasured, not zero.
 4. **Never show an `unreliable` row's number** — show its reason.
 5. **Never present a tier-3 estimate as a measurement.** If the response says
    `tier: 3`, label it an estimate.
+6. **Never silently log a barcode scan's default 100 g** when
+   `serving_grams_known: false` — show the note and let the user adjust.
 
 ---
 
@@ -173,8 +217,11 @@ rule: absent means unmeasured, not zero.
 4. Cooking-state toggle
 5. Ingredient entry for tier 2
 6. Micronutrient expander
+7. Barcode scan (§5b) *(new — self-contained, doesn't depend on 1-6)*
 
-1–2 alone make the feature meaningfully better than what ships today.
+1–2 alone make the feature meaningfully better than what ships today. Barcode
+scan can be built in parallel with any of the above — it's a separate flow,
+not layered on the search UI.
 
 ---
 
