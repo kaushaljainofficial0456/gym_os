@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
 
@@ -65,19 +65,24 @@ export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, icon }) {
 }
 
 export function Ring({ value, max, size = 170, stroke = 12, color, label, sub }) {
-  const light = useLight();
   const frac = max > 0 ? Math.min(1, value / max) : 0;
   const C = 2 * Math.PI * ((size - stroke) / 2);
-  const gradId = `ringGrad-${size}`;
-  const c1 = light ? '#8C6A4D' : '#0A8A85';
-  const c2 = light ? '#B18663' : '#14C4BC';
+  // Unique per instance, not per size: two rings of the SAME size on one
+  // screen previously collided on `ringGrad-120` and the second silently
+  // inherited the first one's stops.
+  const gradId = useId();
+  // Was two hardcoded hex pairs behind a `useLight()` branch. Now the
+  // gradient reads the accent tokens, so a palette change repaints every
+  // ring in the app with no edit here — which is exactly what the peach
+  // repaint needed and did not get from the old version.
   const strokeColor = color || `url(#${gradId})`;
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={c1} /><stop offset="100%" stopColor={c2} />
+            <stop offset="0%" style={{ stopColor: 'var(--accent-deep, var(--accent))' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--accent)' }} />
           </linearGradient>
         </defs>
         <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke="var(--line)" strokeWidth={stroke} />
@@ -94,9 +99,9 @@ export function Ring({ value, max, size = 170, stroke = 12, color, label, sub })
 }
 
 export function Bar({ value, max, color, label, right, height = 'h-2' }) {
-  const light = useLight();
   const frac = max > 0 ? Math.min(1, value / max) : 0;
-  const barColor = color || (light ? 'linear-gradient(92deg,#8C6A4D,#B18663)' : 'linear-gradient(92deg,#0A8A85,#14C4BC)');
+  // Same reasoning as Ring: token-driven, so it follows the palette.
+  const barColor = color || 'var(--accent-grad)';
   return (
     <div>
       {(label || right) && (

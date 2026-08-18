@@ -3,50 +3,83 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════
+   TYPEFACES — self-hosted, see index.html for why
+
+   TWO faces, each with one job, because a premium UI reads as premium
+   through restraint rather than variety:
+
+   SATOSHI (Indian Type Foundry) carries everything functional — UI,
+   labels, and above all NUMBERS. It has true tabular figures, which is
+   what stops a counting animation from making the whole row jitter as
+   digit widths change. Weight range 400-900 is doing the work that a
+   second sans would otherwise be brought in to do.
+
+   SENTIENT is a serif, used for exactly one thing: the greeting line at
+   the top of a screen. It is the human sentence on an otherwise numeric
+   page. It is deliberately NOT used for data, headings, or buttons — a
+   serif on a metric reads as decorative, and decoration on a number is
+   what makes an interface look designed-at rather than designed.
+
+   `font-display: swap` is set on Satoshi (text should never be invisible)
+   but `block` on Sentient: it appears once, large, and a visible swap
+   from a fallback serif to Sentient at 40px is more distracting than a
+   ~100 ms wait on a preloaded, self-hosted file.
+   ═══════════════════════════════════════════════ */
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-900.woff2') format('woff2'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Sentient'; src: url('/fonts/sentient-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: 'Sentient'; src: url('/fonts/sentient-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: block; }
+
+/* ═══════════════════════════════════════════════
    DARK MODE (default — premium SK OS signature)
    ═══════════════════════════════════════════════ */
 :root {
   color-scheme: dark;
-  --bg: #080C10;
-  --bg2: #0E1418;
-  --panel: #111920;
-  --panel2: #162128;
-  --line: rgba(255,255,255,.07);
-  --ink: #F0F4F3;
-  --mute: rgba(240,244,243,.55);
-  --faint: rgba(240,244,243,.30);
-  --accent: #14C4BC;
-  --accent-soft: rgba(20,196,188,.10);
-  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
-  --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
+  /* Deep teal-charcoal. Chosen as the COMPLEMENT of the light theme's
+     peach: peach sits around 25deg hue, so a desaturated teal (~190deg)
+     is its opposite on the wheel. That is what makes the coral accent
+     glow here instead of muddying, and it is why the two themes read as
+     one palette seen under different light rather than two palettes. */
+  --bg: #0D1719;
+  --bg2: #132126;
+  --panel: #17282C;
+  --panel2: #1E343A;
+  --line: rgba(255,255,255,.08);
+  --ink: #F5EBE3;                      /* warm off-white, not pure grey */
+  --mute: rgba(245,235,227,.58);
+  --faint: rgba(245,235,227,.32);
+  --accent: #FF9E6D;                   /* peach-coral */
+  --accent-deep: #E8734A;              /* the gradient's other end */
+  --accent-soft: rgba(255,158,109,.10);
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.045);
+  --card-gradient: linear-gradient(168deg, rgba(255,255,255,.032), rgba(255,255,255,.008) 62%);
 
-  /* ── Design-system tokens (src/design/tokens.js) ──
-     CHANNEL form (`R G B`, no rgb() wrapper) is required so Tailwind can
-     inject opacity modifiers: `bg-accent/30` compiles to
-     `rgb(var(--accent-rgb) / .3)`. A hex value cannot do that.
-     NOTE: --line/--mute/--faint are deliberately NOT channel-based; they
-     bake in an alpha and are consumed both bare and with modifiers. See
-     the long note in src/design/tokens.js before changing them. */
-  --accent-rgb: 20 196 188;
-  --accent-deep-rgb: 10 138 133;
-  --accent-contrast: #FFFFFF;
-  --bg-rgb: 8 12 16;
-  --bg2-rgb: 14 20 24;
-  --panel-rgb: 17 25 32;
-  --panel2-rgb: 22 33 40;
-  --ink-rgb: 240 244 243;
-  --cyan-rgb: 56 216 255;
-  --violet-rgb: 160 128 255;
+  /* Channel tokens -- see src/design/tokens.js for why these are `R G B`
+     and not hex (Tailwind opacity modifiers). */
+  --accent-rgb: 255 158 109;
+  --accent-deep-rgb: 232 115 74;
+  --accent-contrast: #2A160D;          /* dark ink ON the light accent */
+  --bg-rgb: 13 23 25;
+  --bg2-rgb: 19 33 38;
+  --panel-rgb: 23 40 44;
+  --panel2-rgb: 30 52 58;
+  --ink-rgb: 245 235 227;
+  --cyan-rgb: 90 200 214;
+  --violet-rgb: 176 150 220;
   --good-rgb: 52 211 153;
   --warn-rgb: 251 191 36;
   --bad-rgb: 248 113 113;
 
-  /* The brand gradient, defined ONCE. Previously this exact gradient was
-     hardcoded in .btn-primary, .tab.active and .navlink.active, then
-     overridden three more times with !important for light mode. */
-  --accent-grad: linear-gradient(135deg, #0A8A85, #14C4BC);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(10,138,133,.45);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(10,138,133,.55);
+  /* Neutral tint used for hover/fill washes. One token replaces every
+     `.dark X { background: rgba(255,255,255,.04) }` /
+     `.light X { background: rgba(91,70,54,.03) }` pair. */
+  --tint-rgb: 255 255 255;
+
+  --accent-grad: linear-gradient(135deg, #E8734A, #FF9E6D);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(232,115,74,.45);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(232,115,74,.6);
 }
 
 /* ═══════════════════════════════════════════════
@@ -54,47 +87,57 @@
    ═══════════════════════════════════════════════ */
 .light {
   color-scheme: light;
-  --bg: #F7F3EE;
-  --bg2: #EFE6DE;
-  --panel: #FFFFFF;
-  --panel2: #F5EDE4;
-  --line: #E6D9C8;
-  --ink: #3D3026;
-  --mute: #756657;
-  --faint: #9A8979;
-  --accent: #8C6A4D;
-  --accent-soft: rgba(140,106,77,.10);
-  --card-shadow: 0 1px 2px rgba(91,70,54,.04), 0 4px 12px rgba(91,70,54,.03);
+  /* Light peach. Deliberately warm all the way through -- surfaces are
+     tinted peach rather than white-with-a-peach-header, because a pure
+     #FFF panel on a peach page reads as a bug, not as contrast. */
+  --bg: #FFF3EA;
+  --bg2: #FFE8DA;
+  --panel: #FFFDFB;
+  --panel2: #FFF1E6;
+  --line: #F2DCCB;
+  --ink: #3B2A22;
+  --mute: #7D6355;
+  --faint: #A89285;
+  --accent: #D2603A;                   /* terracotta: the peach, deepened
+                                          until it passes contrast on a
+                                          peach ground */
+  --accent-deep: #E8834F;              /* NOTE: lighter than --accent here.
+                                          "deep" means the other end of the
+                                          brand gradient, not "darker" --
+                                          light mode runs terracotta ->
+                                          peach, dark runs coral -> peach. */
+  --accent-soft: rgba(210,96,58,.10);
+  --card-shadow: 0 1px 2px rgba(120,76,52,.05), 0 4px 14px rgba(120,76,52,.045);
   --card-gradient: none;
 
-  /* ── Design-system tokens, light theme ──
-     Only the VALUES change here. No Tailwind class is overridden and no
-     !important is needed, because every consumer references the variable.
-     This is the pattern that should eventually replace the ~102 `.light
-     .some-class { ... !important }` rules further down this file. */
-  --accent-rgb: 140 106 77;
-  --accent-deep-rgb: 177 134 99;
+  --accent-rgb: 210 96 58;
+  --accent-deep-rgb: 181 79 45;
   --accent-contrast: #FFFFFF;
-  --bg-rgb: 247 243 238;
-  --bg2-rgb: 239 230 222;
-  --panel-rgb: 255 255 255;
-  --panel2-rgb: 245 237 228;
-  --ink-rgb: 61 48 38;
-  --cyan-rgb: 62 124 140;
-  --violet-rgb: 122 106 156;
-  /* Status colours intentionally identical across themes -- "danger" must
-     not change hue with the theme or users learn the colour twice. */
+  --bg-rgb: 255 243 234;
+  --bg2-rgb: 255 232 218;
+  --panel-rgb: 255 253 251;
+  --panel2-rgb: 255 241 230;
+  --ink-rgb: 59 42 34;
+  --cyan-rgb: 42 122 133;
+  --violet-rgb: 122 96 156;
+  /* Status hues stay put across themes -- "danger" must not change colour
+     with the theme or users learn it twice. */
 
-  --accent-grad: linear-gradient(135deg, #8C6A4D, #B18663);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(140,106,77,.30);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(140,106,77,.40);
+  --tint-rgb: 138 92 66;               /* warm brown wash, not grey */
+
+  --accent-grad: linear-gradient(135deg, #D2603A, #E8834F);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(210,96,58,.32);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(210,96,58,.42);
 }
 
 html, body, #root { min-height: 100%; }
 
 body {
   @apply antialiased;
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+  /* Tabular figures app-wide: this is a numbers product, and proportional
+     digits make every counter and table column shift width as it ticks. */
+  font-variant-numeric: tabular-nums;
   background-color: var(--bg);
   color: var(--ink);
   overflow-x: hidden;
@@ -104,144 +147,68 @@ body {
 }
 
 /* ═══════════════════════════════════════════════
-   LIGHT MODE — COMPREHENSIVE overrides
-   Covers: text, bg, border, accent/brand colors,
-   gradients, hover states
+   LIGHT MODE — the SHORT list
+
+   This block used to be ~102 `!important` rules re-stating every brand
+   colour in brown. Almost all of them are now GONE, because the colours
+   they overrode are token-driven: `bg-panel`, `text-ink`, `text-gold`,
+   `border-ember` and friends resolve through `rgb(var(--x-rgb) / a)`, so
+   redefining the variable in `.light` above already themes them. Keeping
+   the overrides would have meant editing two places for every palette
+   change -- which is exactly what made the peach repaint expensive.
+
+   What is left is only what a token CANNOT reach:
+     1. `bg-white/*` and `bg-black/*` — literal colours, not tokens. A
+        white wash on a peach page has to become a WARM wash or the
+        surface goes grey and dead.
+     2. `line` / `mute` / `faint` — the documented alpha-baked exception
+        (see src/design/tokens.js).
+     3. Recharts internals, which render their own SVG.
    ═══════════════════════════════════════════════ */
 
-/* ── Text colors ── */
-.light .text-ink { color: #3D3026 !important; }
-.light .text-ink\/80 { color: rgba(61,48,38,.80) !important; }
-.light .text-mute { color: #756657 !important; }
-.light .text-faint { color: #9A8979 !important; }
-.light .text-bg { color: #3D3026 !important; }
-.light .\!text-mute { color: #756657 !important; }
+/* ── 1. White/black washes → warm peach-brown ──
+   Matches --tint-rgb (138 92 66). Any `bg-white/x` in a component is
+   really asking for "a faint wash of the foreground colour"; on a warm
+   ground that has to be brown, not grey. */
+.light .bg-white\/\[\.01\] { background-color: rgba(138,92,66,.018) !important; }
+.light .bg-white\/\[\.02\] { background-color: rgba(138,92,66,.028) !important; }
+.light .bg-white\/\[\.03\] { background-color: rgba(138,92,66,.038) !important; }
+.light .bg-white\/\[\.04\] { background-color: rgba(138,92,66,.045) !important; }
+.light .bg-white\/\[\.05\] { background-color: rgba(138,92,66,.05) !important; }
+.light .bg-white\/\[\.06\] { background-color: rgba(138,92,66,.058) !important; }
+.light .bg-white\/5  { background-color: rgba(138,92,66,.04) !important; }
+.light .bg-white\/8  { background-color: rgba(138,92,66,.06) !important; }
+.light .bg-white\/10 { background-color: rgba(138,92,66,.07) !important; }
+/* High-alpha whites stay near-white: these are real surfaces (sheets,
+   popovers), not washes, so they take the panel tint instead. */
+.light .bg-white\/80 { background-color: rgba(255,253,251,.88) !important; }
+.light .bg-white\/90 { background-color: rgba(255,253,251,.94) !important; }
+.light .bg-white\/95 { background-color: rgba(255,253,251,.97) !important; }
+.light .border-white\/20 { border-color: rgba(138,92,66,.18) !important; }
+.light .hover\:bg-white\/\[\.03\]:hover { background-color: rgba(138,92,66,.035) !important; }
+.light .hover\:bg-white\/\[\.05\]:hover { background-color: rgba(138,92,66,.05) !important; }
+.light .hover\:border-white\/15:hover { border-color: rgba(210,96,58,.22) !important; }
 
-/* ── Background: ivory/cream surfaces ── */
-.light .bg-bg { background-color: #F7F3EE !important; }
-.light .bg-bg\/95 { background-color: rgba(247,243,238,.95) !important; }
-.light .bg-bg\/80 { background-color: rgba(247,243,238,.80) !important; }
-.light .bg-bg\/60 { background-color: rgba(247,243,238,.60) !important; }
-.light .bg-bg\/50 { background-color: rgba(247,243,238,.50) !important; }
-.light .bg-bg\/40 { background-color: rgba(247,243,238,.40) !important; }
-.light .bg-bg\/70 { background-color: rgba(247,243,238,.70) !important; }
-.light .\!bg-bg\/70 { background-color: rgba(247,243,238,.70) !important; }
-.light .bg-bg2 { background-color: #EFE6DE !important; }
-.light .bg-panel { background-color: #FFFFFF !important; }
-.light .bg-panel\/95 { background-color: rgba(255,255,255,.95) !important; }
-.light .bg-panel2 { background-color: #F5EDE4 !important; }
+/* Scrims over content. Warm and much lighter than the dark theme's --
+   a 70% black veil on a peach page reads as a power cut. */
+.light .bg-black\/70 { background-color: rgba(59,42,34,.34) !important; }
+.light .bg-black\/60 { background-color: rgba(59,42,34,.28) !important; }
 
-/* ── White-based backgrounds → warm tints ── */
-.light .bg-white\/\[\.01\] { background-color: rgba(91,70,54,.015) !important; }
-.light .bg-white\/\[\.02\] { background-color: rgba(91,70,54,.025) !important; }
-.light .bg-white\/\[\.03\] { background-color: rgba(91,70,54,.035) !important; }
-.light .bg-white\/\[\.04\] { background-color: rgba(91,70,54,.04) !important; }
-.light .bg-white\/\[\.05\] { background-color: rgba(91,70,54,.045) !important; }
-.light .bg-white\/\[\.06\] { background-color: rgba(91,70,54,.05) !important; }
-.light .bg-white\/5 { background-color: rgba(91,70,54,.035) !important; }
-.light .bg-white\/8 { background-color: rgba(91,70,54,.055) !important; }
-.light .bg-white\/10 { background-color: rgba(91,70,54,.06) !important; }
-.light .bg-white\/80 { background-color: rgba(255,255,255,.85) !important; }
-.light .bg-white\/90 { background-color: rgba(255,255,255,.92) !important; }
-.light .bg-white\/95 { background-color: rgba(255,255,255,.95) !important; }
-.light .bg-mute { background-color: rgba(117,102,87,.55) !important; }
+/* ── 2. Alpha-baked tokens (the documented exception) ── */
+.light .border-line { border-color: #F2DCCB !important; }
+.light .border-line\/40 { border-color: rgba(242,220,203,.40) !important; }
+.light .border-line\/50 { border-color: rgba(242,220,203,.50) !important; }
+.light .border-line\/60 { border-color: rgba(242,220,203,.60) !important; }
+.light .\!border-line { border-color: #F2DCCB !important; }
+.light .text-mute  { color: #7D6355 !important; }
+.light .\!text-mute { color: #7D6355 !important; }
+.light .text-faint { color: #A89285 !important; }
+.light .bg-mute { background-color: rgba(125,99,85,.55) !important; }
 
-/* ── Borders ── */
-.light .border-line { border-color: #E6D9C8 !important; }
-.light .border-line\/40 { border-color: rgba(230,217,200,.40) !important; }
-.light .border-line\/50 { border-color: rgba(230,217,200,.50) !important; }
-.light .border-line\/60 { border-color: rgba(230,217,200,.60) !important; }
-.light .\!border-line { border-color: #E6D9C8 !important; }
-.light .border-white\/20 { border-color: rgba(230,217,200,.20) !important; }
-
-/* ── Dark overlays ── */
-.light .bg-black\/70 { background-color: rgba(61,48,38,.30) !important; }
-.light .bg-black\/60 { background-color: rgba(61,48,38,.25) !important; }
-
-/* ═══════════════════════════════════════════════
-   CRITICAL: Replace teal/cyan brand accents
-   with warm brown/taupe in light mode
-   ═══════════════════════════════════════════════ */
-
-/* ── Gold accent (primary brand) → brown ── */
-.light .text-gold { color: #8C6A4D !important; }
-.light .\!text-gold { color: #8C6A4D !important; }
-.light .border-gold { border-color: #8C6A4D !important; }
-.light .border-gold\/20 { border-color: rgba(140,106,77,.20) !important; }
-.light .border-gold\/25 { border-color: rgba(140,106,77,.25) !important; }
-.light .border-gold\/30 { border-color: rgba(140,106,77,.30) !important; }
-.light .border-gold\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .border-gold\/50 { border-color: rgba(140,106,77,.50) !important; }
-.light .border-gold\/60 { border-color: rgba(140,106,77,.60) !important; }
-.light .\!border-gold\/30 { border-color: rgba(140,106,77,.30) !important; }
-.light .\!border-gold\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .\!border-gold\/50 { border-color: rgba(140,106,77,.50) !important; }
-.light .bg-gold { background-color: #8C6A4D !important; }
-.light .bg-gold\/10 { background-color: rgba(140,106,77,.10) !important; }
-.light .bg-gold\/5 { background-color: rgba(140,106,77,.05) !important; }
-.light .\!bg-gold\/10 { background-color: rgba(140,106,77,.10) !important; }
-.light .bg-gold\/\[\.04\] { background-color: rgba(140,106,77,.04) !important; }
-.light .hover\:border-gold\/40:hover { border-color: rgba(140,106,77,.40) !important; }
-.light .hover\:border-gold\/50:hover { border-color: rgba(140,106,77,.50) !important; }
-.light .hover\:bg-gold\/10:hover { background-color: rgba(140,106,77,.10) !important; }
-.light .hover\:text-gold:hover { color: #8C6A4D !important; }
-.light .group:hover .group-hover\:border-gold\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .group:hover .group-hover\:text-gold { color: #8C6A4D !important; }
-
-/* ── Ember accent → brown ── */
-.light .text-ember { color: #8C6A4D !important; }
-.light .border-ember\/30 { border-color: rgba(140,106,77,.30) !important; }
-.light .border-ember\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .bg-ember\/10 { background-color: rgba(140,106,77,.10) !important; }
-.light .bg-ember\/5 { background-color: rgba(140,106,77,.05) !important; }
-.light .bg-ember\/8 { background-color: rgba(140,106,77,.08) !important; }
-.light .hover\:bg-ember\/20:hover { background-color: rgba(140,106,77,.15) !important; }
-
-/* ── Cyan accent → muted warm ── */
-.light .text-cyanx { color: #9A8979 !important; }
-.light .\!text-cyanx { color: #9A8979 !important; }
-.light .border-cyanx\/25 { border-color: rgba(154,137,121,.25) !important; }
-.light .border-cyanx\/30 { border-color: rgba(154,137,121,.30) !important; }
-.light .\!border-cyanx\/50 { border-color: rgba(154,137,121,.50) !important; }
-.light .bg-cyanx\/10 { background-color: rgba(154,137,121,.10) !important; }
-.light .bg-cyanx\/5 { background-color: rgba(154,137,121,.05) !important; }
-
-/* ── Violet accent → muted warm ── */
-.light .text-violetx { color: #9A8979 !important; }
-.light .border-violetx\/30 { border-color: rgba(154,137,121,.25) !important; }
-.light .border-violetx\/40 { border-color: rgba(154,137,121,.35) !important; }
-.light .bg-violetx\/10 { background-color: rgba(154,137,121,.08) !important; }
-.light .bg-violetx\/5 { background-color: rgba(154,137,121,.04) !important; }
-
-/* ── Gradient stops: teal → warm brown ── */
-.light .from-ember { --tw-gradient-from: #8C6A4D !important; }
-.light .from-ember\/20 { --tw-gradient-from: rgba(140,106,77,.20) !important; }
-.light .from-ember\/25 { --tw-gradient-from: rgba(140,106,77,.25) !important; }
-.light .from-ember\/30 { --tw-gradient-from: rgba(140,106,77,.25) !important; }
-.light .from-ember\/35 { --tw-gradient-from: rgba(140,106,77,.25) !important; }
-.light .from-ember\/40 { --tw-gradient-from: rgba(140,106,77,.30) !important; }
-.light .to-gold { --tw-gradient-to: #B18663 !important; }
-.light .to-gold\/10 { --tw-gradient-to: rgba(177,134,99,.10) !important; }
-.light .to-gold\/15 { --tw-gradient-to: rgba(177,134,99,.12) !important; }
-.light .to-gold\/20 { --tw-gradient-to: rgba(177,134,99,.15) !important; }
-.light .to-gold\/25 { --tw-gradient-to: rgba(177,134,99,.18) !important; }
-.light .from-bg2 { --tw-gradient-from: #EFE6DE !important; }
-.light .to-panel { --tw-gradient-to: #FFFFFF !important; }
-.light .from-bg\/55 { --tw-gradient-from: rgba(247,243,238,.55) !important; }
-.light .via-bg\/25 { --tw-gradient-via: rgba(247,243,238,.25) !important; }
-.light .to-bg\/80 { --tw-gradient-to: rgba(247,243,238,.80) !important; }
-
-/* ── Hover overrides ── */
-.light .hover\:bg-white\/\[\.03\]:hover { background-color: rgba(91,70,54,.025) !important; }
-.light .hover\:bg-white\/\[\.05\]:hover { background-color: rgba(91,70,54,.04) !important; }
-.light .hover\:border-white\/15:hover { border-color: rgba(140,106,77,.12) !important; }
-.light .hover\:text-ink:hover { color: #3D3026 !important; }
-.light .hover\:text-bad:hover { color: #DC6B6B !important; }
-
-/* ── Chart grid lines ── */
+/* ── 3. Recharts draws its own SVG and cannot see Tailwind ── */
 .light .recharts-cartesian-grid-horizontal line,
 .light .recharts-cartesian-grid-vertical line {
-  stroke: #E6D9C8 !important;
+  stroke: #F2DCCB !important;
 }
 
 /* ═══════════════════════════════════════════════
@@ -253,11 +220,13 @@ body {
   inset: -20%;
   z-index: -2;
   pointer-events: none;
+  /* Token-driven: repainting the palette now re-tints the whole ambient
+     field for free, instead of needing four more hex edits. */
   background:
-    radial-gradient(48rem 34rem at 12% -10%, rgba(10,138,133,.10), transparent 60%),
-    radial-gradient(40rem 30rem at 94% 2%, rgba(20,196,188,.07), transparent 58%),
-    radial-gradient(50rem 36rem at 38% 122%, rgba(20,196,188,.04), transparent 60%),
-    radial-gradient(28rem 20rem at 78% 62%, rgba(56,216,255,.025), transparent 62%);
+    radial-gradient(48rem 34rem at 12% -10%, rgb(var(--accent-deep-rgb) / .12), transparent 60%),
+    radial-gradient(40rem 30rem at 94% 2%, rgb(var(--accent-rgb) / .08), transparent 58%),
+    radial-gradient(50rem 36rem at 38% 122%, rgb(var(--accent-rgb) / .05), transparent 60%),
+    radial-gradient(28rem 20rem at 78% 62%, rgb(var(--cyan-rgb) / .03), transparent 62%);
   animation: ambientDrift 52s ease-in-out infinite alternate;
 }
 
@@ -276,17 +245,17 @@ body {
   100% { transform: translate3d(2%, 1%, 0) scale(1.04); }
 }
 
-::selection { background: rgba(20,196,188,.30); }
-.light ::selection { background: rgba(140,106,77,.15); }
+/* Token-driven -- the light-mode variants these replaced were the last
+   two places the old brown palette was still written by hand. */
+::selection { background: rgb(var(--accent-rgb) / .28); color: var(--ink); }
 
-/* ── Focus states ── */
+/* ── Focus states ──
+   Accessibility-critical, so this is never removed for aesthetics: it is
+   the only thing telling a keyboard user where they are. */
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid rgba(20,196,188,.8);
+  outline: 2px solid rgb(var(--accent-rgb) / .85);
   outline-offset: 2px;
   border-radius: 10px;
-}
-.light button:focus-visible, .light a:focus-visible, .light input:focus-visible {
-  outline-color: #8C6A4D;
 }
 
 /* ═══════════════════════════════════════════════
@@ -315,13 +284,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes checkBounce { 0% { transform: scale(0.5); opacity: 0; } 55% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
 .anim-checkBounce { animation: checkBounce .3s cubic-bezier(.22,.8,.3,1) both; }
 
-@keyframes confirmPulse { 0% { box-shadow: 0 0 0 0 rgba(20,196,188,.45); } 70% { box-shadow: 0 0 0 10px rgba(20,196,188,0); } 100% { box-shadow: 0 0 0 0 rgba(20,196,188,0); } }
+@keyframes confirmPulse { 0% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / .45); } 70% { box-shadow: 0 0 0 10px rgb(var(--accent-rgb) / 0); } 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / 0); } }
 .anim-confirmPulse { animation: confirmPulse .5s ease both; }
 
 @keyframes confirmPop { 0% { transform: scale(1); } 30% { transform: scale(1.06); } 100% { transform: scale(1); } }
 .anim-confirmPop { animation: confirmPop .35s cubic-bezier(.22,.8,.3,1) both; }
 
-.shadow-glow { box-shadow: 0 0 18px rgba(20,196,188,.4), 0 0 0 1px rgba(20,196,188,.22); }
+.shadow-glow { box-shadow: 0 0 18px rgb(var(--accent-rgb) / .4), 0 0 0 1px rgb(var(--accent-rgb) / .22); }
 
 /* ═══════════════════════════════════════════════
    COMPONENT LAYER
@@ -337,15 +306,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .dark .card { background-image: var(--card-gradient); }
   .light .card { background-image: none; }
 
-  .card-hover:hover { transform: translateY(-2px); }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgb(var(--accent-rgb) / .18);
+  }
   .dark .card-hover:hover {
-    border-color: rgba(20,196,188,.15);
-    box-shadow: 0 32px 64px -28px rgba(0,0,0,.85), 0 0 0 1px rgba(20,196,188,.1), 0 0 40px -18px rgba(20,196,188,.12);
+    box-shadow: 0 32px 64px -28px rgba(0,0,0,.85),
+                0 0 0 1px rgb(var(--accent-rgb) / .10),
+                0 0 40px -18px rgb(var(--accent-rgb) / .14);
   }
-  .light .card-hover:hover {
-    border-color: rgba(140,106,77,.15);
-    box-shadow: 0 4px 20px rgba(91,70,54,.06);
-  }
+  .light .card-hover:hover { box-shadow: 0 6px 22px rgba(120,76,52,.08); }
 
   .kicker {
     @apply font-grotesk text-[11px] font-semibold uppercase tracking-[.16em] flex items-center gap-2 mb-3;
@@ -358,11 +328,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     border: 1px solid var(--line);
     color: var(--ink);
   }
-  .dark .btn { background: rgba(255,255,255,.04); }
-  .light .btn { background: rgba(91,70,54,.03); }
+  /* One rule, both themes: --tint-rgb is white in dark, warm brown in
+     light, so the wash follows the palette automatically. */
+  .btn { background: rgb(var(--tint-rgb) / .045); }
   .btn:hover { border-color: var(--accent); }
-  .dark .btn:hover { background: rgba(255,255,255,.08); }
-  .light .btn:hover { background: rgba(91,70,54,.05); }
+  .btn:hover { background: rgb(var(--tint-rgb) / .085); }
   .btn:active { transform: scale(.97); }
 
   .btn-primary {
@@ -388,8 +358,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold px-3 py-2 rounded-full transition-colors;
     color: var(--mute);
   }
-  .dark .btn-ghost:hover { color: var(--ink); background: rgba(255,255,255,.05); }
-  .light .btn-ghost:hover { color: var(--ink); background: rgba(91,70,54,.04); }
+  .btn-ghost:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .05); }
 
   .input {
     @apply w-full rounded-xl px-3.5 py-2.5 text-sm font-grotesk transition-all duration-200;
@@ -409,8 +378,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     border: 1px solid var(--line);
     color: var(--mute);
   }
-  .dark .chip { background: rgba(255,255,255,.03); }
-  .light .chip { background: rgba(91,70,54,.04); }
+  .chip { background: rgb(var(--tint-rgb) / .04); }
 
   .tab {
     @apply relative font-grotesk text-xs font-semibold px-3.5 py-2 rounded-full transition-colors whitespace-nowrap;
@@ -427,8 +395,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-grotesk text-[13px] font-medium transition-all duration-200;
     color: var(--mute);
   }
-  .dark .navlink:hover { color: var(--ink); background: rgba(255,255,255,.04); }
-  .light .navlink:hover { color: var(--ink); background: rgba(91,70,54,.04); }
+  .navlink:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .045); }
   /* Token-driven tint: the channel vars let one rule serve both themes,
      replacing a `.dark` + `.light` pair. */
   .navlink.active {

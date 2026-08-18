@@ -26,7 +26,7 @@
  * than one that honours it in neither -- it looks fixed while still
  * shipping the problem.
  */
-import { forwardRef, useEffect } from 'react';
+import { forwardRef, useCallback, useEffect, useRef } from 'react';
 import {
   motion,
   AnimatePresence,
@@ -88,6 +88,21 @@ export const staggerContainer = (step = 0.06) => ({
  * API-compatible with components/motion.jsx's `Reveal` (children, delay in
  * MS, as, className, style, once) so it is a drop-in.
  */
+/**
+ * Cache for `motion.create()`. This MUST be memoised outside render:
+ * motion.create returns a NEW component type on every call, and a new type
+ * makes React unmount and remount the whole subtree each render — which
+ * showed up as a <Link> that lost its focus ring and re-ran its entry
+ * animation on every parent state change.
+ */
+const motionComponentCache = new Map();
+function resolveMotionTag(as, fallback) {
+  if (typeof as === 'string') return motion[as] || fallback;
+  if (!as) return fallback;
+  if (!motionComponentCache.has(as)) motionComponentCache.set(as, motion.create(as));
+  return motionComponentCache.get(as);
+}
+
 export function Reveal({
   children,
   delay = 0,
@@ -99,7 +114,7 @@ export function Reveal({
   ...rest
 }) {
   const reduced = useReducedMotion();
-  const Tag = motion[as] || motion.div;
+  const Tag = resolveMotionTag(as, motion.div);
 
   // Reduced motion: render the destination state, no transition at all.
   if (reduced) {
@@ -131,7 +146,7 @@ export function Reveal({
  */
 export function Stagger({ children, step = 70, className, as = 'div', ...rest }) {
   const reduced = useReducedMotion();
-  const Tag = motion[as] || motion.div;
+  const Tag = resolveMotionTag(as, motion.div);
   const kids = Array.isArray(children) ? children : [children];
 
   if (reduced) {
@@ -251,7 +266,12 @@ export const Pressable = forwardRef(function Pressable(
   ref
 ) {
   const reduced = useReducedMotion();
-  const Tag = motion[as] || motion.button;
+  // `as` may be a COMPONENT, not just a tag name -- a pressable router
+  // <Link> is a completely ordinary need. The previous `motion[as]` lookup
+  // returned undefined for a component and silently fell back to
+  // motion.button, which rendered a <button> and dropped the `to` prop on
+  // the floor: the control looked right and navigated nowhere.
+  const Tag = resolveMotionTag(as, motion.button);
   return (
     <Tag
       ref={ref}
@@ -278,12 +298,32 @@ export const Pressable = forwardRef(function Pressable(
  */
 export function AnimatedNumber({ value, decimals = 0, className }) {
   const reduced = useReducedMotion();
-  const mv = useSpring(0, spring.precise);
-  const text = useTransform(mv, (v) =>
-    Number(v).toLocaleString('en-US', {
+  const ref = useRef(null);
+  /**
+   * Seeded AT the value, not at 0.
+   *
+   * Two reasons, one a bug and one a taste call:
+   *
+   * BUG: starting at 0 meant the mount effect wrote `format(mv.get())` --
+   * i.e. "0" -- over the correct first paint. Any time frame delivery was
+   * throttled (background tab, hidden pane, low-power mode) the spring
+   * never ran and the number stayed 0 permanently. "2,550 kcal left"
+   * silently rendered as "0 kcal left", which is worse than not animating.
+   *
+   * TASTE: counting every figure up from zero on every mount means the
+   * number is unreadable for the first ~700 ms of every page view, and it
+   * is the loudest signal of animation applied for its own sake. The
+   * value should be RIGHT on first paint and animate only when it
+   * genuinely changes -- logging a meal, finishing a set.
+   */
+  const mv = useSpring(value, spring.precise);
+
+  const format = useCallback(
+    (v) => Number(v).toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
-    })
+    }),
+    [decimals]
   );
 
   // Retarget the spring whenever the value changes. In an effect, not
@@ -293,15 +333,35 @@ export function AnimatedNumber({ value, decimals = 0, className }) {
     mv.set(value);
   }, [mv, value]);
 
-  if (reduced) {
-    return (
-      <span className={className}>
-        {Number(value).toLocaleString('en-US', {
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-        })}
-      </span>
-    );
-  }
-  return <motion.span className={className}>{text}</motion.span>;
+  /**
+   * Write the frames to the DOM node ourselves rather than rendering the
+   * MotionValue as a child.
+   *
+   * FOUND IN THE BROWSER, NOT BY READING: the previous version was
+   * `<motion.span>{text}</motion.span>` with `text` a useTransform output.
+   * That is the documented shorthand, but on framer-motion 11.18 it
+   * rendered the value's INITIAL state as a static string and never
+   * subscribed -- so every counter on the home screen sat permanently at
+   * "0" while the spring animated correctly underneath. Calories left,
+   * goal percent and the gym count all silently displayed zero.
+   *
+   * Subscribing by hand is also the cheaper path: textContent is written
+   * per frame WITHOUT a React re-render, which is what you want for a
+   * value updating at 60 fps.
+   */
+  useEffect(() => {
+    if (!ref.current) return undefined;
+    // Subscribe only. No initial write: React already rendered the correct
+    // value, and overwriting it here is what caused the stuck-at-zero bug.
+    return mv.on('change', (v) => {
+      // The node can outlive the subscription by a frame during unmount.
+      if (ref.current) ref.current.textContent = format(v);
+    });
+  }, [mv, format]);
+
+  // Reduced motion: the final value, rendered by React, no spring at all.
+  if (reduced) return <span className={className}>{format(value)}</span>;
+
+  return <span ref={ref} className={className}>{format(value)}</span>;
 }
+

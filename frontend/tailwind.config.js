@@ -55,11 +55,19 @@ export default {
         mute: 'rgba(240,244,243,.55)',
         faint: 'rgba(240,244,243,.30)',
       },
+      /* The four legacy names are KEPT as aliases rather than renamed,
+         because ~40 files use `font-display` / `font-grotesk` today and a
+         rename would be a 40-file diff whose only effect is churn. They
+         now all resolve to Satoshi, so the type change lands everywhere at
+         once. `font-serif` is the new one, and it is intentionally the only
+         way to reach Sentient — see the note in theme.css about keeping the
+         serif off data. */
       fontFamily: {
-        brand: ['"DM Sans"', 'sans-serif'],
-        display: ['"DM Sans"', 'sans-serif'],
-        grotesk: ['"Plus Jakarta Sans"', 'sans-serif'],
-        body: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        brand: ['Satoshi', 'system-ui', 'sans-serif'],
+        display: ['Satoshi', 'system-ui', 'sans-serif'],
+        grotesk: ['Satoshi', 'system-ui', 'sans-serif'],
+        body: ['Satoshi', 'system-ui', 'sans-serif'],
+        serif: ['Sentient', 'Georgia', 'serif'],
       },
       borderRadius: {
         card: '16px',

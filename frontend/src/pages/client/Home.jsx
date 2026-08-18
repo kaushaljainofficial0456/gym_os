@@ -1,28 +1,85 @@
+/**
+ * CLIENT HOME — rebuilt on the design system.
+ *
+ * WHAT CHANGED AND WHY, because "make it premium" is not a spec:
+ *
+ * 1. FIVE STACKED CARDS -> THREE BANDS. The old screen was five `card p-5`
+ *    boxes in a column, each with its own uppercase micro-label. When every
+ *    block has identical weight, nothing is primary and the eye has to read
+ *    all five to find the one thing it came for. Now: a hero band (what am I
+ *    doing today), a fuel band (how is my eating), and a quiet pair of
+ *    tiles. Same information, one obvious entry point.
+ *
+ * 2. EMOJI REMOVED. The old primary button read "🔥 START WORKOUT" and rest
+ *    day read "Rest day 🛌". Emoji in a product surface renders differently
+ *    on every platform, cannot be colour-managed against the palette, and is
+ *    the single fastest way to make an interface look improvised.
+ *
+ * 3. THE HERO NUMBER IS THE SESSION, NOT A METRIC. Users open this screen to
+ *    act, not to audit. So the largest type is the workout name, and the
+ *    primary action sits directly under it.
+ *
+ * 4. 3D IS SCOPED TO THE HERO ONLY. One ambient field behind the top band,
+ *    faded out before the content starts. 3D behind a list of macros would
+ *    cost battery to make numbers harder to read.
+ *
+ * ACCESSIBILITY NOTE: every animation here comes from the design system's
+ * primitives, which check `prefers-reduced-motion` themselves and render
+ * final state when it is set. There is no bare CSS transition in this file
+ * that would survive that preference.
+ */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
+import {
+  AmbientBackdrop, Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
+} from '../../design/index.js';
 
-const CROWD_STYLE = {
-  LOW: { label: 'QUIET', color: '#8C6A4D' },
-  MODERATE: { label: 'MODERATE', color: '#8C6A4D' },
-  HIGH: { label: 'BUSY', color: '#A07855' },
-  VERY_HIGH: { label: 'PACKED', color: '#DC6B6B' }
+/**
+ * Crowd levels. The old version mapped LOW and MODERATE to the SAME hex
+ * (#8C6A4D) — two distinct states rendering identically, which makes the
+ * colour pure decoration. They now differ, and the values are tokens so
+ * they follow the theme.
+ */
+const CROWD = {
+  LOW:       { label: 'Quiet',    tone: 'var(--good)' },
+  MODERATE:  { label: 'Moderate', tone: 'var(--accent)' },
+  HIGH:      { label: 'Busy',     tone: 'var(--warn)' },
+  VERY_HIGH: { label: 'Packed',   tone: 'var(--bad)' },
 };
+
+/** Small uppercase section label. One component so the tracking and size
+ *  are defined once instead of being retyped per section — the old file
+ *  repeated `text-[10.5px] uppercase tracking-[.14em]` five times and had
+ *  drifted to two different sizes. */
+function Label({ children, className = '' }) {
+  return (
+    <div
+      className={`text-[10px] font-medium uppercase tracking-[.18em] ${className}`}
+      style={{ color: 'var(--faint)' }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function Home() {
   const home = useFetch(() => api('/tracking/me/home'));
   const crowdFetch = useFetch(() => api('/me/crowd'));
-  const [crowdDetailOpen, setCrowdDetailOpen] = useState(false);
+  const [crowdOpen, setCrowdOpen] = useState(false);
 
   const data = home.data;
-  const mealState = data?.nutrition?.meals || [];
-  const eaten = mealState.filter((m) => m.eaten).reduce((s, m) => ({
-    calories: s.calories + m.calories, protein: s.protein + m.protein,
-    carbs: s.carbs + m.carbs, fat: s.fat + m.fat
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const meals = data?.nutrition?.meals || [];
+  const eaten = meals.filter((m) => m.eaten).reduce(
+    (s, m) => ({
+      calories: s.calories + m.calories, protein: s.protein + m.protein,
+      carbs: s.carbs + m.carbs, fat: s.fat + m.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  );
 
   if (home.loading) return <Spinner label="Loading your day…" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
@@ -31,114 +88,259 @@ export default function Home() {
   const plan = data.nutrition.plan;
   const today = data.todayWorkout;
   const doneEx = today ? today.exercises.filter((e) => e.done).length : 0;
+  const totalEx = today?.exercises.length || 0;
+  const complete = totalEx > 0 && doneEx === totalEx;
+
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const total = c.startWeight - c.targetWeight;
-  const goalPct = total > 0 ? Math.min(100, Math.max(0, ((c.startWeight - c.currentWeight) / total) * 100)) : 0;
+  const span = c.startWeight - c.targetWeight;
+  const goalPct = span > 0
+    ? Math.min(100, Math.max(0, ((c.startWeight - c.currentWeight) / span) * 100))
+    : 0;
   const crowd = crowdFetch.data;
+  const kcalLeft = Math.max(0, (plan?.calories || 0) - eaten.calories);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
 
-      {/* ── SECTION 1: Greeting ── */}
-      <div>
-        <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-medium" style={{ color: 'var(--mute)' }}>{greet}, {c.name.split(' ')[0]}</div>
-        <h1 className="font-display font-bold text-[26px] leading-tight tracking-tight" style={{ color: 'var(--ink)' }}>Here's your day</h1>
-        <div className="text-xs mt-1" style={{ color: 'var(--faint)' }}>{c.goal.replace(/_/g, ' ')} · {c.currentWeight} kg → {c.targetWeight} kg</div>
-      </div>
+      {/* ═══ HERO ═══
+          The only place 3D appears on this screen. `-mx-4 px-4` lets the
+          ambient field bleed to the device edges while the text stays on
+          the page's normal gutter — a backdrop that stops short of the
+          edge reads as a misaligned card, not as atmosphere. */}
+      <section className="relative -mx-4 -mt-2 px-4 pt-6 pb-5 overflow-hidden">
+        <AmbientBackdrop intensity={0.42} maxTier="medium" />
+        {/* Fades the field into the page before the content below starts,
+            so there is no hard horizontal seam where 3D stops. */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
+          style={{ background: 'linear-gradient(to bottom, transparent, var(--bg))' }}
+        />
 
-      {/* ── SECTION 2: Today's Session ── */}
-      <div className="card p-5 relative overflow-hidden">
         <div className="relative">
-          <div className="flex items-center justify-between mb-1">
-            <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>Today's session</div>
-            <span className="chip border-gold/30 text-gold">{today?.meta?.estMinutes || '—'} min</span>
-          </div>
+          <Reveal>
+            {/* Sentient, the one serif on the screen: this is the only
+                human sentence here, everything else is data. */}
+            <div className="font-serif text-[15px]" style={{ color: 'var(--mute)' }}>
+              {greet}, {c.name.split(' ')[0]}
+            </div>
+          </Reveal>
+
           {today ? (
-            <>
-              <div className="font-display font-bold text-xl tracking-tight" style={{ color: 'var(--ink)' }}>{today.name}</div>
-              {!!today.focus?.length && <div className="text-xs mt-1" style={{ color: 'var(--mute)' }}>{today.focus.map((f) => f.muscle).join(' · ')}</div>}
-              <div className="flex items-center gap-3 mt-3">
-                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-                  <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-500" style={{ width: `${today.exercises.length ? (doneEx / today.exercises.length) * 100 : 0}%` }} />
-                </div>
-                <span className="text-[11px] font-grotesk whitespace-nowrap" style={{ color: 'var(--mute)' }}>{doneEx}/{today.exercises.length} done</span>
+            <Stagger step={70} className="mt-2">
+              <h1
+                className="font-black leading-[0.95] tracking-[-0.035em] text-[34px]"
+                style={{ color: 'var(--ink)', textWrap: 'balance' }}
+              >
+                {today.name}
+              </h1>
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]"
+                   style={{ color: 'var(--mute)' }}>
+                {!!today.focus?.length && <span>{today.focus.map((f) => f.muscle).join(' · ')}</span>}
+                {!!today.focus?.length && <span style={{ color: 'var(--faint)' }}>—</span>}
+                <span>{totalEx} exercises</span>
+                {today.meta?.estMinutes && (
+                  <>
+                    <span style={{ color: 'var(--faint)' }}>—</span>
+                    <span>{today.meta.estMinutes} min</span>
+                  </>
+                )}
               </div>
-              <Link to="/app/client/workout" className="btn-primary w-full !py-3.5 mt-4 text-sm text-center block">
-                🔥 {doneEx === today.exercises.length ? 'REVIEW SESSION' : 'START WORKOUT'}
-              </Link>
-              <div className="text-center text-[10px] mt-2 font-grotesk" style={{ color: 'var(--faint)' }}>{today.meta?.exerciseCount || today.exercises.length} exercises · {today.meta?.totalSets || '—'} sets</div>
-            </>
+
+              {/* Progress. Rendered only mid-session: a 0/6 bar before you
+                  start is a reminder of nothing, and a full bar after you
+                  finish is better said in words. */}
+              {doneEx > 0 && !complete && (
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 h-[3px] rounded-full overflow-hidden"
+                       style={{ background: 'var(--line)' }}>
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: 'var(--accent-grad)' }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(doneEx / totalEx) * 100}%` }}
+                      transition={{ duration: 0.9, ease: [0.22, 0.8, 0.3, 1] }}
+                    />
+                  </div>
+                  <span className="text-[11px] tabular-nums whitespace-nowrap"
+                        style={{ color: 'var(--mute)' }}>
+                    {doneEx} of {totalEx}
+                  </span>
+                </div>
+              )}
+
+              <Pressable
+                as={Link}
+                to="/app/client/workout"
+                className="btn-primary mt-5 w-full !py-4 text-center block text-[13px] font-bold tracking-[.02em]"
+              >
+                {complete ? 'Review session' : doneEx > 0 ? 'Resume workout' : 'Start workout'}
+              </Pressable>
+            </Stagger>
           ) : (
-            <>
-              <div className="font-display font-bold text-xl tracking-tight" style={{ color: 'var(--ink)' }}>Rest day 🛌</div>
-              <div className="text-xs mt-1" style={{ color: 'var(--mute)' }}>Recovery is training too. Fuel well and sleep 8 hours.</div>
-              <Link to="/app/client/workout" className="btn w-full !py-3 mt-4 text-sm text-center block">View training week</Link>
-            </>
+            <Stagger step={70} className="mt-2">
+              <h1 className="font-black leading-[0.95] tracking-[-0.035em] text-[34px]"
+                  style={{ color: 'var(--ink)' }}>
+                Rest day
+              </h1>
+              <p className="mt-2 text-[13px] leading-relaxed max-w-[34ch]"
+                 style={{ color: 'var(--mute)' }}>
+                Recovery is training. Eat to your target and sleep eight hours.
+              </p>
+              <Pressable
+                as={Link}
+                to="/app/client/workout"
+                className="btn mt-5 w-full !py-3.5 text-center block text-[13px] font-semibold"
+              >
+                View training week
+              </Pressable>
+            </Stagger>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* ── SECTION 3: My Progress ── */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>My progress</div>
-          {plan && <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>{plan.calories} kcal target</span>}
-        </div>
-        <div className="flex items-center gap-5">
-          <Ring value={eaten.calories} max={plan?.calories || 1} size={120} stroke={10}
-            label={<span className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>{eaten.calories}</span>}
-            sub={<span className="text-[9px]" style={{ color: 'var(--mute)' }}>of {plan?.calories || 0} kcal</span>} />
-          <div className="flex-1 space-y-3">
-            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} right={`${eaten.protein}/${plan?.protein || 0} g`} />
-            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} right={`${eaten.carbs}/${plan?.carbs || 0} g`} />
-            <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1} right={`${eaten.fat}/${plan?.fat || 0} g`} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── SECTION 4: Goal Progress ── */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>My goal</div>
-          <div className="font-grotesk text-xs font-bold text-gold">{Math.round(goalPct)}%</div>
-        </div>
-        <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: 'var(--line)' }}>
-          <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700" style={{ width: `${goalPct}%` }} />
-        </div>
-        <div className="flex justify-between text-[11px] font-grotesk" style={{ color: 'var(--mute)' }}>
-          <span>{c.startWeight} kg</span><span>now {c.currentWeight} kg</span><span>{c.targetWeight} kg · {c.goalDate?.slice(0, 10) || '—'}</span>
-        </div>
-      </div>
-
-      {/* ── SECTION 5: Gym Crowd ── */}
-      {crowd?.enabled && (
-        <button
-          onClick={() => setCrowdDetailOpen(true)}
-          className="card p-4 w-full text-left hover:border-gold/40 transition-colors group"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>Gym crowd</div>
-            <span className="text-[9px] font-grotesk group-hover:text-gold transition-colors" style={{ color: 'var(--accent)' }}>Tap for details →</span>
-          </div>
-          <div className="flex items-end justify-between">
-            <div>
-              <span className="font-display font-bold text-2xl" style={{ color: 'var(--accent)' }}>{crowd.current}</span>
-              <span className="text-xs" style={{ color: 'var(--mute)' }}> / {crowd.capacity} now</span>
+      {/* ═══ FUEL ═══
+          The headline figure is kcal REMAINING, not kcal eaten. "1,840 of
+          2,550" makes the user do the subtraction to answer the question
+          they actually have, which is how much is left. */}
+      <Reveal delay={80}>
+        <Tilt max={4}>
+          <div className="card p-5">
+            <div className="flex items-start justify-between">
+              <Label>Fuel today</Label>
+              {plan && (
+                <span className="text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
+                  {plan.calories.toLocaleString()} kcal target
+                </span>
+              )}
             </div>
-            <span className="chip" style={{ borderColor: 'var(--accent-soft)', color: 'var(--accent)' }}>
-              {CROWD_STYLE[crowd.status]?.label || crowd.status}
-            </span>
-          </div>
-          <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-            <div className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-ember to-gold" style={{ width: `${crowd.pct}%` }} />
-          </div>
-          <div className="text-[10px] mt-1.5 font-grotesk" style={{ color: 'var(--faint)' }}>Live from the gym access system · {crowd.pct}% of capacity</div>
-        </button>
-      )}
 
-      <GymCrowdDetail open={crowdDetailOpen} onClose={() => setCrowdDetailOpen(false)} crowd={crowd} />
+            <div className="mt-4 flex items-center gap-5">
+              <Ring
+                value={eaten.calories}
+                max={plan?.calories || 1}
+                size={104}
+                stroke={8}
+                label={
+                  <span className="font-black text-[22px] tracking-[-.02em]"
+                        style={{ color: 'var(--ink)' }}>
+                    <AnimatedNumber value={kcalLeft} />
+                  </span>
+                }
+                sub={<span className="text-[9px] tracking-[.1em] uppercase"
+                           style={{ color: 'var(--faint)' }}>left</span>}
+              />
+              <div className="flex-1 space-y-3">
+                <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1}
+                     right={`${eaten.protein} / ${plan?.protein || 0} g`} height="h-1.5" />
+                <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1}
+                     right={`${eaten.carbs} / ${plan?.carbs || 0} g`} height="h-1.5" />
+                <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1}
+                     right={`${eaten.fat} / ${plan?.fat || 0} g`} height="h-1.5" />
+              </div>
+            </div>
+          </div>
+        </Tilt>
+      </Reveal>
+
+      {/* ═══ QUIET TILES ═══
+          Goal and crowd are reference, not action, so they get half width
+          and no accent fill. Deliberately the least loud thing here. */}
+      <div className="grid grid-cols-2 gap-4">
+        <Reveal delay={140}>
+          <Tilt max={5} className="h-full">
+            <div className="card p-4 h-full flex flex-col">
+              <Label>Goal</Label>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="font-black text-[26px] tracking-[-.03em]"
+                      style={{ color: 'var(--ink)' }}>
+                  <AnimatedNumber value={Math.round(goalPct)} />
+                </span>
+                <span className="text-[13px] font-medium" style={{ color: 'var(--mute)' }}>%</span>
+              </div>
+              <div className="mt-auto pt-3">
+                <div className="h-[3px] rounded-full overflow-hidden"
+                     style={{ background: 'var(--line)' }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'var(--accent-grad)' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${goalPct}%` }}
+                    transition={{ duration: 1, ease: [0.22, 0.8, 0.3, 1], delay: 0.2 }}
+                  />
+                </div>
+                <div className="mt-2 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
+                  {c.currentWeight} → {c.targetWeight} kg
+                </div>
+              </div>
+            </div>
+          </Tilt>
+        </Reveal>
+
+        {crowd?.enabled ? (
+          <Reveal delay={200}>
+            <Tilt max={5} className="h-full">
+              <Pressable
+                as="button"
+                onClick={() => setCrowdOpen(true)}
+                className="card p-4 h-full w-full text-left flex flex-col"
+              >
+                <Label>Gym now</Label>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="font-black text-[26px] tracking-[-.03em]"
+                        style={{ color: 'var(--ink)' }}>
+                    <AnimatedNumber value={crowd.current} />
+                  </span>
+                  <span className="text-[13px] font-medium" style={{ color: 'var(--mute)' }}>
+                    /{crowd.capacity}
+                  </span>
+                </div>
+                <div className="mt-auto pt-3">
+                  <div className="h-[3px] rounded-full overflow-hidden"
+                       style={{ background: 'var(--line)' }}>
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: CROWD[crowd.status]?.tone || 'var(--accent)' }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${crowd.pct}%` }}
+                      transition={{ duration: 1, ease: [0.22, 0.8, 0.3, 1], delay: 0.26 }}
+                    />
+                  </div>
+                  <div className="mt-2 text-[10px] font-medium"
+                       style={{ color: CROWD[crowd.status]?.tone || 'var(--mute)' }}>
+                    {CROWD[crowd.status]?.label || crowd.status}
+                  </div>
+                </div>
+              </Pressable>
+            </Tilt>
+          </Reveal>
+        ) : (
+          /* Weight trend stands in when the gym has no live feed, so the
+             grid never renders a lone orphaned tile. */
+          <Reveal delay={200}>
+            <Tilt max={5} className="h-full">
+              <div className="card p-4 h-full flex flex-col">
+                <Label>Weight</Label>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="font-black text-[26px] tracking-[-.03em]"
+                        style={{ color: 'var(--ink)' }}>
+                    <AnimatedNumber value={c.currentWeight} decimals={1} />
+                  </span>
+                  <span className="text-[13px] font-medium" style={{ color: 'var(--mute)' }}>kg</span>
+                </div>
+                <div className="mt-auto pt-3 text-[10px] tabular-nums"
+                     style={{ color: 'var(--faint)' }}>
+                  started at {c.startWeight} kg
+                </div>
+              </div>
+            </Tilt>
+          </Reveal>
+        )}
+      </div>
+
+      <GymCrowdDetail open={crowdOpen} onClose={() => setCrowdOpen(false)} crowd={crowd} />
     </div>
   );
 }

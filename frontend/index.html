@@ -4,11 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SK OS — Train smarter. Coach better. Prove progress.</title>
-  <meta name="theme-color" content="#080C10">
+  <meta name="theme-color" content="#0D1719">
   <link rel="icon" type="image/png" href="/favicon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Fonts are SELF-HOSTED (public/fonts, 145 kB total) rather than pulled
+       from a font CDN. Two reasons that matter here: a third-party font
+       request costs an extra DNS + TLS handshake before any text can
+       paint, and a CDN miss shows the fallback face first — that flash of
+       the wrong typeface is the single most "unfinished" thing a premium
+       UI can do on first load. Preloading the two faces used above the
+       fold means the hero renders in the real type on first paint. -->
+  <link rel="preload" href="/fonts/satoshi-900.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/satoshi-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/sentient-400.woff2" as="font" type="font/woff2" crossorigin>
 </head>
 <body>
   <div id="root"></div>
