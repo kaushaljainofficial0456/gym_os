@@ -493,11 +493,17 @@ export function searchFoods(query, { limit = 8, withPortions = true } = {}) {
  *  take down the search request. */
 function safePortions(food) {
   try {
-    return listPortions(food.food_name, food.cooking_state).map((p) => ({
-      ...p,
-      // Prefer the food's OWN measured serving weight when it has one.
-      grams: p.basis === 'serving' && food.serving_grams ? food.serving_grams : p.grams,
-    }));
+    return listPortions(food.food_name, food.cooking_state)
+      .map((p) => ({
+        ...p,
+        // Prefer the food's OWN measured serving weight when it has one.
+        grams: p.basis === 'serving' && food.serving_grams ? food.serving_grams : p.grams,
+      }))
+      // Drop portions the catalogue could not weigh for THIS food. They
+      // rendered as "Piece · 0g" / "Slice · 0g" -- a chip that logs
+      // nothing, offered next to real ones, which is worse than absent:
+      // a per-piece weight only exists for foods that come in pieces.
+      .filter((p) => Number(p.grams) > 0);
   } catch {
     return [];
   }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
+import Icon from '../../components/Icon.jsx';
+import { Pressable } from '../../design/index.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 
@@ -177,9 +179,21 @@ export default function Nutrition() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="font-grotesk font-bold text-xl">Today's fuel</h1>
-        <div className="text-xs text-mute mt-0.5">{plan ? `${plan.calories} kcal · P${plan.protein} / C${plan.carbs} / F${plan.fat}` : 'No plan assigned'}</div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-black text-xl tracking-[-.02em]" style={{ color: 'var(--ink)' }}>Today's fuel</h1>
+          <div className="text-xs mt-0.5" style={{ color: 'var(--mute)' }}>
+            {plan ? `${plan.calories} kcal · P${plan.protein} / C${plan.carbs} / F${plan.fat}` : 'No plan assigned'}
+          </div>
+        </div>
+        {/* The way IN to the logging flow. Without this the sheet -- with
+            its portion picker, oil levels and barcode scan -- had no
+            trigger at all and could never open. */}
+        <Pressable onClick={() => setSheetOpen(true)}
+                   className="btn-primary shrink-0 !px-3.5 !py-2.5 !text-xs font-bold flex items-center gap-1.5">
+          <Icon name="plate" size={15} />
+          Log food
+        </Pressable>
       </div>
 
       {/* live ring + macros */}
@@ -337,9 +351,18 @@ export default function Nutrition() {
                             ))}
                           </div>
                         )}
+                        {/* One logging flow, not two. This used to be a
+                            name-only search with a bare "servings" number,
+                            which silently assumed a serving size; it now
+                            opens the same sheet as the header button so a
+                            food logged into a meal gets the same portion
+                            and oil treatment as one logged anywhere else. */}
                         <div className="flex gap-2">
-                          <input className="input flex-1" placeholder="Search foods…" value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
-                          <input type="number" min="0.1" step="0.1" className="input w-16 !text-xs" value={foodQty} onChange={(e) => setFoodQty(e.target.value)} aria-label="Quantity (servings)" />
+                          <Pressable onClick={() => setSheetOpen(true)}
+                                     className="btn flex-1 !py-2.5 !text-xs font-semibold flex items-center justify-center gap-1.5">
+                            <Icon name="plate" size={14} />
+                            Add a food to this meal
+                          </Pressable>
                         </div>
                         {!!foodSearch && (
                           <div className="max-h-36 overflow-y-auto space-y-1 pr-1">

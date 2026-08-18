@@ -286,15 +286,34 @@ export default function meRoutes(db) {
       }));
     }
 
+    /* Table rows (the client's own foods and the gym/global library) carry
+       no portion list of their own -- portions come from the model's
+       food-specific catalogue. Without this, any food the user had already
+       logged once (and which was therefore materialised into `foods`)
+       shadowed its catalogue twin and arrived with NO portion chips and no
+       oil control, which is exactly what made the picker look like the
+       feature had not shipped. Enrich them by name so a stored row behaves
+       identically to a fresh catalogue hit. */
+    const enrich = (row) => {
+      const twin = foodModelAvailable() ? searchFoodModel(row.name, { limit: 1 })[0] : null;
+      return {
+        ...row,
+        portions: twin?.portions || [],
+        oil_applicable: !!twin && (twin.cooking_state === 'cooked' || twin.cuisine === 'INDIAN'),
+        source_id: row.source_id || twin?.source_id || null,
+        confidence: row.confidence || (twin ? twin.confidence : null),
+      };
+    };
+
     // Order: the client's own foods, then the measured catalogue, then any
     // library row the catalogue did not already cover by name.
     const norm = (n) => String(n).toLowerCase().trim();
     const claimed = new Set([...mine, ...model].map((f) => norm(f.name)));
     res.json({
       foods: [
-        ...mine,
+        ...mine.map(enrich),
         ...model.filter((f) => !new Set(mine.map((m) => norm(m.name))).has(norm(f.name))),
-        ...library.filter((f) => !claimed.has(norm(f.name))),
+        ...library.filter((f) => !claimed.has(norm(f.name))).map(enrich),
       ],
       model_available: foodModelAvailable(),
     });
