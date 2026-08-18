@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth.jsx';
+import Icon from '../../components/Icon.jsx';
 
 const SETTINGS_SECTIONS = [
   {
     id: 'account',
     label: 'Account Information',
-    icon: '👤',
+    icon: 'user',
     fields: [
       { key: 'name', label: 'Name', type: 'text', placeholder: 'Your full name' },
       { key: 'email', label: 'Email', type: 'email', placeholder: 'your@email.com', readOnly: true },
@@ -15,7 +16,7 @@ const SETTINGS_SECTIONS = [
   {
     id: 'security',
     label: 'Security',
-    icon: '🔒',
+    icon: 'lock',
     fields: [
       { key: 'current_password', label: 'Current Password', type: 'password', placeholder: '••••••••' },
       { key: 'new_password', label: 'New Password', type: 'password', placeholder: '••••••••' },
@@ -55,7 +56,7 @@ export default function Settings() {
       {SETTINGS_SECTIONS.map((section) => (
         <div key={section.id} className="card p-5">
           <div className="flex items-center gap-2.5 mb-4">
-            <span className="text-lg">{section.icon}</span>
+            <span style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={18} /></span>
             <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</span>
           </div>
 

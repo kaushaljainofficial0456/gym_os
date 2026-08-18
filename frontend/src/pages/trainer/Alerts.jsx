@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, daysAgoLabel } from '../../utils.js';
 import { Card, Kicker, Spinner, ErrorState, Empty } from '../../components/UI.jsx';
+import Icon from '../../components/Icon.jsx';
 
 const SEV = {
   high: ['HIGH', 'text-bad border-bad/40 bg-bad/10'],
@@ -55,7 +56,7 @@ export default function Alerts() {
             return (
               <div key={a.id} className={`rounded-2xl border p-3.5 flex flex-wrap items-center gap-3 transition-colors ${a.status === 'open' ? 'border-line bg-white/[.03]' : 'border-line bg-white/[.01] opacity-70'}`}>
                 <div className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${a.status === 'open' ? 'bg-gradient-to-br from-ember/30 to-gold/20 border border-line' : 'bg-white/5 border border-line'}`}>
-                  {a.status === 'open' ? '🚨' : '✓'}
+                  {a.status === 'open' ? <Icon name="alert" size={14} /> : '✓'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

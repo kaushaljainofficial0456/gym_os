@@ -94,7 +94,7 @@ export default function Dashboard() {
               ))}
             </Stagger>
             {!(att.data?.clients?.length) && (
-              <div className="text-center py-10 text-mute text-sm">🎉 No clients need attention right now.</div>
+              <div className="text-center py-10 text-mute text-sm">No clients need attention right now.</div>
             )}
           </div>
         </Card>

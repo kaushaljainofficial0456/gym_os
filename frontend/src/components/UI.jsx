@@ -1,6 +1,7 @@
 import { useEffect, useId } from 'react';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
+import Icon from './Icon.jsx';
 
 export function Card({ children, className, style, hover }) {
   return <div className={cls('card p-5', hover && 'card-hover', className)} style={style}>{children}</div>;
@@ -54,7 +55,7 @@ export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, icon }) {
     <div className="card p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10.5px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--mute)' }}>{label}</span>
-        {icon && <span className="text-sm">{icon}</span>}
+        {icon && <Icon name={icon} size={15} />}
       </div>
       <div className={cls('font-grotesk font-bold text-2xl leading-none', tone)} style={{ color: tone ? undefined : 'var(--ink)' }}>
         {v.toLocaleString('en-US', { maximumFractionDigits: dec })}{suffix}
@@ -161,10 +162,10 @@ export function Modal({ open, onClose, title, children, wide }) {
   );
 }
 
-export function Empty({ title = 'Nothing here yet', hint, icon = '🫙', action }) {
+export function Empty({ title = 'Nothing here yet', hint, icon = 'empty', action }) {
   return (
     <div className="text-center py-12">
-      <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center text-2xl mb-3" style={{ borderColor: 'var(--line)', background: 'var(--bg2)' }}>{icon}</div>
+      <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center text-2xl mb-3" style={{ borderColor: 'var(--line)', background: 'var(--bg2)', color: 'var(--faint)' }}><Icon name={icon} size={24} /></div>
       <div className="font-grotesk font-semibold text-sm" style={{ color: 'var(--ink)' }}>{title}</div>
       {hint && <div className="text-xs mt-1 max-w-xs mx-auto" style={{ color: 'var(--mute)' }}>{hint}</div>}
       {action && <div className="mt-4">{action}</div>}

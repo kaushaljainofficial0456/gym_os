@@ -7,6 +7,7 @@
 // ============================================================
 import { useState, useEffect } from 'react';
 import { useTheme } from '../themeContext.jsx';
+import { brand } from '../design/tokens.js';
 
 // canonical region keys
 export const MUSCLE_REGIONS = {
@@ -76,7 +77,7 @@ const MAP_THEMES = {
     idleFill: 'rgba(61,48,38,.08)',
     idleStroke: 'rgba(61,48,38,.10)',
     selectedStroke: 'rgba(61,48,38,.90)',
-    gradStart: '#8C6A4D',
+    gradStart: brand.light.accent,
     gradEnd: '#A07855',
     filterActive: 'drop-shadow(0 0 8px rgba(140,106,77,.35))',
     gradientId: 'burnGradLight',

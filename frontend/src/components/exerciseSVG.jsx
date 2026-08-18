@@ -2,6 +2,7 @@
 // Keyed by exercise_library.animation_key. `dangerouslySetInnerHTML` is safe
 // here: every template is a fixed, trusted string from this file.
 import { useTheme } from '../themeContext.jsx';
+import { brand } from '../design/tokens.js';
 
 // Color themes for dark and light mode
 const THEMES = {
@@ -22,13 +23,13 @@ const THEMES = {
     chipText: '!text-gold',
   },
   light: {
-    figStroke: '#3D3026',
-    accentStart: '#8C6A4D',
+    figStroke: brand.light.ink,
+    accentStart: brand.light.accent,
     accentEnd: '#A07855',
-    glowColor: '#8C6A4D',
+    glowColor: brand.light.accent,
     glowOpacity: '.16',
     groundStroke: 'rgba(61,48,38,.15)',
-    plateFill: '#8C6A4D',
+    plateFill: brand.light.accent,
     plateStroke: 'rgba(61,48,38,.35)',
     benchFill: '#B89A7A',
     benchStroke: 'rgba(61,48,38,.25)',

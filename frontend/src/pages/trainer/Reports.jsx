@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { useFetch, fmt1 } from '../../utils.js';
 import { Card, Kicker, Spinner, ErrorState } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
+import Icon from '../../components/Icon.jsx';
 
 export default function Reports() {
   const clients = useFetch(() => api('/clients?sort=name'));
@@ -129,7 +130,7 @@ export default function Reports() {
       {!report && !loading && (
         <Card>
           <div className="text-center py-14">
-            <div className="text-4xl mb-3">📄</div>
+            <div className="mb-3 grid place-items-center" style={{ color: 'var(--faint)' }}><Icon name="doc" size={34} /></div>
             <div className="font-grotesk font-semibold">Pick a client to generate their weekly report</div>
             <div className="text-xs text-mute mt-1 max-w-sm mx-auto">Weight delta, workout completion, adherence breakdown, coach summary and next-week actions — all from real data.</div>
           </div>

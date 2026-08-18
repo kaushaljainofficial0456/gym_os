@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getNextQuote } from '../data/quoteRotation.js';
 import { useTheme } from '../themeContext.jsx';
+import { brand } from '../design/tokens.js';
 
 export default function MotivationalWelcome({ onComplete }) {
   const [quote] = useState(() => getNextQuote());
@@ -19,7 +20,7 @@ export default function MotivationalWelcome({ onComplete }) {
   const opacity = phase === 'enter' ? 'opacity-0' : phase === 'hold' ? 'opacity-100' : 'opacity-0';
   const transform = phase === 'enter' ? 'translate-y-3 scale-[0.98]' : phase === 'hold' ? 'translate-y-0 scale-100' : '-translate-y-2 scale-[0.99]';
 
-  const bgColor = isDark ? '#080C10' : '#F7F3EE';
+  const bgColor = isDark ? brand.dark.bg : brand.light.bg;
   const textColor = isDark ? 'rgba(240,244,243,.88)' : 'rgba(61,48,38,.88)';
   const accentGlow = isDark ? 'rgba(20,196,188,.30)' : 'rgba(140,106,77,.12)';
   const accentGlow2 = isDark ? 'rgba(10,138,133,.35)' : 'rgba(177,134,99,.08)';

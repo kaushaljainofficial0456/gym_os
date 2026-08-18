@@ -24,13 +24,14 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStageTier } from '../Stage.jsx';
+import { brand } from '../../tokens.js';
 
 const COUNT_BY_TIER = { low: 60, medium: 140, high: 260 };
 
 export default function AuroraField({
   tier: tierProp,
-  color = '#14C4BC',
-  accentDeep = '#0A8A85',
+  color = brand.dark.accent,
+  accentDeep = brand.dark.accentDeep,
   speed = 0.06,
   spread = 9,
 }) {

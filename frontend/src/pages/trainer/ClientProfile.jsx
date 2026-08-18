@@ -297,10 +297,10 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements 
             ))}
           </div>
         ) : (
-          <div className="text-sm text-mute">No active concerns — this client is tracking well. 🎉</div>
+     <div className="text-sm text-mute">No active concerns — this client is tracking well. </div>
         )}
         {profile?.food_exclusions && (
-          <div className="mt-3 text-[11px] text-mute">🍽️ Food exclusions: <b className="text-ink">{profile.food_exclusions}</b></div>
+          <div className="mt-3 text-[11px] text-mute">Food exclusions: <b className="text-ink">{profile.food_exclusions}</b></div>
         )}
       </Card>
     </div>

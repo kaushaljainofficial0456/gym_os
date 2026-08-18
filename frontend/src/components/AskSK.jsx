@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
+import Icon from './Icon.jsx';
 
 // Web Speech API — speech recognition when the browser supports it.
 // (Chrome/Edge/Safari ship it; Firefox needs a flag.) Everything else
@@ -283,7 +284,7 @@ export default function AskSK({ onLogged }) {
                         ${listening
                           ? 'bg-gradient-to-br from-ember to-gold text-bg border-transparent shadow-glow anim-pulse-soft'
                           : 'bg-bg/60 border-line text-mute hover:text-gold hover:border-gold/40'}`}>
-                      {listening ? '◉' : '🎙️'}
+                      {listening ? '◉' : <Icon name="mic" size={16} />}
                     </button>
                   </div>
                   {listening && (
@@ -417,7 +418,7 @@ export default function AskSK({ onLogged }) {
                             <div className="text-[10px] text-mute">{e.primary_muscle}{e.secondary_muscles && e.secondary_muscles !== '—' ? ` · ${e.secondary_muscles}` : ''} · {e.equipment}</div>
                           </div>
                           <span className="chip border-line !px-1.5 !py-0 text-[9px]">{e.difficulty}</span>
-                          {e.animation_key && <span className="text-[10px]" title="Has an exercise animation">🎬</span>}
+                          {e.animation_key && <span title="Has an exercise animation" style={{ color: 'var(--faint)' }}><Icon name="film" size={12} /></span>}
                         </div>
                       ))}
                       {!view.data.exercises.length && <div className="text-xs text-mute py-2">No exercises match — try fewer filters.</div>}
@@ -435,7 +436,7 @@ export default function AskSK({ onLogged }) {
                 /* meal-photo tab — ESTIMATED only */
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-dashed border-line p-6 text-center">
-                    <div className="text-3xl mb-2">🍽️</div>
+                    <div className="mb-2 grid place-items-center" style={{ color: 'var(--faint)' }}><Icon name="plate" size={28} /></div>
                     <div className="text-xs text-mute mb-3">Upload a photo of a meal. Photos only give ESTIMATED calories in a range — never exact values.
                       {!mealBusy && !meal && <span className="block mt-1 text-faint">(Requires an AI vision provider — without one, you can still log it manually.)</span>}
                     </div>
@@ -476,7 +477,7 @@ export default function AskSK({ onLogged }) {
                 /* label scan tab */
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-dashed border-line p-6 text-center">
-                    <div className="text-3xl mb-2">📸</div>
+                    <div className="mb-2 grid place-items-center" style={{ color: 'var(--faint)' }}><Icon name="camera" size={28} /></div>
                     <div className="text-xs text-mute mb-3">Upload a photo of a packaged-food nutrition label. You review and confirm every value — nothing is trusted blindly.</div>
                     <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
                       onChange={(e) => scanLabel(e.target.files?.[0])} />

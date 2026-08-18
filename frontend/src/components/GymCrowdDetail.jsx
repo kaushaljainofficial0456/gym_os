@@ -1,8 +1,10 @@
 import { Modal } from './UI.jsx';
 
 const CROWD_STYLE = {
-  LOW: { label: 'QUIET', color: '#8C6A4D' },
-  MODERATE: { label: 'MODERATE', color: '#8C6A4D' },
+  // LOW and MODERATE were the SAME hex here too, so the colour carried no
+  // information at all. Tokens, and genuinely distinct.
+  LOW: { label: 'Quiet', color: 'var(--good)' },
+  MODERATE: { label: 'Moderate', color: 'var(--accent)' },
   HIGH: { label: 'BUSY', color: '#A07855' },
   VERY_HIGH: { label: 'PACKED', color: '#DC6B6B' }
 };
@@ -14,7 +16,7 @@ const TYPICAL_HOURLY = [
 function CrowdBar({ hour, value, max, label }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
   const level = value < 10 ? 'LOW' : value < 25 ? 'MODERATE' : value < 35 ? 'HIGH' : 'VERY_HIGH';
-  const color = CROWD_STYLE[level]?.color || '#8C6A4D';
+  const color = CROWD_STYLE[level]?.color || 'var(--accent)';
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
       <div className="w-full h-16 flex items-end">
@@ -108,7 +110,7 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
 
         {crowd.status !== 'LOW' && (
           <div className="rounded-xl border border-good/30 p-3.5" style={{ background: 'rgba(140,106,77,.04)' }}>
-            <div className="font-grotesk text-[10px] text-good uppercase tracking-wider mb-1">💡 Recommended time</div>
+            <div className="font-grotesk text-[10px] text-good uppercase tracking-wider mb-1"> Recommended time</div>
             <div className="text-[12px]" style={{ color: 'var(--mute)' }}>
               Try visiting around <strong className="text-good">{hourlyLabels[recommendedHour]}</strong> for the least crowded experience.
             </div>

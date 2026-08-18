@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
+import Icon from '../../components/Icon.jsx';
 
 const NAV = [
   { to: '/app/client', end: true, label: 'Home', icon: '⌂' },
@@ -13,9 +14,9 @@ const NAV = [
 ];
 
 const PROFILE_MENU = [
-  { to: '/app/client/profile', label: 'Profile', icon: '👤' },
-  { to: '/app/client/profile', label: 'Measurements', icon: '📏' },
-  { to: '/app/client/profile', label: 'Goals', icon: '🎯' },
+  { to: '/app/client/profile', label: 'Profile', icon: 'user' },
+  { to: '/app/client/profile', label: 'Measurements', icon: 'ruler' },
+  { to: '/app/client/profile', label: 'Goals', icon: 'target' },
   { to: '/app/client/settings', label: 'Settings', icon: '⚙️' },
   { to: '/app/client/help', label: 'Help', icon: '❓' },
 ];
@@ -124,7 +125,7 @@ export default function ClientLayout() {
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.08)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = loc.pathname === item.to && item.label === 'Profile' ? 'rgba(128,128,128,.06)' : 'transparent'}
                     >
-                      <span className="text-sm w-5 text-center">{item.icon}</span>
+                      <span className="w-5 grid place-items-center"><Icon name={item.icon} size={16} /></span>
                       <span className="font-grotesk text-[13px]">{item.label}</span>
                     </button>
                   ))}
@@ -193,7 +194,7 @@ export default function ClientLayout() {
             <NavLink key={l.to} to={l.to} end={l.end}
               className={({ isActive }) => `flex flex-col items-center gap-0.5 py-3 font-grotesk text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${isActive ? 'text-gold' : ''}`}
               style={({ isActive }) => ({ color: isActive ? undefined : 'var(--mute)' })}>
-              <span className="text-lg leading-none">{l.icon}</span>
+              <span className="grid place-items-center"><Icon name={l.icon} size={18} /></span>
               {l.label}
             </NavLink>
           ))}

@@ -4,6 +4,7 @@ import { useFetch } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
 import { Spinner, ErrorState, Ring } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
+import Icon from '../../components/Icon.jsx';
 
 const EQUIPMENT = [
   { id: 'barbell', label: 'Barbell' }, { id: 'dumbbells', label: 'Dumbbells' }, { id: 'cable', label: 'Cable machine' },
@@ -23,11 +24,11 @@ const DASH_CARDS = [
 ];
 
 const PROFILE_SECTIONS = [
-  { id: 'goal', label: 'Goal & Setup', icon: '🎯', desc: 'View progress and update your goals' },
-  { id: 'equipment', label: 'My Equipment', icon: '🏋️', desc: 'Manage your gym equipment' },
-  { id: 'metrics', label: 'My Metrics', icon: '📊', desc: 'Track personal measurements' },
-  { id: 'coach', label: 'Coach Preference', icon: '💬', desc: 'Coach settings and messages' },
-  { id: 'dashboard', label: 'Dashboard', icon: '📋', desc: 'Customize your home dashboard' },
+  { id: 'goal', label: 'Goal & Setup', icon: 'target', desc: 'View progress and update your goals' },
+  { id: 'equipment', label: 'My Equipment', icon: 'strength', desc: 'Manage your gym equipment' },
+  { id: 'metrics', label: 'My Metrics', icon: 'chart', desc: 'Track personal measurements' },
+  { id: 'coach', label: 'Coach Preference', icon: 'chat', desc: 'Coach settings and messages' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'clipboard', desc: 'Customize your home dashboard' },
   { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
 ];
 
@@ -62,11 +63,11 @@ function BackButton({ onClick }) {
 function HelpInline() {
   const [expanded, setExpanded] = useState(null);
   const HELP_SECTIONS = [
-    { id: 'overview', icon: '🏠', title: 'How SK OS Works', content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'SK OS analyzes your data and provides insights', 'Your coach gets real-time updates'] },
-    { id: 'workouts', icon: '💪', title: 'How Workouts Work', content: 'Your coach assigns structured workout plans with exercises, sets, reps, and weights.', items: ['Open a workout to see all exercises', 'Log your actual weights and reps', 'Rest timer helps track between sets', 'Complete all exercises to finish the session'] },
-    { id: 'nutrition', icon: '🥗', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask SK OS to quickly log foods', 'Take a meal photo for calorie estimates'] },
-    { id: 'progress', icon: '📈', title: 'Progress Tracking', content: 'Track your body transformation over time with weight, measurements, and photos.', items: ['Log weight regularly on Progress page', 'View weight trends with charts', 'Track body measurements', 'See your adherence score'] },
-    { id: 'coach', icon: '🤖', title: 'Coach & Intelligence', content: 'SK OS provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask SK OS natural language questions', 'Message your coach from Profile'] },
+    { id: 'overview', icon: 'home', title: 'How SK OS Works', content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'SK OS analyzes your data and provides insights', 'Your coach gets real-time updates'] },
+    { id: 'workouts', icon: 'strength', title: 'How Workouts Work', content: 'Your coach assigns structured workout plans with exercises, sets, reps, and weights.', items: ['Open a workout to see all exercises', 'Log your actual weights and reps', 'Rest timer helps track between sets', 'Complete all exercises to finish the session'] },
+    { id: 'nutrition', icon: 'food', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask SK OS to quickly log foods', 'Take a meal photo for calorie estimates'] },
+    { id: 'progress', icon: 'trending', title: 'Progress Tracking', content: 'Track your body transformation over time with weight, measurements, and photos.', items: ['Log weight regularly on Progress page', 'View weight trends with charts', 'Track body measurements', 'See your adherence score'] },
+    { id: 'coach', icon: 'robot', title: 'Coach & Intelligence', content: 'SK OS provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask SK OS natural language questions', 'Message your coach from Profile'] },
   ];
   return (
     <div className="space-y-3">
@@ -74,7 +75,7 @@ function HelpInline() {
       {HELP_SECTIONS.map((section) => (
         <div key={section.id} className="card overflow-hidden">
           <button onClick={() => setExpanded(expanded === section.id ? null : section.id)} className="w-full flex items-center gap-3 p-4 text-left" style={{ color: 'var(--ink)' }}>
-            <span className="text-xl shrink-0">{section.icon}</span>
+            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={20} /></span>
             <span className="flex-1 font-grotesk font-bold text-sm">{section.title}</span>
             <span className="text-lg transition-transform duration-200" style={{ color: 'var(--mute)', transform: expanded === section.id ? 'rotate(45deg)' : 'none' }}>+</span>
           </button>
@@ -110,7 +111,7 @@ function ThemeToggle() {
         <button
           onClick={toggle}
           className="relative w-12 h-6 rounded-full transition-colors duration-200"
-          style={{ background: isDark ? 'linear-gradient(135deg, #0A8A85, #14C4BC)' : '#8C6A4D' }}
+          style={{ background: 'var(--accent-grad)' }}
           role="switch"
           aria-checked={isDark}
           aria-label="Toggle dark mode"
@@ -661,7 +662,7 @@ export default function Profile() {
               }}
               className="w-full card p-4 flex items-center gap-4 text-left hover:border-gold/40 transition-colors group"
             >
-              <span className="text-2xl shrink-0">{section.icon}</span>
+              <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={22} /></span>
               <div className="flex-1 min-w-0">
                 <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{section.desc}</div>

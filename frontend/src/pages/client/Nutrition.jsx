@@ -365,7 +365,7 @@ export default function Nutrition() {
                   ? { borderColor: 'rgba(53,215,255,.55)', boxShadow: '0 0 14px rgba(53,215,255,.25)' }
                   : { borderColor: 'rgba(255,255,255,.12)' }}>
                 <span className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(53,215,255,.25), rgba(53,215,255,.8))', transition: 'transform .5s cubic-bezier(.22,.8,.3,1)', transform: filled ? 'translateY(0)' : 'translateY(101%)' }} />
-                <span className="relative text-[9px] font-grotesk z-10" style={{ color: filled ? '#06121F' : 'rgba(244,246,251,.32)' }}>{filled ? '💧' : '·'}</span>
+        <span className="relative text-[9px] font-grotesk z-10" style={{ color: filled ? 'var(--accent-contrast)' : 'rgba(244,246,251,.32)' }}>{filled ? '' : '·'}</span>
               </button>
             );
           })}

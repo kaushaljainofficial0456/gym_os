@@ -2,7 +2,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { WEEKDAY } from '../utils.js';
 
 const tooltipStyle = {
-  background: '#111920', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12,
+  background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 12,
   fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#F0F4F3',
   boxShadow: '0 24px 48px -20px rgba(0,0,0,.8)', padding: '8px 12px'
 };
@@ -85,11 +85,13 @@ export function WeekBars({ days, valueKey, max = 10, color = '#9B7CFF', format }
 export function AdherenceBreakdown({ components }) {
   const isLight = typeof document !== 'undefined' && document.documentElement.classList.contains('light');
   const rows = [
-    ['Workout', components?.workout, isLight ? '#8C6A4D' : '#0A8A85'],
-    ['Nutrition', components?.nutrition, isLight ? '#B18663' : '#14C4BC'],
+    // Series colours come from the token module, so a palette repaint moves
+    // the charts with it. Recharts needs literal colours, not var().
+    ['Workout', components?.workout, isLight ? brand.light.accentDeep : brand.dark.accentDeep],
+    ['Nutrition', components?.nutrition, isLight ? brand.light.accent : brand.dark.accent],
     ['Protein', components?.protein, '#E8A87C'],
-    ['Water', components?.water, isLight ? '#9BB5C4' : '#38D8FF'],
-    ['Sleep', components?.sleep, isLight ? '#B8A0D4' : '#A080FF'],
+    ['Water', components?.water, isLight ? brand.light.cyan : brand.dark.cyan],
+    ['Sleep', components?.sleep, isLight ? brand.light.violet : brand.dark.violet],
     ['Check-in', components?.checkin, isLight ? '#7DB89A' : '#34D399']
   ].filter(r => r[1] !== null && r[1] !== undefined);
   return (
