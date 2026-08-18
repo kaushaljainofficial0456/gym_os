@@ -10,6 +10,27 @@ const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'))
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
+/**
+ * Seed one editable row per prescribed set.
+ *
+ * Module scope, not a const inside the component: as a `const` arrow it
+ * sat below the effect that restores an in-progress session, and a
+ * `const` is in the temporal dead zone until its line executes -- so the
+ * restore path threw "Cannot access 'buildSets' before initialization"
+ * and the whole Workout page rendered blank. It closes over no state, so
+ * there is no reason for it to live inside the component at all.
+ */
+function buildSets(list) {
+  return Object.fromEntries((list || []).map((e) => [
+    e.id,
+    Array.from({ length: Math.max(1, Number(e.sets) || 1) }, () => ({
+      reps: parseFloat(e.reps) || 0,
+      weight: parseFloat(e.weight) || 0,
+      done: false,
+    })),
+  ]));
+}
+
 export default function Workout() {
   const nav = useNavigate();
   const today = useFetch(() => api('/tracking/me/today'));
@@ -227,15 +248,6 @@ export default function Workout() {
   };
 
 
-  /** Seed one editable row per prescribed set. */
-  const buildSets = (list) => Object.fromEntries(list.map((e) => [
-    e.id,
-    Array.from({ length: Math.max(1, Number(e.sets) || 1) }, () => ({
-      reps: parseFloat(e.reps) || 0,
-      weight: parseFloat(e.weight) || 0,
-      done: false,
-    })),
-  ]));
 
   const patchSet = (exId, i, field, value) => setExSets((prev) => {
     const rows = [...(prev[exId] || [])];
