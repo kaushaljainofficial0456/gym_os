@@ -5,7 +5,7 @@ import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Bar, Ring } from '../../components/UI.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
-import RestTimer from '../../components/RestTimer.jsx';
+import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
@@ -40,14 +40,16 @@ export default function Workout() {
   const [starting, setStarting] = useState(false);
 
   // execution state
-  const [exProgress, setExProgress] = useState({});
-  const [execInputs, setExecInputs] = useState({}); // exId -> { reps, weight, rir }
-  const [setLog, setSetLog] = useState({}); // exId -> [{reps, weight, rir}, ...] per-set capture
   const [startedAt, setStartedAt] = useState(0);
-  // Rest is held as an absolute DEADLINE, not a countdown value -- see
-  // RestTimer.jsx for why a decrementing counter loses time whenever the
-  // phone locks or the user switches apps mid-set.
-  const [rest, setRest] = useState(null);   // { endsAt, totalSec, nextLabel }
+  /* Per-set checklist. exSets[exerciseId] = [{ reps, weight, done }, ...],
+     seeded from the prescription when the session starts. This replaced the
+     old exProgress/execInputs pair, which tracked only a COUNT of finished
+     sets plus one shared reps/weight box -- so every set of an exercise was
+     logged with identical numbers and there was no way to correct set 2
+     after the fact. */
+  const [exSets, setExSets] = useState({});
+  const [openEx, setOpenEx] = useState(null);   // accordion: one exercise open
+  const [infoEx, setInfoEx] = useState(null);   // main-page info panel
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   // this week preview
@@ -78,12 +80,6 @@ export default function Workout() {
     return () => clearTimeout(h);
   }, [toast]);
 
-  // Rest belongs to execute mode only: leaving it (finish, or bail to
-  // browse) must not leave a countdown pinned over another screen.
-  useEffect(() => {
-    if (mode !== 'execute') setRest(null);
-  }, [mode]);
-
   // session elapsed timer — ticks every second during execute mode
   useEffect(() => {
     if (mode !== 'execute' || !startedAt) return;
@@ -98,13 +94,8 @@ export default function Workout() {
     // Only restore if: still in browse mode, workout exists, has started_at, and is NOT completed
     if (mode !== 'browse' || !workout?.started_at || workout?.status === 'completed') return;
     // Workout was already started server-side but user refreshed — restore execution state
-    setExProgress(Object.fromEntries(state.map((e) => [e.id, 0])));
-    setExecInputs(Object.fromEntries(state.map((e) => [e.id, {
-      reps: parseFloat(e.reps) || 0,
-      weight: parseFloat(e.weight) || 0,
-      rir: null
-    }])));
-    setSetLog({});
+    setExSets(buildSets(state));
+    setOpenEx(state[0]?.id ?? null);
     setElapsed(0);
     // Reconstruct elapsed time from server started_at
     setStartedAt(Date.parse(workout.started_at));
@@ -204,9 +195,9 @@ export default function Workout() {
   };
 
   // ---- execution ----
-  const totalSets = state.reduce((s, e) => s + (e.sets || 0), 0);
-  const doneSets = Object.values(exProgress).reduce((s, n) => s + n, 0);
-  const currentEx = state.find((e) => (exProgress[e.id] || 0) < (e.sets || 0)) || null;
+  const totalSets = Object.values(exSets).reduce((n, rows) => n + rows.length, 0)
+    || state.reduce((n, e) => n + (Number(e.sets) || 0), 0);
+  const doneSets = Object.values(exSets).reduce((n, rows) => n + rows.filter((r) => r.done).length, 0);
 
   const startWorkout = async () => {
     if (starting) return; // prevent duplicate clicks
@@ -227,77 +218,80 @@ export default function Workout() {
       return;
     }
     // API succeeded — proceed with local timer/UI
-    setExProgress(Object.fromEntries(state.map((e) => [e.id, 0])));
-    setExecInputs(Object.fromEntries(state.map((e) => [e.id, {
-      reps: parseFloat(e.reps) || 0,
-      weight: parseFloat(e.weight) || 0,
-      rir: null
-    }])));
-    setSetLog({});
+    setExSets(buildSets(state));
+    setOpenEx(state[0]?.id ?? null);
     setElapsed(0);
     setStartedAt(Date.now());
     setMode('execute');
     setStarting(false);
   };
 
-  const patchInput = (exId, k, v) => setExecInputs((inp) => ({ ...inp, [exId]: { ...(inp[exId] || {}), [k]: v } }));
 
-  const completeSet = () => {
-    if (!currentEx) return;
-    // Per-set capture: snapshot the current input values at the moment of completion
-    const inp = execInputs[currentEx.id] || {};
-    setSetLog((prev) => ({
-      ...prev,
-      [currentEx.id]: [...(prev[currentEx.id] || []), {
-        reps: Number(inp.reps) || 0,
-        weight: Number(inp.weight) || 0,
-        rir: inp.rir != null ? Number(inp.rir) : undefined,
-      }],
-    }));
-    const next = { ...exProgress, [currentEx.id]: (exProgress[currentEx.id] || 0) + 1 };
-    setExProgress(next);
-    const remainingAfter = state.filter((e) => (next[e.id] || 0) < (e.sets || 0)).length;
-    if (remainingAfter > 0) {
-      // Start the rest period from the exercise's own prescribed rest, and
-      // name what is coming next -- mid-session the useful question is
-      // "what am I doing when this ends", not "how long have I rested".
-      const restSec = Number(currentEx.rest_sec) > 0 ? Number(currentEx.rest_sec) : 90;
-      const setsDone = next[currentEx.id] || 0;
-      const moreOfThis = setsDone < (currentEx.sets || 0);
-      const upcoming = moreOfThis
-        ? state.find((e) => e.id === currentEx.id)
-        : state.find((e) => (next[e.id] || 0) < (e.sets || 0));
-      const nextLabel = moreOfThis
-        ? `${currentEx.name} — set ${setsDone + 1} of ${currentEx.sets}`
-        : (upcoming ? upcoming.name : 'Next exercise');
-      setRest({ endsAt: Date.now() + restSec * 1000, totalSec: restSec, nextLabel });
-    } else {
-      setRest(null);
-      finishWorkout(next);
+  /** Seed one editable row per prescribed set. */
+  const buildSets = (list) => Object.fromEntries(list.map((e) => [
+    e.id,
+    Array.from({ length: Math.max(1, Number(e.sets) || 1) }, () => ({
+      reps: parseFloat(e.reps) || 0,
+      weight: parseFloat(e.weight) || 0,
+      done: false,
+    })),
+  ]));
+
+  const patchSet = (exId, i, field, value) => setExSets((prev) => {
+    const rows = [...(prev[exId] || [])];
+    if (!rows[i]) return prev;
+    rows[i] = { ...rows[i], [field]: value };
+    return { ...prev, [exId]: rows };
+  });
+
+  const toggleSet = (exId, i) => setExSets((prev) => {
+    const rows = [...(prev[exId] || [])];
+    if (!rows[i]) return prev;
+    rows[i] = { ...rows[i], done: !rows[i].done };
+    const next = { ...prev, [exId]: rows };
+    // Auto-advance to the next unfinished exercise once this one is fully
+    // ticked, so the next thing to do is already open rather than requiring
+    // a tap on a screen the user is holding at arm's length.
+    if (rows.every((r) => r.done)) {
+      const following = state.find((e) => {
+        const rs = next[e.id] || [];
+        return e.id !== exId && (rs.length === 0 || rs.some((r) => !r.done));
+      });
+      setOpenEx(following ? following.id : null);
     }
-  };
+    return next;
+  });
+
 
   // Build per-set logs from actual captured inputs (what was entered when each set was completed).
-  const finishWorkout = async (progress) => {
+  const finishWorkout = async () => {
     setSubmitting(true);
     try {
-      const logs = state.filter((e) => (progress[e.id] || 0) > 0).map((e) => {
-        const captured = setLog[e.id] || [];
-        const n = progress[e.id] || 0;
-        const fallback = execInputs[e.id] || { reps: parseFloat(e.reps) || 0, weight: parseFloat(e.weight) || 0, rir: null };
+      /* Only TICKED sets are logged, with the numbers actually typed for
+         each one. The previous version logged N identical sets from a single
+         shared input box, so a session where the last set dropped from 60 kg
+         to 50 kg was recorded as three sets at 60 -- inflating both volume
+         and the burn estimate derived from it. */
+      const logs = state.map((e) => {
+        const rows = (exSets[e.id] || []).filter((r) => r.done);
+        if (!rows.length) return null;
         return {
           exercise_id: e.id,
-          sets: Array.from({ length: n }, (_, i) => {
-            const s = captured[i] || fallback;
-            return {
-              set_number: i + 1,
-              actual_reps: Number(s.reps) || 0,
-              actual_weight: Number(s.weight) || 0,
-              rir: s.rir != null ? Number(s.rir) : undefined,
-            };
-          }),
+          sets: rows.map((r, i) => ({
+            set_number: i + 1,
+            actual_reps: Number(r.reps) || 0,
+            actual_weight: Number(r.weight) || 0,
+          })),
         };
-      });
+      }).filter(Boolean);
+      if (!logs.length) {
+        // The API requires at least one logged set. Ending an empty session
+        // should return to browse, not surface a validation error.
+        setSubmitting(false);
+        setMode('browse');
+        setToast('Session ended — no sets were logged');
+        return;
+      }
       const res = await api(`/workouts/${workout.id}/complete`, { method: 'POST', body: JSON.stringify({ logs }) });
       const volume = logs.reduce((s, l) => s + l.sets.reduce((a, st) => a + (st.actual_reps * st.actual_weight), 0), 0);
       // duration_min is server-authoritative (completed_at − started_at).
@@ -322,16 +316,14 @@ export default function Workout() {
         method: 'POST',
         body: JSON.stringify({
           duration_minutes: durationMin,
-          exercises: state
-            .filter((e) => (progress[e.id] || 0) > 0)
-            .map((e) => ({
-              name: e.name,
-              sets: (setLog[e.id] || []).map((st) => ({
-                actual_reps: Number(st.reps) || 0,
-                actual_weight: Number(st.weight) || 0,
-                completed: 1,
-              })),
+          exercises: logs.map((l) => ({
+            name: (state.find((e) => e.id === l.exercise_id) || {}).name,
+            sets: l.sets.map((st) => ({
+              actual_reps: st.actual_reps,
+              actual_weight: st.actual_weight,
+              completed: 1,
             })),
+          })),
         }),
       })
         .then(setBurn)
@@ -421,9 +413,17 @@ export default function Workout() {
             </div>
             <div className="grid grid-cols-3 gap-2.5 mt-3">
               {[
+                /* "Est. burn" removed. It was a static number attached to the
+                   PLAN, computed before a single set was lifted, so it could
+                   not reflect what the user actually did -- and it sat next
+                   to two counts that are facts, which lent it credibility it
+                   had not earned. The real figure now comes from skos-cal-v1
+                   AFTER the session, as a range, on the summary screen.
+                   Estimated duration replaces it: also a prediction, but an
+                   honest one, and the thing a user actually plans around. */
                 ['Exercises', meta.exerciseCount || exercises.length],
                 ['Total sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
-                ['Est. burn', `~${meta.estKcal || 0} kcal`]
+                ['Approx. time', meta.estMinutes ? `${meta.estMinutes} min` : '—']
               ].map(([l, v]) => (
                 <div key={l} className="card !p-3 text-center">
                   <div className="font-grotesk font-bold text-lg">{v}</div>
@@ -447,22 +447,71 @@ export default function Workout() {
             <div className="kicker">Today's exercises</div>
             <div className="space-y-2">
               {state.map((ex, i) => (
+                /* The tick used to live here. It was the WRONG place for it:
+                   marking an exercise done from the plan screen records no
+                   reps, no weight and no sets -- it just greys the row out,
+                   while the real logging happens in the session. Two ways to
+                   "complete" an exercise, only one of which produces data,
+                   is a trap. Completion now belongs to the session; this
+                   screen answers "what am I doing, and how?" instead. */
                 <div key={ex.id}
-                  className="card p-3.5 flex items-center gap-3 anim-fadeUp hover:border-gold/20 transition-colors duration-200"
+                  className="card anim-fadeUp transition-colors duration-200"
                   style={{ animationDelay: `${200 + i * 40}ms` }}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-grotesk text-sm font-semibold truncate">{ex.name}</span>
-                      {equipMap[ex.id]?.missing?.length > 0 && (
-                        <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}>⚠ equipment</span>
+                  <div className="p-3.5 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
+                        {equipMap[ex.id]?.missing?.length > 0 && (
+                          <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}>⚠ equipment</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
+                        {ex.sets} sets · {ex.reps} reps{ex.weight ? ` · ${ex.weight}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      aria-label={`About ${ex.name}`}
+                      aria-expanded={infoEx === ex.id}
+                      onClick={() => setInfoEx(infoEx === ex.id ? null : ex.id)}
+                      className="w-8 h-8 rounded-full border grid place-items-center shrink-0 transition-all active:scale-90"
+                      style={infoEx === ex.id
+                        ? { borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }
+                        : { borderColor: 'var(--line)', color: 'var(--mute)' }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {infoEx === ex.id && (
+                    <div className="px-3.5 pb-3.5 -mt-1 space-y-2">
+                      <div className="h-px" style={{ background: 'var(--line)' }} />
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {[ex.primary_muscle, ex.equipment, ex.difficulty]
+                          .filter(Boolean)
+                          .map((t) => (
+                            <span key={t} className="text-[9px] uppercase tracking-[.1em] px-1.5 py-0.5 rounded"
+                                  style={{ color: 'var(--mute)', border: '1px solid var(--line)' }}>
+                              {String(t).replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                      </div>
+                      {/* Coaching cues come from the exercise library and are
+                          already in this payload -- no extra request. Falls
+                          back to a truthful line rather than inventing form
+                          advice, which would be worse than saying nothing. */}
+                      <p className="text-[11px] leading-relaxed" style={{ color: 'var(--mute)' }}>
+                        {ex.cues || ex.notes
+                          || `${ex.sets} sets of ${ex.reps} reps${ex.rest_sec ? `, about ${ex.rest_sec}s rest between sets` : ''}. Your coach has not added form notes for this one yet.`}
+                      </p>
+                      {ex.secondary_muscles && (
+                        <p className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                          Also works: {String(ex.secondary_muscles).replace(/_/g, ' ')}
+                        </p>
                       )}
                     </div>
-                    <div className="text-[11px] text-mute mt-0.5">{ex.sets} sets · {ex.reps} reps{ex.weight ? ` · ${ex.weight}` : ''}</div>
-                  </div>
-                  <button aria-label={`Mark ${ex.name} done`} onClick={() => toggleEx(ex)}
-                    className={`w-8 h-8 rounded-xl border grid place-items-center text-sm transition-all duration-200 active:scale-90 ${ex.done ? 'bg-gradient-to-br from-ember to-gold text-bg border-transparent shadow-lg shadow-ember/30' : 'border-line text-faint hover:border-gold/50'}`}>
-                    {ex.done ? <span className="anim-checkBounce">✓</span> : ''}
-                  </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -783,116 +832,168 @@ export default function Workout() {
 
   // ================= execute mode =================
   if (mode === 'execute') {
+    /* EXECUTE MODE — one session clock, one checklist.
+       Rebuilt to the brief: no per-set timer and no rest countdown, a single
+       elapsed clock from START to END, every exercise for the day visible at
+       once, each expanding into editable sets that get ticked off. */
     const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
-    const setNum = currentEx ? (exProgress[currentEx.id] || 0) + 1 : 0;
+
     return (
-      <div className="space-y-4 pb-2">
-        {/* progress */}
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">Workout progress</div>
-            <div className="font-grotesk font-bold text-sm text-gold">{doneSets}/{totalSets} sets</div>
+      <div className="space-y-3 pb-28">
+
+        {/* ── the ONE session clock ── */}
+        <div className="card p-4 sticky top-2 z-20">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Session</div>
+              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
+                {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Sets done</div>
+              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 22, color: 'var(--accent)' }}>
+                {doneSets}<span className="text-[13px]" style={{ color: 'var(--mute)' }}>/{totalSets}</span>
+              </div>
+            </div>
           </div>
-          <div className="h-2 rounded-full bg-white/8 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-500" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="mt-3 flex gap-1.5 flex-wrap">
-            {state.map((e) => (
-              <span key={e.id} className={`chip border !px-2 !py-0.5 text-[9px] ${(exProgress[e.id] || 0) >= e.sets ? 'text-good border-good/40 bg-good/10' : e.id === currentEx?.id ? 'text-gold border-gold/40 bg-gold/10' : 'text-mute'}`}>
-                {e.name.split(' ').slice(0, 2).join(' ')} {exProgress[e.id] || 0}/{e.sets}
-              </span>
-            ))}
+          <div className="h-1.5 rounded-full overflow-hidden mt-3" style={{ background: 'var(--line)' }}>
+            <div className="h-full rounded-full transition-all duration-500"
+                 style={{ width: `${pct}%`, background: 'var(--accent-grad)' }} />
           </div>
         </div>
 
-        {currentEx ? (
-          <div className="card p-5 text-center">
-            <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-1">Now performing</div>
-            <h2 className="font-grotesk font-bold text-2xl">{currentEx.name}</h2>
-            <div className="flex items-center justify-center gap-3 mt-1.5 text-[11px] text-mute">
-              <span>{currentEx.sets} × {currentEx.reps}</span><span className="text-faint">·</span><span>{currentEx.weight}</span>
+        {/* ── every exercise for today; tap to expand ── */}
+        {state.map((ex) => {
+          const sets = exSets[ex.id] || [];
+          const doneCount = sets.filter((x) => x.done).length;
+          const complete = sets.length > 0 && doneCount === sets.length;
+          const open = openEx === ex.id;
+          return (
+            <div key={ex.id} className="card overflow-hidden transition-colors duration-300"
+                 style={complete ? {
+                   /* Completed exercises go green, tinted from the status
+                      token so it holds in both themes.
+
+                      backgroundColor, NOT the `background` shorthand: a
+                      shorthand containing var() becomes a pending
+                      substitution, which left .card's own
+                      `background-color: var(--panel)` winning and the card
+                      stubbornly grey. The longhand applies cleanly. */
+                   backgroundColor: 'rgb(var(--good-rgb) / .10)',
+                   borderColor: 'rgb(var(--good-rgb) / .45)',
+                 } : undefined}>
+              <button
+                onClick={() => setOpenEx(open ? null : ex.id)}
+                className="w-full flex items-center gap-3 p-3.5 text-left"
+                aria-expanded={open}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
+                    {complete && (
+                      <span className="text-[9px] font-bold uppercase tracking-[.12em] px-1.5 py-0.5 rounded shrink-0"
+                            style={{ color: 'var(--good)', border: '1px solid rgb(var(--good-rgb) / .5)' }}>
+                        Completed
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
+                    {doneCount}/{sets.length} sets{ex.reps ? ` · ${ex.reps} reps` : ''}
+                  </div>
+                </div>
+                <span className="text-[15px] leading-none shrink-0" style={{ color: 'var(--faint)' }}>
+                  {open ? '−' : '+'}
+                </span>
+              </button>
+
+              {open && (
+                <div className="px-3.5 pb-3.5 space-y-1.5">
+                  <div className="grid grid-cols-[26px_1fr_1fr_38px] gap-2 px-1 text-[9px] uppercase tracking-[.12em]"
+                       style={{ color: 'var(--faint)' }}>
+                    <span>Set</span><span>Reps</span><span>Kg</span><span className="text-right">Done</span>
+                  </div>
+                  {sets.map((st, i) => (
+                    <div key={i}
+                         className="grid grid-cols-[26px_1fr_1fr_38px] gap-2 items-center rounded-lg px-1 py-1"
+                         style={st.done ? { backgroundColor: 'rgb(var(--good-rgb) / .08)' } : undefined}>
+                      <span className="text-[12px] tabular-nums" style={{ color: 'var(--mute)' }}>{i + 1}</span>
+                      {/* Editable mid-workout: what was prescribed and what
+                          actually got lifted routinely differ, and the logged
+                          number has to be the real one. */}
+                      <input type="number" inputMode="numeric" className="input !py-1.5 !text-[13px] tabular-nums"
+                             value={st.reps} aria-label={`Set ${i + 1} reps`}
+                             onChange={(e) => patchSet(ex.id, i, 'reps', e.target.value)} />
+                      <input type="number" inputMode="decimal" step="0.5" className="input !py-1.5 !text-[13px] tabular-nums"
+                             value={st.weight} aria-label={`Set ${i + 1} weight in kg`}
+                             onChange={(e) => patchSet(ex.id, i, 'weight', e.target.value)} />
+                      <button
+                        onClick={() => toggleSet(ex.id, i)}
+                        aria-label={`Mark set ${i + 1} ${st.done ? 'not done' : 'done'}`}
+                        aria-pressed={st.done}
+                        className="justify-self-end w-7 h-7 rounded-lg border grid place-items-center transition-all active:scale-90"
+                        style={st.done
+                          ? { backgroundColor: 'var(--good)', borderColor: 'var(--good)', color: 'var(--bg)' }
+                          : { borderColor: 'var(--line)', color: 'var(--faint)' }}>
+                        {st.done && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          );
+        })}
 
-            <ExerciseAnim anim={currentEx.animation_key || 'fallback'} muscle={currentEx.primary_muscle} label="" size="lg" />
-
-            {/* session elapsed timer */}
-            <div className="flex items-center justify-center gap-1.5 mt-3">
-              <span className="text-[10px] uppercase tracking-wider text-mute font-grotesk">Elapsed</span>
-              <span className="font-grotesk font-bold text-lg tabular-nums text-gold">
-                {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-center gap-4 mt-2">
-              <Ring value={setNum} max={currentEx.sets} size={84} stroke={8} color="url(#ringGrad)"
-                label={<span className="font-grotesk font-bold text-lg">{setNum}</span>}
-                sub={<span className="text-[8px] text-mute">of {currentEx.sets} sets</span>} />
-              <div className="text-left text-[11px] text-mute space-y-1.5">
-                <label className="block">
-                  <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">Actual reps</span>
-                  <input type="number" min="0" max="200" className="input !py-1 !px-2 text-xs w-20 mt-0.5"
-                    value={execInputs[currentEx.id]?.reps ?? (parseFloat(currentEx.reps) || 0)}
-                    onChange={(e) => patchInput(currentEx.id, 'reps', e.target.value)} aria-label="Actual reps" />
-                </label>
-                <label className="block">
-                  <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">Weight kg</span>
-                  <input type="number" min="0" step="0.5" className="input !py-1 !px-2 text-xs w-20 mt-0.5"
-                    value={execInputs[currentEx.id]?.weight ?? (parseFloat(currentEx.weight) || 0)}
-                    onChange={(e) => patchInput(currentEx.id, 'weight', e.target.value)} aria-label="Actual weight" />
-                </label>
-                <label className="block">
-                  <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">RIR (optional)</span>
-                  <input type="number" min="0" max="5" placeholder="—" className="input !py-1 !px-2 text-xs w-20 mt-0.5"
-                    value={execInputs[currentEx.id]?.rir ?? ''}
-                    onChange={(e) => patchInput(currentEx.id, 'rir', e.target.value === '' ? null : e.target.value)} aria-label="Reps in reserve (optional)" />
-                </label>
-              </div>
-            </div>
-            <div className="text-[9px] text-mute mt-1.5">Adjust reps/weight/RIR per set — each set is logged individually</div>
-
-            <button className="btn-primary w-full !py-4 mt-5 text-sm" onClick={completeSet} disabled={submitting}>
-              ✓ COMPLETE SET {setNum}/{currentEx.sets}
-            </button>
-          </div>
-        ) : (
-          <div className="card p-8 text-center">
-            
-            <div className="font-grotesk font-bold text-lg">All sets done!</div>
-            <button className="btn-primary w-full !py-4 mt-4" onClick={() => { setExProgress({}); setMode('summary'); finishWorkout(Object.fromEntries(state.map((e) => [e.id, e.sets]))); }} disabled={submitting}>
-              {submitting ? 'Logging…' : 'Finish & log workout'}
-            </button>
-          </div>
-        )}
-
-        {/* Rest timer. Fixed to the bottom of the viewport rather than
-            inline, because during a set the phone is usually on the floor
-            or a bench and the remaining time has to be readable without
-            scrolling to find it. */}
-        {rest && (
-          <RestTimer
-            endsAt={rest.endsAt}
-            totalSec={rest.totalSec}
-            nextLabel={rest.nextLabel}
-            onSkip={() => setRest(null)}
-            onAddTime={(sec) => setRest((r) => (r
-              ? { ...r, endsAt: r.endsAt + sec * 1000, totalSec: r.totalSec + sec }
-              : r))}
-          />
-        )}
-        {/* Reserve the timer's height so the last control is never left
-            trapped underneath the overlay. */}
-        {rest && <div className="h-40" aria-hidden="true" />}
+        {/* ── END SESSION ── */}
+        <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3"
+             style={{ background: 'linear-gradient(to top, var(--bg) 65%, transparent)' }}>
+          <Pressable
+            onClick={() => finishWorkout()}
+            disabled={submitting}
+            className="btn-primary w-full !py-4 text-[13px] font-bold tracking-[.02em]">
+            {submitting ? 'Saving…' : doneSets === 0 ? 'End session' : `End session · ${doneSets} sets`}
+          </Pressable>
+        </div>
 
       </div>
     );
   }
+
 
   // ================= summary =================
   return (
     <div className="space-y-4">
       <div className="card relative overflow-hidden anim-pop">
         <div className="absolute inset-0" aria-hidden="true"><Suspense fallback={null}><TunnelBackdrop /></Suspense></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-bg/55 via-bg/25 to-bg/80 pointer-events-none" aria-hidden="true" />
+        {/* Scrim over the 3D.
+
+            The previous one was `from-bg/55 via-bg/25 to-bg/80` -- a vertical
+            fade whose WEAKEST point (25%) sat exactly in the middle, which is
+            precisely where the heading and the stat tiles are. So the type
+            was fighting the busiest, brightest part of the animation with the
+            least protection, and in light mode a pale veil over a bright
+            scene washed the text out almost completely.
+
+            Now radial and centred: densest behind the content, thinning
+            toward the corners so the 3D still reads as depth at the edges
+            instead of being flatly covered. `--bg-rgb` means one rule serves
+            both themes -- it veils toward peach in light and charcoal in
+            dark, rather than always darkening.
+
+            The blur is doing real work: softening high-frequency detail
+            behind text is what makes it legible without needing a heavier,
+            duller veil. */}
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
+             style={{
+               background: 'radial-gradient(130% 95% at 50% 42%, rgb(var(--bg-rgb) / .93) 0%, rgb(var(--bg-rgb) / .82) 42%, rgb(var(--bg-rgb) / .55) 100%)',
+               backdropFilter: 'blur(3px)',
+               WebkitBackdropFilter: 'blur(3px)',
+             }} />
         <div className="relative p-6 text-center">
           <div className="w-12 h-12 mx-auto rounded-full grid place-items-center anim-pop"
                style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
@@ -909,9 +1010,18 @@ export default function Workout() {
               ['Volume', result?.volume ? `${Math.round(result.volume).toLocaleString()} kg` : '—'],
               ['Exercises', result?.exercises || '—']
             ].map(([l, v]) => (
-              <div key={l} className="rounded-xl bg-white/[.04] border border-line px-2 py-3">
-                <div className="font-grotesk font-bold text-base">{v}</div>
-                <div className="text-[8px] uppercase tracking-wider text-mute font-grotesk mt-0.5">{l}</div>
+              <div key={l} className="rounded-xl px-2 py-3"
+                   style={{
+                     /* Was bg-white/[.04]: a white wash, which on the peach
+                        light theme reads as a grey smudge and gives the text
+                        almost no separation from the animation behind it.
+                        A panel-tinted tile with a real border sits correctly
+                        on both grounds. */
+                     background: 'rgb(var(--panel-rgb) / .72)',
+                     border: '1px solid var(--line)',
+                   }}>
+                <div className="font-black text-base tabular-nums" style={{ color: 'var(--ink)' }}>{v}</div>
+                <div className="text-[8px] uppercase tracking-[.14em] mt-0.5" style={{ color: 'var(--faint)' }}>{l}</div>
               </div>
             ))}
           </div>
@@ -971,27 +1081,12 @@ export default function Workout() {
               ))}
             </div>
           )}
-          {!!result?.calorie && (
-            <div className="mt-3 rounded-xl border border-good/25 bg-good/5 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-widest text-good font-grotesk mb-1">
-                {result.calorie.provider === 'ml' ? 'ML estimate (testing)' : 'Calorie estimate'}
-              </div>
-              <div className="font-grotesk font-bold text-lg">
-                {Math.round(result.calorie.estimated_active_kcal || 0)} kcal
-              </div>
-              {result.calorie.lower_kcal != null && result.calorie.upper_kcal != null && (
-                <div className="text-[10px] text-mute mt-0.5">
-                  Range: {Math.round(result.calorie.lower_kcal)}–{Math.round(result.calorie.upper_kcal)} kcal
-                </div>
-              )}
-              <div className="text-[9px] text-faint mt-1 font-grotesk">
-                provider: {result.calorie.provider || 'baseline'} · {result.calorie.model_version || ''}
-              </div>
-              {result.calorie?.note && (
-                <div className="text-[9px] text-amber-500 mt-1">⚠ {result.calorie.note}</div>
-              )}
-            </div>
-          )}
+          {/* The legacy calorie block was here. Removed: it duplicated the
+              skos-cal-v1 range shown above with a bare point estimate plus a
+              "provider: ..." debug line, so the same session reported two
+              different-looking calorie figures a few pixels apart. One
+              honest range beats two numbers that disagree. */}
+
           <button className="btn w-full mt-5" onClick={() => { setMode('browse'); setResult(null); setExProgress({}); setSetLog({}); setElapsed(0); }}>Done</button>
         </div>
       </div>
