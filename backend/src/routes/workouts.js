@@ -160,6 +160,48 @@ export default function workoutRoutes(db) {
   });
 
   // ---- complete a workout with per-exercise, per-set logs ----
+  /**
+   * Start a session.
+   *
+   * THIS ROUTE DID NOT EXIST. The client's START SESSION button has always
+   * called POST /workouts/:id/start, and the server has always answered
+   * 404 -- so the button appeared to do nothing at all. `/:id/complete`
+   * below was implemented; its counterpart never was.
+   *
+   * Stamping `started_at` server-side (rather than trusting a timestamp
+   * from the phone) is what makes the session duration authoritative: the
+   * completion handler derives duration from completed_at - started_at,
+   * and that figure now feeds the calorie-burn estimate, so a device with
+   * a wrong clock must not be able to skew it.
+   */
+  r.post('/:id/start', async (req, res) => {
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    const client = await resolveClient(db, req, res, w.client_id);
+    if (!client) return;
+
+    // Already finished: report it rather than silently restarting, so the
+    // client can show the summary instead of a fresh empty session.
+    if (w.completed_at) {
+      return res.json({ ok: true, already_completed: true, started_at: w.started_at, completed_at: w.completed_at });
+    }
+
+    // Idempotent: tapping START twice (or reopening the app mid-session)
+    // must NOT reset the clock, or the duration -- and the burn estimate
+    // derived from it -- silently shrinks.
+    if (w.started_at) {
+      return res.json({ ok: true, already_started: true, started_at: w.started_at });
+    }
+
+    const startedAt = now();
+    await db.run('UPDATE workouts SET started_at = ? WHERE id = ?', [startedAt, w.id]);
+    await track(db, {
+      orgId: client.org_id, userId: req.user.sub, type: 'workout_started',
+      data: { clientId: client.id, workoutId: w.id },
+    }).catch(() => {});
+    res.json({ ok: true, started_at: startedAt });
+  });
+
   r.post('/:id/complete', validate(z_workoutComplete()), async (req, res) => {
     const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });

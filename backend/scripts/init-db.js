@@ -61,6 +61,7 @@ if (config.databaseUrl) {
   addCol('foods', 'source', `source TEXT NOT NULL DEFAULT 'USER_ENTERED'`);
   addCol('exercise_library', 'ex_type', `ex_type TEXT NOT NULL DEFAULT 'compound'`);
   addCol('workouts', 'source', `source TEXT NOT NULL DEFAULT 'program'`);
+  addCol('workouts', 'started_at', `started_at TEXT`);
   addCol('progress_photos', 'storage_key', `storage_key TEXT`);
   addCol('progress_photos', 'storage', `storage TEXT NOT NULL DEFAULT 'data_url'`);
   addCol('workout_logs', 'created_at', `created_at TEXT`);

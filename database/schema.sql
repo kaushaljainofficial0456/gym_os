@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS workouts (
   day_label     TEXT,            -- "Monday" | "Push A" | ...
   scheduled_date TEXT,
   status        TEXT NOT NULL DEFAULT 'assigned' CHECK (status IN ('assigned','completed','missed','draft')),
+  started_at    TEXT,          -- set when the client taps START SESSION
   completed_at  TEXT,
   source        TEXT NOT NULL DEFAULT 'program',  -- program | trainer | gym_template | client_custom | ai
   notes         TEXT,

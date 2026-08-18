@@ -57,6 +57,28 @@ export default function Nutrition() {
     return () => clearTimeout(h);
   }, [toast]);
 
+  /* MUST sit above the early returns below. Hooks have to run in the same
+     order on every render; this effect was originally placed further down,
+     next to the code that uses it, which put it AFTER
+     `if (home.loading) return ...`. The first render (loading) then ran
+     fewer hooks than the second (loaded), and React aborted the whole page
+     with "Rendered more hooks than during the previous render" -- the
+     Nutrition screen rendered completely blank. */
+  // Debounced so typing does not fire a request per keystroke.
+  useEffect(() => {
+    const q = foodSearch.trim();
+    if (q.length < 2) { setFoodResults([]); setSearching(false); return undefined; }
+    setSearching(true);
+    let cancelled = false;
+    const h = setTimeout(() => {
+      api(`/me/foods/search?q=${encodeURIComponent(q)}`)
+        .then((r) => { if (!cancelled) setFoodResults(r.foods || []); })
+        .catch(() => { if (!cancelled) setFoodResults([]); })
+        .finally(() => { if (!cancelled) setSearching(false); });
+    }, 220);
+    return () => { cancelled = true; clearTimeout(h); };
+  }, [foodSearch]);
+
   if (home.loading) return <Spinner label="Loading your fuel plan…" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
 
@@ -123,21 +145,6 @@ export default function Nutrition() {
       await reloadItems();
     } catch (e) { setToast(e.message); }
   };
-
-  // Debounced so typing does not fire a request per keystroke.
-  useEffect(() => {
-    const q = foodSearch.trim();
-    if (q.length < 2) { setFoodResults([]); setSearching(false); return undefined; }
-    setSearching(true);
-    let cancelled = false;
-    const h = setTimeout(() => {
-      api(`/me/foods/search?q=${encodeURIComponent(q)}`)
-        .then((r) => { if (!cancelled) setFoodResults(r.foods || []); })
-        .catch(() => { if (!cancelled) setFoodResults([]); })
-        .finally(() => { if (!cancelled) setSearching(false); });
-    }, 220);
-    return () => { cancelled = true; clearTimeout(h); };
-  }, [foodSearch]);
 
   const addItem = async (f) => {
     try {
