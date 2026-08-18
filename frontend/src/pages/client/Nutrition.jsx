@@ -27,6 +27,13 @@ export default function Nutrition() {
   const [items, setItems] = useState([]);
   const [foodSearch, setFoodSearch] = useState('');
   const [foodQty, setFoodQty] = useState(1);
+  // Server-side search results. The picker used to filter a CLIENT-SIDE
+  // array built from /me/foods, which is capped at 100 gym + 200 global
+  // rows -- so ordinary foods (maggi, avocado, oreo) were simply not in it
+  // and the miss rendered as 0 kcal. Search now runs against the
+  // 21,353-food catalogue on the server.
+  const [foodResults, setFoodResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [chosenFood, setChosenFood] = useState(null);
 
   const data = home.data;
@@ -117,9 +124,36 @@ export default function Nutrition() {
     } catch (e) { setToast(e.message); }
   };
 
+  // Debounced so typing does not fire a request per keystroke.
+  useEffect(() => {
+    const q = foodSearch.trim();
+    if (q.length < 2) { setFoodResults([]); setSearching(false); return undefined; }
+    setSearching(true);
+    let cancelled = false;
+    const h = setTimeout(() => {
+      api(`/me/foods/search?q=${encodeURIComponent(q)}`)
+        .then((r) => { if (!cancelled) setFoodResults(r.foods || []); })
+        .catch(() => { if (!cancelled) setFoodResults([]); })
+        .finally(() => { if (!cancelled) setSearching(false); });
+    }, 220);
+    return () => { cancelled = true; clearTimeout(h); };
+  }, [foodSearch]);
+
   const addItem = async (f) => {
     try {
-      await api(`/me/meals/${composing.id}/items`, { method: 'POST', body: JSON.stringify({ food_id: f.id, quantity: Number(foodQty) || 1 }) });
+      // A catalogue result has no `id` yet -- it is not a row. Materialise
+      // it first so meal_items.food_id keeps pointing at something real.
+      let foodId = f.id;
+      if (!foodId) {
+        const r = await api('/me/foods/from-model', {
+          method: 'POST',
+          body: JSON.stringify({ source_id: f.source_id, name: f.name }),
+        });
+        foodId = r.food?.id;
+        if (!foodId) throw new Error('Could not add that food');
+        foods.reload();
+      }
+      await api(`/me/meals/${composing.id}/items`, { method: 'POST', body: JSON.stringify({ food_id: foodId, quantity: Number(foodQty) || 1 }) });
       setChosenFood(null); setFoodQty(1); setFoodSearch('');
       await reloadItems();
       setToast(`${f.name} added`);
@@ -300,14 +334,36 @@ export default function Nutrition() {
                         </div>
                         {!!foodSearch && (
                           <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
-                            {allFoods.filter((f) => (f.name + ' ' + (f.scope || '')).toLowerCase().includes(foodSearch.toLowerCase())).slice(0, 15).map((f) => (
-                              <button key={f.id} onClick={() => addItem(f)}
-                                className="w-full flex items-center justify-between gap-2 rounded-lg border border-line bg-white/[.03] px-2.5 py-1.5 text-left">
+                            {searching && !foodResults.length && (
+                              <div className="text-[10px] text-faint px-1 py-2">Searching…</div>
+                            )}
+                            {!searching && !foodResults.length && (
+                              <div className="text-[10px] text-faint px-1 py-2">No food matched “{foodSearch}”.</div>
+                            )}
+                            {foodResults.slice(0, 15).map((f) => (
+                              <button key={f.id || f.source_id} onClick={() => addItem(f)}
+                                disabled={f.trustworthy === false}
+                                className="w-full flex items-center justify-between gap-2 rounded-lg border border-line bg-white/[.03] px-2.5 py-1.5 text-left disabled:opacity-50"
+                                title={f.trustworthy === false ? (f.data_quality_flag || 'This entry failed a data-quality check') : undefined}>
                                 <span className="min-w-0">
                                   <span className="block text-[12px] font-grotesk font-semibold truncate">{f.name}</span>
-                                  <span className="text-[9px] text-mute">{f.scope} · {f.calories} kcal · P{f.protein} C{f.carbs} F{f.fat}</span>
+                                  <span className="text-[9px] text-mute">
+                                    {/* A null nutrient means NOT MEASURED. Never render it as 0. */}
+                                    {f.trustworthy === false
+                                      ? (f.data_quality_flag || 'Data quality flagged')
+                                      : `${f.calories == null ? '—' : Math.round(f.calories)} kcal / 100 g · P${f.protein ?? '—'} C${f.carbs ?? '—'} F${f.fat ?? '—'}`}
+                                  </span>
                                 </span>
-                                <span className="text-[10px] text-gold shrink-0">+ Add</span>
+                                <span className="flex items-center gap-1.5 shrink-0">
+                                  {/* Confidence is calibrated server-side; the UI honours it
+                                      rather than presenting every match as equally firm. */}
+                                  {f.confidence && f.confidence !== 'high' && (
+                                    <span className="text-[8px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>
+                                      {f.confidence}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px]" style={{ color: 'var(--accent)' }}>+ Add</span>
+                                </span>
                               </button>
                             ))}
                           </div>

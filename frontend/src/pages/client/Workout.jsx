@@ -312,7 +312,13 @@ export default function Workout() {
          on. A failure here leaves `burn` null and the summary simply omits
          the figure -- it never blocks or errors the completion itself,
          which is already saved server-side by this point. */
-      api('/intelligence/workout-burn', {
+      /* NOTE the prefix: the intelligence router is mounted at `/api/intel`
+         in backend/src/index.js, NOT `/api/intelligence`. This originally
+         called `/intelligence/workout-burn`, which 404s -- and because the
+         burn fetch is deliberately fire-and-forget so it can never break a
+         completed session, the failure was SILENT: the summary simply never
+         showed a calorie figure and nothing surfaced to say why. */
+      api('/intel/workout-burn', {
         method: 'POST',
         body: JSON.stringify({
           duration_minutes: durationMin,
