@@ -1,0 +1,175 @@
+{
+  "model_version": "skos-cal-v1",
+  "schema_version": "0.2",
+  "trained_at": "2026-08-16T21:01:37.306215+00:00",
+  "trained_on": {
+    "participants": 14,
+    "rows": 1001,
+    "datasets": [
+      "reis2017",
+      "reis2019"
+    ],
+    "population": "100% male, ages ~20-35, isolated single-exercise lab protocols \u2014 see MODEL_CARD.md before trusting outside this population"
+  },
+  "baseline": {
+    "formula": "MET[intensity_tier] * 3.5 * body_weight_kg / 200  (kcal/min rate)",
+    "met_by_tier": {
+      "light": 3.0,
+      "moderate": 4.5,
+      "hard": 6.0
+    }
+  },
+  "exercise_attributes": {
+    "BENCH_PRESS": {
+      "muscle_group": "chest",
+      "movement_pattern": "horizontal_push",
+      "compound_or_isolation": "compound",
+      "data_source_variant_note": null
+    },
+    "INCLINE_BENCH_PRESS": {
+      "muscle_group": "upper_chest",
+      "movement_pattern": "horizontal_push",
+      "compound_or_isolation": "compound",
+      "data_source_variant_note": null
+    },
+    "BARBELL_SQUAT": {
+      "muscle_group": "quads",
+      "movement_pattern": "squat",
+      "compound_or_isolation": "compound",
+      "data_source_variant_note": "Source studies used a 'half squat' protocol on a guided/Smith-type rig, not a free barbell back squat to full depth. Energy-cost values may not transfer 1:1 to SK OS's BARBELL_SQUAT if that exercise is logged as a free-weight full-depth squat."
+    },
+    "LEG_PRESS": {
+      "muscle_group": "quads",
+      "movement_pattern": "squat",
+      "compound_or_isolation": "compound",
+      "data_source_variant_note": null
+    },
+    "LEG_EXTENSION": {
+      "muscle_group": "quads",
+      "movement_pattern": "isolation",
+      "compound_or_isolation": "isolation",
+      "data_source_variant_note": null
+    },
+    "LAT_PULLDOWN": {
+      "muscle_group": "lats",
+      "movement_pattern": "vertical_pull",
+      "compound_or_isolation": "compound",
+      "data_source_variant_note": null
+    },
+    "BICEP_CURL": {
+      "muscle_group": "biceps",
+      "movement_pattern": "isolation",
+      "compound_or_isolation": "isolation",
+      "data_source_variant_note": null
+    },
+    "TRICEPS_EXTENSION": {
+      "muscle_group": "triceps",
+      "movement_pattern": "isolation",
+      "compound_or_isolation": "isolation",
+      "data_source_variant_note": null
+    }
+  },
+  "correction_kcal_per_min_by_exercise_and_tier": {
+    "BENCH_PRESS": {
+      "light": 0.109,
+      "moderate": -1.672,
+      "hard": 3.172
+    },
+    "INCLINE_BENCH_PRESS": {
+      "light": 1.094,
+      "moderate": -0.031,
+      "hard": 8.422
+    },
+    "BARBELL_SQUAT": {
+      "light": 6.406,
+      "moderate": 5.359,
+      "hard": 27.969
+    },
+    "LEG_PRESS": {
+      "light": 2.141,
+      "moderate": 1.594,
+      "hard": 11.562
+    },
+    "LEG_EXTENSION": {
+      "light": 2.844,
+      "moderate": 1.562,
+      "hard": 17.312
+    },
+    "LAT_PULLDOWN": {
+      "light": -0.844,
+      "moderate": -1.906,
+      "hard": 1.25
+    },
+    "BICEP_CURL": {
+      "light": -0.719,
+      "moderate": -2.203,
+      "hard": 0.297
+    },
+    "TRICEPS_EXTENSION": {
+      "light": -0.859,
+      "moderate": -1.781,
+      "hard": 2.5
+    }
+  },
+  "interval_offsets_kcal_per_min": {
+    "80": {
+      "lo_offset_kcal_min": -1.949,
+      "hi_offset_kcal_min": 1.82
+    },
+    "90": {
+      "lo_offset_kcal_min": -3.112,
+      "hi_offset_kcal_min": 2.505
+    }
+  },
+  "unmapped_exercise_fallback": {
+    "note": "Any exercise_id not in exercise_attributes/correction table: apply the baseline formula with ZERO correction, and widen the interval \u2014 never silently guess a correction for an unknown exercise.",
+    "widen_interval_factor": 1.5
+  },
+  "body_weight_validity": {
+    "reference_body_weight_kg": 78.67,
+    "reference_body_weight_sd_kg": 10.7,
+    "note": "CRITICAL, not fully fixable without new data: the source studies never recorded individual participant body weight, only a cohort mean (78.67kg, SD 10.7kg) \u2014 every training-time baseline prediction used this SAME constant weight for all 14 participants, so the correction terms cannot reflect any real body-weight scaling relationship, even in principle. Runtime should flag/widen when the actual user's body_weight_kg falls outside [flag_below_kg, flag_above_kg] below. A real fix requires new data with individual weights (Phase 9 calibration cohort), not a retrain on the existing data.",
+    "flag_below_kg": 57.3,
+    "flag_above_kg": 100.1
+  },
+  "plausibility_guardrails": {
+    "min_active_rate_met": 1.3,
+    "min_active_rate_rationale": "Lowest resistance-exercise MET independently measured in any source we hold (Adeel et al. 2021, shoulder press, untrained group, Cortex Metalyzer 3B). Acts as a floor symmetric with max_active_rate_kcal_min: a negative correction must never drive the estimate below the least demanding resistance exercise ever measured. Does not trigger anywhere in the 45-125kg estimable range (verified) - it is insurance against unenumerated exercise/tier/weight combinations, not an active adjustment.",
+    "max_active_rate_kcal_min": 20.0,
+    "rationale": "Conservative sustained-rate ceiling (~20-24 kcal/min is roughly the range elite endurance athletes sustain at near-maximal aerobic power). Hard-tier (80%1RM) corrections were fit on 26-56 SECOND near-maximal single bouts (see DATA_AUDIT.md row 7), never validated as a sustainable per-minute rate. V1_PRE_INTEGRATION_AUDIT.md #3/#4/#5/#6: without this cap, BARBELL_SQUAT hard alone computes to 36.2 kcal/min at cohort-mean body weight. This is a safety net, not a scientific fix \u2014 it prevents physiologically-impossible numbers from reaching a user; it does not make the underlying rate accurate for long durations. Real fix needs real multi-set session data (Phase 9)."
+  },
+  "validated_range": {
+    "body_weight_kg": {
+      "min": 57.3,
+      "max": 100.1
+    },
+    "duration_minutes": {
+      "min": 1,
+      "max": 120
+    },
+    "rationale": "Body weight: training cohort mean +/- 2SD. Duration: 120min is the longest resistance session with ANY independent whole-session measurement behind it (Adeel 2021 116min; Joao 2021 116min). Inside these bounds the estimate sits within the evidence base."
+  },
+  "estimable_range": {
+    "body_weight_kg": {
+      "min": 45.0,
+      "max": 125.0,
+      "rationale": "Both bounds widened by product decision beyond the validated band. Checked before accepting: at 45kg the WORST-CASE combination (most negative correction, 60-min session) still implies 1.70-1.91 METs, which is ABOVE the lowest resistance-exercise MET independently measured in any source we hold (1.30, Adeel 2021 shoulder press, untrained). So 45kg output is low but physiologically defensible. Below ~40kg it is not: the constant correction dominates (-213% of net) and sessions clamp toward zero, which is why the hard floor sits at 45 and not lower. On the upper side the correction's relative influence SHRINKS as weight rises (-28% of net at 125kg vs -53% at the 78.67kg fit weight), so plausibility is not the binding constraint there. 45-57.3kg and 100.1-125kg are allowed but confidence-downgraded."
+    },
+    "duration_minutes": {
+      "min": 1,
+      "max": 150.0,
+      "rationale": "Extended to 150min by product decision to cover genuine long sessions (2-2.5h powerlifting/bodybuilding work is real). 120-150min has NO external corroboration -- the flat-rate assumption is least reliable there and most likely to over-estimate, since rest accumulates. Allowed but confidence-downgraded; beyond 150min ML refuses."
+    }
+  },
+  "external_plausibility_envelope_kcal_min_per_kg": {
+    "min": 0.0593,
+    "max": 0.0665,
+    "note": "Independent whole-session measurements, normalised per kg so body weight cancels: Rustaden 2020 (0.0593), Benito 2016 (0.0603), Adeel 2021 (0.0598), Nakagata 2019 (0.0630-0.0665). Four labs, four countries. A session-level estimate outside this band is not necessarily wrong, but is outside everything independently measured -- used to downgrade confidence, never to alter the estimate. See scripts/external_plausibility_envelope.py."
+  },
+  "source_measured_bout_duration_minutes": {
+    "hard": 1.0,
+    "moderate": 5.0,
+    "light": 5.0,
+    "note": "Longest continuous single-intensity bout actually measured in the source studies, per tier (DATA_AUDIT.md row 7: reis2017 4-5min/26-56s, reis2019 4x4min). 'hard' rounds the 26-56s 80%1RM bouts up to 1 minute, conservatively. Any session duration beyond this, for an exercise/tier combination present in the session, is extrapolation beyond what was directly measured \u2014 flagged via `note` and widened at runtime, not silently presented as equally certain."
+  }
+}
