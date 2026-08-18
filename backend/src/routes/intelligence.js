@@ -18,6 +18,12 @@ import { track } from '../services/events.js';
 import { parseFoodInput } from '../services/intelligence/parseFoods.js';
 import { parseWorkoutInput } from '../services/intelligence/parseWorkout.js';
 import { parseQuantity, foodBase } from '../services/intelligence/units.js';
+import { estimateBurn, burnModelAvailable } from '../services/burnEstimator.js';
+import {
+  searchFoods as searchFoodModel,
+  estimateFromBarcode,
+  modelAvailable as foodModelAvailable,
+} from '../services/foodEstimator.js';
 import { resolveFood, searchFoods } from '../services/intelligence/foodSearch.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 import { computeNutrition, sumNutrition } from '../services/intelligence/nutrition.js';
@@ -221,6 +227,76 @@ export default function intelligenceRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const foods = await searchFoods(db, c.org_id, c.id, req.query.q || '', { limit: parseInt(req.query.limit, 10) || 8 });
     res.json({ foods });
+  });
+
+  // ---------------- workout calorie burn (skos-cal-v1) ----------------
+  // POST because a session is a body of sets, not a query string.
+  //
+  // Returns 422 rather than a number when the model refuses. It hard-
+  // requires a body weight and a duration, and inventing either would
+  // produce a confident figure with nothing behind it -- so a missing
+  // weight is reported as something the user can fix.
+  r.post('/workout-burn', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!burnModelAvailable()) {
+      return res.status(503).json({ error: 'Burn model not available on this deployment' });
+    }
+    const b = req.body || {};
+    const bodyWeightKg = Number(b.body_weight_kg) || Number(c.current_weight) || null;
+    const result = estimateBurn({
+      bodyWeightKg,
+      durationMinutes: Number(b.duration_minutes),
+      intensity: b.intensity,
+      exercises: b.exercises || [],
+    });
+    if (!result) {
+      return res.status(422).json({
+        error: !bodyWeightKg
+          ? 'Add your body weight to estimate calories burned'
+          : 'Session is outside what this model can estimate',
+        needs: !bodyWeightKg ? 'body_weight_kg' : 'duration_minutes',
+      });
+    }
+    // The interval and notes go out with the number, never stripped: the
+    // model's uncertainty is part of its answer (see burnEstimator.js).
+    res.json(result);
+  });
+
+  // ---------------- barcode scan -> auto-log (CONTRACT §3.6) ----------------
+  // Exact-key lookup, NOT ranked search: a scanned code either matches a
+  // product or it does not. A miss is a 404 so the client falls back to
+  // name search -- never a substituted "closest" food, which for a barcode
+  // would be a confidently wrong product.
+  r.get('/foods/barcode/:code', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const servings = Number(req.query.servings) > 0 ? Number(req.query.servings) : 1;
+    const result = estimateFromBarcode(req.params.code, servings);
+    if (!result) {
+      return res.status(404).json({
+        error: 'Barcode not recognised',
+        barcode: req.params.code,
+        // Open Food Facts is crowd-sourced, so a real product in the user's
+        // hand can legitimately be unindexed. Tell the client what to do.
+        fallback: 'search_by_name',
+      });
+    }
+    res.json(result);
+  });
+
+  // ---------------- model-backed food search (CONTRACT §3.1) ----------------
+  // Deliberately a SEPARATE path from `GET /foods` above. That one returns
+  // rows from the `foods` table whose ids meal-logging already persists;
+  // swapping its body would change the meaning of those ids. This returns
+  // FoodMatch shapes from skos-food-v1 (21,353 foods, calibrated
+  // confidence, per-food portions) for the picker to offer alongside.
+  r.get('/foods/model-search', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!foodModelAvailable()) {
+      return res.status(503).json({ error: 'Food model not available on this deployment', foods: [] });
+    }
+    const limit = Math.min(25, parseInt(req.query.limit, 10) || 8);
+    const foods = searchFoodModel(String(req.query.q || ''), { limit });
+    res.json({ foods, schema_version: 'food-v1', model_version: 'skos-food-v1' });
   });
 
   // ---------------- exercise search (intent-aware) ----------------
