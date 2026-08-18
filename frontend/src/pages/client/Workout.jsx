@@ -5,6 +5,7 @@ import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Bar, Ring } from '../../components/UI.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
+import RestTimer from '../../components/RestTimer.jsx';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
@@ -43,6 +44,11 @@ export default function Workout() {
   const [execInputs, setExecInputs] = useState({}); // exId -> { reps, weight, rir }
   const [setLog, setSetLog] = useState({}); // exId -> [{reps, weight, rir}, ...] per-set capture
   const [startedAt, setStartedAt] = useState(0);
+  // Rest is held as an absolute DEADLINE, not a countdown value -- see
+  // RestTimer.jsx for why a decrementing counter loses time whenever the
+  // phone locks or the user switches apps mid-set.
+  const [rest, setRest] = useState(null);   // { endsAt, totalSec, nextLabel }
+  const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   // this week preview
   const [weekDay, setWeekDay] = useState(null); // { label, name, focus, exercises }
@@ -71,6 +77,12 @@ export default function Workout() {
     const h = setTimeout(() => setToast(''), 2400);
     return () => clearTimeout(h);
   }, [toast]);
+
+  // Rest belongs to execute mode only: leaving it (finish, or bail to
+  // browse) must not leave a countdown pinned over another screen.
+  useEffect(() => {
+    if (mode !== 'execute') setRest(null);
+  }, [mode]);
 
   // session elapsed timer — ticks every second during execute mode
   useEffect(() => {
@@ -166,7 +178,7 @@ export default function Workout() {
         exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec }))
       }) });
       setPlannerOpen(false);
-      setToast(`${w.name} is today's session 🔥`);
+      setToast(`${w.name} is today's session`);
       today.reload(); hist.reload();
     } catch (e) { setToast(e.message || 'Could not schedule today'); }
   };
@@ -246,8 +258,21 @@ export default function Workout() {
     setExProgress(next);
     const remainingAfter = state.filter((e) => (next[e.id] || 0) < (e.sets || 0)).length;
     if (remainingAfter > 0) {
-      // No rest timer overlay — only the session timer continues running
+      // Start the rest period from the exercise's own prescribed rest, and
+      // name what is coming next -- mid-session the useful question is
+      // "what am I doing when this ends", not "how long have I rested".
+      const restSec = Number(currentEx.rest_sec) > 0 ? Number(currentEx.rest_sec) : 90;
+      const setsDone = next[currentEx.id] || 0;
+      const moreOfThis = setsDone < (currentEx.sets || 0);
+      const upcoming = moreOfThis
+        ? state.find((e) => e.id === currentEx.id)
+        : state.find((e) => (next[e.id] || 0) < (e.sets || 0));
+      const nextLabel = moreOfThis
+        ? `${currentEx.name} — set ${setsDone + 1} of ${currentEx.sets}`
+        : (upcoming ? upcoming.name : 'Next exercise');
+      setRest({ endsAt: Date.now() + restSec * 1000, totalSec: restSec, nextLabel });
     } else {
+      setRest(null);
       finishWorkout(next);
     }
   };
@@ -280,6 +305,31 @@ export default function Workout() {
       const durationMin = res.duration_min ?? Math.max(1, Math.round((Date.now() - startedAt) / 60000));
       setResult({ prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null });
       setMode('summary');
+
+      /* Calorie burn (skos-cal-v1). Deliberately AFTER setMode:
+         the summary must render immediately on a finished session, so this
+         is a progressive enhancement rather than something the user waits
+         on. A failure here leaves `burn` null and the summary simply omits
+         the figure -- it never blocks or errors the completion itself,
+         which is already saved server-side by this point. */
+      api('/intelligence/workout-burn', {
+        method: 'POST',
+        body: JSON.stringify({
+          duration_minutes: durationMin,
+          exercises: state
+            .filter((e) => (progress[e.id] || 0) > 0)
+            .map((e) => ({
+              name: e.name,
+              sets: (setLog[e.id] || []).map((st) => ({
+                actual_reps: Number(st.reps) || 0,
+                actual_weight: Number(st.weight) || 0,
+                completed: 1,
+              })),
+            })),
+        }),
+      })
+        .then(setBurn)
+        .catch(() => setBurn(null));   // 422 = model declined; show nothing
       today.reload(); hist.reload();
     } catch (e) {
       setToast(e.message || 'Could not log workout');
@@ -326,7 +376,7 @@ export default function Workout() {
             {/* My Workouts (planner) */}
             <button onClick={openPlanner}
               className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-gold/10 border border-gold/25 grid place-items-center text-lg">📋</div>
+              <div className="w-11 h-11 rounded-2xl bg-gold/10 border border-gold/25 grid place-items-center" style={{ color: 'var(--accent)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div>
               <span className="font-grotesk text-[11px] font-semibold leading-tight">My<br/>Workout</span>
             </button>
             {/* Build Today */}
@@ -336,18 +386,18 @@ export default function Workout() {
               setBuilderOpen(true);
             }}
               className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-ember/10 border border-ember/25 grid place-items-center text-lg">🔨</div>
+              <div className="w-11 h-11 rounded-2xl bg-ember/10 border border-ember/25 grid place-items-center" style={{ color: 'var(--accent)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></div>
               <span className="font-grotesk text-[11px] font-semibold leading-tight">Build<br/>Today</span>
             </button>
             {/* My PR */}
             <button onClick={() => nav('/app/client/progress')}
               className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-good/10 border border-good/25 grid place-items-center text-lg">🏆</div>
+              <div className="w-11 h-11 rounded-2xl bg-good/10 border border-good/25 grid place-items-center" style={{ color: 'var(--good)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/></svg></div>
               <span className="font-grotesk text-[11px] font-semibold leading-tight">My<br/>PR</span>
             </button>
           </div>
           {locked && (
-            <div className="text-[10px] text-faint mt-2 font-grotesk">Your gym has locked workout creation — follow your coach's plan. 🔒</div>
+            <div className="text-[10px] text-faint mt-2 font-grotesk">Your gym has locked workout creation — follow your coach's plan.</div>
           )}
         </div>
 
@@ -360,7 +410,7 @@ export default function Workout() {
                 <h1 className="font-grotesk font-bold text-2xl leading-tight">{workout.name}</h1>
               </div>
               <button data-start-workout className="btn-primary shrink-0 !px-4 !py-2.5 !text-xs active:scale-95" onClick={startWorkout} disabled={!exercises.length || starting}>
-                {starting ? 'Starting…' : '🔥 START SESSION'}
+                {starting ? 'Starting…' : 'START SESSION'}
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2.5 mt-3">
@@ -378,7 +428,7 @@ export default function Workout() {
           </div>
         ) : (
           <div className="card p-10 text-center anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            <div className="text-4xl mb-3 anim-pop">🛌</div>
+            
             <div className="font-grotesk font-bold text-lg">Rest day</div>
             <div className="text-xs text-mute mt-1.5 max-w-xs mx-auto">No session scheduled for today. Recovery is training too — fuel well and sleep 8 hours.</div>
             <div className="mt-4 text-[10px] uppercase tracking-widest text-gold font-grotesk">Next session appears here tomorrow</div>
@@ -558,7 +608,7 @@ export default function Workout() {
                     try {
                       await api('/me/workouts', { method: 'POST', body: JSON.stringify({ name: builderName, exercises: builderExs.map((b) => ({ exercise_id: b.exercise_id, sets: b.sets, reps: b.reps, weight: b.weight })) }) });
                       setBuilderOpen(false); setBuilderName(''); setBuilderExs([]); setSelectedLibEx(null); setJustAdded(null);
-                      setToast('Your workout is scheduled for today 🔥');
+                      setToast('Your workout is scheduled for today');
                       today.reload(); hist.reload();
                     } catch (e) { setToast(e.message); }
                     setSavingBuilder(false);
@@ -658,7 +708,7 @@ export default function Workout() {
                     <div className="space-y-2">
                       {planner?.workouts?.length === 0 && (
                         <div className="card !p-6 text-center">
-                          <div className="text-2xl mb-1.5">🏋️</div>
+                          
                           <div className="text-xs text-mute">No saved workouts yet — create one, then assign it to your week.</div>
                         </div>
                       )}
@@ -800,13 +850,32 @@ export default function Workout() {
           </div>
         ) : (
           <div className="card p-8 text-center">
-            <div className="text-3xl mb-2">💪</div>
+            
             <div className="font-grotesk font-bold text-lg">All sets done!</div>
             <button className="btn-primary w-full !py-4 mt-4" onClick={() => { setExProgress({}); setMode('summary'); finishWorkout(Object.fromEntries(state.map((e) => [e.id, e.sets]))); }} disabled={submitting}>
               {submitting ? 'Logging…' : 'Finish & log workout'}
             </button>
           </div>
         )}
+
+        {/* Rest timer. Fixed to the bottom of the viewport rather than
+            inline, because during a set the phone is usually on the floor
+            or a bench and the remaining time has to be readable without
+            scrolling to find it. */}
+        {rest && (
+          <RestTimer
+            endsAt={rest.endsAt}
+            totalSec={rest.totalSec}
+            nextLabel={rest.nextLabel}
+            onSkip={() => setRest(null)}
+            onAddTime={(sec) => setRest((r) => (r
+              ? { ...r, endsAt: r.endsAt + sec * 1000, totalSec: r.totalSec + sec }
+              : r))}
+          />
+        )}
+        {/* Reserve the timer's height so the last control is never left
+            trapped underneath the overlay. */}
+        {rest && <div className="h-40" aria-hidden="true" />}
 
       </div>
     );
@@ -819,7 +888,13 @@ export default function Workout() {
         <div className="absolute inset-0" aria-hidden="true"><Suspense fallback={null}><TunnelBackdrop /></Suspense></div>
         <div className="absolute inset-0 bg-gradient-to-b from-bg/55 via-bg/25 to-bg/80 pointer-events-none" aria-hidden="true" />
         <div className="relative p-6 text-center">
-          <div className="w-14 h-14 mx-auto rounded-full bg-good/15 border border-good/40 grid place-items-center text-2xl anim-pop">🏆</div>
+          <div className="w-12 h-12 mx-auto rounded-full grid place-items-center anim-pop"
+               style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                 strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </div>
           <h1 className="font-grotesk font-bold text-2xl mt-3">Workout complete</h1>
           <div className="text-xs text-mute mt-1">{workout?.name}</div>
           <div className="grid grid-cols-3 gap-2 mt-5">
@@ -834,9 +909,49 @@ export default function Workout() {
               </div>
             ))}
           </div>
+          {/* Calorie burn. Shown as a RANGE, not a single figure.
+              skos-cal-v1's interval is genuinely about +-70% of its point
+              estimate, so "597 kcal" would claim a precision the model
+              explicitly does not have. The range is the honest headline;
+              the point estimate is the smaller number inside it. */}
+          {burn && (
+            <div className="mt-4 rounded-xl border px-4 py-3 text-left"
+                 style={{ borderColor: 'var(--line)', background: 'var(--accent-soft)' }}>
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>
+                  Calories burned
+                </div>
+                <div className="text-[9px]" style={{ color: 'var(--faint)' }}>
+                  {burn.model_version}
+                </div>
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-black text-[24px] tabular-nums tracking-[-.02em]"
+                      style={{ color: 'var(--ink)' }}>
+                  {burn.lower_kcal}–{burn.upper_kcal}
+                </span>
+                <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
+              </div>
+              <div className="mt-0.5 text-[11px]" style={{ color: 'var(--mute)' }}>
+                best estimate ≈{burn.kcal} kcal
+              </div>
+              {/* The model's own caveats, surfaced rather than swallowed. An
+                  estimate it has flagged as shaky must not read as clean. */}
+              {!!burn.notes?.length && (
+                <ul className="mt-2 space-y-1">
+                  {burn.notes.map((n) => (
+                    <li key={n} className="text-[10px] leading-snug" style={{ color: 'var(--faint)' }}>
+                      {n}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {!!result?.prs?.length && (
             <div className="mt-4 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-widest text-gold font-grotesk mb-1.5">🎉 New personal records</div>
+              <div className="text-[10px] uppercase tracking-widest text-gold font-grotesk mb-1.5">New personal records</div>
               {result.prs.map((p) => (
                 <div key={p.name + p.records?.map(r => r.type).join() || ''} className="text-sm font-grotesk">
                   <span className="font-bold">{p.name}</span>
@@ -853,7 +968,7 @@ export default function Workout() {
           {!!result?.calorie && (
             <div className="mt-3 rounded-xl border border-good/25 bg-good/5 px-4 py-3">
               <div className="text-[10px] uppercase tracking-widest text-good font-grotesk mb-1">
-                🔥 {result.calorie.provider === 'ml' ? 'ML estimate (testing)' : 'Calorie estimate'}
+                {result.calorie.provider === 'ml' ? 'ML estimate (testing)' : 'Calorie estimate'}
               </div>
               <div className="font-grotesk font-bold text-lg">
                 {Math.round(result.calorie.estimated_active_kcal || 0)} kcal
