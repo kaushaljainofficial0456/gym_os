@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
+import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 
@@ -33,6 +34,7 @@ export default function Nutrition() {
   // and the miss rendered as 0 kcal. Search now runs against the
   // 21,353-food catalogue on the server.
   const [foodResults, setFoodResults] = useState([]);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [chosenFood, setChosenFood] = useState(null);
 
@@ -474,6 +476,31 @@ export default function Nutrition() {
       </div>
 
       {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {/* Full logging flow: search -> portion -> oil -> add. Replaces the
+          bare name-only picker, which silently assumed one serving. */}
+      <FoodLogSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onAdd={async ({ food, resolved }) => {
+          const r = await api('/me/foods/from-model', {
+            method: 'POST',
+            body: JSON.stringify({ source_id: food.source_id, name: food.name }),
+          });
+          const foodId = r.food?.id;
+          if (!foodId) throw new Error('Could not add that food');
+          if (composing?.id) {
+            // Quantity is expressed in servings of the stored 100 g row, so
+            // grams/100 is the multiplier that reproduces the resolved macros.
+            await api(`/me/meals/${composing.id}/items`, {
+              method: 'POST',
+              body: JSON.stringify({ food_id: foodId, quantity: (resolved.grams || 100) / 100 }),
+            });
+            await reloadItems();
+          }
+          foods.reload();
+          setToast(`${food.name} added`);
+        }}
+      />
     </div>
   );
 }

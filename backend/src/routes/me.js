@@ -14,7 +14,11 @@ import { id, now } from '../ids.js';
 import { dayKey, getOrgTz } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
-import { searchFoods as searchFoodModel, modelAvailable as foodModelAvailable } from '../services/foodEstimator.js';
+import {
+  searchFoods as searchFoodModel,
+  modelAvailable as foodModelAvailable,
+  resolveFoodQuantity,
+} from '../services/foodEstimator.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -271,6 +275,14 @@ export default function meRoutes(db) {
         trustworthy: f.trustworthy !== false,
         cooking_state: f.cooking_state || null,
         data_quality_flag: f.data_quality_flag || null,
+        match_kind: f.match_kind || null,
+        // Food-specific portion sizes (CONTRACT §3.4b). A bowl of dal is
+        // 250 g and a bowl of spinach 62 g, so this cannot be a global
+        // table the client caches -- it ships per result.
+        portions: f.portions || [],
+        // Only cooked dishes can meaningfully take an oil adjustment;
+        // telling the user they can add oil to an apple is noise.
+        oil_applicable: f.cooking_state === 'cooked' || f.cuisine === 'INDIAN',
       }));
     }
 
@@ -286,6 +298,32 @@ export default function meRoutes(db) {
       ],
       model_available: foodModelAvailable(),
     });
+  });
+
+  /**
+   * Resolve a chosen portion (and optional oil level) into grams and final
+   * macros, WITHOUT logging anything.
+   *
+   * The client could not do this itself and should not try: portion ->
+   * grams depends on the food's own density and measured serving weight,
+   * and the oil adjustment is applied as a DELTA from the dish's own
+   * recipe oil so selecting "low" on an already-oily dish correctly
+   * REDUCES calories rather than adding a second helping. Both live in the
+   * calibrated model; re-implementing either in the UI is how the numbers
+   * drift apart.
+   */
+  r.post('/foods/resolve', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
+    const { source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
+
+    const hits = searchFoodModel(name || source_id || '', { limit: 25 });
+    const food = (source_id && hits.find((x) => x.source_id === source_id)) || hits[0];
+    if (!food) return res.status(404).json({ error: 'No matching food' });
+
+    const resolved = resolveFoodQuantity(food, { portionKey: portion_key, count, grams, oilLevel: oil_level });
+    if (!resolved) return res.status(422).json({ error: 'Could not resolve that quantity for this food' });
+    res.json(resolved);
   });
 
   /**

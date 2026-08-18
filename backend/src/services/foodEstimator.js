@@ -48,6 +48,7 @@ const PROC = path.join(ML, 'data', 'processed');
 
 const {
   FoodSearch, toGrams, scaleNutrition, portionToGrams, canonicalPortion,
+  listPortions, adjustOil, OIL_LEVELS,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'foodEstimate.reference.js'));
 
 const {
@@ -419,12 +420,212 @@ export function estimateFood(text) {
 
 /**
  * Ranked food search for the picker UI. Returns FoodMatch shapes
- * (CONTRACT §3.1).
+ * (CONTRACT §3.1) with a `portions` array attached.
+ *
+ * TWO PASSES, DELIBERATELY:
+ *
+ * 1. The model's RANKED search. This is the calibrated one -- it decides
+ *    which single food "tomato" most likely means, and its confidence
+ *    labels are measured against held-out lab data.
+ *
+ * 2. A plain CONTAINS pass. Ranking alone is wrong for a type-ahead:
+ *    querying "tomato" returned four raw tomato cultivars (green, orange,
+ *    ripe, yellow) and nothing else, because those score highest. But
+ *    someone typing "tomato" is often reaching for tomato soup, tomato
+ *    ketchup or a tomato curry, and a suggestion list exists to show the
+ *    BREADTH of what is available, not to insist on one answer.
+ *
+ * Ranked hits stay first so the best match is still the default. The
+ * contains pass fills the rest, preferring names that START with the
+ * query and then shorter names, since "Tomato soup" is a likelier target
+ * than "Babyfood, dinner, macaroni and tomato and beef, junior".
  */
-export function searchFoods(query, { limit = 8 } = {}) {
+export function searchFoods(query, { limit = 8, withPortions = true } = {}) {
   const search = getFoodSearch();
   if (!search) return [];
-  return search.search(query, { limit });
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+
+  /* Reserve room for the contains pass instead of letting the ranker fill
+     every slot. Querying "tomato" used to return eight tomato CULTIVARS --
+     green, orange, ripe, yellow, roma, pickled -- which is a taxonomy, not
+     a useful suggestion list. Half the slots now go to the ranked best
+     matches and half to other foods whose names contain the query, which
+     is where tomato soup, ketchup and curries live. */
+  const rankedKeep = Math.max(1, Math.ceil(limit / 2));
+  const ranked = search.search(q, { limit }).slice(0, rankedKeep);
+  const seen = new Set(ranked.map((f) => f.source_id));
+
+  let extra = [];
+  if (ranked.length < limit) {
+    const norm = (x) => (x._norm || String(x.food_name || '').toLowerCase());
+    extra = search.foods
+      .filter((f) => !seen.has(f.source_id) && norm(f).includes(q))
+      .sort((a, b) => {
+        const as = norm(a).startsWith(q) ? 0 : 1;
+        const bs = norm(b).startsWith(q) ? 0 : 1;
+        if (as !== bs) return as - bs;
+        return norm(a).length - norm(b).length;
+      })
+      .slice(0, limit - ranked.length)
+      .map((f) => ({
+        ...f,
+        // These did not go through the calibrated ranker, so they must not
+        // borrow its confidence labels. `low` is the honest floor.
+        confidence: f.confidence || 'low',
+        match_kind: 'name_contains',
+      }));
+  }
+
+  const out = [...ranked, ...extra];
+  if (!withPortions) return out;
+
+  return out.map((f) => ({
+    ...f,
+    // Portions are FOOD-SPECIFIC: a bowl of dal is 250 g, a bowl of
+    // spinach 62 g. Computed per result rather than published as a global
+    // table, which is the whole point of CONTRACT §3.4b.
+    portions: safePortions(f),
+  }));
+}
+
+/** listPortions can throw on odd names; a missing portion list must not
+ *  take down the search request. */
+function safePortions(food) {
+  try {
+    return listPortions(food.food_name, food.cooking_state).map((p) => ({
+      ...p,
+      // Prefer the food's OWN measured serving weight when it has one.
+      grams: p.basis === 'serving' && food.serving_grams ? food.serving_grams : p.grams,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve a chosen quantity (grams, or a portion x count) plus an optional
+ * oil level into final macros for ONE logged item.
+ *
+ * Order of preference for grams matches CONTRACT §3.4b:
+ *   explicit grams  ->  portion x the food's own density/serving  ->  100 g
+ *
+ * OIL is applied through the model's adjustOil, never by adding
+ * `grams x 9 kcal` here. The model treats the selected level as a DELTA
+ * from the dish's own recipe oil, so picking "low" on a dish that already
+ * assumes a lot of oil REDUCES its calories -- and it conserves mass,
+ * because 10 g of added oil is also 10 g of extra food. Hand-rolling that
+ * arithmetic in a route is how the UI and the model start disagreeing.
+ */
+export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLevel } = {}) {
+  if (!food) return null;
+  const n = Number(count) > 0 ? Number(count) : 1;
+
+  let g = null;
+  let basis = null;
+  let label = null;
+
+  if (Number(grams) > 0) {
+    g = Number(grams);
+    basis = 'grams';
+    label = `${g} g`;
+  } else if (portionKey) {
+    const p = portionToGrams(portionKey, n, {
+      foodName: food.food_name,
+      cookingState: food.cooking_state,
+      servingGrams: food.serving_grams,
+    });
+    if (p && p.grams > 0) {
+      g = p.grams;
+      basis = p.basis;
+      label = `${n} x ${portionKey.replace(/_/g, ' ')}`;
+    }
+  }
+  if (!(g > 0)) {
+    if (food.serving_grams > 0) {
+      g = food.serving_grams * n;
+      basis = 'food_serving';
+      label = `${n} x serving`;
+    } else {
+      g = 100 * n;
+      basis = 'assumed_100g';
+      label = `${n} x 100 g (assumed)`;
+    }
+  }
+
+  const scaled = scaleNutrition(food, g);
+  if (!scaled) return null;
+
+  let totals = scaled.totals;
+  let oil = null;
+  const level = oilLevel && OIL_LEVELS[oilLevel] !== undefined ? oilLevel : null;
+  if (level) {
+    /* adjustOil takes an OPTIONS OBJECT and works PER 100 g -- calling it
+       as adjustOil(food, grams, level) silently returned nothing, which is
+       why the oil buttons appeared to do exactly zero.
+
+       It also needs `baselineOilG`: the oil this dish's recipe ALREADY
+       assumes, because the selected level is applied as a delta from that,
+       not piled on top. Choosing "low" for an oily dish must REDUCE its
+       calories.
+
+       HONEST LIMITATION: those per-recipe baselines were derived from 541
+       real recipes in the Python OilAdjuster, which was never ported to
+       JS. Here the baseline is approximated by the dish's own fat_g, and
+       ONLY for cooked dishes, where added oil is the dominant source of
+       fat. For paneer, nuts or meat -- where fat is intrinsic -- that
+       approximation would over-subtract, so oil adjustment is refused
+       rather than guessed, and the response says which happened. */
+    const isCookedDish = food.cooking_state === 'cooked' || food.category === 'indian_dish';
+    const baselineOilG = isCookedDish && Number(food.fat_g) >= 0 ? Number(food.fat_g) : null;
+
+    if (baselineOilG === null) {
+      oil = { level, applied: false, reason: 'no oil baseline for this food — its fat is not mostly added oil' };
+    } else {
+      const adj = adjustOil(food, { level, baselineOilG });
+      // NOTE the field names: adjustOil returns *_adjusted keys, not bare
+      // ones. Reading adj.energy_kcal (which does not exist) made every
+      // level silently report "adjustment unavailable" even though the
+      // model had computed a perfectly good answer.
+      if (adj && adj.adjusted !== false && adj.energy_kcal_adjusted != null) {
+        // adjustOil returns PER-100g values; rescale to the logged portion.
+        const factor = g / 100;
+        const before = scaled.totals.energy_kcal ?? 0;
+        const per100 = (v) => (v == null ? null : Math.round(v * factor * 100) / 100);
+        totals = {
+          ...totals,
+          energy_kcal: per100(adj.energy_kcal_adjusted),
+          fat_g: per100(adj.fat_g_adjusted) ?? totals.fat_g,
+          protein_g: per100(adj.protein_g_adjusted) ?? totals.protein_g,
+          carb_g: per100(adj.carb_g_adjusted) ?? totals.carb_g,
+        };
+        oil = {
+          level,
+          applied: true,
+          g_per_100g: OIL_LEVELS[level],
+          baseline_oil_g_per_100g: adj.baseline_oil_g_per_100g ?? baselineOilG,
+          delta_kcal: (totals.energy_kcal ?? 0) - before,
+          basis: 'approximated from this dish fat content',
+        };
+      } else {
+        oil = { level, applied: false, reason: (adj && adj.reason) || 'adjustment unavailable' };
+      }
+    }
+  }
+
+  return {
+    schema_version: 'food-v1',
+    source_id: food.source_id,
+    name: food.food_name,
+    grams: Math.round(g * 10) / 10,
+    grams_basis: basis,
+    quantity_label: label,
+    confidence: food.confidence,
+    cooking_state: food.cooking_state || null,
+    totals,
+    oil,
+    portions: safePortions(food),
+  };
 }
 
 /**
