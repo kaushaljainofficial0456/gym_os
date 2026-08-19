@@ -48,7 +48,26 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [listening, setListening] = useState(false);
   const inputRef = useRef(null);
+
+  const startVoice = () => {
+    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) { setErr('Voice input not available on this device'); return; }
+    const rec = new SR();
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    setListening(true);
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      setQ(text);
+      setListening(false);
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    rec.start();
+  };
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 120);
@@ -147,11 +166,16 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
                 ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
                 placeholder="Search any food…" aria-label="Search foods"
                 className="input flex-1 !py-2.5 text-[14px]" />
+              <Pressable onClick={startVoice} aria-label="Voice input"
+                         className={`btn !px-3 !py-2.5 shrink-0 ${listening ? 'btn-primary' : ''}`}>
+                <Icon name="mic" size={17} />
+              </Pressable>
               <Pressable onClick={() => setScanning(true)} aria-label="Scan barcode"
                          className="btn !px-3 !py-2.5 shrink-0">
                 <Icon name="camera" size={17} />
               </Pressable>
             </div>
+            {listening && <div className="text-[10px] mt-1.5 anim-pulse-soft" style={{ color: 'var(--accent)' }}>Listening…</div>}
           )}
         </div>
 
