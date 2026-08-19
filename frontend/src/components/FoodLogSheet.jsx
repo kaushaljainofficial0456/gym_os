@@ -161,6 +161,7 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
           </div>
 
           {!food && (
+            <>
             <div className="mt-2 flex gap-2">
               <input
                 ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
@@ -176,6 +177,7 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
               </Pressable>
             </div>
             {listening && <div className="text-[10px] mt-1.5 anim-pulse-soft" style={{ color: 'var(--accent)' }}>Listening…</div>}
+            </>
           )}
         </div>
 
