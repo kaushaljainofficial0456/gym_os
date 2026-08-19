@@ -6,6 +6,7 @@ import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
 import { estimateFood } from '../services/foodEstimator.js';
 import { track } from '../services/events.js';
+import { rateLimit } from '../rateLimit.js';
 
 export default function nutritionRoutes(db) {
   const r = Router();
@@ -34,7 +35,9 @@ export default function nutritionRoutes(db) {
     res.json({ plan: await attachMeals(p) });
   });
 
-  r.post('/plans', trainerOnly, validate(schemas.nutritionPlan), async (req, res) => {
+  // Rate-limited: plan creation is infrequent (trainer action, not per-meal).
+  const planCreateLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/plans', trainerOnly, planCreateLimit, validate(schemas.nutritionPlan), async (req, res) => {
     const pId = id('nut');
     await db.run(
       `INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at)
@@ -53,7 +56,9 @@ export default function nutritionRoutes(db) {
   });
 
   // ---- assign a plan to a client ----
-  r.post('/clients/:id/plan/assign', trainerOnly, validate(z.object({ plan_id: z.string().min(1) })), async (req, res) => {
+  // Rate-limited: plan assignment is infrequent (trainer action).
+  const planAssignLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/clients/:id/plan/assign', trainerOnly, planAssignLimit, validate(z.object({ plan_id: z.string().min(1) })), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const plan = await db.q1('SELECT * FROM nutrition_plans WHERE id = ? AND org_id = ?', [req.body.plan_id, req.orgId]);
@@ -99,10 +104,22 @@ export default function nutritionRoutes(db) {
   r.post('/clients/:id/meals/toggle', validate(z.object({ meal_id: z.string().min(1), eaten: z.boolean().optional() })), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    const meal = await db.q1('SELECT * FROM meals WHERE id = ?', [req.body.meal_id]);
+    const mealId = req.body.meal_id;
+    const eaten = req.body.eaten ?? true;
+
+    // Custom / AI-logged meals have IDs prefixed with 'mlg_' and live directly in meal_logs.
+    if (mealId.startsWith('mlg_')) {
+      const log = await db.q1('SELECT id, client_id FROM meal_logs WHERE id = ?', [mealId]);
+      if (!log || log.client_id !== client.id) return res.status(404).json({ error: 'Meal log not found' });
+      await db.run('UPDATE meal_logs SET eaten = ? WHERE id = ?', [eaten ? 1 : 0, mealId]);
+      await track(db, { orgId: client.org_id, userId: req.user.sub, type: eaten ? 'meal_logged' : 'meal_unlogged', data: { clientId: client.id, mealId } });
+      return res.json({ ok: true });
+    }
+
+    // Plan meals live in the `meals` table — create or update a meal_log for today.
+    const meal = await db.q1('SELECT * FROM meals WHERE id = ?', [mealId]);
     if (!meal) return res.status(404).json({ error: 'Meal not found' });
     const d = dayKey();
-    const eaten = req.body.eaten ?? true;
     const existing = await db.q1(
       'SELECT id FROM meal_logs WHERE client_id = ? AND meal_id = ? AND date = ?', [client.id, meal.id, d]);
     if (existing) {
@@ -118,7 +135,11 @@ export default function nutritionRoutes(db) {
   });
 
   // ---- log a custom (or AI-estimated) meal ----
-  r.post('/clients/:id/meals/log', validate(schemas.mealLog), async (req, res) => {
+  // Rate-limited per authenticated user: 60 requests / minute.
+  // Meal logging is a frequent client action (multiple meals per day),
+  // so the limit is more generous than the AI estimate endpoint (30/min).
+  const mealLogLimit = rateLimit({ windowMs: 60_000, max: 60, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/clients/:id/meals/log', mealLogLimit, validate(schemas.mealLog), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const b = req.body;
@@ -132,7 +153,10 @@ export default function nutritionRoutes(db) {
   });
 
   // ---- AI food estimate (clearly labeled estimate) ----
-  r.post('/clients/:id/meals/ai-estimate', validate(schemas.aiEstimate), async (req, res) => {
+  // Rate-limited per authenticated user: 30 requests / minute, matching
+  // the intelligence AI-endpoint convention for computation-heavy routes.
+  const estimateLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/clients/:id/meals/ai-estimate', estimateLimit, validate(schemas.aiEstimate), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     res.json(estimateFood(req.body.text));

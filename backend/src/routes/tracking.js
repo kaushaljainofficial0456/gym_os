@@ -142,7 +142,7 @@ export default function trackingRoutes(db) {
           // client's own logged foods/meals (source: custom) — count toward today's ring + macros
           ...logs.filter(l => !l.meal_id).map(l => ({
             id: l.id, name: l.name, slot: l.slot || 'Logged', calories: l.calories,
-            protein: l.protein, carbs: l.carbs, fat: l.fat, eaten: true, source: l.source
+            protein: l.protein, carbs: l.carbs, fat: l.fat, eaten: !!l.eaten, source: l.source
           }))
         ],
         eaten, customLogs: logs.filter(l => !l.meal_id)
