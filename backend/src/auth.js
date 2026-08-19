@@ -13,13 +13,30 @@ export function signToken(user) {
   );
 }
 
+// Set the JWT as an httpOnly cookie — immune to XSS token theft.
+// The frontend's Bearer header continues to work as a fallback.
+export function setAuthCookie(res, token) {
+  const isSecure = config.nodeEnv === 'production' || config.nodeEnv === 'staging';
+  res.cookie('sk_token', token, {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: 'strict',
+    path: '/api',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days — matches JWT expiry
+  });
+}
+
+export function clearAuthCookie(res) {
+  res.clearCookie('sk_token', { path: '/api' });
+}
+
 // Attach req.user from the Bearer token (claims carry identity), then resolve the
 // authenticated organization's timezone into req.tz. Resolving tz AFTER auth is
 // intentional: the org is only known once the token is verified. The old app-level
 // middleware ran before this and always fell back to the default timezone.
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token = header.startsWith('Bearer ') ? header.slice(7) : (req.cookies?.sk_token || null);
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
     req.user = jwt.verify(token, config.jwtSecret);

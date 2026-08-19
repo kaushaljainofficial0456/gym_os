@@ -7,6 +7,10 @@ import { getDb } from './db.js';
 import { config } from './config.js';
 import { requireAuth } from './auth.js';
 
+let server = null;
+let dbInstance = null;
+let shuttingDown = false;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import authRoutes from './routes/auth.js';
@@ -24,8 +28,37 @@ import meRoutes from './routes/me.js';
 import intelligenceRoutes from './routes/intelligence.js';
 
 async function main() {
-  const db = await getDb();
+  dbInstance = await getDb();
+  const db = dbInstance;
   const app = express();
+
+  // ---- Minimal cookie parser (no dependency needed) ----
+  app.use((_req, _res, next) => {
+    if (!_req.cookies) {
+      _req.cookies = {};
+      const raw = _req.headers.cookie || '';
+      for (const part of raw.split(';')) {
+        const [k, ...rest] = part.split('=');
+        if (k) _req.cookies[k.trim()] = decodeURIComponent(rest.join('='));
+      }
+    }
+    next();
+  });
+
+  // ---- Security headers (lightweight, no external dependency) ----
+  app.use((_req, res, next) => {
+    // Prevent MIME sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Clickjacking protection
+    res.setHeader('X-Frame-Options', 'DENY');
+    // XSS filter (legacy browsers)
+    res.setHeader('X-XSS-Protection', '0'); // modern best practice: disable in favor of CSP
+    // Referrer policy — strip origin from cross-origin navigations
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // Permissions policy — disable unused browser features
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    next();
+  });
 
   app.use(cors({ origin: config.corsOrigins, credentials: true }));
 
@@ -108,9 +141,55 @@ app.use('/uploads', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error', message: config.nodeEnv === 'production' ? undefined : err.message });
   });
 
-  app.listen(config.port, () => {
+  server = app.listen(config.port, () => {
     console.log(`[sk-os] API listening on http://127.0.0.1:${config.port} (db: ${db.driver})`);
   });
 }
+
+// ---- Process-level error handling ----
+// Unhandled promise rejections crash the process (Node >=15 default).
+// Log the error for diagnostics before exiting — the process manager
+// (systemd, k8s, PM2, etc.) will restart the server.
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] Unhandled rejection:', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] Uncaught exception:', err);
+  process.exit(1);
+});
+
+// ---- Graceful shutdown ----
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[sk-os] ${signal} received — shutting down gracefully…`);
+
+  // Stop accepting new connections
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
+    console.log('[sk-os] HTTP server closed.');
+  }
+
+  // Close database connection
+  if (dbInstance) {
+    try {
+      if (dbInstance.driver === 'postgres' && dbInstance.raw) {
+        await dbInstance.raw.end();
+      }
+      // SQLite via node:sqlite DatabaseSync has no async close — the handle
+      // is released when the process exits. No action needed here.
+    } catch (e) {
+      console.error('[sk-os] Error closing database:', e.message);
+    }
+  }
+
+  console.log('[sk-os] Shutdown complete.');
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 main().catch((e) => { console.error('Fatal startup error:', e); process.exit(1); });

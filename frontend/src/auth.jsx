@@ -5,11 +5,15 @@ const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(getStoredUser());
-  const [ready, setReady] = useState(!!getStoredUser());
+  // If a stored user exists, start unready until the token is validated.
+  const [ready, setReady] = useState(!getStoredUser());
 
   useEffect(() => {
     if (getStoredUser()) {
-      api('/auth/me').then(({ user: u }) => setUser(u)).catch(() => clearSession()).finally(() => setReady(true));
+      api('/auth/me')
+        .then(({ user: u }) => setUser(u))
+        .catch(() => { clearSession(); setUser(null); })
+        .finally(() => setReady(true));
     } else setReady(true);
   }, []);
 

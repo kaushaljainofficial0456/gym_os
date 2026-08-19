@@ -1,10 +1,12 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { z } from 'zod';
-import { hashPassword, verifyPassword, signToken, requireAuth } from '../auth.js';
+import { hashPassword, verifyPassword, signToken, setAuthCookie, requireAuth } from '../auth.js';
 import { rateLimit } from '../rateLimit.js';
 import { validate } from '../validate.js';
 import { id, now } from '../ids.js';
 import { track } from '../services/events.js';
+import { config } from '../config.js';
 
 // Simple in-memory login rate limit (dev-safe, no external deps).
 // 5 failed attempts per email+IP in 60s -> 429. Production should use a
@@ -54,12 +56,10 @@ export default function authRoutes(db) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     loginAttempts.delete(email + '|' + ip);
-    if (!user || !(await verifyPassword(req.body.password, user.password_hash))) {
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
     if (!user.active) return res.status(403).json({ error: 'Account disabled' });
     const org = user.org_id ? await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [user.org_id]) : null;
     const token = signToken(user);
+    setAuthCookie(res, token);
     res.json({
       token,
       user: {
@@ -70,6 +70,11 @@ export default function authRoutes(db) {
   });
 
   // Create a new organization + owner (multi-tenant onboarding).
+  // PRODUCTION SAFETY: In production/staging, SETUP_SECRET env var must be set.
+  // The client must send it in the X-Setup-Secret header. In development mode
+  // the endpoint is open (no secret required) to keep local dev effortless.
+  const setupSecret = process.env.SETUP_SECRET || '';
+  const isSetupLocked = config.nodeEnv === 'production' || config.nodeEnv === 'staging';
   r.post('/setup-org', rateLimit({ windowMs: 60_000, max: 10 }),
     validate(z.object({
       orgName: z.string().min(2).max(80),
@@ -78,6 +83,13 @@ export default function authRoutes(db) {
       password: z.string().min(6),
       type: z.enum(['gym', 'independent']).default('gym')
     })), async (req, res) => {
+    // Production gate: require a valid setup secret
+    if (isSetupLocked) {
+      const provided = req.headers['x-setup-secret'] || '';
+      if (!setupSecret || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(setupSecret))) {
+        return res.status(403).json({ error: 'Setup not available. An invitation is required.' });
+      }
+    }
     const { orgName, ownerName, email, password, type } = req.body;
     const orgId = id('org');
     const userId = id('usr');
@@ -91,11 +103,28 @@ export default function authRoutes(db) {
         [userId, orgId, email.toLowerCase().trim(), await hashPassword(password), ownerName, now()]);
       await track(db, { orgId, userId, type: 'org_created', data: { orgName } });
       const user = { id: userId, org_id: orgId, role: 'GYM_OWNER', name: ownerName, email: email.toLowerCase().trim() };
-      res.status(201).json({ token: signToken(user), user: { id: userId, name: ownerName, email: user.email, role: 'GYM_OWNER', orgId, orgName } });
+      const token = signToken(user);
+      setAuthCookie(res, token);
+      res.status(201).json({ token, user: { id: userId, name: ownerName, email: user.email, role: 'GYM_OWNER', orgId, orgName } });
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
       throw e;
     }
+  });
+
+  // ---- password change (authenticated) ----
+  r.post('/change-password', requireAuth, validate(z.object({
+    current_password: z.string().min(1),
+    new_password: z.string().min(6)
+  })), async (req, res) => {
+    const user = await db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!(await verifyPassword(req.body.current_password, user.password_hash))) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    await db.run('UPDATE users SET password_hash = ? WHERE id = ?',
+      [await hashPassword(req.body.new_password), user.id]);
+    res.json({ ok: true });
   });
 
   r.get('/me', requireAuth, async (req, res) => {

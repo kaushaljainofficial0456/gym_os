@@ -18,6 +18,8 @@ import Workout from './pages/client/Workout.jsx';
 import Nutrition from './pages/client/Nutrition.jsx';
 import Progress from './pages/client/Progress.jsx';
 import Profile from './pages/client/Profile.jsx';
+import Settings from './pages/client/Settings.jsx';
+import Help from './pages/client/Help.jsx';
 
 function Require({ ready, ok, children }) {
   if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
@@ -58,6 +60,8 @@ export default function App() {
         <Route path="nutrition" element={<Nutrition />} />
         <Route path="progress" element={<Progress />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="help" element={<Help />} />
       </Route>
       <Route path="*" element={<Navigate to={authed ? (isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
     </Routes>

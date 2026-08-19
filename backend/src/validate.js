@@ -22,7 +22,7 @@ export const schemas = {
   clientCreate: z.object({
     name: z.string().min(1).max(80),
     email: z.string().email(),
-    password: z.string().min(4).optional(),
+    password: z.string().min(6),
     age: z.number().int().min(10).max(100).optional(),
     height_cm: z.number().min(100).max(250).optional(),
     sex: z.enum(['M', 'F', 'OTHER']).optional(),

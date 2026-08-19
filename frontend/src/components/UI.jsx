@@ -10,17 +10,24 @@ export function PageHeader({ title, sub, right, className }) {
   return (
     <div className={cls('flex items-end justify-between flex-wrap gap-3', className)}>
       <div>
-        <h1 className="font-grotesk font-bold text-2xl tracking-tight">{title}</h1>
-        {sub && <p className="text-mute text-sm mt-0.5">{sub}</p>}
+        <h1 className="font-display font-bold text-2xl tracking-tight" style={{ color: 'var(--ink)' }}>{title}</h1>
+        {sub && <p className="text-sm mt-0.5" style={{ color: 'var(--mute)' }}>{sub}</p>}
       </div>
       {right}
     </div>
   );
 }
 
+function useLight() {
+  if (typeof document === 'undefined') return false;
+  return document.documentElement.classList.contains('light');
+}
+
 export function Avatar({ name, size = 'w-10 h-10', className, glow }) {
+  const light = useLight();
   return (
-    <div className={cls('rounded-full grid place-items-center font-grotesk font-bold text-sm bg-gradient-to-br from-ember/35 to-gold/20 border border-line shrink-0', size, glow && 'shadow-glow', className)}
+    <div className={cls('rounded-full grid place-items-center font-grotesk font-bold text-sm border shrink-0', size, glow && 'shadow-glow', className)}
+      style={{ background: light ? 'linear-gradient(135deg, rgba(140,106,77,.18), rgba(200,169,138,.10))' : 'linear-gradient(135deg, rgba(10,138,133,.25), rgba(20,196,188,.12))', borderColor: 'var(--line)', color: 'var(--ink)' }}
       aria-hidden="true">
       {name?.[0]?.toUpperCase() || '?'}
     </div>
@@ -31,7 +38,7 @@ export function Skeleton({ className, lines = 1 }) {
   return (
     <div className={cls('space-y-2', className)} aria-hidden="true">
       {Array.from({ length: lines }).map((_, i) => (
-        <div key={i} className="skeleton" style={{ height: i === 0 && lines > 1 ? 18 : 14, width: lines === 1 ? '100%' : i === lines - 1 ? '62%' : '100%' }} />
+        <div key={i} className="skeleton" style={{ height: i === 0 && lines > 1 ? 16 : 12, width: lines === 1 ? '100%' : i === lines - 1 ? '60%' : '100%' }} />
       ))}
     </div>
   );
@@ -41,58 +48,65 @@ export function Kicker({ children, tone }) {
   return <div className={cls('kicker', tone)}>{children}</div>;
 }
 
-export function Kpi({ label, value, suffix = '', dec = 0, tone = 'text-ink', sub, icon }) {
+export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, icon }) {
   const v = useCountUp(value, 1000, dec);
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">{label}</span>
+        <span className="text-[10.5px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--mute)' }}>{label}</span>
         {icon && <span className="text-sm">{icon}</span>}
       </div>
-      <div className={cls('font-grotesk font-bold text-2xl leading-none', tone)}>
+      <div className={cls('font-grotesk font-bold text-2xl leading-none', tone)} style={{ color: tone ? undefined : 'var(--ink)' }}>
         {v.toLocaleString('en-US', { maximumFractionDigits: dec })}{suffix}
       </div>
-      {sub && <div className="mt-1.5 text-[11px] text-mute">{sub}</div>}
+      {sub && <div className="mt-1.5 text-[11px]" style={{ color: 'var(--mute)' }}>{sub}</div>}
     </div>
   );
 }
 
-export function Ring({ value, max, size = 170, stroke = 12, color = 'url(#ringGrad)', label, sub }) {
+export function Ring({ value, max, size = 170, stroke = 12, color, label, sub }) {
+  const light = useLight();
   const frac = max > 0 ? Math.min(1, value / max) : 0;
   const C = 2 * Math.PI * ((size - stroke) / 2);
+  const gradId = `ringGrad-${size}`;
+  const c1 = light ? '#8C6A4D' : '#0A8A85';
+  const c2 = light ? '#B18663' : '#14C4BC';
+  const strokeColor = color || `url(#${gradId})`;
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <defs>
-          <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#087F7B" /><stop offset="100%" stopColor="#12B8B0" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={c1} /><stop offset="100%" stopColor={c2} />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke={color} strokeWidth={stroke}
+        <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke="var(--line)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke={strokeColor} strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)}
-          style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,.8,.3,1)', filter: 'drop-shadow(0 0 8px rgba(18,184,176,.45))' }} />
+          style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,.8,.3,1)' }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="font-grotesk font-bold text-[28px] leading-none">{label}</div>
-        {sub && <div className="text-[10px] text-mute mt-1 font-grotesk tracking-wide">{sub}</div>}
+        <div className="font-grotesk font-bold text-[26px] leading-none" style={{ color: 'var(--ink)' }}>{label}</div>
+        {sub && <div className="text-[10px] mt-1 font-grotesk tracking-wide" style={{ color: 'var(--mute)' }}>{sub}</div>}
       </div>
     </div>
   );
 }
 
-export function Bar({ value, max, color = 'linear-gradient(92deg,#087F7B,#12B8B0)', label, right, height = 'h-2' }) {
+export function Bar({ value, max, color, label, right, height = 'h-2' }) {
+  const light = useLight();
   const frac = max > 0 ? Math.min(1, value / max) : 0;
+  const barColor = color || (light ? 'linear-gradient(92deg,#8C6A4D,#B18663)' : 'linear-gradient(92deg,#0A8A85,#14C4BC)');
   return (
     <div>
       {(label || right) && (
         <div className="flex justify-between items-baseline mb-1.5">
-          <span className="font-grotesk text-xs font-semibold">{label}</span>
-          <span className="font-grotesk text-[11px] text-mute">{right}</span>
+          <span className="font-grotesk text-xs font-semibold" style={{ color: 'var(--ink)' }}>{label}</span>
+          <span className="font-grotesk text-[11px]" style={{ color: 'var(--mute)' }}>{right}</span>
         </div>
       )}
-      <div className={cls('rounded-full bg-white/8 overflow-hidden', height)}>
-        <div className="h-full rounded-full" style={{ width: `${frac * 100}%`, background: color, transition: 'width .7s cubic-bezier(.22,.8,.3,1)' }} />
+      <div className={cls('rounded-full overflow-hidden', height)} style={{ background: 'var(--line)' }}>
+        <div className="h-full rounded-full" style={{ width: `${frac * 100}%`, background: barColor, transition: 'width .7s cubic-bezier(.22,.8,.3,1)' }} />
       </div>
     </div>
   );
@@ -110,7 +124,7 @@ export function StatusChip({ status }) {
 
 export function Seg({ options, value, onChange }) {
   return (
-    <div className="flex gap-1.5 bg-white/5 border border-line rounded-full p-1 overflow-x-auto">
+    <div className="flex gap-1.5 border rounded-full p-1 overflow-x-auto" style={{ background: 'rgba(128,128,128,.06)', borderColor: 'var(--line)' }}>
       {options.map((o) => (
         <button key={o.value} className={cls('tab', value === o.value && 'active')} onClick={() => onChange(o.value)}>
           {o.label}
@@ -129,10 +143,11 @@ export function Modal({ open, onClose, title, children, wide }) {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm anim-fadeIn" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 anim-fadeIn" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}
+      style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(8px)' }}>
       <div className={cls('card w-full p-6 anim-scaleIn max-h-[90vh] overflow-auto', wide ? 'max-w-2xl' : 'max-w-md')} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-grotesk font-bold text-lg">{title}</h3>
+          <h3 className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{title}</h3>
           <button className="btn-ghost" onClick={onClose} aria-label="Close">✕</button>
         </div>
         {children}
@@ -144,9 +159,9 @@ export function Modal({ open, onClose, title, children, wide }) {
 export function Empty({ title = 'Nothing here yet', hint, icon = '🫙', action }) {
   return (
     <div className="text-center py-12">
-      <div className="w-14 h-14 mx-auto rounded-2xl border border-line bg-white/[.03] grid place-items-center text-2xl mb-3">{icon}</div>
-      <div className="font-grotesk font-semibold text-sm">{title}</div>
-      {hint && <div className="text-xs text-mute mt-1 max-w-xs mx-auto">{hint}</div>}
+      <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center text-2xl mb-3" style={{ borderColor: 'var(--line)', background: 'var(--bg2)' }}>{icon}</div>
+      <div className="font-grotesk font-semibold text-sm" style={{ color: 'var(--ink)' }}>{title}</div>
+      {hint && <div className="text-xs mt-1 max-w-xs mx-auto" style={{ color: 'var(--mute)' }}>{hint}</div>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -154,8 +169,8 @@ export function Empty({ title = 'Nothing here yet', hint, icon = '🫙', action 
 
 export function Spinner({ label = 'Loading…' }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-12 text-mute text-sm" role="status">
-      <span className="w-4 h-4 rounded-full border-2 border-white/15 border-t-ember animate-spin" style={{ animationDuration: '.7s' }} />
+    <div className="flex items-center justify-center gap-3 py-12 text-sm" style={{ color: 'var(--mute)' }} role="status">
+      <span className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--line)', borderTopColor: 'var(--accent)', animationDuration: '.7s' }} />
       {label}
     </div>
   );
@@ -164,12 +179,13 @@ export function Spinner({ label = 'Loading…' }) {
 export function Toast({ message, tone = 'success' }) {
   if (!message) return null;
   const clsMap = {
-    success: 'border-good/40 text-ink',
-    error: 'border-bad/50 text-ink',
-    info: 'border-gold/40 text-ink'
+    success: 'border-good/40',
+    error: 'border-bad/50',
+    info: 'border-gold/40'
   };
   return (
-    <div className={`fixed bottom-5 left-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border font-grotesk text-xs shadow-card anim-toast ${clsMap[tone] || clsMap.success}`}
+    <div className={`fixed bottom-5 left-1/2 z-50 px-4 py-2.5 rounded-full border font-grotesk text-xs shadow-card anim-toast ${clsMap[tone] || clsMap.success}`}
+      style={{ background: 'var(--panel)', color: 'var(--ink)' }}
       role="status">
       <span className={`mr-2 ${tone === 'error' ? 'text-bad' : tone === 'info' ? 'text-gold' : 'text-good'}`}>{tone === 'error' ? '✕' : '✓'}</span>
       {message}
@@ -182,7 +198,7 @@ export function ErrorState({ error, onRetry }) {
     <div className="text-center py-10">
       <div className="text-2xl mb-2">⚠️</div>
       <div className="text-sm text-bad font-semibold font-grotesk">Something went wrong</div>
-      <div className="text-xs text-mute mt-1 max-w-sm mx-auto break-words">{error?.message || String(error)}</div>
+      <div className="text-xs mt-1 max-w-sm mx-auto break-words" style={{ color: 'var(--mute)' }}>{error?.message || String(error)}</div>
       {onRetry && <button className="btn mt-4" onClick={onRetry}>Try again</button>}
     </div>
   );

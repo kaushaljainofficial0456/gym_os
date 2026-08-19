@@ -10,21 +10,35 @@
 // vision, contextual coaching and recommendation framing.
 // If no provider is configured/available, callers fall back to
 // deterministic engines — SK OS keeps working, never crashes.
+//
+// ZERO-COST SAFETY POLICY:
+// Paid providers (openai, gemini) are DISABLED by default.
+// Setting AI_PROVIDER=openai/gemini WITHOUT ALLOW_PAID_AI=true
+// has NO EFFECT — the provider silently falls back to 'mock'.
+// This prevents accidental API billing from env var misconfig.
 // ============================================================
 
 const PROVIDER = (process.env.AI_PROVIDER || 'ollama').toLowerCase();
 const KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || '';
+
+// --- ZERO-COST GATE ---
+// Paid providers require BOTH the provider selection AND an explicit
+// safety flag. Without ALLOW_PAID_AI=true, paid providers are blocked.
+const ALLOW_PAID_AI = process.env.ALLOW_PAID_AI === 'true';
+const PAID_BLOCKED = !ALLOW_PAID_AI && PROVIDER !== 'ollama' && PROVIDER !== 'mock';
 const OLLAMA_BASE = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/+$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
 
 export function providerName() {
   if (PROVIDER === 'ollama') return 'ollama';
+  if (PAID_BLOCKED) return 'mock'; // paid provider blocked by zero-cost policy
   if (KEY) return PROVIDER;
   return 'mock';
 }
 
 export function isConfigured() {
   if (PROVIDER === 'ollama') return true; // base URL + model are config; availability is checked at call time
+  if (PAID_BLOCKED) return false; // paid provider blocked by zero-cost policy
   return !!KEY;
 }
 
@@ -111,11 +125,15 @@ async function callOpenAI(system, user, { json = true, model } = {}) {
 }
 
 async function callGemini(system, user, { json = true, model } = {}) {
+  const modelId = model || process.env.LLM_MODEL || 'gemini-1.5-flash';
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model || process.env.LLM_MODEL || 'gemini-1.5-flash'}:generateContent?key=${KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': KEY
+      },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: `${system}\n\n${user}` }] }],
         ...(json ? { generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } } : {})
@@ -128,6 +146,7 @@ async function callGemini(system, user, { json = true, model } = {}) {
 
 async function callAI(system, user, opts = {}) {
   if (PROVIDER === 'ollama') return callOllama(system, user, opts);
+  if (PAID_BLOCKED) throw new Error(`Zero-cost policy: paid provider '${PROVIDER}' is disabled. Set ALLOW_PAID_AI=true to enable.`);
   if (!KEY) throw new Error('AI provider not configured');
   if (PROVIDER === 'gemini') return callGemini(system, user, opts);
   return callOpenAI(system, user, opts);

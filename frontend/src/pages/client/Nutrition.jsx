@@ -146,9 +146,9 @@ export default function Nutrition() {
             label={<span className="font-grotesk font-bold text-base">{eaten.calories}</span>}
             sub={<span className="text-[8px] text-mute">kcal</span>} />
           <div className="flex-1 space-y-2.5">
-            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} color="linear-gradient(92deg,#087F7B,#12B8B0)" right={`${eaten.protein}/${plan?.protein || 0} g`} height="h-1.5" />
-            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} color="linear-gradient(92deg,#12B8B0,#DDF7F2)" right={`${eaten.carbs}/${plan?.carbs || 0} g`} height="h-1.5" />
-            <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1} color="linear-gradient(92deg,#35E0D8,#7BE8FF)" right={`${eaten.fat}/${plan?.fat || 0} g`} height="h-1.5" />
+            <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1} color="linear-gradient(92deg,#8C6A4D,#A07855)" right={`${eaten.protein}/${plan?.protein || 0} g`} height="h-1.5" />
+            <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1} color="linear-gradient(92deg,#A07855,#C4A882)" right={`${eaten.carbs}/${plan?.carbs || 0} g`} height="h-1.5" />
+            <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1} color="linear-gradient(92deg,#C4A882,#D4C4B0)" right={`${eaten.fat}/${plan?.fat || 0} g`} height="h-1.5" />
           </div>
         </div>
       </div>

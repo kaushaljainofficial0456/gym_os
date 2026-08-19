@@ -427,40 +427,7 @@ const NUTRITION_TEMPLATES = [
   }
 ];
 
-async function main() {
-  const db = await getDb();
-  const existing = await db.q1('SELECT id FROM organizations WHERE slug = ?', ['ironforge-fitness']);
-  if (existing) {
-    console.error('IRONFORGE already seeded. Run `npm run db:reset` to reseed from scratch.');
-    process.exit(1);
-  }
-
-  const orgId = id('org');
-  await db.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)',
-    [orgId, 'IRONFORGE FITNESS', 'ironforge-fitness', 'gym', now()]);
-
-  const pwHash = await hashPassword('demo1234');
-
-  // ---- users: owner, trainers ----
-  const ownerId = id('usr');
-  await db.run(
-    `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
-     VALUES (?, ?, ?, ?, 'GYM_OWNER', 'Maya Kapoor', 1, ?)`,
-    [ownerId, orgId, 'owner@ironforge.in', pwHash, now()]);
-
-  const trainerIds = [];
-  for (const [email, name, spec] of TRAINERS) {
-    const uid = id('usr');
-    await db.run(
-      `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
-       VALUES (?, ?, ?, ?, 'TRAINER', ?, 1, ?)`,
-      [uid, orgId, email, pwHash, name, now()]);
-    await db.run('INSERT INTO trainers (user_id, org_id, specialization, max_clients) VALUES (?, ?, ?, 50)',
-      [uid, orgId, spec]);
-    trainerIds.push(uid);
-  }
-
-  // movement pattern per exercise (drives weekly movement-pattern balance)
+// movement pattern per exercise (drives weekly movement-pattern balance)
 const MOVEMENT_BY_KEY = {
   bench_press: 'horizontal_push', incline_db_press: 'horizontal_push', shoulder_press: 'vertical_push',
   lateral_raise: 'isolation', triceps_pushdown: 'isolation', lat_pulldown: 'vertical_pull',
@@ -481,7 +448,6 @@ const MOVEMENT_BY_KEY = {
   seated_calf_raise: 'isolation', banded_squat: 'squat',
   hanging_leg_raise: 'core', russian_twist: 'core', ab_wheel: 'core', mountain_climbers: 'core',
   burpee: 'carry', farmers_carry: 'carry', treadmill_run: 'carry', cycling: 'carry', rowing_machine: 'carry',
-  // expanded library
   incline_barbell_press: 'horizontal_push', decline_barbell_press: 'horizontal_push',
   decline_db_press: 'horizontal_push', low_cable_fly: 'isolation', high_cable_fly: 'isolation',
   machine_fly: 'isolation', landmine_press: 'vertical_push', floor_press: 'horizontal_push',
@@ -529,7 +495,7 @@ const MOVEMENT_BY_KEY = {
   wall_slide: 'mobility', ankle_rocker: 'mobility', pigeon_pose: 'mobility'
 };
 
-// exercise aliases for the intelligence search ("flat bench" → Bench Press)
+// exercise aliases for the intelligence search ("flat bench" -> Bench Press)
 const EXERCISE_ALIASES = {
   bench_press: ['flat bench', 'barbell bench', 'bench', 'bench press'],
   squat: ['barbell squat', 'back squat', 'squats'],
@@ -553,7 +519,6 @@ const EXERCISE_ALIASES = {
   leg_curl: ['hamstring curl', 'leg curls'],
   face_pull: ['face pulls'],
   hammer_curl: ['hammer curls', 'db hammer curl'],
-  // expanded-library aliases
   incline_barbell_press: ['incline bench press', 'incline press', 'incline bench'],
   decline_barbell_press: ['decline bench press', 'decline press'],
   dumbbell_bench_press: ['db bench', 'dumbbell press'],
@@ -567,7 +532,6 @@ const EXERCISE_ALIASES = {
   machine_chest_press: ['chest press machine', 'machine press'],
   arnold_press: ['arnold presses'],
   reverse_pec_deck: ['rear delt machine', 'reverse fly machine'],
-  face_pull: ['face pulls'],
   barbell_row: ['bent over row', 'bent-over row'],
   pendlay_row: ['pendlay rows'],
   inverted_row: ['bodyweight row', 'horizontal row'],
@@ -606,16 +570,100 @@ const EXERCISE_ALIASES = {
   shoulder_dislocate: ['dislocates', 'band dislocates']
 };
 
+const typeFor = (equip) => {
+  const e = String(equip).toUpperCase();
+  if (['TREADMILL', 'BIKE', 'ROWING'].includes(e)) return 'cardio';
+  if (['MACHINE', 'SMITH', 'LEG_PRESS'].includes(e)) return 'machine';
+  if (e === 'CABLE') return 'cable';
+  if (['BODYWEIGHT', 'BANDS', 'PULL_UP_BAR'].includes(e)) return 'bodyweight';
+  return 'free_weight';
+};
+
+async function main() {
+  const noDemo = process.argv.includes('--no-demo');
+  const db = await getDb();
+
+  if (noDemo) {
+    // ---- CLEAN MODE: reference data only (exercises, muscles, aliases) ----
+    // Check if exercise library already exists.
+    const exCount = await db.q1('SELECT COUNT(*) AS cnt FROM exercise_library');
+    if (exCount && exCount.cnt > 0) {
+      console.log('Reference data already present — skipping.');
+      process.exit(0);
+    }
+    // Create a minimal org so exercise_library FK is satisfied.
+    const orgId = id('org');
+    await db.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)',
+      [orgId, 'CLEAN', 'clean-' + orgId.slice(-4), 'gym', now()]);
+
+    // ---- exercise library (global) ----
+    const typeFor = (equip) => {
+      const e = String(equip).toUpperCase();
+      if (['TREADMILL', 'BIKE', 'ROWING'].includes(e)) return 'cardio';
+      if (['MACHINE', 'SMITH', 'LEG_PRESS'].includes(e)) return 'machine';
+      if (e === 'CABLE') return 'cable';
+      if (['BODYWEIGHT', 'BANDS', 'PULL_UP_BAR'].includes(e)) return 'bodyweight';
+      return 'free_weight';
+    };
+    for (const [key, name, primary, secondary, equip, diff] of EXERCISES) {
+      await db.run(
+        `INSERT INTO exercise_library (id, org_id, name, primary_muscle, secondary_muscles, equipment, ex_type, movement, difficulty, animation_key, is_global)
+         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [id('exl'), name, primary, secondary, equip, typeFor(equip), MOVEMENT_BY_KEY[key] || 'compound', diff, key]);
+    }
+    // exercise aliases
+    for (const [key, aliases] of Object.entries(EXERCISE_ALIASES)) {
+      const lib = await db.q1('SELECT id FROM exercise_library WHERE animation_key = ?', [key]);
+      if (!lib) continue;
+      for (const alias of aliases) {
+        await db.run(
+          'INSERT INTO exercise_aliases (id, org_id, exercise_id, alias) VALUES (?, NULL, ?, ?)',
+          [id('exa'), lib.id, alias]);
+      }
+    }
+    // ---- normalized muscle model ----
+    await seedMuscles(db);
+    await syncExerciseMuscles(db);
+
+    console.log('Reference data seeded (exercises, muscles, aliases).');
+    console.log('No demo users or sample data created.');
+    await db.close?.();
+    process.exit(0);
+  }
+
+  // ---- FULL SEED: demo data (backward-compatible) ----
+  const existing = await db.q1('SELECT id FROM organizations WHERE slug = ?', ['ironforge-fitness']);
+  if (existing) {
+    console.error('IRONFORGE already seeded. Run `npm run db:reset` to reseed from scratch.');
+    process.exit(1);
+  }
+
+  const orgId = id('org');
+  await db.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)',
+    [orgId, 'IRONFORGE FITNESS', 'ironforge-fitness', 'gym', now()]);
+
+  const pwHash = await hashPassword('demo1234');
+
+  // ---- users: owner, trainers ----
+  const ownerId = id('usr');
+  await db.run(
+    `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+     VALUES (?, ?, ?, ?, 'GYM_OWNER', 'Maya Kapoor', 1, ?)`,
+    [ownerId, orgId, 'owner@ironforge.in', pwHash, now()]);
+
+  const trainerIds = [];
+  for (const [email, name, spec] of TRAINERS) {
+    const uid = id('usr');
+    await db.run(
+      `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+       VALUES (?, ?, ?, ?, 'TRAINER', ?, 1, ?)`,
+      [uid, orgId, email, pwHash, name, now()]);
+    await db.run('INSERT INTO trainers (user_id, org_id, specialization, max_clients) VALUES (?, ?, ?, 50)',
+      [uid, orgId, spec]);
+    trainerIds.push(uid);
+  }
 
   // ---- exercise library (global) ----
-  const typeFor = (equip) => {
-    const e = String(equip).toUpperCase();
-    if (['TREADMILL', 'BIKE', 'ROWING'].includes(e)) return 'cardio';
-    if (['MACHINE', 'SMITH', 'LEG_PRESS'].includes(e)) return 'machine';
-    if (e === 'CABLE') return 'cable';
-    if (['BODYWEIGHT', 'BANDS', 'PULL_UP_BAR'].includes(e)) return 'bodyweight';
-    return 'free_weight';
-  };
   for (const [key, name, primary, secondary, equip, diff] of EXERCISES) {
     await db.run(
       `INSERT INTO exercise_library (id, org_id, name, primary_muscle, secondary_muscles, equipment, ex_type, movement, difficulty, animation_key, is_global)

@@ -37,6 +37,41 @@ const MIGRATIONS = [
   ['foods', 'sugar', `sugar REAL`],
   ['foods', 'sodium', `sodium REAL`],
   ['foods', 'source', `source TEXT NOT NULL DEFAULT 'USER_ENTERED'`],
+    // --- skos-food-v1 provenance ---
+  ['foods', 'source_id', `source_id TEXT`],
+  ['foods', 'source_dataset', `source_dataset TEXT`],
+
+  // --- skos-food-v1 retrieval quality ---
+  ['foods', 'confidence', `confidence TEXT`],
+  ['foods', 'data_quality_flag', `data_quality_flag TEXT`],
+
+  // --- skos-food-v1 cooking state ---
+  ['foods', 'cooking_state', `cooking_state TEXT`],
+  ['foods', 'cooking_state_inferred', `cooking_state_inferred INTEGER`],
+
+  // --- skos-food-v1 household portions ---
+  ['foods', 'serving_description', `serving_description TEXT`],
+  ['foods', 'serving_grams', `serving_grams REAL`],
+
+  // --- skos-food-v1 micronutrients ---
+  ['foods', 'calcium_mg', `calcium_mg REAL`],
+  ['foods', 'iron_mg', `iron_mg REAL`],
+  ['foods', 'potassium_mg', `potassium_mg REAL`],
+  ['foods', 'magnesium_mg', `magnesium_mg REAL`],
+  ['foods', 'zinc_mg', `zinc_mg REAL`],
+  ['foods', 'phosphorus_mg', `phosphorus_mg REAL`],
+  ['foods', 'vitamin_c_mg', `vitamin_c_mg REAL`],
+  ['foods', 'folate_b9_ug', `folate_b9_ug REAL`],
+  ['foods', 'vitamin_e_mg', `vitamin_e_mg REAL`],
+
+  // --- skos-food-v1 fat quality ---
+  ['foods', 'fa_saturated_mg', `fa_saturated_mg REAL`],
+  ['foods', 'fa_monounsat_mg', `fa_monounsat_mg REAL`],
+  ['foods', 'fa_polyunsat_mg', `fa_polyunsat_mg REAL`],
+
+  // --- skos-food-v1 protein quality ---
+  ['foods', 'aa_leucine_mg', `aa_leucine_mg REAL`],
+
   ['exercise_library', 'ex_type', `ex_type TEXT NOT NULL DEFAULT 'compound'`],
   ['workouts', 'source', `source TEXT NOT NULL DEFAULT 'program'`],
   ['progress_photos', 'storage_key', `storage_key TEXT`],
@@ -82,6 +117,17 @@ function applySqliteMigrations(db) {
     if (!hasCol(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
   };
   for (const [table, col, ddl] of MIGRATIONS) addCol(table, col, ddl);
+    // --- skos-food-v1 indexes ---
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_foods_source_id
+    ON foods(source_id)
+    WHERE source_id IS NOT NULL
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_foods_cooking_state
+    ON foods(cooking_state)
+  `);
   // Backfill created_at for existing workout_logs (best-effort: date-based).
   db.exec(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => db.exec(sql), `'stl_' || lower(hex(randomblob(8)))`);
@@ -96,6 +142,16 @@ async function applyPgMigrations(pool) {
     // IF NOT EXISTS slot is: ADD COLUMN [IF NOT EXISTS] name type.
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${ddl}`);
   }
+    await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_foods_source_id
+    ON foods(source_id)
+    WHERE source_id IS NOT NULL
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_foods_cooking_state
+    ON foods(cooking_state)
+  `);
   await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
 }

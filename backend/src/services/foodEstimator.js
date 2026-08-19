@@ -1,68 +1,236 @@
-// ============================================================
-// AI FOOD LOGGING — deterministic estimator for the MVP.
-// Parses free text ("2 rotis, dal and curd") against a small Indian
-// food table and returns per-item + total estimates. Every result is
-// labeled estimate:true — the client UI must badge it as an estimate.
-// Swap the internals for a vision/LLM food-recognition API later;
-// the contract (estimate(text) => {items, total, estimate:true}) stays.
-// ============================================================
-const FOODS = [
-  { match: 'roti|chapati|phulka', name: 'Roti', kcal: 120, p: 3, c: 22, f: 3, unit: '1 roti' },
-  { match: 'rice', name: 'Rice', kcal: 130, p: 3, c: 28, f: 0.5, unit: '1 bowl (150g)' },
-  { match: 'dal', name: 'Dal', kcal: 110, p: 7, c: 16, f: 3, unit: '1 bowl' },
-  { match: 'curd|dahi|yogurt|yoghurt', name: 'Curd', kcal: 60, p: 3, c: 5, f: 3, unit: '100 g' },
-  { match: 'paneer', name: 'Paneer', kcal: 265, p: 18, c: 6, f: 21, unit: '100 g' },
-  { match: 'egg', name: 'Egg', kcal: 75, p: 6, c: 0.5, f: 5, unit: '1 egg' },
-  { match: 'chicken', name: 'Chicken', kcal: 165, p: 31, c: 0, f: 3.6, unit: '100 g' },
-  { match: 'banana', name: 'Banana', kcal: 105, p: 1.3, c: 27, f: 0.3, unit: '1 medium' },
-  { match: 'whey', name: 'Whey scoop', kcal: 120, p: 24, c: 3, f: 1.5, unit: '1 scoop' },
-  { match: 'milk', name: 'Milk', kcal: 60, p: 3.2, c: 4.8, f: 3.3, unit: '100 ml' },
-  { match: 'poha', name: 'Poha', kcal: 250, p: 5, c: 45, f: 6, unit: '1 plate' },
-  { match: 'idli', name: 'Idli', kcal: 55, p: 2, c: 11, f: 0.2, unit: '1 idli' },
-  { match: 'dosa', name: 'Dosa', kcal: 130, p: 3, c: 22, f: 3, unit: '1 plain dosa' },
-  { match: 'upma', name: 'Upma', kcal: 220, p: 5, c: 35, f: 8, unit: '1 bowl' },
-  { match: 'chole', name: 'Chole', kcal: 190, p: 9, c: 25, f: 7, unit: '1 bowl' },
-  { match: 'rajma', name: 'Rajma', kcal: 180, p: 8, c: 24, f: 6, unit: '1 bowl' },
-  { match: 'sabzi|bhaji|vegetable', name: 'Sabzi', kcal: 90, p: 2, c: 10, f: 5, unit: '1 bowl' },
-  { match: 'sprouts|moong', name: 'Sprouts', kcal: 105, p: 9, c: 17, f: 0.5, unit: '100 g' },
-  { match: 'oats', name: 'Oats', kcal: 150, p: 5, c: 27, f: 3, unit: '40 g' },
-  { match: 'peanut', name: 'Peanuts', kcal: 90, p: 4, c: 2, f: 8, unit: '15 g' },
-  { match: 'almond', name: 'Almonds', kcal: 70, p: 2.5, c: 2.5, f: 6, unit: '10 almonds' },
-  { match: 'apple', name: 'Apple', kcal: 95, p: 0.5, c: 25, f: 0.3, unit: '1 medium' },
-  { match: 'bread', name: 'Bread slice', kcal: 80, p: 3, c: 14, f: 1, unit: '1 slice' }
-];
+﻿import {
+  foodSearch,
+  scaleNutrition,
+  portionToGrams,
+  canonicalPortion
+} from './skos-food/index.js';
 
-import { round1 } from '../utils/time.js';
+function round1(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function splitFoodText(text) {
+  return String(text || '')
+    .split(/\s*(?:,|\band\b|\&|\+)\s*/i)
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+function parsePart(part) {
+  const gramMatch = part.match(/^(\d+(?:\.\d+)?)\s*g(?:ram|rams)?\s+(.+)$/i);
+  if (gramMatch) {
+    return {
+      count: Number(gramMatch[1]),
+      gramsExplicit: Number(gramMatch[1]),
+      portion: null,
+      query: gramMatch[2].trim()
+    };
+  }
+
+  const portionMatch = part.match(
+    /^(\d+(?:\.\d+)?)\s*(roti|chapati|phulka|idli|dosa|egg|banana|apple|paratha|poori|samosa|vada|ladoo|biscuit|pieces?|slices?|bowls?|plates?|cups?|glasses?)\s+(.+)$/i
+  );
+
+  if (portionMatch) {
+    const count = Number(portionMatch[1]);
+    const raw = portionMatch[2].toLowerCase();
+    const query = portionMatch[3].trim();
+
+    const aliases = {
+      chapati: 'roti',
+      phulka: 'roti',
+      pieces: 'piece',
+      piece: 'piece',
+      slices: 'slice',
+      slice: 'slice',
+      bowls: 'bowl',
+      plates: 'plate',
+      cups: 'cup',
+      glasses: 'glass'
+    };
+
+    return {
+      count,
+      gramsExplicit: null,
+      portion: canonicalPortion(aliases[raw] || raw),
+      query
+    };
+  }
+
+  // Volume portion: "2 bowls dal", "1 plate rice", "3 cups tea".
+  // The existing portionMatch above requires the portion word BEFORE the food
+  // name ("2 roti dal"), but household expressions often put the vessel first
+  // ("2 bowls dal"). Without this branch it hits leadingNumber, which passes
+  // "bowls dal" as a query and FoodSearch returns garbage like "2-Minute
+  // noodles".
+  const volumePortion = part.match(
+    /^(\d+(?:\.\d+)?)\s*(teaspoons?|tablespoons?|katoris?|small bowls?|soup bowls?|medium bowls?|large bowls?|bowls?|quarter plates?|half plates?|plates?|full plates?|small glasses?|tall glasses?|glasses?|tea cups?|cups?|mugs?)\s+(.+)$/i
+  );
+
+  if (volumePortion) {
+    const count = Number(volumePortion[1]);
+    const raw = volumePortion[2].toLowerCase().replace(/\s+/g, '_');
+    const aliases = {
+      bowls: 'bowl', 'small bowls': 'small_bowl', 'medium bowls': 'medium_bowl',
+      'large bowls': 'large_bowl', 'soup bowls': 'soup_bowl',
+      plates: 'plate', 'half plates': 'half_plate', 'quarter plates': 'quarter_plate',
+      'full plates': 'full_plate',
+      glasses: 'glass', 'small glasses': 'small_glass', 'tall glasses': 'tall_glass',
+      cups: 'cup', 'tea cups': 'tea_cup', mugs: 'mug',
+      teaspoons: 'teaspoon', tablespoons: 'tablespoon', katoris: 'katori'
+    };
+
+    return {
+      count,
+      gramsExplicit: null,
+      portion: canonicalPortion(aliases[raw] || raw),
+      query: volumePortion[3].trim()
+    };
+  }
+
+  // Standalone counted portion: "2 roti", "1 egg", "3 chapati" (no food name after).
+  // The portionMatch above requires text AFTER the portion word (\s+(.+)), so a
+  // bare "2 roti" falls through. Without this branch it hits leadingNumber,
+  // which treats "roti" as the food query and uses serving_grams (36g) instead
+  // of COUNT_PORTIONS.roti.grams (40g).
+  const standalonePortion = part.match(
+    /^(\d+(?:\.\d+)?)\s*(roti|chapati|phulka|idli|dosa|egg|banana|apple|paratha|poori|samosa|vada|ladoo|biscuit|pieces?|slices?)$/i
+  );
+
+  if (standalonePortion) {
+    const count = Number(standalonePortion[1]);
+    const raw = standalonePortion[2].toLowerCase();
+
+    const aliases = {
+      chapati: 'roti',
+      phulka: 'roti',
+      pieces: 'piece',
+      piece: 'piece',
+      slices: 'slice',
+      slice: 'slice'
+    };
+
+    return {
+      count,
+      gramsExplicit: null,
+      portion: canonicalPortion(aliases[raw] || raw),
+      query: aliases[raw] || raw  // use the canonical name so FoodSearch finds it
+    };
+  }
+
+  const leadingNumber = part.match(/^(\d+(?:\.\d+)?)\s*(?:x\s*)?(.+)$/i);
+
+  if (leadingNumber) {
+    return {
+      count: Number(leadingNumber[1]),
+      gramsExplicit: null,
+      portion: null,
+      query: leadingNumber[2].trim()
+    };
+  }
+
+  return {
+    count: 1,
+    gramsExplicit: null,
+    portion: null,
+    query: part
+  };
+}
+
+function makeItem(result, grams, qty, unit) {
+  const nutrition = scaleNutrition(result, grams);
+  if (!nutrition) return null;
+
+  const t = nutrition.totals;
+
+  return {
+    name: result.food_name,
+    source_id: result.source_id,
+    unit,
+    qty,
+    grams: nutrition.grams,
+    calories: round1(t.energy_kcal ?? 0),
+    protein: round1(t.protein_g ?? 0),
+    carbs: round1(t.carb_g ?? 0),
+    fat: round1(t.fat_g ?? 0),
+    fiber: t.fiber_g,
+    sodium_mg: t.sodium_mg,
+    cooking_state: result.cooking_state,
+    confidence: result.confidence,
+    trustworthy: result.trustworthy,
+    match_kind: result.match_kind
+  };
+}
 
 export function estimateFood(text) {
-  const lower = String(text || '').toLowerCase();
+  const parts = splitFoodText(text);
   const items = [];
-  let total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  for (const f of FOODS) {
-    const re = new RegExp(f.match, 'i');
-    if (re.test(lower)) {
-      const qtyRe = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*x?\\s*${f.name}`, 'i');
-      const m = lower.match(qtyRe);
-      const qty = m ? Number(m[1]) : 1;
-      const cal = Math.round(f.kcal * qty);
-      const p = f.p ?? f.protein ?? 0, c = f.c ?? f.carbs ?? 0, ft = f.f ?? f.fat ?? 0;
-      items.push({ name: f.name, unit: f.unit, qty, calories: cal, protein: round1(p * qty), carbs: round1(c * qty), fat: round1(ft * qty) });
-      total.calories += cal;
-      total.protein += p * qty;
-      total.carbs += c * qty;
-      total.fat += ft * qty;
+
+  for (const part of parts) {
+    const parsed = parsePart(part);
+
+    const results = foodSearch.search(parsed.query, {
+      limit: 1,
+      allowBackoff: true
+    });
+
+    const result = results[0];
+    if (!result) continue;
+
+    let grams;
+    let unit;
+
+    if (parsed.gramsExplicit !== null) {
+      grams = parsed.gramsExplicit;
+      unit = `${grams} g`;
+    } else if (parsed.portion) {
+      const converted = portionToGrams(
+        parsed.portion,
+        parsed.count,
+        {
+          foodName: result.food_name,
+          cookingState: result.cooking_state,
+          foodServingGrams: result.serving_grams
+        }
+      );
+
+      grams = converted.grams;
+      unit = parsed.portion;
+    } else if (result.serving_grams) {
+      grams = result.serving_grams * parsed.count;
+      unit = 'serving';
+    } else {
+      grams = 100 * parsed.count;
+      unit = '100 g';
     }
+
+    if (!(grams > 0)) continue;
+
+    const item = makeItem(result, grams, parsed.count, unit);
+    if (item) items.push(item);
   }
+
+  const total = items.reduce(
+    (sum, item) => ({
+      calories: sum.calories + item.calories,
+      protein: sum.protein + item.protein,
+      carbs: sum.carbs + item.carbs,
+      fat: sum.fat + item.fat
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+
   return {
     text,
     items,
     total: {
-      calories: Math.round(total.calories),
+      calories: round1(total.calories),
       protein: round1(total.protein),
       carbs: round1(total.carbs),
       fat: round1(total.fat)
     },
     estimate: true,
-    disclaimer: 'AI-estimated values — approximate. Confirm with the actual pack/recipe when possible.'
+    disclaimer:
+      'AI-estimated values — approximate. Confirm with the actual pack/recipe when possible.'
   };
 }

@@ -18,7 +18,7 @@ export async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = 'Bearer ' + token;
-  const res = await fetch('/api' + path, { ...opts, headers });
+  const res = await fetch('/api' + path, { ...opts, headers, credentials: 'include' });
   if (res.status === 401) {
     clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';

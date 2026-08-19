@@ -171,8 +171,10 @@ test('alert evaluation is idempotent and resolves cleared conditions', async () 
     const n = await db.q1('SELECT COUNT(*) AS n FROM alerts WHERE client_id = ? AND type = ? AND status = ?', ['c1', t, 'open']);
     assert.equal(n.n, 1, `no duplicate ${t}`);
   }
-  // resolve: client checks in -> condition clears
-  await db.run('UPDATE clients SET last_checkin_at = ? WHERE id = ?', ['2026-08-10T08:00:00Z', 'c1']);
+  // resolve: client checks in -> condition clears (use relative date so test doesn't go stale)
+  const { daysAgoIso } = await import('../src/utils/time.js');
+  const recentCheckin = daysAgoIso(1) + 'T08:00:00Z';
+  await db.run('UPDATE clients SET last_checkin_at = ? WHERE id = ?', [recentCheckin, 'c1']);
   await evaluateOrg(db, 'o1', 'u1');
   const resolved = await db.q1(`SELECT COUNT(*) AS n FROM alerts WHERE client_id = ? AND type = 'MISSED_CHECKIN' AND status = 'resolved'`, ['c1']);
   assert.equal(resolved.n, 1, 'cleared condition -> resolved');

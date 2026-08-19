@@ -209,7 +209,7 @@ export default function AskSK({ onLogged }) {
   // <img src> can't send headers — fetch with auth and show a blob URL.
   const authedImage = async (pathname) => {
     try {
-      const res = await fetch('/api' + pathname, { headers: { Authorization: 'Bearer ' + localStorage.getItem('pos_token') } });
+      const res = await fetch('/api' + pathname, { headers: { Authorization: 'Bearer ' + localStorage.getItem('pos_token') }, credentials: 'include' });
       if (!res.ok) throw new Error('image fetch failed');
       const blob = await res.blob();
       return URL.createObjectURL(blob);

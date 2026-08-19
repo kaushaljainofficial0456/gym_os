@@ -110,7 +110,7 @@ export default function Clients() {
 }
 
 function CreateClient({ open, onClose, onDone }) {
-  const [form, setForm] = useState({ name: '', email: '', age: '', height_cm: '', goal: 'FAT_LOSS', start_weight: '', target_weight: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', age: '', height_cm: '', goal: 'FAT_LOSS', start_weight: '', target_weight: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -125,6 +125,7 @@ function CreateClient({ open, onClose, onDone }) {
           name: form.name, email: form.email, goal: form.goal,
           age: form.age ? Number(form.age) : undefined,
           height_cm: form.height_cm ? Number(form.height_cm) : undefined,
+          password: form.password || undefined,
           start_weight: form.start_weight ? Number(form.start_weight) : undefined,
           target_weight: form.target_weight ? Number(form.target_weight) : undefined
         })
@@ -142,6 +143,7 @@ function CreateClient({ open, onClose, onDone }) {
       <form onSubmit={submit} className="space-y-3">
         <input className="input" placeholder="Full name" value={form.name} onChange={set('name')} required />
         <input className="input" type="email" placeholder="Email (login)" value={form.email} onChange={set('email')} required />
+        <input className="input" type="password" placeholder="Password (min 6 chars)" value={form.password} onChange={set('password')} required minLength={6} />
         <div className="grid grid-cols-3 gap-2">
           <input className="input" type="number" placeholder="Age" value={form.age} onChange={set('age')} />
           <input className="input" type="number" placeholder="Height cm" value={form.height_cm} onChange={set('height_cm')} />
@@ -153,7 +155,7 @@ function CreateClient({ open, onClose, onDone }) {
           <input className="input" type="number" placeholder="Start weight (kg)" value={form.start_weight} onChange={set('start_weight')} />
           <input className="input" type="number" placeholder="Target weight (kg)" value={form.target_weight} onChange={set('target_weight')} />
         </div>
-        <div className="text-[11px] text-faint">Default password: <b>demo1234</b> — they can change it later.</div>
+        <div className="text-[11px] text-faint">Client can change their password from Settings after first login.</div>
         {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
         <button className="btn-primary w-full" disabled={busy}>{busy ? 'Creating…' : 'Create client'}</button>
       </form>

@@ -96,19 +96,19 @@ export default function clientRoutes(db) {
     const userId = id('usr');
     const clientId = id('cli');
     const email = body.email.toLowerCase().trim();
-    const password = body.password || 'demo1234';
+    if (!body.password) return res.status(422).json({ error: 'Password is required for new client accounts' });
     const trainerId = body.trainer_id || (req.user.role === 'TRAINER' ? req.user.sub : null);
     try {
       await db.run(
         `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
          VALUES (?, ?, ?, ?, 'CLIENT', ?, 1, ?)`,
-        [userId, req.orgId, email, await hashPassword(password), body.name, now()]);
+        [userId, req.orgId, email, await hashPassword(body.password), body.name, now()]);
       await db.run(
         `INSERT INTO clients (id, user_id, org_id, trainer_id, status, goal, start_weight,
                               current_weight, target_weight, goal_date, height_cm, age, sex, created_at)
          VALUES (?, ?, ?, ?, 'ON_TRACK', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [clientId, userId, req.orgId, trainerId, body.goal, body.start_weight,
-         body.start_weight, body.target_weight, body.goal_date, body.height_cm, body.age, body.sex, now()]);
+        [clientId, userId, req.orgId, trainerId, body.goal, body.start_weight ?? null,
+         body.start_weight ?? null, body.target_weight ?? null, body.goal_date ?? null, body.height_cm ?? null, body.age ?? null, body.sex ?? null, now()]);
       await db.run(
         `INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`,
         [clientId]);
