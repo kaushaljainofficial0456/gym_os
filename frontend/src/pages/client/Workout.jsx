@@ -4,10 +4,172 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Bar, Ring } from '../../components/UI.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
+import ExerciseVisual from '../../components/ExerciseVisual.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
+import { useTheme } from '../../themeContext.jsx';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
+
+/* ───────── PR Celebration with premium visual ───────── */
+function PRCelebration({ prs }) {
+  const [show, setShow] = useState(false);
+  const [countPhase, setCountPhase] = useState(0);
+  const prefersReduced = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 200);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (prefersReduced || !show) return;
+    let start = performance.now();
+    let raf;
+    const tick = (now) => {
+      const elapsed = (now - start) / 1000;
+      setCountPhase(Math.min(1, elapsed / 1.2));
+      if (elapsed < 1.2) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [show, prefersReduced]);
+
+  return (
+    <div className="mt-4 rounded-xl border border-gold/30 bg-gold/10 px-4 py-4 relative overflow-hidden">
+      {/* Animated trophy glow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: `radial-gradient(40% 60% at 50% 30%, rgba(255,196,61,${show ? 0.15 : 0}), transparent 70%)`
+      }} />
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-2">
+          <svg viewBox="0 0 32 32" className="w-7 h-7" role="img" aria-label="Personal record">
+            <defs>
+              <linearGradient id="trophyGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#FFD700" />
+                <stop offset="50%" stopColor="#FFC43D" />
+                <stop offset="100%" stopColor="#E6A817" />
+              </linearGradient>
+            </defs>
+            {/* Trophy cup */}
+            <path d="M10,6 L22,6 L21,16 Q16,22 11,16 Z" fill="url(#trophyGrad)" stroke="#E6A817" strokeWidth="1" />
+            {/* Trophy base */}
+            <rect x="13" y="18" width="6" height="3" rx="1" fill="#E6A817" />
+            <rect x="10" y="21" width="12" height="3" rx="1.5" fill="#FFC43D" stroke="#E6A817" strokeWidth="0.5" />
+            {/* Left handle */}
+            <path d="M10,8 Q4,8 4,13 Q4,17 10,17" fill="none" stroke="#FFC43D" strokeWidth="1.5" strokeLinecap="round" />
+            {/* Right handle */}
+            <path d="M22,8 Q28,8 28,13 Q28,17 22,17" fill="none" stroke="#FFC43D" strokeWidth="1.5" strokeLinecap="round" />
+            {/* Star */}
+            <path d="M16,9 L17.2,12 L20,12.4 L18,14.6 L18.4,17.4 L16,16 L13.6,17.4 L14,14.6 L12,12.4 L14.8,12 Z" fill="#FFF" fillOpacity="0.9" />
+          </svg>
+          <div className="text-[10px] uppercase tracking-widest text-gold font-grotesk font-bold">New personal records</div>
+        </div>
+        {prs.map((p, pi) => (
+          <div key={p.name + (p.records?.map(r => r.type).join() || '')} className="mb-2 last:mb-0">
+            <div className="font-grotesk text-sm font-bold text-ink">{p.name}</div>
+            {p.records?.map((r) => {
+              const displayVal = typeof r.value === 'number'
+                ? Math.round(r.value * countPhase)
+                : r.value;
+              return (
+                <div key={r.type} className="flex items-center gap-2 mt-1">
+                  <span className="text-[11px] text-mute font-grotesk">{r.label}</span>
+                  <span className="text-sm font-grotesk font-bold text-gold">
+                    {displayVal}{r.type === 'est_1rm' || r.type === 'heaviest_weight' || r.type === 'best_volume' ? ' kg' : ''}
+                  </span>
+                  {r.previous !== null && (
+                    <span className="text-[10px] text-mute">(prev {r.previous})</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ───────── Rest Day Card with breathing animation ───────── */
+function RestDayCard({ style }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const [breathPhase, setBreathPhase] = useState(0);
+  const prefersReduced = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
+
+  useEffect(() => {
+    if (prefersReduced) return;
+    let start = performance.now();
+    let raf;
+    const tick = (now) => {
+      const elapsed = (now - start) / 1000;
+      setBreathPhase(Math.sin(elapsed * 0.8) * 0.5 + 0.5);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [prefersReduced]);
+
+  const glowOpacity = 0.06 + breathPhase * 0.08;
+  const bodyScale = 1 + breathPhase * 0.008;
+  const bodyY = breathPhase * 1.5;
+  const bodyColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(61,48,38,0.12)';
+  const accentColor = isDark ? '#12B8B0' : '#8C6A4D';
+
+  return (
+    <div className="card p-8 text-center anim-fadeUp overflow-hidden relative" style={style}>
+      {/* Ambient glow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: `radial-gradient(60% 50% at 50% 60%, ${accentColor}${Math.round(glowOpacity * 255).toString(16).padStart(2, '0')}, transparent 70%)`
+      }} />
+      <div className="relative z-10">
+        {/* Breathing silhouette */}
+        <svg viewBox="0 0 200 280" className="h-32 md:h-40 mx-auto mb-4" role="img" aria-label="Rest day recovery">
+          <defs>
+            <radialGradient id="restGlow" cx="50%" cy="60%" r="50%">
+              <stop offset="0%" stopColor={accentColor} stopOpacity={glowOpacity} />
+              <stop offset="100%" stopColor={accentColor} stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          {/* Glow behind figure */}
+          <ellipse cx="100" cy="160" rx="70" ry="80" fill="url(#restGlow)" />
+          {/* Seated/reclined figure silhouette */}
+          <g transform={`translate(0, ${bodyY}) scale(${bodyScale})`} style={{ transformOrigin: '100px 160px' }}>
+            {/* Head */}
+            <circle cx="100" cy="50" r="16" fill={bodyColor} stroke={accentColor} strokeWidth="1" strokeOpacity="0.3" />
+            {/* Neck */}
+            <rect x="95" y="66" width="10" height="12" rx="3" fill={bodyColor} />
+            {/* Torso — relaxed, slight lean back */}
+            <path d="M78,78 Q100,72 122,78 L118,160 Q100,166 82,160 Z" fill={bodyColor} stroke={accentColor} strokeWidth="1" strokeOpacity="0.2" />
+            {/* Left arm — resting on lap */}
+            <path d="M78,82 L60,108 L58,140 L72,142 L74,112 Z" fill={bodyColor} stroke={accentColor} strokeWidth="0.8" strokeOpacity="0.2" />
+            {/* Right arm — resting on lap */}
+            <path d="M122,82 L140,108 L142,140 L128,142 L126,112 Z" fill={bodyColor} stroke={accentColor} strokeWidth="0.8" strokeOpacity="0.2" />
+            {/* Legs — relaxed, slightly spread */}
+            <path d="M86,160 L80,220 L72,260 L92,262 L96,222 L98,162 Z" fill={bodyColor} stroke={accentColor} strokeWidth="0.8" strokeOpacity="0.2" />
+            <path d="M114,160 L120,220 L128,260 L108,262 L104,222 L102,162 Z" fill={bodyColor} stroke={accentColor} strokeWidth="0.8" strokeOpacity="0.2" />
+          </g>
+          {/* Recovery pulse rings */}
+          {[0, 1, 2].map(i => (
+            <circle key={i} cx="100" cy="160" r={30 + i * 20 + breathPhase * 8}
+              fill="none" stroke={accentColor} strokeWidth="0.5"
+              strokeOpacity={0.15 - i * 0.04} />
+          ))}
+        </svg>
+        <div className="font-grotesk font-bold text-lg">Rest day</div>
+        <div className="text-xs text-mute mt-1.5 max-w-xs mx-auto">No session scheduled for today. Recovery is training too — fuel well and sleep 8 hours.</div>
+        <div className="mt-4 text-[10px] uppercase tracking-widest text-gold font-grotesk">Next session appears here tomorrow</div>
+      </div>
+    </div>
+  );
+}
 
 export default function Workout() {
   const nav = useNavigate();
@@ -363,7 +525,20 @@ export default function Workout() {
                 {starting ? 'Starting…' : '🔥 START SESSION'}
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2.5 mt-3">
+            {/* Exercise visual preview */}
+            {exercises.length > 0 && (
+              <div className="mt-3">
+                <ExerciseVisual
+                  anim={exercises[0]?.animation_key || 'fallback'}
+                  muscle={exercises[0]?.primary_muscle}
+                  secondaryMuscles={exercises[0]?.secondary_muscles}
+                  size="sm"
+                  showControls={false}
+                  className="mb-3"
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2.5">
               {[
                 ['Exercises', meta.exerciseCount || exercises.length],
                 ['Total sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
@@ -377,12 +552,7 @@ export default function Workout() {
             </div>
           </div>
         ) : (
-          <div className="card p-10 text-center anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            <div className="text-4xl mb-3 anim-pop">🛌</div>
-            <div className="font-grotesk font-bold text-lg">Rest day</div>
-            <div className="text-xs text-mute mt-1.5 max-w-xs mx-auto">No session scheduled for today. Recovery is training too — fuel well and sleep 8 hours.</div>
-            <div className="mt-4 text-[10px] uppercase tracking-widest text-gold font-grotesk">Next session appears here tomorrow</div>
-          </div>
+          <RestDayCard style={{ animationDelay: '120ms' }} />
         )}
 
         {/* ── 4. TODAY'S EXERCISES ── */}
@@ -402,6 +572,20 @@ export default function Workout() {
                       )}
                     </div>
                     <div className="text-[11px] text-mute mt-0.5">{ex.sets} sets · {ex.reps} reps{ex.weight ? ` · ${ex.weight}` : ''}</div>
+                    {(ex.primary_muscle || ex.secondary_muscles) && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {ex.primary_muscle && (
+                          <span className="px-1.5 py-px rounded-full text-[8px] font-grotesk font-semibold" style={{ background: 'rgba(18,184,176,0.12)', color: '#12B8B0', border: '1px solid rgba(18,184,176,0.25)' }}>
+                            {ex.primary_muscle}
+                          </span>
+                        )}
+                        {ex.secondary_muscles && (
+                          <span className="px-1.5 py-px rounded-full text-[8px] font-grotesk" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {ex.secondary_muscles}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <button aria-label={`Mark ${ex.name} done`} onClick={() => toggleEx(ex)}
                     className={`w-8 h-8 rounded-xl border grid place-items-center text-sm transition-all duration-200 active:scale-90 ${ex.done ? 'bg-gradient-to-br from-ember to-gold text-bg border-transparent shadow-lg shadow-ember/30' : 'border-line text-faint hover:border-gold/50'}`}>
@@ -757,7 +941,15 @@ export default function Workout() {
               <span>{currentEx.sets} × {currentEx.reps}</span><span className="text-faint">·</span><span>{currentEx.weight}</span>
             </div>
 
-            <ExerciseAnim anim={currentEx.animation_key || 'fallback'} muscle={currentEx.primary_muscle} label="" size="lg" />
+            <ExerciseVisual
+              anim={currentEx.animation_key || 'fallback'}
+              muscle={currentEx.primary_muscle}
+              secondaryMuscles={currentEx.secondary_muscles}
+              size="lg"
+              showControls={true}
+              autoPlay={true}
+              className="my-3"
+            />
 
             {/* session elapsed timer */}
             <div className="flex items-center justify-center gap-1.5 mt-3">
@@ -792,6 +984,19 @@ export default function Workout() {
                 </label>
               </div>
             </div>
+            {/* Muscle activation info */}
+            {currentEx.primary_muscle && (
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-grotesk" style={{ background: 'rgba(18,184,176,0.15)', color: '#12B8B0', border: '1px solid rgba(18,184,176,0.3)' }}>
+                  {currentEx.primary_muscle}
+                </span>
+                {currentEx.secondary_muscles && (
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-grotesk" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {currentEx.secondary_muscles}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="text-[9px] text-mute mt-1.5">Adjust reps/weight/RIR per set — each set is logged individually</div>
 
             <button className="btn-primary w-full !py-4 mt-5 text-sm" onClick={completeSet} disabled={submitting}>
@@ -835,20 +1040,7 @@ export default function Workout() {
             ))}
           </div>
           {!!result?.prs?.length && (
-            <div className="mt-4 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-widest text-gold font-grotesk mb-1.5">🎉 New personal records</div>
-              {result.prs.map((p) => (
-                <div key={p.name + p.records?.map(r => r.type).join() || ''} className="text-sm font-grotesk">
-                  <span className="font-bold">{p.name}</span>
-                  {p.records?.map((r) => (
-                    <span key={r.type} className="block text-xs text-ink/80 mt-0.5">
-                      {r.label}: <span className="text-gold font-semibold">{r.value}{r.type === 'est_1rm' ? ' kg' : r.type === 'heaviest_weight' ? ' kg' : r.type === 'best_volume' ? ' kg' : ''}</span>
-                      {r.previous !== null && <span className="text-mute"> (prev {r.previous})</span>}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
+            <PRCelebration prs={result.prs} />
           )}
           {!!result?.calorie && (
             <div className="mt-3 rounded-xl border border-good/25 bg-good/5 px-4 py-3">

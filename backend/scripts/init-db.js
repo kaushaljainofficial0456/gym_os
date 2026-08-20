@@ -81,6 +81,8 @@ const MIGRATIONS = [
   ['meal_logs', 'quantity', `quantity REAL`],
   ['meal_logs', 'unit', `unit TEXT`],
   ['meal_logs', 'unit_type', `unit_type TEXT`],
+  // --- custom meal template linkage for delete-cascade ---
+  ['meal_logs', 'meal_template_id', `meal_template_id TEXT`],
   // --- workout session timing + calorie persistence (cross-team contract) ---
   ['workouts', 'started_at', `started_at TEXT`],
   ['workouts', 'duration_min', `duration_min REAL`],
@@ -92,7 +94,11 @@ const MIGRATIONS = [
   ['workouts', 'calorie_provider', `calorie_provider TEXT`],
   ['workouts', 'calorie_estimated_at', `calorie_estimated_at TEXT`],
   // --- legacy set provenance: 1 => derived from aggregate logs, not user-entered ---
-  ['exercise_set_logs', 'is_synthesized', `is_synthesized INTEGER NOT NULL DEFAULT 0`]
+  ['exercise_set_logs', 'is_synthesized', `is_synthesized INTEGER NOT NULL DEFAULT 0`],
+  // --- client onboarding flag ---
+  ['clients', 'onboarding_completed', `onboarding_completed INTEGER NOT NULL DEFAULT 0`],
+  // Backfill: existing clients are already in the system, mark as onboarded
+  // (new clients created after this migration will start at 0)
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -131,6 +137,8 @@ function applySqliteMigrations(db) {
   // Backfill created_at for existing workout_logs (best-effort: date-based).
   db.exec(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => db.exec(sql), `'stl_' || lower(hex(randomblob(8)))`);
+  // Backfill: existing clients already in the system are considered onboarded
+  db.exec(`UPDATE clients SET onboarding_completed = 1 WHERE onboarding_completed = 0`);
 }
 
 async function applyPgMigrations(pool) {

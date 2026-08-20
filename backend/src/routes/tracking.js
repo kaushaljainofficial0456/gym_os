@@ -130,7 +130,9 @@ export default function trackingRoutes(db) {
       client: {
         id: client.id, name: user.name, goal: client.goal,
         currentWeight: client.current_weight, targetWeight: client.target_weight,
-        startWeight: client.start_weight, goalDate: client.goal_date
+        startWeight: client.start_weight, goalDate: client.goal_date,
+        sex: client.sex, age: client.age, heightCm: client.height_cm,
+        onboardingCompleted: !!client.onboarding_completed
       },
       adherence: adherence.score,
       adherenceComponents: adherence.components,
@@ -142,7 +144,9 @@ export default function trackingRoutes(db) {
           // client's own logged foods/meals (source: custom) — count toward today's ring + macros
           ...logs.filter(l => !l.meal_id).map(l => ({
             id: l.id, name: l.name, slot: l.slot || 'Logged', calories: l.calories,
-            protein: l.protein, carbs: l.carbs, fat: l.fat, eaten: !!l.eaten, source: l.source
+            protein: l.protein, carbs: l.carbs, fat: l.fat, eaten: !!l.eaten, source: l.source,
+            meal_template_id: l.meal_template_id || null,
+            quantity: l.quantity, unit: l.unit
           }))
         ],
         eaten, customLogs: logs.filter(l => !l.meal_id)

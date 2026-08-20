@@ -14,6 +14,7 @@ import { id, now } from '../ids.js';
 import { dayKey, getOrgTz } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
+import { foodSearch } from '../services/skos-food/index.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -40,17 +41,30 @@ export default function meRoutes(db) {
 
   r.put('/profile', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm } = req.body || {};
+    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, onboarding_completed } = req.body || {};
     const GOALS = ['FAT_LOSS', 'MUSCLE_GAIN', 'RECOMP', 'STRENGTH', 'GENERAL'];
     const EXP = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
+    const SEX = ['MALE', 'FEMALE', 'OTHER'];
     if (goal !== undefined && !GOALS.includes(goal)) return res.status(400).json({ error: 'Invalid goal' });
     if (experience !== undefined && !EXP.includes(experience)) return res.status(400).json({ error: 'Invalid experience level' });
+    if (sex !== undefined && sex !== null && !SEX.includes(sex)) return res.status(400).json({ error: 'Invalid sex' });
+    if (age !== undefined && age !== null && (Number(age) < 10 || Number(age) > 120)) return res.status(400).json({ error: 'Invalid age' });
+    if (current_weight !== undefined && current_weight !== null && (Number(current_weight) < 20 || Number(current_weight) > 400)) return res.status(400).json({ error: 'Invalid weight' });
+    if (height_cm !== undefined && height_cm !== null && (Number(height_cm) < 100 || Number(height_cm) > 250)) return res.status(400).json({ error: 'Invalid height' });
+    // Update user name if provided
+    if (name !== undefined && name !== null && String(name).trim().length >= 2) {
+      await db.run('UPDATE users SET name = ? WHERE id = ?', [String(name).trim().slice(0, 100), req.user.sub]);
+    }
     const sets = [];
     const params = [];
     if (goal !== undefined) { sets.push('goal = ?'); params.push(goal); }
     if (target_weight !== undefined) { sets.push('target_weight = ?'); params.push(num(target_weight)); }
     if (goal_date !== undefined) { sets.push('goal_date = ?'); params.push(goal_date ? String(goal_date).slice(0, 10) : null); }
     if (height_cm !== undefined) { sets.push('height_cm = ?'); params.push(num(height_cm)); }
+    if (sex !== undefined) { sets.push('sex = ?'); params.push(sex || null); }
+    if (age !== undefined) { sets.push('age = ?'); params.push(num(age)); }
+    if (current_weight !== undefined) { sets.push('current_weight = ?'); params.push(num(current_weight)); }
+    if (onboarding_completed !== undefined) { sets.push('onboarding_completed = ?'); params.push(onboarding_completed ? 1 : 0); }
     if (sets.length) {
       params.push(c.id);
       await db.run(`UPDATE clients SET ${sets.join(', ')} WHERE id = ?`, params);
@@ -71,6 +85,113 @@ export default function meRoutes(db) {
     }
     track(db, 'client_profile_updated', req.user.org, req.user.sub, { client_id: c.id });
     res.json({ ok: true });
+  });
+
+  // ---------------- nutrition target generation ----------------
+  // Calculates daily calorie/macro targets from the client's profile.
+  // Uses Mifflin-St Jeor BMR + activity multiplier based on experience.
+  r.get('/nutrition/targets', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const profile = await db.q1('SELECT * FROM client_profiles WHERE client_id = ?', [c.id]);
+    const user = await db.q1('SELECT name FROM users WHERE id = ?', [req.user.sub]);
+
+    const weight = Number(c.current_weight) || 0;
+    const height = Number(c.height_cm) || 0;
+    const age = Number(c.age) || 0;
+    const sex = (c.sex || '').toUpperCase();
+    const goal = c.goal || 'GENERAL';
+
+    // If profile is incomplete, return what we can
+    if (!weight || !height || !age || !sex) {
+      return res.json({
+        targets: null,
+        incomplete: true,
+        missing: [
+          !weight ? 'current_weight' : null,
+          !height ? 'height_cm' : null,
+          !age ? 'age' : null,
+          !sex ? 'sex' : null,
+        ].filter(Boolean),
+        client: { name: user?.name || '', sex, height_cm: height, current_weight: weight, age, goal }
+      });
+    }
+
+    // Mifflin-St Jeor BMR
+    let bmr;
+    if (sex === 'MALE') {
+      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    } else {
+      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+    }
+
+    // Activity multiplier from experience
+    const activityMap = { BEGINNER: 1.375, INTERMEDIATE: 1.55, ADVANCED: 1.725 };
+    const experience = (profile?.experience || 'INTERMEDIATE').toUpperCase();
+    const activityMultiplier = activityMap[experience] || 1.55;
+
+    let tdee = Math.round(bmr * activityMultiplier);
+
+    // Goal adjustment
+    const goalAdjust = {
+      FAT_LOSS: -350,
+      MUSCLE_GAIN: 300,
+      RECOMP: 0,
+      STRENGTH: 200,
+      GENERAL: 0,
+    };
+    tdee += goalAdjust[goal] || 0;
+    tdee = Math.max(1200, Math.min(tdee, 6000));
+
+    // Macro split based on goal
+    let proteinG, carbG, fatG;
+    const leanMass = weight * 0.82; // rough lean mass estimate
+    if (goal === 'MUSCLE_GAIN' || goal === 'STRENGTH') {
+      proteinG = Math.round(leanMass * 2.0);      // 2g/kg lean mass
+      fatG = Math.round(tdee * 0.25 / 9);          // 25% from fat
+      carbG = Math.round((tdee - proteinG * 4 - fatG * 9) / 4);
+    } else if (goal === 'FAT_LOSS') {
+      proteinG = Math.round(leanMass * 2.2);        // higher protein for cut
+      fatG = Math.round(tdee * 0.25 / 9);
+      carbG = Math.round((tdee - proteinG * 4 - fatG * 9) / 4);
+    } else {
+      proteinG = Math.round(leanMass * 1.8);
+      fatG = Math.round(tdee * 0.28 / 9);
+      carbG = Math.round((tdee - proteinG * 4 - fatG * 9) / 4);
+    }
+
+    // Floor macros
+    proteinG = Math.max(proteinG, 50);
+    carbG = Math.max(carbG, 50);
+    fatG = Math.max(fatG, 30);
+
+    res.json({
+      targets: { calories: tdee, protein: proteinG, carbs: carbG, fat: fatG },
+      incomplete: false,
+      meta: { bmr: Math.round(bmr), activityMultiplier, experience, goal },
+      client: { name: user?.name || '', sex, height_cm: height, current_weight: weight, age, goal }
+    });
+  });
+
+  // Confirm and save nutrition targets as a plan
+  r.post('/nutrition/targets/confirm', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { calories, protein, carbs, fat } = req.body || {};
+    if (!calories || !protein || !carbs || !fat) {
+      return res.status(400).json({ error: 'All macro fields are required' });
+    }
+    const cal = Math.max(500, Math.min(Number(calories), 10000));
+    const pro = Math.max(20, Math.min(Number(protein), 500));
+    const carb = Math.max(20, Math.min(Number(carbs), 800));
+    const fatV = Math.max(15, Math.min(Number(fat), 300));
+
+    const id = 'np_' + Math.random().toString(36).slice(2, 10);
+    await db.run(
+      `INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`,
+      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, pro, carb, fatV]
+    );
+    track(db, 'nutrition_plan_created', req.user.org, req.user.sub, { client_id: c.id, source: 'client_self' });
+    res.json({ ok: true, plan: { calories: cal, protein: pro, carbs: carb, fat: fatV } });
   });
 
   // ---------------- dashboard preferences ----------------
@@ -220,6 +341,27 @@ export default function meRoutes(db) {
     res.json({ ok: true });
   });
 
+  // ---------------- food search (SKOS database) ----------------
+  // Lightweight search across the 21K+ SKOS food database.
+  // Returns results in the same shape as the foods table so the frontend
+  // can use them interchangeably for custom meal building.
+  r.get('/foods/search', async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ foods: [] });
+    const results = foodSearch.search(q, { limit: 10, allowBackoff: true });
+    const foods = results.map((r) => ({
+      id: r.source_id,
+      name: r.food_name,
+      calories: r.energy_kcal || 0,
+      protein: r.protein_g || 0,
+      carbs: r.carb_g || 0,
+      fat: r.fat_g || 0,
+      serving_grams: r.serving_grams || null,
+      source: 'skos'
+    }));
+    res.json({ foods });
+  });
+
   // ---------------- my meal templates ----------------
   r.get('/meals', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
@@ -252,17 +394,92 @@ export default function meRoutes(db) {
     const d = dayKey(new Date(), tz);
     const lId = id('mlg');
     await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source)
-       VALUES (?,?,NULL,?,?,?,?,?,?,?,1,'custom')`,
-      [lId, c.id, d, m.slot, m.name, m.calories, m.protein, m.carbs, m.fat]);
+      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, meal_template_id)
+       VALUES (?,?,NULL,?,?,?,?,?,?,?,1,'custom',?)`,
+      [lId, c.id, d, m.slot, m.name, m.calories, m.protein, m.carbs, m.fat, m.id]);
     track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'client_custom' });
     res.json({ id: lId });
   });
 
+  // Update a meal template (name, nutrition, foods)
+  r.put('/meals/:id', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!m) return res.status(404).json({ error: 'Meal not found' });
+    const { name, slot, calories, protein, carbs, fat, foods } = req.body || {};
+    const sets = [], params = [];
+    if (name !== undefined) { sets.push('name = ?'); params.push(String(name).trim().slice(0, 80)); }
+    if (slot !== undefined) { sets.push('slot = ?'); params.push(String(slot).slice(0, 30)); }
+    if (calories !== undefined) { sets.push('calories = ?'); params.push(num(calories) || 0); }
+    if (protein !== undefined) { sets.push('protein = ?'); params.push(num(protein) || 0); }
+    if (carbs !== undefined) { sets.push('carbs = ?'); params.push(num(carbs) || 0); }
+    if (fat !== undefined) { sets.push('fat = ?'); params.push(num(fat) || 0); }
+    if (foods !== undefined) { sets.push('foods = ?'); params.push(String(foods).slice(0, 300)); }
+    if (sets.length) { params.push(m.id); await db.run(`UPDATE client_meal_templates SET ${sets.join(', ')} WHERE id = ?`, params); }
+    res.json({ ok: true });
+  });
+
+  // Delete a meal template and its items.
+  // Also remove any meal_logs from TODAY that were logged from this template.
+  // Historical logs from previous dates are preserved.
   r.delete('/meals/:id', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    await db.run('DELETE FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!m) return res.status(404).json({ error: 'Meal not found' });
+    const tz = req.tz || 'Asia/Kolkata';
+    const today = dayKey(new Date(), tz);
+    await db.run('DELETE FROM meal_items WHERE meal_template_id = ?', [m.id]);
+    // Remove today's logged meals that came from this template
+    await db.run(
+      'DELETE FROM meal_logs WHERE client_id = ? AND meal_template_id = ? AND date = ?',
+      [c.id, m.id, today]);
+    await db.run('DELETE FROM client_meal_templates WHERE id = ?', [m.id]);
     res.json({ ok: true });
+  });
+
+  // ---------------- today's logged food entries ----------------
+  // Delete a single logged entry (does NOT delete saved meal template or food)
+  r.delete('/meal-logs/:logId', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { logId } = req.params;
+    const log = await db.q1('SELECT * FROM meal_logs WHERE id = ? AND client_id = ?', [logId, c.id]);
+    if (!log) return res.status(404).json({ error: 'Log entry not found' });
+    await db.run('DELETE FROM meal_logs WHERE id = ? AND client_id = ?', [logId, c.id]);
+    track(db, 'meal_log_deleted', req.user.org, req.user.sub, { clientId: c.id, logId });
+    res.json({ ok: true });
+  });
+
+  // Edit a logged entry's quantity (recalculates nutrition from food data)
+  r.put('/meal-logs/:logId', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { logId } = req.params;
+    const { quantity, unit } = req.body || {};
+    const log = await db.q1('SELECT * FROM meal_logs WHERE id = ? AND client_id = ?', [logId, c.id]);
+    if (!log) return res.status(404).json({ error: 'Log entry not found' });
+    if (quantity === undefined || quantity === null) return res.status(400).json({ error: 'quantity is required' });
+    const newQty = Math.max(0.1, Number(quantity));
+    const newUnit = unit !== undefined ? String(unit) : log.unit;
+
+    // Try to recalculate from food database if the log has a reference food
+    let newCalories = log.calories;
+    let newProtein = log.protein;
+    let newCarbs = log.carbs;
+    let newFat = log.fat;
+
+    // If the original quantity is known, scale proportionally
+    const origQty = Number(log.quantity) || 100;
+    const scale = newQty / origQty;
+    newCalories = Math.round(log.calories * scale * 10) / 10;
+    newProtein = Math.round(log.protein * scale * 10) / 10;
+    newCarbs = Math.round(log.carbs * scale * 10) / 10;
+    newFat = Math.round(log.fat * scale * 10) / 10;
+
+    await db.run(
+      'UPDATE meal_logs SET quantity = ?, unit = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ? AND client_id = ?',
+      [newQty, newUnit, newCalories, newProtein, newCarbs, newFat, logId, c.id]
+    );
+    track(db, 'meal_log_updated', req.user.org, req.user.sub, { clientId: c.id, logId });
+    res.json({ ok: true, log: { id: logId, quantity: newQty, unit: newUnit, calories: newCalories, protein: newProtein, carbs: newCarbs, fat: newFat } });
   });
 
   // ---------------- my custom workouts ----------------
@@ -513,6 +730,7 @@ export default function meRoutes(db) {
   });
 
   // Add a food to a client meal (scoped: only global, own-gym, or own foods).
+  // If food_id doesn't exist in the foods table (e.g. a SKOS food), auto-create it.
   r.post('/meals/:id/items', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
@@ -523,8 +741,24 @@ export default function meRoutes(db) {
     if (food_id) {
       food = await db.q1(
         `SELECT * FROM foods WHERE id = ? AND (is_global = 1 OR org_id = ? OR client_id = ?)`, [food_id, c.org_id, c.id]);
-      if (!food) return res.status(404).json({ error: 'Food not found or not available to you' });
     }
+    // If not found in foods table, try SKOS food search (for custom meal builder)
+    if (!food && (food_id || name)) {
+      try {
+        const searchResults = foodSearch.search(String(name || food_id), { limit: 1, allowBackoff: true });
+        const skos = searchResults[0];
+        if (skos) {
+          const newId = id('food');
+          await db.run(
+            `INSERT INTO foods (id, org_id, client_id, name, serving, calories, protein, carbs, fat, is_global)
+             VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, 1)`,
+            [newId, c.org_id, skos.food_name, (skos.serving_grams || 100) + ' g',
+             skos.energy_kcal || 0, skos.protein_g || 0, skos.carb_g || 0, skos.fat_g || 0]);
+          food = await db.q1('SELECT * FROM foods WHERE id = ?', [newId]);
+        }
+      } catch { /* SKOS lookup failed — fall through */ }
+    }
+    if (!food) return res.status(404).json({ error: 'Food not found or not available to you' });
     const label = food ? food.name : (name ? String(name).slice(0, 80) : 'Item');
     const itemId = id('mi');
     const pos = (await db.q1('SELECT COALESCE(MAX(position)+1, 0) p FROM meal_items WHERE meal_template_id = ?', [m.id]))?.p || 0;

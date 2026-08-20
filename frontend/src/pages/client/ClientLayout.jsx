@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
+import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 
 const NAV = [
   { to: '/app/client', end: true, label: 'Home', icon: '⌂' },
@@ -30,9 +31,15 @@ export default function ClientLayout() {
 
   const briefFetch = useFetch(() => api('/intel/coach/brief'));
   const weeklyFetch = useFetch(() => api('/intel/coach/weekly'));
+  const homeFetch = useFetch(() => api('/tracking/me/home'));
 
   const hasBrief = briefFetch.data?.ok;
   const briefPriority = briefFetch.data?.priority;
+
+  // Onboarding state — server-side check via /me/home
+  const clientData = homeFetch.data?.client;
+  const needsOnboarding = clientData && !clientData.onboardingCompleted;
+  const [onboardingDone, setOnboardingDone] = useState(false);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -177,6 +184,15 @@ export default function ClientLayout() {
         briefFetch={briefFetch}
         weeklyFetch={weeklyFetch}
       />
+
+      {/* ── ONBOARDING WIZARD ── */}
+      {needsOnboarding && !onboardingDone && (
+        <OnboardingWizard
+          open={true}
+          initialName={user?.name || ''}
+          onComplete={() => { setOnboardingDone(true); homeFetch.reload(); }}
+        />
+      )}
 
       {/* ── MAIN CONTENT ── */}
       <div key={loc.pathname} className="anim-fadeUp pt-4">
