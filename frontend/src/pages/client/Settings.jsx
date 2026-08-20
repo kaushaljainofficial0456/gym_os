@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth.jsx';
+import { api } from '../../api.js';
 import Icon from '../../components/Icon.jsx';
 
 const SETTINGS_SECTIONS = [
@@ -26,13 +27,16 @@ const SETTINGS_SECTIONS = [
 ];
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [toast, setToast] = useState('');
   const [formState, setFormState] = useState({
     name: user?.name || '',
     email: user?.email || '',
     phone: '',
   });
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const handleSave = (section) => {
     setToast(`${section} settings saved ✓`);
@@ -115,6 +119,85 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* DANGER ZONE */}
+      <div className="card p-5" style={{ borderColor: 'rgba(248,113,113,.2)' }}>
+        <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-semibold mb-3" style={{ color: '#FF6B6B' }}>Danger Zone</div>
+        <p className="text-xs mb-4" style={{ color: 'var(--mute)' }}>Permanently delete your account and all associated data. This action cannot be undone.</p>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]"
+          style={{ background: 'rgba(248,113,113,.08)', border: '1px solid rgba(248,113,113,.25)', color: '#FF6B6B' }}
+        >
+          Delete Account
+        </button>
+      </div>
+
+      {/* Delete Account Modal */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) { setDeleteOpen(false); setDeleteConfirm(''); } }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
+          <div className="w-full max-w-sm rounded-2xl p-6 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)', boxShadow: 'var(--card-shadow)' }}>
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 mx-auto rounded-full grid place-items-center text-xl mb-3" style={{ background: 'rgba(248,113,113,.1)', border: '1px solid rgba(248,113,113,.25)' }}>⚠️</div>
+              <h3 className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>Delete your account?</h3>
+              <p className="text-xs mt-2" style={{ color: 'var(--mute)' }}>This will permanently delete:</p>
+              <ul className="text-[11px] mt-2 space-y-1 text-left max-w-xs mx-auto" style={{ color: 'var(--mute)' }}>
+                <li>• Your profile and personal information</li>
+                <li>• Your workout data and history</li>
+                <li>• Your nutrition data and meal logs</li>
+                <li>• Your progress photos and measurements</li>
+                <li>• Your supplements and preferences</li>
+                <li>• All other data associated with your account</li>
+              </ul>
+              <p className="text-[11px] mt-3 font-semibold" style={{ color: '#FF6B6B' }}>This action cannot be undone.</p>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[10px] uppercase tracking-wider font-grotesk font-semibold block mb-1" style={{ color: 'var(--mute)' }}>Type DELETE to confirm</label>
+              <input
+                className="input"
+                placeholder="DELETE"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeleteOpen(false); setDeleteConfirm(''); }}
+                className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95"
+                style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--mute)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (deleteConfirm !== 'DELETE') return;
+                  setDeleting(true);
+                  try {
+                    await api('/me/account', { method: 'DELETE' });
+                    logout();
+                  } catch (e) {
+                    setToast('Account deletion could not be completed. No changes were made.');
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleteConfirm !== 'DELETE' || deleting}
+                className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]"
+                style={{
+                  background: deleteConfirm === 'DELETE' && !deleting ? '#FF6B6B' : 'var(--bg2)',
+                  color: deleteConfirm === 'DELETE' && !deleting ? '#fff' : 'var(--mute)',
+                  opacity: deleteConfirm === 'DELETE' && !deleting ? 1 : 0.5,
+                  cursor: deleteConfirm === 'DELETE' && !deleting ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Permanently Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

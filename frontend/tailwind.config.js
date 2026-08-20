@@ -51,9 +51,9 @@ export default {
            so Tailwind's rgba parser handles the modifier; they are themed
            by the existing overrides in theme.css. Full reasoning in
            src/design/tokens.js. */
-        line: 'rgba(255,255,255,.07)',
-        mute: 'rgba(240,244,243,.55)',
-        faint: 'rgba(240,244,243,.30)',
+        line: 'rgba(255,255,255,.08)',
+        mute: 'rgba(250,250,250,.50)',
+        faint: 'rgba(250,250,250,.28)',
       },
       /* The four legacy names are KEPT as aliases rather than renamed,
          because ~40 files use `font-display` / `font-grotesk` today and a
@@ -75,11 +75,11 @@ export default {
       boxShadow: {
         card: '0 1px 3px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.08)',
         'card-dark': '0 24px 48px -24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04)',
-        'card-hover': '0 32px 64px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(20,196,188,.08)',
-        'card-hover-dark': '0 32px 64px -28px rgba(0,0,0,.85), 0 0 0 1px rgba(20,196,188,.1)',
-        glow: '0 0 20px rgba(20,196,188,.4)',
-        ember: '0 6px 20px -8px rgba(10,138,133,.5)',
-        gold: '0 6px 20px -8px rgba(20,196,188,.4)',
+        'card-hover': '0 32px 64px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(196,248,42,.08)',
+        'card-hover-dark': '0 32px 64px -28px rgba(0,0,0,.85), 0 0 0 1px rgba(196,248,42,.1)',
+        glow: '0 0 20px rgba(196,248,42,.4)',
+        ember: '0 6px 20px -8px rgba(168,217,36,.5)',
+        gold: '0 6px 20px -8px rgba(196,248,42,.4)',
         inner: 'inset 0 1px 0 rgba(255,255,255,.05)',
       },
       keyframes: {

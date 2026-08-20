@@ -63,7 +63,7 @@ export default function Progress() {
       {adh.length >= 2 && (
         <div className="card p-4">
           <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2">Adherence · last 14 days</div>
-          <TrendChart data={adh.map((a) => ({ label: a.date.slice(5), value: a.score }))} color="#4ADE80" />
+          <TrendChart data={adh.map((a) => ({ label: a.date.slice(5), value: a.score }))} color="#C4F82A" />
         </div>
       )}
 

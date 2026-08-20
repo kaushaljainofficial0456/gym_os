@@ -3,14 +3,14 @@ import { WEEKDAY } from '../utils.js';
 
 const tooltipStyle = {
   background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 12,
-  fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#F0F4F3',
+  fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#FAFAFA',
   boxShadow: '0 24px 48px -20px rgba(0,0,0,.8)', padding: '8px 12px'
 };
 
 const tooltipStyleLight = {
-  background: '#FFFFFF', border: '1px solid rgba(91,70,54,.10)', borderRadius: 12,
-  fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#3D2B1A',
-  boxShadow: '0 4px 16px rgba(91,70,54,.06)', padding: '8px 12px'
+  background: '#FFFFFF', border: '1px solid rgba(0,0,0,.08)', borderRadius: 12,
+  fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#1A1D1A',
+  boxShadow: '0 4px 16px rgba(0,0,0,.06)', padding: '8px 12px'
 };
 
 function getTooltipStyle() {
@@ -28,21 +28,21 @@ export function WeightChart({ data }) {
       <AreaChart data={rows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="wGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#12B8B0" stopOpacity={.35} />
-            <stop offset="100%" stopColor="#12B8B0" stopOpacity={0} />
+            <stop offset="0%" stopColor="#C4F82A" stopOpacity={.35} />
+            <stop offset="100%" stopColor="#C4F82A" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 6" stroke="rgba(128,128,128,.08)" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} />
         <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => [`${v} kg`, 'Weight']} labelFormatter={(l) => data[l]?.date} />
-        <Area type="monotone" dataKey="weight" stroke="#12B8B0" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: '#DDF7F2' }} />
+        <Area type="monotone" dataKey="weight" stroke="#C4F82A" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: '#E8FFB0' }} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-export function TrendChart({ data, color = '#12B8B0', domain }) {
+export function TrendChart({ data, color = '#C4F82A', domain }) {
   if (!data || !data.length) return null;
   return (
     <ResponsiveContainer width="100%" height={150}>
@@ -89,10 +89,10 @@ export function AdherenceBreakdown({ components }) {
     // the charts with it. Recharts needs literal colours, not var().
     ['Workout', components?.workout, isLight ? brand.light.accentDeep : brand.dark.accentDeep],
     ['Nutrition', components?.nutrition, isLight ? brand.light.accent : brand.dark.accent],
-    ['Protein', components?.protein, '#E8A87C'],
+    ['Protein', components?.protein, isLight ? '#E07020' : '#FF8C42'],
     ['Water', components?.water, isLight ? brand.light.cyan : brand.dark.cyan],
     ['Sleep', components?.sleep, isLight ? brand.light.violet : brand.dark.violet],
-    ['Check-in', components?.checkin, isLight ? '#7DB89A' : '#34D399']
+    ['Check-in', components?.checkin, isLight ? brand.light.accent : brand.dark.accent]
   ].filter(r => r[1] !== null && r[1] !== undefined);
   return (
     <div className="space-y-2.5">

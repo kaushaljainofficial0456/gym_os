@@ -213,7 +213,7 @@ export function ErrorState({ error, onRetry }) {
 export function MacroPill({ p, c, f }) {
   return (
     <span className="flex gap-2 font-grotesk text-[10.5px]">
-      <span className="text-[#FF9A7A]">P {Math.round(p)}</span>
+      <span className="text-[#FF8C42]">P {Math.round(p)}</span>
       <span className="text-gold">C {Math.round(c)}</span>
       <span className="text-cyanx">F {Math.round(f)}</span>
     </span>
