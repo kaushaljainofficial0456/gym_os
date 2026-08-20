@@ -244,7 +244,10 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
                                   ? { background: 'var(--accent)', color: 'var(--accent-contrast)', border: '1px solid var(--accent)' }
                                   : { border: '1px solid var(--line)', color: 'var(--mute)' }}>
                           {p.label}
-                          <span className="opacity-60"> · {Math.round(p.grams)}g</span>
+                          {/* Sub-gram portions keep a decimal. A pinch is ~0.4 g, and
+                              Math.round turned that into a chip reading "Pinch · 0g" --
+                              a control that appears to log nothing. */}
+                          <span className="opacity-60"> · {p.grams < 1 ? p.grams.toFixed(1) : Math.round(p.grams)}g</span>
                         </button>
                       );
                     })}
