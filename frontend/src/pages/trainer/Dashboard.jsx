@@ -18,12 +18,20 @@ const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', mon
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const ov = useFetch(() => api('/dashboard/overview'));
-  const att = useFetch(() => api('/dashboard/attention'));
+  const isTrainerOnly = user?.role === 'TRAINER';
+
+  // Trainers use the scoped endpoint; owners/admins use the org-wide overview
+  const ov = useFetch(() => api(isTrainerOnly ? '/dashboard/trainer' : '/dashboard/overview'));
+  const att = useFetch(() => isTrainerOnly ? Promise.resolve(null) : api('/dashboard/attention'));
   const trend = useFetch(() => api('/dashboard/adherence-trend'));
   const trendRows = useMemo(() => (trend.data?.trend || []).map(t => ({ label: t.date.slice(5), value: t.avg ?? 0 })), [trend.data]);
 
-  if (ov.loading || att.loading || trend.loading) {
+  // For trainers, attention data comes from the trainer endpoint response
+  const attentionClients = isTrainerOnly
+    ? (ov.data?.attention || [])
+    : (att.data?.clients || []);
+
+  if (ov.loading || (!isTrainerOnly && att.loading) || trend.loading) {
     return (
       <div className="space-y-6">
         <div className="skeleton h-20 w-2/3" />
@@ -59,7 +67,7 @@ export default function Dashboard() {
 
       {/* hero summary — big numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Active clients" value={k.activeClients} sub={`${k.newClients} new · ${k.inactive} inactive`} icon="◉" />
+        <Kpi label="Active clients" value={k.activeClients} sub={k.newClients != null ? `${k.newClients} new · ${k.inactive} inactive` : `${k.totalClients} total · ${k.inactive} inactive`} icon="◉" />
         <Kpi label="On track" value={k.onTrack} tone="text-good" icon="✓" />
         <Kpi label="Needs attention" value={k.needsAttention} tone="text-warn" icon="◐" />
         <Kpi label="At risk" value={k.atRisk} tone="text-bad" sub={`${k.attentionCount || ''} open alerts`} icon="◈" />
@@ -73,7 +81,7 @@ export default function Dashboard() {
           </div>
           <div className="px-3 pb-3 space-y-1.5">
             <Stagger step={70}>
-              {(att.data?.clients || []).slice(0, 6).map((c) => (
+              {attentionClients.slice(0, 6).map((c) => (
                 <Link key={c.clientId} to={`/app/trainer/clients/${c.clientId}`}
                   className="group flex items-center gap-3 p-3 rounded-2xl border border-line bg-white/[.02] hover:bg-white/[.05] hover:border-white/15 transition-all duration-200">
                   <Avatar name={c.name} size="w-10 h-10" />
@@ -93,7 +101,7 @@ export default function Dashboard() {
                 </Link>
               ))}
             </Stagger>
-            {!(att.data?.clients?.length) && (
+            {!(attentionClients.length) && (
               <div className="text-center py-10 text-mute text-sm">🎉 No clients need attention right now.</div>
             )}
           </div>

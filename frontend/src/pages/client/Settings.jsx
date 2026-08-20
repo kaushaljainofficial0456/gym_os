@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth.jsx';
+import { api } from '../../api.js';
 
 const SETTINGS_SECTIONS = [
   {
@@ -33,8 +34,42 @@ export default function Settings() {
     phone: '',
   });
 
-  const handleSave = (section) => {
-    setToast(`${section} settings saved ✓`);
+  const [busy, setBusy] = useState(false);
+
+  const handleSave = async (section) => {
+    if (section === 'Account Information') {
+      setBusy(true);
+      try {
+        await api('/me/profile', { method: 'PUT', body: JSON.stringify({ name: formState.name }) });
+        setToast('Account information saved ✓');
+      } catch (e) { setToast(e.message || 'Save failed'); }
+      setBusy(false);
+    } else {
+      setToast(`${section} settings saved ✓`);
+    }
+    setTimeout(() => setToast(''), 2400);
+  };
+
+  const handlePassword = async () => {
+    if (!formState.current_password || !formState.new_password) {
+      setToast('Please fill in both password fields');
+      return;
+    }
+    if (formState.new_password !== formState.confirm_password) {
+      setToast('New passwords do not match');
+      return;
+    }
+    if (formState.new_password.length < 6) {
+      setToast('New password must be at least 6 characters');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api('/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password: formState.current_password, new_password: formState.new_password }) });
+      setToast('Password changed successfully ✓');
+      setFormState(s => ({ ...s, current_password: '', new_password: '', confirm_password: '' }));
+    } catch (e) { setToast(e.message || 'Password change failed'); }
+    setBusy(false);
     setTimeout(() => setToast(''), 2400);
   };
 
@@ -92,9 +127,10 @@ export default function Settings() {
       <div className="card p-5">
         <button
           className="btn-primary w-full"
-          onClick={() => handleSave('Password')}
+          onClick={handlePassword}
+          disabled={busy}
         >
-          Change Password
+          {busy ? 'Saving...' : 'Change Password'}
         </button>
         <div className="text-[9px] mt-2 text-center" style={{ color: 'var(--faint)' }}>
           Password changes require your current password for verification

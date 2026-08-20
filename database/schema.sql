@@ -53,8 +53,11 @@ CREATE TABLE IF NOT EXISTS clients (
   age             INTEGER,
   sex             TEXT,
   last_checkin_at TEXT,
+  onboarding_completed INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id);
+CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id);
 
 CREATE TABLE IF NOT EXISTS client_profiles (
   client_id        TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
@@ -213,6 +216,7 @@ CREATE TABLE IF NOT EXISTS workouts (
   created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_workouts_client ON workouts(client_id, scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status);
 
 CREATE TABLE IF NOT EXISTS workout_exercises (
   id          TEXT PRIMARY KEY,
@@ -364,8 +368,7 @@ CREATE TABLE IF NOT EXISTS food_aliases (
 CREATE INDEX IF NOT EXISTS idx_food_aliases ON food_aliases(alias);
 
 -- Every intelligent action is traceable (input → resolution → calculation → result).
-CREATE INDEX IF NOT EXISTS idx_set_logs_client ON exercise_set_logs(client_id);
-CREATE INDEX IF NOT EXISTS idx_set_logs_wl ON exercise_set_logs(workout_log_id);
+
 
 CREATE TABLE IF NOT EXISTS intelligence_events (
   id        TEXT PRIMARY KEY,
@@ -523,10 +526,12 @@ CREATE TABLE IF NOT EXISTS meal_logs (
   estimate  INTEGER NOT NULL DEFAULT 0,     -- 1 => AI-estimated nutrition
   quantity  REAL,                           -- original parsed quantity (for provenance)
   unit      TEXT,                           -- original parsed unit, e.g. 'g' | 'rotis' | 'ml'
-  unit_type TEXT                            -- original parsed unitType, e.g. 'gram' | 'piece' | 'ml'
+  unit_type TEXT,                           -- original parsed unitType, e.g. 'gram' | 'piece' | 'ml'
+  meal_template_id TEXT                      -- FK to client_meal_templates (used for delete-cascade of today's log)
 );
 CREATE INDEX IF NOT EXISTS idx_meal_logs_client ON meal_logs(client_id, date);
-CREATE INDEX IF NOT EXISTS idx_meallogs_client ON meal_logs(client_id, date);
+CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id);
+CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten);
 
 CREATE TABLE IF NOT EXISTS water_logs (
   id        TEXT PRIMARY KEY,

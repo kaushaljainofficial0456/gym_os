@@ -1,19 +1,71 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../../api.js';
+import { useAuth } from '../../auth.jsx';
 import { useFetch, GOAL_LABEL, fmt1, fmtK, cls } from '../../utils.js';
 import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg } from '../../components/UI.jsx';
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 
+// Map trainer client-detail response to the shape the existing components expect.
+// Owner/admin uses the existing /clients/:id/overview endpoint (returns all org data).
+function mapTrainerResponse(tr) {
+  return {
+    client: {
+      id: tr.client.id,
+      name: tr.client.name,
+      email: tr.client.email,
+      avatar: tr.client.avatar,
+      goal: tr.client.goal,
+      startWeight: tr.client.startWeight,
+      currentWeight: tr.client.currentWeight,
+      targetWeight: tr.client.targetWeight,
+      heightCm: tr.client.height,
+      age: tr.client.age,
+      sex: tr.client.sex,
+      goalDate: tr.client.goalDate,
+      status: tr.client.status,
+      bmi: tr.client.height && tr.client.currentWeight
+        ? Math.round((tr.client.currentWeight / ((tr.client.height / 100) ** 2)) * 10) / 10
+        : null,
+      lastCheckin: null,
+      trainerId: null
+    },
+    profile: null,
+    adherence: {
+      score: tr.summary.adherence,
+      components: { workout: null, nutrition: tr.summary.nutritionAdherence, protein: null, water: null, sleep: null, checkin: null },
+      weights: {}
+    },
+    rules: (tr.alerts || []).map(a => ({ type: a.type, severity: a.severity, title: a.title, detail: '' })),
+    weights: (tr.weight?.history || []).map(w => ({ date: w.date, weight: w.weight })),
+    measurements: [],
+    photos: [],
+    workoutHistory: (tr.workouts?.recent || []).map(w => ({
+      id: w.date + w.name,
+      name: w.name,
+      scheduled_date: w.date,
+      status: w.status
+    }))
+  };
+}
+
 export default function ClientProfile() {
   const { id } = useParams();
-  const { data, loading, error, reload } = useFetch(() => api(`/clients/${id}/overview`), [id]);
+  const { user } = useAuth();
+  const isTrainerOnly = user?.role === 'TRAINER';
+
+  const { data: rawData, loading, error, reload } = useFetch(
+    () => isTrainerOnly ? api(`/trainer/clients/${id}/dashboard`) : api(`/clients/${id}/overview`),
+    [id, isTrainerOnly]
+  );
   const [tab, setTab] = useState('overview');
 
   if (loading) return <Spinner label="Loading client profile…" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
+  // Normalize: owner gets the raw overview shape, trainer gets the mapped shape
+  const data = isTrainerOnly ? mapTrainerResponse(rawData) : rawData;
   const { client, profile, adherence, rules, weights, measurements, photos, workoutHistory } = data;
 
   const startW = client.startWeight, curW = client.currentWeight, tgtW = client.targetWeight;

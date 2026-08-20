@@ -26,6 +26,7 @@ import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import meRoutes from './routes/me.js';
 import intelligenceRoutes from './routes/intelligence.js';
+import trainerRoutes from './routes/trainer.js';
 
 async function main() {
   dbInstance = await getDb();
@@ -106,6 +107,7 @@ app.use('/api/reports', reportRoutes(db));      // /clients/:id/weekly-report
 app.use('/api/messages', messageRoutes(db));
 app.use('/api/business', adminRoutes(db));
 app.use('/api/admin', adminRoutes(db)); // alias — Business page calls /admin/*
+app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail dashboard
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,

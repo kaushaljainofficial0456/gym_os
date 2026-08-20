@@ -72,6 +72,10 @@ const MIGRATIONS = [
   // --- skos-food-v1 protein quality ---
   ['foods', 'aa_leucine_mg', `aa_leucine_mg REAL`],
 
+  // --- messages table: channel + read columns may be missing from older DBs ---
+  ['messages', 'channel', `channel TEXT NOT NULL DEFAULT 'inapp'`],
+  ['messages', 'read', `read INTEGER NOT NULL DEFAULT 0`],
+
   ['exercise_library', 'ex_type', `ex_type TEXT NOT NULL DEFAULT 'compound'`],
   ['workouts', 'source', `source TEXT NOT NULL DEFAULT 'program'`],
   ['progress_photos', 'storage_key', `storage_key TEXT`],
@@ -83,6 +87,8 @@ const MIGRATIONS = [
   ['meal_logs', 'unit_type', `unit_type TEXT`],
   // --- custom meal template linkage for delete-cascade ---
   ['meal_logs', 'meal_template_id', `meal_template_id TEXT`],
+  // --- client onboarding flag ---
+  ['notifications', 'read', `read INTEGER NOT NULL DEFAULT 0`],
   // --- workout session timing + calorie persistence (cross-team contract) ---
   ['workouts', 'started_at', `started_at TEXT`],
   ['workouts', 'duration_min', `duration_min REAL`],
@@ -139,6 +145,13 @@ function applySqliteMigrations(db) {
   backfillSetLogs((sql) => db.exec(sql), `'stl_' || lower(hex(randomblob(8)))`);
   // Backfill: existing clients already in the system are considered onboarded
   db.exec(`UPDATE clients SET onboarding_completed = 1 WHERE onboarding_completed = 0`);
+
+  // ---- P1 indexes for production query performance ----
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
 }
 
 async function applyPgMigrations(pool) {
@@ -162,6 +175,12 @@ async function applyPgMigrations(pool) {
   `);
   await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
+  // ---- P1 indexes for production query performance ----
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
 }
 
 if (config.databaseUrl) {

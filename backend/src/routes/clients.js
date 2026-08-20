@@ -8,10 +8,12 @@ import { computeAdherence } from '../services/adherence.js';
 import { evaluateClient } from '../services/atRisk.js';
 import { validateProgram } from '../services/programValidation.js';
 import { track } from '../services/events.js';
+import { rateLimit } from '../rateLimit.js';
 
 export default function clientRoutes(db) {
   const r = Router();
   r.use(requireAuth, requireRole('GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'), orgScope);
+  const clientCreateLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
 
   async function withEvaluation(c) {
     const ev = await evaluateClient(db, c);
@@ -73,10 +75,19 @@ export default function clientRoutes(db) {
   }
 
   // ---- list with search / filter / sort ----
+  // TRAINER scoped: trainers only see clients assigned to them.
+  // OWNER/ADMIN see all org clients (unchanged behavior).
   r.get('/', async (req, res) => {
     const { q = '', status = '', goal = '', trainer_id = '', sort = 'status' } = req.query;
     const limit = Math.min(parseInt(req.query.limit, 10) || 500, 1000);
-    let rows = await db.q('SELECT * FROM clients WHERE org_id = ? ORDER BY created_at DESC LIMIT ?', [req.orgId, limit]);
+    let rows;
+    if (req.user.role === 'TRAINER') {
+      // Trainers only see clients assigned to them — no cross-trainer access
+      rows = await db.q('SELECT * FROM clients WHERE org_id = ? AND trainer_id = ? ORDER BY created_at DESC LIMIT ?',
+        [req.orgId, req.user.sub, limit]);
+    } else {
+      rows = await db.q('SELECT * FROM clients WHERE org_id = ? ORDER BY created_at DESC LIMIT ?', [req.orgId, limit]);
+    }
     let out = await withEvaluationBulk(rows);
     if (q) out = out.filter(x => (x.name || '').toLowerCase().includes(String(q).toLowerCase()));
     if (status) out = out.filter(x => x.status === status);
@@ -91,7 +102,7 @@ export default function clientRoutes(db) {
   });
 
   // ---- create ----
-  r.post('/', validate(schemas.clientCreate), async (req, res) => {
+  r.post('/', clientCreateLimit, validate(schemas.clientCreate), async (req, res) => {
     const body = req.body;
     const userId = id('usr');
     const clientId = id('cli');

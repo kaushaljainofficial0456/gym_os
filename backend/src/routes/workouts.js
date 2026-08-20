@@ -148,6 +148,58 @@ export default function workoutRoutes(db) {
     res.status(201).json({ id: wId });
   });
 
+  // ---- update an assigned workout (trainer/owner only) ----
+  // Only unstarted/assigned workouts can be modified. Completed workouts
+  // are immutable — their history is preserved as-is.
+  r.put('/clients/:clientId/workouts/:workoutId', trainerOnly, validate(schemas.workoutTemplate), async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.clientId);
+    if (!client) return;
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ? AND client_id = ?', [req.params.workoutId, client.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    if (w.status === 'completed') {
+      return res.status(400).json({ error: 'Cannot modify a completed workout' });
+    }
+    if (w.status === 'missed') {
+      return res.status(400).json({ error: 'Cannot modify a missed workout' });
+    }
+    // Update workout metadata
+    const scheduled = req.body.scheduled_date || w.scheduled_date;
+    const name = req.body.name || w.name;
+    await db.run(
+      `UPDATE workouts SET name = ?, day_label = ?, scheduled_date = ?, notes = ? WHERE id = ?`,
+      [name, req.body.day_label || w.day_label, scheduled, req.body.notes ?? w.notes, w.id]);
+    // Replace exercises: delete existing, insert new
+    await db.run('DELETE FROM workout_exercises WHERE workout_id = ?', [w.id]);
+    for (let i = 0; i < req.body.exercises.length; i++) {
+      const ex = req.body.exercises[i];
+      await db.run(
+        `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id('wxe'), w.id, ex.exercise_id || null, i, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo || null, ex.notes || null]);
+    }
+    await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'workout_updated', data: { clientId: client.id, workoutId: w.id } });
+    res.json({ ok: true, id: w.id });
+  });
+
+  // ---- delete/cancel an assigned workout (trainer/owner only) ----
+  // Only unstarted workouts can be deleted. Completed workouts are never
+  // deleted — their history (workout_logs, exercise_set_logs, PRs) must
+  // be preserved. Deleting a missed workout is also safe.
+  r.delete('/clients/:clientId/workouts/:workoutId', trainerOnly, async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.clientId);
+    if (!client) return;
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ? AND client_id = ?', [req.params.workoutId, client.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    if (w.status === 'completed') {
+      return res.status(400).json({ error: 'Cannot delete a completed workout — history must be preserved' });
+    }
+    // Delete exercises first (workout_exercises FK references workouts)
+    await db.run('DELETE FROM workout_exercises WHERE workout_id = ?', [w.id]);
+    await db.run('DELETE FROM workouts WHERE id = ?', [w.id]);
+    await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'workout_deleted', data: { clientId: client.id, workoutId: w.id } });
+    res.json({ ok: true });
+  });
+
   // ---- client toggles an exercise "done" ----
   r.patch('/:wid/exercises/:exid', async (req, res) => {
     const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.wid]);

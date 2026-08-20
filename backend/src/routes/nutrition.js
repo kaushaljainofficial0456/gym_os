@@ -35,6 +35,35 @@ export default function nutritionRoutes(db) {
     res.json({ plan: await attachMeals(p) });
   });
 
+  // ---- update a nutrition plan template (trainer/owner only) ----
+  // Only templates (is_template=1) can be updated. Client-specific plans
+  // assigned to individual clients should be managed via re-assignment.
+  // Preserves existing client assignments — updating a template does NOT
+  // rewrite historical meal logs or alter already-assigned plans.
+  const planUpdateLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
+  r.put('/plans/:id', trainerOnly, planUpdateLimit, validate(schemas.nutritionPlan), async (req, res) => {
+    const p = await db.q1('SELECT * FROM nutrition_plans WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
+    if (!p) return res.status(404).json({ error: 'Plan not found' });
+    if (!p.is_template) {
+      return res.status(400).json({ error: 'Only templates can be updated — use plan assignment for client-specific plans' });
+    }
+    // Update plan-level nutrition values
+    await db.run(
+      `UPDATE nutrition_plans SET name = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?`,
+      [req.body.name, req.body.calories, req.body.protein, req.body.carbs, req.body.fat, p.id]);
+    // Replace meals: delete existing, insert new (atomic via sequential writes)
+    await db.run('DELETE FROM meals WHERE plan_id = ?', [p.id]);
+    for (let i = 0; i < req.body.meals.length; i++) {
+      const m = req.body.meals[i];
+      await db.run(
+        `INSERT INTO meals (id, plan_id, slot, name, time, calories, protein, carbs, fat, foods, position)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id('mea'), p.id, m.slot, m.name, m.time || null, m.calories, m.protein, m.carbs, m.fat, m.foods || null, i]);
+    }
+    await track(db, { orgId: req.orgId, userId: req.user.sub, type: 'nutrition_plan_updated', data: { planId: p.id } });
+    res.json({ ok: true, id: p.id });
+  });
+
   // Rate-limited: plan creation is infrequent (trainer action, not per-meal).
   const planCreateLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
   r.post('/plans', trainerOnly, planCreateLimit, validate(schemas.nutritionPlan), async (req, res) => {

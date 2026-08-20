@@ -51,16 +51,26 @@ export default function messageRoutes(db) {
     }
 
     const msgId = id('msg');
-    await db.run(
-      `INSERT INTO messages (id, org_id, from_user, to_user, client_id, type, body, channel, read, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'inapp', 0, ?)`,
-      [msgId, client.org_id, fromUser, toUser, client_id, type, body, now()]);
-    // Mirror to the recipient's notification center.
-    if (toUser) {
+    try {
       await db.run(
-        `INSERT INTO notifications (id, org_id, user_id, client_id, type, title, body, read, created_at)
-         VALUES (?, ?, ?, ?, ?, 'message', ?, ?, 0, ?)`,
-        [id('ntf'), client.org_id, toUser, client_id, type, body.slice(0, 80), now()]);
+        `INSERT INTO messages (id, org_id, from_user, to_user, client_id, type, body, channel, read, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'inapp', 0, ?)`,
+        [msgId, client.org_id, fromUser, toUser, client_id, type, body, now()]);
+    } catch (msgErr) {
+      console.error('[messages] INSERT failed:', msgErr.message, 'sql params:', [msgId, client.org_id, fromUser, toUser, client_id, type, body, now()].length);
+      throw msgErr;
+    }
+    // Mirror to the recipient's notification center (best-effort — must never
+    // break message delivery if the notifications table schema differs).
+    if (toUser) {
+      try {
+        await db.run(
+          `INSERT INTO notifications (id, org_id, user_id, client_id, type, title, body, created_at)
+           VALUES (?, ?, ?, ?, ?, 'message', ?, ?)`,
+          [id('ntf'), client.org_id, toUser, client_id, type, body.slice(0, 80), now()]);
+      } catch (notifErr) {
+        console.error('[messages] notification mirror failed:', notifErr.message);
+      }
     }
     res.status(201).json({ id: msgId });
   });

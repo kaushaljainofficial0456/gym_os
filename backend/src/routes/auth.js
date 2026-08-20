@@ -35,6 +35,12 @@ function recordFailure(email, ip) {
   } else {
     rec.count += 1;
   }
+  // Prevent unbounded growth: evict entries older than 2× the window.
+  if (loginAttempts.size > 500) {
+    for (const [k, v] of loginAttempts) {
+      if (nowMs - v.start > RATE_WINDOW_MS * 2) loginAttempts.delete(k);
+    }
+  }
 }
 
 export default function authRoutes(db) {
@@ -86,7 +92,13 @@ export default function authRoutes(db) {
     // Production gate: require a valid setup secret
     if (isSetupLocked) {
       const provided = req.headers['x-setup-secret'] || '';
-      if (!setupSecret || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(setupSecret))) {
+      const providedBuf = Buffer.from(provided, 'utf8');
+      const secretBuf = Buffer.from(setupSecret, 'utf8');
+      // timingSafeEqual requires equal-length buffers; compare length first
+      // to avoid a RangeError crash. Different lengths → invalid secret.
+      const lengthOk = providedBuf.length === secretBuf.length;
+      const contentOk = lengthOk && crypto.timingSafeEqual(providedBuf, secretBuf);
+      if (!setupSecret || !contentOk) {
         return res.status(403).json({ error: 'Setup not available. An invitation is required.' });
       }
     }
