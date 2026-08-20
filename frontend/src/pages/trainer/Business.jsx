@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import { useFetch, fmtK, fmt1 } from '../../utils.js';
 import { Card, Kicker, Kpi, Spinner, ErrorState, Modal } from '../../components/UI.jsx';
 import { TrendChart } from '../../components/charts.jsx';
+import { status } from '../../design/tokens.js';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -116,7 +117,7 @@ export default function Business() {
         {/* revenue trend */}
         <Card className="lg:col-span-2">
           <Kicker>Revenue · 6 months</Kicker>
-          {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} color="#4ADE80" /> : <div className="text-sm text-mute py-10 text-center">No revenue recorded yet.</div>}
+          {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} color={status.good} /> : <div className="text-sm text-mute py-10 text-center">No revenue recorded yet.</div>}
           <div className="text-[11px] text-faint mt-2">From recorded payments · ₹{fmtK(d.monthlyRevenue)} this month</div>
         </Card>
 
