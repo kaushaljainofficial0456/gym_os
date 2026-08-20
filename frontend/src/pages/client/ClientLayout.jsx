@@ -4,7 +4,16 @@ import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
+import FeaturePopup from '../../components/FeaturePopup.jsx';
 import Icon from '../../components/Icon.jsx';
+
+// Map route paths to feature IDs for first-time popups
+const FEATURE_MAP = {
+  '/app/client': 'home',
+  '/app/client/workout': 'workout',
+  '/app/client/nutrition': 'nutrition',
+  '/app/client/progress': 'progress',
+};
 
 const NAV = [
   { to: '/app/client', end: true, label: 'Home', icon: '⌂' },
@@ -27,7 +36,18 @@ export default function ClientLayout() {
   const nav = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [featurePopup, setFeaturePopup] = useState(null);
   const dropdownRef = useRef(null);
+
+  // Show feature popup on first visit to each page
+  useEffect(() => {
+    const featureId = FEATURE_MAP[loc.pathname];
+    if (featureId) {
+      // Small delay to let the page render first
+      const timer = setTimeout(() => setFeaturePopup(featureId), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loc.pathname]);
 
   const briefFetch = useFetch(() => api('/intel/coach/brief'));
   const weeklyFetch = useFetch(() => api('/intel/coach/weekly'));
@@ -78,10 +98,14 @@ export default function ClientLayout() {
               aria-label="Profile menu"
             >
               <div
-                className="w-8 h-8 rounded-full grid place-items-center font-grotesk font-bold text-xs border shrink-0"
-                style={{ background: 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.06))', borderColor: 'var(--line)' }}
+                className="w-8 h-8 rounded-full grid place-items-center font-grotesk font-bold text-xs border shrink-0 overflow-hidden"
+                style={{ background: user?.avatar ? 'none' : 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.06))', borderColor: 'var(--line)' }}
               >
-                {user?.name?.[0]?.toUpperCase() || '?'}
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{user?.name?.[0]?.toUpperCase() || '?'}</span>
+                )}
               </div>
               <div className="hidden sm:flex flex-col items-start">
                 <span className="font-grotesk text-[11px] font-semibold leading-none" style={{ color: 'var(--ink)' }}>{user?.name?.split(' ')[0]}</span>
@@ -187,14 +211,17 @@ export default function ClientLayout() {
         <Outlet />
       </div>
 
+      {/* ── FEATURE POPUP ── */}
+      {featurePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
+
       {/* ── BOTTOM NAV ── */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur border-t" style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 92%, transparent)', borderColor: 'var(--line)' }}>
-        <div className="max-w-lg mx-auto grid grid-cols-4">
+      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t" style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--line)' }}>
+        <div className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">
           {NAV.map((l) => (
             <NavLink key={l.to} to={l.to} end={l.end}
-              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-3 font-grotesk text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${isActive ? 'text-gold' : ''}`}
-              style={({ isActive }) => ({ color: isActive ? undefined : 'var(--mute)' })}>
-              <span className="grid place-items-center"><Icon name={l.icon} size={18} /></span>
+              className={({ isActive }) => `flex flex-col items-center gap-1 py-2.5 rounded-xl font-grotesk text-[9px] font-bold uppercase tracking-[.14em] transition-all duration-200 ${isActive ? 'text-accent' : ''}`}
+              style={({ isActive }) => ({ color: isActive ? undefined : 'var(--mute)', background: isActive ? 'rgb(var(--accent-rgb) / .08)' : 'transparent' })}>
+              <span className="grid place-items-center"><Icon name={l.icon} size={20} /></span>
               {l.label}
             </NavLink>
           ))}

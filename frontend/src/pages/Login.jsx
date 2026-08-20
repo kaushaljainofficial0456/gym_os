@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
+import OnboardingWizard from '../components/OnboardingWizard.jsx';
 
 const DEMO = [
   { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
@@ -54,9 +55,12 @@ export default function Login() {
     finally { setBusy(false); }
   };
 
+  const [onboarding, setOnboarding] = useState(false);
+
   return (
     <>
       {showWelcome && <MotivationalWelcome onComplete={handleWelcomeComplete} />}
+      {onboarding && <OnboardingWizard onComplete={() => { setOnboarding(false); nav('/app/client'); }} />}
 
       <div className="min-h-screen grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
         {/* brand side */}
@@ -118,6 +122,14 @@ export default function Login() {
                 {busy ? 'Signing in…' : 'Sign in'}
               </button>
             </form>
+
+            <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
+              <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
+            </div>
+
+            <button onClick={() => setOnboarding(true)} className="w-full py-3 rounded-2xl font-grotesk text-sm font-bold transition-all duration-200 active:scale-[.97]" style={{ background: 'rgb(var(--accent-rgb) / .12)', border: '1px solid rgb(var(--accent-rgb) / .3)', color: 'var(--accent)' }}>
+              New to SK OS? Get Started →
+            </button>
 
             <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
               <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />

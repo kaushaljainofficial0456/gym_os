@@ -32,7 +32,7 @@ const PROFILE_SECTIONS = [
   { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
 ];
 
-function MiniSpark({ values, color = '#12B8B0' }) {
+function MiniSpark({ values, color = '#C4F82A' }) {
   if (!values?.length) return <div className="text-[10px] text-faint">No entries yet</div>;
   const pts = values.slice(-8).map((v, i, a) => {
     const min = Math.min(...a), max = Math.max(...a);
@@ -154,6 +154,9 @@ export default function Profile() {
   const [gForm, setGForm] = useState(null);
   const [savingG, setSavingG] = useState(false);
   const [toast, setToast] = useState('');
+  const [localAvatar, setLocalAvatar] = useState(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   // coach memory/preferences
   const coachMem = useFetch(() => api('/intel/coach/memory'));
   const [coachPrefs, setCoachPrefs] = useState({});
@@ -161,6 +164,34 @@ export default function Profile() {
 
   const data = home.data;
   const clientId = data?.client?.id;
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setToast('Only JPG, PNG, or WebP images are supported'); return; }
+    if (file.size > 5 * 1024 * 1024) { setToast('Image too large (max 5 MB)'); return; }
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result); fr.onerror = reject; fr.readAsDataURL(file);
+      });
+      const res = await api('/me/avatar', { method: 'POST', body: JSON.stringify({ image: b64 }) });
+      setLocalAvatar(res.avatar);
+      home.reload();
+      setToast('Profile photo updated ✓');
+    } catch (err) { setToast(err.message || 'Upload failed'); }
+    e.target.value = '';
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      await api('/me/avatar', { method: 'DELETE' });
+      setLocalAvatar(null);
+      home.reload();
+      setRemoveConfirmOpen(false);
+      setToast('Profile photo removed');
+    } catch (err) { setToast(err.message || 'Failed to remove photo'); }
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -481,7 +512,7 @@ export default function Profile() {
                           <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
                         </div>
                       </div>
-                      <MiniSpark values={vals} color={m.color || '#12B8B0'} />
+                      <MiniSpark values={vals} color={m.color || '#C4F82A'} />
                       {(m.entries || []).slice(0, 4).length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {(m.entries || []).slice(0, 4).map((e) => (
@@ -630,9 +661,54 @@ export default function Profile() {
 
       {/* Profile header — always visible */}
       <div className="card p-5 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg border shrink-0" style={{ background: 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.08))', borderColor: 'var(--line)' }}>
-          {c.name[0]}
+        {/* Avatar with photo menu */}
+        <div className="relative shrink-0">
+          <button onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg border transition-all hover:scale-105 active:scale-95" style={{ background: (localAvatar || c.avatar) ? 'none' : 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.08))', borderColor: 'var(--line)', overflow: 'hidden' }} title="Change profile photo">
+            {(localAvatar || c.avatar) ? (
+              <img src={localAvatar || c.avatar} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span>{c.name[0]}</span>
+            )}
+          </button>
+          {/* X/remove button when photo exists */}
+          {(localAvatar || c.avatar) && (
+            <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmOpen(true); }} className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full grid place-items-center text-[8px] font-bold border transition-all hover:scale-110" style={{ background: 'var(--panel)', borderColor: 'var(--line)', color: 'var(--mute)' }} title="Remove photo">✕</button>
+          )}
+          {/* Photo menu */}
+          {avatarMenuOpen && (
+            <div className="absolute top-full left-0 mt-2 z-30 rounded-xl overflow-hidden anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
+              <button onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-camera').click(); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors" style={{ color: 'var(--ink)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <span className="text-base">📷</span>
+                <span className="font-grotesk text-sm font-semibold">Camera</span>
+              </button>
+              <button onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-gallery').click(); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors" style={{ color: 'var(--ink)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <span className="text-base">🖼️</span>
+                <span className="font-grotesk text-sm font-semibold">Gallery</span>
+              </button>
+              <button onClick={() => setAvatarMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-t" style={{ borderColor: 'var(--line)', color: 'var(--mute)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <span className="font-grotesk text-sm font-semibold">Cancel</span>
+              </button>
+            </div>
+          )}
         </div>
+        {/* Hidden file inputs */}
+        <input id="avatar-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleAvatarUpload} />
+        <input id="avatar-gallery" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
+        {/* Remove photo confirmation */}
+        {removeConfirmOpen && (
+          <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+            <div className="w-full max-w-xs rounded-2xl p-5 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+              <div className="text-center mb-4">
+                <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Remove profile photo?</div>
+                <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>Your initial letter will be shown instead.</div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setRemoveConfirmOpen(false)} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold" style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--mute)' }}>Cancel</button>
+                <button onClick={handleRemoveAvatar} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold" style={{ background: '#FF6B6B', color: '#fff' }}>Remove</button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{c.name}</div>
           <div className="text-xs" style={{ color: 'var(--mute)' }}>{c.goal.replace(/_/g, ' ')} · {c.currentWeight} kg now</div>

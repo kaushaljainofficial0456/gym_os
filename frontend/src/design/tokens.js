@@ -50,28 +50,24 @@
  */
 export const brand = {
   dark: {
-    accent: '#FF9E6D',        // peach-coral
-    accentDeep: '#E8734A',    // gradient partner, deeper end
-    accentContrast: '#2A160D',// dark ink ON the light accent, not white
-    cyan: '#5AC8D6',
-    violet: '#B096DC',
-    bg: '#0D1719',            // deep teal-charcoal
-    panel: '#17282C',
-    ink: '#F5EBE3',
+    accent: '#C4F82A',        // electric lime
+    accentDeep: '#A8D924',    // gradient partner, deeper end
+    accentContrast: '#0A0A0A',// dark ink ON the bright accent
+    cyan: '#22D3EE',
+    violet: '#7C3AED',
+    bg: '#0A0A0A',            // pitch-black canvas
+    panel: '#18181B',
+    ink: '#FAFAFA',
   },
   light: {
-    accent: '#D2603A',        // terracotta
-    accentDeep: '#E8834F',    // NOTE: LIGHTER than accent here, unlike dark
-                              // mode. The key means "the other end of the
-                              // brand gradient", not "always darker" — light
-                              // mode runs terracotta -> peach, dark runs
-                              // deep coral -> bright peach.
+    accent: '#5A8C00',        // muted lime for light mode
+    accentDeep: '#4A7500',
     accentContrast: '#FFFFFF',
-    cyan: '#2A7A85',
-    violet: '#7A609C',
-    bg: '#FFF3EA',            // light peach
-    panel: '#FFFDFB',
-    ink: '#3B2A22',
+    cyan: '#0E7490',
+    violet: '#6D28D9',
+    bg: '#F5F2ED',            // warm neutral
+    panel: '#FFFFFF',
+    ink: '#1A1D1A',
   },
 };
 

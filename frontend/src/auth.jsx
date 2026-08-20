@@ -20,6 +20,17 @@ export function AuthProvider({ children }) {
     return res.user;
   };
 
+  const register = async (data) => {
+    const res = await api('/auth/register', { method: 'POST', body: JSON.stringify(data) });
+    setSession(res);
+    setUser(res.user);
+    return { user: res.user, clientId: res.clientId };
+  };
+
+  const completeOnboarding = async (data) => {
+    await api('/auth/complete-onboarding', { method: 'POST', body: JSON.stringify(data) });
+  };
+
   const logout = () => { clearSession(); setUser(null); location.href = '/login'; };
 
   const isTrainer = user && ['GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'].includes(user.role);
@@ -27,7 +38,7 @@ export function AuthProvider({ children }) {
   const isClient = user && user.role === 'CLIENT';
 
   return (
-    <AuthCtx.Provider value={{ user, ready, login, logout, isTrainer, isOwner, isClient }}>
+    <AuthCtx.Provider value={{ user, ready, login, register, completeOnboarding, logout, isTrainer, isOwner, isClient }}>
       {children}
     </AuthCtx.Provider>
   );

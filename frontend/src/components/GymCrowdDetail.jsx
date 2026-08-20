@@ -5,8 +5,8 @@ const CROWD_STYLE = {
   // information at all. Tokens, and genuinely distinct.
   LOW: { label: 'Quiet', color: 'var(--good)' },
   MODERATE: { label: 'Moderate', color: 'var(--accent)' },
-  HIGH: { label: 'BUSY', color: '#A07855' },
-  VERY_HIGH: { label: 'PACKED', color: '#DC6B6B' }
+  HIGH: { label: 'BUSY', color: 'var(--orange, #FA541C)' },
+  VERY_HIGH: { label: 'PACKED', color: 'var(--bad, #F87171)' }
 };
 
 const TYPICAL_HOURLY = [
