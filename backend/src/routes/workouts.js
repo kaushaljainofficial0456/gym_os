@@ -202,6 +202,38 @@ export default function workoutRoutes(db) {
     res.json({ ok: true, started_at: startedAt });
   });
 
+  /**
+   * Save in-flight set ticks.
+   *
+   * WHY THIS EXISTS: ticked sets lived only in React state, so a refresh,
+   * a phone lock that killed the tab, or an accidental back-swipe silently
+   * discarded the whole session's progress -- while `started_at` survived
+   * server-side, so the app cheerfully restored an "in progress" session
+   * showing 0 sets done. Losing logged work is worse than not restoring
+   * at all.
+   *
+   * Stored as opaque JSON rather than as exercise_set_logs rows on
+   * purpose: these are DRAFT ticks that the user can still untick and
+   * edit. Only `/complete` writes real set logs, so PRs, volume history
+   * and the burn estimate stay derived exclusively from finished
+   * sessions.
+   */
+  r.put('/:id/progress', async (req, res) => {
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    const client = await resolveClient(db, req, res, w.client_id);
+    if (!client) return;
+    if (w.completed_at) return res.status(409).json({ error: 'Workout already completed' });
+
+    // Cap the payload: this is a handful of sets per exercise, and an
+    // unbounded blob on a per-tick endpoint is an easy way to fill a disk.
+    const body = JSON.stringify(req.body?.progress ?? {});
+    if (body.length > 20000) return res.status(413).json({ error: 'Progress payload too large' });
+
+    await db.run('UPDATE workouts SET progress_json = ? WHERE id = ?', [body, w.id]);
+    res.json({ ok: true });
+  });
+
   r.post('/:id/complete', validate(z_workoutComplete()), async (req, res) => {
     const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });

@@ -101,6 +101,23 @@ export default function Workout() {
     return () => clearTimeout(h);
   }, [toast]);
 
+  /* Persist the checklist as it changes.
+
+     Debounced at 800 ms: ticking four sets in quick succession should cost
+     one request, not four. Fire-and-forget on purpose -- a failed save must
+     never interrupt someone mid-set, and the next tick retries implicitly
+     by sending the whole checklist rather than a delta. */
+  useEffect(() => {
+    if (mode !== 'execute' || !workout?.id) return undefined;
+    const h = setTimeout(() => {
+      api(`/workouts/${workout.id}/progress`, {
+        method: 'PUT',
+        body: JSON.stringify({ progress: exSets }),
+      }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(h);
+  }, [exSets, mode, workout?.id]);
+
   // session elapsed timer — ticks every second during execute mode
   useEffect(() => {
     if (mode !== 'execute' || !startedAt) return;
@@ -115,8 +132,28 @@ export default function Workout() {
     // Only restore if: still in browse mode, workout exists, has started_at, and is NOT completed
     if (mode !== 'browse' || !workout?.started_at || workout?.status === 'completed') return;
     // Workout was already started server-side but user refreshed — restore execution state
-    setExSets(buildSets(state));
-    setOpenEx(state[0]?.id ?? null);
+    /* Restore the SAVED ticks, not a blank checklist.
+       started_at survives server-side, so before this the app happily
+       restored an "in progress" session showing 0/16 sets -- every set the
+       user had already ticked was gone. Losing logged work is worse than
+       not restoring at all. */
+    let restored = null;
+    try {
+      restored = workout.progress_json ? JSON.parse(workout.progress_json) : null;
+    } catch {
+      restored = null;   // corrupt draft: fall back to a fresh checklist
+    }
+    const fresh = buildSets(state);
+    // Merge rather than trust the draft wholesale: the plan may have been
+    // edited since, so the prescribed set COUNT comes from the plan and only
+    // the per-set values come from the draft.
+    const merged = Object.fromEntries(Object.entries(fresh).map(([exId, rows]) => [
+      exId,
+      rows.map((row, i) => (restored?.[exId]?.[i] ? { ...row, ...restored[exId][i] } : row)),
+    ]));
+    setExSets(merged);
+    const firstUnfinished = state.find((e) => (merged[e.id] || []).some((r) => !r.done));
+    setOpenEx((firstUnfinished || state[0])?.id ?? null);
     setElapsed(0);
     // Reconstruct elapsed time from server started_at
     setStartedAt(Date.parse(workout.started_at));
