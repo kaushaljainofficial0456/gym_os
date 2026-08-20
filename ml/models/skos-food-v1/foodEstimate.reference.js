@@ -290,7 +290,15 @@ class FoodSearch {
       }
     }
 
-    score -= Math.max(0, tokens.length - qTokens.length) * 6;
+    /* Extra-token penalty, weighted by how specific the QUERY was.
+       Ported from Kaushal's backend copy, which had diverged with this
+       improvement. A one-word query is a strong signal that the user wants
+       the plain food: typing "egg" should not land on "Egg, chicken,
+       whole, cooked, poached". Multi-word queries are already specific, so
+       they keep the gentler penalty. */
+    const extraTokens = Math.max(0, tokens.length - qTokens.length);
+    const extraPenalty = qTokens.length === 1 ? 20 : 6;
+    score -= extraTokens * extraPenalty;
 
     const qSet = new Set(qTokens);
     score -= tokens.filter((t) => PREP_WORDS.has(t) && !qSet.has(t)).length * 45;
