@@ -1,0 +1,220 @@
+{
+  "muscles": [
+    {
+      "id": "pectoralis_major",
+      "displayName": "Chest",
+      "exerciseMuscleGroup": "CHEST",
+      "collections": [
+        "Pectoralis major muscle"
+      ]
+    },
+    {
+      "id": "anterior_deltoid",
+      "displayName": "Front Delts",
+      "exerciseMuscleGroup": "FRONT DELTS",
+      "collections": [
+        "Deltoid muscle"
+      ],
+      "name_contains": [
+        "Clavicular part of deltoid muscle"
+      ]
+    },
+    {
+      "id": "lateral_deltoid",
+      "displayName": "Side Delts",
+      "exerciseMuscleGroup": "SIDE DELTS",
+      "collections": [
+        "Deltoid muscle"
+      ],
+      "name_contains": [
+        "Acromial part of deltoid muscle"
+      ]
+    },
+    {
+      "id": "posterior_deltoid",
+      "displayName": "Rear Delts",
+      "exerciseMuscleGroup": "REAR DELTS",
+      "collections": [
+        "Deltoid muscle"
+      ],
+      "name_contains": [
+        "Scapular part of deltoid uscle"
+      ]
+    },
+    {
+      "id": "trapezius",
+      "displayName": "Traps",
+      "exerciseMuscleGroup": "TRAPS",
+      "collections": [
+        "Trapezius muscle"
+      ]
+    },
+    {
+      "id": "latissimus_dorsi",
+      "displayName": "Lats",
+      "exerciseMuscleGroup": "LATS",
+      "collections": [
+        "Hypaxial muscles of back"
+      ],
+      "name_contains": [
+        "Latissimus dorsi muscle"
+      ]
+    },
+    {
+      "id": "rhomboids",
+      "displayName": "Upper Back",
+      "exerciseMuscleGroup": "UPPER BACK",
+      "collections": [
+        "Hypaxial muscles of back"
+      ],
+      "name_contains": [
+        "Rhomboid major muscle",
+        "Rhomboid minor muscle"
+      ]
+    },
+    {
+      "id": "serratus_anterior",
+      "displayName": "Serratus Anterior",
+      "exerciseMuscleGroup": "CORE",
+      "collections": [],
+      "name_contains": [
+        "Serratus anterior muscle"
+      ]
+    },
+    {
+      "id": "rectus_abdominis",
+      "displayName": "Abs",
+      "exerciseMuscleGroup": "ABS",
+      "collections": [
+        "Rectus abdominis muscle"
+      ]
+    },
+    {
+      "id": "obliques",
+      "displayName": "Obliques",
+      "exerciseMuscleGroup": "CORE",
+      "collections": [],
+      "name_contains": [
+        "External abdominal oblique",
+        "Internal abdominal oblique"
+      ]
+    },
+    {
+      "id": "erector_spinae",
+      "displayName": "Lower Back",
+      "exerciseMuscleGroup": "LOWER BACK",
+      "collections": [
+        "Iliocostalis muscles",
+        "Longissimus muscles",
+        "Longissimus thoracis muscle",
+        "Spinalis muscles"
+      ]
+    },
+    {
+      "id": "gluteus_maximus",
+      "displayName": "Glutes",
+      "exerciseMuscleGroup": "GLUTES",
+      "collections": [
+        "Superficial gluteal muscles"
+      ],
+      "name_contains": [
+        "Gluteus maximus muscle"
+      ]
+    },
+    {
+      "id": "gluteus_medius",
+      "displayName": "Glutes (Medius)",
+      "exerciseMuscleGroup": "GLUTES",
+      "collections": [
+        "Superficial gluteal muscles"
+      ],
+      "name_contains": [
+        "Gluteus medius muscle"
+      ]
+    },
+    {
+      "id": "gluteus_minimus",
+      "displayName": "Glutes (Minimus)",
+      "exerciseMuscleGroup": "GLUTES",
+      "collections": [
+        "Superficial gluteal muscles"
+      ],
+      "name_contains": [
+        "Gluteus minimus muscle"
+      ]
+    },
+    {
+      "id": "quadriceps",
+      "displayName": "Quads",
+      "exerciseMuscleGroup": "QUADS",
+      "collections": [
+        "Quadriceps femoris muscle"
+      ]
+    },
+    {
+      "id": "hamstrings",
+      "displayName": "Hamstrings",
+      "exerciseMuscleGroup": "HAMSTRINGS",
+      "collections": [
+        "Posterior compartment of thigh",
+        "Biceps femoris muscle"
+      ]
+    },
+    {
+      "id": "gastrocnemius",
+      "displayName": "Calves",
+      "exerciseMuscleGroup": "CALVES",
+      "collections": [
+        "Gastrocnemius muscle"
+      ],
+      "exclude_name_contains": [
+        "Calcaneal tendon"
+      ]
+    },
+    {
+      "id": "soleus",
+      "displayName": "Calves (Soleus)",
+      "exerciseMuscleGroup": "CALVES",
+      "collections": [
+        "Soleus muscle"
+      ]
+    },
+    {
+      "id": "forearms",
+      "displayName": "Forearms",
+      "exerciseMuscleGroup": "FOREARMS",
+      "collections": [],
+      "name_contains": [
+        "Brachioradialis muscle",
+        "Flexor carpi radialis",
+        "Humeral head of flexor carpi ulnaris",
+        "Ulnar head of flexor carpi ulnaris",
+        "Palmaris longus muscle",
+        "Flexor digitorum superficialis",
+        "Flexor digitorum profundus",
+        "Flexor pollicis longus",
+        "Extensor carpi radialis brevis",
+        "Extensor carpi radialis longus",
+        "Humeral head of extensor carpi ulnaris",
+        "Ulnar head of extensor carpi ulnaris",
+        "Extensor digitorum"
+      ]
+    },
+    {
+      "id": "biceps",
+      "displayName": "Biceps",
+      "exerciseMuscleGroup": "BICEPS",
+      "collections": [
+        "Biceps brachii muscle"
+      ]
+    },
+    {
+      "id": "triceps",
+      "displayName": "Triceps",
+      "exerciseMuscleGroup": "TRICEPS",
+      "collections": [
+        "Triceps brachii muscle"
+      ]
+    }
+  ]
+}
