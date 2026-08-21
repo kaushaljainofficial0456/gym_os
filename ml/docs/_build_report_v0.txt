@@ -1,0 +1,62 @@
+UNIFIED DATASET — build report (auto-generated, real counts, not estimated)
+======================================================================
+Total observation rows: 2069
+Rows dropped as Reis-lab duplicates (2017 vs 2019): 441
+
+-- by dataset_id --
+dataset_id
+reis2019        994
+reis2017        679
+brunelli2019    396
+
+-- unique participant_group_id count by dataset_id --
+dataset_id
+brunelli2019    11
+reis2017        14
+reis2019        14
+
+-- unique participant_group_id count OVERALL (leakage-safe grouping key) --
+25
+
+-- by exercise_canonical_id --
+exercise_canonical_id
+LEG_EXTENSION          606
+TRICEPS_EXTENSION      210
+BARBELL_SQUAT          210
+BENCH_PRESS            210
+LAT_PULLDOWN           210
+BICEP_CURL             209
+LEG_PRESS              208
+INCLINE_BENCH_PRESS    206
+
+-- by metric_type --
+metric_type
+vo2_relative                     560
+energy_cost_rate                 560
+heart_rate                       441
+energy_expenditure_absolute      231
+blood_lactate                    165
+predicted_energy_cost_from_hr    112
+
+-- missingness by column --
+observation_id             0.000
+dataset_id                 0.000
+participant_group_id       0.000
+local_participant_id       0.000
+exercise_canonical_id      0.000
+exercise_original_label    0.000
+condition_type             0.000
+intensity_value            0.064
+metric_type                0.000
+metric_subtype             0.809
+value                      0.000
+unit                       0.000
+is_directly_measured       0.000
+is_group_mean_derived      0.000
+source_sheet               0.000
+notes                      0.564
+
+-- directly measured vs derived --
+is_directly_measured
+True     1805
+False     264

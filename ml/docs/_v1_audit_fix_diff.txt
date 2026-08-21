@@ -1,0 +1,10 @@
+correction_kcal_per_min_by_exercise_and_tier: UNCHANGED
+interval_offsets_kcal_per_min: UNCHANGED
+baseline: UNCHANGED
+
+trained_on.participants same: True
+trained_on.rows same: True
+
+New keys added: ['body_weight_validity', 'plausibility_guardrails', 'source_measured_bout_duration_minutes']
+
+ALL FITTED NUMBERS PROVEN IDENTICAL: True

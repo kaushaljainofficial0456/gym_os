@@ -1,0 +1,2457 @@
+[
+  {
+    "source_id": "indb:ASC002",
+    "food_name": "Instant coffee",
+    "energy_kcal_per_100g": 23.156,
+    "fat_g_per_100g": 0.747,
+    "serving_description": "tea cup",
+    "serving_grams": 450.0,
+    "serving_energy_kcal": 104.201,
+    "reasons": [
+      "1 tea cup derived as 450 g, above a sane maximum of 300 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC006",
+    "food_name": "Fruit Punch (with fresh juices)",
+    "energy_kcal_per_100g": 36.117,
+    "fat_g_per_100g": 0.033,
+    "serving_description": "tall glass",
+    "serving_grams": 544.3,
+    "serving_energy_kcal": 196.597,
+    "reasons": [
+      "1 tall glass derived as 544 g, above a sane maximum of 500 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC007",
+    "food_name": "Fruit Punch (with squashes)",
+    "energy_kcal_per_100g": 23.128,
+    "fat_g_per_100g": 0.017,
+    "serving_description": "tall glass",
+    "serving_grams": 502.8,
+    "serving_energy_kcal": 116.297,
+    "reasons": [
+      "1 tall glass derived as 503 g, above a sane maximum of 500 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC046",
+    "food_name": "Sesame toast",
+    "energy_kcal_per_100g": 495.186,
+    "fat_g_per_100g": 49.378,
+    "serving_description": "toasted triangle",
+    "serving_grams": 62.4,
+    "serving_energy_kcal": 309.182,
+    "reasons": [
+      "90% of energy is fat (49.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC061",
+    "food_name": "Plain omelette/omlet",
+    "energy_kcal_per_100g": 272.411,
+    "fat_g_per_100g": 25.74,
+    "serving_description": "omelette",
+    "serving_grams": 143.0,
+    "serving_energy_kcal": 389.548,
+    "reasons": [
+      "85% of energy is fat (25.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC068",
+    "food_name": "Brown stock",
+    "energy_kcal_per_100g": 21.325,
+    "fat_g_per_100g": 1.384,
+    "serving_description": "cup",
+    "serving_grams": 486.1,
+    "serving_energy_kcal": 103.655,
+    "reasons": [
+      "1 cup derived as 486 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC069",
+    "food_name": "Vegetable stock",
+    "energy_kcal_per_100g": 17.604,
+    "fat_g_per_100g": 1.378,
+    "serving_description": "cup",
+    "serving_grams": 415.4,
+    "serving_energy_kcal": 73.133,
+    "reasons": [
+      "1 cup derived as 415 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC082",
+    "food_name": "Cream of tomato soup",
+    "energy_kcal_per_100g": 97.812,
+    "fat_g_per_100g": 13.115,
+    "serving_description": "soup bowl",
+    "serving_grams": 462.4,
+    "serving_energy_kcal": 452.284,
+    "reasons": [
+      "121% of energy is fat (13.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC083",
+    "food_name": "Cream of green peas soup",
+    "energy_kcal_per_100g": 127.841,
+    "fat_g_per_100g": 14.781,
+    "serving_description": "soup bowl",
+    "serving_grams": 408.5,
+    "serving_energy_kcal": 522.23,
+    "reasons": [
+      "104% of energy is fat (14.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC084",
+    "food_name": "Cream of spinach soup",
+    "energy_kcal_per_100g": 100.538,
+    "fat_g_per_100g": 13.31,
+    "serving_description": "soup bowl",
+    "serving_grams": 462.6,
+    "serving_energy_kcal": 465.118,
+    "reasons": [
+      "119% of energy is fat (13.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC086",
+    "food_name": "Cream of mushroom soup",
+    "energy_kcal_per_100g": 117.278,
+    "fat_g_per_100g": 15.501,
+    "serving_description": "soup bowl",
+    "serving_grams": 375.0,
+    "serving_energy_kcal": 439.827,
+    "reasons": [
+      "119% of energy is fat (15.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC090",
+    "food_name": "Chinese cabbage and meat ball soup",
+    "energy_kcal_per_100g": 484.305,
+    "fat_g_per_100g": 56.572,
+    "serving_description": "soup bowl",
+    "serving_grams": 465.5,
+    "serving_energy_kcal": 2254.248,
+    "reasons": [
+      "105% of energy is fat (56.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC107",
+    "food_name": "Poori",
+    "energy_kcal_per_100g": 737.635,
+    "fat_g_per_100g": 77.606,
+    "serving_description": "poori",
+    "serving_grams": 124.9,
+    "serving_energy_kcal": 921.306,
+    "reasons": [
+      "95% of energy is fat (77.6 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 poori derived as 125 g, above a sane maximum of 120 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC108",
+    "food_name": "Spinach poori (Palak poori)",
+    "energy_kcal_per_100g": 684.254,
+    "fat_g_per_100g": 71.858,
+    "serving_description": "poori",
+    "serving_grams": 135.0,
+    "serving_energy_kcal": 923.743,
+    "reasons": [
+      "95% of energy is fat (71.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 poori derived as 135 g, above a sane maximum of 120 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC109",
+    "food_name": "Methi poori",
+    "energy_kcal_per_100g": 710.02,
+    "fat_g_per_100g": 74.604,
+    "serving_description": "poori",
+    "serving_grams": 130.0,
+    "serving_energy_kcal": 923.026,
+    "reasons": [
+      "95% of energy is fat (74.6 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 poori derived as 130 g, above a sane maximum of 120 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC110",
+    "food_name": "Dal stuffed poori",
+    "energy_kcal_per_100g": 785.163,
+    "fat_g_per_100g": 81.685,
+    "serving_description": "poori",
+    "serving_grams": 118.8,
+    "serving_energy_kcal": 932.648,
+    "reasons": [
+      "94% of energy is fat (81.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC111",
+    "food_name": "Potato stuffed poori (Aloo ki poori)",
+    "energy_kcal_per_100g": 776.738,
+    "fat_g_per_100g": 81.353,
+    "serving_description": "poori",
+    "serving_grams": 119.2,
+    "serving_energy_kcal": 925.872,
+    "reasons": [
+      "94% of energy is fat (81.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC118",
+    "food_name": "Paneer pulao",
+    "energy_kcal_per_100g": 581.912,
+    "fat_g_per_100g": 59.809,
+    "serving_description": "plate",
+    "serving_grams": 837.9,
+    "serving_energy_kcal": 4875.841,
+    "reasons": [
+      "93% of energy is fat (59.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 plate derived as 838 g, above a sane maximum of 700 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC137",
+    "food_name": "Spaghetti and cheese balls in tomato sauce",
+    "energy_kcal_per_100g": 508.322,
+    "fat_g_per_100g": 52.08,
+    "serving_description": "plate",
+    "serving_grams": 965.6,
+    "serving_energy_kcal": 4908.383,
+    "reasons": [
+      "92% of energy is fat (52.1 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 plate derived as 966 g, above a sane maximum of 700 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC139",
+    "food_name": "Pasta hot pot",
+    "energy_kcal_per_100g": 125.173,
+    "fat_g_per_100g": 6.466,
+    "serving_description": "plate",
+    "serving_grams": 831.4,
+    "serving_energy_kcal": 1040.713,
+    "reasons": [
+      "1 plate derived as 831 g, above a sane maximum of 700 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC143",
+    "food_name": "Bhatura",
+    "energy_kcal_per_100g": 793.203,
+    "fat_g_per_100g": 82.564,
+    "serving_description": "bhatura",
+    "serving_grams": 145.6,
+    "serving_energy_kcal": 1154.606,
+    "reasons": [
+      "94% of energy is fat (82.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC148",
+    "food_name": "Onion tomato uttapam",
+    "energy_kcal_per_100g": 462.019,
+    "fat_g_per_100g": 45.303,
+    "serving_description": "uttapam",
+    "serving_grams": 139.5,
+    "serving_energy_kcal": 644.32,
+    "reasons": [
+      "88% of energy is fat (45.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC168",
+    "food_name": "Besan kadhi with pakodies",
+    "energy_kcal_per_100g": 403.349,
+    "fat_g_per_100g": 42.588,
+    "serving_description": "bowl",
+    "serving_grams": 586.8,
+    "serving_energy_kcal": 2366.793,
+    "reasons": [
+      "95% of energy is fat (42.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC198",
+    "food_name": "Pea kofta curry (Matar kofta curry)",
+    "energy_kcal_per_100g": 595.665,
+    "fat_g_per_100g": 63.392,
+    "serving_description": "bowl",
+    "serving_grams": 780.5,
+    "serving_energy_kcal": 4649.164,
+    "reasons": [
+      "96% of energy is fat (63.4 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 780 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC199",
+    "food_name": "Spinach kofta curry (Palak kofta curry)",
+    "energy_kcal_per_100g": 571.776,
+    "fat_g_per_100g": 61.492,
+    "serving_description": "bowl",
+    "serving_grams": 806.2,
+    "serving_energy_kcal": 4609.487,
+    "reasons": [
+      "97% of energy is fat (61.5 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 806 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC200",
+    "food_name": "Paneer kofta curry",
+    "energy_kcal_per_100g": 670.911,
+    "fat_g_per_100g": 72.063,
+    "serving_description": "bowl",
+    "serving_grams": 701.0,
+    "serving_energy_kcal": 4703.084,
+    "reasons": [
+      "97% of energy is fat (72.1 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 701 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC201",
+    "food_name": "Lotus stem kofta curry (Kamal kakdi kofta curry)",
+    "energy_kcal_per_100g": 633.564,
+    "fat_g_per_100g": 67.764,
+    "serving_description": "bowl",
+    "serving_grams": 731.2,
+    "serving_energy_kcal": 4632.431,
+    "reasons": [
+      "96% of energy is fat (67.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 731 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC202",
+    "food_name": "Raw banana kofta curry (Kela kofta curry)",
+    "energy_kcal_per_100g": 627.271,
+    "fat_g_per_100g": 67.979,
+    "serving_description": "bowl",
+    "serving_grams": 727.2,
+    "serving_energy_kcal": 4561.33,
+    "reasons": [
+      "98% of energy is fat (68.0 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 727 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC203",
+    "food_name": "Cauliflower kofta curry (Phoolgobhi kofta curry)",
+    "energy_kcal_per_100g": 641.1,
+    "fat_g_per_100g": 69.623,
+    "serving_description": "bowl",
+    "serving_grams": 711.2,
+    "serving_energy_kcal": 4559.308,
+    "reasons": [
+      "98% of energy is fat (69.6 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 711 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC204",
+    "food_name": "Cabbage kofta curry (Pattagobhi kofta curry)",
+    "energy_kcal_per_100g": 639.813,
+    "fat_g_per_100g": 69.4,
+    "serving_description": "bowl",
+    "serving_grams": 713.2,
+    "serving_energy_kcal": 4562.953,
+    "reasons": [
+      "98% of energy is fat (69.4 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 713 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC205",
+    "food_name": "Ghiya/Lauki Kofta Curry",
+    "energy_kcal_per_100g": 638.707,
+    "fat_g_per_100g": 69.401,
+    "serving_description": "bowl",
+    "serving_grams": 713.2,
+    "serving_energy_kcal": 4555.065,
+    "reasons": [
+      "98% of energy is fat (69.4 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 713 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC206",
+    "food_name": "Spinach paneer kofta curry (Palak paneer kofta curry)",
+    "energy_kcal_per_100g": 606.025,
+    "fat_g_per_100g": 65.408,
+    "serving_description": "bowl",
+    "serving_grams": 762.5,
+    "serving_energy_kcal": 4620.942,
+    "reasons": [
+      "97% of energy is fat (65.4 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 762 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC207",
+    "food_name": "Vegetarian egg kofta curry",
+    "energy_kcal_per_100g": 627.406,
+    "fat_g_per_100g": 67.242,
+    "serving_description": "bowl",
+    "serving_grams": 741.0,
+    "serving_energy_kcal": 4649.077,
+    "reasons": [
+      "96% of energy is fat (67.2 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 741 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC214",
+    "food_name": "Dum aloo",
+    "energy_kcal_per_100g": 682.33,
+    "fat_g_per_100g": 74.007,
+    "serving_description": "bowl",
+    "serving_grams": 670.6,
+    "serving_energy_kcal": 4575.568,
+    "reasons": [
+      "98% of energy is fat (74.0 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 671 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC216",
+    "food_name": "Methi chaman",
+    "energy_kcal_per_100g": 475.625,
+    "fat_g_per_100g": 50.907,
+    "serving_description": "bowl",
+    "serving_grams": 1001.5,
+    "serving_energy_kcal": 4763.379,
+    "reasons": [
+      "96% of energy is fat (50.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 1002 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC218",
+    "food_name": "Jackfruit sabzi (Kathal ki sabzi)",
+    "energy_kcal_per_100g": 625.4,
+    "fat_g_per_100g": 67.596,
+    "serving_description": "bowl",
+    "serving_grams": 361.2,
+    "serving_energy_kcal": 2258.724,
+    "reasons": [
+      "97% of energy is fat (67.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC220",
+    "food_name": "Al yakhani",
+    "energy_kcal_per_100g": 147.544,
+    "fat_g_per_100g": 13.144,
+    "serving_description": "bowl",
+    "serving_grams": 232.0,
+    "serving_energy_kcal": 342.303,
+    "reasons": [
+      "80% of energy is fat (13.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC224",
+    "food_name": "Chilli paneer",
+    "energy_kcal_per_100g": 777.514,
+    "fat_g_per_100g": 84.011,
+    "serving_description": "bowl",
+    "serving_grams": 296.9,
+    "serving_energy_kcal": 2308.283,
+    "reasons": [
+      "97% of energy is fat (84.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC225",
+    "food_name": "Paneer makhana korma",
+    "energy_kcal_per_100g": 775.816,
+    "fat_g_per_100g": 82.758,
+    "serving_description": "bowl",
+    "serving_grams": 607.0,
+    "serving_energy_kcal": 4709.204,
+    "reasons": [
+      "96% of energy is fat (82.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 607 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC236",
+    "food_name": "Mutton chops",
+    "energy_kcal_per_100g": 663.638,
+    "fat_g_per_100g": 71.315,
+    "serving_description": "chop",
+    "serving_grams": 349.6,
+    "serving_energy_kcal": 2320.309,
+    "reasons": [
+      "97% of energy is fat (71.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC237",
+    "food_name": "Shammi kebab",
+    "energy_kcal_per_100g": 685.691,
+    "fat_g_per_100g": 72.608,
+    "serving_description": "kabab",
+    "serving_grams": 171.2,
+    "serving_energy_kcal": 1173.954,
+    "reasons": [
+      "95% of energy is fat (72.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC238",
+    "food_name": "Scotch egg",
+    "energy_kcal_per_100g": 676.892,
+    "fat_g_per_100g": 72.623,
+    "serving_description": "piece",
+    "serving_grams": 342.5,
+    "serving_energy_kcal": 2318.052,
+    "reasons": [
+      "97% of energy is fat (72.6 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 piece derived as 342 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC242",
+    "food_name": "Butter chicken",
+    "energy_kcal_per_100g": 137.003,
+    "fat_g_per_100g": 8.7,
+    "serving_description": "large piece",
+    "serving_grams": 275.2,
+    "serving_energy_kcal": 377.039,
+    "reasons": [
+      "1 large piece derived as 275 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC243",
+    "food_name": "Chicken kebab",
+    "energy_kcal_per_100g": 729.406,
+    "fat_g_per_100g": 78.886,
+    "serving_description": "kabab",
+    "serving_grams": 123.9,
+    "serving_energy_kcal": 903.734,
+    "reasons": [
+      "97% of energy is fat (78.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC247",
+    "food_name": "Fried fish (Indian style) (Tali hui machli)",
+    "energy_kcal_per_100g": 658.544,
+    "fat_g_per_100g": 68.88,
+    "serving_description": "piece",
+    "serving_grams": 353.5,
+    "serving_energy_kcal": 2327.953,
+    "reasons": [
+      "94% of energy is fat (68.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 piece derived as 354 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC248",
+    "food_name": "Fried fish and Chips (English Style) (Tali hui machli aur chips)",
+    "energy_kcal_per_100g": 651.749,
+    "fat_g_per_100g": 69.694,
+    "serving_description": "fillet",
+    "serving_grams": 697.7,
+    "serving_energy_kcal": 4547.578,
+    "reasons": [
+      "96% of energy is fat (69.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC249",
+    "food_name": "Tomato fish",
+    "energy_kcal_per_100g": 489.788,
+    "fat_g_per_100g": 51.908,
+    "serving_description": "bowl",
+    "serving_grams": 967.9,
+    "serving_energy_kcal": 4740.807,
+    "reasons": [
+      "95% of energy is fat (51.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 968 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC277",
+    "food_name": "Boondi raita",
+    "energy_kcal_per_100g": 687.719,
+    "fat_g_per_100g": 73.827,
+    "serving_description": "bowl",
+    "serving_grams": 328.9,
+    "serving_energy_kcal": 2261.736,
+    "reasons": [
+      "97% of energy is fat (73.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC279",
+    "food_name": "Dahi vadas/Dahi bhalla",
+    "energy_kcal_per_100g": 667.726,
+    "fat_g_per_100g": 70.403,
+    "serving_description": "vada",
+    "serving_grams": 172.3,
+    "serving_energy_kcal": 1150.159,
+    "reasons": [
+      "95% of energy is fat (70.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC280",
+    "food_name": "Gunjia",
+    "energy_kcal_per_100g": 667.342,
+    "fat_g_per_100g": 70.277,
+    "serving_description": "gunjia",
+    "serving_grams": 174.7,
+    "serving_energy_kcal": 1166.179,
+    "reasons": [
+      "95% of energy is fat (70.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC305",
+    "food_name": "Mango ice cream",
+    "energy_kcal_per_100g": 125.686,
+    "fat_g_per_100g": 7.618,
+    "serving_description": "ice-cream cup",
+    "serving_grams": 456.0,
+    "serving_energy_kcal": 573.128,
+    "reasons": [
+      "1 ice-cream cup derived as 456 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC327",
+    "food_name": "Queen of pudding",
+    "energy_kcal_per_100g": 132.92,
+    "fat_g_per_100g": 5.38,
+    "serving_description": "large slice",
+    "serving_grams": 325.7,
+    "serving_energy_kcal": 432.986,
+    "reasons": [
+      "1 large slice derived as 326 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC330",
+    "food_name": "Stewed apple with custard",
+    "energy_kcal_per_100g": 92.873,
+    "fat_g_per_100g": 1.82,
+    "serving_description": "piece",
+    "serving_grams": 283.5,
+    "serving_energy_kcal": 263.294,
+    "reasons": [
+      "1 piece derived as 284 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC331",
+    "food_name": "Apple snowballs",
+    "energy_kcal_per_100g": 101.511,
+    "fat_g_per_100g": 0.312,
+    "serving_description": "piece",
+    "serving_grams": 259.5,
+    "serving_energy_kcal": 263.422,
+    "reasons": [
+      "1 piece derived as 260 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC346",
+    "food_name": "Milk cake",
+    "energy_kcal_per_100g": 127.408,
+    "fat_g_per_100g": 8.927,
+    "serving_description": "slice",
+    "serving_grams": 287.3,
+    "serving_energy_kcal": 365.98,
+    "reasons": [
+      "1 slice derived as 287 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC347",
+    "food_name": "Ghujia/Lavang latika",
+    "energy_kcal_per_100g": 768.979,
+    "fat_g_per_100g": 78.93,
+    "serving_description": "gunjia",
+    "serving_grams": 106.5,
+    "serving_energy_kcal": 818.706,
+    "reasons": [
+      "92% of energy is fat (78.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC348",
+    "food_name": "Gulab Jamun with khoya",
+    "energy_kcal_per_100g": 586.063,
+    "fat_g_per_100g": 53.233,
+    "serving_description": "gulab jamun",
+    "serving_grams": 156.7,
+    "serving_energy_kcal": 918.459,
+    "reasons": [
+      "82% of energy is fat (53.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC349",
+    "food_name": "Mal pua",
+    "energy_kcal_per_100g": 566.678,
+    "fat_g_per_100g": 54.636,
+    "serving_description": "malqura",
+    "serving_grams": 149.6,
+    "serving_energy_kcal": 847.939,
+    "reasons": [
+      "87% of energy is fat (54.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC351",
+    "food_name": "Potato pakora/pakoda (Aloo pakoda)",
+    "energy_kcal_per_100g": 677.19,
+    "fat_g_per_100g": 71.838,
+    "serving_description": "plate",
+    "serving_grams": 674.5,
+    "serving_energy_kcal": 4567.648,
+    "reasons": [
+      "95% of energy is fat (71.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC352",
+    "food_name": "Onion pakora/pakoda (Pyaaz ke pakode)",
+    "energy_kcal_per_100g": 674.611,
+    "fat_g_per_100g": 71.839,
+    "serving_description": "plate",
+    "serving_grams": 674.5,
+    "serving_energy_kcal": 4550.249,
+    "reasons": [
+      "96% of energy is fat (71.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC353",
+    "food_name": "Cauliflower pakora/pakoda (Phoolgobhi ke pakode)",
+    "energy_kcal_per_100g": 671.634,
+    "fat_g_per_100g": 71.863,
+    "serving_description": "plate",
+    "serving_grams": 674.5,
+    "serving_energy_kcal": 4530.173,
+    "reasons": [
+      "96% of energy is fat (71.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC354",
+    "food_name": "Mixed vegetable pakora/pakoda",
+    "energy_kcal_per_100g": 673.81,
+    "fat_g_per_100g": 71.857,
+    "serving_description": "plate",
+    "serving_grams": 674.5,
+    "serving_energy_kcal": 4544.848,
+    "reasons": [
+      "96% of energy is fat (71.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC355",
+    "food_name": "Spinach pakora/pakoda (Palak pakoda)",
+    "energy_kcal_per_100g": 712.619,
+    "fat_g_per_100g": 76.378,
+    "serving_description": "plate",
+    "serving_grams": 634.5,
+    "serving_energy_kcal": 4521.569,
+    "reasons": [
+      "96% of energy is fat (76.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC356",
+    "food_name": "Methi pakora/pakoda (Methi ke pakode)",
+    "energy_kcal_per_100g": 713.252,
+    "fat_g_per_100g": 76.39,
+    "serving_description": "plate",
+    "serving_grams": 634.5,
+    "serving_energy_kcal": 4525.584,
+    "reasons": [
+      "96% of energy is fat (76.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC357",
+    "food_name": "Egg pakora/pakoda (Ande ke pakode)",
+    "energy_kcal_per_100g": 710.507,
+    "fat_g_per_100g": 75.863,
+    "serving_description": "plate",
+    "serving_grams": 644.5,
+    "serving_energy_kcal": 4579.216,
+    "reasons": [
+      "96% of energy is fat (75.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC358",
+    "food_name": "Bread pakora/pakoda",
+    "energy_kcal_per_100g": 710.988,
+    "fat_g_per_100g": 74.198,
+    "serving_description": "plate",
+    "serving_grams": 654.5,
+    "serving_energy_kcal": 4653.417,
+    "reasons": [
+      "94% of energy is fat (74.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC359",
+    "food_name": "Paneer pakora/pakoda",
+    "energy_kcal_per_100g": 718.122,
+    "fat_g_per_100g": 76.052,
+    "serving_description": "plate",
+    "serving_grams": 646.7,
+    "serving_energy_kcal": 4644.453,
+    "reasons": [
+      "95% of energy is fat (76.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC360",
+    "food_name": "Potato bonda (Aloo bonda)",
+    "energy_kcal_per_100g": 632.835,
+    "fat_g_per_100g": 67.799,
+    "serving_description": "bonda",
+    "serving_grams": 179.2,
+    "serving_energy_kcal": 1134.088,
+    "reasons": [
+      "96% of energy is fat (67.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC361",
+    "food_name": "Potato samosa (Aloo ka samosa)",
+    "energy_kcal_per_100g": 577.386,
+    "fat_g_per_100g": 59.191,
+    "serving_description": "samosa",
+    "serving_grams": 140.9,
+    "serving_energy_kcal": 813.758,
+    "reasons": [
+      "92% of energy is fat (59.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC362",
+    "food_name": "Minced meat samosa (Keema ka samosa)",
+    "energy_kcal_per_100g": 620.988,
+    "fat_g_per_100g": 64.261,
+    "serving_description": "samosa",
+    "serving_grams": 134.9,
+    "serving_energy_kcal": 837.506,
+    "reasons": [
+      "93% of energy is fat (64.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC363",
+    "food_name": "Paneer and pea samosa (Paneer matar ka samosa)",
+    "energy_kcal_per_100g": 623.806,
+    "fat_g_per_100g": 63.646,
+    "serving_description": "samosa",
+    "serving_grams": 134.9,
+    "serving_energy_kcal": 841.307,
+    "reasons": [
+      "92% of energy is fat (63.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC364",
+    "food_name": "Mathri",
+    "energy_kcal_per_100g": 805.123,
+    "fat_g_per_100g": 83.097,
+    "serving_description": "kachori",
+    "serving_grams": 87.2,
+    "serving_energy_kcal": 702.183,
+    "reasons": [
+      "93% of energy is fat (83.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC365",
+    "food_name": "Khasta kachori",
+    "energy_kcal_per_100g": 712.729,
+    "fat_g_per_100g": 72.274,
+    "serving_description": "kachori",
+    "serving_grams": 100.7,
+    "serving_energy_kcal": 717.565,
+    "reasons": [
+      "91% of energy is fat (72.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC366",
+    "food_name": "Vegetable cutlet",
+    "energy_kcal_per_100g": 665.454,
+    "fat_g_per_100g": 71.327,
+    "serving_description": "cutlet",
+    "serving_grams": 337.8,
+    "serving_energy_kcal": 2247.572,
+    "reasons": [
+      "96% of energy is fat (71.3 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 338 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC367",
+    "food_name": "Flattened rice cutlet (Chirwa cutlet/Chivda cutlet/Poha cutlet)",
+    "energy_kcal_per_100g": 701.711,
+    "fat_g_per_100g": 73.887,
+    "serving_description": "cutlet",
+    "serving_grams": 331.3,
+    "serving_energy_kcal": 2325.015,
+    "reasons": [
+      "95% of energy is fat (73.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 331 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC368",
+    "food_name": "Peanut cutlet (Mungfali ke cutlet)",
+    "energy_kcal_per_100g": 698.767,
+    "fat_g_per_100g": 74.002,
+    "serving_description": "cutlet",
+    "serving_grams": 338.8,
+    "serving_energy_kcal": 2367.666,
+    "reasons": [
+      "95% of energy is fat (74.0 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 339 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC369",
+    "food_name": "Fish cutlet (Machli ka cutlet)",
+    "energy_kcal_per_100g": 654.64,
+    "fat_g_per_100g": 70.106,
+    "serving_description": "cutlet",
+    "serving_grams": 349.0,
+    "serving_energy_kcal": 2284.432,
+    "reasons": [
+      "96% of energy is fat (70.1 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 349 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC370",
+    "food_name": "Paneer potato cutlet (Paneer aloo cutlet)",
+    "energy_kcal_per_100g": 672.944,
+    "fat_g_per_100g": 71.403,
+    "serving_description": "cutlet",
+    "serving_grams": 343.3,
+    "serving_energy_kcal": 2309.881,
+    "reasons": [
+      "95% of energy is fat (71.4 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 343 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC371",
+    "food_name": "Spinach chickpeas cutlet (Palak channa dal cutlet)",
+    "energy_kcal_per_100g": 688.028,
+    "fat_g_per_100g": 73.599,
+    "serving_description": "cutlet",
+    "serving_grams": 327.8,
+    "serving_energy_kcal": 2255.597,
+    "reasons": [
+      "96% of energy is fat (73.6 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 328 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC372",
+    "food_name": "Cheese toast",
+    "energy_kcal_per_100g": 785.367,
+    "fat_g_per_100g": 84.109,
+    "serving_description": "toast",
+    "serving_grams": 145.0,
+    "serving_energy_kcal": 1138.782,
+    "reasons": [
+      "96% of energy is fat (84.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC375",
+    "food_name": "Vegetable burger",
+    "energy_kcal_per_100g": 519.931,
+    "fat_g_per_100g": 50.631,
+    "serving_description": "burger",
+    "serving_grams": 515.3,
+    "serving_energy_kcal": 2678.945,
+    "reasons": [
+      "88% of energy is fat (50.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC377",
+    "food_name": "Vegetable seekh kebab",
+    "energy_kcal_per_100g": 690.725,
+    "fat_g_per_100g": 73.72,
+    "serving_description": "kabab",
+    "serving_grams": 164.5,
+    "serving_energy_kcal": 1136.381,
+    "reasons": [
+      "96% of energy is fat (73.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC378",
+    "food_name": "Masala vada",
+    "energy_kcal_per_100g": 826.025,
+    "fat_g_per_100g": 89.155,
+    "serving_description": "vada",
+    "serving_grams": 269.7,
+    "serving_energy_kcal": 2228.201,
+    "reasons": [
+      "97% of energy is fat (89.2 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 vada derived as 270 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC379",
+    "food_name": "Peanut sago vada (Sabudana mungfali vada)",
+    "energy_kcal_per_100g": 749.886,
+    "fat_g_per_100g": 79.823,
+    "serving_description": "vada",
+    "serving_grams": 305.6,
+    "serving_energy_kcal": 2291.538,
+    "reasons": [
+      "96% of energy is fat (79.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 vada derived as 306 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC380",
+    "food_name": "Vegeterian scotch egg",
+    "energy_kcal_per_100g": 681.666,
+    "fat_g_per_100g": 72.773,
+    "serving_description": "piece",
+    "serving_grams": 334.1,
+    "serving_energy_kcal": 2277.342,
+    "reasons": [
+      "96% of energy is fat (72.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 piece derived as 334 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC383",
+    "food_name": "Spring roll",
+    "energy_kcal_per_100g": 623.874,
+    "fat_g_per_100g": 64.633,
+    "serving_description": "spring roll",
+    "serving_grams": 94.2,
+    "serving_energy_kcal": 587.385,
+    "reasons": [
+      "93% of energy is fat (64.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC386",
+    "food_name": "Coconut chutney (Nariyal ki chutney)",
+    "energy_kcal_per_100g": 265.925,
+    "fat_g_per_100g": 24.999,
+    "serving_description": "tablespoon",
+    "serving_grams": 25.3,
+    "serving_energy_kcal": 67.365,
+    "reasons": [
+      "85% of energy is fat (25.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC409",
+    "food_name": "Cheese balls",
+    "energy_kcal_per_100g": 681.282,
+    "fat_g_per_100g": 72.567,
+    "serving_description": "piece",
+    "serving_grams": 59.1,
+    "serving_energy_kcal": 402.95,
+    "reasons": [
+      "96% of energy is fat (72.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC433",
+    "food_name": "Pineapple cake",
+    "energy_kcal_per_100g": 195.572,
+    "fat_g_per_100g": 9.344,
+    "serving_description": "slice",
+    "serving_grams": 513.0,
+    "serving_energy_kcal": 1003.282,
+    "reasons": [
+      "1 slice derived as 513 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC456",
+    "food_name": "Soyabean muthias",
+    "energy_kcal_per_100g": 839.327,
+    "fat_g_per_100g": 90.449,
+    "serving_description": "muthia",
+    "serving_grams": 134.2,
+    "serving_energy_kcal": 1126.439,
+    "reasons": [
+      "97% of energy is fat (90.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC457",
+    "food_name": "Soyabean tikki",
+    "energy_kcal_per_100g": 698.17,
+    "fat_g_per_100g": 74.018,
+    "serving_description": "tikki",
+    "serving_grams": 165.6,
+    "serving_energy_kcal": 1156.343,
+    "reasons": [
+      "95% of energy is fat (74.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC458",
+    "food_name": "Soyabean namak paras",
+    "energy_kcal_per_100g": 838.464,
+    "fat_g_per_100g": 89.825,
+    "serving_description": "plate",
+    "serving_grams": 273.6,
+    "serving_energy_kcal": 2294.246,
+    "reasons": [
+      "96% of energy is fat (89.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC460",
+    "food_name": "Spinach peanut namak paras (Palak moongfali namak paras)",
+    "energy_kcal_per_100g": 740.165,
+    "fat_g_per_100g": 78.511,
+    "serving_description": "plate",
+    "serving_grams": 316.1,
+    "serving_energy_kcal": 2339.846,
+    "reasons": [
+      "95% of energy is fat (78.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC461",
+    "food_name": "Gram flour and semolina chilla/cheela/savory pancake (Besan suji chilla/cheela)",
+    "energy_kcal_per_100g": 758.895,
+    "fat_g_per_100g": 80.038,
+    "serving_description": "cheela",
+    "serving_grams": 150.5,
+    "serving_energy_kcal": 1142.137,
+    "reasons": [
+      "95% of energy is fat (80.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC462",
+    "food_name": "Rice moong dal cheela (Chawal aur moong dal ka cheela)",
+    "energy_kcal_per_100g": 798.261,
+    "fat_g_per_100g": 82.438,
+    "serving_description": "cheela",
+    "serving_grams": 145.8,
+    "serving_energy_kcal": 1163.466,
+    "reasons": [
+      "93% of energy is fat (82.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC464",
+    "food_name": "Sweet poori (Meethi poori)",
+    "energy_kcal_per_100g": 782.746,
+    "fat_g_per_100g": 79.631,
+    "serving_description": "poori",
+    "serving_grams": 152.5,
+    "serving_energy_kcal": 1193.687,
+    "reasons": [
+      "92% of energy is fat (79.6 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 poori derived as 152 g, above a sane maximum of 120 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:ASC473",
+    "food_name": "Semolina carrot vada (Suji gajar vada)",
+    "energy_kcal_per_100g": 699.529,
+    "fat_g_per_100g": 74.075,
+    "serving_description": "vada",
+    "serving_grams": 162.7,
+    "serving_energy_kcal": 1138.483,
+    "reasons": [
+      "95% of energy is fat (74.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP027",
+    "food_name": "Mintade",
+    "energy_kcal_per_100g": 40.322,
+    "fat_g_per_100g": 0.023,
+    "serving_description": "glass",
+    "serving_grams": 570.0,
+    "serving_energy_kcal": 229.836,
+    "reasons": [
+      "1 glass derived as 570 g, above a sane maximum of 500 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP054",
+    "food_name": "French omelette/omlet",
+    "energy_kcal_per_100g": 211.039,
+    "fat_g_per_100g": 18.857,
+    "serving_description": "egg",
+    "serving_grams": 68.0,
+    "serving_energy_kcal": 143.507,
+    "reasons": [
+      "80% of energy is fat (18.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP055",
+    "food_name": "Puffy omelette/omlet",
+    "energy_kcal_per_100g": 188.149,
+    "fat_g_per_100g": 16.836,
+    "serving_description": "egg",
+    "serving_grams": 76.0,
+    "serving_energy_kcal": 142.993,
+    "reasons": [
+      "81% of energy is fat (16.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP059",
+    "food_name": "Mixed stock",
+    "energy_kcal_per_100g": 25.193,
+    "fat_g_per_100g": 1.713,
+    "serving_description": "cup",
+    "serving_grams": 910.0,
+    "serving_energy_kcal": 229.252,
+    "reasons": [
+      "1 cup derived as 910 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP060",
+    "food_name": "Meat stock",
+    "energy_kcal_per_100g": 24.483,
+    "fat_g_per_100g": 1.776,
+    "serving_description": "cup",
+    "serving_grams": 870.0,
+    "serving_energy_kcal": 213.0,
+    "reasons": [
+      "1 cup derived as 870 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP062",
+    "food_name": "White stock",
+    "energy_kcal_per_100g": 6.987,
+    "fat_g_per_100g": 0.556,
+    "serving_description": "cup",
+    "serving_grams": 765.0,
+    "serving_energy_kcal": 53.452,
+    "reasons": [
+      "1 cup derived as 765 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP065",
+    "food_name": "Meat consomme (with mutton)",
+    "energy_kcal_per_100g": 29.764,
+    "fat_g_per_100g": null,
+    "serving_description": "bowl",
+    "serving_grams": 619.9,
+    "serving_energy_kcal": 184.508,
+    "reasons": [
+      "1 bowl derived as 620 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP066",
+    "food_name": "Consomme au julienne",
+    "energy_kcal_per_100g": 27.763,
+    "fat_g_per_100g": null,
+    "serving_description": "bowl",
+    "serving_grams": 769.9,
+    "serving_energy_kcal": 213.745,
+    "reasons": [
+      "1 bowl derived as 770 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP067",
+    "food_name": "Consomme au vermicelli",
+    "energy_kcal_per_100g": 29.944,
+    "fat_g_per_100g": null,
+    "serving_description": "bowl",
+    "serving_grams": 626.9,
+    "serving_energy_kcal": 187.72,
+    "reasons": [
+      "1 bowl derived as 627 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP089",
+    "food_name": "Cold tomato soup",
+    "energy_kcal_per_100g": 16.904,
+    "fat_g_per_100g": 1.557,
+    "serving_description": "bowl",
+    "serving_grams": 274.5,
+    "serving_energy_kcal": 46.402,
+    "reasons": [
+      "83% of energy is fat (1.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP114",
+    "food_name": "Bathua poori",
+    "energy_kcal_per_100g": 598.794,
+    "fat_g_per_100g": 59.137,
+    "serving_description": "poori",
+    "serving_grams": 90.9,
+    "serving_energy_kcal": 544.238,
+    "reasons": [
+      "89% of energy is fat (59.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP115",
+    "food_name": "Gram flour poori (Besan poori)",
+    "energy_kcal_per_100g": 697.665,
+    "fat_g_per_100g": 71.513,
+    "serving_description": "poori",
+    "serving_grams": 75.3,
+    "serving_energy_kcal": 525.574,
+    "reasons": [
+      "92% of energy is fat (71.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP116",
+    "food_name": "Beetroot poori (Chukandar ki poori)",
+    "energy_kcal_per_100g": 527.658,
+    "fat_g_per_100g": 52.178,
+    "serving_description": "poori",
+    "serving_grams": 102.9,
+    "serving_energy_kcal": 543.136,
+    "reasons": [
+      "89% of energy is fat (52.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP117",
+    "food_name": "Peas poori (Matar ki poori)",
+    "energy_kcal_per_100g": 592.831,
+    "fat_g_per_100g": 57.692,
+    "serving_description": "poori",
+    "serving_grams": 83.8,
+    "serving_energy_kcal": 496.793,
+    "reasons": [
+      "88% of energy is fat (57.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP118",
+    "food_name": "Peas kachori (Matar kachori)",
+    "energy_kcal_per_100g": 584.683,
+    "fat_g_per_100g": 57.506,
+    "serving_description": "kachori",
+    "serving_grams": 108.1,
+    "serving_energy_kcal": 632.209,
+    "reasons": [
+      "89% of energy is fat (57.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP122",
+    "food_name": "Pizza",
+    "energy_kcal_per_100g": 146.773,
+    "fat_g_per_100g": 8.724,
+    "serving_description": "slice",
+    "serving_grams": 297.3,
+    "serving_energy_kcal": 436.348,
+    "reasons": [
+      "1 slice derived as 297 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP127",
+    "food_name": "Minced meat pancake (with chicken)",
+    "energy_kcal_per_100g": 116.041,
+    "fat_g_per_100g": 10.478,
+    "serving_description": "pancake",
+    "serving_grams": 134.4,
+    "serving_energy_kcal": 155.929,
+    "reasons": [
+      "81% of energy is fat (10.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP144",
+    "food_name": "Plain khitchdi (Plain khichri/khichdi)",
+    "energy_kcal_per_100g": 57.03,
+    "fat_g_per_100g": 1.006,
+    "serving_description": "small bowl",
+    "serving_grams": 574.0,
+    "serving_energy_kcal": 327.355,
+    "reasons": [
+      "1 small bowl derived as 574 g, above a sane maximum of 350 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP196",
+    "food_name": "Shahi keema kofta curry",
+    "energy_kcal_per_100g": 418.135,
+    "fat_g_per_100g": 43.826,
+    "serving_description": "bowl",
+    "serving_grams": 617.1,
+    "serving_energy_kcal": 2580.268,
+    "reasons": [
+      "94% of energy is fat (43.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 617 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP201",
+    "food_name": "Indian lamb and egg curry (Nargisi kofta)",
+    "energy_kcal_per_100g": 335.751,
+    "fat_g_per_100g": 34.697,
+    "serving_description": "kofta",
+    "serving_grams": 390.9,
+    "serving_energy_kcal": 1312.536,
+    "reasons": [
+      "93% of energy is fat (34.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP203",
+    "food_name": "Soya chunks sweet and sour (Nutrinugget sweet and sour)",
+    "energy_kcal_per_100g": 500.941,
+    "fat_g_per_100g": 55.991,
+    "serving_description": "bowl",
+    "serving_grams": 461.6,
+    "serving_energy_kcal": 2312.296,
+    "reasons": [
+      "101% of energy is fat (56.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP207",
+    "food_name": "Vegetable yakhni",
+    "energy_kcal_per_100g": 406.058,
+    "fat_g_per_100g": 43.796,
+    "serving_description": "bowl",
+    "serving_grams": 573.7,
+    "serving_energy_kcal": 2329.719,
+    "reasons": [
+      "97% of energy is fat (43.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP210",
+    "food_name": "Vegetarian nargisi kofta curry",
+    "energy_kcal_per_100g": 332.154,
+    "fat_g_per_100g": 32.94,
+    "serving_description": "kofta",
+    "serving_grams": 399.0,
+    "serving_energy_kcal": 1325.26,
+    "reasons": [
+      "89% of energy is fat (32.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP221",
+    "food_name": "Chicken sweet and sour",
+    "energy_kcal_per_100g": 445.094,
+    "fat_g_per_100g": 47.592,
+    "serving_description": "bowl",
+    "serving_grams": 561.6,
+    "serving_energy_kcal": 2499.603,
+    "reasons": [
+      "96% of energy is fat (47.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP226",
+    "food_name": "Fish finger",
+    "energy_kcal_per_100g": 542.901,
+    "fat_g_per_100g": 55.822,
+    "serving_description": "fillet",
+    "serving_grams": 443.6,
+    "serving_energy_kcal": 2408.256,
+    "reasons": [
+      "93% of energy is fat (55.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP246",
+    "food_name": "Potato kofta curry (Aloo kofta curry)",
+    "energy_kcal_per_100g": 455.397,
+    "fat_g_per_100g": 49.085,
+    "serving_description": "bowl",
+    "serving_grams": 1020.1,
+    "serving_energy_kcal": 4645.418,
+    "reasons": [
+      "97% of energy is fat (49.1 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 1020 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP249",
+    "food_name": "Yam kofta curry (Zimikand/Suran kofta curry)",
+    "energy_kcal_per_100g": 322.879,
+    "fat_g_per_100g": 33.835,
+    "serving_description": "bowl",
+    "serving_grams": 750.3,
+    "serving_energy_kcal": 2422.436,
+    "reasons": [
+      "94% of energy is fat (33.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 750 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP250",
+    "food_name": "Jackfruit kofta curry (Kathal ka kofta curry)",
+    "energy_kcal_per_100g": 321.083,
+    "fat_g_per_100g": 33.832,
+    "serving_description": "bowl",
+    "serving_grams": 750.3,
+    "serving_energy_kcal": 2408.956,
+    "reasons": [
+      "95% of energy is fat (33.8 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 750 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP270",
+    "food_name": "Crispy okra/Crispy lady's fingers (Karare bhindi)",
+    "energy_kcal_per_100g": 657.76,
+    "fat_g_per_100g": 70.396,
+    "serving_description": "small bowl",
+    "serving_grams": 342.8,
+    "serving_energy_kcal": 2254.473,
+    "reasons": [
+      "96% of energy is fat (70.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP273",
+    "food_name": "Stuffed bittergourd (wet) (Bharwa karele)",
+    "energy_kcal_per_100g": 162.362,
+    "fat_g_per_100g": 15.245,
+    "serving_description": "bowl",
+    "serving_grams": 156.5,
+    "serving_energy_kcal": 254.047,
+    "reasons": [
+      "85% of energy is fat (15.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP274",
+    "food_name": "Jackfruit/Kathal (dry)",
+    "energy_kcal_per_100g": 488.975,
+    "fat_g_per_100g": 51.783,
+    "serving_description": "bowl",
+    "serving_grams": 483.4,
+    "serving_energy_kcal": 2363.802,
+    "reasons": [
+      "95% of energy is fat (51.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP275",
+    "food_name": "Yam fried (Zimikand/Suran fried)",
+    "energy_kcal_per_100g": 491.763,
+    "fat_g_per_100g": 51.788,
+    "serving_description": "bowl",
+    "serving_grams": 483.4,
+    "serving_energy_kcal": 2377.281,
+    "reasons": [
+      "95% of energy is fat (51.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP278",
+    "food_name": "Vegetables stir fry",
+    "energy_kcal_per_100g": 30.781,
+    "fat_g_per_100g": 1.473,
+    "serving_description": "small bowl",
+    "serving_grams": 388.5,
+    "serving_energy_kcal": 119.585,
+    "reasons": [
+      "1 small bowl derived as 388 g, above a sane maximum of 350 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP291",
+    "food_name": "Creamed spinach and mushroom",
+    "energy_kcal_per_100g": 419.615,
+    "fat_g_per_100g": 44.137,
+    "serving_description": "bowl",
+    "serving_grams": 595.0,
+    "serving_energy_kcal": 2496.712,
+    "reasons": [
+      "95% of energy is fat (44.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP308",
+    "food_name": "Frozen frosty fruit salad (Phalon ka salaad)",
+    "energy_kcal_per_100g": 103.507,
+    "fat_g_per_100g": 4.172,
+    "serving_description": "slice",
+    "serving_grams": 233.0,
+    "serving_energy_kcal": 241.172,
+    "reasons": [
+      "1 slice derived as 233 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP386",
+    "food_name": "Gulab jamun with milk powder",
+    "energy_kcal_per_100g": 471.154,
+    "fat_g_per_100g": 40.151,
+    "serving_description": "piece",
+    "serving_grams": 301.9,
+    "serving_energy_kcal": 1422.295,
+    "reasons": [
+      "1 piece derived as 302 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP388",
+    "food_name": "Chum chum",
+    "energy_kcal_per_100g": 130.054,
+    "fat_g_per_100g": 1.917,
+    "serving_description": "piece",
+    "serving_grams": 311.7,
+    "serving_energy_kcal": 405.443,
+    "reasons": [
+      "1 piece derived as 312 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP389",
+    "food_name": "Dil bahar",
+    "energy_kcal_per_100g": 130.054,
+    "fat_g_per_100g": 1.917,
+    "serving_description": "piece",
+    "serving_grams": 311.7,
+    "serving_energy_kcal": 405.443,
+    "reasons": [
+      "1 piece derived as 312 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP390",
+    "food_name": "Rasbhari",
+    "energy_kcal_per_100g": 130.054,
+    "fat_g_per_100g": 1.917,
+    "serving_description": "piece",
+    "serving_grams": 311.7,
+    "serving_energy_kcal": 405.443,
+    "reasons": [
+      "1 piece derived as 312 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP391",
+    "food_name": "Rajbogh",
+    "energy_kcal_per_100g": 133.698,
+    "fat_g_per_100g": 2.278,
+    "serving_description": "piece",
+    "serving_grams": 314.5,
+    "serving_energy_kcal": 420.546,
+    "reasons": [
+      "1 piece derived as 314 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP392",
+    "food_name": "Rasgulla",
+    "energy_kcal_per_100g": 118.637,
+    "fat_g_per_100g": 1.749,
+    "serving_description": "piece",
+    "serving_grams": 341.8,
+    "serving_energy_kcal": 405.443,
+    "reasons": [
+      "1 piece derived as 342 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP393",
+    "food_name": "Rasmalai",
+    "energy_kcal_per_100g": 135.549,
+    "fat_g_per_100g": 2.108,
+    "serving_description": "piece",
+    "serving_grams": 317.4,
+    "serving_energy_kcal": 430.28,
+    "reasons": [
+      "1 piece derived as 317 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP415",
+    "food_name": "Masala onion pakora/pakoda (Pyaaz ke pakode)",
+    "energy_kcal_per_100g": 551.643,
+    "fat_g_per_100g": 57.608,
+    "serving_description": "pakora",
+    "serving_grams": 70.5,
+    "serving_energy_kcal": 389.028,
+    "reasons": [
+      "94% of energy is fat (57.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP416",
+    "food_name": "Masala green chilli pakora/pakoda (Hari mirch kay pakode)",
+    "energy_kcal_per_100g": 668.759,
+    "fat_g_per_100g": 71.015,
+    "serving_description": "pakora",
+    "serving_grams": 68.6,
+    "serving_energy_kcal": 458.916,
+    "reasons": [
+      "96% of energy is fat (71.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP420",
+    "food_name": "Chicken pakora/pakoda",
+    "energy_kcal_per_100g": 590.093,
+    "fat_g_per_100g": 60.975,
+    "serving_description": "pakora",
+    "serving_grams": 68.5,
+    "serving_energy_kcal": 404.342,
+    "reasons": [
+      "93% of energy is fat (61.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP421",
+    "food_name": "Fish pakora/pakoda",
+    "energy_kcal_per_100g": 577.025,
+    "fat_g_per_100g": 59.522,
+    "serving_description": "pakora",
+    "serving_grams": 68.5,
+    "serving_energy_kcal": 395.387,
+    "reasons": [
+      "93% of energy is fat (59.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP424",
+    "food_name": "Paneer cutlet",
+    "energy_kcal_per_100g": 672.196,
+    "fat_g_per_100g": 69.376,
+    "serving_description": "cutlet",
+    "serving_grams": 180.8,
+    "serving_energy_kcal": 1215.565,
+    "reasons": [
+      "93% of energy is fat (69.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP425",
+    "food_name": "Sago cutlet/vadas (Sabudana cutlet/vadas)",
+    "energy_kcal_per_100g": 558.755,
+    "fat_g_per_100g": 56.97,
+    "serving_description": "cutlet",
+    "serving_grams": 210.8,
+    "serving_energy_kcal": 1178.051,
+    "reasons": [
+      "92% of energy is fat (57.0 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 211 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP427",
+    "food_name": "Poshtik cutlet",
+    "energy_kcal_per_100g": 496.45,
+    "fat_g_per_100g": 50.941,
+    "serving_description": "cutlet",
+    "serving_grams": 240.8,
+    "serving_energy_kcal": 1195.625,
+    "reasons": [
+      "92% of energy is fat (50.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 241 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP428",
+    "food_name": "Egg cutlet (Anda cutlet)",
+    "energy_kcal_per_100g": 575.022,
+    "fat_g_per_100g": 60.248,
+    "serving_description": "cutlet",
+    "serving_grams": 203.3,
+    "serving_energy_kcal": 1169.221,
+    "reasons": [
+      "94% of energy is fat (60.2 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 203 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP430",
+    "food_name": "Minced meat cutlet",
+    "energy_kcal_per_100g": 531.856,
+    "fat_g_per_100g": 54.467,
+    "serving_description": "cutlet",
+    "serving_grams": 233.3,
+    "serving_energy_kcal": 1241.007,
+    "reasons": [
+      "92% of energy is fat (54.5 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 cutlet derived as 233 g, above a sane maximum of 200 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:BFP431",
+    "food_name": "Vegetable samosa",
+    "energy_kcal_per_100g": 443.107,
+    "fat_g_per_100g": 42.223,
+    "serving_description": "samosa",
+    "serving_grams": 100.9,
+    "serving_energy_kcal": 447.228,
+    "reasons": [
+      "86% of energy is fat (42.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP436",
+    "food_name": "Plain urad dal vada (Uzunne vada/Minapa garelu/Ulundu vadai/Medu vada)",
+    "energy_kcal_per_100g": 745.499,
+    "fat_g_per_100g": 76.315,
+    "serving_description": "vada",
+    "serving_grams": 78.9,
+    "serving_energy_kcal": 588.013,
+    "reasons": [
+      "92% of energy is fat (76.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP437",
+    "food_name": "Masala urad dal vada",
+    "energy_kcal_per_100g": 703.779,
+    "fat_g_per_100g": 71.617,
+    "serving_description": "vada",
+    "serving_grams": 85.5,
+    "serving_energy_kcal": 602.03,
+    "reasons": [
+      "92% of energy is fat (71.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP446",
+    "food_name": "Walnut chutney (Akhrot ki chutney)",
+    "energy_kcal_per_100g": 370.431,
+    "fat_g_per_100g": 33.463,
+    "serving_description": "tablespoon",
+    "serving_grams": 12.4,
+    "serving_energy_kcal": 45.92,
+    "reasons": [
+      "81% of energy is fat (33.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP539",
+    "food_name": "Potato aigrettes",
+    "energy_kcal_per_100g": 530.027,
+    "fat_g_per_100g": 54.239,
+    "serving_description": "aigrette",
+    "serving_grams": 41.4,
+    "serving_energy_kcal": 219.409,
+    "reasons": [
+      "92% of energy is fat (54.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP564",
+    "food_name": "Pearl millet mathri (Bajra mathri)",
+    "energy_kcal_per_100g": 785.078,
+    "fat_g_per_100g": 83.122,
+    "serving_description": "piece",
+    "serving_grams": 150.1,
+    "serving_energy_kcal": 1178.598,
+    "reasons": [
+      "95% of energy is fat (83.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP566",
+    "food_name": "Fermented bengal gram vada (Khameerikrit/Ufna hua channa dal ka vada)",
+    "energy_kcal_per_100g": 657.573,
+    "fat_g_per_100g": 67.186,
+    "serving_description": "vada",
+    "serving_grams": 90.1,
+    "serving_energy_kcal": 592.637,
+    "reasons": [
+      "92% of energy is fat (67.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP568",
+    "food_name": "Poshtik namak paras",
+    "energy_kcal_per_100g": 613.391,
+    "fat_g_per_100g": 56.577,
+    "serving_description": "piece",
+    "serving_grams": 12.9,
+    "serving_energy_kcal": 79.127,
+    "reasons": [
+      "83% of energy is fat (56.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP604",
+    "food_name": "Stuffed bittergourd (dry) (Bharwa karela)",
+    "energy_kcal_per_100g": 217.648,
+    "fat_g_per_100g": 22.384,
+    "serving_description": "bowl",
+    "serving_grams": 106.1,
+    "serving_energy_kcal": 230.903,
+    "reasons": [
+      "93% of energy is fat (22.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP606",
+    "food_name": "Creamed spinach",
+    "energy_kcal_per_100g": 96.915,
+    "fat_g_per_100g": 6.391,
+    "serving_description": "small bowl",
+    "serving_grams": 385.6,
+    "serving_energy_kcal": 373.695,
+    "reasons": [
+      "1 small bowl derived as 386 g, above a sane maximum of 350 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR002",
+    "food_name": "Sattu drink",
+    "energy_kcal_per_100g": 23.377,
+    "fat_g_per_100g": 0.139,
+    "serving_description": "glass",
+    "serving_grams": 534.2,
+    "serving_energy_kcal": 124.874,
+    "reasons": [
+      "1 glass derived as 534 g, above a sane maximum of 500 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR007",
+    "food_name": "Apple oats chia seed smoothie",
+    "energy_kcal_per_100g": 85.645,
+    "fat_g_per_100g": 2.476,
+    "serving_description": "glass",
+    "serving_grams": 628.5,
+    "serving_energy_kcal": 538.278,
+    "reasons": [
+      "1 glass derived as 628 g, above a sane maximum of 500 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR008",
+    "food_name": "Nannari sharbat",
+    "energy_kcal_per_100g": 88.79,
+    "fat_g_per_100g": 0.009,
+    "serving_description": "cup",
+    "serving_grams": 1115.0,
+    "serving_energy_kcal": 990.007,
+    "reasons": [
+      "1 cup derived as 1115 g, above a sane maximum of 400 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR012",
+    "food_name": "Coconut kheer (Nariyal ki kheer)",
+    "energy_kcal_per_100g": 162.612,
+    "fat_g_per_100g": 10.547,
+    "serving_description": "bowl",
+    "serving_grams": 650.4,
+    "serving_energy_kcal": 1057.591,
+    "reasons": [
+      "1 bowl derived as 650 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR016",
+    "food_name": "Mango malpua",
+    "energy_kcal_per_100g": 334.644,
+    "fat_g_per_100g": 30.671,
+    "serving_description": "piece",
+    "serving_grams": 392.9,
+    "serving_energy_kcal": 1314.714,
+    "reasons": [
+      "82% of energy is fat (30.7 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 piece derived as 393 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR020",
+    "food_name": "Lotus seed halwa (Kamal gattay ka halwa)",
+    "energy_kcal_per_100g": 370.55,
+    "fat_g_per_100g": 20.688,
+    "serving_description": "piece",
+    "serving_grams": 362.5,
+    "serving_energy_kcal": 1343.244,
+    "reasons": [
+      "1 piece derived as 362 g, above a sane maximum of 250 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR032",
+    "food_name": "Buttermilk biscuit",
+    "energy_kcal_per_100g": 322.544,
+    "fat_g_per_100g": 17.501,
+    "serving_description": "biscuit",
+    "serving_grams": 128.5,
+    "serving_energy_kcal": 414.461,
+    "reasons": [
+      "1 biscuit derived as 128 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR033",
+    "food_name": "Lemon cookies",
+    "energy_kcal_per_100g": 394.477,
+    "fat_g_per_100g": 23.015,
+    "serving_description": "cookie",
+    "serving_grams": 156.5,
+    "serving_energy_kcal": 617.357,
+    "reasons": [
+      "1 cookie derived as 156 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR034",
+    "food_name": "Sweet potato biscuit (Shakarkand ke biscuit)",
+    "energy_kcal_per_100g": 296.398,
+    "fat_g_per_100g": 13.308,
+    "serving_description": "biscuit",
+    "serving_grams": 150.9,
+    "serving_energy_kcal": 447.314,
+    "reasons": [
+      "1 biscuit derived as 151 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR038",
+    "food_name": "Sunflower cookies",
+    "energy_kcal_per_100g": 520.623,
+    "fat_g_per_100g": 36.282,
+    "serving_description": "cookie",
+    "serving_grams": 183.3,
+    "serving_energy_kcal": 954.302,
+    "reasons": [
+      "1 cookie derived as 183 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR039",
+    "food_name": "Cardamom cookies (Elaichi cookies)",
+    "energy_kcal_per_100g": 400.489,
+    "fat_g_per_100g": 19.119,
+    "serving_description": "cookie",
+    "serving_grams": 218.6,
+    "serving_energy_kcal": 875.47,
+    "reasons": [
+      "1 cookie derived as 219 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR041",
+    "food_name": "Milk cookies",
+    "energy_kcal_per_100g": 459.434,
+    "fat_g_per_100g": 24.961,
+    "serving_description": "cookie",
+    "serving_grams": 124.8,
+    "serving_energy_kcal": 573.575,
+    "reasons": [
+      "1 cookie derived as 125 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR042",
+    "food_name": "Cranberry cookies",
+    "energy_kcal_per_100g": 272.482,
+    "fat_g_per_100g": 12.661,
+    "serving_description": "cookie",
+    "serving_grams": 185.8,
+    "serving_energy_kcal": 506.136,
+    "reasons": [
+      "1 cookie derived as 186 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR045",
+    "food_name": "Tutti fruitti biscuit",
+    "energy_kcal_per_100g": 420.782,
+    "fat_g_per_100g": 17.898,
+    "serving_description": "biscuit",
+    "serving_grams": 108.7,
+    "serving_energy_kcal": 457.39,
+    "reasons": [
+      "1 biscuit derived as 109 g, above a sane maximum of 100 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR049",
+    "food_name": "Gooseberry pickle (Amla ka achaar)",
+    "energy_kcal_per_100g": 278.585,
+    "fat_g_per_100g": 27.609,
+    "serving_description": "jar",
+    "serving_grams": 23.3,
+    "serving_energy_kcal": 64.86,
+    "reasons": [
+      "89% of energy is fat (27.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR052",
+    "food_name": "Garlic pickle (Lahasun ka achar)",
+    "energy_kcal_per_100g": 413.618,
+    "fat_g_per_100g": 39.884,
+    "serving_description": "jar",
+    "serving_grams": 51.1,
+    "serving_energy_kcal": 211.441,
+    "reasons": [
+      "87% of energy is fat (39.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR053",
+    "food_name": "Fermented bamboo shoot pickle (Mesu pickle)",
+    "energy_kcal_per_100g": 59.832,
+    "fat_g_per_100g": 5.591,
+    "serving_description": "jar",
+    "serving_grams": 136.2,
+    "serving_energy_kcal": 81.521,
+    "reasons": [
+      "84% of energy is fat (5.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR057",
+    "food_name": "Green tomato pickle (Haray tamatar ka achaar)",
+    "energy_kcal_per_100g": 193.261,
+    "fat_g_per_100g": 19.673,
+    "serving_description": "jar",
+    "serving_grams": 63.6,
+    "serving_energy_kcal": 122.914,
+    "reasons": [
+      "92% of energy is fat (19.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR059",
+    "food_name": "Coconut pickle (Nariyal ka aachar)",
+    "energy_kcal_per_100g": 517.256,
+    "fat_g_per_100g": 51.71,
+    "serving_description": "jar",
+    "serving_grams": 28.0,
+    "serving_energy_kcal": 144.863,
+    "reasons": [
+      "90% of energy is fat (51.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR060",
+    "food_name": "Potato pickle (Aloo ka achaar)",
+    "energy_kcal_per_100g": 369.14,
+    "fat_g_per_100g": 36.456,
+    "serving_description": "bowl",
+    "serving_grams": 46.9,
+    "serving_energy_kcal": 173.173,
+    "reasons": [
+      "89% of energy is fat (36.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR063",
+    "food_name": "Fish orly",
+    "energy_kcal_per_100g": 563.7,
+    "fat_g_per_100g": 58.184,
+    "serving_description": "fillet",
+    "serving_grams": 294.0,
+    "serving_energy_kcal": 1657.278,
+    "reasons": [
+      "93% of energy is fat (58.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR075",
+    "food_name": "Cabbage manchurian (Pattagobhi manchurian)",
+    "energy_kcal_per_100g": 224.263,
+    "fat_g_per_100g": 22.485,
+    "serving_description": "bowl",
+    "serving_grams": 740.4,
+    "serving_energy_kcal": 1660.411,
+    "reasons": [
+      "90% of energy is fat (22.5 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 bowl derived as 740 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR076",
+    "food_name": "Gobi 65",
+    "energy_kcal_per_100g": 278.293,
+    "fat_g_per_100g": 29.11,
+    "serving_description": "plate",
+    "serving_grams": 857.5,
+    "serving_energy_kcal": 2386.475,
+    "reasons": [
+      "94% of energy is fat (29.1 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 plate derived as 858 g, above a sane maximum of 700 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR086",
+    "food_name": "Chicken salad",
+    "energy_kcal_per_100g": 338.194,
+    "fat_g_per_100g": 30.257,
+    "serving_description": "bowl",
+    "serving_grams": 247.0,
+    "serving_energy_kcal": 835.339,
+    "reasons": [
+      "81% of energy is fat (30.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR108",
+    "food_name": "Khakhra chaat",
+    "energy_kcal_per_100g": 358.663,
+    "fat_g_per_100g": 30.648,
+    "serving_description": "plate",
+    "serving_grams": 835.5,
+    "serving_energy_kcal": 2996.462,
+    "reasons": [
+      "1 plate derived as 836 g, above a sane maximum of 700 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR110",
+    "food_name": "Banana appam",
+    "energy_kcal_per_100g": 469.805,
+    "fat_g_per_100g": 42.528,
+    "serving_description": "appam",
+    "serving_grams": 290.4,
+    "serving_energy_kcal": 1364.198,
+    "reasons": [
+      "81% of energy is fat (42.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR111",
+    "food_name": "Veg manchurian",
+    "energy_kcal_per_100g": 585.641,
+    "fat_g_per_100g": 61.652,
+    "serving_description": "plate",
+    "serving_grams": 194.9,
+    "serving_energy_kcal": 1141.692,
+    "reasons": [
+      "95% of energy is fat (61.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR114",
+    "food_name": "Bhel puri",
+    "energy_kcal_per_100g": 509.887,
+    "fat_g_per_100g": 47.912,
+    "serving_description": "plate",
+    "serving_grams": 700.9,
+    "serving_energy_kcal": 3573.645,
+    "reasons": [
+      "85% of energy is fat (47.9 g/100 g) -- implies the frying bath was counted as consumed",
+      "1 plate derived as 701 g, above a sane maximum of 700 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR116",
+    "food_name": "Spicy corn chaat",
+    "energy_kcal_per_100g": 479.799,
+    "fat_g_per_100g": 46.552,
+    "serving_description": "plate",
+    "serving_grams": 554.2,
+    "serving_energy_kcal": 2659.167,
+    "reasons": [
+      "87% of energy is fat (46.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR118",
+    "food_name": "Jackfruit fritters (Ponsa mulik/Kathal ka pakora)",
+    "energy_kcal_per_100g": 597.788,
+    "fat_g_per_100g": 54.406,
+    "serving_description": "mulik/fritter",
+    "serving_grams": 26.8,
+    "serving_energy_kcal": 160.122,
+    "reasons": [
+      "82% of energy is fat (54.4 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR119",
+    "food_name": "Banana chips (Kele ke chips)",
+    "energy_kcal_per_100g": 665.666,
+    "fat_g_per_100g": 70.456,
+    "serving_description": "bowl",
+    "serving_grams": 170.4,
+    "serving_energy_kcal": 1134.129,
+    "reasons": [
+      "95% of energy is fat (70.5 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR134",
+    "food_name": "Paneer soup",
+    "energy_kcal_per_100g": 47.851,
+    "fat_g_per_100g": 2.801,
+    "serving_description": "bowl",
+    "serving_grams": 610.7,
+    "serving_energy_kcal": 292.249,
+    "reasons": [
+      "1 bowl derived as 611 g, above a sane maximum of 600 g for that unit"
+    ]
+  },
+  {
+    "source_id": "indb:OSR138",
+    "food_name": "Garlic soup",
+    "energy_kcal_per_100g": 194.858,
+    "fat_g_per_100g": 17.619,
+    "serving_description": "bowl",
+    "serving_grams": 144.0,
+    "serving_energy_kcal": 280.596,
+    "reasons": [
+      "81% of energy is fat (17.6 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR147",
+    "food_name": "Sev (Omapodi/Karapusa)",
+    "energy_kcal_per_100g": 609.143,
+    "fat_g_per_100g": 60.076,
+    "serving_description": "plate",
+    "serving_grams": 136.9,
+    "serving_energy_kcal": 834.221,
+    "reasons": [
+      "89% of energy is fat (60.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR148",
+    "food_name": "Papdi",
+    "energy_kcal_per_100g": 708.961,
+    "fat_g_per_100g": 72.111,
+    "serving_description": "plate",
+    "serving_grams": 173.7,
+    "serving_energy_kcal": 1231.377,
+    "reasons": [
+      "92% of energy is fat (72.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:OSR152",
+    "food_name": "Bread roll",
+    "energy_kcal_per_100g": 435.456,
+    "fat_g_per_100g": 40.249,
+    "serving_description": "bread roll",
+    "serving_grams": 121.0,
+    "serving_energy_kcal": 526.924,
+    "reasons": [
+      "83% of energy is fat (40.2 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC131",
+    "food_name": "Pasta spinach sauce",
+    "energy_kcal_per_100g": 85.464,
+    "fat_g_per_100g": 7.896,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "83% of energy is fat (7.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC507",
+    "food_name": "Mango pickle (Aam ka achaar)",
+    "energy_kcal_per_100g": 192.119,
+    "fat_g_per_100g": 17.888,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "84% of energy is fat (17.9 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:ASC509",
+    "food_name": "Mixed vegetable pickle (Sabziyoon ka achaar)",
+    "energy_kcal_per_100g": 211.205,
+    "fat_g_per_100g": 19.682,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "84% of energy is fat (19.7 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP095",
+    "food_name": "Tartare sauce",
+    "energy_kcal_per_100g": 610.935,
+    "fat_g_per_100g": 66.118,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "97% of energy is fat (66.1 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP167",
+    "food_name": "Cumin seeds baghar (Jeera baghar/tadka)",
+    "energy_kcal_per_100g": 736.806,
+    "fat_g_per_100g": 78.768,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "96% of energy is fat (78.8 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP169",
+    "food_name": "Mustard seeds baghar (Mustard seed tadka)",
+    "energy_kcal_per_100g": 552.592,
+    "fat_g_per_100g": 54.298,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "88% of energy is fat (54.3 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  },
+  {
+    "source_id": "indb:BFP597",
+    "food_name": "Brinjal pickle (Baingan ka achaar)",
+    "energy_kcal_per_100g": 139.007,
+    "fat_g_per_100g": 12.978,
+    "serving_description": null,
+    "serving_grams": null,
+    "serving_energy_kcal": null,
+    "reasons": [
+      "84% of energy is fat (13.0 g/100 g) -- implies the frying bath was counted as consumed"
+    ]
+  }
+]

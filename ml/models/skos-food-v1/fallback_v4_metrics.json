@@ -1,0 +1,69 @@
+{
+  "model_version": "skos-food-v1-fallback-v4",
+  "method": "similarity-weighted kNN retrieval over measured foods",
+  "config": {
+    "k": 5,
+    "class_weight": 0.5,
+    "weighting": "similarity"
+  },
+  "regime_a_novel_family": {
+    "energy_kcal": {
+      "median_ape": 24.9,
+      "mean_ape": 65.6,
+      "mae": 77.44
+    },
+    "protein_g": {
+      "median_ape": 30.3,
+      "mean_ape": 69.9,
+      "mae": 3.46
+    },
+    "fat_g": {
+      "median_ape": 42.0,
+      "mean_ape": 94.4,
+      "mae": 6.69
+    },
+    "carb_g": {
+      "median_ape": 36.1,
+      "mean_ape": 82.5,
+      "mae": 10.59
+    },
+    "_energy_interval_80": {
+      "lo_offset": -127.2,
+      "hi_offset": 122.8
+    },
+    "_top_similarity_median": 0.578
+  },
+  "regime_b_known_family": {
+    "energy_kcal": {
+      "median_ape": 15.1,
+      "mean_ape": 43.8,
+      "mae": 46.56
+    },
+    "protein_g": {
+      "median_ape": 17.0,
+      "mean_ape": 35.8,
+      "mae": 2.41
+    },
+    "fat_g": {
+      "median_ape": 25.6,
+      "mean_ape": 58.4,
+      "mae": 3.82
+    },
+    "carb_g": {
+      "median_ape": 20.7,
+      "mean_ape": 53.7,
+      "mae": 5.81
+    },
+    "_energy_interval_80": {
+      "lo_offset": -72.7,
+      "hi_offset": 66.7
+    },
+    "_top_similarity_median": 0.8
+  },
+  "measured_floor": {
+    "identical_name_median_ape": 5.1,
+    "same_head_noun_median_ape": 16.9,
+    "note": "16.9% is the floor that applies to regime A: tier 3 runs only when no exact match exists, so the head noun is the best information available, and foods sharing a head noun genuinely differ by that much. The 5.1% identical-name figure describes tier 1, which uses a measured value directly."
+  },
+  "deployment_rule": "Tier 3 output must always be labelled an estimate and shown with its interval. It must never be presented in the same visual weight as a tier-1 measured value."
+}

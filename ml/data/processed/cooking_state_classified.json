@@ -1,0 +1,21 @@
+{
+  "classified": 7994,
+  "left_unspecified": 4087,
+  "distribution": {
+    "unspecified": 4087,
+    "ready_to_eat": 5021,
+    "cooked": 9372,
+    "raw": 2873
+  },
+  "evidence_counts": {
+    "ready_to_eat: packaged/processed product": 2899,
+    "ready_to_eat: ingredient with no meaningful cooking state": 1030,
+    "cooked: dish form implies cooking": 1694,
+    "ready_to_eat: cured, fermented or dairy product eaten as sold": 1092,
+    "cooked: explicit cooking verb in name": 308,
+    "cooked: assembled/prepared dish": 559,
+    "raw: explicit raw/fresh in name": 137,
+    "raw: explicitly dry/uncooked staple": 107,
+    "cooked: baked good": 168
+  }
+}
