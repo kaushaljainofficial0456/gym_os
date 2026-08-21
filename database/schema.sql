@@ -200,6 +200,8 @@ CREATE TABLE IF NOT EXISTS workouts (
   day_label     TEXT,            -- "Monday" | "Push A" | ...
   scheduled_date TEXT,
   status        TEXT NOT NULL DEFAULT 'assigned' CHECK (status IN ('assigned','completed','missed','draft')),
+  started_at    TEXT,          -- set when the client taps START SESSION
+  progress_json TEXT,          -- in-flight per-set ticks, so a refresh mid-session does not lose them
   completed_at  TEXT,
   started_at    TEXT,             -- UTC ISO-8601: session start. Backend is the source of truth (set via POST /workouts/:id/start or lazily at completion).
   duration_min  REAL,             -- backend-computed actual duration: completed_at - started_at (minutes). Never computed authoritatively by the frontend.

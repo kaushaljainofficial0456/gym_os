@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import Icon from '../../components/Icon.jsx';
 
 const HELP_SECTIONS = [
   {
     id: 'overview',
-    icon: '🏠',
+    icon: 'home',
     title: 'How SK OS Works',
     content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place. Think of it as your fitness command center.',
     items: [
@@ -15,7 +16,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'home',
-    icon: '📊',
+    icon: 'chart',
     title: 'Using the Home Page',
     content: 'Your Home page is the dashboard overview. It shows your daily status at a glance.',
     items: [
@@ -28,7 +29,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'workouts',
-    icon: '💪',
+    icon: 'strength',
     title: 'How Workouts Work',
     content: 'Your coach assigns structured workout plans. Each workout has exercises with sets, reps, and weights.',
     items: [
@@ -41,7 +42,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'sets',
-    icon: '📝',
+    icon: 'note',
     title: 'How to Log Sets',
     content: 'Logging sets accurately helps your coach understand your progress and adjust your plan.',
     items: [
@@ -54,7 +55,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'nutrition',
-    icon: '🥗',
+    icon: 'food',
     title: 'How Nutrition Works',
     content: 'Your nutrition plan is designed by your coach based on your goals — fat loss, muscle gain, or recomposition.',
     items: [
@@ -67,7 +68,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'calories',
-    icon: '🔢',
+    icon: 'numbers',
     title: 'Food & Calorie Estimation',
     content: 'SK OS can estimate calories from multiple sources — typed input, label scans, and meal photos.',
     items: [
@@ -80,7 +81,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'progress',
-    icon: '📈',
+    icon: 'trending',
     title: 'Progress Tracking',
     content: 'Track your body transformation over time with weight, measurements, and photos.',
     items: [
@@ -93,7 +94,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'coach',
-    icon: '🤖',
+    icon: 'robot',
     title: 'Coach & Intelligence Features',
     content: 'SK OS has an intelligent coach system that provides insights and recommendations.',
     items: [
@@ -106,7 +107,7 @@ const HELP_SECTIONS = [
   },
   {
     id: 'profile',
-    icon: '👤',
+    icon: 'user',
     title: 'Profile & Settings',
     content: 'Manage your profile, goals, and preferences from the profile menu.',
     items: [
@@ -132,7 +133,7 @@ export default function Help() {
       <div className="card p-5">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl grid place-items-center border" style={{ background: 'linear-gradient(135deg, rgba(10,138,133,.2), rgba(20,196,188,.1))', borderColor: 'var(--line)' }}>
-            💡
+
           </div>
           <div>
             <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Welcome to SK OS</div>
@@ -148,7 +149,7 @@ export default function Help() {
             className="w-full flex items-center gap-3 p-4 text-left transition-colors"
             style={{ color: 'var(--ink)' }}
           >
-            <span className="text-xl shrink-0">{section.icon}</span>
+            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={20} /></span>
             <span className="flex-1 min-w-0">
               <span className="font-grotesk font-bold text-sm block">{section.title}</span>
             </span>

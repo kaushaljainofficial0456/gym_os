@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import { useFetch, fmtK, fmt1 } from '../../utils.js';
 import { Card, Kicker, Kpi, Spinner, ErrorState, Modal } from '../../components/UI.jsx';
 import { TrendChart } from '../../components/charts.jsx';
+import { status } from '../../design/tokens.js';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -96,8 +97,16 @@ export default function Business() {
       <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
         <div>
           <div className="text-[11px] text-mute uppercase tracking-[.18em] font-grotesk">{todayLabel}</div>
-          <h1 className="font-grotesk font-bold text-3xl tracking-tight mt-1">
-            {greeting()}, <span className="bg-gradient-to-r from-ember to-gold bg-clip-text text-transparent">{user?.name?.split(' ')[0] || 'Owner'}</span>
+          {/* font-brand (Satoshi), not font-grotesk: this is a hero, and
+              trainer scope repoints font-grotesk to DM Sans for small
+              supporting text -- a hero staying on the punchier headline
+              face is the whole point of having two. Gradient-clipped name
+              removed to match the fix already made on Dashboard.jsx's
+              hero: gradient text on a warm ground reads washed-out, not
+              premium, and it spent the page's loudest moment on the
+              owner's own name rather than on information. */}
+          <h1 className="font-brand font-black text-3xl tracking-tight mt-1" style={{ color: 'var(--ink)' }}>
+            {greeting()}, {user?.name?.split(' ')[0] || 'Owner'}
           </h1>
           <p className="text-mute text-sm mt-1">Members, plans, payments and renewals — the pulse of your gym.</p>
         </div>
@@ -105,18 +114,18 @@ export default function Business() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi label="Active members" value={d.activeMembers} sub={`${d.totalMembers} total`} icon="◉" />
-        <Kpi label="Monthly revenue" value={d.monthlyRevenue} dec={0} sub="this month" icon="₹" />
-        <Kpi label="Renewals due" value={d.renewalsThisMonth} tone="text-warn" sub="next 30 days" icon="◐" />
-        <Kpi label="Overdue" value={d.overdue} tone="text-bad" sub="payments" icon="⚠" />
-        <Kpi label="Attendance today" value={d.attendanceToday} tone="text-cyanx" sub="marked present" icon="✓" />
+        <Kpi label="Active members" value={d.activeMembers} sub={`${d.totalMembers} total`} />
+        <Kpi label="Monthly revenue" value={d.monthlyRevenue} dec={0} sub="this month" />
+        <Kpi label="Renewals due" value={d.renewalsThisMonth} sub="next 30 days" dot="bg-bad" />
+        <Kpi label="Overdue" value={d.overdue} sub="payments" dot="bg-bad" />
+        <Kpi label="Attendance today" value={d.attendanceToday} sub="marked present" />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
         {/* revenue trend */}
         <Card className="lg:col-span-2">
           <Kicker>Revenue · 6 months</Kicker>
-          {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} color="#4ADE80" /> : <div className="text-sm text-mute py-10 text-center">No revenue recorded yet.</div>}
+          {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} color={status.good} /> : <div className="text-sm text-mute py-10 text-center">No revenue recorded yet.</div>}
           <div className="text-[11px] text-faint mt-2">From recorded payments · ₹{fmtK(d.monthlyRevenue)} this month</div>
         </Card>
 
@@ -154,9 +163,9 @@ export default function Business() {
             <div className="space-y-2.5">
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">BRANDING</div>
               <input className="input" placeholder="Gym name" value={setForm.brand_name} onChange={(e) => setSetForm((f) => ({ ...f, brand_name: e.target.value }))} />
-              <input className="input" placeholder="Tagline" value={setForm.tagline || ''} onChange={(e) => setSetForm((f) => ({ ...f, tagline: e.target.value }))} />
+              <input className="input" placeholder="e.g. Train hard, recover smarter" value={setForm.tagline || ''} onChange={(e) => setSetForm((f) => ({ ...f, tagline: e.target.value }))} />
               <div className="grid grid-cols-2 gap-2">
-                <input className="input" type="number" placeholder="Crowd capacity" value={setForm.crowd_capacity} onChange={(e) => setSetForm((f) => ({ ...f, crowd_capacity: e.target.value }))} />
+                <input className="input" type="number" placeholder="Crowd capacity (e.g. 60)" value={setForm.crowd_capacity} onChange={(e) => setSetForm((f) => ({ ...f, crowd_capacity: e.target.value }))} />
                 <label className="flex items-center gap-2 text-xs text-mute">
                   <input type="checkbox" className="accent-cyanx" checked={!!setForm.crowd_enabled} onChange={(e) => setSetForm((f) => ({ ...f, crowd_enabled: e.target.checked ? 1 : 0 }))} />
                   Show live crowd

@@ -5,18 +5,33 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
+import FeaturePopup from '../../components/FeaturePopup.jsx';
+import Icon from '../../components/Icon.jsx';
 
+// Map route paths to feature IDs for first-time popups
+const FEATURE_MAP = {
+  '/app/client': 'home',
+  '/app/client/workout': 'workout',
+  '/app/client/nutrition': 'nutrition',
+  '/app/client/progress': 'progress',
+};
+
+// MERGE FIX: these were unicode glyphs ('⌂', '⌁', '◍', '⇗') left over from
+// before the bottom nav switched to <Icon name={l.icon}>. None of those
+// glyphs are keys in Icon.jsx's PATHS table, so all four nav icons would
+// silently render as the generic fallback glyph — same bug class already
+// fixed at 9 other sites (see UI.jsx), just missed here.
 const NAV = [
-  { to: '/app/client', end: true, label: 'Home', icon: '⌂' },
-  { to: '/app/client/workout', label: 'Workout', icon: '⌁' },
-  { to: '/app/client/nutrition', label: 'Nutrition', icon: '◍' },
-  { to: '/app/client/progress', label: 'Progress', icon: '⇗' },
+  { to: '/app/client', end: true, label: 'Home', icon: 'home' },
+  { to: '/app/client/workout', label: 'Workout', icon: 'strength' },
+  { to: '/app/client/nutrition', label: 'Nutrition', icon: 'food' },
+  { to: '/app/client/progress', label: 'Progress', icon: 'trending' },
 ];
 
 const PROFILE_MENU = [
-  { to: '/app/client/profile', label: 'Profile', icon: '👤' },
-  { to: '/app/client/profile', label: 'Measurements', icon: '📏' },
-  { to: '/app/client/profile', label: 'Goals', icon: '🎯' },
+  { to: '/app/client/profile', label: 'Profile', icon: 'user' },
+  { to: '/app/client/profile', label: 'Measurements', icon: 'ruler' },
+  { to: '/app/client/profile', label: 'Goals', icon: 'target' },
   { to: '/app/client/settings', label: 'Settings', icon: '⚙️' },
   { to: '/app/client/help', label: 'Help', icon: '❓' },
 ];
@@ -27,7 +42,18 @@ export default function ClientLayout() {
   const nav = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [featurePopup, setFeaturePopup] = useState(null);
   const dropdownRef = useRef(null);
+
+  // Show feature popup on first visit to each page
+  useEffect(() => {
+    const featureId = FEATURE_MAP[loc.pathname];
+    if (featureId) {
+      // Small delay to let the page render first
+      const timer = setTimeout(() => setFeaturePopup(featureId), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loc.pathname]);
 
   const briefFetch = useFetch(() => api('/intel/coach/brief'));
   const weeklyFetch = useFetch(() => api('/intel/coach/weekly'));
@@ -84,10 +110,14 @@ export default function ClientLayout() {
               aria-label="Profile menu"
             >
               <div
-                className="w-8 h-8 rounded-full grid place-items-center font-grotesk font-bold text-xs border shrink-0"
-                style={{ background: 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.06))', borderColor: 'var(--line)' }}
+                className="w-8 h-8 rounded-full grid place-items-center font-grotesk font-bold text-xs border shrink-0 overflow-hidden"
+                style={{ background: user?.avatar ? 'none' : 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.06))', borderColor: 'var(--line)' }}
               >
-                {user?.name?.[0]?.toUpperCase() || '?'}
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{user?.name?.[0]?.toUpperCase() || '?'}</span>
+                )}
               </div>
               <div className="hidden sm:flex flex-col items-start">
                 <span className="font-grotesk text-[11px] font-semibold leading-none" style={{ color: 'var(--ink)' }}>{user?.name?.split(' ')[0]}</span>
@@ -131,7 +161,7 @@ export default function ClientLayout() {
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.08)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = loc.pathname === item.to && item.label === 'Profile' ? 'rgba(128,128,128,.06)' : 'transparent'}
                     >
-                      <span className="text-sm w-5 text-center">{item.icon}</span>
+                      <span className="w-5 grid place-items-center"><Icon name={item.icon} size={16} /></span>
                       <span className="font-grotesk text-[13px]">{item.label}</span>
                     </button>
                   ))}
@@ -168,7 +198,10 @@ export default function ClientLayout() {
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--mute)'; }}
             aria-label="Coach brief"
           >
-            <span className="text-[13px]">🔔</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
+            </svg>
             <span className="hidden sm:block font-grotesk text-[11px]">Coach</span>
             {hasBrief && briefPriority && (
               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-gold anim-pulse-soft" />
@@ -199,14 +232,17 @@ export default function ClientLayout() {
         <Outlet />
       </div>
 
+      {/* ── FEATURE POPUP ── */}
+      {featurePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
+
       {/* ── BOTTOM NAV ── */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur border-t" style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 92%, transparent)', borderColor: 'var(--line)' }}>
-        <div className="max-w-lg mx-auto grid grid-cols-4">
+      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t" style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--line)' }}>
+        <div className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">
           {NAV.map((l) => (
             <NavLink key={l.to} to={l.to} end={l.end}
-              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-3 font-grotesk text-[9.5px] font-semibold uppercase tracking-wider transition-colors ${isActive ? 'text-gold' : ''}`}
-              style={({ isActive }) => ({ color: isActive ? undefined : 'var(--mute)' })}>
-              <span className="text-lg leading-none">{l.icon}</span>
+              className={({ isActive }) => `flex flex-col items-center gap-1 py-2.5 rounded-xl font-grotesk text-[9px] font-bold uppercase tracking-[.14em] transition-all duration-200 ${isActive ? 'text-accent' : ''}`}
+              style={({ isActive }) => ({ color: isActive ? undefined : 'var(--mute)', background: isActive ? 'rgb(var(--accent-rgb) / .08)' : 'transparent' })}>
+              <span className="grid place-items-center"><Icon name={l.icon} size={20} /></span>
               {l.label}
             </NavLink>
           ))}

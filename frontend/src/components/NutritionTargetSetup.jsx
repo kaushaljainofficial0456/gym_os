@@ -12,16 +12,16 @@ import { useCountUp } from '../utils.js';
 
 const T = {
   dark: {
-    bg: '#080B12', surface: 'rgba(255,255,255,0.03)', glass: 'rgba(255,255,255,0.04)',
-    border: 'rgba(255,255,255,0.07)', ink: '#EDEFF7', mute: 'rgba(255,255,255,0.42)',
-    faint: 'rgba(255,255,255,0.22)', accent: '#12B8B0', accentDim: 'rgba(18,184,176,0.15)',
-    gold: '#FFC43D', goldDim: 'rgba(255,196,61,0.12)', danger: '#FF6B6B',
-    protein: '#FF9A7A', carbs: '#FFC43D', fat: '#82C8F0',
+    bg: '#0A0A0A', surface: 'rgba(255,255,255,0.03)', glass: 'rgba(255,255,255,0.04)',
+    border: 'rgba(255,255,255,0.08)', ink: '#FAFAFA', mute: 'rgba(250,250,250,0.50)',
+    faint: 'rgba(250,250,250,0.28)', accent: '#C4F82A', accentDim: 'rgba(196,248,42,0.10)',
+    gold: '#FBBF24', goldDim: 'rgba(251,191,36,0.10)', danger: '#F87171',
+    protein: '#FF8C42', carbs: '#FFD166', fat: '#4ECDC4',
   },
   light: {
-    bg: '#F5F0EB', surface: 'rgba(61,48,38,0.03)', glass: 'rgba(255,255,255,0.6)',
-    border: 'rgba(61,48,38,0.08)', ink: '#3D3026', mute: 'rgba(61,48,38,0.45)',
-    faint: 'rgba(61,48,38,0.25)', accent: '#8C6A4D', accentDim: 'rgba(140,106,77,0.12)',
+    bg: '#F5F2ED', surface: 'rgba(0,0,0,0.03)', glass: 'rgba(255,255,255,0.6)',
+    border: 'rgba(0,0,0,0.08)', ink: '#1A1D1A', mute: 'rgba(26,29,26,0.55)',
+    faint: 'rgba(26,29,26,0.32)', accent: '#5A8C00', accentDim: 'rgba(90,140,0,0.08)',
     gold: '#B47828', goldDim: 'rgba(180,120,40,0.10)', danger: '#D44',
     protein: '#D4623A', carbs: '#B47828', fat: '#3A8AB0',
   },

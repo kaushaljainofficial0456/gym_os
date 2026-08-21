@@ -78,6 +78,8 @@ const MIGRATIONS = [
 
   ['exercise_library', 'ex_type', `ex_type TEXT NOT NULL DEFAULT 'compound'`],
   ['workouts', 'source', `source TEXT NOT NULL DEFAULT 'program'`],
+  // in-flight per-set ticks (base schema has this already; guard is for pre-existing DBs)
+  ['workouts', 'progress_json', `progress_json TEXT`],
   ['progress_photos', 'storage_key', `storage_key TEXT`],
   ['progress_photos', 'storage', `storage TEXT NOT NULL DEFAULT 'data_url'`],
   ['workout_logs', 'created_at', `created_at TEXT`],

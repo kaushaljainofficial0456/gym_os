@@ -15,6 +15,11 @@ import { dayKey, getOrgTz } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
 import { foodSearch } from '../services/skos-food/index.js';
+import {
+  searchFoods as searchFoodModel,
+  modelAvailable as foodModelAvailable,
+  resolveFoodQuantity,
+} from '../services/foodEstimator.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -318,6 +323,199 @@ export default function meRoutes(db) {
       'SELECT * FROM foods WHERE client_id IS NULL AND org_id = ? AND is_global = 0 ORDER BY name LIMIT 100', [c.org_id]);
     const global = await db.q('SELECT * FROM foods WHERE is_global = 1 ORDER BY name LIMIT 200', []);
     res.json({ mine, gym, global });
+  });
+
+  /**
+   * Model-backed food search.
+   *
+   * WHY THIS EXISTS: `GET /foods` above returns rows from the `foods`
+   * TABLE, capped at 100 gym + 200 global. That is the entire library the
+   * picker could see, so ordinary foods -- maggi, avocado, oreo -- were
+   * simply absent, and the UI rendered the miss as 0 kcal. Meanwhile
+   * skos-food-v1 has all three with lab/label values. The picker was
+   * searching the wrong corpus.
+   *
+   * Results are shaped like `foods` rows so the existing picker can render
+   * them unchanged, and each carries `source_id` so it can be materialised
+   * on add (see POST /foods/from-model).
+   */
+  r.get('/foods/search', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ foods: [] });
+
+    /* PRECEDENCE, and this distinction matters a lot:
+       Only the client's OWN foods outrank the catalogue. A client who
+       entered "my protein shake" means THAT, not a lookalike.
+       Gym/global rows do NOT outrank it. Those are the hand-typed seed
+       library the model exists to supersede, and letting them win
+       reintroduces exactly the errors this work removed -- the seeded
+       "Paneer" row says 265 kcal against a lab-measured 305.4, and
+       "Avocado" says 240 against 160. Ranking them first would have shown
+       the wrong number while appearing to work. */
+    const mine = await db.q(
+      `SELECT * FROM foods
+        WHERE client_id = ? AND lower(name) LIKE ?
+        ORDER BY name LIMIT 5`,
+      [c.id, `%${q.toLowerCase()}%`]);
+
+    // Gym/global rows are a FALLBACK, used only for names the catalogue
+    // does not cover at all (a gym's own supplement, say).
+    const library = await db.q(
+      `SELECT * FROM foods
+        WHERE client_id IS NULL AND (org_id = ? OR is_global = 1)
+          AND lower(name) LIKE ?
+        ORDER BY name LIMIT 8`,
+      [c.org_id, `%${q.toLowerCase()}%`]);
+
+    let model = [];
+    if (foodModelAvailable()) {
+      model = searchFoodModel(q, { limit: 10 }).map((f) => ({
+        // No `id` on purpose -- these are not yet rows. The picker must
+        // call /foods/from-model to obtain one, which is what keeps
+        // meal_items.food_id referentially honest.
+        source_id: f.source_id,
+        name: f.food_name,
+        serving: '100 g',
+        unit: 'g',
+        piece_g: f.serving_grams || null,
+        calories: f.energy_kcal,
+        protein: f.protein_g,
+        carbs: f.carb_g,
+        fat: f.fat_g,
+        fiber: f.fiber_g,
+        sugar: f.sugar_g,
+        sodium: f.sodium_mg,
+        brand: f.brand || null,
+        source: 'VERIFIED_DATABASE',
+        category: f.category || null,
+        cuisine: f.cuisine || null,
+        // Passed through so the UI can honour CONTRACT §3.2 rather than
+        // presenting a weak match as a firm number.
+        confidence: f.confidence,
+        trustworthy: f.trustworthy !== false,
+        cooking_state: f.cooking_state || null,
+        data_quality_flag: f.data_quality_flag || null,
+        match_kind: f.match_kind || null,
+        // Food-specific portion sizes (CONTRACT §3.4b). A bowl of dal is
+        // 250 g and a bowl of spinach 62 g, so this cannot be a global
+        // table the client caches -- it ships per result.
+        portions: f.portions || [],
+        // Only cooked dishes can meaningfully take an oil adjustment;
+        // telling the user they can add oil to an apple is noise.
+        oil_applicable: f.cooking_state === 'cooked' || f.cuisine === 'INDIAN',
+      }));
+    }
+
+    /* Table rows (the client's own foods and the gym/global library) carry
+       no portion list of their own -- portions come from the model's
+       food-specific catalogue. Without this, any food the user had already
+       logged once (and which was therefore materialised into `foods`)
+       shadowed its catalogue twin and arrived with NO portion chips and no
+       oil control, which is exactly what made the picker look like the
+       feature had not shipped. Enrich them by name so a stored row behaves
+       identically to a fresh catalogue hit. */
+    const enrich = (row) => {
+      const twin = foodModelAvailable() ? searchFoodModel(row.name, { limit: 1 })[0] : null;
+      return {
+        ...row,
+        portions: twin?.portions || [],
+        oil_applicable: !!twin && (twin.cooking_state === 'cooked' || twin.cuisine === 'INDIAN'),
+        source_id: row.source_id || twin?.source_id || null,
+        confidence: row.confidence || (twin ? twin.confidence : null),
+      };
+    };
+
+    // Order: the client's own foods, then the measured catalogue, then any
+    // library row the catalogue did not already cover by name.
+    const norm = (n) => String(n).toLowerCase().trim();
+    const claimed = new Set([...mine, ...model].map((f) => norm(f.name)));
+    res.json({
+      foods: [
+        ...mine.map(enrich),
+        ...model.filter((f) => !new Set(mine.map((m) => norm(m.name))).has(norm(f.name))),
+        ...library.filter((f) => !claimed.has(norm(f.name))).map(enrich),
+      ],
+      model_available: foodModelAvailable(),
+    });
+  });
+
+  /**
+   * Resolve a chosen portion (and optional oil level) into grams and final
+   * macros, WITHOUT logging anything.
+   *
+   * The client could not do this itself and should not try: portion ->
+   * grams depends on the food's own density and measured serving weight,
+   * and the oil adjustment is applied as a DELTA from the dish's own
+   * recipe oil so selecting "low" on an already-oily dish correctly
+   * REDUCES calories rather than adding a second helping. Both live in the
+   * calibrated model; re-implementing either in the UI is how the numbers
+   * drift apart.
+   */
+  r.post('/foods/resolve', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
+    const { source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
+
+    const hits = searchFoodModel(name || source_id || '', { limit: 25 });
+    const food = (source_id && hits.find((x) => x.source_id === source_id)) || hits[0];
+    if (!food) return res.status(404).json({ error: 'No matching food' });
+
+    const resolved = resolveFoodQuantity(food, { portionKey: portion_key, count, grams, oilLevel: oil_level });
+    if (!resolved) return res.status(422).json({ error: 'Could not resolve that quantity for this food' });
+    res.json(resolved);
+  });
+
+  /**
+   * Materialise a catalogue food into the `foods` table so it can be
+   * logged. Returns an existing row if one already matches, so repeatedly
+   * logging maggi does not accumulate duplicates.
+   *
+   * Written as a client-owned row (not global): the catalogue is the
+   * source of truth and re-derivable, so polluting the shared global
+   * library from a user action would be the wrong default.
+   */
+  r.post('/foods/from-model', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
+    const { source_id, name } = req.body || {};
+    if (!source_id && !name) return res.status(400).json({ error: 'source_id or name is required' });
+
+    const hits = searchFoodModel(name || source_id, { limit: 25 });
+    const f = (source_id && hits.find((x) => x.source_id === source_id)) || hits[0];
+    if (!f) return res.status(404).json({ error: 'No matching food in the catalogue' });
+
+    /* Reuse only the CLIENT'S OWN row, never a global/gym one.
+       Matching `is_global = 1` here reintroduced the precedence bug the
+       search endpoint just fixed, one layer down and worse: search showed
+       the catalogue's lab-measured Paneer at 305 kcal, but adding it
+       returned the seeded global row at 265, so the figure the user saw
+       and the figure that got logged silently disagreed. */
+    const existing = await db.q1(
+      `SELECT * FROM foods WHERE lower(name) = ? AND client_id = ? LIMIT 1`,
+      [String(f.food_name).toLowerCase(), c.id]);
+    if (existing) return res.json({ food: existing, created: false });
+
+    const fId = id('food');
+    await db.run(
+      `INSERT INTO foods (id, org_id, client_id, name, unit, serving, piece_g,
+                          calories, protein, carbs, fat, fiber, sugar, sodium,
+                          brand, source, category, cuisine, is_global)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`,
+      /* Every nullable value is coerced with `?? null`. node:sqlite refuses
+         to bind `undefined` -- it accepts null but throws "Provided value
+         cannot be bound to SQLite parameter N" on undefined -- and a
+         catalogue row legitimately omits nutrients nobody measured. The
+         first version bound f.sugar_g straight through and 500'd on every
+         food without a sugar figure, which is most of them.
+         `?? null` (not `|| null`) so a real 0 survives as 0. */
+      [fId, c.org_id, c.id, String(f.food_name).slice(0, 80), 'g', '100 g',
+       f.serving_grams ?? null, f.energy_kcal ?? null, f.protein_g ?? null,
+       f.carb_g ?? null, f.fat_g ?? null, f.fiber_g ?? null, f.sugar_g ?? null,
+       f.sodium_mg ?? null, f.brand ?? null,
+       'VERIFIED_DATABASE', f.category ?? null, f.cuisine ?? null]);
+    const food = await db.q1('SELECT * FROM foods WHERE id = ?', [fId]);
+    res.status(201).json({ food, created: true });
   });
 
   r.post('/foods', async (req, res) => {

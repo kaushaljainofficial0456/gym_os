@@ -43,6 +43,8 @@ export default function Login() {
   };
 
 
+  const [onboarding, setOnboarding] = useState(false);
+
   return (
     <>
       {showWelcome && <MotivationalWelcome onComplete={handleWelcomeComplete} />}
@@ -72,7 +74,7 @@ export default function Login() {
             </p>
             <div className="mt-8 flex items-center gap-2 text-[11px] font-grotesk uppercase tracking-[.2em]" style={{ color: 'var(--faint)' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-good" style={{ boxShadow: '0 0 8px rgba(52,211,153,.8)' }} />
-              Set up your workspace to get started
+              IRONFORGE FITNESS · demo workspace
             </div>
           </div>
         </div>
@@ -95,7 +97,7 @@ export default function Login() {
               <div>
                 <label htmlFor="email" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
                 <input id="email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com" required autoFocus />
+                  placeholder="you@ironforge.in" required autoFocus />
               </div>
               <div>
                 <label htmlFor="password" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
@@ -109,6 +111,35 @@ export default function Login() {
             </form>
 
 
+            {/* MERGE NOTE: ui-manavi also had a "New to SK OS? Get Started"
+                CTA opening OnboardingWizard here. Dropped — it assumed a
+                self-service signup flow, but no backend registration
+                endpoint exists pre-auth (OnboardingWizard's working path,
+                PUT /me/profile, requires an authenticated session; the
+                app's only account-creation routes are POST /auth/setup-org
+                for a new gym owner, and staff-created client accounts).
+                Flagged in the integration audit. */}
+            <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
+              <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
+            </div>
+
+            <div className="space-y-2">
+              {DEMO.map((d, i) => (
+                <button key={d.email} onClick={() => quick(d.email)} disabled={busy}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 text-left anim-fadeUp"
+                  style={{ borderColor: 'var(--line)', background: 'rgba(128,128,128,.025)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.025)'}
+                  animation-delay={`${120 + i * 70}ms`}>
+                  <span className="w-9 h-9 rounded-xl grid place-items-center border text-base" style={{ background: 'var(--accent-soft)', borderColor: 'var(--line)', color: 'var(--accent)' }}>{d.icon}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{d.label}</span>
+                    <span className="block text-[11px] truncate" style={{ color: 'var(--mute)' }}>{d.desc}</span>
+                  </span>
+                  <span className="chip !text-[9px]">demo1234</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

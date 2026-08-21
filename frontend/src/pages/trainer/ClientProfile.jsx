@@ -84,7 +84,11 @@ export default function ClientProfile() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="font-grotesk font-bold text-3xl tracking-tight">{client.name}</h1>
+              {/* font-brand, not font-grotesk -- see Business.jsx's hero
+                  for why: trainer scope repoints font-grotesk to DM Sans
+                  for supporting text, so a name-as-headline stays on the
+                  bolder face on purpose. */}
+              <h1 className="font-brand font-black text-3xl tracking-tight" style={{ color: 'var(--ink)' }}>{client.name}</h1>
               <StatusChip status={client.status} />
             </div>
             <div className="text-xs text-mute mt-1 font-grotesk">
@@ -132,7 +136,7 @@ export default function ClientProfile() {
         { value: 'messages', label: 'Messages' }
       ]} value={tab} onChange={setTab} />
 
-      {tab === 'overview' && <OverviewTab client={client} profile={profile} adherence={adherence} rules={rules} weights={weights} measurements={measurements} />}
+      {tab === 'overview' && <OverviewTab client={client} profile={profile} adherence={adherence} rules={rules} weights={weights} measurements={measurements} onChanged={reload} />}
       {tab === 'training' && <TrainingTab clientId={id} />}
       {tab === 'workouts' && <WorkoutsTab clientId={id} history={workoutHistory} onChanged={reload} />}
       {tab === 'nutrition' && <NutritionTab clientId={id} profile={profile} />}
@@ -295,18 +299,38 @@ function TrainingTab({ clientId }) {
 }
 
 /* ---------------- Overview ---------------- */
-function OverviewTab({ client, profile, adherence, rules, weights, measurements }) {
+function OverviewTab({ client, profile, adherence, rules, weights, measurements, onChanged }) {
   const [w, setW] = useState('');
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
+  useEffect(() => {
+    if (!toast) return undefined;
+    const h = setTimeout(() => setToast(''), 2600);
+    return () => clearTimeout(h);
+  }, [toast]);
   const logWeight = async () => {
     if (!w) return;
     setBusy(true);
-    try { await api(`/clients/${client.id}/weights`, { method: 'POST', body: JSON.stringify({ weight: Number(w) }) }); setW(''); location.reload(); }
-    catch (e) { alert(e.message); } finally { setBusy(false); }
+    try {
+      await api(`/clients/${client.id}/weights`, { method: 'POST', body: JSON.stringify({ weight: Number(w) }) });
+      setW('');
+      // A full location.reload() here used to throw away the whole app
+      // state for one new data point. onChanged() re-fetches just the
+      // client overview -- the same pattern WorkoutsTab/PhotosTab already
+      // use -- so the weight chart updates without the page flashing.
+      onChanged?.();
+    } catch (e) { setToast(e.message); }
+    finally { setBusy(false); }
   };
 
   return (
     <div className="grid lg:grid-cols-3 gap-5">
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-card border"
+          style={{ background: 'var(--panel)', color: 'var(--ink)', borderColor: 'var(--accent-soft)' }}>
+          {toast}
+        </div>
+      )}
       <Card className="lg:col-span-1">
         <Kicker>Adherence score</Kicker>
         <div className="flex justify-center py-2">
@@ -349,10 +373,10 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements 
             ))}
           </div>
         ) : (
-          <div className="text-sm text-mute">No active concerns — this client is tracking well. 🎉</div>
+     <div className="text-sm text-mute">No active concerns — this client is tracking well. </div>
         )}
         {profile?.food_exclusions && (
-          <div className="mt-3 text-[11px] text-mute">🍽️ Food exclusions: <b className="text-ink">{profile.food_exclusions}</b></div>
+          <div className="mt-3 text-[11px] text-mute">Food exclusions: <b className="text-ink">{profile.food_exclusions}</b></div>
         )}
       </Card>
     </div>
@@ -398,11 +422,13 @@ function AssignWorkout({ clientId, templates, onClose, onDone }) {
   const [templateId, setTemplateId] = useState(templates[0]?.id || '');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   const t = templates.find((x) => x.id === templateId);
 
   const submit = async () => {
     if (!t) return;
     setBusy(true);
+    setErr('');
     try {
       await api(`/workouts/clients/${clientId}/assign`, {
         method: 'POST',
@@ -415,12 +441,20 @@ function AssignWorkout({ clientId, templates, onClose, onDone }) {
         })
       });
       onDone();
-    } catch (e) { alert(e.message); } finally { setBusy(false); }
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
   return (
     <Modal open onClose={onClose} title="Assign workout">
       <div className="space-y-3">
+        {/* A native alert() blocks the whole tab and looks like a browser
+            error, not a product one -- shown inline instead, same as every
+            other form error in this app. */}
+        {err && (
+          <div className="text-xs text-bad rounded-xl px-3 py-2 border" style={{ borderColor: 'var(--line)', background: 'var(--panel2)' }}>
+            {err}
+          </div>
+        )}
         <select className="input" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
           {templates.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.exercises.length} exercises</option>)}
         </select>
@@ -595,11 +629,13 @@ function AITab({ clientId }) {
   const { data, loading, reload } = useFetch(() => api(`/insights/clients/${clientId}`));
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [err, setErr] = useState('');
 
   const analyze = async () => {
     setBusy(true);
+    setErr('');
     try { await api(`/insights/clients/${clientId}/analyze`, { method: 'POST', body: '{}' }); reload(); }
-    catch (e) { alert(e.message); } finally { setBusy(false); }
+    catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
   const action = async (id, action) => {
@@ -608,7 +644,9 @@ function AITab({ clientId }) {
   };
 
   return (
-    <div className="space-y-4">       <div className="card !p-0 overflow-hidden" style={{ padding: 1, background: 'linear-gradient(135deg, rgba(8,127,123,.55), rgba(18,184,176,.28) 45%, rgba(155,124,255,.4))', borderRadius: 19 }}>
+    <div className="space-y-4">
+      {err && <div className="text-xs text-bad rounded-xl px-3 py-2 border" style={{ borderColor: 'var(--line)', background: 'var(--panel2)' }}>{err}</div>}
+      <div className="card !p-0 overflow-hidden" style={{ padding: 1, background: 'linear-gradient(135deg, rgba(8,127,123,.55), rgba(18,184,176,.28) 45%, rgba(155,124,255,.4))', borderRadius: 19 }}>
         <div className="bg-panel rounded-[18px] p-5 relative overflow-hidden">
           <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-violetx/10 blur-[80px] pointer-events-none" />
           <div className="flex items-center justify-between flex-wrap gap-3 relative">

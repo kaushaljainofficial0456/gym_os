@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Card } from '../../components/UI.jsx';
 import { WeightChart, TrendChart, AdherenceBreakdown } from '../../components/charts.jsx';
+import Icon from '../../components/Icon.jsx';
 
 export default function Progress() {
   const p = useFetch(() => api('/tracking/me/progress'));
@@ -62,7 +63,7 @@ export default function Progress() {
       {adh.length >= 2 && (
         <div className="card p-4">
           <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2">Adherence · last 14 days</div>
-          <TrendChart data={adh.map((a) => ({ label: a.date.slice(5), value: a.score }))} color="#4ADE80" />
+          <TrendChart data={adh.map((a) => ({ label: a.date.slice(5), value: a.score }))} color="#C4F82A" />
         </div>
       )}
 
@@ -112,7 +113,7 @@ export default function Progress() {
                   <div className="text-[10px] text-good font-grotesk">{has.length} photo{v.length > 1 ? 's' : ''} ✓</div>
                 ) : (
                   <div>
-                    <div className="text-lg mb-1">📷</div>
+                    <div className="mb-1 grid place-items-center" style={{ color: 'var(--faint)' }}><Icon name="camera" size={20} /></div>
                     <div className="text-[9px] text-faint uppercase tracking-wider font-grotesk">{v}</div>
                     <div className="text-[8px] text-faint mt-1">Before/after — privacy-protected</div>
                   </div>

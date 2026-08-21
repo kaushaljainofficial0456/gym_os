@@ -4,6 +4,8 @@ import { api } from '../../api.js';
 import { useFetch, useCountUp } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
+import BarcodeScanner from '../../components/BarcodeScanner.jsx';
+import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -13,58 +15,62 @@ const r1 = (n) => Math.round(n * 10) / 10;
 
 const T = {
   dark: {
-    bg: '#080B12',
+    bg: '#0A0A0A',
     surface: 'rgba(255,255,255,0.03)',
     surfaceHover: 'rgba(255,255,255,0.06)',
-    border: 'rgba(255,255,255,0.07)',
+    border: 'rgba(255,255,255,0.08)',
     borderHover: 'rgba(255,255,255,0.14)',
-    ink: '#EDEFF7',
-    mute: 'rgba(255,255,255,0.42)',
-    faint: 'rgba(255,255,255,0.22)',
-    accent: '#12B8B0',
-    accentDim: 'rgba(18,184,176,0.15)',
-    gold: '#FFC43D',
-    goldDim: 'rgba(255,196,61,0.12)',
-    protein: '#FF9A7A',
-    carbs: '#FFC43D',
-    fat: '#82C8F0',
-    water: '#35D7FF',
-    waterDim: 'rgba(53,215,255,0.12)',
-    danger: '#FF6B6B',
+    ink: '#FAFAFA',
+    mute: 'rgba(250,250,250,0.50)',
+    faint: 'rgba(250,250,250,0.28)',
+    accent: '#C4F82A',
+    accentDim: 'rgba(196,248,42,0.10)',
+    gold: '#C4F82A',
+    goldDim: 'rgba(196,248,42,0.10)',
+    secondary: '#FB7185',
+    secondaryDim: 'rgba(251,113,133,0.10)',
+    protein: '#FF8C42',
+    carbs: '#FFD166',
+    fat: '#4ECDC4',
+    water: '#22D3EE',
+    waterDim: 'rgba(34,211,238,0.10)',
+    danger: '#F87171',
     glass: 'rgba(255,255,255,0.04)',
     glassBorder: 'rgba(255,255,255,0.08)',
     ringTrack: 'rgba(255,255,255,0.06)',
-    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgba(18,184,176,0.08), transparent 70%)',
+    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgba(196,248,42,0.06), transparent 70%)',
     cardShadow: '0 2px 20px rgba(0,0,0,0.3)',
     timeline: 'rgba(255,255,255,0.06)',
-    timelineActive: 'rgba(18,184,176,0.3)',
+    timelineActive: 'rgba(196,248,42,0.3)',
   },
   light: {
-    bg: '#F5F0EB',
-    surface: 'rgba(61,48,38,0.03)',
-    surfaceHover: 'rgba(61,48,38,0.06)',
-    border: 'rgba(61,48,38,0.08)',
-    borderHover: 'rgba(61,48,38,0.16)',
-    ink: '#3D3026',
-    mute: 'rgba(61,48,38,0.45)',
-    faint: 'rgba(61,48,38,0.25)',
-    accent: '#8C6A4D',
-    accentDim: 'rgba(140,106,77,0.12)',
-    gold: '#B47828',
-    goldDim: 'rgba(180,120,40,0.10)',
-    protein: '#D4623A',
-    carbs: '#B47828',
-    fat: '#3A8AB0',
+    bg: '#F5F2ED',
+    surface: 'rgba(0,0,0,0.03)',
+    surfaceHover: 'rgba(0,0,0,0.06)',
+    border: 'rgba(0,0,0,0.08)',
+    borderHover: 'rgba(0,0,0,0.14)',
+    ink: '#1A1D1A',
+    mute: 'rgba(26,29,26,0.55)',
+    faint: 'rgba(26,29,26,0.32)',
+    accent: '#5A8C00',
+    accentDim: 'rgba(90,140,0,0.08)',
+    gold: '#5A8C00',
+    goldDim: 'rgba(90,140,0,0.08)',
+    secondary: '#D46A8A',
+    secondaryDim: 'rgba(212,106,138,0.08)',
+    protein: '#E07020',
+    carbs: '#D4A028',
+    fat: '#2AAFCF',
     water: '#2AAFCF',
     waterDim: 'rgba(42,175,207,0.10)',
     danger: '#D44',
     glass: 'rgba(255,255,255,0.6)',
-    glassBorder: 'rgba(61,48,38,0.08)',
-    ringTrack: 'rgba(61,48,38,0.08)',
-    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgba(140,106,77,0.06), transparent 70%)',
+    glassBorder: 'rgba(0,0,0,0.08)',
+    ringTrack: 'rgba(0,0,0,0.08)',
+    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgba(90,140,0,0.04), transparent 70%)',
     cardShadow: '0 2px 20px rgba(0,0,0,0.06)',
-    timeline: 'rgba(61,48,38,0.06)',
-    timelineActive: 'rgba(140,106,77,0.25)',
+    timeline: 'rgba(0,0,0,0.06)',
+    timelineActive: 'rgba(90,140,0,0.25)',
   },
 };
 
@@ -96,7 +102,8 @@ function CalorieRing({ value, max, t }) {
         <defs>
           <linearGradient id={`${uid}_grad`} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor={overTarget ? '#FF6B6B' : t.accent} />
-            <stop offset="100%" stopColor={overTarget ? '#FF9A7A' : t.gold} />
+            <stop offset="50%" stopColor={overTarget ? '#FF9A7A' : t.accent} />
+            <stop offset="100%" stopColor={overTarget ? '#FFB88C' : t.accent} />
           </linearGradient>
           <filter id={`${uid}_glow`}>
             <feGaussianBlur stdDeviation="4" result="blur" />
@@ -196,7 +203,10 @@ function HydrationCard({ waterState, target, onAdd, t }) {
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm" style={{ background: t.waterDim, color: t.water }}>💧</div>
             <div>
-              <div className="font-grotesk text-xs font-semibold" style={{ color: t.ink }}>Hydration</div>
+              <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2" style={{ color: t.mute }}>
+                <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
+                Water
+              </div>
               <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{Math.round(pct * 100)}% of daily goal</div>
             </div>
           </div>
@@ -275,14 +285,27 @@ function MealTimeline({ meals, onToggle, onEditLog, onDeleteLog, t }) {
           const isCustomLog = !m.meal_id && m.id && !m.id.startsWith('plan_');
           return (
             <div key={m.id} className="relative flex gap-3 items-start group transition-all">
-              {/* Timeline dot */}
-              <div className="absolute -left-5 top-3 w-[15px] h-[15px] rounded-full border-2 z-10 transition-all duration-300" style={{
-                borderColor: m.eaten ? t.accent : t.border,
-                background: m.eaten ? t.accent : 'transparent',
-                boxShadow: m.eaten ? `0 0 10px ${t.accent}40` : 'none',
-              }}>
-                {m.eaten && <div className="absolute inset-0.5 rounded-full flex items-center justify-center text-[7px] text-white font-bold">✓</div>}
-              </div>
+              {/* Timeline dot — clickable toggle */}
+              <button
+                type="button"
+                aria-label={m.eaten ? `Mark ${m.name} as not eaten` : `Mark ${m.name} as eaten`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(m);
+                }}
+                className="absolute -left-5 top-3 w-[15px] h-[15px] rounded-full border-2 z-10 transition-all duration-300 cursor-pointer"
+                style={{
+                  borderColor: m.eaten ? t.accent : t.border,
+                  background: m.eaten ? t.accent : 'transparent',
+                  boxShadow: m.eaten ? `0 0 10px ${t.accent}40` : 'none',
+                }}
+              >
+                {m.eaten && (
+                  <div className="absolute inset-0.5 rounded-full flex items-center justify-center text-[7px] text-white font-bold">
+                    ✓
+                  </div>
+                )}
+              </button>
 
               {/* Meal card */}
               <div className="flex-1 rounded-xl p-3.5 transition-all duration-200" style={{
@@ -370,7 +393,21 @@ function NutritionInsight({ plan, eaten, t }) {
    SECTION HEADER — reusable premium section title
    ════════════════════════════════════════════════════════════════ */
 
-function SectionHeader({ title, subtitle, action, t }) {
+function SectionHeader({ title, subtitle, action, t, kicker = false }) {
+  if (kicker) {
+    return (
+      <div className="flex items-end justify-between mb-4">
+        <div>
+          <div className="font-grotesk text-[11px] font-semibold uppercase tracking-[.16em] flex items-center gap-2 mb-1" style={{ color: t.mute }}>
+            <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
+            {title}
+          </div>
+          {subtitle && <div className="font-grotesk text-[11px]" style={{ color: t.faint }}>{subtitle}</div>}
+        </div>
+        {action}
+      </div>
+    );
+  }
   return (
     <div className="flex items-end justify-between mb-3">
       <div>
@@ -681,9 +718,12 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
     <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
       <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
         {/* Header */}
-        <div className="px-5 pt-5 pb-3">
-          <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Edit Entry</div>
-          <div className="font-grotesk text-base font-bold mt-1" style={{ color: t.ink }}>{log.name}</div>
+        <div className="px-5 pt-5 pb-3 flex items-start justify-between">
+          <div>
+            <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Edit Entry</div>
+            <div className="font-grotesk text-base font-bold mt-1" style={{ color: t.ink }}>{log.name}</div>
+          </div>
+          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
         </div>
 
         {/* Quantity input */}
@@ -730,7 +770,8 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
       <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-        <div className="px-5 pt-5 pb-4 text-center">
+        <div className="px-5 pt-5 pb-4 text-center relative">
+          <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
           <div className="w-12 h-12 mx-auto rounded-full grid place-items-center text-xl mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30` }}>🗑️</div>
           <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>Remove from today's intake?</div>
           <div className="text-[11px]" style={{ color: t.mute }}>{log.name} · {log.quantity || 100}{log.unit || 'g'} · {log.calories} kcal</div>
@@ -768,7 +809,7 @@ export default function Nutrition() {
   const [mealForm, setMealForm] = useState({ slot: 'Meal', name: '', time: '', calories: '', protein: '', carbs: '', fat: '', foods: '' });
   const [saving, setSaving] = useState(false);
   const [openSection, setOpenSection] = useState(null);
-  const [supForm, setSupForm] = useState({ name: '', dose: '', schedule_time: '' });
+  const [supForm, setSupForm] = useState({ name: '', dose: '' });
   const [savingSup, setSavingSup] = useState(false);
   const [composing, setComposing] = useState(null);
   const [items, setItems] = useState([]);
@@ -784,6 +825,15 @@ export default function Nutrition() {
   const [editLog, setEditLog] = useState(null);
   const [deleteLogOpen, setDeleteLogOpen] = useState(false);
   const [deleteLog, setDeleteLog] = useState(null);
+  const [supplementsExpanded, setSupplementsExpanded] = useState(false);
+  const [showAddSupplement, setShowAddSupplement] = useState(false);
+  const [barcodeOpen, setBarcodeOpen] = useState(false);
+  const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [quickAddQuery, setQuickAddQuery] = useState('');
+  const [quickAddResults, setQuickAddResults] = useState([]);
+  const [quickAddSearching, setQuickAddSearching] = useState(false);
+  const [quickAddFocused, setQuickAddFocused] = useState(false);
 
   const data = home.data;
   const clientId = data?.client?.id;
@@ -805,6 +855,21 @@ export default function Nutrition() {
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
+
+  // Quick Add search debounce
+  useEffect(() => {
+    const term = quickAddQuery.trim();
+    if (term.length < 2) { setQuickAddResults([]); setQuickAddSearching(false); return; }
+    setQuickAddSearching(true);
+    let dead = false;
+    const h = setTimeout(() => {
+      api(`/me/foods/search?q=${encodeURIComponent(term)}`)
+        .then((r) => { if (!dead) setQuickAddResults(r.foods || []); })
+        .catch(() => { if (!dead) setQuickAddResults([]); })
+        .finally(() => { if (!dead) setQuickAddSearching(false); });
+    }, 200);
+    return () => { dead = true; clearTimeout(h); };
+  }, [quickAddQuery]);
 
   if (home.loading) return <Spinner label="Loading your fuel plan…" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
@@ -855,6 +920,43 @@ export default function Nutrition() {
     } catch (e) { setToast(e.message); } setLogging(false);
   };
 
+  const startVoice = () => {
+    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) { setToast('Voice input is not supported in this browser'); return; }
+    const rec = new SR();
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.continuous = false;
+    setListening(true);
+    setLogFoodMenuOpen(false);
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      setAiText(text);
+      setListening(false);
+      setToast(`Heard: "${text}"`);
+    };
+    rec.onerror = (e) => {
+      setListening(false);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setToast('Microphone permission is required for voice input');
+      } else if (e.error === 'no-speech') {
+        setToast('No speech detected — try again');
+      } else if (e.error === 'aborted') {
+        // User cancelled — no toast needed
+      } else {
+        setToast('Voice input failed — please try again');
+      }
+    };
+    rec.onend = () => setListening(false);
+    try {
+      rec.start();
+    } catch (err) {
+      setListening(false);
+      setToast('Could not start voice input');
+    }
+  };
+
   const openComposer = async (m) => {
     setComposing(m); setFoodSearch(''); setFoodQty(1); setChosenFood(null);
     try { const r = await api(`/me/meals/${m.id}/items`); setItems(r.items || []); } catch (e) { setToast(e.message || 'Could not open meal'); }
@@ -865,13 +967,26 @@ export default function Nutrition() {
   const addItem = async (f) => { try { await api(`/me/meals/${composing.id}/items`, { method: 'POST', body: JSON.stringify({ food_id: f.id, quantity: Number(foodQty) || 1 }) }); setChosenFood(null); setFoodQty(1); setFoodSearch(''); await reloadItems(); setToast(`${f.name} added`); } catch (e) { setToast(e.message); } };
   const allFoods = [...(foods.data?.mine || []).map((f) => ({ ...f, scope: 'MY FOOD' })), ...(foods.data?.gym || []).map((f) => ({ ...f, scope: 'GYM' })), ...(foods.data?.global || []).map((f) => ({ ...f, scope: 'GLOBAL' }))];
 
+  const logQuickAddFood = async (food) => {
+    try {
+      await api(`/nutrition/clients/${clientId}/meals/log`, {
+        method: 'POST',
+        body: JSON.stringify({ name: food.name, slot: 'Snack', calories: food.calories || 0, protein: food.protein || 0, carbs: food.carbs || 0, fat: food.fat || 0, source: 'quick_add', eaten: true })
+      });
+      setToast(`Logged ${food.name} ✓`);
+      setQuickAddQuery('');
+      setQuickAddResults([]);
+      home.reload();
+    } catch (e) { setToast(e.message); }
+  };
+
   return (
     <div className="space-y-5 pb-24">
 
       {/* ══════ HEADER ══════ */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-grotesk font-bold text-xl" style={{ color: t.ink }}>Today's Fuel</h1>
+          <h1 className="font-grotesk font-bold text-2xl leading-tight" style={{ color: t.ink }}>Today's Fuel</h1>
           <div className="text-xs mt-0.5" style={{ color: t.mute }}>
             {plan ? `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g` : 'No plan assigned'}
           </div>
@@ -919,20 +1034,17 @@ export default function Nutrition() {
 
       {/* ══════ TODAY'S MEALS ══════ */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <SectionHeader title="Today's Meals" subtitle={`${mealState.filter(m => m.eaten).length} of ${mealState.length} logged`} t={t} />
+        <SectionHeader title="My Diet" kicker subtitle={`${mealState.filter(m => m.eaten).length} of ${mealState.length} logged`} t={t} />
         <MealTimeline meals={mealState} onToggle={toggleMeal} onEditLog={(m) => { setEditLog(m); setEditLogOpen(true); }} onDeleteLog={(m) => { setDeleteLog(m); setDeleteLogOpen(true); }} t={t} />
       </div>
 
-      {/* ══════ HYDRATION ══════ */}
-      <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
-
       {/* ══════ AI FOOD ESTIMATE ══════ */}
       <div id="log-food-section" className="rounded-3xl p-5 scroll-mt-20" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <SectionHeader title="What did you eat?" t={t} />
-        <div className="flex gap-2">
-          <input className="flex-1 px-3.5 py-2.5 rounded-xl font-grotesk text-sm outline-none" placeholder='"2 rotis, dal and curd"' value={aiText} onChange={(e) => setAiText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && estimate()} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} />
-          <button className="shrink-0 px-4 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95" onClick={estimate} disabled={estimating || !aiText.trim()} style={{ background: (estimating || !aiText.trim()) ? t.surface : t.accent, color: (estimating || !aiText.trim()) ? t.mute : '#fff', cursor: (estimating || !aiText.trim()) ? 'not-allowed' : 'pointer' }}>
-            {estimating ? '…' : 'Estimate'}
+        <SectionHeader title="What did you eat?" kicker subtitle="Describe your meal in plain text" t={t} />
+        <div className="space-y-2">
+          <input className="w-full px-4 py-3 rounded-xl font-grotesk text-sm outline-none" placeholder='"2 rotis, dal and curd"' value={aiText} onChange={(e) => setAiText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && estimate()} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} />
+          <button className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-95" onClick={estimate} disabled={estimating || !aiText.trim()} style={{ background: (estimating || !aiText.trim()) ? t.surface : t.accent, color: (estimating || !aiText.trim()) ? t.mute : '#0A0C0A', boxShadow: (estimating || !aiText.trim()) ? 'none' : `0 4px 20px ${t.accent}40`, cursor: (estimating || !aiText.trim()) ? 'not-allowed' : 'pointer' }}>
+            {estimating ? 'Analyzing…' : 'Estimate'}
           </button>
         </div>
         {aiResult && (
@@ -954,10 +1066,58 @@ export default function Nutrition() {
         )}
       </div>
 
+      {/* ══════ QUICK ADD ══════ */}
+      <div className="relative overflow-hidden rounded-3xl p-5" style={{ background: `linear-gradient(135deg, ${t.surface} 0%, ${t.bg} 100%)`, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+        {/* Subtle accent glow */}
+        <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, ${t.accent}14, transparent 70%)` }} />
+        <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.06) 0%, transparent 70%)' }} />
+        <div className="relative z-10">
+          <SectionHeader title="Quick Add" kicker subtitle="Search food or type what you ate" t={t} />
+          <div className="relative">
+            <div className="flex items-center gap-2">
+              <input
+                className="flex-1 px-4 py-3 rounded-xl font-grotesk text-sm outline-none"
+                placeholder="Search food or type what you ate..."
+                value={quickAddQuery}
+                onChange={(e) => setQuickAddQuery(e.target.value)}
+                onFocus={() => setQuickAddFocused(true)}
+                onBlur={() => setTimeout(() => setQuickAddFocused(false), 200)}
+                onKeyDown={(e) => e.key === 'Enter' && quickAddResults.length > 0 && logQuickAddFood(quickAddResults[0])}
+                style={{ background: t.glass, border: `1px solid ${quickAddFocused ? t.accent + '66' : t.border}`, color: t.ink }}
+              />
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={startVoice} title="Voice input" style={{ background: listening ? t.accentDim : t.glass, color: listening ? t.accent : t.mute, border: `1px solid ${listening ? t.accent + '4D' : t.border}` }}>{listening ? '●' : '🎤'}</button>
+                <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={() => setBarcodeOpen(true)} title="Scan barcode" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>📷</button>
+              </div>
+            </div>
+            {/* Search results dropdown */}
+            {quickAddQuery.trim().length >= 2 && quickAddFocused && (
+              <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-xl z-10" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
+                {quickAddSearching && (
+                  <div className="p-3 text-center text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>Searching…</div>
+                )}
+                {!quickAddSearching && quickAddResults.length === 0 && (
+                  <div className="p-3 text-center text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>No foods found</div>
+                )}
+                {!quickAddSearching && quickAddResults.map((f) => (
+                  <button key={f.id} onClick={() => logQuickAddFood(f)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors" style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                    <span className="min-w-0">
+                      <span className="block text-[12px] font-grotesk font-semibold truncate">{f.name}</span>
+                      <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{f.calories} kcal/100g · P{f.protein} C{f.carbs} F{f.fat}</span>
+                    </span>
+                    <span className="text-[10px] shrink-0 font-semibold px-2.5 py-1 rounded-lg" style={{ background: t.accentDim, color: t.accent, border: `1px solid ${t.accent}33` }}>Log</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ══════ MY FOODS ══════ */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <div className="flex items-center justify-between mb-3">
-          <SectionHeader title="My Foods" subtitle={foods.data?.mine?.length ? `${foods.data.mine.length} saved` : undefined} t={t} action={
+          <SectionHeader title="My Foods" kicker subtitle={foods.data?.mine?.length ? `${foods.data.mine.length} saved` : undefined} t={t} action={
             <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold transition-colors" onClick={() => setOpenSection(openSection === 'foods' ? null : 'foods')} style={{ background: openSection === 'foods' ? t.accentDim : t.glass, color: openSection === 'foods' ? t.accent : t.mute, border: `1px solid ${openSection === 'foods' ? t.accent + '30' : t.border}` }}>
               {openSection === 'foods' ? 'Close' : 'Manage'}
             </button>
@@ -1015,7 +1175,7 @@ export default function Nutrition() {
       {/* ══════ MY MEALS ══════ */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <div className="flex items-center justify-between mb-3">
-          <SectionHeader title="My Meals" subtitle={myMeals.data?.meals?.length ? `${myMeals.data.meals.length} templates` : undefined} t={t} action={
+          <SectionHeader title="My Meals" kicker subtitle={myMeals.data?.meals?.length ? `${myMeals.data.meals.length} templates` : undefined} t={t} action={
             <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold transition-colors" onClick={() => setOpenSection(openSection === 'meals' ? null : 'meals')} style={{ background: openSection === 'meals' ? t.accentDim : t.glass, color: openSection === 'meals' ? t.accent : t.mute, border: `1px solid ${openSection === 'meals' ? t.accent + '30' : t.border}` }}>
               {openSection === 'meals' ? 'Close' : 'Manage'}
             </button>
@@ -1099,38 +1259,100 @@ export default function Nutrition() {
               </div>
             )}
           </div>
-        )}
-      </div>
+        )}      </div>
 
       {/* ══════ SUPPLEMENTS ══════ */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <SectionHeader title="Supplements" t={t} />
-        {supList?.length > 0 && (
-          <div className="space-y-1.5 mb-3">
-            {supList.map((s) => {
-              const taken = !!supTaken[s.id];
-              return (
-                <button key={s.id} onClick={() => setSupTaken((x) => ({ ...x, [s.id]: !taken }))} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all" style={{ background: taken ? `${t.accent}10` : t.glass, border: `1px solid ${taken ? t.accent + '30' : t.border}` }}>
-                  <span className="w-5 h-5 rounded-md grid place-items-center text-[10px]" style={{ background: taken ? t.accent : 'transparent', color: taken ? '#fff' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}>✓</span>
-                  <span className="flex-1 font-grotesk text-sm font-semibold" style={{ color: t.ink }}>{s.name}</span>
-                  <span className="text-[10px]" style={{ color: t.mute }}>{s.dose || ''}{s.schedule_time ? ` · ${s.schedule_time}` : ''}</span>
+        {(() => {
+          const sups = supList || [];
+          const visible = sups.length > 0 ? (supplementsExpanded ? sups : sups.slice(0, 2)) : [];
+          const takenCount = sups.filter((s) => !!supTaken[s.id]).length;
+          const supPct = sups.length > 0 ? Math.round((takenCount / sups.length) * 100) : 0;
+          return (
+            <>
+              {/* Header with progress ring */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-14 h-14">
+                    <svg width="56" height="56" className="-rotate-90">
+                      <circle cx="28" cy="28" r={26} fill="none" stroke={t.ringTrack} strokeWidth="4" />
+                      <circle cx="28" cy="28" r={26} fill="none" stroke={supPct === 100 ? t.accent : t.gold} strokeWidth="4" strokeLinecap="round" strokeDasharray={2 * Math.PI * 26} strokeDashoffset={2 * Math.PI * 26 * (1 - supPct / 100)} style={{ transition: 'stroke-dashoffset 0.6s cubic-bezier(.22,.8,.3,1)' }} />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="font-grotesk text-[13px] font-bold" style={{ color: supPct === 100 ? t.accent : t.gold }}>{supPct}%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2" style={{ color: t.mute }}>
+                      <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
+                      Supplements
+                    </div>
+                    <div className="font-grotesk text-[10px]" style={{ color: t.faint }}>{takenCount} of {sups.length} taken</div>
+                  </div>
+                </div>
+                <button onClick={() => setShowAddSupplement(!showAddSupplement)} className="px-3 py-1.5 rounded-xl font-grotesk text-[10px] font-bold transition-all active:scale-95" style={{ background: showAddSupplement ? t.danger + '15' : t.accentDim, color: showAddSupplement ? t.danger : t.accent, border: `1px solid ${showAddSupplement ? t.danger + '30' : t.accent + '30'}` }}>
+                  {showAddSupplement ? '✕ Close' : '+ Add'}
                 </button>
-              );
-            })}
-          </div>
-        )}
-        <div className="rounded-xl p-3 space-y-2" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-          <div className="grid grid-cols-3 gap-2">
-            <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Name" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.name} onChange={(e) => setSupForm((f) => ({ ...f, name: e.target.value }))} />
-            <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Dose" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.dose} onChange={(e) => setSupForm((f) => ({ ...f, dose: e.target.value }))} />
-            <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" type="time" placeholder="Time" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.schedule_time} onChange={(e) => setSupForm((f) => ({ ...f, schedule_time: e.target.value }))} />
-          </div>
-          <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={savingSup || !supForm.name.trim()} onClick={async () => { setSavingSup(true); try { await api(`/tracking/clients/${clientId}/supplements`, { method: 'POST', body: JSON.stringify({ name: supForm.name.trim(), dose: supForm.dose || undefined, schedule_time: supForm.schedule_time || undefined }) }); setSupForm({ name: '', dose: '', schedule_time: '' }); api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {}); setToast('Supplement added ✓'); } catch (e) { setToast(e.message); } setSavingSup(false); }}
-            style={{ background: (savingSup || !supForm.name.trim()) ? t.surface : t.accent, color: (savingSup || !supForm.name.trim()) ? t.mute : '#fff', cursor: (savingSup || !supForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
-            Add supplement
-          </button>
-        </div>
+              </div>
+
+              {/* Supplement list */}
+              {visible.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {visible.map((s) => {
+                    const taken = !!supTaken[s.id];
+                    return (
+                      <button key={s.id} onClick={() => setSupTaken((x) => ({ ...x, [s.id]: !taken }))} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all" style={{ background: taken ? `${t.accent}10` : t.glass, border: `1px solid ${taken ? t.accent + '30' : t.border}` }}>
+                        <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] shrink-0" style={{ background: taken ? t.accent : 'transparent', color: taken ? '#fff' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}>✓</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{s.name}</span>
+                          {/* Linear progress bar */}
+                          <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: t.ringTrack }}>
+                            <div className="h-full rounded-full" style={{ width: taken ? '100%' : '0%', background: t.accent, transition: 'width 0.4s ease' }} />
+                          </div>
+                        </span>
+                        <span className="font-grotesk text-[10px] shrink-0" style={{ color: t.mute }}>{s.dose || ''}</span>
+                        <button className="w-6 h-6 rounded-md grid place-items-center text-[9px] shrink-0 transition-colors" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${s.name}"?`)) return; try { await api(`/tracking/clients/${clientId}/supplements/${s.id}`, { method: 'DELETE' }); const r = await api(`/tracking/clients/${clientId}/supplements`); setSupList(r.supplements || []); setToast(`${s.name} removed`); } catch (err) { setToast(err.message || 'Failed to delete supplement'); } }} style={{ color: t.danger + 'AA' }} aria-label={`Delete ${s.name}`}>✕</button>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {sups.length === 0 && !showAddSupplement && (
+                <div className="text-center py-4 mb-3">
+                  <div className="font-grotesk text-[11px]" style={{ color: t.mute }}>No supplements added yet</div>
+                </div>
+              )}
+
+              {/* See more / See less */}
+              {sups.length > 2 && (
+                <button onClick={() => setSupplementsExpanded(!supplementsExpanded)} className="w-full py-2 text-center font-grotesk text-[11px] font-semibold rounded-xl mb-3 transition-colors" style={{ color: t.accent, background: t.accentDim + '40' }}>
+                  {supplementsExpanded ? 'Show less' : `See more (${sups.length - 2} more)`}
+                </button>
+              )}
+
+              {/* Add supplement form */}
+              {showAddSupplement && (
+                <div className="rounded-xl p-3.5 space-y-2.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
+                  <div className="flex items-center justify-between">
+                    <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Add supplement</div>
+                    <button onClick={() => { setShowAddSupplement(false); setSupForm({ name: '', dose: '' }); }} className="w-6 h-6 rounded-md grid place-items-center text-[10px]" style={{ color: t.mute }} aria-label="Close add form">✕</button>
+                  </div>
+                  <input className="w-full px-3 py-2.5 rounded-xl font-grotesk text-sm outline-none" placeholder="e.g. Omega 3" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.name} onChange={(e) => setSupForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
+                  <input className="w-full px-3 py-2.5 rounded-xl font-grotesk text-xs outline-none" placeholder="Dose (e.g. 1000 mg, 1 scoop, 1000 IU)" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.dose} onChange={(e) => setSupForm((f) => ({ ...f, dose: e.target.value }))} />
+                  <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={savingSup || !supForm.name.trim()} onClick={async () => { setSavingSup(true); try { await api(`/tracking/clients/${clientId}/supplements`, { method: 'POST', body: JSON.stringify({ name: supForm.name.trim(), dose: supForm.dose || undefined }) }); setSupForm({ name: '', dose: '' }); setShowAddSupplement(false); api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {}); setToast('Supplement added ✓'); } catch (e) { setToast(e.message); } setSavingSup(false); }}
+                    style={{ background: (savingSup || !supForm.name.trim()) ? t.surface : t.accent, color: (savingSup || !supForm.name.trim()) ? t.mute : '#fff', cursor: (savingSup || !supForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
+                    {savingSup ? 'Saving…' : 'Save supplement'}
+                  </button>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
+
+      {/* ══════ HYDRATION ══════ */}
+      <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
 
       {/* ══════ TOAST ══════ */}
       {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
@@ -1139,22 +1361,60 @@ export default function Nutrition() {
       {logFoodMenuOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setLogFoodMenuOpen(false); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
           <div className="w-full max-w-sm overflow-hidden rounded-3xl anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-            <div className="p-5" style={{ borderBottom: `1px solid ${t.border}` }}>
-              <div className="font-grotesk font-bold" style={{ color: t.ink }}>Log Food</div>
+            <div className="p-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${t.border}` }}>
+              <div>
+                <div className="font-grotesk font-bold" style={{ color: t.ink }}>Log Food</div>
+                <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>How do you want to log your food?</div>
+              </div>
+              <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={() => setLogFoodMenuOpen(false)} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
             </div>
             <div className="p-2">
+              {/* Voice Input */}
+              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); startVoice(); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.accentDim, border: `1px solid ${t.accent}30` }}>🎤</div>
+                <div>
+                  <div className="font-grotesk text-sm font-bold">Voice</div>
+                  <div className="text-[11px]" style={{ color: t.mute }}>Say what you ate</div>
+                </div>
+              </button>
+              {/* Scan Barcode */}
+              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setBarcodeOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.goldDim, border: `1px solid ${t.gold}25` }}>📷</div>
+                <div>
+                  <div className="font-grotesk text-sm font-bold">Scan Barcode</div>
+                  <div className="text-[11px]" style={{ color: t.mute }}>Scan food packaging</div>
+                </div>
+              </button>
+              {/* Take Photo */}
+              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment'; input.onchange = (e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { setAiText('[Photo uploaded]'); setToast('Photo captured — use Estimate to analyze'); }; reader.readAsDataURL(file); } }; input.click(); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: '#F0F0F010', border: `1px solid ${t.border}` }}>📸</div>
+                <div>
+                  <div className="font-grotesk text-sm font-bold">Take Photo</div>
+                  <div className="text-[11px]" style={{ color: t.mute }}>Photograph your meal</div>
+                </div>
+              </button>
+              {/* Search / Select Food */}
+              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setFoodLogSheetOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.accentDim, border: `1px solid ${t.accent}25` }}>🔎</div>
+                <div>
+                  <div className="font-grotesk text-sm font-bold">Search Food</div>
+                  <div className="text-[11px]" style={{ color: t.mute }}>Search and select from foods</div>
+                </div>
+              </button>
+              {/* Customize My Meal */}
               <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setCustomMealOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                 <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.goldDim, border: `1px solid ${t.gold}25` }}>🍳</div>
                 <div>
                   <div className="font-grotesk text-sm font-bold">Customize My Meal</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Build a meal from individual ingredients</div>
+                  <div className="text-[11px]" style={{ color: t.mute }}>Build a meal from ingredients</div>
                 </div>
               </button>
+              {/* Saved Meals */}
               <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setSavedMealsOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                 <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.accentDim, border: `1px solid ${t.accent}25` }}>📋</div>
                 <div>
                   <div className="font-grotesk text-sm font-bold">Saved Meals</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>View and manage your saved meals</div>
+                  <div className="text-[11px]" style={{ color: t.mute }}>Log from your saved recipes</div>
                 </div>
               </button>
             </div>
@@ -1170,6 +1430,12 @@ export default function Nutrition() {
       <SavedMealsModal open={savedMealsOpen} onClose={() => setSavedMealsOpen(false)} onEdit={(m) => { setEditMeal(m); setCustomMealOpen(true); }} toast={(msg) => setToast(msg)} onRefresh={() => { home.reload(); myMeals.reload(); }} />
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
       <DeleteLogConfirm open={deleteLogOpen} log={deleteLog} onClose={() => { setDeleteLogOpen(false); setDeleteLog(null); }} onConfirm={deleteLogEntry} t={t} />
+
+      {/* ══════ BARCODE SCANNER ══════ */}
+      <BarcodeScanner open={barcodeOpen} onClose={() => setBarcodeOpen(false)} onScanned={(item) => { setBarcodeOpen(false); if (item) { setAiText(item.name || ''); setToast(`Found: ${item.name || 'Unknown'}`); } }} />
+
+      {/* ══════ FOOD LOG SHEET ══════ */}
+      <FoodLogSheet open={foodLogSheetOpen} onClose={() => setFoodLogSheetOpen(false)} onAdd={(entry) => { setFoodLogSheetOpen(false); home.reload(); setToast('Food logged ✓'); }} />
     </div>
   );
 }

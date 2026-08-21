@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
+import Icon from './Icon.jsx';
 
 export function Card({ children, className, style, hover }) {
   return <div className={cls('card p-5', hover && 'card-hover', className)} style={style}>{children}</div>;
@@ -48,13 +49,28 @@ export function Kicker({ children, tone }) {
   return <div className={cls('kicker', tone)}>{children}</div>;
 }
 
-export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, icon }) {
+/**
+ * `icon` used to take a literal glyph ('◉', '✓', '₹', ...) passed straight
+ * to <Icon name={...}>. None of those strings match a key in Icon.jsx's
+ * PATHS table, so every one of the 9 call sites across the trainer pages
+ * silently fell through to the same generic placeholder glyph -- nine
+ * different KPIs (active clients, revenue, overdue, attendance...) all
+ * showing one meaningless icon, which is worse than no icon at all: it
+ * looks intentional and communicates nothing.
+ *
+ * Replaced with `dot`: a small colour swatch for tiles that need a
+ * glance-able "this one wants action" signal (needs attention, at risk,
+ * overdue), omitted for neutral tiles (active clients, on track, revenue).
+ * Matches the restrained KPI-row treatment already established for the
+ * trainer dashboard -- most tiles carry no colour at all, so the ones that
+ * do stand out instead of competing with eight others for attention. */
+export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, dot }) {
   const v = useCountUp(value, 1000, dec);
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-1.5 mb-2">
+        {dot && <span className={cls('w-1.5 h-1.5 rounded-full shrink-0', dot)} />}
         <span className="text-[10.5px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--mute)' }}>{label}</span>
-        {icon && <span className="text-sm">{icon}</span>}
       </div>
       <div className={cls('font-grotesk font-bold text-2xl leading-none', tone)} style={{ color: tone ? undefined : 'var(--ink)' }}>
         {v.toLocaleString('en-US', { maximumFractionDigits: dec })}{suffix}
@@ -65,19 +81,24 @@ export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, icon }) {
 }
 
 export function Ring({ value, max, size = 170, stroke = 12, color, label, sub }) {
-  const light = useLight();
   const frac = max > 0 ? Math.min(1, value / max) : 0;
   const C = 2 * Math.PI * ((size - stroke) / 2);
-  const gradId = `ringGrad-${size}`;
-  const c1 = light ? '#8C6A4D' : '#0A8A85';
-  const c2 = light ? '#B18663' : '#14C4BC';
+  // Unique per instance, not per size: two rings of the SAME size on one
+  // screen previously collided on `ringGrad-120` and the second silently
+  // inherited the first one's stops.
+  const gradId = useId();
+  // Was two hardcoded hex pairs behind a `useLight()` branch. Now the
+  // gradient reads the accent tokens, so a palette change repaints every
+  // ring in the app with no edit here — which is exactly what the peach
+  // repaint needed and did not get from the old version.
   const strokeColor = color || `url(#${gradId})`;
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={c1} /><stop offset="100%" stopColor={c2} />
+            <stop offset="0%" style={{ stopColor: 'var(--accent-deep, var(--accent))' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--accent)' }} />
           </linearGradient>
         </defs>
         <circle cx={size / 2} cy={size / 2} r={(size - stroke) / 2} fill="none" stroke="var(--line)" strokeWidth={stroke} />
@@ -94,9 +115,9 @@ export function Ring({ value, max, size = 170, stroke = 12, color, label, sub })
 }
 
 export function Bar({ value, max, color, label, right, height = 'h-2' }) {
-  const light = useLight();
   const frac = max > 0 ? Math.min(1, value / max) : 0;
-  const barColor = color || (light ? 'linear-gradient(92deg,#8C6A4D,#B18663)' : 'linear-gradient(92deg,#0A8A85,#14C4BC)');
+  // Same reasoning as Ring: token-driven, so it follows the palette.
+  const barColor = color || 'var(--accent-grad)';
   return (
     <div>
       {(label || right) && (
@@ -156,10 +177,10 @@ export function Modal({ open, onClose, title, children, wide }) {
   );
 }
 
-export function Empty({ title = 'Nothing here yet', hint, icon = '🫙', action }) {
+export function Empty({ title = 'Nothing here yet', hint, icon = 'empty', action }) {
   return (
     <div className="text-center py-12">
-      <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center text-2xl mb-3" style={{ borderColor: 'var(--line)', background: 'var(--bg2)' }}>{icon}</div>
+      <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center text-2xl mb-3" style={{ borderColor: 'var(--line)', background: 'var(--bg2)', color: 'var(--faint)' }}><Icon name={icon} size={24} /></div>
       <div className="font-grotesk font-semibold text-sm" style={{ color: 'var(--ink)' }}>{title}</div>
       {hint && <div className="text-xs mt-1 max-w-xs mx-auto" style={{ color: 'var(--mute)' }}>{hint}</div>}
       {action && <div className="mt-4">{action}</div>}
@@ -207,7 +228,7 @@ export function ErrorState({ error, onRetry }) {
 export function MacroPill({ p, c, f }) {
   return (
     <span className="flex gap-2 font-grotesk text-[10.5px]">
-      <span className="text-[#FF9A7A]">P {Math.round(p)}</span>
+      <span className="text-[#FF8C42]">P {Math.round(p)}</span>
       <span className="text-gold">C {Math.round(c)}</span>
       <span className="text-cyanx">F {Math.round(f)}</span>
     </span>

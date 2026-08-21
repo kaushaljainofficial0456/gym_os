@@ -4,6 +4,7 @@ import { useFetch } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
 import { Spinner, ErrorState, Ring } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
+import Icon from '../../components/Icon.jsx';
 
 const EQUIPMENT = [
   { id: 'barbell', label: 'Barbell' }, { id: 'dumbbells', label: 'Dumbbells' }, { id: 'cable', label: 'Cable machine' },
@@ -23,15 +24,15 @@ const DASH_CARDS = [
 ];
 
 const PROFILE_SECTIONS = [
-  { id: 'goal', label: 'Goal & Setup', icon: '🎯', desc: 'View progress and update your goals' },
-  { id: 'equipment', label: 'My Equipment', icon: '🏋️', desc: 'Manage your gym equipment' },
-  { id: 'metrics', label: 'My Metrics', icon: '📊', desc: 'Track personal measurements' },
-  { id: 'coach', label: 'Coach Preference', icon: '💬', desc: 'Coach settings and messages' },
-  { id: 'dashboard', label: 'Dashboard', icon: '📋', desc: 'Customize your home dashboard' },
+  { id: 'goal', label: 'Goal & Setup', icon: 'target', desc: 'View progress and update your goals' },
+  { id: 'equipment', label: 'My Equipment', icon: 'strength', desc: 'Manage your gym equipment' },
+  { id: 'metrics', label: 'My Metrics', icon: 'chart', desc: 'Track personal measurements' },
+  { id: 'coach', label: 'Coach Preference', icon: 'chat', desc: 'Coach settings and messages' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'clipboard', desc: 'Customize your home dashboard' },
   { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
 ];
 
-function MiniSpark({ values, color = '#12B8B0' }) {
+function MiniSpark({ values, color = '#C4F82A' }) {
   if (!values?.length) return <div className="text-[10px] text-faint">No entries yet</div>;
   const pts = values.slice(-8).map((v, i, a) => {
     const min = Math.min(...a), max = Math.max(...a);
@@ -62,11 +63,11 @@ function BackButton({ onClick }) {
 function HelpInline() {
   const [expanded, setExpanded] = useState(null);
   const HELP_SECTIONS = [
-    { id: 'overview', icon: '🏠', title: 'How SK OS Works', content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'SK OS analyzes your data and provides insights', 'Your coach gets real-time updates'] },
-    { id: 'workouts', icon: '💪', title: 'How Workouts Work', content: 'Your coach assigns structured workout plans with exercises, sets, reps, and weights.', items: ['Open a workout to see all exercises', 'Log your actual weights and reps', 'Rest timer helps track between sets', 'Complete all exercises to finish the session'] },
-    { id: 'nutrition', icon: '🥗', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask SK OS to quickly log foods', 'Take a meal photo for calorie estimates'] },
-    { id: 'progress', icon: '📈', title: 'Progress Tracking', content: 'Track your body transformation over time with weight, measurements, and photos.', items: ['Log weight regularly on Progress page', 'View weight trends with charts', 'Track body measurements', 'See your adherence score'] },
-    { id: 'coach', icon: '🤖', title: 'Coach & Intelligence', content: 'SK OS provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask SK OS natural language questions', 'Message your coach from Profile'] },
+    { id: 'overview', icon: 'home', title: 'How SK OS Works', content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'SK OS analyzes your data and provides insights', 'Your coach gets real-time updates'] },
+    { id: 'workouts', icon: 'strength', title: 'How Workouts Work', content: 'Your coach assigns structured workout plans with exercises, sets, reps, and weights.', items: ['Open a workout to see all exercises', 'Log your actual weights and reps', 'Rest timer helps track between sets', 'Complete all exercises to finish the session'] },
+    { id: 'nutrition', icon: 'food', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask SK OS to quickly log foods', 'Take a meal photo for calorie estimates'] },
+    { id: 'progress', icon: 'trending', title: 'Progress Tracking', content: 'Track your body transformation over time with weight, measurements, and photos.', items: ['Log weight regularly on Progress page', 'View weight trends with charts', 'Track body measurements', 'See your adherence score'] },
+    { id: 'coach', icon: 'robot', title: 'Coach & Intelligence', content: 'SK OS provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask SK OS natural language questions', 'Message your coach from Profile'] },
   ];
   return (
     <div className="space-y-3">
@@ -74,7 +75,7 @@ function HelpInline() {
       {HELP_SECTIONS.map((section) => (
         <div key={section.id} className="card overflow-hidden">
           <button onClick={() => setExpanded(expanded === section.id ? null : section.id)} className="w-full flex items-center gap-3 p-4 text-left" style={{ color: 'var(--ink)' }}>
-            <span className="text-xl shrink-0">{section.icon}</span>
+            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={20} /></span>
             <span className="flex-1 font-grotesk font-bold text-sm">{section.title}</span>
             <span className="text-lg transition-transform duration-200" style={{ color: 'var(--mute)', transform: expanded === section.id ? 'rotate(45deg)' : 'none' }}>+</span>
           </button>
@@ -110,7 +111,7 @@ function ThemeToggle() {
         <button
           onClick={toggle}
           className="relative w-12 h-6 rounded-full transition-colors duration-200"
-          style={{ background: isDark ? 'linear-gradient(135deg, #0A8A85, #14C4BC)' : '#8C6A4D' }}
+          style={{ background: 'var(--accent-grad)' }}
           role="switch"
           aria-checked={isDark}
           aria-label="Toggle dark mode"
@@ -153,6 +154,9 @@ export default function Profile() {
   const [gForm, setGForm] = useState(null);
   const [savingG, setSavingG] = useState(false);
   const [toast, setToast] = useState('');
+  const [localAvatar, setLocalAvatar] = useState(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   // coach memory/preferences
   const coachMem = useFetch(() => api('/intel/coach/memory'));
   const [coachPrefs, setCoachPrefs] = useState({});
@@ -160,6 +164,34 @@ export default function Profile() {
 
   const data = home.data;
   const clientId = data?.client?.id;
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setToast('Only JPG, PNG, or WebP images are supported'); return; }
+    if (file.size > 5 * 1024 * 1024) { setToast('Image too large (max 5 MB)'); return; }
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result); fr.onerror = reject; fr.readAsDataURL(file);
+      });
+      const res = await api('/me/avatar', { method: 'POST', body: JSON.stringify({ image: b64 }) });
+      setLocalAvatar(res.avatar);
+      home.reload();
+      setToast('Profile photo updated ✓');
+    } catch (err) { setToast(err.message || 'Upload failed'); }
+    e.target.value = '';
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      await api('/me/avatar', { method: 'DELETE' });
+      setLocalAvatar(null);
+      home.reload();
+      setRemoveConfirmOpen(false);
+      setToast('Profile photo removed');
+    } catch (err) { setToast(err.message || 'Failed to remove photo'); }
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -480,7 +512,7 @@ export default function Profile() {
                           <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
                         </div>
                       </div>
-                      <MiniSpark values={vals} color={m.color || '#12B8B0'} />
+                      <MiniSpark values={vals} color={m.color || '#C4F82A'} />
                       {(m.entries || []).slice(0, 4).length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {(m.entries || []).slice(0, 4).map((e) => (
@@ -629,9 +661,54 @@ export default function Profile() {
 
       {/* Profile header — always visible */}
       <div className="card p-5 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg border shrink-0" style={{ background: 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.08))', borderColor: 'var(--line)' }}>
-          {c.name[0]}
+        {/* Avatar with photo menu */}
+        <div className="relative shrink-0">
+          <button onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg border transition-all hover:scale-105 active:scale-95" style={{ background: (localAvatar || c.avatar) ? 'none' : 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.08))', borderColor: 'var(--line)', overflow: 'hidden' }} title="Change profile photo">
+            {(localAvatar || c.avatar) ? (
+              <img src={localAvatar || c.avatar} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span>{c.name[0]}</span>
+            )}
+          </button>
+          {/* X/remove button when photo exists */}
+          {(localAvatar || c.avatar) && (
+            <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmOpen(true); }} className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full grid place-items-center text-[8px] font-bold border transition-all hover:scale-110" style={{ background: 'var(--panel)', borderColor: 'var(--line)', color: 'var(--mute)' }} title="Remove photo">✕</button>
+          )}
+          {/* Photo menu */}
+          {avatarMenuOpen && (
+            <div className="absolute top-full left-0 mt-2 z-30 rounded-xl overflow-hidden anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
+              <button onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-camera').click(); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors" style={{ color: 'var(--ink)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <span className="text-base">📷</span>
+                <span className="font-grotesk text-sm font-semibold">Camera</span>
+              </button>
+              <button onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-gallery').click(); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors" style={{ color: 'var(--ink)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <span className="text-base">🖼️</span>
+                <span className="font-grotesk text-sm font-semibold">Gallery</span>
+              </button>
+              <button onClick={() => setAvatarMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-t" style={{ borderColor: 'var(--line)', color: 'var(--mute)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <span className="font-grotesk text-sm font-semibold">Cancel</span>
+              </button>
+            </div>
+          )}
         </div>
+        {/* Hidden file inputs */}
+        <input id="avatar-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleAvatarUpload} />
+        <input id="avatar-gallery" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
+        {/* Remove photo confirmation */}
+        {removeConfirmOpen && (
+          <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+            <div className="w-full max-w-xs rounded-2xl p-5 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+              <div className="text-center mb-4">
+                <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Remove profile photo?</div>
+                <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>Your initial letter will be shown instead.</div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setRemoveConfirmOpen(false)} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold" style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--mute)' }}>Cancel</button>
+                <button onClick={handleRemoveAvatar} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold" style={{ background: '#FF6B6B', color: '#fff' }}>Remove</button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{c.name}</div>
           <div className="text-xs" style={{ color: 'var(--mute)' }}>{c.goal.replace(/_/g, ' ')} · {c.currentWeight} kg now</div>
@@ -661,7 +738,7 @@ export default function Profile() {
               }}
               className="w-full card p-4 flex items-center gap-4 text-left hover:border-gold/40 transition-colors group"
             >
-              <span className="text-2xl shrink-0">{section.icon}</span>
+              <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={22} /></span>
               <div className="flex-1 min-w-0">
                 <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{section.desc}</div>

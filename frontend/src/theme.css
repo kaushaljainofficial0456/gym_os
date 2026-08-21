@@ -3,48 +3,266 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════
+   TYPEFACES — self-hosted, see index.html for why
+
+   TWO faces, each with one job, because a premium UI reads as premium
+   through restraint rather than variety:
+
+   SATOSHI (Indian Type Foundry) carries everything functional — UI,
+   labels, and above all NUMBERS. It has true tabular figures, which is
+   what stops a counting animation from making the whole row jitter as
+   digit widths change. Weight range 400-900 is doing the work that a
+   second sans would otherwise be brought in to do.
+
+   SENTIENT is a serif, used for exactly one thing: the greeting line at
+   the top of a screen. It is the human sentence on an otherwise numeric
+   page. It is deliberately NOT used for data, headings, or buttons — a
+   serif on a metric reads as decorative, and decoration on a number is
+   what makes an interface look designed-at rather than designed.
+
+   `font-display: swap` is set on Satoshi (text should never be invisible)
+   but `block` on Sentient: it appears once, large, and a visible swap
+   from a fallback serif to Sentient at 40px is more distracting than a
+   ~100 ms wait on a preloaded, self-hosted file.
+   ═══════════════════════════════════════════════ */
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-900.woff2') format('woff2'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Sentient'; src: url('/fonts/sentient-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: 'Sentient'; src: url('/fonts/sentient-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: block; }
+/* DM Sans — trainer-scoped numerals/labels. Satoshi carries the trainer
+   HEADLINES (hero number, section titles); DM Sans carries the smaller
+   supporting text — table cells, list rows, form labels — where its
+   quieter, more geometric numerals read calmer at small sizes than
+   Satoshi's punchier default. Two faces with two distinct jobs, not two
+   faces competing for the same job. */
+@font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+/* Bricolage Grotesque — one specific trainer headline, nothing else.
+   Google's static instances top out at 800 (this family has no 900 cut,
+   unlike Satoshi's font-black); 800 is mapped to the CSS weight 900 so
+   `font-black` still resolves to the heaviest cut this face actually has,
+   rather than silently falling back past it to a lighter weight or a
+   system font. */
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage-800.woff2') format('woff2'); font-weight: 800 900; font-style: normal; font-display: swap; }
+
+/* ═══════════════════════════════════════════════
    DARK MODE (default — premium SK OS signature)
    ═══════════════════════════════════════════════ */
 :root {
   color-scheme: dark;
-  --bg: #080C10;
-  --bg2: #0E1418;
-  --panel: #111920;
-  --panel2: #162128;
-  --line: rgba(255,255,255,.07);
-  --ink: #F0F4F3;
-  --mute: rgba(240,244,243,.55);
-  --faint: rgba(240,244,243,.30);
-  --accent: #14C4BC;
-  --accent-soft: rgba(20,196,188,.10);
-  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+  /* Pitch-black canvas */
+  --bg: #0A0A0A;
+  --bg2: #111113;
+  --panel: #18181B;
+  --panel2: #27272A;
+  --line: rgba(255,255,255,.08);
+  --ink: #FAFAFA;                      /* high-contrast white */
+  --mute: rgba(250,250,250,.50);
+  --faint: rgba(250,250,250,.28);
+  /* Primary accent: electric lime */
+  --accent: #C4F82A;
+  --accent-deep: #A8D924;
+  --accent-soft: rgba(196,248,42,.10);
+  /* Secondary colors */
+  --secondary: #FB7185;               /* pink/red */
+  --secondary-deep: #F43F5E;
+  --secondary-soft: rgba(251,113,133,.10);
+  --cyan: #22D3EE;
+  --purple: #7C3AED;
+  --orange: #FA541C;
+  --gold: #FBBF24;
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
   --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
+
+  /* Channel tokens */
+  --accent-rgb: 196 248 42;
+  --accent-deep-rgb: 168 217 36;
+  --accent-contrast: #0A0A0A;          /* dark ink ON lime */
+  --bg-rgb: 10 10 10;
+  --bg2-rgb: 17 17 19;
+  --panel-rgb: 24 24 27;
+  --panel2-rgb: 39 39 42;
+  --ink-rgb: 250 250 250;
+  --secondary-rgb: 251 113 133;
+  --secondary-deep-rgb: 244 63 94;
+  --cyan-rgb: 34 211 238;
+  --violet-rgb: 124 58 237;
+  --orange-rgb: 250 84 28;
+  --gold-rgb: 251 191 36;
+  --good-rgb: 196 248 42;
+  --warn-rgb: 251 191 36;
+  --bad-rgb: 248 113 113;
+
+  --tint-rgb: 255 255 255;
+
+  --accent-grad: linear-gradient(135deg, #A8D924, #C4F82A);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(196,248,42,.35);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(196,248,42,.5);
 }
 
 /* ═══════════════════════════════════════════════
-   LIGHT MODE — Warm luxury beige/ivory palette
+   LIGHT MODE — Clean, warm palette
    ═══════════════════════════════════════════════ */
 .light {
   color-scheme: light;
-  --bg: #F7F3EE;
-  --bg2: #EFE6DE;
+  --bg: #F5F2ED;
+  --bg2: #EDEAE4;
   --panel: #FFFFFF;
-  --panel2: #F5EDE4;
-  --line: #E6D9C8;
-  --ink: #3D3026;
-  --mute: #756657;
-  --faint: #9A8979;
-  --accent: #8C6A4D;
-  --accent-soft: rgba(140,106,77,.10);
-  --card-shadow: 0 1px 2px rgba(91,70,54,.04), 0 4px 12px rgba(91,70,54,.03);
+  --panel2: #F8F6F2;
+  --line: rgba(0,0,0,.08);
+  --ink: #1A1D1A;
+  --mute: rgba(26,29,26,.55);
+  --faint: rgba(26,29,26,.32);
+  --accent: #5A8C00;                   /* muted lime for light mode */
+  --accent-deep: #4A7500;
+  --accent-soft: rgba(90,140,0,.08);
+  --secondary: #D46A8A;
+  --secondary-deep: #C25A7A;
+  --secondary-soft: rgba(212,106,138,.08);
+  --card-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.04);
   --card-gradient: none;
+
+  --accent-rgb: 90 140 0;
+  --accent-deep-rgb: 74 117 0;
+  --accent-contrast: #FFFFFF;
+  --bg-rgb: 245 242 237;
+  --bg2-rgb: 237 234 228;
+  --panel-rgb: 255 255 255;
+  --panel2-rgb: 248 246 242;
+  --ink-rgb: 26 29 26;
+  --secondary-rgb: 212 106 138;
+  --secondary-deep-rgb: 194 90 122;
+  --cyan-rgb: 42 122 133;
+  --violet-rgb: 122 96 156;
+
+  --tint-rgb: 0 0 0;
+
+  --accent-grad: linear-gradient(135deg, #4A7500, #5A8C00);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(90,140,0,.25);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(90,140,0,.35);
+}
+
+/* ═══════════════════════════════════════════════
+   TRAINER — scoped design language (terracotta / blush)
+
+   Wrapped around <TrainerLayout>'s root only, via .trainer-theme, so
+   the client app's lime identity is completely untouched — nothing
+   here reaches Home/Workout/Nutrition. Two pairs (dark/light) so it
+   still honours the global theme toggle rather than forcing one look.
+
+   Leaves --secondary/--cyan/--violet alone (semantic data-viz hues,
+   not brand). DOES override good/warn/bad, on reflection: --good-rgb
+   globally IS the client app's lime brand colour reused as a status
+   colour, so leaving it "untouched" meant a neon-lime dot on every
+   trainer screen — the opposite of untouched. What's preserved is the
+   MEANING (good still reads as positive, bad still reads as alarm),
+   not the literal hex; see the values below for why.
+   ═══════════════════════════════════════════════ */
+.dark .trainer-theme {
+  --bg: #1C1210;
+  --bg2: #241815;
+  --panel: #2A1D19;
+  --panel2: #33241F;
+  --line: rgba(255,255,255,.08);
+  --ink: #F7ECE7;
+  --mute: rgba(247,236,231,.55);
+  --faint: rgba(247,236,231,.30);
+  --accent: #E07A63;
+  --accent-deep: #C15C4C;
+  --accent-soft: rgba(224,122,99,.12);
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+  --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
+
+  --accent-rgb: 224 122 99;
+  --accent-deep-rgb: 193 92 76;
+  --accent-contrast: #2B120A;
+  --bg-rgb: 28 18 16;
+  --bg2-rgb: 36 24 21;
+  --panel-rgb: 42 29 25;
+  --panel2-rgb: 51 36 31;
+  --ink-rgb: 247 236 231;
+  --tint-rgb: 255 255 255;
+
+  --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
+
+  /* Status, restrained. The global --good-rgb IS the client app's lime
+     brand colour doing double duty as "on track" -- inside trainer that
+     read as a stray neon-green dot next to a warm palette, one hue too
+     many on an already-busy screen. "Bad"/at-risk reuses accent-deep
+     rather than inventing a second red: terracotta already reads as
+     alarm-adjacent, and one fewer competing hue is the point. Good and
+     warn get quiet, warm-leaning tones instead of the loud defaults, so
+     the whole screen reads as one family plus two calm status notes,
+     not four hues shouting over each other. */
+  --good-rgb: 122 168 128;
+  --warn-rgb: 199 149 92;
+  --bad-rgb: 193 92 76;
+}
+
+.light .trainer-theme {
+  --bg: #FFDFDD;
+  --bg2: #FFE9E6;
+  --panel: #FFFFFF;
+  --panel2: #FFF3F1;
+  --line: #F1DAD5;
+  --ink: #2B211C;
+  --mute: rgba(43,33,28,.58);
+  --faint: rgba(43,33,28,.34);
+  --accent: #C15C4C;
+  --accent-deep: #9C4436;
+  --accent-soft: rgba(193,92,76,.10);
+  --card-shadow: 0 1px 2px rgba(120,60,50,.05), 0 4px 14px rgba(120,60,50,.05);
+  --card-gradient: none;
+
+  --accent-rgb: 193 92 76;
+  --accent-deep-rgb: 156 68 54;
+  --accent-contrast: #FFFFFF;
+  --bg-rgb: 255 223 221;
+  --bg2-rgb: 255 233 230;
+  --panel-rgb: 255 255 255;
+  --panel2-rgb: 255 243 241;
+  --ink-rgb: 43 33 28;
+  --tint-rgb: 138 66 50;
+
+  --accent-grad: linear-gradient(135deg, #9C4436, #C15C4C);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.28);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.38);
+
+  /* Status, restrained -- see the dark block above for why. */
+  --good-rgb: 95 141 100;
+  --warn-rgb: 185 138 78;
+  --bad-rgb: 156 68 54;
+}
+
+/* Trainer type split: font-grotesk (Satoshi everywhere else in this app)
+   repoints to DM Sans inside trainer scope, for exactly the smaller
+   supporting text that class already carries -- kickers, list sub-lines,
+   table cells, form labels, timestamps. font-brand/font-display/font-body
+   (the actual headings and hero numbers) stay on Satoshi. Two faces with
+   two distinct jobs: Satoshi says "this is the important number/word on
+   the screen", DM Sans says "this is context for it" -- rather than one
+   face doing both jobs at different weights, which reads flatter.
+   Needs no !important: two classes beats font-grotesk's one on
+   specificity alone, and this rule compiles after @tailwind utilities. */
+.trainer-theme .font-grotesk {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
 }
 
 html, body, #root { min-height: 100%; }
 
 body {
   @apply antialiased;
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+  /* Tabular figures app-wide: this is a numbers product, and proportional
+     digits make every counter and table column shift width as it ticks. */
+  font-variant-numeric: tabular-nums;
   background-color: var(--bg);
   color: var(--ink);
   overflow-x: hidden;
@@ -54,144 +272,86 @@ body {
 }
 
 /* ═══════════════════════════════════════════════
-   LIGHT MODE — COMPREHENSIVE overrides
-   Covers: text, bg, border, accent/brand colors,
-   gradients, hover states
+   LIGHT MODE — the SHORT list
+
+   This block used to be ~102 `!important` rules re-stating every brand
+   colour in brown. Almost all of them are now GONE, because the colours
+   they overrode are token-driven: `bg-panel`, `text-ink`, `text-gold`,
+   `border-ember` and friends resolve through `rgb(var(--x-rgb) / a)`, so
+   redefining the variable in `.light` above already themes them. Keeping
+   the overrides would have meant editing two places for every palette
+   change -- which is exactly what made the peach repaint expensive.
+
+   What is left is only what a token CANNOT reach:
+     1. `bg-white/*` and `bg-black/*` — literal colours, not tokens. A
+        white wash on a peach page has to become a WARM wash or the
+        surface goes grey and dead.
+     2. `line` / `mute` / `faint` — the documented alpha-baked exception
+        (see src/design/tokens.js).
+     3. Recharts internals, which render their own SVG.
    ═══════════════════════════════════════════════ */
 
-/* ── Text colors ── */
-.light .text-ink { color: #3D3026 !important; }
-.light .text-ink\/80 { color: rgba(61,48,38,.80) !important; }
-.light .text-mute { color: #756657 !important; }
-.light .text-faint { color: #9A8979 !important; }
-.light .text-bg { color: #3D3026 !important; }
-.light .\!text-mute { color: #756657 !important; }
+/* ── 1. White/black washes → light theme compatible ── */
+.light .bg-white\/\[\.01\] { background-color: rgba(0,0,0,.015) !important; }
+.light .bg-white\/\[\.02\] { background-color: rgba(0,0,0,.025) !important; }
+.light .bg-white\/\[\.03\] { background-color: rgba(0,0,0,.03) !important; }
+.light .bg-white\/\[\.04\] { background-color: rgba(0,0,0,.035) !important; }
+.light .bg-white\/\[\.05\] { background-color: rgba(0,0,0,.04) !important; }
+.light .bg-white\/\[\.06\] { background-color: rgba(0,0,0,.045) !important; }
+.light .bg-white\/5  { background-color: rgba(0,0,0,.035) !important; }
+.light .bg-white\/8  { background-color: rgba(0,0,0,.05) !important; }
+.light .bg-white\/10 { background-color: rgba(0,0,0,.06) !important; }
+.light .bg-white\/80 { background-color: rgba(255,255,255,.88) !important; }
+.light .bg-white\/90 { background-color: rgba(255,255,255,.94) !important; }
+.light .bg-white\/95 { background-color: rgba(255,255,255,.97) !important; }
+.light .border-white\/20 { border-color: rgba(0,0,0,.12) !important; }
+.light .hover\:bg-white\/\[\.03\]:hover { background-color: rgba(0,0,0,.03) !important; }
+.light .hover\:bg-white\/\[\.05\]:hover { background-color: rgba(0,0,0,.045) !important; }
+.light .hover\:border-white\/15:hover { border-color: rgba(90,140,0,.25) !important; }
 
-/* ── Background: ivory/cream surfaces ── */
-.light .bg-bg { background-color: #F7F3EE !important; }
-.light .bg-bg\/95 { background-color: rgba(247,243,238,.95) !important; }
-.light .bg-bg\/80 { background-color: rgba(247,243,238,.80) !important; }
-.light .bg-bg\/60 { background-color: rgba(247,243,238,.60) !important; }
-.light .bg-bg\/50 { background-color: rgba(247,243,238,.50) !important; }
-.light .bg-bg\/40 { background-color: rgba(247,243,238,.40) !important; }
-.light .bg-bg\/70 { background-color: rgba(247,243,238,.70) !important; }
-.light .\!bg-bg\/70 { background-color: rgba(247,243,238,.70) !important; }
-.light .bg-bg2 { background-color: #EFE6DE !important; }
-.light .bg-panel { background-color: #FFFFFF !important; }
-.light .bg-panel\/95 { background-color: rgba(255,255,255,.95) !important; }
-.light .bg-panel2 { background-color: #F5EDE4 !important; }
+/* Scrims */
+.light .bg-black\/70 { background-color: rgba(0,0,0,.35) !important; }
+.light .bg-black\/60 { background-color: rgba(0,0,0,.28) !important; }
 
-/* ── White-based backgrounds → warm tints ── */
-.light .bg-white\/\[\.01\] { background-color: rgba(91,70,54,.015) !important; }
-.light .bg-white\/\[\.02\] { background-color: rgba(91,70,54,.025) !important; }
-.light .bg-white\/\[\.03\] { background-color: rgba(91,70,54,.035) !important; }
-.light .bg-white\/\[\.04\] { background-color: rgba(91,70,54,.04) !important; }
-.light .bg-white\/\[\.05\] { background-color: rgba(91,70,54,.045) !important; }
-.light .bg-white\/\[\.06\] { background-color: rgba(91,70,54,.05) !important; }
-.light .bg-white\/5 { background-color: rgba(91,70,54,.035) !important; }
-.light .bg-white\/8 { background-color: rgba(91,70,54,.055) !important; }
-.light .bg-white\/10 { background-color: rgba(91,70,54,.06) !important; }
-.light .bg-white\/80 { background-color: rgba(255,255,255,.85) !important; }
-.light .bg-white\/90 { background-color: rgba(255,255,255,.92) !important; }
-.light .bg-white\/95 { background-color: rgba(255,255,255,.95) !important; }
-.light .bg-mute { background-color: rgba(117,102,87,.55) !important; }
+/* ── 2. Alpha-baked tokens (the documented exception) ── */
+.light .border-line { border-color: rgba(0,0,0,.10) !important; }
+.light .border-line\/40 { border-color: rgba(0,0,0,.08) !important; }
+.light .border-line\/50 { border-color: rgba(0,0,0,.10) !important; }
+.light .border-line\/60 { border-color: rgba(0,0,0,.12) !important; }
+.light .\!border-line { border-color: rgba(0,0,0,.10) !important; }
+.light .text-mute  { color: rgba(26,29,26,.55) !important; }
+.light .\!text-mute { color: rgba(26,29,26,.55) !important; }
+.light .text-faint { color: rgba(26,29,26,.32) !important; }
+.light .bg-mute { background-color: rgba(0,0,0,.45) !important; }
 
-/* ── Borders ── */
-.light .border-line { border-color: #E6D9C8 !important; }
-.light .border-line\/40 { border-color: rgba(230,217,200,.40) !important; }
-.light .border-line\/50 { border-color: rgba(230,217,200,.50) !important; }
-.light .border-line\/60 { border-color: rgba(230,217,200,.60) !important; }
-.light .\!border-line { border-color: #E6D9C8 !important; }
-.light .border-white\/20 { border-color: rgba(230,217,200,.20) !important; }
-
-/* ── Dark overlays ── */
-.light .bg-black\/70 { background-color: rgba(61,48,38,.30) !important; }
-.light .bg-black\/60 { background-color: rgba(61,48,38,.25) !important; }
-
-/* ═══════════════════════════════════════════════
-   CRITICAL: Replace teal/cyan brand accents
-   with warm brown/taupe in light mode
-   ═══════════════════════════════════════════════ */
-
-/* ── Gold accent (primary brand) → brown ── */
-.light .text-gold { color: #8C6A4D !important; }
-.light .\!text-gold { color: #8C6A4D !important; }
-.light .border-gold { border-color: #8C6A4D !important; }
-.light .border-gold\/20 { border-color: rgba(140,106,77,.20) !important; }
-.light .border-gold\/25 { border-color: rgba(140,106,77,.25) !important; }
-.light .border-gold\/30 { border-color: rgba(140,106,77,.30) !important; }
-.light .border-gold\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .border-gold\/50 { border-color: rgba(140,106,77,.50) !important; }
-.light .border-gold\/60 { border-color: rgba(140,106,77,.60) !important; }
-.light .\!border-gold\/30 { border-color: rgba(140,106,77,.30) !important; }
-.light .\!border-gold\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .\!border-gold\/50 { border-color: rgba(140,106,77,.50) !important; }
-.light .bg-gold { background-color: #8C6A4D !important; }
-.light .bg-gold\/10 { background-color: rgba(140,106,77,.10) !important; }
-.light .bg-gold\/5 { background-color: rgba(140,106,77,.05) !important; }
-.light .\!bg-gold\/10 { background-color: rgba(140,106,77,.10) !important; }
-.light .bg-gold\/\[\.04\] { background-color: rgba(140,106,77,.04) !important; }
-.light .hover\:border-gold\/40:hover { border-color: rgba(140,106,77,.40) !important; }
-.light .hover\:border-gold\/50:hover { border-color: rgba(140,106,77,.50) !important; }
-.light .hover\:bg-gold\/10:hover { background-color: rgba(140,106,77,.10) !important; }
-.light .hover\:text-gold:hover { color: #8C6A4D !important; }
-.light .group:hover .group-hover\:border-gold\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .group:hover .group-hover\:text-gold { color: #8C6A4D !important; }
-
-/* ── Ember accent → brown ── */
-.light .text-ember { color: #8C6A4D !important; }
-.light .border-ember\/30 { border-color: rgba(140,106,77,.30) !important; }
-.light .border-ember\/40 { border-color: rgba(140,106,77,.40) !important; }
-.light .bg-ember\/10 { background-color: rgba(140,106,77,.10) !important; }
-.light .bg-ember\/5 { background-color: rgba(140,106,77,.05) !important; }
-.light .bg-ember\/8 { background-color: rgba(140,106,77,.08) !important; }
-.light .hover\:bg-ember\/20:hover { background-color: rgba(140,106,77,.15) !important; }
-
-/* ── Cyan accent → muted warm ── */
-.light .text-cyanx { color: #9A8979 !important; }
-.light .\!text-cyanx { color: #9A8979 !important; }
-.light .border-cyanx\/25 { border-color: rgba(154,137,121,.25) !important; }
-.light .border-cyanx\/30 { border-color: rgba(154,137,121,.30) !important; }
-.light .\!border-cyanx\/50 { border-color: rgba(154,137,121,.50) !important; }
-.light .bg-cyanx\/10 { background-color: rgba(154,137,121,.10) !important; }
-.light .bg-cyanx\/5 { background-color: rgba(154,137,121,.05) !important; }
-
-/* ── Violet accent → muted warm ── */
-.light .text-violetx { color: #9A8979 !important; }
-.light .border-violetx\/30 { border-color: rgba(154,137,121,.25) !important; }
-.light .border-violetx\/40 { border-color: rgba(154,137,121,.35) !important; }
-.light .bg-violetx\/10 { background-color: rgba(154,137,121,.08) !important; }
-.light .bg-violetx\/5 { background-color: rgba(154,137,121,.04) !important; }
-
-/* ── Gradient stops: teal → warm brown ── */
-.light .from-ember { --tw-gradient-from: #8C6A4D !important; }
-.light .from-ember\/20 { --tw-gradient-from: rgba(140,106,77,.20) !important; }
-.light .from-ember\/25 { --tw-gradient-from: rgba(140,106,77,.25) !important; }
-.light .from-ember\/30 { --tw-gradient-from: rgba(140,106,77,.25) !important; }
-.light .from-ember\/35 { --tw-gradient-from: rgba(140,106,77,.25) !important; }
-.light .from-ember\/40 { --tw-gradient-from: rgba(140,106,77,.30) !important; }
-.light .to-gold { --tw-gradient-to: #B18663 !important; }
-.light .to-gold\/10 { --tw-gradient-to: rgba(177,134,99,.10) !important; }
-.light .to-gold\/15 { --tw-gradient-to: rgba(177,134,99,.12) !important; }
-.light .to-gold\/20 { --tw-gradient-to: rgba(177,134,99,.15) !important; }
-.light .to-gold\/25 { --tw-gradient-to: rgba(177,134,99,.18) !important; }
-.light .from-bg2 { --tw-gradient-from: #EFE6DE !important; }
-.light .to-panel { --tw-gradient-to: #FFFFFF !important; }
-.light .from-bg\/55 { --tw-gradient-from: rgba(247,243,238,.55) !important; }
-.light .via-bg\/25 { --tw-gradient-via: rgba(247,243,238,.25) !important; }
-.light .to-bg\/80 { --tw-gradient-to: rgba(247,243,238,.80) !important; }
-
-/* ── Hover overrides ── */
-.light .hover\:bg-white\/\[\.03\]:hover { background-color: rgba(91,70,54,.025) !important; }
-.light .hover\:bg-white\/\[\.05\]:hover { background-color: rgba(91,70,54,.04) !important; }
-.light .hover\:border-white\/15:hover { border-color: rgba(140,106,77,.12) !important; }
-.light .hover\:text-ink:hover { color: #3D3026 !important; }
-.light .hover\:text-bad:hover { color: #DC6B6B !important; }
-
-/* ── Chart grid lines ── */
+/* ── 3. Recharts draws its own SVG and cannot see Tailwind ── */
 .light .recharts-cartesian-grid-horizontal line,
 .light .recharts-cartesian-grid-vertical line {
-  stroke: #E6D9C8 !important;
+  stroke: rgba(0,0,0,.08) !important;
+}
+
+/* ── Trainer override: higher specificity beats the client's
+   !important rules above, which a plain CSS variable cannot. Same
+   values as --mute/--faint/--line already carry in .light .trainer-theme;
+   restated here only because Tailwind's utility classes read the
+   !important rule directly, not the variable, for this one alpha-baked
+   trio (see the exception documented at the top of this file). Without
+   this, text-mute/text-faint/border-line rendered in the CLIENT app's
+   grey instead of trainer's warm brown -- two greys visibly disagreeing
+   on the same screen. ── */
+.light .trainer-theme .border-line { border-color: #F1DAD5 !important; }
+.light .trainer-theme .border-line\/40 { border-color: rgba(241,218,213,.55) !important; }
+.light .trainer-theme .border-line\/50 { border-color: rgba(241,218,213,.65) !important; }
+.light .trainer-theme .border-line\/60 { border-color: rgba(241,218,213,.75) !important; }
+.light .trainer-theme .\!border-line { border-color: #F1DAD5 !important; }
+.light .trainer-theme .text-mute  { color: rgba(43,33,28,.58) !important; }
+.light .trainer-theme .\!text-mute { color: rgba(43,33,28,.58) !important; }
+.light .trainer-theme .text-faint { color: rgba(43,33,28,.34) !important; }
+.light .trainer-theme .bg-mute { background-color: rgba(43,33,28,.4) !important; }
+.light .trainer-theme .hover\:border-white\/15:hover { border-color: rgba(193,92,76,.28) !important; }
+.light .trainer-theme .recharts-cartesian-grid-horizontal line,
+.light .trainer-theme .recharts-cartesian-grid-vertical line {
+  stroke: #F1DAD5 !important;
 }
 
 /* ═══════════════════════════════════════════════
@@ -204,10 +364,10 @@ body {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(48rem 34rem at 12% -10%, rgba(10,138,133,.10), transparent 60%),
-    radial-gradient(40rem 30rem at 94% 2%, rgba(20,196,188,.07), transparent 58%),
-    radial-gradient(50rem 36rem at 38% 122%, rgba(20,196,188,.04), transparent 60%),
-    radial-gradient(28rem 20rem at 78% 62%, rgba(56,216,255,.025), transparent 62%);
+    radial-gradient(48rem 34rem at 12% -10%, rgb(var(--accent-deep-rgb) / .08), transparent 60%),
+    radial-gradient(40rem 30rem at 94% 2%, rgb(var(--secondary-rgb) / .05), transparent 58%),
+    radial-gradient(50rem 36rem at 38% 122%, rgb(var(--accent-rgb) / .04), transparent 60%),
+    radial-gradient(28rem 20rem at 78% 62%, rgb(var(--secondary-rgb) / .03), transparent 62%);
   animation: ambientDrift 52s ease-in-out infinite alternate;
 }
 
@@ -226,17 +386,17 @@ body {
   100% { transform: translate3d(2%, 1%, 0) scale(1.04); }
 }
 
-::selection { background: rgba(20,196,188,.30); }
-.light ::selection { background: rgba(140,106,77,.15); }
+/* Token-driven -- the light-mode variants these replaced were the last
+   two places the old brown palette was still written by hand. */
+::selection { background: rgb(var(--accent-rgb) / .28); color: var(--ink); }
 
-/* ── Focus states ── */
+/* ── Focus states ──
+   Accessibility-critical, so this is never removed for aesthetics: it is
+   the only thing telling a keyboard user where they are. */
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid rgba(20,196,188,.8);
+  outline: 2px solid rgb(var(--accent-rgb) / .85);
   outline-offset: 2px;
   border-radius: 10px;
-}
-.light button:focus-visible, .light a:focus-visible, .light input:focus-visible {
-  outline-color: #8C6A4D;
 }
 
 /* ═══════════════════════════════════════════════
@@ -265,18 +425,64 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes checkBounce { 0% { transform: scale(0.5); opacity: 0; } 55% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
 .anim-checkBounce { animation: checkBounce .3s cubic-bezier(.22,.8,.3,1) both; }
 
-@keyframes confirmPulse { 0% { box-shadow: 0 0 0 0 rgba(20,196,188,.45); } 70% { box-shadow: 0 0 0 10px rgba(20,196,188,0); } 100% { box-shadow: 0 0 0 0 rgba(20,196,188,0); } }
+@keyframes confirmPulse { 0% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / .45); } 70% { box-shadow: 0 0 0 10px rgb(var(--accent-rgb) / 0); } 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / 0); } }
 .anim-confirmPulse { animation: confirmPulse .5s ease both; }
 
 @keyframes confirmPop { 0% { transform: scale(1); } 30% { transform: scale(1.06); } 100% { transform: scale(1); } }
 .anim-confirmPop { animation: confirmPop .35s cubic-bezier(.22,.8,.3,1) both; }
 
-.shadow-glow { box-shadow: 0 0 18px rgba(20,196,188,.4), 0 0 0 1px rgba(20,196,188,.22); }
+.shadow-glow { box-shadow: 0 0 18px rgb(var(--accent-rgb) / .4), 0 0 0 1px rgb(var(--accent-rgb) / .22); }
+
+/* ── Micro-interactions ── */
+@keyframes progressFill { from { stroke-dashoffset: var(--circumference, 283); } }
+@keyframes countUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInRight { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes breathe { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+@keyframes limePulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / .3); } 50% { box-shadow: 0 0 0 8px rgb(var(--accent-rgb) / 0); } }
+
+.anim-progressFill { animation: progressFill .8s cubic-bezier(.22,.8,.3,1) both; }
+.anim-countUp { animation: countUp .4s cubic-bezier(.22,.8,.3,1) both; }
+.anim-slideInRight { animation: slideInRight .3s cubic-bezier(.22,.8,.3,1) both; }
+.anim-breathe { animation: breathe 2s ease-in-out infinite; }
+.anim-limePulse { animation: limePulse 1.5s ease-in-out infinite; }
+
+/* Stagger children */
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 50ms; }
+.stagger > *:nth-child(3) { animation-delay: 100ms; }
+.stagger > *:nth-child(4) { animation-delay: 150ms; }
+.stagger > *:nth-child(5) { animation-delay: 200ms; }
+.stagger > *:nth-child(6) { animation-delay: 250ms; }
 
 /* ═══════════════════════════════════════════════
    COMPONENT LAYER
    ═══════════════════════════════════════════════ */
 @layer components {
+  /* ── Typography Hierarchy ── */
+  .page-title {
+    @apply font-grotesk font-black leading-tight;
+    font-size: 1.75rem;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .section-title {
+    @apply font-grotesk font-bold uppercase tracking-[.14em] leading-none;
+    font-size: 0.7rem;
+    color: var(--mute);
+  }
+  .stat-value {
+    @apply font-grotesk font-black tabular-nums leading-none;
+    font-size: 2rem;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .stat-label {
+    @apply font-grotesk font-medium uppercase tracking-[.12em];
+    font-size: 0.65rem;
+    color: var(--mute);
+  }
+
+  /* ── Cards ── */
   .card {
     background-color: var(--panel);
     border: 1px solid var(--line);
@@ -287,44 +493,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .dark .card { background-image: var(--card-gradient); }
   .light .card { background-image: none; }
 
-  .card-hover:hover { transform: translateY(-2px); }
-  .dark .card-hover:hover {
-    border-color: rgba(20,196,188,.15);
-    box-shadow: 0 32px 64px -28px rgba(0,0,0,.85), 0 0 0 1px rgba(20,196,188,.1), 0 0 40px -18px rgba(20,196,188,.12);
-  }
-  .light .card-hover:hover {
-    border-color: rgba(140,106,77,.15);
-    box-shadow: 0 4px 20px rgba(91,70,54,.06);
+  .card-elevated {
+    background-color: var(--panel2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--card-shadow);
   }
 
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgb(var(--accent-rgb) / .18);
+  }
+  .dark .card-hover:hover {
+    box-shadow: 0 32px 64px -28px rgba(0,0,0,.85),
+                0 0 0 1px rgb(var(--accent-rgb) / .10),
+                0 0 40px -18px rgb(var(--accent-rgb) / .14);
+  }
+  .light .card-hover:hover { box-shadow: 0 6px 22px rgba(0,0,0,.06); }
+
+  /* ── Kicker (section label) ── */
   .kicker {
     @apply font-grotesk text-[11px] font-semibold uppercase tracking-[.16em] flex items-center gap-2 mb-3;
     color: var(--mute);
   }
   .kicker::before { content: ''; @apply w-1 h-1 rounded-full; background: var(--accent); }
 
+  /* ── Buttons ── */
   .btn {
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold tracking-wide px-4 py-2.5 rounded-full transition-all duration-200;
     border: 1px solid var(--line);
     color: var(--ink);
   }
-  .dark .btn { background: rgba(255,255,255,.04); }
-  .light .btn { background: rgba(91,70,54,.03); }
+  .btn { background: rgb(var(--tint-rgb) / .045); }
   .btn:hover { border-color: var(--accent); }
-  .dark .btn:hover { background: rgba(255,255,255,.08); }
-  .light .btn:hover { background: rgba(91,70,54,.05); }
+  .btn:hover { background: rgb(var(--tint-rgb) / .085); }
   .btn:active { transform: scale(.97); }
 
   .btn-primary {
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold tracking-wide px-4 py-2.5 rounded-full transition-all duration-200 relative overflow-hidden;
-    background: linear-gradient(135deg, #0A8A85, #14C4BC);
-    box-shadow: 0 4px 14px -4px rgba(10,138,133,.45);
-    color: #FFFFFF;
-  }
-  .light .btn-primary {
-    background: #8C6A4D !important;
-    box-shadow: 0 4px 14px -4px rgba(140,106,77,.30) !important;
-    color: #FFFFFF !important;
+    background: var(--accent-grad);
+    box-shadow: var(--accent-grad-shadow);
+    color: var(--accent-contrast);
   }
   .btn-primary::after {
     content: '';
@@ -334,18 +543,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     transform: translateX(-120%) skewX(-18deg);
   }
   .btn-primary:hover::after { animation: sheen .6s ease; }
-  .btn-primary:hover { filter: brightness(1.06); }
-  .dark .btn-primary:hover { box-shadow: 0 6px 20px -4px rgba(10,138,133,.55); }
-  .light .btn-primary:hover { background: #B18663 !important; box-shadow: 0 6px 20px -4px rgba(140,106,77,.40) !important; }
+  .btn-primary:hover { filter: brightness(1.06); box-shadow: var(--accent-grad-shadow-hover); }
   .btn-primary:active { transform: scale(.97); }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold tracking-wide px-4 py-2.5 rounded-full transition-all duration-200;
+    border: 1px solid var(--line);
+    background: rgb(var(--secondary-rgb) / .12);
+    color: var(--secondary, #FF86B3);
+  }
+  .btn-secondary:hover { background: rgb(var(--secondary-rgb) / .20); }
 
   .btn-ghost {
     @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold px-3 py-2 rounded-full transition-colors;
     color: var(--mute);
   }
-  .dark .btn-ghost:hover { color: var(--ink); background: rgba(255,255,255,.05); }
-  .light .btn-ghost:hover { color: var(--ink); background: rgba(91,70,54,.04); }
+  .btn-ghost:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .05); }
 
+  /* ── Inputs ── */
   .input {
     @apply w-full rounded-xl px-3.5 py-2.5 text-sm font-grotesk transition-all duration-200;
     background-color: var(--bg2);
@@ -359,51 +574,70 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
+  /* ── Chips / Tags ── */
   .chip {
     @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full;
     border: 1px solid var(--line);
     color: var(--mute);
   }
-  .dark .chip { background: rgba(255,255,255,.03); }
-  .light .chip { background: rgba(91,70,54,.04); }
+  .chip { background: rgb(var(--tint-rgb) / .04); }
 
+  .chip-active {
+    @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full;
+    border: 1px solid rgb(var(--accent-rgb) / .4);
+    background: rgb(var(--accent-rgb) / .10);
+    color: var(--accent);
+  }
+
+  /* ── Tabs ── */
   .tab {
     @apply relative font-grotesk text-xs font-semibold px-3.5 py-2 rounded-full transition-colors whitespace-nowrap;
     color: var(--mute);
   }
   .tab:hover { color: var(--ink); }
   .tab.active {
-    @apply text-white;
-    background: linear-gradient(135deg, #0A8A85, #14C4BC);
-    box-shadow: 0 4px 14px -4px rgba(10,138,133,.5);
-  }
-  .light .tab.active {
-    background: #8C6A4D !important;
-    box-shadow: 0 4px 14px -4px rgba(140,106,77,.30) !important;
+    background: var(--accent-grad);
+    box-shadow: var(--accent-grad-shadow);
+    color: var(--accent-contrast);
   }
 
+  /* ── Navigation Links ── */
   .navlink {
     @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-grotesk text-[13px] font-medium transition-all duration-200;
     color: var(--mute);
   }
-  .dark .navlink:hover { color: var(--ink); background: rgba(255,255,255,.04); }
-  .light .navlink:hover { color: var(--ink); background: rgba(91,70,54,.04); }
-  .navlink.active { color: var(--ink); }
-  .dark .navlink.active {
-    background: linear-gradient(135deg, rgba(10,138,133,.10), rgba(20,196,188,.03) 70%);
-    box-shadow: inset 2px 0 0 #0A8A85;
-  }
-  .light .navlink.active {
-    background: rgba(140,106,77,.06);
-    box-shadow: inset 2px 0 0 #8C6A4D;
-    color: #3D3026;
+  .navlink:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .045); }
+  .navlink.active {
+    color: var(--ink);
+    background: linear-gradient(135deg, rgb(var(--accent-deep-rgb) / .10), rgb(var(--accent-rgb) / .03) 70%);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
+  /* ── Progress Ring ── */
+  .progress-ring-track { stroke: var(--line); }
+  .progress-ring-fill { stroke: var(--accent); transition: stroke-dashoffset .8s cubic-bezier(.22,.8,.3,1); }
+
+  /* ── Skeleton Loading ── */
   .skeleton {
     border-radius: 10px;
     background: linear-gradient(90deg, rgba(128,128,128,.08) 25%, rgba(128,128,128,.14) 37%, rgba(128,128,128,.08) 63%);
     background-size: 800px 100%;
     animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--line);
+    border: none;
+  }
+
+  /* ── Accent Glow ── */
+  .glow-lime {
+    box-shadow: 0 0 20px rgb(var(--accent-rgb) / .25), 0 0 0 1px rgb(var(--accent-rgb) / .15);
+  }
+  .glow-pink {
+    box-shadow: 0 0 20px rgb(var(--secondary-rgb, 255 134 179) / .25), 0 0 0 1px rgb(var(--secondary-rgb, 255 134 179) / .15);
   }
 }
 

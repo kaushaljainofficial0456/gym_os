@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { Spinner } from './components/UI.jsx';
@@ -21,6 +22,11 @@ import Profile from './pages/client/Profile.jsx';
 import Settings from './pages/client/Settings.jsx';
 import Help from './pages/client/Help.jsx';
 
+// Lazy: the design-system showcase is a reference page for the team, not
+// something a real user navigates to. Static-importing it would put its
+// demo content in the entry chunk everyone downloads.
+const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
+
 function Require({ ready, ok, children }) {
   if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
   if (!ok()) return <Navigate to="/login" replace />;
@@ -34,6 +40,17 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Design-system showcase. Intentionally unauthenticated: it renders
+          only static demo data, and needing a login to check a colour token
+          is friction that stops people checking. */}
+      <Route
+        path="/design"
+        element={
+          <Suspense fallback={<div className="min-h-screen grid place-items-center"><Spinner /></div>}>
+            <DesignSystem />
+          </Suspense>
+        }
+      />
       <Route path="/app" element={
         <Require ready={ready} ok={() => authed}>
           {isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
