@@ -107,12 +107,22 @@ export default function authRoutes(db) {
     const userId = id('usr');
     const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + orgId.slice(-4);
     try {
-      await db.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)',
-        [orgId, orgName, slug, type, now()]);
-      await db.run(
-        `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
-         VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, 1, ?)`,
-        [userId, orgId, email.toLowerCase().trim(), await hashPassword(password), ownerName, now()]);
+      // Hashed before the transaction opens — bcrypt is CPU-bound, no reason
+      // to hold a DB connection (Postgres: a pooled one) for it.
+      const passwordHash = await hashPassword(password);
+      // Was two separate db.run() calls: a failure on the second (e.g. a
+      // duplicate email) left the organization row committed with no
+      // owner — an orphaned org, unrecoverable except by hand, and its slug
+      // permanently unavailable to a retry. Same db.tx() pattern already
+      // used for workout completion.
+      await db.tx(async (tx) => {
+        await tx.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)',
+          [orgId, orgName, slug, type, now()]);
+        await tx.run(
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+           VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, 1, ?)`,
+          [userId, orgId, email.toLowerCase().trim(), passwordHash, ownerName, now()]);
+      });
       await track(db, { orgId, userId, type: 'org_created', data: { orgName } });
       const user = { id: userId, org_id: orgId, role: 'GYM_OWNER', name: ownerName, email: email.toLowerCase().trim() };
       const token = signToken(user);

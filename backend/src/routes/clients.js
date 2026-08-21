@@ -110,19 +110,28 @@ export default function clientRoutes(db) {
     if (!body.password) return res.status(422).json({ error: 'Password is required for new client accounts' });
     const trainerId = body.trainer_id || (req.user.role === 'TRAINER' ? req.user.sub : null);
     try {
-      await db.run(
-        `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
-         VALUES (?, ?, ?, ?, 'CLIENT', ?, 1, ?)`,
-        [userId, req.orgId, email, await hashPassword(body.password), body.name, now()]);
-      await db.run(
-        `INSERT INTO clients (id, user_id, org_id, trainer_id, status, goal, start_weight,
-                              current_weight, target_weight, goal_date, height_cm, age, sex, created_at)
-         VALUES (?, ?, ?, ?, 'ON_TRACK', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [clientId, userId, req.orgId, trainerId, body.goal, body.start_weight ?? null,
-         body.start_weight ?? null, body.target_weight ?? null, body.goal_date ?? null, body.height_cm ?? null, body.age ?? null, body.sex ?? null, now()]);
-      await db.run(
-        `INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`,
-        [clientId]);
+      // Hashed before the transaction opens — bcrypt is CPU-bound.
+      const passwordHash = await hashPassword(body.password);
+      // Was three separate db.run() calls: a failure on the second or third
+      // insert left a `users` row (role=CLIENT) committed with no matching
+      // `clients` row — an account that can authenticate but 404s on every
+      // client-portal endpoint, since those all resolve through `clients`.
+      // Same db.tx() pattern already used for workout completion.
+      await db.tx(async (tx) => {
+        await tx.run(
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+           VALUES (?, ?, ?, ?, 'CLIENT', ?, 1, ?)`,
+          [userId, req.orgId, email, passwordHash, body.name, now()]);
+        await tx.run(
+          `INSERT INTO clients (id, user_id, org_id, trainer_id, status, goal, start_weight,
+                                current_weight, target_weight, goal_date, height_cm, age, sex, created_at)
+           VALUES (?, ?, ?, ?, 'ON_TRACK', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [clientId, userId, req.orgId, trainerId, body.goal, body.start_weight ?? null,
+           body.start_weight ?? null, body.target_weight ?? null, body.goal_date ?? null, body.height_cm ?? null, body.age ?? null, body.sex ?? null, now()]);
+        await tx.run(
+          `INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`,
+          [clientId]);
+      });
       await track(db, { orgId: req.orgId, userId: req.user.sub, type: 'client_created', data: { clientId } });
       res.status(201).json({ client: await withEvaluation((await db.q1('SELECT * FROM clients WHERE id = ?', [clientId]))) });
     } catch (e) {
@@ -138,7 +147,7 @@ export default function clientRoutes(db) {
     const profile = await db.q1('SELECT * FROM client_profiles WHERE client_id = ?', [client.id]);
     const ev = await evaluateClient(db, client);
     const [weights, measurements, photos, workoutHistory, insights] = await Promise.all([
-      db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? ORDER BY date', [client.id]),
+      db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? AND date >= ? ORDER BY date', [client.id, daysAgoIso(90)]),
       db.q('SELECT * FROM measurements WHERE client_id = ? ORDER BY taken_at DESC LIMIT 12', [client.id]),
       db.q('SELECT * FROM progress_photos WHERE client_id = ? ORDER BY taken_at', [client.id]),
       db.q('SELECT * FROM workouts WHERE client_id = ? ORDER BY scheduled_date DESC LIMIT 20', [client.id]),
@@ -202,10 +211,17 @@ export default function clientRoutes(db) {
   });
 
   // ---- weight logs ----
+  // 90-day window: this feeds WeightChart (a trend chart, not a full-history
+  // export), matching the same bound already used for weight history
+  // elsewhere (see /clients/:clientId/dashboard). Unbounded before this —
+  // a client who's been logging daily for years would return their entire
+  // history on every chart render.
   r.get('/:id/weights', async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    const rows = await db.q('SELECT date, weight, source FROM weight_logs WHERE client_id = ? ORDER BY date', [client.id]);
+    const rows = await db.q(
+      'SELECT date, weight, source FROM weight_logs WHERE client_id = ? AND date >= ? ORDER BY date',
+      [client.id, daysAgoIso(90)]);
     res.json({ weights: rows });
   });
 
