@@ -28,7 +28,14 @@ import meRoutes from './routes/me.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 
-async function main() {
+// Builds the Express app without starting a listener, so it can be reused
+// both by the traditional long-running server below (for local dev or a
+// persistent host like Railway/Render) and by a serverless entry point
+// (api/index.js, for Vercel) that just needs the (req, res) => {} handler.
+// Sets dbInstance as a side effect so the graceful-shutdown handler below
+// can close it -- serverless invocations never trigger that path, so it's
+// a harmless no-op there.
+export async function buildApp() {
   dbInstance = await getDb();
   const db = dbInstance;
   const app = express();
@@ -143,9 +150,21 @@ app.use('/uploads', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error', message: config.nodeEnv === 'production' ? undefined : err.message });
   });
 
-  server = app.listen(config.port, () => {
-    console.log(`[sk-os] API listening on http://127.0.0.1:${config.port} (db: ${db.driver})`);
-  });
+  return app;
+}
+
+// Only start a traditional listener when this file is run directly (local
+// dev, or a persistent host like Railway/Render) -- not when it's imported
+// by the serverless entry point (api/index.js), which just wants buildApp().
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) {
+  buildApp()
+    .then((app) => {
+      server = app.listen(config.port, () => {
+        console.log(`[sk-os] API listening on http://127.0.0.1:${config.port} (db: ${dbInstance.driver})`);
+      });
+    })
+    .catch((e) => { console.error('Fatal startup error:', e); process.exit(1); });
 }
 
 // ---- Process-level error handling ----
@@ -193,5 +212,3 @@ async function shutdown(signal) {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
-
-main().catch((e) => { console.error('Fatal startup error:', e); process.exit(1); });
