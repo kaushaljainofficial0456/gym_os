@@ -69,6 +69,17 @@ if (dbRequired && process.env.DATABASE_URL) {
   }
 }
 
+// CORS fails CLOSED without CORS_ORIGINS (falls back to the localhost dev
+// list), not open — so this isn't a security gap the way a missing
+// JWT_SECRET or DATABASE_URL would be. But it's a silent one: a production
+// deploy that forgets to set it boots fine and then every request from the
+// real frontend origin is invisibly blocked by the browser, which looks
+// like "the API is down" with no server-side clue why. Same visibility
+// treatment as the checks above, just a warning instead of exit(1).
+if (dbRequired && !process.env.CORS_ORIGINS) {
+  console.warn(`[sk-os] WARN: CORS_ORIGINS is not set in ${nodeEnv} — falling back to localhost origins only. Requests from the real frontend origin will be blocked until this is set.`);
+}
+
 export const config = {
   port: Number(process.env.PORT || 4000),
   jwtSecret: jwtSecret || 'dev-secret-change-me',  // dev fallback only — never used in production

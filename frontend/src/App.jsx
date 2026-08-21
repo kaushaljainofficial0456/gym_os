@@ -27,9 +27,14 @@ import Help from './pages/client/Help.jsx';
 // demo content in the entry chunk everyone downloads.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 
-function Require({ ready, ok, children }) {
+// `fallback` distinguishes "not logged in" from "logged in, wrong role for
+// this subtree" — e.g. a trainer hitting an /app/client/* URL is still
+// authenticated, so bouncing to /login (which looked identical to a real
+// session-expiry) was confusing. Sends them to their own home instead,
+// matching the role-aware redirect the catch-all route below already uses.
+function Require({ ready, ok, fallback = '/login', children }) {
   if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
-  if (!ok()) return <Navigate to="/login" replace />;
+  if (!ok()) return <Navigate to={fallback} replace />;
   return children;
 }
 
@@ -57,7 +62,7 @@ export default function App() {
         </Require>
       } />
       <Route path="/app/trainer" element={
-        <Require ready={ready} ok={() => authed && isTrainer}><TrainerLayout /></Require>
+        <Require ready={ready} ok={() => authed && isTrainer} fallback={authed ? '/app/client' : '/login'}><TrainerLayout /></Require>
       }>
         <Route index element={<Dashboard />} />
         <Route path="clients" element={<Clients />} />
@@ -70,7 +75,7 @@ export default function App() {
         <Route path="business" element={<Business />} />
       </Route>
       <Route path="/app/client" element={
-        <Require ready={ready} ok={() => authed && isClient}><ClientLayout /></Require>
+        <Require ready={ready} ok={() => authed && isClient} fallback={authed ? '/app/trainer' : '/login'}><ClientLayout /></Require>
       }>
         <Route index element={<Home />} />
         <Route path="workout" element={<Workout />} />

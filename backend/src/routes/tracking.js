@@ -68,15 +68,23 @@ export default function trackingRoutes(db) {
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
     const workouts = await db.q(
       'SELECT * FROM workouts WHERE client_id = ? ORDER BY scheduled_date DESC LIMIT 20', [client.id]);
-    const withEx = [];
-    for (const w of workouts) {
-      const ex = await db.q(
+    // Batched instead of one exercises query per workout (was up to 21
+    // queries for this endpoint; same IN(...) pattern already used above,
+    // e.g. /me/schedule).
+    const wIds = workouts.map((w) => w.id);
+    const allEx = wIds.length
+      ? await db.q(
         `SELECT we.*, el.animation_key, el.primary_muscle
            FROM workout_exercises we
            LEFT JOIN exercise_library el ON el.id = we.exercise_id
-          WHERE we.workout_id = ? ORDER BY we.position`, [w.id]);
-      withEx.push({ ...w, exercises: ex });
+          WHERE we.workout_id IN (${wIds.map(() => '?').join(',')}) ORDER BY we.workout_id, we.position`, wIds)
+      : [];
+    const exByWorkout = new Map();
+    for (const ex of allEx) {
+      if (!exByWorkout.has(ex.workout_id)) exByWorkout.set(ex.workout_id, []);
+      exByWorkout.get(ex.workout_id).push(ex);
     }
+    const withEx = workouts.map((w) => ({ ...w, exercises: exByWorkout.get(w.id) || [] }));
     res.json({ workouts: withEx });
   });
 
