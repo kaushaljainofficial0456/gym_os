@@ -40,6 +40,15 @@
 @font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+/* Bricolage Grotesque — one specific trainer headline, nothing else.
+   Google's static instances top out at 800 (this family has no 900 cut,
+   unlike Satoshi's font-black); 800 is mapped to the CSS weight 900 so
+   `font-black` still resolves to the heaviest cut this face actually has,
+   rather than silently falling back past it to a lighter weight or a
+   system font. */
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage-800.woff2') format('woff2'); font-weight: 800 900; font-style: normal; font-display: swap; }
 
 /* ═══════════════════════════════════════════════
    DARK MODE (default — premium SK OS signature)

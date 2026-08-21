@@ -69,8 +69,13 @@ export default function Dashboard() {
                 the reference exactly rather than the split-hierarchy
                 treatment this had before. */}
             <div className="mt-2 flex items-baseline gap-2.5 flex-wrap">
+              {/* Size (50px) and weight (font-black) unchanged -- only the
+                  typeface moves, to Bricolage Grotesque specifically for
+                  this headline. Every other trainer heading stays Satoshi;
+                  this is a one-element swap, not a section-wide font
+                  change. */}
               <span className="font-black leading-[1.05] tracking-[-.03em]"
-                    style={{ fontSize: 50, color: 'var(--ink)' }}>
+                    style={{ fontSize: 50, color: 'var(--ink)', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
                 <AnimatedNumber value={k.needsAttention + k.atRisk} />
                 {' '}
                 {(k.needsAttention + k.atRisk) === 1 ? 'client needs you today' : 'clients need you today'}
@@ -83,12 +88,19 @@ export default function Dashboard() {
         </div>
       </Reveal>
 
-      {/* hero summary — big numbers */}
+      {/* hero summary — big numbers.
+          Numbers were coloured per-tile (sage/amber/terracotta) via
+          `tone`; the reference shows all four numbers in plain ink and
+          reserves colour for a single small dot on the two tiles that
+          actually need one. Dropped `tone` here. Also collapsed the two
+          dot hues to one: amber-vs-terracotta was a second colour
+          distinction the reference doesn't make -- both actionable tiles
+          use the same accent-family dot now. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Active clients" value={k.activeClients} sub={`${k.newClients} new · ${k.inactive} inactive`} />
-        <Kpi label="On track" value={k.onTrack} tone="text-good" />
-        <Kpi label="Needs attention" value={k.needsAttention} tone="text-warn" dot="bg-warn" />
-        <Kpi label="At risk" value={k.atRisk} tone="text-bad" sub={`${k.attentionCount || ''} open alerts`} dot="bg-bad" />
+        <Kpi label="On track" value={k.onTrack} sub="adherence above 70%" />
+        <Kpi label="Needs attention" value={k.needsAttention} dot="bg-bad" />
+        <Kpi label="At risk" value={k.atRisk} sub={`${k.attentionCount || ''} open alerts`} dot="bg-bad" />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">

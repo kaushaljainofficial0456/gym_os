@@ -116,9 +116,9 @@ export default function Business() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="Active members" value={d.activeMembers} sub={`${d.totalMembers} total`} />
         <Kpi label="Monthly revenue" value={d.monthlyRevenue} dec={0} sub="this month" />
-        <Kpi label="Renewals due" value={d.renewalsThisMonth} tone="text-warn" sub="next 30 days" dot="bg-warn" />
-        <Kpi label="Overdue" value={d.overdue} tone="text-bad" sub="payments" dot="bg-bad" />
-        <Kpi label="Attendance today" value={d.attendanceToday} tone="text-cyanx" sub="marked present" />
+        <Kpi label="Renewals due" value={d.renewalsThisMonth} sub="next 30 days" dot="bg-bad" />
+        <Kpi label="Overdue" value={d.overdue} sub="payments" dot="bg-bad" />
+        <Kpi label="Attendance today" value={d.attendanceToday} sub="marked present" />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
