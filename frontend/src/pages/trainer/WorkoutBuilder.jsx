@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, Kicker, Spinner, ErrorState, Modal, Empty } from '../../components/UI.jsx';
+import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
 
@@ -75,6 +76,12 @@ export default function WorkoutBuilder() {
   const [addForm, setAddForm] = useState({ name: '', primary_muscle: '', equipment: 'BW', difficulty: 'BEGINNER', instructions: '', cues: '', animation_key: '' });
   const [addSaving, setAddSaving] = useState(false);
 
+  // ---- 3D muscle picker: rotate the body, click a muscle, get matching
+  // exercises from the same library the "link from library" dropdown uses.
+  const [pickOpen, setPickOpen] = useState(false);
+  const [pickGroup, setPickGroup] = useState(null);
+  const [pickLabel, setPickLabel] = useState('');
+
   // ---- training programs ----
   const [progClient, setProgClient] = useState('');
   const [currentProg, setCurrentProg] = useState(null);
@@ -146,6 +153,11 @@ export default function WorkoutBuilder() {
     () => templates.find((t) => t.id === selectedId) || null,
     [templates, selectedId]
   );
+
+  const pickMatches = useMemo(() => {
+    if (!pickGroup) return [];
+    return exercises.filter((x) => x.primary_muscle === pickGroup || (x.secondary_muscles || '').includes(pickGroup));
+  }, [exercises, pickGroup]);
 
   useEffect(() => {
     if (!selectedId && templates.length) setSelectedId(templates[0].id);
@@ -232,6 +244,16 @@ export default function WorkoutBuilder() {
       setAssignOpen(false);
     } catch (e) { setToast(e.message); }
     setSaving(false);
+  };
+
+  const onPickMuscle = (group, _muscleId, displayName) => {
+    setPickGroup(group);
+    setPickLabel(displayName);
+  };
+
+  const addFromPicker = (ex) => {
+    setEditing((e) => ({ ...e, exercises: [...e.exercises, { ...emptyEx(), exercise_id: ex.id, name: ex.name }] }));
+    setToast(`Added ${ex.name}`);
   };
 
   const addToLibrary = async () => {
@@ -345,7 +367,10 @@ export default function WorkoutBuilder() {
                     </div>
                   </div>
                 ))}
-                <button className="btn w-full !border-dashed" onClick={addEx}>+ Add exercise</button>
+                <div className="flex gap-2">
+                  <button className="btn flex-1 !border-dashed" onClick={addEx}>+ Add exercise</button>
+                  <button className="btn flex-1 !border-dashed" onClick={() => setPickOpen(true)}>◎ Pick by muscle</button>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2 pt-1">
@@ -483,6 +508,33 @@ export default function WorkoutBuilder() {
             <input type="date" className="input" value={assignDate} onChange={(e) => setAssignDate(e.target.value)} />
           </div>
           <button className="btn-primary w-full" onClick={assign} disabled={saving}>{saving ? 'Assigning…' : 'Assign workout'}</button>
+        </div>
+      </Modal>
+
+      <Modal open={pickOpen} onClose={() => { setPickOpen(false); setPickGroup(null); }} title="Pick an exercise by muscle" wide>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <MuscleBody3D selectedGroup={pickGroup} onSelect={onPickMuscle} height={380} />
+          <div className="min-w-0">
+            <Kicker>{pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
+            <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+              {pickMatches.map((ex) => (
+                <button key={ex.id} type="button" onClick={() => addFromPicker(ex)}
+                  className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-white/[.02] hover:bg-white/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="block font-grotesk text-sm font-semibold truncate">{ex.name}</span>
+                    <span className="block text-[10px] text-mute">{ex.primary_muscle} · {ex.equipment}</span>
+                  </span>
+                  <span className="text-mute shrink-0">+</span>
+                </button>
+              ))}
+              {pickGroup && !pickMatches.length && (
+                <div className="text-center py-8 text-mute text-sm">No exercises tagged {pickLabel} yet.</div>
+              )}
+              {!pickGroup && (
+                <div className="text-center py-8 text-mute text-sm">Rotate the model or tap a muscle chip to see matching exercises.</div>
+              )}
+            </div>
+          </div>
         </div>
       </Modal>
 

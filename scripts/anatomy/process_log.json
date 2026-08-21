@@ -1,0 +1,344 @@
+{
+  "muscles": [
+    {
+      "id": "pectoralis_major.l",
+      "decorative": false,
+      "source_objects": 3,
+      "polys_before_join": 9584,
+      "polys_after_join": 9584,
+      "polys_after_decimate": 9007
+    },
+    {
+      "id": "pectoralis_major.r",
+      "decorative": false,
+      "source_objects": 3,
+      "polys_before_join": 17660,
+      "polys_after_join": 17660,
+      "polys_after_decimate": 9056
+    },
+    {
+      "id": "anterior_deltoid.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 5806,
+      "polys_after_join": 5806,
+      "polys_after_decimate": 5806
+    },
+    {
+      "id": "anterior_deltoid.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 5806,
+      "polys_after_join": 5806,
+      "polys_after_decimate": 5806
+    },
+    {
+      "id": "lateral_deltoid.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 5925,
+      "polys_after_join": 5925,
+      "polys_after_decimate": 5925
+    },
+    {
+      "id": "lateral_deltoid.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 5925,
+      "polys_after_join": 5925,
+      "polys_after_decimate": 5925
+    },
+    {
+      "id": "posterior_deltoid.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 8756,
+      "polys_after_join": 8756,
+      "polys_after_decimate": 8756
+    },
+    {
+      "id": "posterior_deltoid.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 8756,
+      "polys_after_join": 8756,
+      "polys_after_decimate": 8756
+    },
+    {
+      "id": "trapezius.l",
+      "decorative": false,
+      "source_objects": 3,
+      "polys_before_join": 28694,
+      "polys_after_join": 28694,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "trapezius.r",
+      "decorative": false,
+      "source_objects": 3,
+      "polys_before_join": 48198,
+      "polys_after_join": 48198,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "latissimus_dorsi.l",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 35462,
+      "polys_after_join": 35462,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "latissimus_dorsi.r",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 43162,
+      "polys_after_join": 43162,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "rhomboids.l",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 12576,
+      "polys_after_join": 12576,
+      "polys_after_decimate": 9006
+    },
+    {
+      "id": "rhomboids.r",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 15561,
+      "polys_after_join": 15561,
+      "polys_after_decimate": 9006
+    },
+    {
+      "id": "serratus_anterior.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 50482,
+      "polys_after_join": 50482,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "serratus_anterior.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 50482,
+      "polys_after_join": 50482,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "rectus_abdominis.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 41210,
+      "polys_after_join": 41210,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "rectus_abdominis.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 41210,
+      "polys_after_join": 41210,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "obliques.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 57736,
+      "polys_after_join": 57736,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "obliques.r",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 176228,
+      "polys_after_join": 176228,
+      "polys_after_decimate": 8999
+    },
+    {
+      "id": "erector_spinae.l",
+      "decorative": false,
+      "source_objects": 9,
+      "polys_before_join": 72934,
+      "polys_after_join": 72934,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "erector_spinae.r",
+      "decorative": false,
+      "source_objects": 9,
+      "polys_before_join": 141768,
+      "polys_after_join": 141768,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "gluteus_maximus.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 6652,
+      "polys_after_join": 6652,
+      "polys_after_decimate": 6652
+    },
+    {
+      "id": "gluteus_maximus.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 6652,
+      "polys_after_join": 6652,
+      "polys_after_decimate": 6652
+    },
+    {
+      "id": "gluteus_medius.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 10354,
+      "polys_after_join": 10354,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "gluteus_medius.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 10354,
+      "polys_after_join": 10354,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "gluteus_minimus.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 12500,
+      "polys_after_join": 12500,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "gluteus_minimus.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 12500,
+      "polys_after_join": 12500,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "quadriceps.l",
+      "decorative": false,
+      "source_objects": 4,
+      "polys_before_join": 60515,
+      "polys_after_join": 60515,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "quadriceps.r",
+      "decorative": false,
+      "source_objects": 4,
+      "polys_before_join": 104478,
+      "polys_after_join": 104478,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "hamstrings.l",
+      "decorative": false,
+      "source_objects": 4,
+      "polys_before_join": 42988,
+      "polys_after_join": 42988,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "hamstrings.r",
+      "decorative": false,
+      "source_objects": 4,
+      "polys_before_join": 71460,
+      "polys_after_join": 71460,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "gastrocnemius.l",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 22742,
+      "polys_after_join": 22742,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "gastrocnemius.r",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 35668,
+      "polys_after_join": 35668,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "soleus.l",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 13547,
+      "polys_after_join": 13547,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "soleus.r",
+      "decorative": false,
+      "source_objects": 1,
+      "polys_before_join": 13547,
+      "polys_after_join": 13547,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "forearms.l",
+      "decorative": false,
+      "source_objects": 13,
+      "polys_before_join": 109952,
+      "polys_after_join": 109952,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "forearms.r",
+      "decorative": false,
+      "source_objects": 13,
+      "polys_before_join": 205281,
+      "polys_after_join": 205281,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "biceps.l",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 11830,
+      "polys_after_join": 11830,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "biceps.r",
+      "decorative": false,
+      "source_objects": 2,
+      "polys_before_join": 17224,
+      "polys_after_join": 17224,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "triceps.l",
+      "decorative": false,
+      "source_objects": 3,
+      "polys_before_join": 20532,
+      "polys_after_join": 20532,
+      "polys_after_decimate": 9000
+    },
+    {
+      "id": "triceps.r",
+      "decorative": false,
+      "source_objects": 3,
+      "polys_before_join": 33806,
+      "polys_after_join": 33806,
+      "polys_after_decimate": 9000
+    }
+  ],
+  "errors": [],
+  "final_object_count": 42,
+  "final_total_polys": 360329,
+  "export_ok": true
+}

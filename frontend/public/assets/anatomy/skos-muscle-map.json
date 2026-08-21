@@ -1,0 +1,86 @@
+{
+  "pectoralis_major": {
+    "displayName": "Chest",
+    "exerciseMuscleGroup": "CHEST"
+  },
+  "anterior_deltoid": {
+    "displayName": "Front Delts",
+    "exerciseMuscleGroup": "FRONT DELTS"
+  },
+  "lateral_deltoid": {
+    "displayName": "Side Delts",
+    "exerciseMuscleGroup": "SIDE DELTS"
+  },
+  "posterior_deltoid": {
+    "displayName": "Rear Delts",
+    "exerciseMuscleGroup": "REAR DELTS"
+  },
+  "trapezius": {
+    "displayName": "Traps",
+    "exerciseMuscleGroup": "TRAPS"
+  },
+  "latissimus_dorsi": {
+    "displayName": "Lats",
+    "exerciseMuscleGroup": "LATS"
+  },
+  "rhomboids": {
+    "displayName": "Upper Back",
+    "exerciseMuscleGroup": "UPPER BACK"
+  },
+  "serratus_anterior": {
+    "displayName": "Serratus Anterior",
+    "exerciseMuscleGroup": "CORE"
+  },
+  "rectus_abdominis": {
+    "displayName": "Abs",
+    "exerciseMuscleGroup": "ABS"
+  },
+  "obliques": {
+    "displayName": "Obliques",
+    "exerciseMuscleGroup": "CORE"
+  },
+  "erector_spinae": {
+    "displayName": "Lower Back",
+    "exerciseMuscleGroup": "LOWER BACK"
+  },
+  "gluteus_maximus": {
+    "displayName": "Glutes",
+    "exerciseMuscleGroup": "GLUTES"
+  },
+  "gluteus_medius": {
+    "displayName": "Glutes (Medius)",
+    "exerciseMuscleGroup": "GLUTES"
+  },
+  "gluteus_minimus": {
+    "displayName": "Glutes (Minimus)",
+    "exerciseMuscleGroup": "GLUTES"
+  },
+  "quadriceps": {
+    "displayName": "Quads",
+    "exerciseMuscleGroup": "QUADS"
+  },
+  "hamstrings": {
+    "displayName": "Hamstrings",
+    "exerciseMuscleGroup": "HAMSTRINGS"
+  },
+  "gastrocnemius": {
+    "displayName": "Calves",
+    "exerciseMuscleGroup": "CALVES"
+  },
+  "soleus": {
+    "displayName": "Calves (Soleus)",
+    "exerciseMuscleGroup": "CALVES"
+  },
+  "forearms": {
+    "displayName": "Forearms",
+    "exerciseMuscleGroup": "FOREARMS"
+  },
+  "biceps": {
+    "displayName": "Biceps",
+    "exerciseMuscleGroup": "BICEPS"
+  },
+  "triceps": {
+    "displayName": "Triceps",
+    "exerciseMuscleGroup": "TRICEPS"
+  }
+}
