@@ -63,13 +63,17 @@ export default function Dashboard() {
             <div className="font-serif text-[15px]" style={{ color: 'var(--mute)' }}>
               {greeting()}, {firstName}
             </div>
-            <div className="mt-2 flex items-baseline gap-2.5">
-              <span className="font-black leading-none tracking-[-.04em]"
-                    style={{ fontSize: 42, color: 'var(--ink)' }}>
+            {/* One uniform headline, not a big-number + small-caption split.
+                42 -> 50px and the whole phrase (not just the digit) now
+                shares the same font-black weight and ink colour, matching
+                the reference exactly rather than the split-hierarchy
+                treatment this had before. */}
+            <div className="mt-2 flex items-baseline gap-2.5 flex-wrap">
+              <span className="font-black leading-[1.05] tracking-[-.03em]"
+                    style={{ fontSize: 50, color: 'var(--ink)' }}>
                 <AnimatedNumber value={k.needsAttention + k.atRisk} />
-              </span>
-              <span className="text-[14px] font-medium" style={{ color: 'var(--mute)' }}>
-                {(k.needsAttention + k.atRisk) === 1 ? 'client needs you' : 'clients need you'}
+                {' '}
+                {(k.needsAttention + k.atRisk) === 1 ? 'client needs you today' : 'clients need you today'}
               </span>
             </div>
             <div className="text-[11px] mt-1.5 tabular-nums" style={{ color: 'var(--faint)' }}>
