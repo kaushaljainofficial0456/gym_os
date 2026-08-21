@@ -129,6 +129,80 @@
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(90,140,0,.35);
 }
 
+/* ═══════════════════════════════════════════════
+   TRAINER — scoped design language (terracotta / blush)
+
+   Wrapped around <TrainerLayout>'s root only, via .trainer-theme, so
+   the client app's lime identity is completely untouched — nothing
+   here reaches Home/Workout/Nutrition. Two pairs (dark/light) so it
+   still honours the global theme toggle rather than forcing one look.
+
+   Deliberately does NOT touch --secondary/--cyan/--violet or the
+   good/warn/bad status trio: those are semantic, not brand, and this
+   app's own convention (see tokens.js) is that status meaning must
+   not shift with theme or section — "danger" learned once should stay
+   danger everywhere.
+   ═══════════════════════════════════════════════ */
+.dark .trainer-theme {
+  --bg: #1C1210;
+  --bg2: #241815;
+  --panel: #2A1D19;
+  --panel2: #33241F;
+  --line: rgba(255,255,255,.08);
+  --ink: #F7ECE7;
+  --mute: rgba(247,236,231,.55);
+  --faint: rgba(247,236,231,.30);
+  --accent: #E07A63;
+  --accent-deep: #C15C4C;
+  --accent-soft: rgba(224,122,99,.12);
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+  --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
+
+  --accent-rgb: 224 122 99;
+  --accent-deep-rgb: 193 92 76;
+  --accent-contrast: #2B120A;
+  --bg-rgb: 28 18 16;
+  --bg2-rgb: 36 24 21;
+  --panel-rgb: 42 29 25;
+  --panel2-rgb: 51 36 31;
+  --ink-rgb: 247 236 231;
+  --tint-rgb: 255 255 255;
+
+  --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
+}
+
+.light .trainer-theme {
+  --bg: #FFDFDD;
+  --bg2: #FFE9E6;
+  --panel: #FFFFFF;
+  --panel2: #FFF3F1;
+  --line: #F1DAD5;
+  --ink: #2B211C;
+  --mute: rgba(43,33,28,.58);
+  --faint: rgba(43,33,28,.34);
+  --accent: #C15C4C;
+  --accent-deep: #9C4436;
+  --accent-soft: rgba(193,92,76,.10);
+  --card-shadow: 0 1px 2px rgba(120,60,50,.05), 0 4px 14px rgba(120,60,50,.05);
+  --card-gradient: none;
+
+  --accent-rgb: 193 92 76;
+  --accent-deep-rgb: 156 68 54;
+  --accent-contrast: #FFFFFF;
+  --bg-rgb: 255 223 221;
+  --bg2-rgb: 255 233 230;
+  --panel-rgb: 255 255 255;
+  --panel2-rgb: 255 243 241;
+  --ink-rgb: 43 33 28;
+  --tint-rgb: 138 66 50;
+
+  --accent-grad: linear-gradient(135deg, #9C4436, #C15C4C);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.28);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.38);
+}
+
 html, body, #root { min-height: 100%; }
 
 body {

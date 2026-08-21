@@ -1,5 +1,6 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { WEEKDAY } from '../utils.js';
+import { brand } from '../design/tokens.js';
 
 const tooltipStyle = {
   background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 12,
