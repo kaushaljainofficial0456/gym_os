@@ -539,26 +539,13 @@ export default function meRoutes(db) {
     res.json({ ok: true });
   });
 
-  // ---------------- food search (SKOS database) ----------------
-  // Lightweight search across the 21K+ SKOS food database.
-  // Returns results in the same shape as the foods table so the frontend
-  // can use them interchangeably for custom meal building.
-  r.get('/foods/search', async (req, res) => {
-    const q = String(req.query.q || '').trim();
-    if (!q) return res.json({ foods: [] });
-    const results = foodSearch.search(q, { limit: 10, allowBackoff: true });
-    const foods = results.map((r) => ({
-      id: r.source_id,
-      name: r.food_name,
-      calories: r.energy_kcal || 0,
-      protein: r.protein_g || 0,
-      carbs: r.carb_g || 0,
-      fat: r.fat_g || 0,
-      serving_grams: r.serving_grams || null,
-      source: 'skos'
-    }));
-    res.json({ foods });
-  });
+  // NOTE: a second, simpler `GET /foods/search` used to be registered here,
+  // backed by skos-food/index.js's `foodSearch`. Express only ever dispatches
+  // to the FIRST matching route (see /foods/search above, ~line 342), so this
+  // one was dead code from the day both were merged in — never reachable.
+  // Removed rather than left as a trap for the next person who edits it
+  // expecting it to run. `foodSearch` is still imported and used below, in
+  // POST /meals/:id/items, as a fallback lookup — left as-is.
 
   // ---------------- my meal templates ----------------
   r.get('/meals', async (req, res) => {

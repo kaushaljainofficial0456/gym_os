@@ -382,6 +382,12 @@ export function estimateFood(text) {
       grams_basis: q.basis,
       grams_assumed: q.assumed,
       confidence: food.confidence,
+      // Available on `food` since the trustworthy gate above already reads
+      // it — just wasn't being copied through to the response. Same fields,
+      // same meaning, as me.js's /foods/search route exposes for search
+      // results from the same underlying engine.
+      trustworthy: food.trustworthy !== false,
+      match_kind: food.match_kind || null,
       cooking_state: food.cooking_state,
       matched_from: fragment,
       // null means NOT MEASURED. Passed through as null on purpose so the

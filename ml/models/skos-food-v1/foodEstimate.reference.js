@@ -550,6 +550,14 @@ const OBSERVED_SPREAD = {
 };
 
 const PORTION_ALIAS = {
+  // COUNT_PORTIONS.roti is labelled 'Roti / chapati' but chapati was never
+  // actually wired to it here, so "3 chapati" fell through to the matched
+  // food's own INDB serving_grams (36g) instead of the 40g count-portion
+  // "roti" gets — 108g instead of 120g for the same food. Backed by
+  // food_aliases.json, which already maps both words to the same food
+  // (indb:ASC096), and by PIECE_GRAMS above, which already treats them as
+  // interchangeable.
+  chapati: 'roti',
   tbsp: 'tablespoon', tsp: 'teaspoon', bowls: 'bowl', plates: 'plate',
   'big bowl': 'large_bowl', 'regular plate': 'plate', 'half plate': 'half_plate',
   'serving spoon': 'serving_spoon', 'small glass': 'small_glass',

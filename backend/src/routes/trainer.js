@@ -146,7 +146,12 @@ export default function trainerRoutes(db) {
       sex: client.sex || null,
       startWeight: client.start_weight || null,
       goalDate: client.goal_date || null,
-      status: client.status
+      // Was the raw `clients.status` DB column, which nothing in the
+      // codebase ever updates after seed/creation — stale by definition.
+      // `ev` (evaluateClient, above) is the same live rule engine the
+      // trainer dashboard's attention list uses; reuse its result so this
+      // page can't disagree with the dashboard about a client's status.
+      status: ev.status
     };
 
     // Summary

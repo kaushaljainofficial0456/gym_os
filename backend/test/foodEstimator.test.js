@@ -25,6 +25,11 @@ function findItem(result, nameSubstr) {
 }
 
 // ---------- standalone counted portions ----------
+//
+// `unit` is "<qty> x <canonical unit>" (e.g. "2 x roti"), not the bare
+// canonical unit — count is folded into the string so "2 rotis" reads as
+// one descriptive label instead of a separate qty box in the UI. `qty` and
+// `grams` still carry the actual numbers this test file cares about.
 
 test('"2 roti" uses COUNT_PORTIONS roti reference: 40g x 2 = 80g', () => {
   const r = estimateFood('2 roti');
@@ -32,7 +37,7 @@ test('"2 roti" uses COUNT_PORTIONS roti reference: 40g x 2 = 80g', () => {
   const item = r.items[0];
   assert.equal(item.grams, 80, '40g per roti x 2');
   assert.equal(item.qty, 2);
-  assert.equal(item.unit, 'roti');
+  assert.equal(item.unit, '2 x roti');
   assert.ok(item.source_id, 'has source_id');
   assert.equal(item.confidence, 'high');
   assert.equal(item.trustworthy, true);
@@ -51,7 +56,7 @@ test('"2 egg" uses COUNT_PORTIONS egg reference: 50g x 2 = 100g', () => {
   assert.equal(r.items.length, 1);
   assert.equal(r.items[0].grams, 100, '50g per egg x 2');
   assert.equal(r.items[0].qty, 2);
-  assert.equal(r.items[0].unit, 'egg');
+  assert.equal(r.items[0].unit, '2 x egg');
 });
 
 test('"1 banana" uses COUNT_PORTIONS banana reference: 120g x 1 = 120g', () => {
@@ -59,7 +64,7 @@ test('"1 banana" uses COUNT_PORTIONS banana reference: 120g x 1 = 120g', () => {
   assert.equal(r.items.length, 1);
   assert.equal(r.items[0].grams, 120, '120g per banana x 1');
   assert.equal(r.items[0].qty, 1);
-  assert.equal(r.items[0].unit, 'banana');
+  assert.equal(r.items[0].unit, '1 x banana');
 });
 
 test('"3 chapati" uses canonical roti reference via alias: 40g x 3 = 120g', () => {
@@ -95,7 +100,7 @@ test('"2 bowls dal" uses volume portion: 2 x 250ml bowl x ~1.0 density', () => {
   assert.equal(r.items.length, 1);
   // bowl = 250ml; dal cooked density ~1.0; 2 x 250 = 500g
   assert.equal(r.items[0].grams, 500);
-  assert.equal(r.items[0].unit, 'bowl');
+  assert.equal(r.items[0].unit, '2 x bowl');
   assert.equal(r.items[0].qty, 2);
   assert.equal(r.items[0].confidence, 'high');
 });
@@ -106,7 +111,7 @@ test('"1 plate rice" uses volume portion: 1 x 350ml plate', () => {
   // plate = 350ml; rice cooked density ~0.85 (from DENSITY_PATTERNS); 1 x 350 x 0.85 = 297.5
   // Actually effectiveDensity may boost cooked wet dish to 1.0; rice matches WET_DISH_RE
   assert.ok(r.items[0].grams > 200, 'rice plate is a meaningful portion');
-  assert.equal(r.items[0].unit, 'plate');
+  assert.equal(r.items[0].unit, '1 x plate');
   assert.equal(r.items[0].qty, 1);
 });
 

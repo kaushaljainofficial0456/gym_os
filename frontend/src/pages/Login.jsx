@@ -4,6 +4,11 @@ import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 
+const DEMO = [
+  { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
+  { label: 'Gym Owner', email: 'owner@ironforge.in', icon: '₹', desc: 'Maya Kapoor · business view' },
+  { label: 'Client', email: 'client1@ironforge.in', icon: '⌁', desc: 'Rahul Sharma · client portal' }
+];
 
 export default function Login() {
   const { login } = useAuth();
@@ -42,6 +47,12 @@ export default function Login() {
     finally { setBusy(false); }
   };
 
+  const quick = async (demoEmail) => {
+    setBusy(true); setErr('');
+    try { go(await login(demoEmail, 'demo1234')); }
+    catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  };
 
   const [onboarding, setOnboarding] = useState(false);
 
