@@ -81,10 +81,10 @@ export default function Dashboard() {
 
       {/* hero summary — big numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Active clients" value={k.activeClients} sub={`${k.newClients} new · ${k.inactive} inactive`} icon="◉" />
-        <Kpi label="On track" value={k.onTrack} tone="text-good" icon="✓" />
-        <Kpi label="Needs attention" value={k.needsAttention} tone="text-warn" icon="◐" />
-        <Kpi label="At risk" value={k.atRisk} tone="text-bad" sub={`${k.attentionCount || ''} open alerts`} icon="◈" />
+        <Kpi label="Active clients" value={k.activeClients} sub={`${k.newClients} new · ${k.inactive} inactive`} />
+        <Kpi label="On track" value={k.onTrack} tone="text-good" />
+        <Kpi label="Needs attention" value={k.needsAttention} tone="text-warn" dot="bg-warn" />
+        <Kpi label="At risk" value={k.atRisk} tone="text-bad" sub={`${k.attentionCount || ''} open alerts`} dot="bg-bad" />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
@@ -104,7 +104,14 @@ export default function Dashboard() {
                       <span className="font-grotesk text-sm font-semibold group-hover:text-gold transition-colors">{c.name}</span>
                       <StatusChip status={c.status} />
                     </div>
-                    <div className="text-xs text-bad mt-0.5 truncate">
+                    {/* Was text-bad on every row regardless of severity --
+                        a NEEDS_ATTENTION client's reason line shouted as
+                        loud as an AT_RISK one, and doubled the coloured
+                        surface the StatusChip badge already carries right
+                        above it. The badge alone is the status signal now;
+                        the reason line stays calm so it's readable, not
+                        alarming. */}
+                    <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--mute)' }}>
                       {c.rules.slice(0, 2).map((r) => r.title).join(' · ')}
                     </div>
                     <div className="text-[10px] text-faint mt-0.5 font-grotesk">

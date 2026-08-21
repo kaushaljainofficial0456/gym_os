@@ -31,6 +31,15 @@
 @font-face { font-family: 'Satoshi'; src: url('/fonts/satoshi-900.woff2') format('woff2'); font-weight: 900; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Sentient'; src: url('/fonts/sentient-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: block; }
 @font-face { font-family: 'Sentient'; src: url('/fonts/sentient-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: block; }
+/* DM Sans — trainer-scoped numerals/labels. Satoshi carries the trainer
+   HEADLINES (hero number, section titles); DM Sans carries the smaller
+   supporting text — table cells, list rows, form labels — where its
+   quieter, more geometric numerals read calmer at small sizes than
+   Satoshi's punchier default. Two faces with two distinct jobs, not two
+   faces competing for the same job. */
+@font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DM Sans'; src: url('/fonts/dmsans-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
 
 /* ═══════════════════════════════════════════════
    DARK MODE (default — premium SK OS signature)
@@ -137,11 +146,13 @@
    here reaches Home/Workout/Nutrition. Two pairs (dark/light) so it
    still honours the global theme toggle rather than forcing one look.
 
-   Deliberately does NOT touch --secondary/--cyan/--violet or the
-   good/warn/bad status trio: those are semantic, not brand, and this
-   app's own convention (see tokens.js) is that status meaning must
-   not shift with theme or section — "danger" learned once should stay
-   danger everywhere.
+   Leaves --secondary/--cyan/--violet alone (semantic data-viz hues,
+   not brand). DOES override good/warn/bad, on reflection: --good-rgb
+   globally IS the client app's lime brand colour reused as a status
+   colour, so leaving it "untouched" meant a neon-lime dot on every
+   trainer screen — the opposite of untouched. What's preserved is the
+   MEANING (good still reads as positive, bad still reads as alarm),
+   not the literal hex; see the values below for why.
    ═══════════════════════════════════════════════ */
 .dark .trainer-theme {
   --bg: #1C1210;
@@ -171,6 +182,19 @@
   --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
   --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
+
+  /* Status, restrained. The global --good-rgb IS the client app's lime
+     brand colour doing double duty as "on track" -- inside trainer that
+     read as a stray neon-green dot next to a warm palette, one hue too
+     many on an already-busy screen. "Bad"/at-risk reuses accent-deep
+     rather than inventing a second red: terracotta already reads as
+     alarm-adjacent, and one fewer competing hue is the point. Good and
+     warn get quiet, warm-leaning tones instead of the loud defaults, so
+     the whole screen reads as one family plus two calm status notes,
+     not four hues shouting over each other. */
+  --good-rgb: 122 168 128;
+  --warn-rgb: 199 149 92;
+  --bad-rgb: 193 92 76;
 }
 
 .light .trainer-theme {
@@ -201,6 +225,25 @@
   --accent-grad: linear-gradient(135deg, #9C4436, #C15C4C);
   --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.28);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.38);
+
+  /* Status, restrained -- see the dark block above for why. */
+  --good-rgb: 95 141 100;
+  --warn-rgb: 185 138 78;
+  --bad-rgb: 156 68 54;
+}
+
+/* Trainer type split: font-grotesk (Satoshi everywhere else in this app)
+   repoints to DM Sans inside trainer scope, for exactly the smaller
+   supporting text that class already carries -- kickers, list sub-lines,
+   table cells, form labels, timestamps. font-brand/font-display/font-body
+   (the actual headings and hero numbers) stay on Satoshi. Two faces with
+   two distinct jobs: Satoshi says "this is the important number/word on
+   the screen", DM Sans says "this is context for it" -- rather than one
+   face doing both jobs at different weights, which reads flatter.
+   Needs no !important: two classes beats font-grotesk's one on
+   specificity alone, and this rule compiles after @tailwind utilities. */
+.trainer-theme .font-grotesk {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
 }
 
 html, body, #root { min-height: 100%; }
@@ -276,6 +319,30 @@ body {
 .light .recharts-cartesian-grid-horizontal line,
 .light .recharts-cartesian-grid-vertical line {
   stroke: rgba(0,0,0,.08) !important;
+}
+
+/* ── Trainer override: higher specificity beats the client's
+   !important rules above, which a plain CSS variable cannot. Same
+   values as --mute/--faint/--line already carry in .light .trainer-theme;
+   restated here only because Tailwind's utility classes read the
+   !important rule directly, not the variable, for this one alpha-baked
+   trio (see the exception documented at the top of this file). Without
+   this, text-mute/text-faint/border-line rendered in the CLIENT app's
+   grey instead of trainer's warm brown -- two greys visibly disagreeing
+   on the same screen. ── */
+.light .trainer-theme .border-line { border-color: #F1DAD5 !important; }
+.light .trainer-theme .border-line\/40 { border-color: rgba(241,218,213,.55) !important; }
+.light .trainer-theme .border-line\/50 { border-color: rgba(241,218,213,.65) !important; }
+.light .trainer-theme .border-line\/60 { border-color: rgba(241,218,213,.75) !important; }
+.light .trainer-theme .\!border-line { border-color: #F1DAD5 !important; }
+.light .trainer-theme .text-mute  { color: rgba(43,33,28,.58) !important; }
+.light .trainer-theme .\!text-mute { color: rgba(43,33,28,.58) !important; }
+.light .trainer-theme .text-faint { color: rgba(43,33,28,.34) !important; }
+.light .trainer-theme .bg-mute { background-color: rgba(43,33,28,.4) !important; }
+.light .trainer-theme .hover\:border-white\/15:hover { border-color: rgba(193,92,76,.28) !important; }
+.light .trainer-theme .recharts-cartesian-grid-horizontal line,
+.light .trainer-theme .recharts-cartesian-grid-vertical line {
+  stroke: #F1DAD5 !important;
 }
 
 /* ═══════════════════════════════════════════════

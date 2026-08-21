@@ -32,7 +32,11 @@ export default function ClientProfile() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="font-grotesk font-bold text-3xl tracking-tight">{client.name}</h1>
+              {/* font-brand, not font-grotesk -- see Business.jsx's hero
+                  for why: trainer scope repoints font-grotesk to DM Sans
+                  for supporting text, so a name-as-headline stays on the
+                  bolder face on purpose. */}
+              <h1 className="font-brand font-black text-3xl tracking-tight" style={{ color: 'var(--ink)' }}>{client.name}</h1>
               <StatusChip status={client.status} />
             </div>
             <div className="text-xs text-mute mt-1 font-grotesk">

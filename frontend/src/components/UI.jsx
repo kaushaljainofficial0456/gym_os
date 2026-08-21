@@ -49,13 +49,28 @@ export function Kicker({ children, tone }) {
   return <div className={cls('kicker', tone)}>{children}</div>;
 }
 
-export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, icon }) {
+/**
+ * `icon` used to take a literal glyph ('◉', '✓', '₹', ...) passed straight
+ * to <Icon name={...}>. None of those strings match a key in Icon.jsx's
+ * PATHS table, so every one of the 9 call sites across the trainer pages
+ * silently fell through to the same generic placeholder glyph -- nine
+ * different KPIs (active clients, revenue, overdue, attendance...) all
+ * showing one meaningless icon, which is worse than no icon at all: it
+ * looks intentional and communicates nothing.
+ *
+ * Replaced with `dot`: a small colour swatch for tiles that need a
+ * glance-able "this one wants action" signal (needs attention, at risk,
+ * overdue), omitted for neutral tiles (active clients, on track, revenue).
+ * Matches the restrained KPI-row treatment already established for the
+ * trainer dashboard -- most tiles carry no colour at all, so the ones that
+ * do stand out instead of competing with eight others for attention. */
+export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, dot }) {
   const v = useCountUp(value, 1000, dec);
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-1.5 mb-2">
+        {dot && <span className={cls('w-1.5 h-1.5 rounded-full shrink-0', dot)} />}
         <span className="text-[10.5px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--mute)' }}>{label}</span>
-        {icon && <Icon name={icon} size={15} />}
       </div>
       <div className={cls('font-grotesk font-bold text-2xl leading-none', tone)} style={{ color: tone ? undefined : 'var(--ink)' }}>
         {v.toLocaleString('en-US', { maximumFractionDigits: dec })}{suffix}
