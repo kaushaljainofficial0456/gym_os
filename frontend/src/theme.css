@@ -77,8 +77,8 @@
   --panel2: #33241F;
   --line: rgba(255,255,255,.08);
   --ink: #F7ECE7;                      /* warm high-contrast off-white */
-  --mute: rgba(247,236,231,.55);
-  --faint: rgba(247,236,231,.30);
+  --mute: rgba(247,236,231,.68);
+  --faint: rgba(247,236,231,.44);
   /* Primary accent: terracotta */
   --accent: #E07A63;
   --accent-deep: #C15C4C;
@@ -146,8 +146,8 @@
   --panel2: #FFF3F1;
   --line: #F1DAD5;
   --ink: #2B211C;
-  --mute: rgba(43,33,28,.58);
-  --faint: rgba(43,33,28,.34);
+  --mute: rgba(43,33,28,.70);
+  --faint: rgba(43,33,28,.46);
   --accent: #C15C4C;                   /* terracotta for light mode */
   --accent-deep: #9C4436;
   --accent-soft: rgba(193,92,76,.10);
@@ -256,9 +256,9 @@ body {
 .light .border-line\/50 { border-color: rgba(241,218,213,.65) !important; }
 .light .border-line\/60 { border-color: rgba(241,218,213,.75) !important; }
 .light .\!border-line { border-color: #F1DAD5 !important; }
-.light .text-mute  { color: rgba(43,33,28,.58) !important; }
-.light .\!text-mute { color: rgba(43,33,28,.58) !important; }
-.light .text-faint { color: rgba(43,33,28,.34) !important; }
+.light .text-mute  { color: rgba(43,33,28,.70) !important; }
+.light .\!text-mute { color: rgba(43,33,28,.70) !important; }
+.light .text-faint { color: rgba(43,33,28,.46) !important; }
 .light .bg-mute { background-color: rgba(43,33,28,.4) !important; }
 .light .hover\:border-white\/15:hover { border-color: rgba(193,92,76,.28) !important; }
 

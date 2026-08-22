@@ -1,0 +1,47 @@
+/* LineSidebar's proximity technique, adapted for icon+label+index nav
+   items in a 272px drawer rather than a plain full-height text list.
+   --effect (0..1) is driven per item by the rAF lerp in LineNavList.jsx;
+   every derived property below reads that same continuously-animating
+   value, so colour and shift stay in lockstep with no CSS transition to
+   stagger against the JS loop. */
+.line-nav__item {
+  position: relative;
+  color: var(--mute);
+  text-decoration: none;
+  transform: translateX(calc(var(--effect, 0) * 6px));
+  transition: color 0s; /* colour is driven by --effect, not this */
+}
+
+.line-nav__icon,
+.line-nav__label {
+  color: color-mix(in srgb, var(--accent) calc(var(--effect, 0) * 100%), var(--mute));
+}
+
+.line-nav__index {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  color: var(--faint);
+  opacity: calc(0.5 + var(--effect, 0) * 0.5);
+}
+
+.line-nav__marker {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* active item gets a permanent soft fill so it reads even when the
+   cursor is nowhere near it -- proximity is a hover delight on top of,
+   not instead of, "you are here". */
+.line-nav__item[aria-current="page"] {
+  background: var(--accent-soft);
+}
+
+.line-nav__item:hover {
+  background: rgb(var(--tint-rgb) / .04);
+}

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
+import LineNavList from '../../components/LineNavList.jsx';
+import '../../components/LineNavList.css';
 
 const NAV = [
   { to: '/app/trainer', end: true, label: 'Dashboard', icon: 'grid' },
@@ -79,7 +82,9 @@ export default function TrainerLayout() {
           aria-expanded={navOpen}
           className="w-9 h-9 grid place-items-center rounded-xl border transition-colors active:scale-95"
           style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}>
-          <Icon name="menu" size={18} />
+          <motion.span animate={{ rotate: navOpen ? 90 : 0 }} transition={{ duration: 0.25, ease: [0.22, 0.8, 0.3, 1] }} style={{ display: 'inline-flex' }}>
+            <Icon name={navOpen ? 'close' : 'menu'} size={18} />
+          </motion.span>
         </button>
         <button className="flex items-center gap-2" onClick={() => nav('/app/trainer')}>
           <img src="/logo.png" alt="SK OS" className="w-7 h-7 rounded-lg object-cover" />
@@ -90,81 +95,81 @@ export default function TrainerLayout() {
         </button>
       </header>
 
-      {/* ── backdrop, only present while open ── */}
-      {navOpen && (
-        <div
-          onClick={() => setNavOpen(false)}
-          aria-hidden="true"
-          className="fixed inset-0 z-40 transition-opacity"
-          style={{ background: 'rgb(0 0 0 / .38)' }}
-        />
-      )}
+      {/* ── backdrop + drawer, StaggeredMenu-style choreography: panel
+          slides in first, then the nav items cascade in with a stagger,
+          via framer-motion (already a dependency) rather than adding
+          GSAP for one component. AnimatePresence handles both directions
+          so the close feels as deliberate as the open. ── */}
+      <AnimatePresence>
+        {navOpen && (
+          <motion.div
+            key="backdrop"
+            onClick={() => setNavOpen(false)}
+            aria-hidden="true"
+            className="fixed inset-0 z-40"
+            style={{ background: 'rgb(0 0 0 / .38)' }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* ── drawer ── */}
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label="Trainer navigation"
-        className="fixed inset-y-0 left-0 z-50 w-[272px] flex flex-col p-4 border-r transition-transform duration-300"
-        style={{
-          background: 'var(--panel)',
-          borderColor: 'var(--line)',
-          transform: navOpen ? 'translateX(0)' : 'translateX(-100%)',
-          boxShadow: navOpen ? '24px 0 60px -20px rgb(0 0 0 / .35)' : 'none',
-        }}>
+      <AnimatePresence>
+        {navOpen && (
+          <motion.aside
+            key="drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Trainer navigation"
+            className="fixed inset-y-0 left-0 z-50 w-[272px] flex flex-col p-4 border-r"
+            style={{ background: 'var(--panel)', borderColor: 'var(--line)', boxShadow: '24px 0 60px -20px rgb(0 0 0 / .35)' }}
+            initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+            transition={{ duration: 0.38, ease: [0.22, 0.8, 0.3, 1] }}
+          >
+            <div className="flex items-center justify-between mb-6 px-1">
+              <button className="flex items-center gap-2.5" onClick={() => { nav('/app/trainer'); setNavOpen(false); }}>
+                <img src="/logo.png" alt="SK OS" className="w-9 h-9 rounded-xl object-cover" />
+                <div className="text-left">
+                  <div className="font-brand text-[13px] font-bold leading-none">SK OS</div>
+                  <div className="text-[9px] tracking-[.2em] mt-1 uppercase" style={{ color: 'var(--faint)' }}>
+                    {user?.orgName || 'Workspace'}
+                  </div>
+                </div>
+              </button>
+              <button onClick={() => setNavOpen(false)} aria-label="Close menu"
+                className="w-8 h-8 grid place-items-center rounded-lg" style={{ color: 'var(--mute)' }}>
+                <Icon name="close" size={16} />
+              </button>
+            </div>
 
-        <div className="flex items-center justify-between mb-6 px-1">
-          <button className="flex items-center gap-2.5" onClick={() => { nav('/app/trainer'); setNavOpen(false); }}>
-            <img src="/logo.png" alt="SK OS" className="w-9 h-9 rounded-xl object-cover" />
-            <div className="text-left">
-              <div className="font-brand text-[13px] font-bold leading-none">SK OS</div>
-              <div className="text-[9px] tracking-[.2em] mt-1 uppercase" style={{ color: 'var(--faint)' }}>
-                {user?.orgName || 'Workspace'}
+            <LineNavList
+              items={links.map((l) => ({ ...l, icon: <Icon name={l.icon} size={18} /> }))}
+              onNavigate={() => setNavOpen(false)}
+            />
+
+            <div className="border-t pt-3 mt-3" style={{ borderColor: 'var(--line)' }}>
+              <div className="flex items-center gap-2.5 px-2 mb-2">
+                <div className="w-8 h-8 rounded-full grid place-items-center border font-grotesk text-xs font-bold"
+                  style={{ background: 'var(--panel2)', borderColor: 'var(--line)' }}>
+                  {user?.name?.[0] || '?'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold font-grotesk truncate">{user?.name}</div>
+                  <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                    {user?.role === 'GYM_OWNER' ? 'Gym Owner' : user?.role === 'TRAINER' ? 'Trainer' : 'Admin'}
+                  </div>
+                </div>
               </div>
+              <button onClick={logout}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-semibold transition-colors"
+                style={{ color: 'var(--mute)' }}>
+                <Icon name="signOut" size={16} />
+                Sign out
+              </button>
             </div>
-          </button>
-          <button onClick={() => setNavOpen(false)} aria-label="Close menu"
-            className="w-8 h-8 grid place-items-center rounded-lg" style={{ color: 'var(--mute)' }}>
-            <Icon name="close" size={16} />
-          </button>
-        </div>
-
-        <nav className="space-y-1 flex-1 overflow-y-auto">
-          {links.map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.end}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-semibold transition-colors ${isActive ? '' : 'hover:opacity-100'}`
-              }
-              style={({ isActive }) => isActive
-                ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
-                : { color: 'var(--mute)' }}>
-              <Icon name={l.icon} size={18} />
-              {l.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="border-t pt-3 mt-3" style={{ borderColor: 'var(--line)' }}>
-          <div className="flex items-center gap-2.5 px-2 mb-2">
-            <div className="w-8 h-8 rounded-full grid place-items-center border font-grotesk text-xs font-bold"
-              style={{ background: 'var(--panel2)', borderColor: 'var(--line)' }}>
-              {user?.name?.[0] || '?'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold font-grotesk truncate">{user?.name}</div>
-              <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
-                {user?.role === 'GYM_OWNER' ? 'Gym Owner' : user?.role === 'TRAINER' ? 'Trainer' : 'Admin'}
-              </div>
-            </div>
-          </div>
-          <button onClick={logout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-semibold transition-colors"
-            style={{ color: 'var(--mute)' }}>
-            <Icon name="signOut" size={16} />
-            Sign out
-          </button>
-        </div>
-      </aside>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       <main className="p-4 md:p-8 max-w-7xl mx-auto">
         <div key={loc.pathname} className="anim-fadeUp">

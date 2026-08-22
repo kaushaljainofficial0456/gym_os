@@ -7,10 +7,20 @@
  *
  * Zero new dependencies — pure React + inline theme tokens.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
+
+// Stepper's directional slide+fade, adapted from its stepVariants --
+// entering forward comes from the right, back comes from the left, so
+// the motion itself tells you which way you're moving through the flow.
+const stepVariants = {
+  enter: (dir) => ({ x: dir >= 0 ? 24 : -24, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir) => ({ x: dir >= 0 ? -24 : 24, opacity: 0 }),
+};
 
 /* ════════════════════════════════════════════════════════════════
    THEME TOKENS
@@ -236,6 +246,7 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
   const { theme } = useTheme();
   const t = T[theme] || T.dark;
   const [step, setStep] = useState(0);
+  const direction = useRef(1); // 1 = forward, -1 = back; read once per step change, not reactive state
   const [form, setForm] = useState({
     name: initialName || '',
     sex: '',
@@ -257,10 +268,11 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
     return false;
   }, [step, form]);
 
-  const handleBack = () => { if (step > 0) setStep(step - 1); };
+  const handleBack = () => { if (step > 0) { direction.current = -1; setStep(step - 1); } };
 
   const handleNext = () => {
     if (step < STEPS.length - 1) {
+      direction.current = 1;
       setStep(step + 1);
       setError('');
     } else {
@@ -307,13 +319,20 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
           </div>
         </div>
 
-        {/* Step content */}
-        <div className="px-6 pb-6 min-h-[280px]">
-          {step === 0 && <StepName form={form} setForm={setForm} t={t} />}
-          {step === 1 && <StepSex form={form} setForm={setForm} t={t} />}
-          {step === 2 && <StepBody form={form} setForm={setForm} t={t} />}
-          {step === 3 && <StepGoal form={form} setForm={setForm} t={t} />}
-          {step === 4 && <StepActivity form={form} setForm={setForm} t={t} />}
+        {/* Step content — Stepper's directional slide+fade (see
+            stepVariants above), not the instant swap this had before. */}
+        <div className="px-6 pb-6 min-h-[280px] overflow-hidden relative">
+          <AnimatePresence mode="wait" custom={direction.current} initial={false}>
+            <motion.div key={step} custom={direction.current} variants={stepVariants}
+              initial="enter" animate="center" exit="exit"
+              transition={{ duration: 0.28, ease: [0.22, 0.8, 0.3, 1] }}>
+              {step === 0 && <StepName form={form} setForm={setForm} t={t} />}
+              {step === 1 && <StepSex form={form} setForm={setForm} t={t} />}
+              {step === 2 && <StepBody form={form} setForm={setForm} t={t} />}
+              {step === 3 && <StepGoal form={form} setForm={setForm} t={t} />}
+              {step === 4 && <StepActivity form={form} setForm={setForm} t={t} />}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Error */}
@@ -335,7 +354,7 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
             className="flex-1 py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"
             style={{
               background: canNext && !saving ? t.accent : t.surface,
-              color: canNext && !saving ? '#fff' : t.mute,
+              color: canNext && !saving ? 'var(--accent-contrast)' : t.mute,
               border: `1px solid ${canNext && !saving ? t.accent : t.border}`,
               opacity: canNext && !saving ? 1 : 0.5,
               cursor: canNext && !saving ? 'pointer' : 'not-allowed',

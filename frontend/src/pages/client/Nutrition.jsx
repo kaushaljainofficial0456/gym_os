@@ -1187,7 +1187,7 @@ export default function Nutrition() {
             <div className="rounded-xl p-3 space-y-2" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
               <div className="grid grid-cols-3 gap-2">
                 <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Slot" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.slot} onChange={(e) => setMealForm((f) => ({ ...f, slot: e.target.value }))} />
-                <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Name" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.name} onChange={(e) => setMealForm((f) => ({ ...f, name: e.target.value }))} />
+                <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="e.g. Post-Workout Shake" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.name} onChange={(e) => setMealForm((f) => ({ ...f, name: e.target.value }))} />
                 <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Time" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.time} onChange={(e) => setMealForm((f) => ({ ...f, time: e.target.value }))} />
               </div>
               <div className="grid grid-cols-4 gap-2">

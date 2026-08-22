@@ -4,6 +4,8 @@ import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
+import BorderGlow from '../components/BorderGlow.jsx';
+import './../components/BorderGlow.css';
 
 const DEMO = [
   { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
@@ -118,9 +120,11 @@ export default function Login() {
                   placeholder="••••••••" required />
               </div>
               {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
-              <button className="btn-primary w-full !py-3" disabled={busy}>
-                {busy ? 'Signing in…' : 'Sign in'}
-              </button>
+              <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
+                <button className="btn-primary w-full !py-3" disabled={busy}>
+                  {busy ? 'Signing in…' : 'Sign in'}
+                </button>
+              </BorderGlow>
             </form>
 
 

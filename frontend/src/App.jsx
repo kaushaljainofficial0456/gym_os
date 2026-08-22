@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { Spinner } from './components/UI.jsx';
+import ClickSparkLazy from './components/ClickSparkLazy.jsx';
 import Login from './pages/Login.jsx';
 import TrainerLayout from './pages/trainer/TrainerLayout.jsx';
 import Dashboard from './pages/trainer/Dashboard.jsx';
@@ -43,6 +44,7 @@ export default function App() {
   const authed = !!user;
 
   return (
+    <ClickSparkLazy>
     <Routes>
       <Route path="/login" element={<Login />} />
       {/* Design-system showcase. Intentionally unauthenticated: it renders
@@ -87,5 +89,6 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to={authed ? (isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
     </Routes>
+    </ClickSparkLazy>
   );
 }

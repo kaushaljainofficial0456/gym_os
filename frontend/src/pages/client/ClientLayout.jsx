@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useMotionValue } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -7,6 +8,7 @@ import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
 import Icon from '../../components/Icon.jsx';
+import DockNavItem from '../../components/DockNavItem.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -32,14 +34,23 @@ const PROFILE_MENU = [
   { to: '/app/client/profile', label: 'Profile', icon: 'user' },
   { to: '/app/client/profile', label: 'Measurements', icon: 'ruler' },
   { to: '/app/client/profile', label: 'Goals', icon: 'target' },
-  { to: '/app/client/settings', label: 'Settings', icon: '⚙️' },
-  { to: '/app/client/help', label: 'Help', icon: '❓' },
+  // Was '⚙️'/'❓' -- literal emoji, neither a key in Icon.jsx's PATHS table,
+  // same bug class this file's own comment above already flags as fixed
+  // at 9 other sites. 'bulb' has no dedicated question-mark glyph in the
+  // shared icon set; it's the closest semantic fit ("here's something to
+  // know") rather than adding a one-off icon for a single menu row.
+  { to: '/app/client/settings', label: 'Settings', icon: 'settings' },
+  { to: '/app/client/help', label: 'Help', icon: 'bulb' },
 ];
 
 export default function ClientLayout() {
   const { user, logout } = useAuth();
   const loc = useLocation();
   const nav = useNavigate();
+  // Infinity, not 0: Dock's distance-from-cursor transform maps
+  // out-of-range to baseSize, and 0 would sit inside every item's range
+  // on first paint, before any real pointer position ever arrives.
+  const bottomNavMouseX = useMotionValue(Infinity);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [featurePopup, setFeaturePopup] = useState(null);
@@ -235,16 +246,21 @@ export default function ClientLayout() {
       {/* ── FEATURE POPUP ── */}
       {featurePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
 
-      {/* ── BOTTOM NAV ── */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t" style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--line)' }}>
+      {/* ── BOTTOM NAV — Dock's spring-physics magnify-on-proximity,
+          layered onto the existing full-width tab bar rather than the
+          demo's floating pill: this is a persistent mobile tab bar,
+          not a desktop dock, and it needs to keep working with zero
+          hover capability at all on a touchscreen. ── */}
+      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--line)' }}
+        onMouseMove={(e) => bottomNavMouseX.set(e.clientX)}
+        onMouseLeave={() => bottomNavMouseX.set(Infinity)}>
         <div className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">
           {NAV.map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.end}
-              className={({ isActive }) => `flex flex-col items-center gap-1 py-2.5 rounded-xl font-grotesk text-[9px] font-bold uppercase tracking-[.14em] transition-all duration-200 ${isActive ? 'text-accent' : ''}`}
-              style={({ isActive }) => ({ color: isActive ? undefined : 'var(--mute)', background: isActive ? 'rgb(var(--accent-rgb) / .08)' : 'transparent' })}>
-              <span className="grid place-items-center"><Icon name={l.icon} size={20} /></span>
-              {l.label}
-            </NavLink>
+            <DockNavItem key={l.to} to={l.to} end={l.end} label={l.label}
+              icon={<Icon name={l.icon} size={20} />}
+              mouseX={bottomNavMouseX} baseSize={20} magnifySize={26} distance={80}
+              spring={{ mass: 0.1, stiffness: 200, damping: 14 }} />
           ))}
         </div>
       </nav>
