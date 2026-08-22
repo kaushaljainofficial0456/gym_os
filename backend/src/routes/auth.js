@@ -70,9 +70,67 @@ export default function authRoutes(db) {
       token,
       user: {
         id: user.id, name: user.name, email: user.email, role: user.role,
-        orgId: user.org_id, orgName: org?.name || null
+        orgId: user.org_id, orgName: org?.name || null, orgSlug: org?.slug || null
       }
     });
+  });
+
+  // Self-service client signup (pre-auth). Distinct from POST /clients
+  // (staff-created accounts, requires an authenticated trainer/owner
+  // session) -- this is how a client joins on their own, given the gym
+  // code their trainer/owner shares with them. Mirrors setup-org's shape:
+  // one db.tx() insert of users + clients + client_profiles (never two
+  // separate calls -- a failure on the second/third insert must not leave
+  // an orphaned account that can log in but 404s everywhere), then
+  // auto-login via the same signed-cookie + token response as /login.
+  // Deliberately collects only name/email/password/gymCode here -- goal,
+  // weight, height etc. are collected right after by OnboardingWizard
+  // (ClientLayout already shows it automatically while onboarding_completed
+  // is false), so this form stays a 30-second signup, not a full profile.
+  r.post('/register', rateLimit({ windowMs: 60_000, max: 10 }),
+    validate(z.object({
+      name: z.string().min(1).max(80),
+      email: z.string().email(),
+      password: z.string().min(6),
+      gymCode: z.string().min(1).max(80)
+    })), async (req, res) => {
+    const email = req.body.email.toLowerCase().trim();
+    const slug = req.body.gymCode.toLowerCase().trim();
+    const org = await db.q1('SELECT id, name, slug FROM organizations WHERE slug = ?', [slug]);
+    if (!org) return res.status(404).json({ error: 'Gym code not found. Check with your trainer or gym owner.' });
+    const userId = id('usr');
+    const clientId = id('cli');
+    try {
+      const passwordHash = await hashPassword(req.body.password);
+      await db.tx(async (tx) => {
+        await tx.run(
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+           VALUES (?, ?, ?, ?, 'CLIENT', ?, 1, ?)`,
+          [userId, org.id, email, passwordHash, req.body.name, now()]);
+        // goal defaults to 'GENERAL' here (not the clients table's own
+        // DB-level default of 'FAT_LOSS') to match POST /clients' documented
+        // default when a goal isn't supplied -- the wizard sets the real
+        // one moments later, so the account shouldn't silently pick one.
+        await tx.run(
+          `INSERT INTO clients (id, user_id, org_id, status, goal, created_at)
+           VALUES (?, ?, ?, 'ON_TRACK', 'GENERAL', ?)`,
+          [clientId, userId, org.id, now()]);
+        await tx.run(
+          `INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`,
+          [clientId]);
+      });
+      await track(db, { orgId: org.id, userId, type: 'client_self_registered', data: {} });
+      const user = { id: userId, org_id: org.id, role: 'CLIENT', name: req.body.name, email };
+      const token = signToken(user);
+      setAuthCookie(res, token);
+      res.status(201).json({
+        token,
+        user: { id: userId, name: req.body.name, email, role: 'CLIENT', orgId: org.id, orgName: org.name, orgSlug: org.slug }
+      });
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      throw e;
+    }
   });
 
   // Create a new organization + owner (multi-tenant onboarding).
@@ -127,7 +185,7 @@ export default function authRoutes(db) {
       const user = { id: userId, org_id: orgId, role: 'GYM_OWNER', name: ownerName, email: email.toLowerCase().trim() };
       const token = signToken(user);
       setAuthCookie(res, token);
-      res.status(201).json({ token, user: { id: userId, name: ownerName, email: user.email, role: 'GYM_OWNER', orgId, orgName } });
+      res.status(201).json({ token, user: { id: userId, name: ownerName, email: user.email, role: 'GYM_OWNER', orgId, orgName, orgSlug: slug } });
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
       throw e;
@@ -152,7 +210,7 @@ export default function authRoutes(db) {
   r.get('/me', requireAuth, async (req, res) => {
     const user = await db.q1(
       `SELECT u.id, u.name, u.email, u.role, u.org_id, u.avatar,
-              o.name AS org_name
+              o.name AS org_name, o.slug AS org_slug
          FROM users u LEFT JOIN organizations o ON o.id = u.org_id
         WHERE u.id = ?`, [req.user.sub]);
     if (!user) return res.status(404).json({ error: 'User not found' });

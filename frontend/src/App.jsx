@@ -4,6 +4,7 @@ import { useAuth } from './auth.jsx';
 import { Spinner } from './components/UI.jsx';
 import ClickSparkLazy from './components/ClickSparkLazy.jsx';
 import Login from './pages/Login.jsx';
+import SignUp from './pages/SignUp.jsx';
 import TrainerLayout from './pages/trainer/TrainerLayout.jsx';
 import Dashboard from './pages/trainer/Dashboard.jsx';
 import Clients from './pages/trainer/Clients.jsx';
@@ -47,6 +48,7 @@ export default function App() {
     <ClickSparkLazy>
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<SignUp />} />
       {/* Design-system showcase. Intentionally unauthenticated: it renders
           only static demo data, and needing a login to check a colour token
           is friction that stops people checking. */}

@@ -158,6 +158,27 @@ export default function Business() {
             </span>
           )}
         </div>
+
+        {/* Gym code -- what a client types into /signup's "Gym code" field
+            (POST /auth/register resolves it to this org). orgSlug comes
+            from /auth/login's response right after signing in; org_slug is
+            the same value from /auth/me on a page refresh -- the API isn't
+            consistently camelCased across endpoints, so both are read here
+            rather than silently showing nothing after a refresh. */}
+        {(user?.orgSlug || user?.org_slug) && (
+          <div className="mt-3 rounded-2xl border border-line bg-white/[.03] p-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mb-1">Client sign-up code</div>
+              <div className="font-grotesk font-bold text-lg tracking-tight" style={{ color: 'var(--ink)' }}>{user.orgSlug || user.org_slug}</div>
+              <div className="text-[11px] text-mute mt-1">Share this with clients — they enter it at sign-up to join your gym automatically.</div>
+            </div>
+            <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => {
+              navigator.clipboard?.writeText(user.orgSlug || user.org_slug);
+              setToast('Gym code copied');
+            }}>Copy code</button>
+          </div>
+        )}
+
         {setForm && (
           <div className="grid md:grid-cols-2 gap-4 mt-3">
             <div className="space-y-2.5">

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
@@ -127,15 +127,17 @@ export default function Login() {
               </BorderGlow>
             </form>
 
+            {/* Restores ui-manavi's "New to SK OS?" CTA, previously dropped
+                (see git history) because it opened OnboardingWizard directly
+                pre-auth, which needs an authenticated session. Now points at
+                a real signup screen backed by POST /auth/register: creates
+                the account, logs the client in, then OnboardingWizard runs
+                exactly as it does for any other client. */}
+            <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
+              New to SK OS?{' '}
+              <Link to="/signup" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
+            </div>
 
-            {/* MERGE NOTE: ui-manavi also had a "New to SK OS? Get Started"
-                CTA opening OnboardingWizard here. Dropped — it assumed a
-                self-service signup flow, but no backend registration
-                endpoint exists pre-auth (OnboardingWizard's working path,
-                PUT /me/profile, requires an authenticated session; the
-                app's only account-creation routes are POST /auth/setup-org
-                for a new gym owner, and staff-created client accounts).
-                Flagged in the integration audit. */}
             <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
               <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
             </div>
