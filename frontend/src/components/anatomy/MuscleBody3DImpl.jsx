@@ -53,7 +53,7 @@ function Body({ map, selectedGroup, onSelect, hovered, setHovered, onReady }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meshes]);
 
-  const accent = useMemo(() => readCssColor('--accent', '#C4A15A'), []);
+  const accent = useMemo(() => readCssColor('--accent', '#E07A63'), []);
 
   useEffect(() => {
     for (const mesh of meshes) {

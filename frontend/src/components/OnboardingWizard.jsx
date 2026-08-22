@@ -17,20 +17,20 @@ import { useCountUp } from '../utils.js';
    ════════════════════════════════════════════════════════════════ */
 const T = {
   dark: {
-    bg: '#080B12', surface: 'rgba(255,255,255,0.03)', glass: 'rgba(255,255,255,0.04)',
-    border: 'rgba(255,255,255,0.07)', borderHover: 'rgba(255,255,255,0.14)',
-    ink: '#EDEFF7', mute: 'rgba(255,255,255,0.42)', faint: 'rgba(255,255,255,0.22)',
-    accent: '#12B8B0', accentDim: 'rgba(18,184,176,0.15)',
-    gold: '#FFC43D', goldDim: 'rgba(255,196,61,0.12)',
-    danger: '#FF6B6B',
+    bg: 'var(--bg)', surface: 'rgba(255,255,255,0.03)', glass: 'rgba(255,255,255,0.04)',
+    border: 'var(--line)', borderHover: 'rgba(255,255,255,0.14)',
+    ink: 'var(--ink)', mute: 'var(--mute)', faint: 'var(--faint)',
+    accent: 'var(--accent)', accentDim: 'var(--accent-soft)',
+    gold: 'rgb(var(--warn-rgb))', goldDim: 'rgb(var(--warn-rgb) / .12)',
+    danger: 'rgb(var(--bad-rgb))',
   },
   light: {
-    bg: '#F5F0EB', surface: 'rgba(61,48,38,0.03)', glass: 'rgba(255,255,255,0.6)',
-    border: 'rgba(61,48,38,0.08)', borderHover: 'rgba(61,48,38,0.16)',
-    ink: '#3D3026', mute: 'rgba(61,48,38,0.45)', faint: 'rgba(61,48,38,0.25)',
-    accent: '#8C6A4D', accentDim: 'rgba(140,106,77,0.12)',
-    gold: '#B47828', goldDim: 'rgba(180,120,40,0.10)',
-    danger: '#D44',
+    bg: 'var(--bg)', surface: 'rgba(0,0,0,0.03)', glass: 'rgba(255,255,255,0.6)',
+    border: 'var(--line)', borderHover: 'rgba(0,0,0,0.16)',
+    ink: 'var(--ink)', mute: 'var(--mute)', faint: 'var(--faint)',
+    accent: 'var(--accent)', accentDim: 'var(--accent-soft)',
+    gold: 'rgb(var(--warn-rgb))', goldDim: 'rgb(var(--warn-rgb) / .10)',
+    danger: 'rgb(var(--bad-rgb))',
   },
 };
 

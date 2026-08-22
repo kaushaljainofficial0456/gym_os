@@ -117,6 +117,16 @@
   --good-rgb: 122 168 128;
   --warn-rgb: 199 149 92;
   --bad-rgb: 193 92 76;
+  /* Bare aliases: several components read `var(--good)` etc. directly in
+     inline styles (not through a Tailwind rgb(var(..)/<alpha>) utility,
+     which is why only the -rgb form existed before) -- FoodLogSheet,
+     GymCrowdDetail, Home's crowd-level map, Workout's completed-set
+     button. Without these three lines those inline styles silently
+     resolved to nothing. Kept as plain rgb() of the same channel tokens
+     so both forms can never drift apart. */
+  --good: rgb(var(--good-rgb));
+  --warn: rgb(var(--warn-rgb));
+  --bad: rgb(var(--bad-rgb));
 
   --tint-rgb: 255 255 255;
 
