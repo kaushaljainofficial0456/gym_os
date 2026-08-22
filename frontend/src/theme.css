@@ -52,22 +52,37 @@
 
 /* ═══════════════════════════════════════════════
    DARK MODE (default — premium SK OS signature)
+
+   PALETTE OWNERSHIP: these values ARE the SK OS design system, for every
+   role — trainer, client and owner alike. They were previously the client
+   app's electric-lime identity, with the trainer running a scoped
+   terracotta override (`.trainer-theme`) on top. That split is gone: the
+   trainer palette proved to be the product's visual direction, so its
+   values were promoted here rather than duplicated in two places.
+
+   Why promote instead of adding `.trainer-theme` to the client tree:
+   every page in this app — both roles — already reads these same token
+   NAMES through the same Tailwind classes (bg-panel, text-ink, .card,
+   .btn). Changing the values here restyles all three role areas without
+   editing a single line of page markup, so no layout, button position or
+   workflow moves. That property is the whole reason this unification is
+   safe.
    ═══════════════════════════════════════════════ */
 :root {
   color-scheme: dark;
-  /* Pitch-black canvas */
-  --bg: #0A0A0A;
-  --bg2: #111113;
-  --panel: #18181B;
-  --panel2: #27272A;
+  /* Warm near-black canvas */
+  --bg: #1C1210;
+  --bg2: #241815;
+  --panel: #2A1D19;
+  --panel2: #33241F;
   --line: rgba(255,255,255,.08);
-  --ink: #FAFAFA;                      /* high-contrast white */
-  --mute: rgba(250,250,250,.50);
-  --faint: rgba(250,250,250,.28);
-  /* Primary accent: electric lime */
-  --accent: #C4F82A;
-  --accent-deep: #A8D924;
-  --accent-soft: rgba(196,248,42,.10);
+  --ink: #F7ECE7;                      /* warm high-contrast off-white */
+  --mute: rgba(247,236,231,.55);
+  --faint: rgba(247,236,231,.30);
+  /* Primary accent: terracotta */
+  --accent: #E07A63;
+  --accent-deep: #C15C4C;
+  --accent-soft: rgba(224,122,99,.12);
   /* Secondary colors */
   --secondary: #FB7185;               /* pink/red */
   --secondary-deep: #F43F5E;
@@ -76,33 +91,38 @@
   --purple: #7C3AED;
   --orange: #FA541C;
   --gold: #FBBF24;
-  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
   --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
 
   /* Channel tokens */
-  --accent-rgb: 196 248 42;
-  --accent-deep-rgb: 168 217 36;
-  --accent-contrast: #0A0A0A;          /* dark ink ON lime */
-  --bg-rgb: 10 10 10;
-  --bg2-rgb: 17 17 19;
-  --panel-rgb: 24 24 27;
-  --panel2-rgb: 39 39 42;
-  --ink-rgb: 250 250 250;
+  --accent-rgb: 224 122 99;
+  --accent-deep-rgb: 193 92 76;
+  --accent-contrast: #2B120A;          /* dark ink ON terracotta */
+  --bg-rgb: 28 18 16;
+  --bg2-rgb: 36 24 21;
+  --panel-rgb: 42 29 25;
+  --panel2-rgb: 51 36 31;
+  --ink-rgb: 247 236 231;
   --secondary-rgb: 251 113 133;
   --secondary-deep-rgb: 244 63 94;
   --cyan-rgb: 34 211 238;
   --violet-rgb: 124 58 237;
   --orange-rgb: 250 84 28;
   --gold-rgb: 251 191 36;
-  --good-rgb: 196 248 42;
-  --warn-rgb: 251 191 36;
-  --bad-rgb: 248 113 113;
+  /* Status, restrained. --good-rgb used to be the lime brand colour doing
+     double duty as "on track", which read as a stray neon dot beside a warm
+     palette. Good and warn now carry quiet, warm-leaning tones and "bad"
+     reuses accent-deep rather than inventing a second red — the MEANING is
+     preserved (good reads positive, bad reads alarm), not the literal hex. */
+  --good-rgb: 122 168 128;
+  --warn-rgb: 199 149 92;
+  --bad-rgb: 193 92 76;
 
   --tint-rgb: 255 255 255;
 
-  --accent-grad: linear-gradient(135deg, #A8D924, #C4F82A);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(196,248,42,.35);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(196,248,42,.5);
+  --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
 }
 
 /* ═══════════════════════════════════════════════
@@ -110,103 +130,6 @@
    ═══════════════════════════════════════════════ */
 .light {
   color-scheme: light;
-  --bg: #F5F2ED;
-  --bg2: #EDEAE4;
-  --panel: #FFFFFF;
-  --panel2: #F8F6F2;
-  --line: rgba(0,0,0,.08);
-  --ink: #1A1D1A;
-  --mute: rgba(26,29,26,.55);
-  --faint: rgba(26,29,26,.32);
-  --accent: #5A8C00;                   /* muted lime for light mode */
-  --accent-deep: #4A7500;
-  --accent-soft: rgba(90,140,0,.08);
-  --secondary: #D46A8A;
-  --secondary-deep: #C25A7A;
-  --secondary-soft: rgba(212,106,138,.08);
-  --card-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.04);
-  --card-gradient: none;
-
-  --accent-rgb: 90 140 0;
-  --accent-deep-rgb: 74 117 0;
-  --accent-contrast: #FFFFFF;
-  --bg-rgb: 245 242 237;
-  --bg2-rgb: 237 234 228;
-  --panel-rgb: 255 255 255;
-  --panel2-rgb: 248 246 242;
-  --ink-rgb: 26 29 26;
-  --secondary-rgb: 212 106 138;
-  --secondary-deep-rgb: 194 90 122;
-  --cyan-rgb: 42 122 133;
-  --violet-rgb: 122 96 156;
-
-  --tint-rgb: 0 0 0;
-
-  --accent-grad: linear-gradient(135deg, #4A7500, #5A8C00);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(90,140,0,.25);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(90,140,0,.35);
-}
-
-/* ═══════════════════════════════════════════════
-   TRAINER — scoped design language (terracotta / blush)
-
-   Wrapped around <TrainerLayout>'s root only, via .trainer-theme, so
-   the client app's lime identity is completely untouched — nothing
-   here reaches Home/Workout/Nutrition. Two pairs (dark/light) so it
-   still honours the global theme toggle rather than forcing one look.
-
-   Leaves --secondary/--cyan/--violet alone (semantic data-viz hues,
-   not brand). DOES override good/warn/bad, on reflection: --good-rgb
-   globally IS the client app's lime brand colour reused as a status
-   colour, so leaving it "untouched" meant a neon-lime dot on every
-   trainer screen — the opposite of untouched. What's preserved is the
-   MEANING (good still reads as positive, bad still reads as alarm),
-   not the literal hex; see the values below for why.
-   ═══════════════════════════════════════════════ */
-.dark .trainer-theme {
-  --bg: #1C1210;
-  --bg2: #241815;
-  --panel: #2A1D19;
-  --panel2: #33241F;
-  --line: rgba(255,255,255,.08);
-  --ink: #F7ECE7;
-  --mute: rgba(247,236,231,.55);
-  --faint: rgba(247,236,231,.30);
-  --accent: #E07A63;
-  --accent-deep: #C15C4C;
-  --accent-soft: rgba(224,122,99,.12);
-  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
-  --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
-
-  --accent-rgb: 224 122 99;
-  --accent-deep-rgb: 193 92 76;
-  --accent-contrast: #2B120A;
-  --bg-rgb: 28 18 16;
-  --bg2-rgb: 36 24 21;
-  --panel-rgb: 42 29 25;
-  --panel2-rgb: 51 36 31;
-  --ink-rgb: 247 236 231;
-  --tint-rgb: 255 255 255;
-
-  --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
-
-  /* Status, restrained. The global --good-rgb IS the client app's lime
-     brand colour doing double duty as "on track" -- inside trainer that
-     read as a stray neon-green dot next to a warm palette, one hue too
-     many on an already-busy screen. "Bad"/at-risk reuses accent-deep
-     rather than inventing a second red: terracotta already reads as
-     alarm-adjacent, and one fewer competing hue is the point. Good and
-     warn get quiet, warm-leaning tones instead of the loud defaults, so
-     the whole screen reads as one family plus two calm status notes,
-     not four hues shouting over each other. */
-  --good-rgb: 122 168 128;
-  --warn-rgb: 199 149 92;
-  --bad-rgb: 193 92 76;
-}
-
-.light .trainer-theme {
   --bg: #FFDFDD;
   --bg2: #FFE9E6;
   --panel: #FFFFFF;
@@ -215,9 +138,12 @@
   --ink: #2B211C;
   --mute: rgba(43,33,28,.58);
   --faint: rgba(43,33,28,.34);
-  --accent: #C15C4C;
+  --accent: #C15C4C;                   /* terracotta for light mode */
   --accent-deep: #9C4436;
   --accent-soft: rgba(193,92,76,.10);
+  --secondary: #D46A8A;
+  --secondary-deep: #C25A7A;
+  --secondary-soft: rgba(212,106,138,.08);
   --card-shadow: 0 1px 2px rgba(120,60,50,.05), 0 4px 14px rgba(120,60,50,.05);
   --card-gradient: none;
 
@@ -229,31 +155,29 @@
   --panel-rgb: 255 255 255;
   --panel2-rgb: 255 243 241;
   --ink-rgb: 43 33 28;
+  --secondary-rgb: 212 106 138;
+  --secondary-deep-rgb: 194 90 122;
+  --cyan-rgb: 42 122 133;
+  --violet-rgb: 122 96 156;
+
   --tint-rgb: 138 66 50;
 
   --accent-grad: linear-gradient(135deg, #9C4436, #C15C4C);
   --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.28);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.38);
 
-  /* Status, restrained -- see the dark block above for why. */
+  /* Status, restrained — see the :root block for the reasoning. */
   --good-rgb: 95 141 100;
   --warn-rgb: 185 138 78;
   --bad-rgb: 156 68 54;
 }
 
-/* Trainer type split: font-grotesk (Satoshi everywhere else in this app)
-   repoints to DM Sans inside trainer scope, for exactly the smaller
-   supporting text that class already carries -- kickers, list sub-lines,
-   table cells, form labels, timestamps. font-brand/font-display/font-body
-   (the actual headings and hero numbers) stay on Satoshi. Two faces with
-   two distinct jobs: Satoshi says "this is the important number/word on
-   the screen", DM Sans says "this is context for it" -- rather than one
-   face doing both jobs at different weights, which reads flatter.
-   Needs no !important: two classes beats font-grotesk's one on
-   specificity alone, and this rule compiles after @tailwind utilities. */
-.trainer-theme .font-grotesk {
-  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
-}
+/* The former `.trainer-theme` scoped palette (terracotta / blush) has been
+   PROMOTED to :root and .light above — it is now the whole product's design
+   system, not one role's override. The scoping class and its two duplicate
+   value blocks are gone rather than left as dead overrides restating the
+   same values one specificity level higher.
+   ═══════════════════════════════════════════════ */
 
 html, body, #root { min-height: 100%; }
 
@@ -313,44 +237,24 @@ body {
 .light .bg-black\/70 { background-color: rgba(0,0,0,.35) !important; }
 .light .bg-black\/60 { background-color: rgba(0,0,0,.28) !important; }
 
-/* ── 2. Alpha-baked tokens (the documented exception) ── */
-.light .border-line { border-color: rgba(0,0,0,.10) !important; }
-.light .border-line\/40 { border-color: rgba(0,0,0,.08) !important; }
-.light .border-line\/50 { border-color: rgba(0,0,0,.10) !important; }
-.light .border-line\/60 { border-color: rgba(0,0,0,.12) !important; }
-.light .\!border-line { border-color: rgba(0,0,0,.10) !important; }
-.light .text-mute  { color: rgba(26,29,26,.55) !important; }
-.light .\!text-mute { color: rgba(26,29,26,.55) !important; }
-.light .text-faint { color: rgba(26,29,26,.32) !important; }
-.light .bg-mute { background-color: rgba(0,0,0,.45) !important; }
+/* ── 2. Alpha-baked tokens (the documented exception) ──
+   Warm values, matching --line/--mute/--faint in the .light block above.
+   Restated here because Tailwind's utility classes read this !important
+   rule directly rather than the variable, for this one alpha-baked trio. */
+.light .border-line { border-color: #F1DAD5 !important; }
+.light .border-line\/40 { border-color: rgba(241,218,213,.55) !important; }
+.light .border-line\/50 { border-color: rgba(241,218,213,.65) !important; }
+.light .border-line\/60 { border-color: rgba(241,218,213,.75) !important; }
+.light .\!border-line { border-color: #F1DAD5 !important; }
+.light .text-mute  { color: rgba(43,33,28,.58) !important; }
+.light .\!text-mute { color: rgba(43,33,28,.58) !important; }
+.light .text-faint { color: rgba(43,33,28,.34) !important; }
+.light .bg-mute { background-color: rgba(43,33,28,.4) !important; }
+.light .hover\:border-white\/15:hover { border-color: rgba(193,92,76,.28) !important; }
 
 /* ── 3. Recharts draws its own SVG and cannot see Tailwind ── */
 .light .recharts-cartesian-grid-horizontal line,
 .light .recharts-cartesian-grid-vertical line {
-  stroke: rgba(0,0,0,.08) !important;
-}
-
-/* ── Trainer override: higher specificity beats the client's
-   !important rules above, which a plain CSS variable cannot. Same
-   values as --mute/--faint/--line already carry in .light .trainer-theme;
-   restated here only because Tailwind's utility classes read the
-   !important rule directly, not the variable, for this one alpha-baked
-   trio (see the exception documented at the top of this file). Without
-   this, text-mute/text-faint/border-line rendered in the CLIENT app's
-   grey instead of trainer's warm brown -- two greys visibly disagreeing
-   on the same screen. ── */
-.light .trainer-theme .border-line { border-color: #F1DAD5 !important; }
-.light .trainer-theme .border-line\/40 { border-color: rgba(241,218,213,.55) !important; }
-.light .trainer-theme .border-line\/50 { border-color: rgba(241,218,213,.65) !important; }
-.light .trainer-theme .border-line\/60 { border-color: rgba(241,218,213,.75) !important; }
-.light .trainer-theme .\!border-line { border-color: #F1DAD5 !important; }
-.light .trainer-theme .text-mute  { color: rgba(43,33,28,.58) !important; }
-.light .trainer-theme .\!text-mute { color: rgba(43,33,28,.58) !important; }
-.light .trainer-theme .text-faint { color: rgba(43,33,28,.34) !important; }
-.light .trainer-theme .bg-mute { background-color: rgba(43,33,28,.4) !important; }
-.light .trainer-theme .hover\:border-white\/15:hover { border-color: rgba(193,92,76,.28) !important; }
-.light .trainer-theme .recharts-cartesian-grid-horizontal line,
-.light .trainer-theme .recharts-cartesian-grid-vertical line {
   stroke: #F1DAD5 !important;
 }
 

@@ -65,7 +65,18 @@ export default {
       fontFamily: {
         brand: ['Satoshi', 'system-ui', 'sans-serif'],
         display: ['Satoshi', 'system-ui', 'sans-serif'],
-        grotesk: ['Satoshi', 'system-ui', 'sans-serif'],
+        /* grotesk carries the SUPPORTING text app-wide — kickers, list
+           sub-lines, table cells, form labels, timestamps — and points at
+           DM Sans, whose quieter geometric numerals read calmer at small
+           sizes than Satoshi's punchier default. brand/display/body (the
+           actual headings and hero numbers) stay on Satoshi. Two faces,
+           two distinct jobs: Satoshi says "this is the important number on
+           the screen", DM Sans says "this is context for it".
+           Set HERE rather than as a CSS override in theme.css: a
+           `.font-grotesk` rule there would tie with Tailwind's own utility
+           on specificity and win only by source order, which is a silent
+           trap for whoever edits the file next. */
+        grotesk: ['DM Sans', 'system-ui', 'sans-serif'],
         body: ['Satoshi', 'system-ui', 'sans-serif'],
         serif: ['Sentient', 'Georgia', 'serif'],
       },

@@ -32,7 +32,7 @@ const PROFILE_SECTIONS = [
   { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
 ];
 
-function MiniSpark({ values, color = '#C4F82A' }) {
+function MiniSpark({ values, color = 'var(--accent)' }) {
   if (!values?.length) return <div className="text-[10px] text-faint">No entries yet</div>;
   const pts = values.slice(-8).map((v, i, a) => {
     const min = Math.min(...a), max = Math.max(...a);
@@ -512,7 +512,7 @@ export default function Profile() {
                           <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
                         </div>
                       </div>
-                      <MiniSpark values={vals} color={m.color || '#C4F82A'} />
+                      <MiniSpark values={vals} color={m.color || 'var(--accent)'} />
                       {(m.entries || []).slice(0, 4).length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {(m.entries || []).slice(0, 4).map((e) => (

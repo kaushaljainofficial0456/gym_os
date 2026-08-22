@@ -29,21 +29,21 @@ export function WeightChart({ data }) {
       <AreaChart data={rows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="wGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#C4F82A" stopOpacity={.35} />
-            <stop offset="100%" stopColor="#C4F82A" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={.35} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 6" stroke="rgba(128,128,128,.08)" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} />
         <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => [`${v} kg`, 'Weight']} labelFormatter={(l) => data[l]?.date} />
-        <Area type="monotone" dataKey="weight" stroke="#C4F82A" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: '#E8FFB0' }} />
+        <Area type="monotone" dataKey="weight" stroke="var(--accent)" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: 'var(--accent)' }} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-export function TrendChart({ data, color = '#C4F82A', domain }) {
+export function TrendChart({ data, color = 'var(--accent)', domain }) {
   if (!data || !data.length) return null;
   return (
     <ResponsiveContainer width="100%" height={150}>

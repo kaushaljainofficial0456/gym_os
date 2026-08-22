@@ -15,18 +15,18 @@ const r1 = (n) => Math.round(n * 10) / 10;
 
 const T = {
   dark: {
-    bg: '#0A0A0A',
+    bg: 'var(--bg)',
     surface: 'rgba(255,255,255,0.03)',
     surfaceHover: 'rgba(255,255,255,0.06)',
-    border: 'rgba(255,255,255,0.08)',
+    border: 'var(--line)',
     borderHover: 'rgba(255,255,255,0.14)',
-    ink: '#FAFAFA',
-    mute: 'rgba(250,250,250,0.50)',
-    faint: 'rgba(250,250,250,0.28)',
-    accent: '#C4F82A',
-    accentDim: 'rgba(196,248,42,0.10)',
-    gold: '#C4F82A',
-    goldDim: 'rgba(196,248,42,0.10)',
+    ink: 'var(--ink)',
+    mute: 'var(--mute)',
+    faint: 'var(--faint)',
+    accent: 'var(--accent)',
+    accentDim: 'var(--accent-soft)',
+    gold: 'var(--accent)',
+    goldDim: 'var(--accent-soft)',
     secondary: '#FB7185',
     secondaryDim: 'rgba(251,113,133,0.10)',
     protein: '#FF8C42',
@@ -38,24 +38,24 @@ const T = {
     glass: 'rgba(255,255,255,0.04)',
     glassBorder: 'rgba(255,255,255,0.08)',
     ringTrack: 'rgba(255,255,255,0.06)',
-    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgba(196,248,42,0.06), transparent 70%)',
+    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgb(var(--accent-rgb) / .06), transparent 70%)',
     cardShadow: '0 2px 20px rgba(0,0,0,0.3)',
     timeline: 'rgba(255,255,255,0.06)',
-    timelineActive: 'rgba(196,248,42,0.3)',
+    timelineActive: 'rgb(var(--accent-rgb) / .3)',
   },
   light: {
-    bg: '#F5F2ED',
+    bg: 'var(--bg)',
     surface: 'rgba(0,0,0,0.03)',
     surfaceHover: 'rgba(0,0,0,0.06)',
-    border: 'rgba(0,0,0,0.08)',
+    border: 'var(--line)',
     borderHover: 'rgba(0,0,0,0.14)',
-    ink: '#1A1D1A',
-    mute: 'rgba(26,29,26,0.55)',
-    faint: 'rgba(26,29,26,0.32)',
-    accent: '#5A8C00',
-    accentDim: 'rgba(90,140,0,0.08)',
-    gold: '#5A8C00',
-    goldDim: 'rgba(90,140,0,0.08)',
+    ink: 'var(--ink)',
+    mute: 'var(--mute)',
+    faint: 'var(--faint)',
+    accent: 'var(--accent)',
+    accentDim: 'var(--accent-soft)',
+    gold: 'var(--accent)',
+    goldDim: 'var(--accent-soft)',
     secondary: '#D46A8A',
     secondaryDim: 'rgba(212,106,138,0.08)',
     protein: '#E07020',
@@ -67,10 +67,10 @@ const T = {
     glass: 'rgba(255,255,255,0.6)',
     glassBorder: 'rgba(0,0,0,0.08)',
     ringTrack: 'rgba(0,0,0,0.08)',
-    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgba(90,140,0,0.04), transparent 70%)',
+    heroGlow: 'radial-gradient(ellipse at 50% 30%, rgb(var(--accent-rgb) / .05), transparent 70%)',
     cardShadow: '0 2px 20px rgba(0,0,0,0.06)',
     timeline: 'rgba(0,0,0,0.06)',
-    timelineActive: 'rgba(90,140,0,0.25)',
+    timelineActive: 'rgb(var(--accent-rgb) / .25)',
   },
 };
 
@@ -1043,7 +1043,7 @@ export default function Nutrition() {
         <SectionHeader title="What did you eat?" kicker subtitle="Describe your meal in plain text" t={t} />
         <div className="space-y-2">
           <input className="w-full px-4 py-3 rounded-xl font-grotesk text-sm outline-none" placeholder='"2 rotis, dal and curd"' value={aiText} onChange={(e) => setAiText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && estimate()} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} />
-          <button className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-95" onClick={estimate} disabled={estimating || !aiText.trim()} style={{ background: (estimating || !aiText.trim()) ? t.surface : t.accent, color: (estimating || !aiText.trim()) ? t.mute : '#0A0C0A', boxShadow: (estimating || !aiText.trim()) ? 'none' : `0 4px 20px ${t.accent}40`, cursor: (estimating || !aiText.trim()) ? 'not-allowed' : 'pointer' }}>
+          <button className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-95" onClick={estimate} disabled={estimating || !aiText.trim()} style={{ background: (estimating || !aiText.trim()) ? t.surface : t.accent, color: (estimating || !aiText.trim()) ? t.mute : 'var(--accent-contrast)', boxShadow: (estimating || !aiText.trim()) ? 'none' : `0 4px 20px ${t.accent}40`, cursor: (estimating || !aiText.trim()) ? 'not-allowed' : 'pointer' }}>
             {estimating ? 'Analyzing…' : 'Estimate'}
           </button>
         </div>

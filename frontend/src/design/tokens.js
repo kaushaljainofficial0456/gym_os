@@ -50,33 +50,33 @@
  */
 export const brand = {
   dark: {
-    accent: '#C4F82A',        // electric lime
-    accentDeep: '#A8D924',    // gradient partner, deeper end
-    accentContrast: '#0A0A0A',// dark ink ON the bright accent
+    accent: '#E07A63',        // terracotta
+    accentDeep: '#C15C4C',    // gradient partner, deeper end
+    accentContrast: '#2B120A',// dark ink ON the accent
     cyan: '#22D3EE',
     violet: '#7C3AED',
-    bg: '#0A0A0A',            // pitch-black canvas
-    panel: '#18181B',
-    ink: '#FAFAFA',
+    bg: '#1C1210',            // warm near-black canvas
+    panel: '#2A1D19',
+    ink: '#F7ECE7',
   },
   light: {
-    accent: '#5A8C00',        // muted lime for light mode
-    accentDeep: '#4A7500',
+    accent: '#C15C4C',        // terracotta for light mode
+    accentDeep: '#9C4436',
     accentContrast: '#FFFFFF',
     cyan: '#0E7490',
     violet: '#6D28D9',
-    bg: '#F5F2ED',            // warm neutral
+    bg: '#FFDFDD',            // blush
     panel: '#FFFFFF',
-    ink: '#1A1D1A',
+    ink: '#2B211C',
   },
 };
 
 /** Semantic status colours. Identical in both themes -- "danger" must not
  *  change hue with the theme, or users learn the colour twice. */
 export const status = {
-  good: '#34D399',
-  warn: '#FBBF24',
-  bad: '#F87171',
+  good: '#7AA880',
+  warn: '#C7955C',
+  bad: '#C15C4C',
 };
 
 /* ------------------------------------------------------------------ */

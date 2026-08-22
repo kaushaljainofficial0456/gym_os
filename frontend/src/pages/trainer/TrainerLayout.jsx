@@ -68,7 +68,7 @@ export default function TrainerLayout() {
   }, [navOpen]);
 
   return (
-    <div className="trainer-theme min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
 
       {/* ── persistent top bar: hamburger + wordmark, nothing else ── */}
       <header className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b backdrop-blur"
