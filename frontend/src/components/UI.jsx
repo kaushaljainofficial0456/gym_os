@@ -107,7 +107,7 @@ export function Ring({ value, max, size = 170, stroke = 12, color, label, sub })
           style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,.8,.3,1)' }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="font-grotesk font-bold text-[26px] leading-none" style={{ color: 'var(--ink)' }}>{label}</div>
+        <div className="font-black text-[26px] leading-none" style={{ color: 'var(--ink)' }}>{label}</div>
         {sub && <div className="text-[10px] mt-1 font-grotesk tracking-wide" style={{ color: 'var(--mute)' }}>{sub}</div>}
       </div>
     </div>

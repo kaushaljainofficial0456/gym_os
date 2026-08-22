@@ -129,7 +129,7 @@ function CalorieRing({ value, max, t }) {
       </svg>
       {/* Center label */}
       <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-        <div className="font-grotesk font-bold leading-none" style={{ fontSize: 38, color: t.ink, letterSpacing: '-0.02em' }}>
+        <div className="font-black leading-none" style={{ fontSize: 38, color: t.ink, letterSpacing: '-0.02em' }}>
           {animValue.toLocaleString()}
         </div>
         <div className="font-grotesk text-[11px] mt-1" style={{ color: t.mute, letterSpacing: '0.06em' }}>kcal</div>
@@ -670,7 +670,7 @@ function SavedMealsModal({ open, onClose, onEdit, toast, onRefresh }) {
                   <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>{m.name}</div>
                   <div className="text-[10px] mb-2.5" style={{ color: t.mute }}>{m.calories} kcal · P{m.protein}g · C{m.carbs}g · F{m.fat}g{m.item_count ? ` · ${m.item_count} items` : ''}</div>
                   <div className="flex gap-2">
-                    <button className="flex-1 py-2 rounded-xl font-grotesk text-[11px] font-bold transition-all active:scale-[.97]" onClick={() => logMeal(m)} style={{ background: t.accent, color: '#fff' }}>Log 1 Serving</button>
+                    <button className="flex-1 py-2 rounded-xl font-grotesk text-[11px] font-bold transition-all active:scale-[.97]" onClick={() => logMeal(m)} style={{ background: t.accent, color: 'var(--accent-contrast)' }}>Log 1 Serving</button>
                     <button className="px-3 py-2 rounded-xl font-grotesk text-[11px] font-semibold transition-all active:scale-[.97]" onClick={() => { onClose(); onEdit(m); }} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>Edit</button>
                     <button className="px-3 py-2 rounded-xl font-grotesk text-[11px] font-semibold transition-all active:scale-[.97]" disabled={deleting === m.id} onClick={() => confirmDelete(m)} style={{ background: 'transparent', border: `1px solid ${t.danger}30`, color: t.danger + 'CC' }}>{deleting === m.id ? '…' : 'Delete'}</button>
                   </div>
@@ -991,7 +991,7 @@ export default function Nutrition() {
             {plan ? `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g` : 'No plan assigned'}
           </div>
         </div>
-        <button onClick={() => setLogFoodMenuOpen(true)} className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95" style={{ background: t.accent, color: '#fff', boxShadow: `0 4px 15px ${t.accent}40` }}>
+        <button onClick={() => setLogFoodMenuOpen(true)} className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95" style={{ background: t.accent, color: 'var(--accent-contrast)', boxShadow: `0 4px 15px ${t.accent}40` }}>
           <span className="text-sm leading-none">+</span> Log Food
         </button>
       </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
+import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 
 const DEMO = [
   { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
@@ -59,6 +60,7 @@ export default function Login() {
   return (
     <>
       {showWelcome && <MotivationalWelcome onComplete={handleWelcomeComplete} />}
+      <SplashCursorLazy />
 
       <div className="min-h-screen grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
         {/* brand side */}

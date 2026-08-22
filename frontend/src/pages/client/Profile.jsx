@@ -704,7 +704,7 @@ export default function Profile() {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setRemoveConfirmOpen(false)} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold" style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--mute)' }}>Cancel</button>
-                <button onClick={handleRemoveAvatar} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold" style={{ background: '#FF6B6B', color: '#fff' }}>Remove</button>
+                <button onClick={handleRemoveAvatar} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold" style={{ background: 'var(--bad)', color: '#fff' }}>Remove</button>
               </div>
             </div>
           </div>

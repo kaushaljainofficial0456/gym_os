@@ -467,12 +467,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     color: var(--secondary, #FF86B3);
   }
   .btn-secondary:hover { background: rgb(var(--secondary-rgb) / .20); }
+  .btn-secondary:active { transform: scale(.97); }
 
   .btn-ghost {
-    @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold px-3 py-2 rounded-full transition-colors;
+    @apply inline-flex items-center gap-2 justify-center font-grotesk text-xs font-semibold px-3 py-2 rounded-full transition-all duration-200;
     color: var(--mute);
   }
   .btn-ghost:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .05); }
+  .btn-ghost:active { transform: scale(.97); }
 
   /* ── Inputs ── */
   .input {
@@ -488,9 +490,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
-  /* ── Chips / Tags ── */
+  /* ── Chips / Tags ──
+     transition added here, not per call site: dozens of places toggle a
+     chip between idle and an active/selected look (border-gold, bg-gold/10,
+     etc via inline conditional classes) and none of them animated -- the
+     colour just snapped. One line here smooths every chip in the app. */
   .chip {
-    @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full;
+    @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full transition-all duration-200;
     border: 1px solid var(--line);
     color: var(--mute);
   }
