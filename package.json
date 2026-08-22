@@ -4,7 +4,7 @@
   "private": true,
   "description": "SK OS — B2B fitness coaching SaaS for gyms, trainers, and members.",
   "scripts": {
-    "setup": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "setup": "npm install && npm install --prefix backend && npm install --prefix frontend --include=dev",
     "db:init": "node backend/scripts/init-db.js",
     "db:seed": "node backend/scripts/seed.js",
     "db:reset": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js",
