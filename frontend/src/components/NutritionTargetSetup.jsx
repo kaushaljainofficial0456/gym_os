@@ -40,6 +40,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   // Editable values
   const [calories, setCalories] = useState(0);
@@ -51,6 +52,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
     if (!open) return;
     setLoading(true);
     setError(null);
+    setSaveError(null);
     setConfirmed(false);
     api('/me/nutrition/targets')
       .then((res) => {
@@ -70,6 +72,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
 
   const handleConfirm = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       await api('/me/nutrition/targets/confirm', {
         method: 'POST',
@@ -78,7 +81,11 @@ export default function NutritionTargetSetup({ open, onComplete }) {
       setConfirmed(true);
       setTimeout(() => onComplete(), 1200);
     } catch (e) {
-      setError(e.message || 'Could not save targets');
+      // Separate from `error` (the initial-load failure state, which hides
+      // the whole editor) -- a save failure here must leave the editor and
+      // Confirm button visible so the user can see what went wrong and
+      // retry, instead of the UI going silently unresponsive.
+      setSaveError(e.message || 'Could not save targets');
     }
     setSaving(false);
   };
@@ -146,6 +153,12 @@ export default function NutritionTargetSetup({ open, onComplete }) {
                   </div>
                 ))}
               </div>
+
+              {saveError && (
+                <div className="text-[11px] font-grotesk px-3 py-2 rounded-xl anim-fadeIn" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}25`, color: t.danger }}>
+                  {saveError}
+                </div>
+              )}
             </div>
           )}
 
@@ -159,7 +172,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
         </div>
 
         {/* Actions */}
-        {targets && !loading && !confirmed && !error && (
+        {targets && !loading && !confirmed && (
           <div className="px-6 pb-6 flex gap-3">
             <button onClick={handleConfirm} disabled={saving}
               className="flex-1 py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"

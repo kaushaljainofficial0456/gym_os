@@ -3,31 +3,42 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { Spinner } from './components/UI.jsx';
 import ClickSparkLazy from './components/ClickSparkLazy.jsx';
+// Login/SignUp stay eager: they're the first thing an unauthenticated visitor
+// needs, so there's no "next page" to defer them in favor of.
 import Login from './pages/Login.jsx';
 import SignUp from './pages/SignUp.jsx';
 import TrainerLayout from './pages/trainer/TrainerLayout.jsx';
-import Dashboard from './pages/trainer/Dashboard.jsx';
-import Clients from './pages/trainer/Clients.jsx';
-import ClientProfile from './pages/trainer/ClientProfile.jsx';
-import WorkoutBuilder from './pages/trainer/WorkoutBuilder.jsx';
-import NutritionBuilder from './pages/trainer/NutritionBuilder.jsx';
-import Alerts from './pages/trainer/Alerts.jsx';
-import Reports from './pages/trainer/Reports.jsx';
-import Messages from './pages/trainer/Messages.jsx';
-import Business from './pages/trainer/Business.jsx';
 import ClientLayout from './pages/client/ClientLayout.jsx';
-import Home from './pages/client/Home.jsx';
-import Workout from './pages/client/Workout.jsx';
-import Nutrition from './pages/client/Nutrition.jsx';
-import Progress from './pages/client/Progress.jsx';
-import Profile from './pages/client/Profile.jsx';
-import Settings from './pages/client/Settings.jsx';
-import Help from './pages/client/Help.jsx';
 
-// Lazy: the design-system showcase is a reference page for the team, not
-// something a real user navigates to. Static-importing it would put its
-// demo content in the entry chunk everyone downloads.
+// Every other page is route-split: previously all of these were static
+// imports, so the entry bundle (the one thing every visitor downloads
+// before anything renders, even the login page) included every trainer and
+// client page plus their dependency trees -- most notably WorkoutBuilder's
+// 3D muscle picker, which alone pulls in three.js (~735 kB before gzip).
+// None of that is needed until the specific route is actually visited.
+const Dashboard = lazy(() => import('./pages/trainer/Dashboard.jsx'));
+const Clients = lazy(() => import('./pages/trainer/Clients.jsx'));
+const ClientProfile = lazy(() => import('./pages/trainer/ClientProfile.jsx'));
+const WorkoutBuilder = lazy(() => import('./pages/trainer/WorkoutBuilder.jsx'));
+const NutritionBuilder = lazy(() => import('./pages/trainer/NutritionBuilder.jsx'));
+const Alerts = lazy(() => import('./pages/trainer/Alerts.jsx'));
+const Reports = lazy(() => import('./pages/trainer/Reports.jsx'));
+const Messages = lazy(() => import('./pages/trainer/Messages.jsx'));
+const Business = lazy(() => import('./pages/trainer/Business.jsx'));
+const Home = lazy(() => import('./pages/client/Home.jsx'));
+const Workout = lazy(() => import('./pages/client/Workout.jsx'));
+const Nutrition = lazy(() => import('./pages/client/Nutrition.jsx'));
+const Progress = lazy(() => import('./pages/client/Progress.jsx'));
+const Profile = lazy(() => import('./pages/client/Profile.jsx'));
+const Settings = lazy(() => import('./pages/client/Settings.jsx'));
+const Help = lazy(() => import('./pages/client/Help.jsx'));
+// Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
+
+const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
+// Small helper so each route below stays a one-liner instead of repeating
+// the same <Suspense fallback={...}> wrapper 16 times.
+const page = (El) => <Suspense fallback={PageFallback}><El /></Suspense>;
 
 // `fallback` distinguishes "not logged in" from "logged in, wrong role for
 // this subtree" — e.g. a trainer hitting an /app/client/* URL is still
@@ -52,14 +63,7 @@ export default function App() {
       {/* Design-system showcase. Intentionally unauthenticated: it renders
           only static demo data, and needing a login to check a colour token
           is friction that stops people checking. */}
-      <Route
-        path="/design"
-        element={
-          <Suspense fallback={<div className="min-h-screen grid place-items-center"><Spinner /></div>}>
-            <DesignSystem />
-          </Suspense>
-        }
-      />
+      <Route path="/design" element={page(DesignSystem)} />
       <Route path="/app" element={
         <Require ready={ready} ok={() => authed}>
           {isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
@@ -68,26 +72,26 @@ export default function App() {
       <Route path="/app/trainer" element={
         <Require ready={ready} ok={() => authed && isTrainer} fallback={authed ? '/app/client' : '/login'}><TrainerLayout /></Require>
       }>
-        <Route index element={<Dashboard />} />
-        <Route path="clients" element={<Clients />} />
-        <Route path="clients/:id" element={<ClientProfile />} />
-        <Route path="workouts" element={<WorkoutBuilder />} />
-        <Route path="nutrition" element={<NutritionBuilder />} />
-        <Route path="alerts" element={<Alerts />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="business" element={<Business />} />
+        <Route index element={page(Dashboard)} />
+        <Route path="clients" element={page(Clients)} />
+        <Route path="clients/:id" element={page(ClientProfile)} />
+        <Route path="workouts" element={page(WorkoutBuilder)} />
+        <Route path="nutrition" element={page(NutritionBuilder)} />
+        <Route path="alerts" element={page(Alerts)} />
+        <Route path="reports" element={page(Reports)} />
+        <Route path="messages" element={page(Messages)} />
+        <Route path="business" element={page(Business)} />
       </Route>
       <Route path="/app/client" element={
         <Require ready={ready} ok={() => authed && isClient} fallback={authed ? '/app/trainer' : '/login'}><ClientLayout /></Require>
       }>
-        <Route index element={<Home />} />
-        <Route path="workout" element={<Workout />} />
-        <Route path="nutrition" element={<Nutrition />} />
-        <Route path="progress" element={<Progress />} />
-        <Route path="profile" element={<Profile />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="help" element={<Help />} />
+        <Route index element={page(Home)} />
+        <Route path="workout" element={page(Workout)} />
+        <Route path="nutrition" element={page(Nutrition)} />
+        <Route path="progress" element={page(Progress)} />
+        <Route path="profile" element={page(Profile)} />
+        <Route path="settings" element={page(Settings)} />
+        <Route path="help" element={page(Help)} />
       </Route>
       <Route path="*" element={<Navigate to={authed ? (isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
     </Routes>

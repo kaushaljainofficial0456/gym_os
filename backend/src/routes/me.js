@@ -192,8 +192,8 @@ export default function meRoutes(db) {
     const id = 'np_' + Math.random().toString(36).slice(2, 10);
     await db.run(
       `INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`,
-      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, pro, carb, fatV]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, pro, carb, fatV, now()]
     );
     track(db, 'nutrition_plan_created', req.user.org, req.user.sub, { client_id: c.id, source: 'client_self' });
     res.json({ ok: true, plan: { calories: cal, protein: pro, carbs: carb, fat: fatV } });
