@@ -531,7 +531,13 @@ CREATE TABLE IF NOT EXISTS meal_logs (
   meal_template_id TEXT                      -- FK to client_meal_templates (used for delete-cascade of today's log)
 );
 CREATE INDEX IF NOT EXISTS idx_meal_logs_client ON meal_logs(client_id, date);
-CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id);
+-- idx_ml_template intentionally NOT created here: meal_template_id is also a
+-- guarded migration column (see init-db.js MIGRATIONS) added via ALTER TABLE
+-- on databases that predate it. CREATE TABLE IF NOT EXISTS is a no-op on an
+-- existing table, so this index would fail with "column does not exist" on
+-- any such database if created here, before the migration runs. It's created
+-- instead in applySqliteMigrations/applyPgMigrations, after the column is
+-- guaranteed to exist either way.
 CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten);
 
 CREATE TABLE IF NOT EXISTS water_logs (
@@ -677,7 +683,11 @@ CREATE TABLE IF NOT EXISTS notifications (
   read      INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read);
+-- idx_notif_user intentionally NOT created here: same reason as idx_ml_template
+-- above -- the read column is also a guarded migration column (init-db.js
+-- MIGRATIONS), so this index is created in applySqliteMigrations/
+-- applyPgMigrations instead, after the column is guaranteed to exist on
+-- databases that predate it.
 
 CREATE TABLE IF NOT EXISTS events (
   id        TEXT PRIMARY KEY,

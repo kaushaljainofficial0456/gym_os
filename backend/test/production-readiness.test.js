@@ -21,6 +21,15 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // idx_ml_template / idx_notif_user reference columns that are also guarded
+  // migration columns (init-db.js MIGRATIONS), so schema.sql intentionally
+  // does NOT create them -- doing so would break on any database that
+  // predates those columns (CREATE TABLE IF NOT EXISTS is a no-op there).
+  // init-db.js always runs applySqliteMigrations/applyPgMigrations right
+  // after schema.sql, which is what actually creates them; mirror that here
+  // so this in-memory DB matches real init-db.js output.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)');
   const mk = () => ({
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },

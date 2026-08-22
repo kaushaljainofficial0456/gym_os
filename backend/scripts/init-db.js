@@ -154,6 +154,9 @@ function applySqliteMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
+  // Moved from schema.sql (see comment there): `read` is a guarded migration
+  // column, so this index must run after the loop above, not before it.
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
 }
 
 async function applyPgMigrations(pool) {
@@ -183,6 +186,9 @@ async function applyPgMigrations(pool) {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
+  // Moved from schema.sql (see comment there): `read` is a guarded migration
+  // column, so this index must run after the loop above, not before it.
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
 }
 
 if (config.databaseUrl) {
