@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
 import { useFetch, useCountUp } from '../../utils.js';
@@ -798,7 +799,9 @@ export default function Nutrition() {
   const { theme } = useTheme();
   const t = T[theme] || T.dark;
 
-  const home = useFetch(() => api('/tracking/me/home'));
+  // Already fetched once by the persistent ClientLayout — reuse it instead
+  // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
+  const home = useOutletContext();
   const [meals, setMeals] = useState(null);
   const [water, setWater] = useState(null);
   const [supTaken, setSupTaken] = useState({});

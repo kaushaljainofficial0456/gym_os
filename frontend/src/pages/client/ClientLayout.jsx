@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMotionValue } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
@@ -78,6 +78,19 @@ export default function ClientLayout() {
   const clientData = homeFetch.data?.client;
   const needsOnboarding = clientData && !clientData.onboardingCompleted;
   const [onboardingDone, setOnboardingDone] = useState(false);
+
+  // ClientLayout persists across client-page navigation (Outlet swaps only
+  // the page below it), so /tracking/me/home is fetched once here and handed
+  // down via Outlet context — every child page used to call
+  // useFetch(() => api('/tracking/me/home')) itself, doubling that request
+  // on every single navigation. Memoized on the fetch's own fields (not on
+  // homeFetch's render-fresh object identity) so layout-only re-renders
+  // (profile dropdown, coach drawer, feature popup) don't push a new context
+  // value and re-render whichever child page is mounted.
+  const homeCtx = useMemo(
+    () => ({ data: homeFetch.data, loading: homeFetch.loading, error: homeFetch.error, reload: homeFetch.reload }),
+    [homeFetch.data, homeFetch.loading, homeFetch.error, homeFetch.reload]
+  );
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -241,7 +254,7 @@ export default function ClientLayout() {
 
       {/* ── MAIN CONTENT ── */}
       <div key={loc.pathname} className="anim-fadeUp pt-4">
-        <Outlet />
+        <Outlet context={homeCtx} />
       </div>
 
       {/* ── FEATURE POPUP ── */}

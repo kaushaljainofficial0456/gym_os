@@ -212,12 +212,28 @@ export default function trackingRoutes(db) {
     }
 
     const DOW_LABEL = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-    const loadDayExs = async (templateId) => db.q(
-      `SELECT we.position, we.name, we.sets, we.reps, we.weight, we.rest_sec,
-              el.primary_muscle, el.secondary_muscles, el.equipment, el.animation_key
-         FROM workout_exercises we
-         LEFT JOIN exercise_library el ON el.id = we.exercise_id
-        WHERE we.template_id = ? ORDER BY we.position`, [templateId]);
+    // Batch-fetch every scheduled day's template exercises in one query
+    // instead of one sequential `await` per day-of-week inside the loop
+    // below (up to 7 round trips) — same batch-then-group-in-JS pattern
+    // already used above for plannerExs/byPlannerWorkout.
+    const templateIds = [...new Set(days.map((d) => d.template_id).filter(Boolean))];
+    const templateExs = templateIds.length
+      ? await db.q(
+          `SELECT we.template_id, we.position, we.name, we.sets, we.reps, we.weight, we.rest_sec,
+                  el.primary_muscle, el.secondary_muscles, el.equipment, el.animation_key
+             FROM workout_exercises we
+             LEFT JOIN exercise_library el ON el.id = we.exercise_id
+            WHERE we.template_id IN (${templateIds.map(() => '?').join(',')})
+            ORDER BY we.template_id, we.position`, templateIds)
+      : [];
+    const byTemplate = new Map();
+    for (const ex of templateExs) {
+      // template_id was only needed to group here — drop it so each
+      // exercise object keeps the exact same shape the API returned before.
+      const { template_id, ...rest } = ex;
+      if (!byTemplate.has(template_id)) byTemplate.set(template_id, []);
+      byTemplate.get(template_id).push(rest);
+    }
     const week = [];
     for (let dow = 0; dow <= 6; dow++) {
       const day = days.find((d) => d.day_of_week === dow);
@@ -226,7 +242,7 @@ export default function trackingRoutes(db) {
       let source = null;
       let name = 'Rest';
       if (day?.template_id) {
-        exercises = await loadDayExs(day.template_id);
+        exercises = byTemplate.get(day.template_id) || [];
         source = 'program';
         name = day.name;
       } else if (plannerWid) {

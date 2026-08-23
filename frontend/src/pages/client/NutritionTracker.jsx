@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, cls } from '../../utils.js';
 import { Spinner, ErrorState, Empty, Seg, Kpi, Bar } from '../../components/UI.jsx';
@@ -57,8 +58,10 @@ const WEEKDAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export default function NutritionTracker() {
   // /tracking/me/home already resolves "my own client id" — the same
-  // lookup every other client page (Progress, Home) uses, reused as-is.
-  const home = useFetch(() => api('/tracking/me/home'));
+  // lookup every other client page (Progress, Home) uses. It's already
+  // fetched once by the persistent ClientLayout, so it's reused here via
+  // Outlet context instead of firing a second, redundant request.
+  const home = useOutletContext();
   const clientId = home.data?.client?.id;
 
   const today = todayKey();

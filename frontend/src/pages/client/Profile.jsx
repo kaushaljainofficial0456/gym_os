@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
@@ -133,7 +134,9 @@ function ThemeToggle() {
 export default function Profile() {
   const [activeSection, setActiveSection] = useState(null);
 
-  const home = useFetch(() => api('/tracking/me/home'));
+  // Already fetched once by the persistent ClientLayout — reuse it instead
+  // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
+  const home = useOutletContext();
   const meDash = useFetch(() => api('/me/dashboard'));
   const metrics = useFetch(() => api('/me/metrics'));
   const profile = useFetch(() => api('/me/profile'));

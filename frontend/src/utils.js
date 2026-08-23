@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const fmtK = (n) => Number(n || 0).toLocaleString('en-US');
 export const fmt1 = (n) => (Math.round(Number(n || 0) * 10) / 10).toFixed(1);
@@ -58,7 +58,11 @@ export function useFetch(fn, deps = []) {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [...deps, tick]);
-  return { data, loading, error, reload: () => setTick(t => t + 1) };
+  // Stable identity (was a fresh arrow fn every render) so consumers that
+  // pass the whole { data, loading, error, reload } object down — e.g. via
+  // Outlet context — don't get a new object on every unrelated re-render.
+  const reload = useCallback(() => setTick(t => t + 1), []);
+  return { data, loading, error, reload };
 }
 
 // Tiny deterministic SVGs for empty/loading states are in UI.jsx.

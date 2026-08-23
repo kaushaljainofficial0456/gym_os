@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Card } from '../../components/UI.jsx';
@@ -7,7 +8,9 @@ import Icon from '../../components/Icon.jsx';
 
 export default function Progress() {
   const p = useFetch(() => api('/tracking/me/progress'));
-  const home = useFetch(() => api('/tracking/me/home'));
+  // Already fetched once by the persistent ClientLayout — reuse it instead
+  // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
+  const home = useOutletContext();
   const [weightInput, setWeightInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');

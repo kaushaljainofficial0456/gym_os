@@ -29,7 +29,7 @@
  * that would survive that preference.
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
@@ -67,7 +67,9 @@ function Label({ children, className = '' }) {
 }
 
 export default function Home() {
-  const home = useFetch(() => api('/tracking/me/home'));
+  // Already fetched once by the persistent ClientLayout — reuse it instead
+  // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
+  const home = useOutletContext();
   const crowdFetch = useFetch(() => api('/me/crowd'));
   const [crowdOpen, setCrowdOpen] = useState(false);
 
