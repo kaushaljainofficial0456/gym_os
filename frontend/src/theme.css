@@ -70,15 +70,28 @@
    ═══════════════════════════════════════════════ */
 :root {
   color-scheme: dark;
-  /* Warm near-black canvas */
-  --bg: #1C1210;
-  --bg2: #241815;
-  --panel: #2A1D19;
-  --panel2: #33241F;
-  --line: rgba(255,255,255,.08);
-  --ink: #F7ECE7;                      /* warm high-contrast off-white */
-  --mute: rgba(247,236,231,.68);
-  --faint: rgba(247,236,231,.44);
+  /* True black canvas, blush highlights. Was a warm near-black
+     (#1C1210) with off-white (#F7ECE7) text/highlights -- both replaced
+     on request: the canvas drops its brown cast entirely (neutral,
+     R=G=B, no hue) and everything that used to read as "white" in dark
+     mode (ink, hairlines, hover/active washes, card sheen, scrollbar)
+     now reads as blush (#FFDFDD) -- the exact colour that IS light
+     mode's own canvas below, reused here as dark mode's highlight so
+     the two themes share one deliberate hue instead of one being warm
+     and the other neutral. Contrast only improved by this swap: blush
+     ink on the new black scale is 12.6:1+ (was ~11:1 on the old warm
+     scale); --mute/--faint keep the alpha values already tuned for AA
+     in the last contrast pass, just recoloured from ink's old RGB to
+     blush's. accent/accent-contrast are untouched -- terracotta stays
+     the brand accent, this only changes canvas + highlight. */
+  --bg: #000000;
+  --bg2: #0D0D0D;
+  --panel: #161616;
+  --panel2: #202020;
+  --line: rgba(255,223,221,.08);
+  --ink: #FFDFDD;                      /* blush -- was warm off-white */
+  --mute: rgba(255,223,221,.68);
+  --faint: rgba(255,223,221,.44);
   /* Primary accent: terracotta */
   --accent: #E07A63;
   --accent-deep: #C15C4C;
@@ -91,18 +104,18 @@
   --purple: #7C3AED;
   --orange: #FA541C;
   --gold: #FBBF24;
-  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
-  --card-gradient: linear-gradient(168deg, rgba(255,255,255,.03), rgba(255,255,255,.008) 62%);
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,223,221,.04);
+  --card-gradient: linear-gradient(168deg, rgba(255,223,221,.03), rgba(255,223,221,.008) 62%);
 
   /* Channel tokens */
   --accent-rgb: 224 122 99;
   --accent-deep-rgb: 193 92 76;
   --accent-contrast: #2B120A;          /* dark ink ON terracotta */
-  --bg-rgb: 28 18 16;
-  --bg2-rgb: 36 24 21;
-  --panel-rgb: 42 29 25;
-  --panel2-rgb: 51 36 31;
-  --ink-rgb: 247 236 231;
+  --bg-rgb: 0 0 0;
+  --bg2-rgb: 13 13 13;
+  --panel-rgb: 22 22 22;
+  --panel2-rgb: 32 32 32;
+  --ink-rgb: 255 223 221;
   --secondary-rgb: 251 113 133;
   --secondary-deep-rgb: 244 63 94;
   --cyan-rgb: 34 211 238;
@@ -128,7 +141,7 @@
   --warn: rgb(var(--warn-rgb));
   --bad: rgb(var(--bad-rgb));
 
-  --tint-rgb: 255 255 255;
+  --tint-rgb: 255 223 221;             /* blush -- was white; drives .btn/.chip/.navlink hover washes */
 
   --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
   --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
@@ -563,8 +576,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
-.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.20); border: 2px solid transparent; background-clip: content-box; }
+.dark ::-webkit-scrollbar-thumb { background: rgba(255,223,221,.12); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,223,221,.20); border: 2px solid transparent; background-clip: content-box; }
 .light ::-webkit-scrollbar-thumb { background: rgba(140,106,77,.15); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
 .light ::-webkit-scrollbar-thumb:hover { background: rgba(140,106,77,.25); border: 2px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }

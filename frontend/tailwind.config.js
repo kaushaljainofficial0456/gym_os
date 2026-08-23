@@ -50,10 +50,19 @@ export default {
            which would turn every hairline into solid white. Left literal
            so Tailwind's rgba parser handles the modifier; they are themed
            by the existing overrides in theme.css. Full reasoning in
-           src/design/tokens.js. */
-        line: 'rgba(255,255,255,.08)',
-        mute: 'rgba(250,250,250,.50)',
-        faint: 'rgba(250,250,250,.28)',
+           src/design/tokens.js.
+
+           This is dark mode's literal default (light overrides it via the
+           `.light` !important block in theme.css) -- it was drifted from
+           `:root`'s own --line/--mute/--faint (white 250,250,250 here vs
+           ink 247,236,231 there, .50/.28 alpha here vs the already-tuned
+           .68/.44 there), so the last contrast pass that darkened --mute/
+           --faint never actually reached anything styled through these
+           Tailwind classes. Now recoloured to blush AND realigned to the
+           same alpha as theme.css's :root, so both paths agree. */
+        line: 'rgba(255,223,221,.08)',
+        mute: 'rgba(255,223,221,.68)',
+        faint: 'rgba(255,223,221,.44)',
       },
       /* The four legacy names are KEPT as aliases rather than renamed,
          because ~40 files use `font-display` / `font-grotesk` today and a
