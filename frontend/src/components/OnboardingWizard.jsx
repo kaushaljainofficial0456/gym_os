@@ -35,7 +35,9 @@ const T = {
     danger: 'rgb(var(--bad-rgb))',
   },
   light: {
-    bg: 'var(--bg)', surface: 'rgba(0,0,0,0.03)', glass: 'rgba(255,255,255,0.6)',
+    // surface was rgba(0,0,0,0.03) -- a near-invisible tint over the peach
+    // page background. var(--panel) matches the app's actual white .card.
+    bg: 'var(--bg)', surface: 'var(--panel)', glass: 'rgba(255,255,255,0.6)',
     border: 'var(--line)', borderHover: 'rgba(0,0,0,0.16)',
     ink: 'var(--ink)', mute: 'var(--mute)', faint: 'var(--faint)',
     accent: 'var(--accent)', accentDim: 'var(--accent-soft)',

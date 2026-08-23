@@ -45,7 +45,12 @@ const T = {
   },
   light: {
     bg: 'var(--bg)',
-    surface: 'rgba(0,0,0,0.03)',
+    // Was rgba(0,0,0,0.03): a 3% black tint OVER the peach page background,
+    // meaning every "card" on this page was ~97% peach and barely
+    // distinguishable from the page itself -- text sat with almost no
+    // background separation. var(--panel) is solid white, the same value
+    // the app's own .card class uses everywhere else.
+    surface: 'var(--panel)',
     surfaceHover: 'rgba(0,0,0,0.06)',
     border: 'var(--line)',
     borderHover: 'rgba(0,0,0,0.14)',

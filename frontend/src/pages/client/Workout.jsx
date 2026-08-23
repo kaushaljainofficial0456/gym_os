@@ -72,6 +72,9 @@ export default function Workout() {
   const [openEx, setOpenEx] = useState(null);   // accordion: one exercise open
   const [infoEx, setInfoEx] = useState(null);   // main-page info panel
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
+  const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
+  const [intensity, setIntensity] = useState(null); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
+  const [burnLoading, setBurnLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   // this week preview
   const [weekDay, setWeekDay] = useState(null); // { label, name, focus, exercises }
@@ -349,40 +352,62 @@ export default function Workout() {
       setResult({ prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null });
       setMode('summary');
 
-      /* Calorie burn (skos-cal-v1). Deliberately AFTER setMode:
-         the summary must render immediately on a finished session, so this
-         is a progressive enhancement rather than something the user waits
-         on. A failure here leaves `burn` null and the summary simply omits
-         the figure -- it never blocks or errors the completion itself,
-         which is already saved server-side by this point. */
+      /* Calorie burn (skos-cal-v1) needs an intensity rating -- see
+         ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md: "session.intensity_rating
+         selects the MET tier" and is a required, deliberately-cheap (one
+         tap) input to the model, not optional context. Rather than firing
+         the estimate immediately with no rating (which silently defaults to
+         "moderate" for every session -- see skosCalV1.js's normalizeTier --
+         quietly wrong for anyone whose actual effort wasn't moderate), the
+         request payload is captured here and the summary screen asks the
+         one question before sending it. Still fire-and-forget in spirit:
+         a missing/declined estimate never blocks or errors the completed
+         session, which is already saved server-side by this point. */
       /* NOTE the prefix: the intelligence router is mounted at `/api/intel`
          in backend/src/index.js, NOT `/api/intelligence`. This originally
          called `/intelligence/workout-burn`, which 404s -- and because the
          burn fetch is deliberately fire-and-forget so it can never break a
          completed session, the failure was SILENT: the summary simply never
          showed a calorie figure and nothing surfaced to say why. */
-      api('/intel/workout-burn', {
-        method: 'POST',
-        body: JSON.stringify({
-          duration_minutes: durationMin,
-          exercises: logs.map((l) => ({
-            name: (state.find((e) => e.id === l.exercise_id) || {}).name,
-            sets: l.sets.map((st) => ({
-              actual_reps: st.actual_reps,
-              actual_weight: st.actual_weight,
-              completed: 1,
-            })),
+      setBurnInput({
+        duration_minutes: durationMin,
+        exercises: logs.map((l) => ({
+          name: (state.find((e) => e.id === l.exercise_id) || {}).name,
+          sets: l.sets.map((st) => ({
+            actual_reps: st.actual_reps,
+            actual_weight: st.actual_weight,
+            completed: 1,
           })),
-        }),
-      })
-        .then(setBurn)
-        .catch(() => setBurn(null));   // 422 = model declined; show nothing
+        })),
+      });
+      setBurn(null);
+      setIntensity(null);
       today.reload(); hist.reload();
     } catch (e) {
       setToast(e.message || 'Could not log workout');
       setMode('browse');
     }
     setSubmitting(false);
+  };
+
+  // One tap, asked once per session on the summary screen -- the intensity
+  // rating skos-cal-v1 needs (see the note in finishWorkout above). A
+  // declined/failed estimate leaves `burn` null and the summary simply
+  // omits the calorie figure, same as before this was wired up.
+  const pickIntensity = async (tier) => {
+    if (!burnInput || burnLoading) return;
+    setIntensity(tier);
+    setBurnLoading(true);
+    try {
+      const res = await api('/intel/workout-burn', {
+        method: 'POST',
+        body: JSON.stringify({ ...burnInput, intensity: tier }),
+      });
+      setBurn(res);
+    } catch {
+      setBurn(null); // 422 = model declined; show nothing
+    }
+    setBurnLoading(false);
   };
 
   // ================= browse mode =================
@@ -403,7 +428,14 @@ export default function Workout() {
                 const isRest = d.name === 'Rest';
                 return (
                   <button key={d.day_of_week} onClick={() => { setWeekDay(d); setWeekDayIdx(i); }}
-                    className={`rounded-xl border px-1 py-2 text-center transition-all active:scale-95 ${isToday ? 'border-gold/60 bg-gold/10 shadow-lg shadow-ember/10' : isRest ? 'border-line bg-white/[.02] opacity-60' : 'border-line bg-white/[.02] hover:bg-white/[.05]'}`}>
+                    // Was bg-white/[.02] (+hover:bg-white/[.05]): a wash this
+                    // faint is invisible against the .card it sits inside on
+                    // the light theme (already solid white), so these pills
+                    // had no visible tile boundary at all -- just floating
+                    // text. --panel2 is a step up from --panel specifically
+                    // for this kind of nesting (see theme.css).
+                    className={`rounded-xl border px-1 py-2 text-center transition-all active:scale-95 ${isToday ? 'border-gold/60 bg-gold/10 shadow-lg shadow-ember/10' : isRest ? 'border-line opacity-60' : 'border-line hover:brightness-95'}`}
+                    style={isToday ? undefined : { background: 'var(--panel2)' }}>
                     <div className={`text-[8px] uppercase tracking-wider font-grotesk ${isToday ? 'text-gold' : 'text-mute'}`}>{d.label}</div>
                     <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight truncate ${isToday ? 'text-gold' : isRest ? 'text-faint' : 'text-ink'}`}>
                       {isRest ? 'Rest' : d.name.split(' ').slice(0, 2).join(' ')}
@@ -1074,6 +1106,24 @@ export default function Workout() {
               </div>
             ))}
           </div>
+          {/* One-tap intensity rating -- required by skos-cal-v1 to estimate
+              calories burned (see finishWorkout above for why this can't
+              just be skipped/defaulted). Asked here rather than blocking the
+              "Workout complete" moment: the summary above renders instantly,
+              this is a small follow-up question underneath it. */}
+          {burnInput && !intensity && (
+            <div className="mt-4 rounded-xl border px-4 py-3 text-left" style={{ borderColor: 'var(--line)', background: 'rgb(var(--panel-rgb) / .72)' }}>
+              <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>How intense was that session?</div>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {[['light', 'Light'], ['moderate', 'Moderate'], ['hard', 'Hard']].map(([tier, label]) => (
+                  <button key={tier} className="btn !py-2.5 !text-[12px]" onClick={() => pickIntensity(tier)}>{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {burnInput && intensity && burnLoading && (
+            <div className="mt-4 text-center text-[11px]" style={{ color: 'var(--mute)' }}>Estimating calories burned…</div>
+          )}
           {/* Calorie burn. Shown as a RANGE, not a single figure.
               skos-cal-v1's interval is genuinely about +-70% of its point
               estimate, so "597 kcal" would claim a precision the model
@@ -1136,7 +1186,7 @@ export default function Workout() {
               different-looking calorie figures a few pixels apart. One
               honest range beats two numbers that disagree. */}
 
-          <button className="btn w-full mt-5" onClick={() => { setMode('browse'); setResult(null); setExProgress({}); setSetLog({}); setElapsed(0); }}>Done</button>
+          <button className="btn w-full mt-5" onClick={() => { setMode('browse'); setResult(null); setExProgress({}); setSetLog({}); setElapsed(0); setBurn(null); setBurnInput(null); setIntensity(null); }}>Done</button>
         </div>
       </div>
     </div>
