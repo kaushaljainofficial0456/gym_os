@@ -618,7 +618,7 @@ function CustomMealModal({ open, onClose, clientId, onSaved, toast, editMeal = n
         {/* Footer */}
         <div className="p-5 shrink-0" style={{ borderTop: `1px solid ${t.border}` }}>
           <button className="w-full py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]" disabled={!canSave || saving || loadingEdit} onClick={saveAndLog}
-            style={{ background: canSave ? t.accent : t.surface, color: canSave ? '#fff' : t.mute, border: `1px solid ${canSave ? t.accent : t.border}`, opacity: canSave ? 1 : 0.5, cursor: canSave ? 'pointer' : 'not-allowed' }}>
+            style={{ background: canSave ? t.accent : t.surface, color: canSave ? 'var(--accent-contrast)' : t.mute, border: `1px solid ${canSave ? t.accent : t.border}`, opacity: canSave ? 1 : 0.5, cursor: canSave ? 'pointer' : 'not-allowed' }}>
             {saving ? 'Saving…' : loadingEdit ? 'Loading…' : isEdit ? 'Update meal' : 'Save & log 1 serving'}
           </button>
           {canSave && <div className="text-center text-[10px] mt-2" style={{ color: t.faint }}>1 serving = {perServing.calories} kcal · P{perServing.protein}g · C{perServing.carbs}g · F{perServing.fat}g</div>}
@@ -759,7 +759,7 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
         {/* Actions */}
         <div className="px-5 pb-5 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving || newQty <= 0} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: (saving || newQty <= 0) ? t.surface : t.accent, color: (saving || newQty <= 0) ? t.mute : '#fff', border: `1px solid ${(saving || newQty <= 0) ? t.border : t.accent}`, opacity: (saving || newQty <= 0) ? 0.5 : 1, cursor: (saving || newQty <= 0) ? 'not-allowed' : 'pointer' }}>{saving ? 'Saving…' : 'Save Changes'}</button>
+          <button onClick={handleSave} disabled={saving || newQty <= 0} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: (saving || newQty <= 0) ? t.surface : t.accent, color: (saving || newQty <= 0) ? t.mute : 'var(--accent-contrast)', border: `1px solid ${(saving || newQty <= 0) ? t.border : t.accent}`, opacity: (saving || newQty <= 0) ? 0.5 : 1, cursor: (saving || newQty <= 0) ? 'not-allowed' : 'pointer' }}>{saving ? 'Saving…' : 'Save Changes'}</button>
         </div>
       </div>
     </div>
@@ -784,7 +784,7 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
         </div>
         <div className="px-5 pb-5 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
-          <button onClick={() => onConfirm(log.id)} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: t.danger, color: '#fff' }}>Remove</button>
+          <button onClick={() => onConfirm(log.id)} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: t.danger, color: 'var(--accent-contrast)' }}>Remove</button>
         </div>
       </div>
     </div>
@@ -1066,7 +1066,7 @@ export default function Nutrition() {
               <div className="font-grotesk text-sm font-bold" style={{ color: t.gold }}>~{aiResult.total.calories} kcal · P{aiResult.total.protein}g · C{aiResult.total.carbs}g · F{aiResult.total.fat}g</div>
               <div className="flex gap-2">
                 <button className="px-3 py-1.5 rounded-xl font-grotesk text-[11px] font-semibold active:scale-95" onClick={() => setAiResult(null)} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>Edit</button>
-                <button className="px-3 py-1.5 rounded-xl font-grotesk text-[11px] font-bold active:scale-95" onClick={logAi} disabled={logging} style={{ background: t.gold, color: '#000' }}>{logging ? '…' : 'Log it'}</button>
+                <button className="px-3 py-1.5 rounded-xl font-grotesk text-[11px] font-bold active:scale-95" onClick={logAi} disabled={logging} style={{ background: t.gold, color: 'var(--accent-contrast)' }}>{logging ? '…' : 'Log it'}</button>
               </div>
             </div>
             <div className="text-[10px] mt-2" style={{ color: t.faint }}>⚠️ {aiResult.disclaimer}</div>
@@ -1157,7 +1157,7 @@ export default function Nutrition() {
                 <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="F" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.fat} onChange={(e) => setFoodForm((f) => ({ ...f, fat: e.target.value }))} />
               </div>
               <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={saving || !foodForm.name.trim()} onClick={async () => { setSaving(true); try { await api('/me/foods', { method: 'POST', body: JSON.stringify({ ...foodForm, calories: Number(foodForm.calories) || 0, protein: Number(foodForm.protein) || 0, carbs: Number(foodForm.carbs) || 0, fat: Number(foodForm.fat) || 0 }) }); setFoodForm({ name: '', unit: '', serving: '', calories: '', protein: '', carbs: '', fat: '' }); foods.reload(); setToast('Food saved ✓'); } catch (e) { setToast(e.message); } setSaving(false); }}
-                style={{ background: (saving || !foodForm.name.trim()) ? t.surface : t.accent, color: (saving || !foodForm.name.trim()) ? t.mute : '#fff', cursor: (saving || !foodForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
+                style={{ background: (saving || !foodForm.name.trim()) ? t.surface : t.accent, color: (saving || !foodForm.name.trim()) ? t.mute : 'var(--accent-contrast)', cursor: (saving || !foodForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
                 Save to My Foods
               </button>
             </div>
@@ -1206,7 +1206,7 @@ export default function Nutrition() {
               </div>
               <input className="w-full px-3 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Foods (e.g. 50g oats · 200ml milk)" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.foods} onChange={(e) => setMealForm((f) => ({ ...f, foods: e.target.value }))} />
               <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={saving || !mealForm.name.trim()} onClick={async () => { setSaving(true); try { await api('/me/meals', { method: 'POST', body: JSON.stringify({ ...mealForm, calories: Number(mealForm.calories) || 0, protein: Number(mealForm.protein) || 0, carbs: Number(mealForm.carbs) || 0, fat: Number(mealForm.fat) || 0 }) }); setMealForm({ slot: 'Meal', name: '', time: '', calories: '', protein: '', carbs: '', fat: '', foods: '' }); myMeals.reload(); setToast('Meal template saved ✓'); } catch (e) { setToast(e.message); } setSaving(false); }}
-                style={{ background: (saving || !mealForm.name.trim()) ? t.surface : t.accent, color: (saving || !mealForm.name.trim()) ? t.mute : '#fff', cursor: (saving || !mealForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
+                style={{ background: (saving || !mealForm.name.trim()) ? t.surface : t.accent, color: (saving || !mealForm.name.trim()) ? t.mute : 'var(--accent-contrast)', cursor: (saving || !mealForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
                 Save meal template
               </button>
             </div>
@@ -1309,8 +1309,8 @@ export default function Nutrition() {
                   {visible.map((s) => {
                     const taken = !!supTaken[s.id];
                     return (
-                      <button key={s.id} onClick={() => setSupTaken((x) => ({ ...x, [s.id]: !taken }))} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all" style={{ background: taken ? `${t.accent}10` : t.glass, border: `1px solid ${taken ? t.accent + '30' : t.border}` }}>
-                        <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] shrink-0" style={{ background: taken ? t.accent : 'transparent', color: taken ? '#fff' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}>✓</span>
+                      <div key={s.id} role="button" tabIndex={0} onClick={() => setSupTaken((x) => ({ ...x, [s.id]: !taken }))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSupTaken((x) => ({ ...x, [s.id]: !taken })); } }} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all cursor-pointer" style={{ background: taken ? `${t.accent}10` : t.glass, border: `1px solid ${taken ? t.accent + '30' : t.border}` }}>
+                        <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] shrink-0" style={{ background: taken ? t.accent : 'transparent', color: taken ? 'var(--accent-contrast)' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}>✓</span>
                         <span className="flex-1 min-w-0">
                           <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{s.name}</span>
                           {/* Linear progress bar */}
@@ -1320,7 +1320,7 @@ export default function Nutrition() {
                         </span>
                         <span className="font-grotesk text-[10px] shrink-0" style={{ color: t.mute }}>{s.dose || ''}</span>
                         <button className="w-6 h-6 rounded-md grid place-items-center text-[9px] shrink-0 transition-colors" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${s.name}"?`)) return; try { await api(`/tracking/clients/${clientId}/supplements/${s.id}`, { method: 'DELETE' }); const r = await api(`/tracking/clients/${clientId}/supplements`); setSupList(r.supplements || []); setToast(`${s.name} removed`); } catch (err) { setToast(err.message || 'Failed to delete supplement'); } }} style={{ color: t.danger + 'AA' }} aria-label={`Delete ${s.name}`}>✕</button>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1349,7 +1349,7 @@ export default function Nutrition() {
                   <input className="w-full px-3 py-2.5 rounded-xl font-grotesk text-sm outline-none" placeholder="e.g. Omega 3" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.name} onChange={(e) => setSupForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
                   <input className="w-full px-3 py-2.5 rounded-xl font-grotesk text-xs outline-none" placeholder="Dose (e.g. 1000 mg, 1 scoop, 1000 IU)" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.dose} onChange={(e) => setSupForm((f) => ({ ...f, dose: e.target.value }))} />
                   <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={savingSup || !supForm.name.trim()} onClick={async () => { setSavingSup(true); try { await api(`/tracking/clients/${clientId}/supplements`, { method: 'POST', body: JSON.stringify({ name: supForm.name.trim(), dose: supForm.dose || undefined }) }); setSupForm({ name: '', dose: '' }); setShowAddSupplement(false); api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {}); setToast('Supplement added ✓'); } catch (e) { setToast(e.message); } setSavingSup(false); }}
-                    style={{ background: (savingSup || !supForm.name.trim()) ? t.surface : t.accent, color: (savingSup || !supForm.name.trim()) ? t.mute : '#fff', cursor: (savingSup || !supForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
+                    style={{ background: (savingSup || !supForm.name.trim()) ? t.surface : t.accent, color: (savingSup || !supForm.name.trim()) ? t.mute : 'var(--accent-contrast)', cursor: (savingSup || !supForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
                     {savingSup ? 'Saving…' : 'Save supplement'}
                   </button>
                 </div>

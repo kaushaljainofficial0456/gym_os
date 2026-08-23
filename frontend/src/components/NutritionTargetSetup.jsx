@@ -180,7 +180,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
               className="flex-1 py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"
               style={{
                 background: saving ? t.surface : t.accent,
-                color: saving ? t.mute : '#fff',
+                color: saving ? t.mute : 'var(--accent-contrast)',
                 border: `1px solid ${saving ? t.border : t.accent}`,
                 opacity: saving ? 0.5 : 1,
                 cursor: saving ? 'not-allowed' : 'pointer',
