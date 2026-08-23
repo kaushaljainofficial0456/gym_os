@@ -27,6 +27,7 @@ const PROFILE_SECTIONS = [
   { id: 'goal', label: 'Goal & Setup', icon: 'target', desc: 'View progress and update your goals' },
   { id: 'equipment', label: 'My Equipment', icon: 'strength', desc: 'Manage your gym equipment' },
   { id: 'metrics', label: 'My Metrics', icon: 'chart', desc: 'Track personal measurements' },
+  { id: 'nutrition-tracker', label: 'Nutrition Tracker', icon: 'food', desc: 'Calendar and full logging history' },
   { id: 'coach', label: 'Coach Preference', icon: 'chat', desc: 'Coach settings and messages' },
   { id: 'dashboard', label: 'Dashboard', icon: 'clipboard', desc: 'Customize your home dashboard' },
   { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
@@ -734,6 +735,7 @@ export default function Profile() {
               key={section.id}
               onClick={() => {
                 if (section.id === 'help') { window.location.href = '/app/client/help'; return; }
+                if (section.id === 'nutrition-tracker') { window.location.href = '/app/client/nutrition-tracker'; return; }
                 setActiveSection(section.id);
               }}
               className="w-full card p-4 flex items-center gap-4 text-left hover:border-gold/40 transition-colors group"

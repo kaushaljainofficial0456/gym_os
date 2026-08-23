@@ -28,6 +28,7 @@ const Business = lazy(() => import('./pages/trainer/Business.jsx'));
 const Home = lazy(() => import('./pages/client/Home.jsx'));
 const Workout = lazy(() => import('./pages/client/Workout.jsx'));
 const Nutrition = lazy(() => import('./pages/client/Nutrition.jsx'));
+const NutritionTracker = lazy(() => import('./pages/client/NutritionTracker.jsx'));
 const Progress = lazy(() => import('./pages/client/Progress.jsx'));
 const Profile = lazy(() => import('./pages/client/Profile.jsx'));
 const Settings = lazy(() => import('./pages/client/Settings.jsx'));
@@ -88,6 +89,7 @@ export default function App() {
         <Route index element={page(Home)} />
         <Route path="workout" element={page(Workout)} />
         <Route path="nutrition" element={page(Nutrition)} />
+        <Route path="nutrition-tracker" element={page(NutritionTracker)} />
         <Route path="progress" element={page(Progress)} />
         <Route path="profile" element={page(Profile)} />
         <Route path="settings" element={page(Settings)} />

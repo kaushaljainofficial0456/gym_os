@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
-import { dayKey } from '../utils/time.js';
+import { dayKey, addDays, daysBetween } from '../utils/time.js';
 import { estimateFood } from '../services/foodEstimator.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
@@ -210,6 +210,69 @@ export default function nutritionRoutes(db) {
         calories: plan.calories - eaten.calories, protein: plan.protein - eaten.protein,
         carbs: plan.carbs - eaten.carbs, fat: plan.fat - eaten.fat
       } : null
+    });
+  });
+
+  // ---- nutrition history: calendar + long-term trends ----
+  // One parameterized query for the whole [from, to] range, grouped by date
+  // in JS -- no N+1 regardless of range length. The response carries both
+  // per-day aggregates (calendar dots, history charts) AND each day's
+  // individual logs, so selecting any date already covered by a fetched
+  // range (the calendar's current month, or the history section's current
+  // window) needs no extra request -- it's a lookup into data already in
+  // hand, not a new round trip.
+  r.get('/clients/:id/history', async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const tz = req.tz || 'Asia/Kolkata';
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const to = DATE_RE.test(req.query.to) ? req.query.to : dayKey(new Date(), tz);
+    const from = DATE_RE.test(req.query.from) ? req.query.from : dayKey(addDays(new Date(), -29), tz);
+    if (from > to) return res.status(400).json({ error: '"from" must not be after "to"' });
+    // Generous cap (a little over a year) -- covers every range the UI
+    // offers (7d/30d/3mo/6mo/custom) with headroom, while bounding the
+    // query and response size against an arbitrarily large request.
+    if (daysBetween(from, to) > 400) {
+      return res.status(400).json({ error: 'Date range too large (max 400 days)' });
+    }
+    const plan = await db.q1(
+      'SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]);
+    const rows = await db.q(
+      `SELECT id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit, unit_type
+         FROM meal_logs WHERE client_id = ? AND date >= ? AND date <= ? ORDER BY date ASC`,
+      [client.id, from, to]);
+    const byDate = new Map();
+    for (const row of rows) {
+      let day = byDate.get(row.date);
+      if (!day) {
+        day = { date: row.date, calories: 0, protein: 0, carbs: 0, fat: 0, logged: true, logs: [] };
+        byDate.set(row.date, day);
+      }
+      // Totals count only eaten=1 rows -- matches nutrition-summary above
+      // and the Home page's "Fuel today" ring, so the same day never shows
+      // two disagreeing calorie figures depending on which screen it's
+      // viewed from. Un-eaten rows still appear in `logs` (a genuine
+      // historical log either way), just excluded from the day's totals.
+      if (row.eaten) {
+        day.calories += row.calories; day.protein += row.protein;
+        day.carbs += row.carbs; day.fat += row.fat;
+      }
+      day.logs.push({
+        id: row.id, name: row.name, calories: row.calories, protein: row.protein,
+        carbs: row.carbs, fat: row.fat, slot: row.slot || null,
+        quantity: row.quantity ?? null, unit: row.unit || null,
+        eaten: !!row.eaten, source: row.source
+      });
+    }
+    res.json({
+      from, to,
+      target: plan ? { calories: plan.calories, protein: plan.protein, carbs: plan.carbs, fat: plan.fat } : null,
+      // Only dates with at least one log are included -- the frontend
+      // already knows every date in [from, to] from the calendar/range it
+      // requested, so an absent date unambiguously means "nothing logged"
+      // rather than the server needing to materialize empty rows for
+      // every unlogged day in a 6-month range.
+      days: [...byDate.values()]
     });
   });
 
