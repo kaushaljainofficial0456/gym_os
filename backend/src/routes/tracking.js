@@ -140,7 +140,8 @@ export default function trackingRoutes(db) {
         currentWeight: client.current_weight, targetWeight: client.target_weight,
         startWeight: client.start_weight, goalDate: client.goal_date,
         sex: client.sex, age: client.age, heightCm: client.height_cm,
-        onboardingCompleted: !!client.onboarding_completed
+        onboardingCompleted: !!client.onboarding_completed,
+        trainerId: client.trainer_id || null
       },
       adherence: adherence.score,
       adherenceComponents: adherence.components,

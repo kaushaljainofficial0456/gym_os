@@ -1,23 +1,78 @@
 import { useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
-import { useTheme } from '../themeContext.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
+import Icon from '../components/Icon.jsx';
 import './../components/BorderGlow.css';
 
-const DEMO = [
-  { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
-  { label: 'Gym Owner', email: 'owner@ironforge.in', icon: '₹', desc: 'Maya Kapoor · business view' },
-  { label: 'Client', email: 'client1@ironforge.in', icon: '⌁', desc: 'Rahul Sharma · client portal' }
+// The three top-level paths onto SK OS. Each is a genuinely different
+// account-creation story, not a cosmetic split of one login form:
+//   - Enterprise: a gym's very first visit, before any account exists ->
+//     /setup-org (POST /auth/setup-org).
+//   - Gym ecosystem: someone whose account already exists under a gym
+//     (trainer, owner, or a gym-code client) -> the role picker below,
+//     then the real email/password form.
+//   - Independent client: no gym at all -> /independent (Google sign-in,
+//     POST /auth/google).
+const PATHS = [
+  { id: 'enterprise', icon: 'clipboard', title: 'Enterprise', desc: "First time here? Set up your gym — code, roster and workspace in one go." },
+  { id: 'ecosystem', icon: 'strength', title: 'Gym ecosystem', desc: 'Trainer, owner or client at a gym already on SK OS.' },
+  { id: 'independent', icon: 'user', title: 'Independent client', desc: 'Training solo, no gym — sign in with Google.' },
 ];
+
+const ROLES = [
+  { id: 'TRAINER', icon: 'chart', title: 'Trainer', desc: 'Your coaching workspace.' },
+  { id: 'GYM_OWNER', icon: 'clipboard', title: 'Gym Owner', desc: 'Members, plans and payments.' },
+  { id: 'CLIENT', icon: 'user', title: 'Client', desc: 'Your training portal.' },
+];
+
+const DEMO_BY_ROLE = {
+  TRAINER: { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
+  GYM_OWNER: { label: 'Gym Owner', email: 'owner@ironforge.in', icon: '₹', desc: 'Maya Kapoor · business view' },
+  CLIENT: { label: 'Client', email: 'client1@ironforge.in', icon: '⌁', desc: 'Rahul Sharma · client portal' },
+};
+
+const ROLE_COPY = {
+  TRAINER: { heading: 'Welcome back, coach', sub: 'Sign in to your coaching workspace.' },
+  GYM_OWNER: { heading: 'Welcome back', sub: 'Sign in to your business dashboard.' },
+  CLIENT: { heading: 'Welcome back', sub: 'Sign in to your client portal.' },
+};
+
+function OptionCard({ icon, title, desc, onClick, delay = 0 }) {
+  return (
+    <button onClick={onClick}
+      className="w-full flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200 text-left anim-fadeUp"
+      style={{ borderColor: 'var(--line)', background: 'rgba(128,128,128,.025)' }}
+      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.05)'}
+      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.025)'}
+      animation-delay={`${delay}ms`}>
+      <span className="w-11 h-11 rounded-xl grid place-items-center border shrink-0" style={{ background: 'var(--accent-soft)', borderColor: 'var(--line)', color: 'var(--accent)' }}>
+        <Icon name={icon} size={20} />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block font-grotesk text-sm font-bold" style={{ color: 'var(--ink)' }}>{title}</span>
+        <span className="block text-[12px] mt-0.5 leading-snug" style={{ color: 'var(--mute)' }}>{desc}</span>
+      </span>
+      <span style={{ color: 'var(--faint)' }}>›</span>
+    </button>
+  );
+}
+
+function BackLink({ onClick, label }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-1.5 text-[12px] font-grotesk font-semibold mb-5" style={{ color: 'var(--mute)' }}>
+      <span aria-hidden>‹</span> {label}
+    </button>
+  );
+}
 
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const [view, setView] = useState('landing'); // landing | roles | form
+  const [roleHint, setRoleHint] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
@@ -57,7 +112,20 @@ export default function Login() {
     finally { setBusy(false); }
   };
 
-  const [onboarding, setOnboarding] = useState(false);
+  const pickPath = (id) => {
+    if (id === 'enterprise') return nav('/setup-org');
+    if (id === 'independent') return nav('/independent');
+    setView('roles');
+  };
+
+  const pickRole = (id) => {
+    setRoleHint(id);
+    setErr(''); setEmail(''); setPassword('');
+    setView('form');
+  };
+
+  const copy = ROLE_COPY[roleHint] || ROLE_COPY.CLIENT;
+  const demo = DEMO_BY_ROLE[roleHint];
 
   return (
     <>
@@ -85,7 +153,7 @@ export default function Login() {
             </h1>
             <p className="text-sm mt-5 max-w-sm leading-relaxed" style={{ color: 'var(--mute)' }}>
               Client data → tracking → analysis → AI insight → trainer action → client progress.
-              The operating system for fitness professionals.
+              The operating system for fitness professionals — and for anyone training on their own.
             </p>
             <div className="mt-8 flex items-center gap-2 text-[11px] font-grotesk uppercase tracking-[.2em]" style={{ color: 'var(--faint)' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-good" style={{ boxShadow: '0 0 8px rgba(52,211,153,.8)' }} />
@@ -105,60 +173,87 @@ export default function Login() {
               </div>
             </div>
 
-            <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Welcome back</h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>Sign in to your coaching workspace.</p>
+            {view === 'landing' && (
+              <>
+                <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Welcome</h2>
+                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>How are you using SK OS?</p>
+                <div className="space-y-2.5">
+                  {PATHS.map((p, i) => (
+                    <OptionCard key={p.id} icon={p.icon} title={p.title} desc={p.desc} delay={80 + i * 60} onClick={() => pickPath(p.id)} />
+                  ))}
+                </div>
+              </>
+            )}
 
-            <form onSubmit={submit} className="space-y-3">
-              <div>
-                <label htmlFor="email" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
-                <input id="email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@ironforge.in" required autoFocus />
-              </div>
-              <div>
-                <label htmlFor="password" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
-                <input id="password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••" required />
-              </div>
-              {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
-              <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
-                <button className="btn-primary w-full !py-3" disabled={busy}>
-                  {busy ? 'Signing in…' : 'Sign in'}
-                </button>
-              </BorderGlow>
-            </form>
+            {view === 'roles' && (
+              <>
+                <BackLink onClick={() => setView('landing')} label="Back" />
+                <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Gym ecosystem</h2>
+                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>Which one are you?</p>
+                <div className="space-y-2.5">
+                  {ROLES.map((r, i) => (
+                    <OptionCard key={r.id} icon={r.icon} title={r.title} desc={r.desc} delay={80 + i * 60} onClick={() => pickRole(r.id)} />
+                  ))}
+                </div>
+              </>
+            )}
 
-            {/* Restores ui-manavi's "New to SK OS?" CTA, previously dropped
-                (see git history) because it opened OnboardingWizard directly
-                pre-auth, which needs an authenticated session. Now points at
-                a real signup screen backed by POST /auth/register: creates
-                the account, logs the client in, then OnboardingWizard runs
-                exactly as it does for any other client. */}
-            <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
-              New to SK OS?{' '}
-              <Link to="/signup" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
-            </div>
+            {view === 'form' && (
+              <>
+                <BackLink onClick={() => setView('roles')} label="Back" />
+                <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>{copy.heading}</h2>
+                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>{copy.sub}</p>
 
-            <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
-              <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
-            </div>
+                <form onSubmit={submit} className="space-y-3">
+                  <div>
+                    <label htmlFor="email" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
+                    <input id="email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@ironforge.in" required autoFocus />
+                  </div>
+                  <div>
+                    <label htmlFor="password" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
+                    <input id="password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••" required />
+                  </div>
+                  {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
+                  <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
+                    <button className="btn-primary w-full !py-3" disabled={busy}>
+                      {busy ? 'Signing in…' : 'Sign in'}
+                    </button>
+                  </BorderGlow>
+                </form>
 
-            <div className="space-y-2">
-              {DEMO.map((d, i) => (
-                <button key={d.email} onClick={() => quick(d.email)} disabled={busy}
-                  className="w-full flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 text-left anim-fadeUp"
-                  style={{ borderColor: 'var(--line)', background: 'rgba(128,128,128,.025)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.05)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.025)'}
-                  animation-delay={`${120 + i * 70}ms`}>
-                  <span className="w-9 h-9 rounded-xl grid place-items-center border text-base" style={{ background: 'var(--accent-soft)', borderColor: 'var(--line)', color: 'var(--accent)' }}>{d.icon}</span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{d.label}</span>
-                    <span className="block text-[11px] truncate" style={{ color: 'var(--mute)' }}>{d.desc}</span>
-                  </span>
-                  <span className="chip !text-[9px]">demo1234</span>
-                </button>
-              ))}
-            </div>
+                {/* Gym-code signup only applies to clients -- trainers and
+                    owners are created by an owner or via Enterprise, never
+                    self-serve. */}
+                {roleHint === 'CLIENT' && (
+                  <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
+                    New to SK OS?{' '}
+                    <Link to="/signup" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
+                  </div>
+                )}
+
+                {demo && (
+                  <>
+                    <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
+                      <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
+                    </div>
+                    <button onClick={() => quick(demo.email)} disabled={busy}
+                      className="w-full flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 text-left anim-fadeUp"
+                      style={{ borderColor: 'var(--line)', background: 'rgba(128,128,128,.025)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.025)'}>
+                      <span className="w-9 h-9 rounded-xl grid place-items-center border text-base" style={{ background: 'var(--accent-soft)', borderColor: 'var(--line)', color: 'var(--accent)' }}>{demo.icon}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{demo.label}</span>
+                        <span className="block text-[11px] truncate" style={{ color: 'var(--mute)' }}>{demo.desc}</span>
+                      </span>
+                      <span className="chip !text-[9px]">demo1234</span>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>

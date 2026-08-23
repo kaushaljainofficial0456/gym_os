@@ -16,6 +16,12 @@ import ClientLayout from './pages/client/ClientLayout.jsx';
 // client page plus their dependency trees -- most notably WorkoutBuilder's
 // 3D muscle picker, which alone pulls in three.js (~735 kB before gzip).
 // None of that is needed until the specific route is actually visited.
+// SetupOrg/IndependentLogin are one tap past Login's landing screen (not
+// the first thing a visitor needs), and IndependentLogin in particular
+// pulls in Google's own GSI script on top -- both split like every other
+// non-entry page rather than joining Login/SignUp's eager pair.
+const SetupOrg = lazy(() => import('./pages/SetupOrg.jsx'));
+const IndependentLogin = lazy(() => import('./pages/IndependentLogin.jsx'));
 const Dashboard = lazy(() => import('./pages/trainer/Dashboard.jsx'));
 const Clients = lazy(() => import('./pages/trainer/Clients.jsx'));
 const ClientProfile = lazy(() => import('./pages/trainer/ClientProfile.jsx'));
@@ -61,6 +67,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/setup-org" element={page(SetupOrg)} />
+      <Route path="/independent" element={page(IndependentLogin)} />
       {/* Design-system showcase. Intentionally unauthenticated: it renders
           only static demo data, and needing a login to check a colour token
           is friction that stops people checking. */}

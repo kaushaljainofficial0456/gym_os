@@ -592,30 +592,46 @@ export default function Profile() {
                 setSavingPrefs2(false);
               }}>{savingPrefs2 ? 'Saving…' : 'Save coach preferences'}</button>
             </div>
-            {/* messages */}
-            <div className="card p-4">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Message your coach</div>
-              <div className="h-44 overflow-y-auto space-y-2 pr-1 mb-3">
-                {(msgs || []).map((m) => {
-                  const mine = m.from_name === c.name || m.mine;
-                  return (
-                    <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30 rounded-br-md' : 'bg-white/[.05] border border-line rounded-bl-md'}`}>
-                        {!mine && <div className="text-[9px] text-mute font-grotesk mb-0.5">{m.from_name}</div>}
-                        <div>{m.body}</div>
-                        <div className="text-[8px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+            {/* messages -- a real human-trainer thread (POST /messages),
+                distinct from the AI "Coach Brief"/"Coach preferences" above.
+                Gated on having a trainer at all: an independent client's
+                org has no trainer to receive it, so the composer would send
+                into a void. Gating on trainerId directly (rather than an
+                "is independent" flag) also correctly covers a gym client
+                who simply hasn't been assigned a trainer yet. `c` here is
+                /tracking/me/home's camelCase client object (via ClientLayout's
+                outlet context), not /me/profile's raw snake_case row -- see
+                tracking.js, where trainerId was added alongside this. */}
+            {c.trainerId ? (
+              <div className="card p-4">
+                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Message your coach</div>
+                <div className="h-44 overflow-y-auto space-y-2 pr-1 mb-3">
+                  {(msgs || []).map((m) => {
+                    const mine = m.from_name === c.name || m.mine;
+                    return (
+                      <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30 rounded-br-md' : 'bg-white/[.05] border border-line rounded-bl-md'}`}>
+                          {!mine && <div className="text-[9px] text-mute font-grotesk mb-0.5">{m.from_name}</div>}
+                          <div>{m.body}</div>
+                          <div className="text-[8px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {!msgs?.length && <div className="text-center text-xs text-mute py-6">No messages yet — say hi to your coach.</div>}
-                <div ref={endRef} />
+                    );
+                  })}
+                  {!msgs?.length && <div className="text-center text-xs text-mute py-6">No messages yet — say hi to your coach.</div>}
+                  <div ref={endRef} />
+                </div>
+                <div className="flex gap-2">
+                  <input className="input flex-1" placeholder="Type a message…" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
+                  <button className="btn-primary shrink-0" onClick={send} disabled={sending || !body.trim()}>Send</button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <input className="input flex-1" placeholder="Type a message…" value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
-                <button className="btn-primary shrink-0" onClick={send} disabled={sending || !body.trim()}>Send</button>
+            ) : (
+              <div className="card p-4 text-center">
+                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-1.5">Training independently</div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--mute)' }}>No human coach assigned — SK Coach above still tracks your data and gives you priorities.</p>
               </div>
-            </div>
+            )}
           </div>
         );
 
