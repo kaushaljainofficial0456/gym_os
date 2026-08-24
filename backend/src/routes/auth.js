@@ -286,7 +286,17 @@ export default function authRoutes(db) {
     const { orgName, ownerName, email, password, type } = req.body;
     const orgId = id('org');
     const userId = id('usr');
-    const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + orgId.slice(-4);
+    // .toLowerCase() applies to the WHOLE string, including the orgId
+    // suffix -- id() generates mixed-case nanoid-style ids, so without this
+    // the stored slug could contain uppercase letters while /auth/register
+    // always lowercases the gym code it's given before looking it up
+    // (case-insensitive by design, since a client typing a code shouldn't
+    // need to match its exact casing). A slug with real uppercase in it
+    // would then never match ANY input a client could type -- gym-code
+    // signup silently unusable for that org. Found while reproducing an
+    // unrelated report by creating a real test org and hitting exactly
+    // this.
+    const slug = (orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + orgId.slice(-4)).toLowerCase();
     try {
       // Hashed before the transaction opens — bcrypt is CPU-bound, no reason
       // to hold a DB connection (Postgres: a pooled one) for it.
