@@ -66,6 +66,15 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [listening, setListening] = useState(false);
+  // Tier 4 (food-AI) -- reached only when the user explicitly asks for it
+  // after a name search comes back empty, never automatically. See
+  // backend/src/services/intelligence/foodAI.js for why: cost, latency and
+  // trust all argue against calling AI on every miss while someone is
+  // still typing.
+  const [aiEstimating, setAiEstimating] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiErr, setAiErr] = useState('');
+  const [aiLogging, setAiLogging] = useState(false);
   const inputRef = useRef(null);
 
   // ── barcode scan state ──
@@ -116,6 +125,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
       setBarcodeItem(null); setBarcodeGrams(''); setBarcodeResolved(null); setBarcodeErr('');
       setManualAdd(false); setManualBarcode(''); setManualForm(EMPTY_MANUAL); setManualErr('');
       setLabelScanning(false); setLabelNote('');
+      setAiResult(null); setAiErr(''); setAiEstimating(false);
     }
   }, [open, autoScan]);
 
@@ -233,6 +243,45 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
     setBusy(false);
   };
 
+  const estimateWithAI = async () => {
+    const query = q.trim();
+    if (!query) return;
+    setAiEstimating(true); setAiErr(''); setAiResult(null);
+    try {
+      const res = await api('/me/foods/ai-estimate', { method: 'POST', body: JSON.stringify({ query }) });
+      if (!res.ok) { setAiErr(res.reason || 'Could not produce an AI estimate.'); return; }
+      setAiResult(res);
+    } catch (e) {
+      setAiErr(e.message || 'Could not produce an AI estimate.');
+    }
+    setAiEstimating(false);
+  };
+
+  const commitAI = async () => {
+    if (!aiResult) return;
+    setAiLogging(true);
+    try {
+      await onAdd({
+        name: aiResult.food_name,
+        calories: Math.round(aiResult.totals.calories ?? 0),
+        protein: aiResult.totals.protein ?? 0,
+        carbs: aiResult.totals.carbs ?? 0,
+        fat: aiResult.totals.fat ?? 0,
+        // Provenance: never "measured", never plain "manual" -- see the
+        // source enum in backend/src/validate.js. Nutrition.jsx's onAdd
+        // must pass these through rather than hardcoding source: 'manual'.
+        source: 'ai_estimated',
+        ai_provider: aiResult.ai?.provider || null,
+        ai_model: aiResult.ai?.model || null,
+        ai_confidence: aiResult.confidence || null,
+      });
+      onClose();
+    } catch (e) {
+      setAiErr(e.message || 'Could not add that food');
+    }
+    setAiLogging(false);
+  };
+
   const setManualField = (key, value) => setManualForm((f) => ({ ...f, [key]: value }));
 
   const submitManual = async () => {
@@ -335,12 +384,12 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>
-              {barcodeItem ? 'Confirm product' : manualAdd ? 'Add product manually' : food ? 'How much?' : 'Add food'}
+              {barcodeItem ? 'Confirm product' : manualAdd ? 'Add product manually' : food ? 'How much?' : aiResult ? 'AI estimate' : 'Add food'}
             </div>
             <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}>✕</button>
           </div>
 
-          {!food && !barcodeItem && !manualAdd && (
+          {!food && !barcodeItem && !manualAdd && !aiResult && (
             <>
             <div className="mt-2 flex gap-2">
               <input
@@ -363,14 +412,22 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
 
         <div className="px-4 pb-4">
           {/* ── search results ── */}
-          {!food && !barcodeItem && !manualAdd && (
+          {!food && !barcodeItem && !manualAdd && !aiResult && (
             <div className="space-y-1">
               {searching && !results.length && (
                 <div className="text-[11px] py-3" style={{ color: 'var(--faint)' }}>Searching…</div>
               )}
               {!searching && q.trim().length >= 2 && !results.length && (
-                <div className="text-[11px] py-3" style={{ color: 'var(--faint)' }}>
-                  Nothing matched “{q.trim()}”.
+                <div className="py-3 space-y-2">
+                  <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
+                    Nothing matched “{q.trim()}”.
+                  </div>
+                  <Pressable onClick={estimateWithAI} disabled={aiEstimating}
+                             className="btn w-full !py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2">
+                    <Icon name="robot" size={15} />
+                    {aiEstimating ? 'Estimating…' : 'Estimate with AI'}
+                  </Pressable>
+                  {aiErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
                 </div>
               )}
               {results.map((f) => (
@@ -394,6 +451,72 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                   )}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* ── AI estimate (Tier 4) review ── */}
+          {aiResult && (
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[15px] font-bold truncate" style={{ color: 'var(--ink)' }}>{aiResult.food_name}</div>
+                  {aiResult.cuisine && <div className="text-[11px]" style={{ color: 'var(--mute)' }}>{aiResult.cuisine}</div>}
+                </div>
+                <span className="text-[9px] uppercase tracking-[.14em] font-semibold px-2 py-1 rounded-full shrink-0"
+                      style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                  AI estimate{aiResult.from_cache ? ' · reused' : ''}
+                </span>
+              </div>
+
+              <div className="text-[11px] leading-relaxed" style={{ color: 'var(--mute)' }}>{aiResult.disclaimer}</div>
+
+              {/* Totals + uncertainty range -- never a bare confident number */}
+              <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)' }}>
+                <div className="flex items-baseline justify-between">
+                  <span className="font-black text-[22px] tabular-nums" style={{ color: 'var(--ink)' }}>~{Math.round(aiResult.totals.calories)}</span>
+                  <span className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
+                    likely {Math.round(aiResult.uncertainty.calories_low)}–{Math.round(aiResult.uncertainty.calories_high)} kcal
+                  </span>
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: 'var(--mute)' }}>
+                  P {r1(aiResult.totals.protein)} · C {r1(aiResult.totals.carbs)} · F {r1(aiResult.totals.fat)}
+                  {aiResult.serving?.description ? ` · ${aiResult.serving.description}` : ''}
+                </div>
+              </div>
+
+              {/* Component breakdown -- shows how much of the estimate is
+                  grounded in real measured data vs. an AI guess */}
+              {aiResult.components?.length > 0 && (
+                <div className="space-y-1">
+                  {aiResult.components.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-[11px] rounded-lg px-2.5 py-1.5" style={{ background: 'var(--glass, rgba(128,128,128,.05))' }}>
+                      <span className="min-w-0 truncate" style={{ color: 'var(--ink)' }}>
+                        {c.name} <span style={{ color: 'var(--faint)' }}>· {Math.round(c.estimated_weight_g)}g</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums" style={{ color: 'var(--mute)' }}>{Math.round(c.calories)} kcal</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {aiResult.assumptions?.length > 0 && (
+                <div className="text-[10px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+                  <span className="uppercase tracking-[.12em]" style={{ color: 'var(--mute)' }}>Assumptions: </span>
+                  {aiResult.assumptions.join(' · ')}
+                </div>
+              )}
+
+              {aiErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
+
+              <div className="flex gap-2">
+                <button onClick={() => { setAiResult(null); setAiErr(''); }}
+                        className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold" style={{ border: '1px solid var(--line)', color: 'var(--mute)' }}>
+                  Close
+                </button>
+                <Pressable onClick={commitAI} disabled={aiLogging} className="flex-1 btn-primary !py-2.5 text-[12px] font-bold">
+                  {aiLogging ? 'Adding…' : 'Log it'}
+                </Pressable>
+              </div>
             </div>
           )}
 
@@ -689,7 +812,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
             </div>
           )}
 
-          {err && !food && !barcodeItem && !manualAdd && <div className="text-[11px] mt-2" style={{ color: 'var(--bad)' }}>{err}</div>}
+          {err && !food && !barcodeItem && !manualAdd && !aiResult && <div className="text-[11px] mt-2" style={{ color: 'var(--bad)' }}>{err}</div>}
         </div>
       </div>
 

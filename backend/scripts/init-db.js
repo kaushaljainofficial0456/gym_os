@@ -112,6 +112,11 @@ const MIGRATIONS = [
   ['foods', 'barcode', `barcode TEXT`],
   ['foods', 'ingredients_text', `ingredients_text TEXT`],
   ['foods', 'image_url', `image_url TEXT`],
+
+  // --- food-AI Tier 4 provenance on logged meals (see foodAI.js) ---
+  ['meal_logs', 'ai_provider', `ai_provider TEXT`],
+  ['meal_logs', 'ai_model', `ai_model TEXT`],
+  ['meal_logs', 'ai_confidence', `ai_confidence TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

@@ -801,12 +801,21 @@ export default function Nutrition() {
         onAdd={async (entry) => {
           // Same endpoint + body shape every other "log this to today" action
           // in this file already uses (e.g. the quick-add food chips above).
+          // source/ai_* pass through entry's own values (an AI-estimated
+          // log via FoodLogSheet's "Estimate with AI" sets entry.source to
+          // 'ai_estimated') rather than always hardcoding 'manual' -- see
+          // the source enum in backend/src/validate.js. Never overwritten
+          // to 'measured': AI-generated data stays labelled as such even
+          // once logged.
           await api(`/nutrition/clients/${clientId}/meals/log`, {
             method: 'POST',
             body: JSON.stringify({
               name: entry.name, slot: 'Snack',
               calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
-              source: 'manual', eaten: true,
+              source: entry.source || 'manual', eaten: true,
+              ai_provider: entry.ai_provider || undefined,
+              ai_model: entry.ai_model || undefined,
+              ai_confidence: entry.ai_confidence || undefined,
             }),
           });
           setFoodLogSheetOpen(false);

@@ -173,11 +173,18 @@ export default function nutritionRoutes(db) {
     if (!client) return;
     const b = req.body;
     await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id('mlg'), client.id, b.meal_id || null, b.date || dayKey(), b.slot || 'snack', b.name,
-       b.calories, b.protein, b.carbs, b.fat, b.eaten ? 1 : 0, b.source, b.estimate ? 1 : 0]);
+       b.calories, b.protein, b.carbs, b.fat, b.eaten ? 1 : 0, b.source, b.estimate ? 1 : 0,
+       b.ai_provider || null, b.ai_model || null, b.ai_confidence || null]);
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'meal_logged', data: { clientId: client.id, source: b.source } });
+    if (b.source === 'ai_estimated' || b.source === 'ai_estimated_user_adjusted') {
+      // Distinct from the generic 'meal_logged' event above so Tier-4
+      // confirmation/adjustment rates (spec: user_confirmed_ai_estimates,
+      // user_adjusted_ai_estimates) can be measured without re-parsing data.
+      await track(db, { orgId: client.org_id, userId: req.user.sub, type: `food_ai_${b.source === 'ai_estimated_user_adjusted' ? 'user_adjusted' : 'user_confirmed'}`, data: { clientId: client.id, name: b.name } });
+    }
     res.status(201).json({ ok: true });
   });
 

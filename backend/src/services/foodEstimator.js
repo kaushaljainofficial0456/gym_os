@@ -60,6 +60,12 @@ const {
 // the static index uses, so an external-API or DB-cached hit is scaled
 // identically to a local-snapshot hit rather than duplicating that math.
 export { cleanCode, canonicalEan13, resolveServing };
+// Re-exported for foodAI.js (Tier 4): resolving an AI-proposed component
+// ("rice", 350g) against a REAL matched database row uses the exact same
+// per-100g scaling math every other tier uses, so an AI-grounded component
+// total and a Tier-1 search result are computed identically, not by two
+// different formulas that could quietly disagree.
+export { scaleNutrition };
 
 /* ------------------------------------------------------------------ */
 /*  Lazy singletons                                                    */

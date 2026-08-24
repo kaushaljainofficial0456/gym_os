@@ -79,8 +79,17 @@ export const schemas = {
     carbs: z.number().min(0).max(1000),
     fat: z.number().min(0).max(1000),
     eaten: z.boolean().default(true),
-    source: z.enum(['plan', 'ai', 'manual']).default('manual'),
-    estimate: z.boolean().default(false)
+    // ai_estimated/ai_estimated_user_adjusted are additive (food-AI Tier 4,
+    // see foodAI.js) -- 'ai' keeps its existing meaning (the older photo/
+    // text AI-estimate flow) untouched, never repurposed.
+    source: z.enum(['plan', 'ai', 'manual', 'ai_estimated', 'ai_estimated_user_adjusted']).default('manual'),
+    estimate: z.boolean().default(false),
+    // Tier-4 provenance, optional -- only present when source starts with
+    // 'ai_estimated'. Never used to mark a result "measured": these are
+    // metadata about which AI produced the number, not a trust upgrade.
+    ai_provider: z.string().max(40).optional(),
+    ai_model: z.string().max(80).optional(),
+    ai_confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional()
   }),
   waterLog: z.object({ date: z.string().optional(), litres: z.number().min(0).max(20) }),
   sleepLog: z.object({
@@ -101,6 +110,19 @@ export const schemas = {
     neck: z.number().min(0).max(150).optional()
   }),
   aiEstimate: z.object({ text: z.string().min(1).max(300) }),
+  // Tier 4 (food-AI) single-food estimate request. Deliberately separate
+  // from `aiEstimate` above, which parses a free-text SENTENCE of several
+  // items ("2 rotis, dal and milk") -- this is one specific dish/food a
+  // search already came up empty for.
+  foodAIEstimate: z.object({
+    query: z.string().min(1).max(150),
+    brand: z.string().max(80).optional(),
+    restaurant: z.string().max(80).optional(),
+    cuisine: z.string().max(60).optional(),
+    portion: z.string().max(60).optional(),
+    cooking_method: z.string().max(60).optional(),
+    ingredients: z.array(z.string().max(60)).max(15).optional()
+  }),
   insightAction: z.object({
     action: z.enum(['accept', 'modify', 'dismiss']),
     summary: z.string().max(1000).optional(),

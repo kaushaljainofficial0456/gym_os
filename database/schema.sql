@@ -738,3 +738,30 @@ CREATE TABLE IF NOT EXISTS ai_feedback (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ai_feedback_client ON ai_feedback(client_id, created_at);
+
+-- Food-AI Tier 4 GLOBAL cache -- one row per canonical dish CONCEPT
+-- ("chicken chettinad biryani"), never per user and never per raw query
+-- string. NOT org/client-scoped on purpose: a reusable dish estimate is
+-- product knowledge, not any one gym's or client's data (contrast with
+-- the "foods" table, which IS scoped, for client-owned/gym-owned entries). Rows for
+-- personal-possessive queries ("my mom's curry") are never written here --
+-- see isPersonalQuery() in backend/src/services/intelligence/foodAICache.js.
+CREATE TABLE IF NOT EXISTS ai_food_estimates (
+  id                      TEXT PRIMARY KEY,
+  canonical_key           TEXT NOT NULL UNIQUE,  -- sorted, noise-stripped word set; see foodAICache.js
+  canonical_name          TEXT NOT NULL,          -- display name, title-cased from the first query that created this row
+  cuisine                 TEXT,
+  component_template_json TEXT NOT NULL DEFAULT '[]', -- AI-proposed {name, estimated_weight_g, ...}[]
+  nutrition_json          TEXT NOT NULL DEFAULT '{}', -- deterministic totals computed from component_template + measured DB
+  uncertainty_json        TEXT NOT NULL DEFAULT '{}', -- {calories_low, calories_high, ...} -- always present, see foodAI.js
+  assumptions_json        TEXT NOT NULL DEFAULT '[]', -- human-readable assumption strings shown to the user
+  source                  TEXT NOT NULL DEFAULT 'ai_estimated', -- ai_estimated | ai_estimated_user_adjusted
+  ai_provider             TEXT,                    -- which provider produced this (ollama | groq | openai | gemini)
+  ai_model                TEXT,
+  confidence              TEXT NOT NULL DEFAULT 'low', -- high | medium | low | unreliable -- backend-derived, never AI-chosen; see foodAI.js
+  times_used              INTEGER NOT NULL DEFAULT 0,
+  user_confirmation_count INTEGER NOT NULL DEFAULT 0,
+  created_at              TEXT NOT NULL,
+  updated_at              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_food_estimates_key ON ai_food_estimates(canonical_key);

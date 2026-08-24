@@ -32,6 +32,13 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // meal_logs.ai_provider/ai_model/ai_confidence (food-AI Tier 4
+  // provenance, see foodAI.js) exist only via scripts/init-db.js's guarded
+  // migrations, which this lightweight in-memory DB doesn't run -- same
+  // gap documented in barcodeApi.test.js's memDb() for the `foods` table.
+  for (const ddl of ['ai_provider TEXT', 'ai_model TEXT', 'ai_confidence TEXT']) {
+    db.exec(`ALTER TABLE meal_logs ADD COLUMN ${ddl}`);
+  }
   const mk = () => ({
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },

@@ -21,6 +21,9 @@ import {
   resolveFoodQuantity,
 } from '../services/foodEstimator.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
+import { validate, schemas } from '../validate.js';
+import { rateLimit } from '../rateLimit.js';
+import { estimateFoodAI, isFoodAIAvailable } from '../services/intelligence/foodAI.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -473,6 +476,43 @@ export default function meRoutes(db) {
       ],
       model_available: foodModelAvailable(),
     });
+  });
+
+  /**
+   * Tier 4 — AI food estimate. Reached ONLY when a user has already tried
+   * /foods/search above and it came back with nothing usable ("Nothing
+   * matched ..." in FoodLogSheet) -- this is explicitly NOT called
+   * automatically on every search miss (spec: "Do NOT call AI for every
+   * food query" -- cost, latency, rate limits, trust). The frontend gates
+   * this behind an explicit "Estimate with AI" tap.
+   *
+   * Rate-limited tighter than ordinary search/log routes: this is the one
+   * endpoint on the client surface that can call an external AI vendor
+   * and cost real money/latency, not a local DB read.
+   *
+   * Returns the AI's estimate for review -- it does NOT log anything.
+   * Logging (with the user's possibly-adjusted quantities) goes through
+   * the EXISTING POST /nutrition/clients/:id/meals/log with
+   * source: 'ai_estimated' (or 'ai_estimated_user_adjusted'), reusing
+   * that endpoint rather than duplicating a second logging path.
+   */
+  const foodAILimit = rateLimit({ windowMs: 60_000, max: 12, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/foods/ai-estimate', foodAILimit, validate(schemas.foodAIEstimate), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!isFoodAIAvailable()) {
+      return res.status(503).json({
+        ok: false, tier: 4, estimate_status: 'unresolved',
+        reason: 'AI food estimation is not configured on this server.',
+        error: 'AI food estimation is not configured on this server.',
+      });
+    }
+    const b = req.body;
+    const result = await estimateFoodAI(db, {
+      query: b.query, brand: b.brand, restaurant: b.restaurant, cuisine: b.cuisine,
+      portion: b.portion, cookingMethod: b.cooking_method, ingredients: b.ingredients,
+      orgId: c.org_id, userId: req.user.sub,
+    });
+    res.status(result.ok ? 200 : 502).json(result);
   });
 
   /**
