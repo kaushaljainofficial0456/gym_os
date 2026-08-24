@@ -180,16 +180,107 @@ test('3. DB cache takes priority over the external API', async (t) => {
   assert.equal(calls.length, 0);
 });
 
-test('4. external API failure -> 404, not a 500', async (t) => {
+test('4. external API network failure -> 503 (service unavailable), not a 500 and not a 404', async (t) => {
   const { call, close } = await startBarcodeApi();
   t.after(() => close());
   resetRateLimits();
   mockExternalApi(t, () => { throw new Error('simulated network failure'); });
 
   const r = await call('GET', '/api/intel/foods/barcode/9998887776663');
-  assert.equal(r.status, 404);
-  assert.equal(r.json.fallback, 'manual_entry');
+  // 503, not 404: the product may well exist -- a transient lookup failure
+  // must not be indistinguishable from "genuinely not found" (which would
+  // wrongly push the user straight into re-typing the whole product).
+  assert.equal(r.status, 503);
+  assert.equal(r.json.fallback, 'retry');
   assert.equal(r.json.reason, 'network_error');
+});
+
+test('4b. external API timeout -> 503', async (t) => {
+  const { call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  mockExternalApi(t, () => { const e = new Error('timed out'); e.name = 'TimeoutError'; throw e; });
+
+  const r = await call('GET', '/api/intel/foods/barcode/9998887776672');
+  assert.equal(r.status, 503);
+  assert.equal(r.json.reason, 'timeout');
+});
+
+test('4c. external API rate-limits (HTTP 429) -> 429, not 404 or 500', async (t) => {
+  const { call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  mockExternalApi(t, () => new Response('', { status: 429 }));
+
+  const r = await call('GET', '/api/intel/foods/barcode/9998887776673');
+  assert.equal(r.status, 429);
+  assert.equal(r.json.reason, 'rate_limited');
+  assert.equal(r.json.fallback, 'retry');
+});
+
+test('4d. external API 5xx -> 503', async (t) => {
+  const { call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  mockExternalApi(t, () => new Response('', { status: 502 }));
+
+  const r = await call('GET', '/api/intel/foods/barcode/9998887776674');
+  assert.equal(r.status, 503);
+  assert.equal(r.json.reason, 'service_unavailable');
+});
+
+test('4e. external API v3-shaped success response is parsed correctly', async (t) => {
+  const { call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  mockExternalApi(t, () => jsonResponse(200, {
+    status: 'success', // v3 shape, not v2's status: 1
+    product: {
+      product_name: 'V3 Shaped Product', brands: 'V3Brand', serving_quantity: 30,
+      nutriments: { 'energy-kcal_100g': 350, proteins_100g: 10, fat_100g: 12, carbohydrates_100g: 40 },
+    },
+  }));
+
+  const r = await call('GET', '/api/intel/foods/barcode/9998887776675');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.food.food_name, 'V3 Shaped Product');
+  assert.equal(r.json.food.energy_kcal, 350);
+});
+
+test('4f. real HTTP 404 from the external API (v3 miss shape) is a genuine not-found, not a service failure', async (t) => {
+  const { call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  mockExternalApi(t, () => jsonResponse(404, { status: 'failure', result: { id: 'product_not_found' } }));
+
+  const r = await call('GET', '/api/intel/foods/barcode/9998887776676');
+  assert.equal(r.status, 404);
+  assert.equal(r.json.reason, 'not_found');
+  assert.equal(r.json.fallback, 'manual_entry');
+});
+
+test('4g. a DB cache read failure (e.g. an unmigrated foods table) degrades to the local/external sources instead of 500ing', async (t) => {
+  const { db, call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  // Simulate a production deploy whose migration for foods.barcode hasn't
+  // run: the column genuinely doesn't exist, so any query against it throws.
+  const original = db.q1;
+  db.q1 = async (sql, params) => {
+    if (sql.includes('foods') && sql.includes('barcode')) {
+      throw new Error('column "barcode" of relation "foods" does not exist');
+    }
+    return original(sql, params);
+  };
+  const calls = mockExternalApi(t, () => jsonResponse(200, {
+    status: 'success',
+    product: { product_name: 'Degraded Cache Product', nutriments: { 'energy-kcal_100g': 200, proteins_100g: 5, fat_100g: 5, carbohydrates_100g: 25 } },
+  }));
+
+  const r = await call('GET', '/api/intel/foods/barcode/9998887776677');
+  assert.equal(r.status, 200, 'a broken DB cache must not prevent the local/external lookup from succeeding');
+  assert.equal(r.json.food.food_name, 'Degraded Cache Product');
+  assert.equal(calls.length, 1);
 });
 
 test('5. product genuinely not found anywhere -> 404', async (t) => {
@@ -270,6 +361,20 @@ test('9. manual product creation returns a ready-to-confirm envelope', async (t)
   assert.ok(row, 'manually-added product must be persisted');
   assert.equal(row.source, 'PACKAGING_LABEL');
   assert.equal(row.is_global, 1);
+});
+
+test('9b. manual save on a broken DB (e.g. unmigrated foods table) returns a controlled 503, not an uncaught 500', async (t) => {
+  const { db, call, close } = await startBarcodeApi();
+  t.after(() => close());
+  resetRateLimits();
+  db.run = async () => { throw new Error('column "barcode" of relation "foods" does not exist'); };
+
+  const r = await call('POST', '/api/intel/foods/barcode/9998887776678/manual', {
+    name: 'Should Not Save', serving_grams: 50, calories: 100, protein: 5, carbs: 10, fat: 3,
+  });
+  assert.equal(r.status, 503);
+  assert.equal(r.json.reason, 'service_unavailable');
+  assert.ok(!('stack' in r.json), 'the response must never include a raw stack trace');
 });
 
 test('10. cached product returned on second lookup -- external API called exactly once', async (t) => {

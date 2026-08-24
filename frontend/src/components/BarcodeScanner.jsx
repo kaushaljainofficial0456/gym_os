@@ -47,11 +47,16 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
       stop();
       onScanned(item, code);
     } catch (e) {
-      // A miss is expected: even with a live external lookup behind this
-      // (see backend/src/services/barcodeLookup.js), a real product can
-      // legitimately be unindexed everywhere. Tell the caller so it can
-      // offer "add manually" with the code pre-filled, rather than leaving
-      // the scanner sitting on a dead-end status line.
+      // 404/400 (genuinely not found / malformed code) is the only case
+      // that should route into "add manually" -- the caller pre-fills the
+      // scanned code and lets the user type it in. A 429/503 (Open Food
+      // Facts itself rate-limited or is temporarily unreachable -- see
+      // backend/src/services/barcodeLookup.js's statusForReason) is NOT a
+      // miss: the product may well exist, so pushing the user straight
+      // into retyping everything by hand would be worse than just showing
+      // the backend's own "try again shortly" message (already in
+      // e.message) and letting them re-scan or retry the manual code
+      // field a moment later.
       const isMiss = e.status === 404 || e.status === 400;
       setStatus(isMiss
         ? `Barcode ${code} isn’t in the database yet.`

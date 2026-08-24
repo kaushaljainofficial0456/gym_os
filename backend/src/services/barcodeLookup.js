@@ -30,6 +30,42 @@ import { getBarcodeIndex, cleanCode, canonicalEan13, resolveServing } from './fo
 
 const EXTERNAL_TIMEOUT_MS = 5000;
 
+// Open Food Facts asks integrations to identify themselves with a real
+// app name/version and a way to reach the maintainer -- a generic or
+// missing User-Agent is exactly what gets throttled hardest under load.
+const USER_AGENT = 'SK-OS-Nutrition/1.0 (+https://github.com/kaushaljainofficial0456/gym_os)';
+
+/**
+ * Maps a `resolveBarcodeProduct`/`fetchFromExternalApi` failure `reason`
+ * to the HTTP status the route should return. Centralized here so the
+ * route is a thin translation of it, and so every failure mode has an
+ * explicit, deliberate status instead of everything collapsing onto 404
+ * or an uncaught exception becoming an unhandled 500:
+ *   400 - the scanned/typed code itself isn't a plausible barcode
+ *   404 - genuinely not found anywhere (or found with no usable nutrition
+ *         data, which the frontend must treat identically -- see
+ *         normalizeExternalProduct)
+ *   429 - Open Food Facts itself rate-limited this request
+ *   503 - the external lookup is unavailable right now (timeout, network
+ *         error, a non-2xx/non-429/non-404 response, or an unparseable
+ *         body) -- distinct from 404 because the product may well exist;
+ *         retrying shortly is the right move, not "add manually"
+ */
+export const REASON_STATUS = {
+  invalid_barcode: 400,
+  not_found: 404,
+  incomplete_data: 404,
+  rate_limited: 429,
+  timeout: 503,
+  network_error: 503,
+  bad_response: 503,
+  not_configured: 503,
+  service_unavailable: 503,
+};
+export function statusForReason(reason) {
+  return REASON_STATUS[reason] || 404;
+}
+
 function toMg(gramsValue) {
   const n = Number(gramsValue);
   return Number.isFinite(n) ? Math.round(n * 1000 * 100) / 100 : null;
@@ -106,9 +142,10 @@ export function normalizeExternalProduct(barcode, product) {
 
 /**
  * Live external lookup. Never throws — every failure mode (not configured,
- * network error, timeout, non-2xx, product not found, unusable payload)
- * comes back as `{ record: null, reason }` so the caller can fall through to
- * "product not found, add manually" instead of 500ing.
+ * network error, timeout, rate limit, non-2xx, product not found, unusable
+ * payload) comes back as `{ record: null, reason }` (see REASON_STATUS)
+ * so the caller can return a controlled, correctly-coded response instead
+ * of ever letting an external-API hiccup surface as an unhandled 500.
  */
 export async function fetchFromExternalApi(barcode) {
   const base = config.foodDatabaseApiUrl;
@@ -119,7 +156,7 @@ export async function fetchFromExternalApi(barcode) {
     'ingredients_text_en', 'image_front_url', 'image_url', 'categories_tags', 'status',
   ].join(',');
   const url = `${base}/${encodeURIComponent(barcode)}.json?fields=${fields}`;
-  const headers = { 'User-Agent': 'SK-OS-Nutrition/1.0 (+barcode lookup)' };
+  const headers = { 'User-Agent': USER_AGENT };
   if (config.foodDatabaseApiKey) headers.Authorization = `Bearer ${config.foodDatabaseApiKey}`;
   let res;
   try {
@@ -128,10 +165,17 @@ export async function fetchFromExternalApi(barcode) {
     return { record: null, reason: e.name === 'TimeoutError' || e.name === 'AbortError' ? 'timeout' : 'network_error' };
   }
   if (res.status === 429) return { record: null, reason: 'rate_limited' };
-  if (!res.ok) return { record: null, reason: `http_${res.status}` };
+  // v3 returns a real HTTP 404 on a miss (v2 always answered 200 with a
+  // status flag in the body — still handled below for anyone who points
+  // FOOD_DATABASE_API_URL at a v2-shaped mirror).
+  if (res.status === 404) return { record: null, reason: 'not_found' };
+  if (!res.ok) return { record: null, reason: 'service_unavailable' };
   let data;
   try { data = await res.json(); } catch { return { record: null, reason: 'bad_response' }; }
-  if (data?.status !== 1 || !data.product) return { record: null, reason: 'not_found' };
+  // v3: { status: 'success'|'failure', product: {...} }.
+  // v2: { status: 1|0, product: {...} }.
+  const found = data?.status === 'success' || data?.status === 1;
+  if (!found || !data.product) return { record: null, reason: 'not_found' };
   const record = normalizeExternalProduct(barcode, data.product);
   if (!record) return { record: null, reason: 'incomplete_data' };
   return { record, reason: null };
@@ -242,7 +286,21 @@ export async function resolveBarcodeProduct(db, rawCode) {
   // DB cache or local snapshot in practice -- but if it ever did, falling
   // through to the next source is strictly safer than handing out an
   // unusable "hit".
-  const cachedRow = (await lookupCachedProduct(db, barcode)) || (await lookupCachedProduct(db, canon));
+  //
+  // The DB cache is an OPTIMIZATION on top of the local snapshot + external
+  // API, not a hard dependency for either read or write below -- if the
+  // `foods` table is ever missing barcode/ingredients_text/image_url (e.g.
+  // a deploy whose migration, scripts/init-db.js, hasn't been run against
+  // that database yet), every query against those columns throws a
+  // "column does not exist" error. Catching that here and falling through
+  // is the difference between "barcode lookup still works, just without
+  // caching until the DB catches up" and every single scan 500ing.
+  let cachedRow = null;
+  try {
+    cachedRow = (await lookupCachedProduct(db, barcode)) || (await lookupCachedProduct(db, canon));
+  } catch (e) {
+    console.error(`[barcode] DB cache read failed, continuing without it: ${e.message}`);
+  }
   if (cachedRow) {
     const rec = foodRowToRecord(cachedRow);
     if (hasUsableNutrition(rec)) return { record: rec, reason: null, cached: true, fromExternal: false };
@@ -253,8 +311,16 @@ export async function resolveBarcodeProduct(db, rawCode) {
 
   const { record, reason } = await fetchFromExternalApi(canon);
   if (record) {
-    const saved = await cacheProduct(db, record);
-    return { record: foodRowToRecord(saved), reason: null, cached: false, fromExternal: true };
+    try {
+      const saved = await cacheProduct(db, record);
+      return { record: foodRowToRecord(saved), reason: null, cached: false, fromExternal: true };
+    } catch (e) {
+      // Caching failed (same possible cause as the read above). The user
+      // still gets the product they just scanned -- it just won't be
+      // cached for the next scan until the DB is migrated.
+      console.error(`[barcode] Caching a resolved product failed, returning it uncached: ${e.message}`);
+      return { record, reason: null, cached: false, fromExternal: true };
+    }
   }
   return { record: null, reason: reason || 'not_found', cached: false, fromExternal: false };
 }

@@ -25,7 +25,7 @@ import {
   modelAvailable as foodModelAvailable,
   cleanCode, canonicalEan13,
 } from '../services/foodEstimator.js';
-import { resolveBarcodeProduct, buildBarcodeResponse, cacheProduct, foodRowToRecord } from '../services/barcodeLookup.js';
+import { resolveBarcodeProduct, buildBarcodeResponse, cacheProduct, foodRowToRecord, statusForReason } from '../services/barcodeLookup.js';
 import { resolveFood, searchFoods } from '../services/intelligence/foodSearch.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 import { computeNutrition, sumNutrition } from '../services/intelligence/nutrition.js';
@@ -306,29 +306,48 @@ export default function intelligenceRoutes(db) {
   // part of this route that isn't just reading local data.
   const barcodeLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
 
+  // Human-readable message per failure reason -- kept next to the route
+  // (not in barcodeLookup.js) since it's response wording, not lookup
+  // logic. statusForReason (barcodeLookup.js) owns the actual HTTP status.
+  const BARCODE_ERROR_MESSAGE = {
+    invalid_barcode: 'Invalid barcode',
+    rate_limited: 'Nutrition lookup is rate-limited right now — try again shortly',
+    timeout: 'Nutrition lookup service is temporarily unavailable — try again shortly',
+    network_error: 'Nutrition lookup service is temporarily unavailable — try again shortly',
+    bad_response: 'Nutrition lookup service is temporarily unavailable — try again shortly',
+    not_configured: 'Nutrition lookup service is temporarily unavailable — try again shortly',
+    service_unavailable: 'Nutrition lookup service is temporarily unavailable — try again shortly',
+  };
+
   // ---------------- barcode scan -> auto-log (CONTRACT §3.6) ----------------
   // Exact-key lookup, NOT ranked search: a scanned code either matches a
   // product or it does not -- never a substituted "closest" food, which for
   // a barcode would be a confidently wrong product. Three sources, in
   // order (see barcodeLookup.js's header): the DB cache, the local
   // snapshot this app ships, then a live external API as a last resort
-  // (result cached for next time). Still a plain 404 on a genuine miss
-  // everywhere, so the client's existing fallback (search by name, or
-  // "add product manually") is unchanged.
+  // (result cached for next time).
+  //
+  // Every failure mode gets its own deliberate status via statusForReason
+  // -- 400 for a malformed code, 404 for a genuine miss, 429 when Open
+  // Food Facts itself rate-limits, 503 when the external lookup is
+  // unavailable (timeout/network/bad response) -- so a transient OFF
+  // hiccup never surfaces as an unhandled 500, and the client can tell
+  // "not found, add it yourself" (404) apart from "try again in a moment"
+  // (429/503) instead of collapsing both into the same dead end.
   r.get('/foods/barcode/:code', barcodeLimit, async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const servings = Number(req.query.servings) > 0 ? Number(req.query.servings) : 1;
     const { record, reason } = await resolveBarcodeProduct(db, req.params.code);
     if (!record) {
-      return res.status(reason === 'invalid_barcode' ? 400 : 404).json({
-        error: reason === 'invalid_barcode' ? 'Invalid barcode' : 'Barcode not recognised',
+      const status = statusForReason(reason);
+      return res.status(status).json({
+        error: BARCODE_ERROR_MESSAGE[reason] || 'Barcode not recognised',
         barcode: req.params.code,
         reason: reason || 'not_found',
-        // Open Food Facts is crowd-sourced and the live fallback can also
-        // fail (network/timeout/rate-limit) -- either way, the client's
-        // next move is the same: let the user search by name or add the
-        // product by hand.
-        fallback: 'manual_entry',
+        // manual entry is the right next step only on a genuine miss (400/
+        // 404) -- offering it on a 429/503 would push the user into
+        // retyping a product that's very likely just a retry away.
+        fallback: status === 404 ? 'manual_entry' : (status === 400 ? null : 'retry'),
       });
     }
     res.json(buildBarcodeResponse(record, servings));
@@ -382,7 +401,18 @@ export default function intelligenceRoutes(db) {
       ingredients_text: null,
       image_url: null,
     };
-    const saved = await cacheProduct(db, record);
+    // Unlike the GET lookup, a manual save has no fallback source to
+    // degrade to -- persisting IS the request. But a schema-level failure
+    // (e.g. a deploy whose DB migration for foods.barcode hasn't run yet)
+    // must still come back as a controlled response, not an uncaught
+    // exception the global error handler turns into a bare 500.
+    let saved;
+    try {
+      saved = await cacheProduct(db, record);
+    } catch (e) {
+      console.error(`[barcode] Manual product save failed: ${e.message}`);
+      return res.status(503).json({ error: 'Could not save this product right now — try again shortly', reason: 'service_unavailable' });
+    }
     const servings = Number(req.query.servings) > 0 ? Number(req.query.servings) : 1;
     await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'barcode_product_added_manually', data: { clientId: c.id, barcode } });
     res.status(201).json(buildBarcodeResponse(foodRowToRecord(saved), servings));
