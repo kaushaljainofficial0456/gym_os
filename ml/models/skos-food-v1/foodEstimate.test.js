@@ -138,6 +138,54 @@ check('progressive backoff resolves multi-word queries', () => {
   assert(r !== null, '"apple big" should resolve via backoff');
 });
 
+// ---------------------------------------------------- fuzzy fallback ----
+// Indian Nutrition Engine upgrade, Phase 5: spelling mistakes must resolve
+// WITHOUT paid AI. "chapatti"/"phulka" is the master prompt's own example.
+check('"chapatti" (the master prompt\'s own example) resolves as a curated alias', () => {
+  // Promoted from build_food_aliases.py's SPELLING_VARIANTS, alongside its
+  // existing chapathi/chappati siblings -- a curated match beats relying
+  // on the fuzzy fallback for a spelling this common.
+  const r = first('chapatti');
+  assert(r !== null, '"chapatti" should resolve');
+  assert(r.confidence === 'high', `curated spelling variant should be high confidence, got ${r.confidence}`);
+  assert(/chapati|roti/i.test(r.food_name), `expected a chapati/roti row, got ${r.food_name}`);
+});
+
+check('an UNCURATED misspelling ("panneer") resolves only via the fuzzy fallback, and is labelled honestly', () => {
+  const r = first('panneer');
+  assert(r !== null, '"panneer" should resolve');
+  assert(r.fuzzy_corrected === true, 'must be flagged as fuzzy-corrected, not passed off as a real match');
+  assert(r.confidence === 'low', `fuzzy correction must never claim high/medium confidence, got ${r.confidence}`);
+  assert(/paneer/i.test(r.food_name), `expected a paneer row, got ${r.food_name}`);
+});
+
+check('a query too far from any real word is not force-matched (bounded edit distance)', () => {
+  // "riceee" (6 chars) is edit-distance 2 from "rice" (4 chars) -- outside
+  // the 1-edit budget its own length band allows -- so it must return
+  // nothing rather than guess.
+  assert(first('riceee') === null, `"riceee" should not resolve, got ${JSON.stringify(first('riceee'))}`);
+});
+
+check('short tokens are excluded from fuzzy correction (too many false positives)', () => {
+  // "dal" (3 chars) must never fuzzy-correct to an unrelated 3-4 letter word.
+  const r = fsx.search('xal', { limit: 5 });
+  assert(r.every((x) => x.fuzzy_corrected !== true), 'a 3-character token must not trigger fuzzy correction');
+});
+
+check('an alias addition (not fuzzy) resolves the regional name "phulka"', () => {
+  const r = first('phulka');
+  assert(r !== null, '"phulka" should resolve via food_aliases.json, not fuzzy matching');
+  assert(r.fuzzy_corrected !== true, '"phulka" is a curated alias, not a spelling correction');
+  assert(r.confidence === 'high', `curated alias should be high confidence, got ${r.confidence}`);
+});
+
+check('fuzzy fallback never fires when a real match already exists (no regression)', () => {
+  for (const q of ['chapati', 'roti', 'paneer', 'rice', 'idli']) {
+    const r = first(q);
+    assert(r.fuzzy_corrected !== true, `"${q}" already matches directly -- fuzzy must not have been reached`);
+  }
+});
+
 // --------------------------------------------------------------- units --
 check('mass units are exact', () => {
   assert(toGrams(250, 'g', 'rice').grams === 250);

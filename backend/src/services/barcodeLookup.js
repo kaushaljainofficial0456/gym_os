@@ -27,6 +27,7 @@
 import { id } from '../ids.js';
 import { config } from '../config.js';
 import { getBarcodeIndex, cleanCode, canonicalEan13, resolveServing } from './foodEstimator.js';
+import { validateFoodRecord } from './foodValidation.js';
 
 const EXTERNAL_TIMEOUT_MS = 5000;
 
@@ -236,6 +237,13 @@ export async function cacheProduct(db, record) {
   // regardless of which caller reaches this function.
   if (!hasUsableNutrition(record)) {
     throw new Error('Refusing to cache a product with no energy value');
+  }
+  // This cache row is GLOBAL -- shared by every client who ever scans this
+  // barcode -- so a negative or physically-impossible value here corrupts
+  // every one of their logs, not just one. Reject outright; never "repair".
+  const check = validateFoodRecord({ name: record.food_name, ...record });
+  if (!check.valid) {
+    throw new Error(`Refusing to cache an invalid product: ${check.errors.join('; ')}`);
   }
   const existing = await lookupCachedProduct(db, record.barcode);
   if (existing) return existing;

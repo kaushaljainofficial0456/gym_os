@@ -1,7 +1,7 @@
 {
   "generated_from": "unified_food_db.json",
-  "alias_count": 3997,
-  "mapping_count": 6239,
+  "alias_count": 4006,
+  "mapping_count": 6248,
   "aliases": {
     "0 4 m f": [
       "cnf:27"
@@ -3136,6 +3136,12 @@
     "bread chapati or rotti whole wheat commercially prepared frozen": [
       "usda:174075"
     ],
+    "bread chapatti or roti plain commercially prepared": [
+      "usda:171844"
+    ],
+    "bread chapatti or roti whole wheat commercially prepared frozen": [
+      "usda:174075"
+    ],
     "bread chappati or roti plain commercially prepared": [
       "usda:171844"
     ],
@@ -3663,6 +3669,9 @@
       "indb:ASC096"
     ],
     "chapati": [
+      "indb:ASC096"
+    ],
+    "chapatti": [
       "indb:ASC096"
     ],
     "chappati": [
@@ -6847,6 +6856,12 @@
       "cnf:7253"
     ],
     "indian bread chapati or rotti whole wheat": [
+      "cnf:7250"
+    ],
+    "indian bread chapatti or roti plain": [
+      "cnf:7253"
+    ],
+    "indian bread chapatti or roti whole wheat": [
       "cnf:7250"
     ],
     "indian bread chappati or roti plain": [
@@ -10574,6 +10589,9 @@
     "phulgobhi parantha": [
       "indb:ASC100"
     ],
+    "phulka": [
+      "indb:ASC096"
+    ],
     "pie sweet aloo": [
       "usda:2708012"
     ],
@@ -11133,6 +11151,9 @@
       "off:8901262153348"
     ],
     "protein rich chapathi": [
+      "off:8906020582002"
+    ],
+    "protein rich chapatti": [
       "off:8906020582002"
     ],
     "protein rich chappati": [
@@ -13959,6 +13980,9 @@
     "wheat chapathi": [
       "off:8908001588560"
     ],
+    "wheat chapatti": [
+      "off:8908001588560"
+    ],
     "wheat chappati": [
       "off:8908001588560"
     ],
@@ -14027,6 +14051,9 @@
       "cnf:7258"
     ],
     "whole wheat chapathi": [
+      "off:8906020580138"
+    ],
+    "whole wheat chapatti": [
       "off:8906020580138"
     ],
     "whole wheat chappati": [

@@ -20,6 +20,7 @@ import {
   modelAvailable as foodModelAvailable,
   resolveFoodQuantity,
 } from '../services/foodEstimator.js';
+import { validateFoodRecord } from '../services/foodValidation.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -556,6 +557,11 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const { name, unit, serving, calories, protein, carbs, fat, category } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Food name is required' });
+    // Reject invalid macro values outright (negative, impossible combos) --
+    // never silently clamp or drop them, since the client would see a
+    // "saved" food that quietly logs the wrong number every time it's used.
+    const check = validateFoodRecord({ name, energy_kcal: calories, protein_g: protein, carb_g: carbs, fat_g: fat });
+    if (!check.valid) return res.status(400).json({ error: 'Invalid food data', details: check.errors });
     const fId = id('food');
     await db.run(
       `INSERT INTO foods (id, org_id, client_id, name, unit, serving, calories, protein, carbs, fat, category, is_global)

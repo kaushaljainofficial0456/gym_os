@@ -156,6 +156,31 @@ const NORMALLY_DRY = new Set(['dal', 'lentil', 'gram', 'chana', 'rice', 'wheat',
 
 function tokensOf(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean); }
 
+/** Standard Levenshtein edit distance (textbook DP, no dependency). Used
+ *  ONLY as a last-resort fallback for single tokens that fail every other
+ *  match tier -- see FoodSearch._searchFuzzy. Deliberately the plain
+ *  unbanded version: fuzzy is a rare cache-miss path, food-name tokens are
+ *  short (a handful of characters), and a boring, obviously-correct
+ *  implementation is worth more here than shaving cycles off a path that
+ *  barely runs. */
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j += 1) prev[j] = j;
+  for (let i = 1; i <= m; i += 1) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j += 1) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
 /** The state a food is normally EATEN in — which is what a user logging it
  *  means. Rice is 358 kcal/100g raw and 129 cooked; defaulting wrong is a
  *  342 kcal error on a 150 g portion. */
@@ -246,6 +271,16 @@ class FoodSearch {
         const f = this.bySourceId.get(id);
         if (f) for (const t of toks) f._aliasTokens.add(t);
       }
+    }
+
+    // Token vocabulary for the fuzzy fallback (spelling mistakes only --
+    // never a source of new synonyms, which stay in food_aliases.json).
+    // Built once here, not per query: one pass over tokens already computed
+    // above, so this costs nothing beyond what the constructor already does.
+    this._vocab = new Map(); // token -> occurrence count (breaks fuzzy ties toward the commoner word)
+    for (const f of this.foods) {
+      for (const t of f._tokens) this._vocab.set(t, (this._vocab.get(t) || 0) + 1);
+      for (const t of f._aliasTokens) this._vocab.set(t, (this._vocab.get(t) || 0) + 1);
     }
   }
 
@@ -338,31 +373,44 @@ class FoodSearch {
     return score;
   }
 
-  search(query, { limit = 8, cuisine = null, allowBackoff = true } = {}) {
+  search(query, { limit = 8, cuisine = null, allowBackoff = true, allowFuzzy = true } = {}) {
     const qNorm = normalize(query);
     if (!qNorm) return [];
     let qTokens = qNorm.split(' ').filter((t) => !STOPWORDS.has(t));
     if (!qTokens.length) qTokens = qNorm.split(' ');
 
     let out = this._searchExact(qNorm, qTokens, limit, cuisine);
-    if (out.length || !allowBackoff || qTokens.length < 2) return out;
+    if (out.length) return out;
 
     // Progressive backoff: every query token must normally match, which
     // returns NOTHING for "apple big" when the DB holds "Apples, raw".
     // Measured as the largest single cause of unresolved queries.
-    for (let drop = 1; drop < qTokens.length; drop += 1) {
-      const sub = qTokens.slice(0, qTokens.length - drop);
-      if (!sub.length) break;
-      out = this._searchExact(sub.join(' '), sub, limit, cuisine);
-      if (out.length) {
-        for (const r of out) {
-          r.query_relaxed = true;
-          r.matched_on = sub.join(' ');
-          r.unmatched_query_terms = qTokens.slice(qTokens.length - drop);
+    if (allowBackoff && qTokens.length >= 2) {
+      for (let drop = 1; drop < qTokens.length; drop += 1) {
+        const sub = qTokens.slice(0, qTokens.length - drop);
+        if (!sub.length) break;
+        out = this._searchExact(sub.join(' '), sub, limit, cuisine);
+        if (out.length) {
+          for (const r of out) {
+            r.query_relaxed = true;
+            r.matched_on = sub.join(' ');
+            r.unmatched_query_terms = qTokens.slice(qTokens.length - drop);
+          }
+          return out;
         }
-        return out;
       }
     }
+
+    // Last resort: character-level spelling correction (e.g. "chapatti"
+    // with an extra 't' -> "chapati"). Only ever reached once exact/alias/
+    // token/substring/backoff have all found nothing, so it can never
+    // outrank or replace a real match -- see _searchFuzzy for the distance
+    // budget and why results are always capped at 'low' confidence.
+    if (allowFuzzy) {
+      out = this._searchFuzzy(qNorm, qTokens, limit, cuisine);
+      if (out.length) return out;
+    }
+
     return [];
   }
 
@@ -418,6 +466,48 @@ class FoodSearch {
         _score: Math.round(s * 10) / 10
       };
     });
+  }
+
+  /** Spelling-mistake fallback ONLY -- not a synonym system (that's
+   *  food_aliases.json). Corrects each query token to the closest word in
+   *  the dataset's own vocabulary, within a small edit-distance budget, and
+   *  re-runs the existing exact/alias/token pipeline on the corrected
+   *  query. Deliberately does not duplicate any scoring logic: a fixed
+   *  spelling either matches for real reasons or it doesn't. Every result
+   *  is capped at 'low' confidence and flagged `fuzzy_corrected: true` --
+   *  correcting a typo is never grounds for a confident identification, so
+   *  this must not be able to silently look as trustworthy as a real match. */
+  _searchFuzzy(qNorm, qTokens, limit, cuisine) {
+    let changed = false;
+    const correctedTokens = qTokens.map((tok) => {
+      // Short tokens are excluded: at length <=3, a 1-character edit budget
+      // covers a large fraction of unrelated words ("dal" <-> "dad"), so
+      // guessing does more harm than returning nothing.
+      if (tok.length <= 3 || this._vocab.has(tok)) return tok;
+      const maxDist = tok.length >= 7 ? 2 : 1;
+      let best = null, bestDist = Infinity, bestFreq = -1;
+      for (const [vTok, freq] of this._vocab) {
+        if (Math.abs(vTok.length - tok.length) > maxDist) continue; // cheap prefilter before the DP
+        const d = levenshtein(tok, vTok);
+        if (d > maxDist) continue;
+        if (d < bestDist || (d === bestDist && freq > bestFreq)) {
+          best = vTok; bestDist = d; bestFreq = freq;
+        }
+      }
+      if (best !== null) { changed = true; return best; }
+      return tok;
+    });
+    if (!changed) return [];
+
+    const correctedQNorm = correctedTokens.join(' ');
+    const out = this._searchExact(correctedQNorm, correctedTokens, limit, cuisine);
+    for (const r of out) {
+      r.fuzzy_corrected = true;
+      r.corrected_from = qNorm;
+      r.matched_on = correctedQNorm;
+      r.confidence = 'low';
+    }
+    return out;
   }
 }
 

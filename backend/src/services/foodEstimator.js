@@ -270,10 +270,19 @@ function resolveGrams(parsed, food) {
   }
 
   if (parsed.unit) {
+    // Param name must match portionToGrams's own destructuring
+    // (`foodServingGrams`, not `servingGrams`) -- the mismatch silently
+    // disabled the "food's own measured serving beats the generic figure"
+    // override for bowl/katori/plate/piece/medium_bowl portions: "1 bowl
+    // dal" fell through to a generic 250ml x density estimate even when
+    // the matched food publishes its own measured serving_grams. Found via
+    // the SK OS Indian Nutrition Engine upgrade's Phase 16 ground-truth
+    // test suite (indianFoodAuthoritative.test.js), not previously covered
+    // by any existing test.
     const p = portionToGrams(parsed.unit, qty, {
       foodName: food.food_name,
       cookingState: food.cooking_state,
-      servingGrams: food.serving_grams,
+      foodServingGrams: food.serving_grams,
     });
     if (p && p.grams > 0) {
       return { grams: p.grams, basis: p.basis, assumed: false,

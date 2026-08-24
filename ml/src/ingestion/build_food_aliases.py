@@ -51,7 +51,7 @@ SPELLING_VARIANTS = [
     ("bharta", "bhartha"), ("bharta", "bhurta"),
     ("paratha", "parantha"), ("paratha", "prantha"),
     ("sabzi", "sabji"), ("sabzi", "subji"), ("sabzi", "sabzee"),
-    ("roti", "rotti"), ("chapati", "chapathi"), ("chapati", "chappati"),
+    ("roti", "rotti"), ("chapati", "chapathi"), ("chapati", "chappati"), ("chapati", "chapatti"),
     ("dal", "daal"), ("dal", "dhal"),
     ("paneer", "panir"), ("gobhi", "gobi"), ("phoolgobhi", "phulgobhi"),
     ("biryani", "biriyani"), ("biryani", "biriani"),
@@ -126,6 +126,10 @@ DISH_SYNONYMS = {
     "cottage cheese": ["paneer"],
     "clarified butter": ["ghee"],
     "curd": ["dahi", "yoghurt"],
+    # "phulka" is a regional name for the same unleavened flatbread stored
+    # as "Chapati/Roti" -- an unambiguous equivalence (SK OS Indian
+    # Nutrition Engine upgrade, master prompt Phase 5 worked example).
+    "phulka": ["chapati", "roti"],
 }
 
 
