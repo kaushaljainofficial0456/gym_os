@@ -1,5 +1,6 @@
 /**
  * FOOD LOG SHEET — search → choose portion → (oil) → add.
+ *                  OR barcode scan → confirm product → choose quantity → add.
  *
  * WHY A SHEET RATHER THAN MORE ROWS IN THE PICKER:
  * Logging a food is three decisions (which food, how much, how it was
@@ -11,12 +12,20 @@
  *
  * WHAT IS DELIBERATELY *NOT* COMPUTED HERE:
  * grams, macros and the oil adjustment all come from the server
- * (`/me/foods/resolve`). Portion→grams depends on the food's own density
- * and measured serving weight, and the oil model applies the chosen level
- * as a DELTA from the dish's own recipe oil — so picking "low" on an
- * already-oily dish correctly *reduces* calories. Re-implementing either
- * here is how the UI and the model start disagreeing, which is exactly the
- * class of bug that made the old estimator untrustworthy.
+ * (`/me/foods/resolve`, or `/intel/foods/barcode/:code` for a scanned
+ * product). Portion→grams depends on the food's own density and measured
+ * serving weight, and the oil model applies the chosen level as a DELTA
+ * from the dish's own recipe oil — so picking "low" on an already-oily
+ * dish correctly *reduces* calories. Re-implementing either here is how
+ * the UI and the model start disagreeing, which is exactly the class of
+ * bug that made the old estimator untrustworthy.
+ *
+ * BARCODE PATH: a scanned/looked-up product is an EXACT match (CONTRACT
+ * §3.6) with no portion catalogue of its own — it defines its own serving.
+ * It therefore gets its own confirm screen (image/brand/serving/full
+ * macros incl. fiber/sugar/sodium/ingredients) rather than being forced
+ * through the name-search portion picker below, which does not understand
+ * a barcode's `source_id` shape and would silently mis-resolve it.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
@@ -35,7 +44,15 @@ const OIL_LEVELS = [
 /** Portion groups, in the order a person actually reaches for them. */
 const GROUP_ORDER = ['count', 'bowl', 'plate', 'glass', 'spoon', 'misc'];
 
-export default function FoodLogSheet({ open, onClose, onAdd }) {
+const EMPTY_MANUAL = {
+  name: '', brand: '', servingGrams: '', servingLabel: '',
+  calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '',
+};
+
+/** Round for display only — never re-used as an input to further math. */
+const r1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
+
+export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -50,6 +67,25 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
   const [err, setErr] = useState('');
   const [listening, setListening] = useState(false);
   const inputRef = useRef(null);
+
+  // ── barcode scan state ──
+  const [barcodeItem, setBarcodeItem] = useState(null);       // food-v1 envelope from a scan or a manual save
+  const [barcodeGrams, setBarcodeGrams] = useState('');
+  const [barcodeResolved, setBarcodeResolved] = useState(null); // re-scaled envelope as barcodeGrams changes
+  const [barcodeErr, setBarcodeErr] = useState('');
+  const [manualAdd, setManualAdd] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
+  const [manualForm, setManualForm] = useState(EMPTY_MANUAL);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualErr, setManualErr] = useState('');
+  // AI/OCR label-read fallback (existing backend endpoint, POST
+  // /intel/label-scan — previously built but never wired into any live
+  // screen). Offered as a faster alternative to typing every field by
+  // hand; every extracted value still lands in the same editable form
+  // below and nothing is saved until the user reviews and submits it.
+  const [labelScanning, setLabelScanning] = useState(false);
+  const [labelNote, setLabelNote] = useState('');
+  const labelFileRef = useRef(null);
 
   const startVoice = () => {
     const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -70,12 +106,18 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
   };
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 120);
+    if (open) {
+      setTimeout(() => inputRef.current?.focus(), 120);
+      if (autoScan) setScanning(true);
+    }
     if (!open) {
       setQ(''); setResults([]); setFood(null); setResolved(null);
       setPortionKey(null); setCount(1); setGrams(''); setOil(null); setErr('');
+      setBarcodeItem(null); setBarcodeGrams(''); setBarcodeResolved(null); setBarcodeErr('');
+      setManualAdd(false); setManualBarcode(''); setManualForm(EMPTY_MANUAL); setManualErr('');
+      setLabelScanning(false); setLabelNote('');
     }
-  }, [open]);
+  }, [open, autoScan]);
 
   // Type-ahead. Debounced so a fast typist does not fire a request per key.
   useEffect(() => {
@@ -113,6 +155,26 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
     return () => { dead = true; clearTimeout(h); };
   }, [food, portionKey, count, grams, oil]);
 
+  // Re-scale a scanned/saved barcode product as its quantity (in grams)
+  // changes. Hits the SAME lookup endpoint with a `servings` multiplier
+  // derived from the product's own serving size -- the product is already
+  // cached (this is the request that cached it, or a save that just wrote
+  // it), so this is a single indexed DB read, never a second external call.
+  useEffect(() => {
+    if (!barcodeItem) { setBarcodeResolved(null); return undefined; }
+    const g = Number(barcodeGrams);
+    if (!(g > 0)) { setBarcodeResolved(null); return undefined; }
+    let dead = false;
+    const perServing = barcodeItem.quantity.serving_grams_each || 100;
+    const servings = g / perServing;
+    const h = setTimeout(() => {
+      api(`/intel/foods/barcode/${encodeURIComponent(barcodeItem.food.barcode)}?servings=${servings}`)
+        .then((r) => { if (!dead) { setBarcodeResolved(r); setBarcodeErr(''); } })
+        .catch((e) => { if (!dead) { setBarcodeResolved(null); setBarcodeErr(e.message || 'Could not price that quantity'); } });
+    }, 150);
+    return () => { dead = true; clearTimeout(h); };
+  }, [barcodeItem, barcodeGrams]);
+
   const groups = useMemo(() => {
     const ps = food?.portions || [];
     const by = {};
@@ -133,17 +195,135 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
     if (!first) setGrams('100');
   };
 
+  const backToSearch = () => {
+    setFood(null); setResolved(null);
+    setBarcodeItem(null); setBarcodeResolved(null); setBarcodeErr('');
+  };
+
   const commit = async () => {
-    if (!food || !resolved) return;
+    const isBarcode = !!barcodeItem;
+    const totals = isBarcode ? (barcodeResolved?.totals || barcodeItem.totals) : resolved?.totals;
+    const name = isBarcode ? barcodeItem.food.food_name : food?.name;
+    // The backend already refuses to hand back a barcode "hit" with no
+    // verified energy value (see barcodeLookup.js) -- this is a second,
+    // independent check, not a trust of that guarantee: without it, a
+    // totals object whose fields are all null would still pass the
+    // `!totals` check below (it's a truthy object) and silently log as
+    // 0 kcal / 0g everything, which is indistinguishable from an
+    // accurate zero-calorie entry.
+    if (!totals || !name || totals.energy_kcal == null) {
+      if (isBarcode && totals && totals.energy_kcal == null) {
+        setBarcodeErr('No verified nutrition data for this product — use "Add manually" instead.');
+      }
+      return;
+    }
     setBusy(true);
     try {
-      await onAdd({ food, resolved });
+      await onAdd({
+        name,
+        calories: Math.round(totals.energy_kcal ?? 0),
+        protein: totals.protein_g ?? 0,
+        carbs: totals.carb_g ?? 0,
+        fat: totals.fat_g ?? 0,
+      });
       onClose();
     } catch (e) {
       setErr(e.message || 'Could not add that food');
     }
     setBusy(false);
   };
+
+  const setManualField = (key, value) => setManualForm((f) => ({ ...f, [key]: value }));
+
+  const submitManual = async () => {
+    setManualErr('');
+    const mf = manualForm;
+    if (!mf.name.trim()) { setManualErr('Product name is required'); return; }
+    if (!(Number(mf.servingGrams) > 0)) { setManualErr('Serving size (in grams) is required'); return; }
+    if (!(Number(mf.calories) >= 0)) { setManualErr('Calories are required'); return; }
+    setManualBusy(true);
+    try {
+      const item = await api(`/intel/foods/barcode/${encodeURIComponent(manualBarcode)}/manual`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: mf.name.trim(),
+          brand: mf.brand.trim() || undefined,
+          serving_grams: Number(mf.servingGrams),
+          serving_label: mf.servingLabel.trim() || undefined,
+          calories: Number(mf.calories) || 0,
+          protein: Number(mf.protein) || 0,
+          carbs: Number(mf.carbs) || 0,
+          fat: Number(mf.fat) || 0,
+          fiber: mf.fiber !== '' ? Number(mf.fiber) : undefined,
+          sugar: mf.sugar !== '' ? Number(mf.sugar) : undefined,
+          sodium: mf.sodium !== '' ? Number(mf.sodium) : undefined,
+        }),
+      });
+      setManualAdd(false);
+      setManualForm(EMPTY_MANUAL);
+      setBarcodeItem(item);
+      setBarcodeGrams(String(item.quantity.grams));
+    } catch (e) {
+      setManualErr(e.message || 'Could not save that product');
+    }
+    setManualBusy(false);
+  };
+
+  const openManualAdd = (code) => {
+    setManualBarcode(code || '');
+    setManualForm((f) => ({ ...f, name: '' }));
+    setManualAdd(true);
+  };
+
+  // AI/OCR fallback for a barcode miss: read a photo of the label into the
+  // SAME editable fields the fully-manual form below uses, via the
+  // existing POST /intel/label-scan (vision-model extraction when an AI
+  // provider is configured, otherwise an explicit "enter manually" note --
+  // never a guess). Nothing is saved here; submitManual still owns that,
+  // so every OCR'd value gets the same user review before it's persisted
+  // or logged as this app's "Do not fabricate nutrition data" rule requires.
+  const scanLabel = async (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|jpg|webp|gif)$/.test(file.type)) { setLabelNote('Please choose a PNG, JPEG, WebP or GIF image'); return; }
+    if (file.size > 5 * 1024 * 1024) { setLabelNote('Image too large (max 5 MB)'); return; }
+    setLabelScanning(true);
+    setLabelNote('');
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      });
+      const r = await api('/intel/label-scan', { method: 'POST', body: JSON.stringify({ image: b64 }) });
+      const f = r.fields || {};
+      // Only pre-fill grams when the label's own unit is actually a mass
+      // unit -- OCR reading "1 bar" as the serving would otherwise silently
+      // become "1 g", which is exactly the kind of fabricated number this
+      // form exists to avoid. Anything else is left for the user to type.
+      const massUnit = /^(g|gram|grams|gm|gms)$/i.test(f.unit || '');
+      setManualForm((prev) => ({
+        ...prev,
+        name: f.name || prev.name,
+        brand: f.brand || prev.brand,
+        servingGrams: massUnit && f.serving_size ? f.serving_size : prev.servingGrams,
+        servingLabel: f.serving_size ? `${f.serving_size} ${f.unit || ''}`.trim() : prev.servingLabel,
+        calories: f.calories || prev.calories,
+        protein: f.protein || prev.protein,
+        carbs: f.carbs || prev.carbs,
+        fat: f.fat || prev.fat,
+        fiber: f.fiber || prev.fiber,
+        sugar: f.sugar || prev.sugar,
+        sodium: f.sodium || prev.sodium,
+      }));
+      setLabelNote(r.note || 'Extracted from the label — review every value before saving.');
+    } catch (e) {
+      setLabelNote(e.message || 'Could not read that label — enter the values manually.');
+    }
+    setLabelScanning(false);
+  };
+
+  const bc = barcodeResolved || barcodeItem;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
@@ -155,12 +335,12 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>
-              {food ? 'How much?' : 'Add food'}
+              {barcodeItem ? 'Confirm product' : manualAdd ? 'Add product manually' : food ? 'How much?' : 'Add food'}
             </div>
             <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}>✕</button>
           </div>
 
-          {!food && (
+          {!food && !barcodeItem && !manualAdd && (
             <>
             <div className="mt-2 flex gap-2">
               <input
@@ -182,8 +362,8 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
         </div>
 
         <div className="px-4 pb-4">
-          {/* ── results ── */}
-          {!food && (
+          {/* ── search results ── */}
+          {!food && !barcodeItem && !manualAdd && (
             <div className="space-y-1">
               {searching && !results.length && (
                 <div className="text-[11px] py-3" style={{ color: 'var(--faint)' }}>Searching…</div>
@@ -217,12 +397,186 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
             </div>
           )}
 
-          {/* ── quantity ── */}
+          {/* ── barcode product confirm ── */}
+          {barcodeItem && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                {barcodeItem.food.image_url && (
+                  <img src={barcodeItem.food.image_url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0"
+                       style={{ border: '1px solid var(--line)' }} />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-bold truncate" style={{ color: 'var(--ink)' }}>{barcodeItem.food.food_name}</div>
+                  {barcodeItem.food.brand && (
+                    <div className="text-[11px] truncate" style={{ color: 'var(--mute)' }}>{barcodeItem.food.brand}</div>
+                  )}
+                  <div className="text-[10px] mt-1" style={{ color: 'var(--faint)' }}>
+                    Serving: {barcodeItem.food.serving_size_label || `${barcodeItem.quantity.serving_grams_each} g`}
+                  </div>
+                  <button onClick={backToSearch} className="text-[10px] underline mt-1" style={{ color: 'var(--mute)' }}>
+                    change food
+                  </button>
+                </div>
+              </div>
+
+              {barcodeItem.notes?.length > 0 && (
+                <div className="text-[10px] rounded-lg px-3 py-2" style={{ background: 'var(--warn-soft, rgba(234,179,8,.1))', color: 'var(--warn, #b45309)' }}>
+                  {barcodeItem.notes[0]}
+                </div>
+              )}
+
+              {/* Per-serving reference numbers */}
+              <div className="rounded-xl px-3 py-2.5 grid grid-cols-4 gap-2 text-center"
+                   style={{ border: '1px solid var(--line)' }}>
+                {[
+                  ['kcal', barcodeItem.food.energy_kcal],
+                  ['protein', barcodeItem.food.protein_g],
+                  ['carbs', barcodeItem.food.carb_g],
+                  ['fat', barcodeItem.food.fat_g],
+                ].map(([label, v]) => (
+                  <div key={label}>
+                    <div className="text-[13px] font-bold tabular-nums" style={{ color: 'var(--ink)' }}>{v == null ? '—' : r1(v)}</div>
+                    <div className="text-[8px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              {(barcodeItem.food.fiber_g != null || barcodeItem.food.sugar_g != null || barcodeItem.food.sodium_mg != null) && (
+                <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
+                  {barcodeItem.food.fiber_g != null && <>Fiber {r1(barcodeItem.food.fiber_g)}g</>}
+                  {barcodeItem.food.sugar_g != null && <>{barcodeItem.food.fiber_g != null ? ' · ' : ''}Sugar {r1(barcodeItem.food.sugar_g)}g</>}
+                  {barcodeItem.food.sodium_mg != null && <>{(barcodeItem.food.fiber_g != null || barcodeItem.food.sugar_g != null) ? ' · ' : ''}Sodium {r1(barcodeItem.food.sodium_mg)}mg</>}
+                  {' '}(per {barcodeItem.food.serving_size_label || `${barcodeItem.quantity.serving_grams_each}g`})
+                </div>
+              )}
+              {barcodeItem.food.ingredients_text && (
+                <div className="text-[10px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+                  <span className="uppercase tracking-[.12em]" style={{ color: 'var(--mute)' }}>Ingredients: </span>
+                  {barcodeItem.food.ingredients_text}
+                </div>
+              )}
+
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Quantity (g)</span>
+                <input type="number" min="1" step="1" value={barcodeGrams}
+                       onChange={(e) => setBarcodeGrams(e.target.value)}
+                       className="input w-full !py-2 mt-1 tabular-nums" aria-label="Quantity in grams" />
+              </label>
+
+              {/* Calculated totals for the entered quantity. */}
+              <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)' }}>
+                {bc?.totals ? (
+                  <>
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-black text-[22px] tabular-nums" style={{ color: 'var(--ink)' }}>
+                        {bc.totals.energy_kcal == null ? '—' : Math.round(bc.totals.energy_kcal)}
+                      </span>
+                      <span className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
+                        {bc.quantity.grams} g
+                      </span>
+                    </div>
+                    <div className="text-[10px] mt-1" style={{ color: 'var(--mute)' }}>
+                      P {r1(bc.totals.protein_g) ?? '—'} · C {r1(bc.totals.carb_g) ?? '—'} · F {r1(bc.totals.fat_g) ?? '—'}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[11px]" style={{ color: 'var(--faint)' }}>{barcodeErr || 'Working it out…'}</div>
+                )}
+              </div>
+
+              <Pressable onClick={commit} disabled={!bc?.totals || bc.totals.energy_kcal == null || busy}
+                         className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                {busy ? 'Adding…' : 'Log Food'}
+              </Pressable>
+            </div>
+          )}
+
+          {/* ── add product manually (barcode not found) ── */}
+          {manualAdd && (
+            <div className="space-y-3">
+              <div className="text-[11px]" style={{ color: 'var(--mute)' }}>
+                {manualBarcode
+                  ? <>Barcode <span className="tabular-nums font-semibold" style={{ color: 'var(--ink)' }}>{manualBarcode}</span> isn’t in the database. Enter what’s on the pack and it’ll be saved for next time.</>
+                  : 'Enter the details from the pack.'}
+              </div>
+
+              <input ref={labelFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
+                     onChange={(e) => scanLabel(e.target.files?.[0])} />
+              <Pressable onClick={() => labelFileRef.current?.click()} disabled={labelScanning}
+                         className="btn w-full !py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2">
+                <Icon name="camera" size={15} />
+                {labelScanning ? 'Reading label…' : 'Scan the label instead'}
+              </Pressable>
+              {labelNote && (
+                <div className="text-[10px]" style={{ color: 'var(--mute)' }}>{labelNote}</div>
+              )}
+              <div className="text-[9px] uppercase tracking-[.16em] text-center" style={{ color: 'var(--faint)' }}>or enter it yourself</div>
+
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Barcode</span>
+                <input value={manualBarcode} onChange={(e) => setManualBarcode(e.target.value.replace(/\D/g, ''))}
+                       inputMode="numeric" className="input w-full !py-2 mt-1 tabular-nums" aria-label="Barcode" />
+              </label>
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Product name *</span>
+                <input value={manualForm.name} onChange={(e) => setManualField('name', e.target.value)}
+                       className="input w-full !py-2 mt-1" aria-label="Product name" />
+              </label>
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Brand</span>
+                <input value={manualForm.brand} onChange={(e) => setManualField('brand', e.target.value)}
+                       className="input w-full !py-2 mt-1" aria-label="Brand" />
+              </label>
+              <div className="flex gap-3">
+                <label className="flex-1">
+                  <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Serving size (g) *</span>
+                  <input type="number" min="1" step="1" value={manualForm.servingGrams}
+                         onChange={(e) => setManualField('servingGrams', e.target.value)}
+                         className="input w-full !py-2 mt-1 tabular-nums" aria-label="Serving size in grams" />
+                </label>
+                <label className="flex-1">
+                  <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Serving label</span>
+                  <input value={manualForm.servingLabel} onChange={(e) => setManualField('servingLabel', e.target.value)}
+                         placeholder="e.g. 1 bar (40g)" className="input w-full !py-2 mt-1" aria-label="Serving label" />
+                </label>
+              </div>
+              <div className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>
+                Per that serving size
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['calories', 'Calories *'], ['protein', 'Protein (g) *'],
+                  ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *'],
+                  ['fiber', 'Fiber (g)'], ['sugar', 'Sugar (g)'],
+                  ['sodium', 'Sodium (mg)'],
+                ].map(([key, label]) => (
+                  <label key={key} className="block">
+                    <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>{label}</span>
+                    <input type="number" min="0" step="any" value={manualForm[key]}
+                           onChange={(e) => setManualField(key, e.target.value)}
+                           className="input w-full !py-2 mt-1 tabular-nums" aria-label={label} />
+                  </label>
+                ))}
+              </div>
+
+              {manualErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{manualErr}</div>}
+
+              <Pressable onClick={submitManual} disabled={manualBusy}
+                         className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                {manualBusy ? 'Saving…' : 'Save & continue'}
+              </Pressable>
+              <button onClick={() => { setManualAdd(false); setManualErr(''); }}
+                      className="w-full text-center text-[11px] underline" style={{ color: 'var(--mute)' }}>
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* ── quantity (name-search picker) ── */}
           {food && (
             <div className="space-y-4">
               <div>
                 <div className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>{food.name}</div>
-                <button onClick={() => { setFood(null); setResolved(null); }}
+                <button onClick={backToSearch}
                         className="text-[10px] underline mt-0.5" style={{ color: 'var(--mute)' }}>
                   change food
                 </button>
@@ -335,28 +689,26 @@ export default function FoodLogSheet({ open, onClose, onAdd }) {
             </div>
           )}
 
-          {err && !food && <div className="text-[11px] mt-2" style={{ color: 'var(--bad)' }}>{err}</div>}
+          {err && !food && !barcodeItem && !manualAdd && <div className="text-[11px] mt-2" style={{ color: 'var(--bad)' }}>{err}</div>}
         </div>
       </div>
 
       <BarcodeScanner
         open={scanning}
         onClose={() => setScanning(false)}
-        onScanned={(item) => {
+        onScanned={(item, code) => {
           setScanning(false);
-          if (!item) return;
-          // A scan already knows the product AND its serving, so it drops
-          // straight into the quantity step rather than back into search.
-          setFood({
-            source_id: item.food.source_id,
-            name: item.food.food_name,
-            brand: item.food.brand,
-            calories: item.food.energy_kcal,
-            portions: [],
-            oil_applicable: false,
-          });
-          setGrams(String(item.quantity.grams));
-          setPortionKey(null);
+          if (item) {
+            // A scan already knows the product AND its serving, so it drops
+            // straight into the confirm screen rather than back into search.
+            setBarcodeItem(item);
+            setBarcodeGrams(String(item.quantity.grams));
+          } else if (code) {
+            // Genuine miss (not indexed anywhere, including the live
+            // external lookup) — offer the manual-add fallback with the
+            // scanned code already filled in.
+            openManualAdd(code);
+          }
         }}
       />
     </div>

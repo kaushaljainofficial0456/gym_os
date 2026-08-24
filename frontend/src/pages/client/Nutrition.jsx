@@ -5,7 +5,6 @@ import { api } from '../../api.js';
 import { useFetch, useCountUp } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
-import BarcodeScanner from '../../components/BarcodeScanner.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 
 const r1 = (n) => Math.round(n * 10) / 10;
@@ -835,8 +834,16 @@ export default function Nutrition() {
   const [deleteLog, setDeleteLog] = useState(null);
   const [supplementsExpanded, setSupplementsExpanded] = useState(false);
   const [showAddSupplement, setShowAddSupplement] = useState(false);
-  const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
+  // Both scanner entry points (the camera icon and the "Scan Barcode" menu
+  // item below) open FoodLogSheet pre-launched into its scanner, instead of
+  // each running its own separate BarcodeScanner instance -- see the
+  // removed standalone <BarcodeScanner> further down for why: it fed a
+  // scan result into the free-text AI-estimate box (item.name, which
+  // doesn't even exist on the real response shape) and threw away the
+  // actual product data, instead of the confirm-quantity-log flow
+  // FoodLogSheet's barcode branch now provides.
+  const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
   const [listening, setListening] = useState(false);
   const [quickAddQuery, setQuickAddQuery] = useState('');
   const [quickAddResults, setQuickAddResults] = useState([]);
@@ -1095,7 +1102,7 @@ export default function Nutrition() {
               />
               <div className="flex items-center gap-1.5 shrink-0">
                 <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={startVoice} title="Voice input" style={{ background: listening ? t.accentDim : t.glass, color: listening ? t.accent : t.mute, border: `1px solid ${listening ? t.accent + '4D' : t.border}` }}>{listening ? '●' : '🎤'}</button>
-                <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={() => setBarcodeOpen(true)} title="Scan barcode" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>📷</button>
+                <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={() => { setFoodLogAutoScan(true); setFoodLogSheetOpen(true); }} title="Scan barcode" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>📷</button>
               </div>
             </div>
             {/* Search results dropdown */}
@@ -1386,7 +1393,7 @@ export default function Nutrition() {
                 </div>
               </button>
               {/* Scan Barcode */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setBarcodeOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setFoodLogAutoScan(true); setFoodLogSheetOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                 <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.goldDim, border: `1px solid ${t.gold}25` }}>📷</div>
                 <div>
                   <div className="font-grotesk text-sm font-bold">Scan Barcode</div>
@@ -1439,11 +1446,28 @@ export default function Nutrition() {
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
       <DeleteLogConfirm open={deleteLogOpen} log={deleteLog} onClose={() => { setDeleteLogOpen(false); setDeleteLog(null); }} onConfirm={deleteLogEntry} t={t} />
 
-      {/* ══════ BARCODE SCANNER ══════ */}
-      <BarcodeScanner open={barcodeOpen} onClose={() => setBarcodeOpen(false)} onScanned={(item) => { setBarcodeOpen(false); if (item) { setAiText(item.name || ''); setToast(`Found: ${item.name || 'Unknown'}`); } }} />
-
-      {/* ══════ FOOD LOG SHEET ══════ */}
-      <FoodLogSheet open={foodLogSheetOpen} onClose={() => setFoodLogSheetOpen(false)} onAdd={(entry) => { setFoodLogSheetOpen(false); home.reload(); setToast('Food logged ✓'); }} />
+      {/* ══════ FOOD LOG SHEET (search, or scan a barcode) ══════ */}
+      <FoodLogSheet
+        open={foodLogSheetOpen}
+        autoScan={foodLogAutoScan}
+        onClose={() => { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }}
+        onAdd={async (entry) => {
+          // Same endpoint + body shape every other "log this to today" action
+          // in this file already uses (e.g. the quick-add food chips above).
+          await api(`/nutrition/clients/${clientId}/meals/log`, {
+            method: 'POST',
+            body: JSON.stringify({
+              name: entry.name, slot: 'Snack',
+              calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
+              source: 'manual', eaten: true,
+            }),
+          });
+          setFoodLogSheetOpen(false);
+          setFoodLogAutoScan(false);
+          home.reload();
+          setToast('Food logged ✓');
+        }}
+      />
     </div>
   );
 }

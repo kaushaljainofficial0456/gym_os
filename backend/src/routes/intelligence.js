@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireAuth, orgScope } from '../auth.js';
 import { rateLimit } from '../rateLimit.js';
+import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
 import { track } from '../services/events.js';
@@ -21,9 +22,10 @@ import { parseQuantity, foodBase } from '../services/intelligence/units.js';
 import { estimateBurn, burnModelAvailable } from '../services/burnEstimator.js';
 import {
   searchFoods as searchFoodModel,
-  estimateFromBarcode,
   modelAvailable as foodModelAvailable,
+  cleanCode, canonicalEan13,
 } from '../services/foodEstimator.js';
+import { resolveBarcodeProduct, buildBarcodeResponse, cacheProduct, foodRowToRecord } from '../services/barcodeLookup.js';
 import { resolveFood, searchFoods } from '../services/intelligence/foodSearch.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 import { computeNutrition, sumNutrition } from '../services/intelligence/nutrition.js';
@@ -298,25 +300,92 @@ export default function intelligenceRoutes(db) {
     res.json(result);
   });
 
+  // Live external lookups only happen on a genuine local+cache miss, but a
+  // tighter cap than the router-wide 240/min still matters: each miss can
+  // trigger an outbound HTTP call to a third-party API, which is the one
+  // part of this route that isn't just reading local data.
+  const barcodeLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
+
   // ---------------- barcode scan -> auto-log (CONTRACT §3.6) ----------------
   // Exact-key lookup, NOT ranked search: a scanned code either matches a
-  // product or it does not. A miss is a 404 so the client falls back to
-  // name search -- never a substituted "closest" food, which for a barcode
-  // would be a confidently wrong product.
-  r.get('/foods/barcode/:code', async (req, res) => {
+  // product or it does not -- never a substituted "closest" food, which for
+  // a barcode would be a confidently wrong product. Three sources, in
+  // order (see barcodeLookup.js's header): the DB cache, the local
+  // snapshot this app ships, then a live external API as a last resort
+  // (result cached for next time). Still a plain 404 on a genuine miss
+  // everywhere, so the client's existing fallback (search by name, or
+  // "add product manually") is unchanged.
+  r.get('/foods/barcode/:code', barcodeLimit, async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const servings = Number(req.query.servings) > 0 ? Number(req.query.servings) : 1;
-    const result = estimateFromBarcode(req.params.code, servings);
-    if (!result) {
-      return res.status(404).json({
-        error: 'Barcode not recognised',
+    const { record, reason } = await resolveBarcodeProduct(db, req.params.code);
+    if (!record) {
+      return res.status(reason === 'invalid_barcode' ? 400 : 404).json({
+        error: reason === 'invalid_barcode' ? 'Invalid barcode' : 'Barcode not recognised',
         barcode: req.params.code,
-        // Open Food Facts is crowd-sourced, so a real product in the user's
-        // hand can legitimately be unindexed. Tell the client what to do.
-        fallback: 'search_by_name',
+        reason: reason || 'not_found',
+        // Open Food Facts is crowd-sourced and the live fallback can also
+        // fail (network/timeout/rate-limit) -- either way, the client's
+        // next move is the same: let the user search by name or add the
+        // product by hand.
+        fallback: 'manual_entry',
       });
     }
-    res.json(result);
+    res.json(buildBarcodeResponse(record, servings));
+  });
+
+  // ---------------- barcode scan miss -> manual product save ----------------
+  // "Add product manually" fallback (CONTRACT §3.6's not-indexed path).
+  // Saved as the SAME kind of global, barcode-keyed cache row an external
+  // API hit would produce (see barcodeLookup.js), so a later scan of this
+  // exact barcode -- by this client or any other -- resolves it from the
+  // DB cache without ever touching the external API. Returns the identical
+  // food-v1 envelope the GET lookup does, so the frontend can feed it into
+  // the same confirm-quantity screen either way.
+  r.post('/foods/barcode/:code/manual', barcodeLimit, validate(schemas.manualBarcodeProduct), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    // Validate BEFORE canonicalizing -- canonicalEan13 left-pads with
+    // zeros, so an empty/garbage code would otherwise silently turn into a
+    // plausible-looking 13-digit string and pass the length check below.
+    const cleaned = cleanCode(req.params.code);
+    if (!cleaned || cleaned.length < 8 || cleaned.length > 14) {
+      return res.status(400).json({ error: 'Invalid barcode' });
+    }
+    const barcode = canonicalEan13(cleaned);
+    const b = req.body;
+    const factor = 100 / b.serving_grams; // entered values are per-serving; store per-100g like every other source
+    const record = {
+      source: 'PACKAGING_LABEL',
+      barcode,
+      // No `off:` source_id -- that prefix means "verified against Open
+      // Food Facts" (see foodRowToRecord). This is a user's own transcription
+      // of their pack; `barcode` alone is the identifier it's cached/looked
+      // up by, and claiming OFF provenance for typed-in data would be
+      // exactly the kind of misattribution this feature must avoid.
+      source_id: null,
+      food_name: b.name.trim(),
+      brand: b.brand?.trim() || null,
+      category: null,
+      cuisine: 'PACKAGED',
+      cooking_state: 'ready_to_eat',
+      serving_size_label: b.serving_label?.trim() || `${b.serving_grams} g`,
+      serving_grams: b.serving_grams,
+      energy_kcal: b.calories * factor,
+      protein_g: b.protein * factor,
+      fat_g: b.fat * factor,
+      carb_g: b.carbs * factor,
+      fiber_g: b.fiber != null ? b.fiber * factor : null,
+      sugar_g: b.sugar != null ? b.sugar * factor : null,
+      sodium_mg: b.sodium != null ? b.sodium * factor : null,
+      calcium_mg: null,
+      iron_mg: null,
+      ingredients_text: null,
+      image_url: null,
+    };
+    const saved = await cacheProduct(db, record);
+    const servings = Number(req.query.servings) > 0 ? Number(req.query.servings) : 1;
+    await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'barcode_product_added_manually', data: { clientId: c.id, barcode } });
+    res.status(201).json(buildBarcodeResponse(foodRowToRecord(saved), servings));
   });
 
   // ---------------- model-backed food search (CONTRACT §3.1) ----------------

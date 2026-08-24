@@ -118,6 +118,26 @@ export const schemas = {
     taken_at: z.string().optional(),
     is_before: z.boolean().default(false)
   }),
+  // "Add product manually" -- barcode scanned/typed but not found in the
+  // local snapshot, DB cache, or the external API. serving_grams is
+  // required (not optional) so the entered macros -- which the user reads
+  // straight off the pack, i.e. PER THAT SERVING -- can be converted to the
+  // same per-100g basis every other barcode source uses (see
+  // barcodeLookup.js's cacheProduct / resolveServing), rather than
+  // introducing a second nutrition representation into the same table.
+  manualBarcodeProduct: z.object({
+    name: z.string().min(1).max(100),
+    brand: z.string().max(80).optional(),
+    serving_grams: z.number().positive().max(5000),
+    serving_label: z.string().max(60).optional(),
+    calories: z.number().min(0).max(10000),
+    protein: z.number().min(0).max(1000),
+    carbs: z.number().min(0).max(1000),
+    fat: z.number().min(0).max(1000),
+    fiber: z.number().min(0).max(1000).optional(),
+    sugar: z.number().min(0).max(1000).optional(),
+    sodium: z.number().min(0).max(100000).optional() // mg
+  }),
   measurementUpdate: z.object({
     weight: z.number().positive().max(500).optional(),
     target_weight: z.number().positive().max(500).optional(),

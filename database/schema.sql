@@ -352,7 +352,14 @@ CREATE TABLE IF NOT EXISTS foods (
   source   TEXT NOT NULL DEFAULT 'USER_ENTERED', -- VERIFIED_DATABASE | USER_ENTERED | PACKAGING_LABEL | OCR_EXTRACTED | ESTIMATED
   category TEXT,
   cuisine  TEXT DEFAULT 'INDIAN',
-  is_global INTEGER NOT NULL DEFAULT 0  -- 1 => GLOBAL library; org_id+!global => GYM FOODS
+  is_global INTEGER NOT NULL DEFAULT 0, -- 1 => GLOBAL library; org_id+!global => GYM FOODS
+  -- Barcode scan cache (org_id/client_id NULL, is_global=1): one row per
+  -- physical product, shared by every client who scans it, populated from
+  -- either a live external lookup or a manual "add product" save. See
+  -- backend/src/services/barcodeLookup.js.
+  barcode  TEXT,
+  ingredients_text TEXT,
+  image_url TEXT
  );
  CREATE INDEX IF NOT EXISTS idx_foods_scope ON foods(org_id, client_id, is_global);
  CREATE INDEX IF NOT EXISTS idx_foods_name ON foods(name);

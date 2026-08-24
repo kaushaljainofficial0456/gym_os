@@ -52,8 +52,14 @@ const {
 } = require(path.join(ML, 'models', 'skos-food-v1', 'foodEstimate.reference.js'));
 
 const {
-  BarcodeIndex, autoLogFromBarcode,
+  BarcodeIndex, autoLogFromBarcode, cleanCode, canonicalEan13, resolveServing,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'barcodeLookup.reference.js'));
+
+// Re-exported for barcodeLookup.js (live/DB-cache fallback layered on top of
+// this local snapshot): same code-cleaning and per-100g-scaling primitives
+// the static index uses, so an external-API or DB-cached hit is scaled
+// identically to a local-snapshot hit rather than duplicating that math.
+export { cleanCode, canonicalEan13, resolveServing };
 
 /* ------------------------------------------------------------------ */
 /*  Lazy singletons                                                    */

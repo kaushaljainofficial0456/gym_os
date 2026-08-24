@@ -89,6 +89,14 @@ export const config = {
   // Calorie model provider — validated above; missing/empty => safe baseline default.
   calorieModelProvider: providerParsed.ok ? providerParsed.value : DEFAULT_CALORIE_PROVIDER,
   sqlitePath: process.env.SQLITE_PATH || 'backend/data/physique.db',
+  // Live barcode lookup fallback (used only when a scanned code isn't in the
+  // static local snapshot or the DB cache — see barcodeLookup.js). Defaults
+  // to Open Food Facts' public v2 API: free, no key required, and the same
+  // data provenance as the pre-baked off_barcode_index.json snapshot this
+  // app already ships. FOOD_DATABASE_API_KEY is only for a differently
+  // configured provider that requires one — Open Food Facts does not.
+  foodDatabaseApiUrl: process.env.FOOD_DATABASE_API_URL || 'https://world.openfoodfacts.org/api/v2/product',
+  foodDatabaseApiKey: process.env.FOOD_DATABASE_API_KEY || null,
   // CORS: explicit allow-list. Empty in dev = localhost origins only.
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
     .split(',').map((s) => s.trim()).filter(Boolean)

@@ -45,13 +45,18 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
     try {
       const item = await api(`/intel/foods/barcode/${encodeURIComponent(code)}`);
       stop();
-      onScanned(item);
+      onScanned(item, code);
     } catch (e) {
-      // A miss is expected: Open Food Facts is crowd-sourced, so a real
-      // product can simply be unindexed. Say so plainly and keep going.
-      setStatus(e.status === 404 || /not recognis/i.test(e.message || '')
-        ? `Barcode ${code} isn’t in the database yet — search by name instead.`
+      // A miss is expected: even with a live external lookup behind this
+      // (see backend/src/services/barcodeLookup.js), a real product can
+      // legitimately be unindexed everywhere. Tell the caller so it can
+      // offer "add manually" with the code pre-filled, rather than leaving
+      // the scanner sitting on a dead-end status line.
+      const isMiss = e.status === 404 || e.status === 400;
+      setStatus(isMiss
+        ? `Barcode ${code} isn’t in the database yet.`
         : (e.message || 'Lookup failed'));
+      if (isMiss) onScanned(null, code);
     }
     setBusy(false);
   };
@@ -105,8 +110,15 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
   if (!open) return null;
 
   return (
+    // stopPropagation: this can be rendered inside another modal's own
+    // backdrop (e.g. FoodLogSheet, which closes itself on any click that
+    // reaches its outer div). Without this, tapping anything in here --
+    // "Find", the video frame, even the close button -- bubbled straight
+    // up and closed the parent sheet too, since nothing between here and
+    // there stops it.
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-         style={{ background: 'rgb(var(--bg-rgb) / .92)' }}>
+         style={{ background: 'rgb(var(--bg-rgb) / .92)' }}
+         onClick={(e) => e.stopPropagation()}>
       <div className="card w-full max-w-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Scan barcode</div>

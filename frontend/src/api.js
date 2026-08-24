@@ -29,6 +29,10 @@ export async function api(path, opts = {}) {
     const err = new Error(data.error || data.message || 'Request failed');
     err.issues = data.issues;
     err.status = res.status;
+    // Machine-readable failure reason some endpoints attach (e.g. barcode
+    // lookup's 'not_found' vs 'network_error' vs 'invalid_barcode') so a
+    // caller can branch without parsing the human-readable message text.
+    err.reason = data.reason;
     throw err;
   }
   return data;

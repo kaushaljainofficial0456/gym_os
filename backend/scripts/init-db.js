@@ -107,6 +107,11 @@ const MIGRATIONS = [
   ['clients', 'onboarding_completed', `onboarding_completed INTEGER NOT NULL DEFAULT 0`],
   // Backfill: existing clients are already in the system, mark as onboarded
   // (new clients created after this migration will start at 0)
+
+  // --- barcode scan cache (see backend/src/services/barcodeLookup.js) ---
+  ['foods', 'barcode', `barcode TEXT`],
+  ['foods', 'ingredients_text', `ingredients_text TEXT`],
+  ['foods', 'image_url', `image_url TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -141,6 +146,12 @@ function applySqliteMigrations(db) {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_foods_cooking_state
     ON foods(cooking_state)
+  `);
+  // One cached row per physical product (see barcode migration above).
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_foods_barcode
+    ON foods(barcode)
+    WHERE barcode IS NOT NULL
   `);
   // Backfill created_at for existing workout_logs (best-effort: date-based).
   db.exec(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
@@ -177,6 +188,11 @@ async function applyPgMigrations(pool) {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_foods_cooking_state
     ON foods(cooking_state)
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_foods_barcode
+    ON foods(barcode)
+    WHERE barcode IS NOT NULL
   `);
   await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
