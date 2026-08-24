@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
-import { useFetch, useCountUp } from '../../utils.js';
+import { useCountUp } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
@@ -438,271 +438,6 @@ function SectionHeader({ title, subtitle, action, t, kicker = false }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   CustomMealModal — preserved from existing implementation
-   ════════════════════════════════════════════════════════════════ */
-
-function CustomMealModal({ open, onClose, clientId, onSaved, toast, editMeal = null }) {
-  const { theme } = useTheme();
-  const t = T[theme] || T.dark;
-  const [mealName, setMealName] = useState('');
-  const [ingredients, setIngredients] = useState([]);
-  const [servings, setServings] = useState(1);
-  const [foodQuery, setFoodQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [loadingEdit, setLoadingEdit] = useState(false);
-
-  const isEdit = !!editMeal;
-
-  useEffect(() => {
-    if (!foodQuery.trim() || foodQuery.length < 2) { setSearchResults([]); return; }
-    let cancelled = false;
-    const t2 = setTimeout(async () => {
-      setSearching(true);
-      try { const res = await api(`/me/foods/search?q=${encodeURIComponent(foodQuery)}`); if (!cancelled) setSearchResults(res.foods || []); }
-      catch { if (!cancelled) setSearchResults([]); }
-      setSearching(false);
-    }, 300);
-    return () => { cancelled = true; clearTimeout(t2); };
-  }, [foodQuery]);
-
-  const totals = useMemo(() => {
-    let cal = 0, pro = 0, carb = 0, fat = 0;
-    for (const ing of ingredients) {
-      const f = ing.grams / 100;
-      cal += (ing.calories || 0) * f; pro += (ing.protein || 0) * f;
-      carb += (ing.carbs || 0) * f; fat += (ing.fat || 0) * f;
-    }
-    return { calories: r1(cal), protein: r1(pro), carbs: r1(carb), fat: r1(fat) };
-  }, [ingredients]);
-
-  const perServing = useMemo(() => {
-    const n = Math.max(1, Number(servings) || 1);
-    return { calories: r1(totals.calories / n), protein: r1(totals.protein / n), carbs: r1(totals.carbs / n), fat: r1(totals.fat / n) };
-  }, [totals, servings]);
-
-  useEffect(() => {
-    if (open && editMeal) {
-      setMealName(editMeal.name || ''); setServings(1); setIngredients([]); setLoadingEdit(true);
-      api(`/me/meals/${editMeal.id}/items`).then((r) => {
-        setIngredients((r.items || []).map((it) => ({
-          name: it.name, calories: it.quantity > 0 ? (it.calories / it.quantity) * 100 : 0,
-          protein: it.quantity > 0 ? (it.protein / it.quantity) * 100 : 0,
-          carbs: it.quantity > 0 ? (it.carbs / it.quantity) * 100 : 0,
-          fat: it.quantity > 0 ? (it.fat / it.quantity) * 100 : 0, grams: it.quantity || 100
-        })));
-      }).catch(() => {}).finally(() => setLoadingEdit(false));
-    } else if (open && !editMeal) { setMealName(''); setIngredients([]); setServings(1); }
-  }, [open, editMeal?.id]);
-
-  const addIngredient = (food) => {
-    setIngredients((p) => [...p, { foodId: food.id, name: food.name, calories: Number(food.calories) || 0, protein: Number(food.protein) || 0, carbs: Number(food.carbs) || 0, fat: Number(food.fat) || 0, grams: 100 }]);
-    setFoodQuery('');
-  };
-
-  const canSave = mealName.trim() && ingredients.length > 0 && ingredients.every((i) => i.grams > 0) && Number(servings) > 0;
-
-  const saveAndLog = async () => {
-    if (!canSave) return; setSaving(true);
-    try {
-      const n = Math.max(1, Number(servings) || 1);
-      if (isEdit) {
-        await api(`/me/meals/${editMeal.id}`, { method: 'PUT', body: JSON.stringify({ name: mealName.trim().slice(0, 80), calories: r1(totals.calories / n), protein: r1(totals.protein / n), carbs: r1(totals.carbs / n), fat: r1(totals.fat / n), foods: ingredients.map((i) => `${i.grams}g ${i.name}`).join(', ') }) });
-        toast('Meal updated ✓');
-      } else {
-        const res = await api('/me/meals', { method: 'POST', body: JSON.stringify({ name: mealName.trim().slice(0, 80), slot: 'Meal', calories: r1(totals.calories / n), protein: r1(totals.protein / n), carbs: r1(totals.carbs / n), fat: r1(totals.fat / n), foods: ingredients.map((i) => `${i.grams}g ${i.name}`).join(', ') }) });
-        if (res?.id) {
-          for (const ing of ingredients) await api(`/me/meals/${res.id}/items`, { method: 'POST', body: JSON.stringify({ name: ing.name, quantity: ing.grams }) }).catch(() => {});
-          await api(`/me/meals/${res.id}/log`, { method: 'POST' }).catch(() => {});
-        }
-        toast('Custom meal saved & logged ✓');
-      }
-      onClose(); setMealName(''); setIngredients([]); setServings(1); setFoodQuery(''); onSaved();
-    } catch (e) { toast(e.message || 'Could not save meal'); }
-    setSaving(false);
-  };
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
-      <div className="w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden rounded-3xl anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-        {/* Header */}
-        <div className="p-5 flex items-center justify-between shrink-0" style={{ borderBottom: `1px solid ${t.border}` }}>
-          <div>
-            <div className="font-grotesk font-bold" style={{ color: t.ink }}>{isEdit ? 'Edit meal' : 'Customize your meal'}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>{isEdit ? 'Update your recipe' : 'Build a recipe from ingredients'}</div>
-          </div>
-          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div>
-            <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Meal Name</label>
-            <input className="w-full px-3.5 py-2.5 rounded-xl font-grotesk text-sm outline-none transition-colors" placeholder="e.g. Paneer Rice Bowl" value={mealName} onChange={(e) => setMealName(e.target.value)} autoFocus style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Ingredients</label>
-              {ingredients.length > 0 && <span className="font-grotesk text-[10px]" style={{ color: t.faint }}>{ingredients.length} item{ingredients.length !== 1 ? 's' : ''}</span>}
-            </div>
-
-            {ingredients.length > 0 && (
-              <div className="space-y-1.5 mb-2">
-                {ingredients.map((ing, idx) => (
-                  <div key={idx} className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                    <span className="flex-1 min-w-0">
-                      <span className="block font-grotesk text-[13px] font-semibold truncate" style={{ color: t.ink }}>{ing.name}</span>
-                      <span className="text-[9px]" style={{ color: t.mute }}>{ing.calories} kcal · P{ing.protein} C{ing.carbs} F{ing.fat} <span style={{ color: t.faint }}>(per 100g)</span></span>
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <input type="number" min="1" step="10" className="w-16 text-right px-1.5 py-1 rounded-lg font-grotesk text-[11px] outline-none" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} value={ing.grams} onChange={(e) => { const n = Number(e.target.value); if (n >= 0) setIngredients((p) => p.map((x, i) => i === idx ? { ...x, grams: n } : x)); }} aria-label={`${ing.name} grams`} />
-                      <span className="text-[10px] w-3" style={{ color: t.mute }}>g</span>
-                      <button className="text-[11px] ml-1 transition-colors" style={{ color: t.danger + 'AA' }} onClick={() => setIngredients((p) => p.filter((_, i) => i !== idx))} aria-label={`Remove ${ing.name}`}>✕</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="relative">
-              <input className="w-full px-3.5 py-2.5 rounded-xl font-grotesk text-sm outline-none transition-colors" placeholder="+ Add ingredient (search foods…)" value={foodQuery} onChange={(e) => setFoodQuery(e.target.value)} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} />
-              {searchResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-xl z-10 space-y-0.5 p-1" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
-                  {searchResults.map((f) => (
-                    <button key={f.id} onClick={() => addIngredient(f)} className="w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition-colors" style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <span className="min-w-0">
-                        <span className="block text-[12px] font-grotesk font-semibold truncate">{f.name}</span>
-                        <span className="text-[9px]" style={{ color: t.mute }}>{f.source || 'food'} · {r1(f.calories)} kcal/100g</span>
-                      </span>
-                      <span className="text-[10px] shrink-0 font-semibold" style={{ color: t.gold }}>+ Add</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {foodQuery.length >= 2 && searchResults.length === 0 && !searching && (
-                <div className="absolute left-0 right-0 top-full mt-1 rounded-xl z-10 p-3 text-center text-[11px]" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 12px 40px rgba(0,0,0,0.4)', color: t.mute }}>No foods found for "{foodQuery}"</div>
-              )}
-              {searching && foodQuery.length >= 2 && (
-                <div className="absolute left-0 right-0 top-full mt-1 rounded-xl z-10 p-3 text-center text-[11px]" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 12px 40px rgba(0,0,0,0.4)', color: t.mute }}>Searching…</div>
-              )}
-            </div>
-          </div>
-
-          {ingredients.length > 0 && (
-            <div className="rounded-xl p-3.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-              <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.mute }}>Recipe total</div>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                {[['Calories', totals.calories, 'kcal'], ['Protein', totals.protein, 'g'], ['Carbs', totals.carbs, 'g'], ['Fat', totals.fat, 'g']].map(([l, v, u]) => (
-                  <div key={l}><div className="font-grotesk font-bold text-sm" style={{ color: t.ink }}>{v}</div><div className="text-[9px]" style={{ color: t.mute }}>{u}</div></div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {ingredients.length > 0 && (
-            <div className="flex items-center gap-3">
-              <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold shrink-0" style={{ color: t.mute }}>Servings</label>
-              <input type="number" min="1" step="1" className="w-16 text-center px-2 py-1.5 rounded-lg font-grotesk text-sm outline-none" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} value={servings} onChange={(e) => setServings(Math.max(1, parseInt(e.target.value, 10) || 1))} />
-              <span className="text-[10px]" style={{ color: t.faint }}>= {r1(totals.calories / Math.max(1, Number(servings) || 1))} kcal / serving</span>
-            </div>
-          )}
-
-          {ingredients.length > 0 && (
-            <div className="rounded-xl p-3.5" style={{ background: t.goldDim, border: `1px solid ${t.gold}30` }}>
-              <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.gold }}>Per serving ({Math.max(1, Number(servings) || 1)} servings)</div>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                {[['Calories', perServing.calories, 'kcal'], ['Protein', perServing.protein, 'g'], ['Carbs', perServing.carbs, 'g'], ['Fat', perServing.fat, 'g']].map(([l, v, u]) => (
-                  <div key={l}><div className="font-grotesk font-bold text-sm" style={{ color: t.gold }}>{v}</div><div className="text-[9px]" style={{ color: t.mute }}>{u}</div></div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {ingredients.length === 0 && (
-            <div className="text-center py-6 text-xs" style={{ color: t.mute }}>Search for foods above to start building your meal.</div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-5 shrink-0" style={{ borderTop: `1px solid ${t.border}` }}>
-          <button className="w-full py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]" disabled={!canSave || saving || loadingEdit} onClick={saveAndLog}
-            style={{ background: canSave ? t.accent : t.surface, color: canSave ? 'var(--accent-contrast)' : t.mute, border: `1px solid ${canSave ? t.accent : t.border}`, opacity: canSave ? 1 : 0.5, cursor: canSave ? 'pointer' : 'not-allowed' }}>
-            {saving ? 'Saving…' : loadingEdit ? 'Loading…' : isEdit ? 'Update meal' : 'Save & log 1 serving'}
-          </button>
-          {canSave && <div className="text-center text-[10px] mt-2" style={{ color: t.faint }}>1 serving = {perServing.calories} kcal · P{perServing.protein}g · C{perServing.carbs}g · F{perServing.fat}g</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   SavedMealsModal — preserved from existing implementation
-   ════════════════════════════════════════════════════════════════ */
-
-function SavedMealsModal({ open, onClose, onEdit, toast, onRefresh }) {
-  const { theme } = useTheme();
-  const t = T[theme] || T.dark;
-  const [meals, setMeals] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [deleting, setDeleting] = useState(null);
-
-  const load = async () => { setLoading(true); setError(null); try { const res = await api('/me/meals'); setMeals(res.meals || []); } catch (e) { setError(e.message); } setLoading(false); };
-  useEffect(() => { if (open) load(); }, [open]);
-
-  const logMeal = async (m) => { try { await api(`/me/meals/${m.id}/log`, { method: 'POST' }); toast(`Logged ${m.name} ✓`); onRefresh(); onClose(); } catch (e) { toast(e.message); } };
-  const confirmDelete = (m) => { if (!window.confirm(`Delete "${m.name}"?\n\nIf you've logged it today, today's entry will also be removed. Previous nutrition history will be preserved.`)) return; deleteMeal(m.id); };
-  const deleteMeal = async (id) => { setDeleting(id); try { await api(`/me/meals/${id}`, { method: 'DELETE' }); setMeals((p) => p.filter((m) => m.id !== id)); toast('Meal deleted'); onRefresh(); } catch (e) { toast(e.message); } setDeleting(null); };
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
-      <div className="w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden rounded-3xl anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-        <div className="p-5 flex items-center justify-between shrink-0" style={{ borderBottom: `1px solid ${t.border}` }}>
-          <div>
-            <div className="font-grotesk font-bold" style={{ color: t.ink }}>Saved meals</div>
-            <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>Quick log from your recipes</div>
-          </div>
-          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5">
-          {loading && <div className="text-center py-8 text-xs" style={{ color: t.mute }}>Loading saved meals…</div>}
-          {error && <div className="text-center py-8"><div className="text-xs mb-2" style={{ color: t.danger }}>Couldn't load your saved meals.</div><button className="px-3 py-1.5 rounded-lg text-xs font-grotesk" onClick={load} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>Retry</button></div>}
-          {!loading && !error && meals.length === 0 && (
-            <div className="text-center py-8 space-y-3">
-              <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center text-2xl" style={{ background: t.surface, border: `1px solid ${t.border}` }}>🍽️</div>
-              <div className="text-sm font-grotesk font-semibold" style={{ color: t.ink }}>No saved meals yet</div>
-              <div className="text-[11px]" style={{ color: t.mute }}>Create a custom meal and it will appear here.</div>
-            </div>
-          )}
-          {!loading && !error && meals.length > 0 && (
-            <div className="space-y-2">
-              {meals.map((m) => (
-                <div key={m.id} className="rounded-xl p-3.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                  <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>{m.name}</div>
-                  <div className="text-[10px] mb-2.5" style={{ color: t.mute }}>{m.calories} kcal · P{m.protein}g · C{m.carbs}g · F{m.fat}g{m.item_count ? ` · ${m.item_count} items` : ''}</div>
-                  <div className="flex gap-2">
-                    <button className="flex-1 py-2 rounded-xl font-grotesk text-[11px] font-bold transition-all active:scale-[.97]" onClick={() => logMeal(m)} style={{ background: t.accent, color: 'var(--accent-contrast)' }}>Log 1 Serving</button>
-                    <button className="px-3 py-2 rounded-xl font-grotesk text-[11px] font-semibold transition-all active:scale-[.97]" onClick={() => { onClose(); onEdit(m); }} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>Edit</button>
-                    <button className="px-3 py-2 rounded-xl font-grotesk text-[11px] font-semibold transition-all active:scale-[.97]" disabled={deleting === m.id} onClick={() => confirmDelete(m)} style={{ background: 'transparent', border: `1px solid ${t.danger}30`, color: t.danger + 'CC' }}>{deleting === m.id ? '…' : 'Delete'}</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
    EDIT LOG MODAL — edit quantity of a logged food entry
    ════════════════════════════════════════════════════════════════ */
 
@@ -817,29 +552,10 @@ export default function Nutrition() {
   const [meals, setMeals] = useState(null);
   const [water, setWater] = useState(null);
   const [supTaken, setSupTaken] = useState({});
-    const [aiResult, setAiResult] = useState(null);
-  const [estimating, setEstimating] = useState(false);
-  const [logging, setLogging] = useState(false);
   const [toast, setToast] = useState('');
   const [supList, setSupList] = useState(null);
-  const foods = useFetch(() => api('/me/foods'));
-  const myMeals = useFetch(() => api('/me/meals'));
-  const [foodForm, setFoodForm] = useState({ name: '', unit: '', serving: '', calories: '', protein: '', carbs: '', fat: '' });
-  const [mealForm, setMealForm] = useState({ slot: 'Meal', name: '', time: '', calories: '', protein: '', carbs: '', fat: '', foods: '' });
-  const [saving, setSaving] = useState(false);
-  const [openSection, setOpenSection] = useState(null);
-  const [manageOpen, setManageOpen] = useState(false);
   const [supForm, setSupForm] = useState({ name: '', dose: '' });
   const [savingSup, setSavingSup] = useState(false);
-  const [composing, setComposing] = useState(null);
-  const [items, setItems] = useState([]);
-  const [foodSearch, setFoodSearch] = useState('');
-  const [foodQty, setFoodQty] = useState(1);
-  const [chosenFood, setChosenFood] = useState(null);
-  const [customMealOpen, setCustomMealOpen] = useState(false);
-  const [editMeal, setEditMeal] = useState(null);
-  const [savedMealsOpen, setSavedMealsOpen] = useState(false);
-  const [logFoodMenuOpen, setLogFoodMenuOpen] = useState(false);
   const [targetSetupOpen, setTargetSetupOpen] = useState(false);
   const [editLogOpen, setEditLogOpen] = useState(false);
   const [editLog, setEditLog] = useState(null);
@@ -848,21 +564,16 @@ export default function Nutrition() {
   const [supplementsExpanded, setSupplementsExpanded] = useState(false);
   const [mealsExpanded, setMealsExpanded] = useState(false);
   const [showAddSupplement, setShowAddSupplement] = useState(false);
+  // The single "Log Food" entry point (header button): search, voice,
+  // barcode scan, manual entry and label-scan all live inside FoodLogSheet
+  // itself now -- was three parallel, half-duplicate flows on this page
+  // (an inline search box, a separate free-text AI-estimate box, and a
+  // 6-option "how do you want to log" menu on top of THOSE) that FoodLogSheet
+  // already covered better on its own. Saving a custom food/meal template
+  // for reuse is gone too, on request -- whatever gets logged shows up in
+  // My Diet, which is now the only place saved/logged items live.
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
-  // Both scanner entry points (the camera icon and the "Scan Barcode" menu
-  // item below) open FoodLogSheet pre-launched into its scanner, instead of
-  // each running its own separate BarcodeScanner instance -- see the
-  // removed standalone <BarcodeScanner> further down for why: it fed a
-  // scan result into the free-text AI-estimate box (item.name, which
-  // doesn't even exist on the real response shape) and threw away the
-  // actual product data, instead of the confirm-quantity-log flow
-  // FoodLogSheet's barcode branch now provides.
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [quickAddQuery, setQuickAddQuery] = useState('');
-  const [quickAddResults, setQuickAddResults] = useState([]);
-  const [quickAddSearching, setQuickAddSearching] = useState(false);
-  const [quickAddFocused, setQuickAddFocused] = useState(false);
 
   const data = home.data;
   const clientId = data?.client?.id;
@@ -884,21 +595,6 @@ export default function Nutrition() {
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
-
-  // Quick Add search debounce
-  useEffect(() => {
-    const term = quickAddQuery.trim();
-    if (term.length < 2) { setQuickAddResults([]); setQuickAddSearching(false); return; }
-    setQuickAddSearching(true);
-    let dead = false;
-    const h = setTimeout(() => {
-      api(`/me/foods/search?q=${encodeURIComponent(term)}`)
-        .then((r) => { if (!dead) setQuickAddResults(r.foods || []); })
-        .catch(() => { if (!dead) setQuickAddResults([]); })
-        .finally(() => { if (!dead) setQuickAddSearching(false); });
-    }, 200);
-    return () => { dead = true; clearTimeout(h); };
-  }, [quickAddQuery]);
 
   if (home.loading) return <Spinner label="Loading your fuel plan…" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
@@ -935,84 +631,6 @@ export default function Nutrition() {
     await api(`/tracking/clients/${clientId}/water`, { method: 'POST', body: JSON.stringify({ litres: next }) }).catch(() => home.reload());
   };
 
-  // aiText was a second, separate input just for the free-text estimate --
-  // now folded into quickAddQuery (the one Log Food search box) so voice,
-  // barcode and typed search all feed the same field instead of three
-  // inputs that didn't talk to each other.
-  const estimate = async () => {
-    if (!quickAddQuery.trim()) return; setEstimating(true);
-    try { const res = await api(`/nutrition/clients/${clientId}/meals/ai-estimate`, { method: 'POST', body: JSON.stringify({ text: quickAddQuery }) }); setAiResult(res); }
-    catch (e) { setToast(e.message); } setEstimating(false);
-  };
-
-  const logAi = async () => {
-    if (!aiResult) return; setLogging(true);
-    try {
-      await api(`/nutrition/clients/${clientId}/meals/log`, { method: 'POST', body: JSON.stringify({ name: quickAddQuery.slice(0, 100), slot: 'Snack', calories: aiResult.total.calories, protein: aiResult.total.protein, carbs: aiResult.total.carbs, fat: aiResult.total.fat, source: 'ai', estimate: true, eaten: true }) });
-      setToast('Meal logged ✓'); setQuickAddQuery(''); setAiResult(null); home.reload();
-    } catch (e) { setToast(e.message); } setLogging(false);
-  };
-
-  const startVoice = () => {
-    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!SR) { setToast('Voice input is not supported in this browser'); return; }
-    const rec = new SR();
-    rec.lang = 'en-US';
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.continuous = false;
-    setListening(true);
-    setLogFoodMenuOpen(false);
-    rec.onresult = (e) => {
-      const text = e.results[0][0].transcript;
-      setQuickAddQuery(text);
-      setListening(false);
-      setToast(`Heard: "${text}"`);
-    };
-    rec.onerror = (e) => {
-      setListening(false);
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        setToast('Microphone permission is required for voice input');
-      } else if (e.error === 'no-speech') {
-        setToast('No speech detected — try again');
-      } else if (e.error === 'aborted') {
-        // User cancelled — no toast needed
-      } else {
-        setToast('Voice input failed — please try again');
-      }
-    };
-    rec.onend = () => setListening(false);
-    try {
-      rec.start();
-    } catch (err) {
-      setListening(false);
-      setToast('Could not start voice input');
-    }
-  };
-
-  const openComposer = async (m) => {
-    setComposing(m); setFoodSearch(''); setFoodQty(1); setChosenFood(null);
-    try { const r = await api(`/me/meals/${m.id}/items`); setItems(r.items || []); } catch (e) { setToast(e.message || 'Could not open meal'); }
-  };
-
-  const reloadItems = async () => { try { const r = await api(`/me/meals/${composing.id}/items`); setItems(r.items || []); myMeals.reload(); } catch (e) { setToast(e.message); } };
-  const setItemQty = async (it, q) => { const n = Number(q); if (!n || n <= 0) return; try { await api(`/me/meals/${composing.id}/items/${it.id}`, { method: 'PUT', body: JSON.stringify({ quantity: n }) }); await reloadItems(); } catch (e) { setToast(e.message); } };
-  const addItem = async (f) => { try { await api(`/me/meals/${composing.id}/items`, { method: 'POST', body: JSON.stringify({ food_id: f.id, quantity: Number(foodQty) || 1 }) }); setChosenFood(null); setFoodQty(1); setFoodSearch(''); await reloadItems(); setToast(`${f.name} added`); } catch (e) { setToast(e.message); } };
-  const allFoods = [...(foods.data?.mine || []).map((f) => ({ ...f, scope: 'MY FOOD' })), ...(foods.data?.gym || []).map((f) => ({ ...f, scope: 'GYM' })), ...(foods.data?.global || []).map((f) => ({ ...f, scope: 'GLOBAL' }))];
-
-  const logQuickAddFood = async (food) => {
-    try {
-      await api(`/nutrition/clients/${clientId}/meals/log`, {
-        method: 'POST',
-        body: JSON.stringify({ name: food.name, slot: 'Snack', calories: food.calories || 0, protein: food.protein || 0, carbs: food.carbs || 0, fat: food.fat || 0, source: 'quick_add', eaten: true })
-      });
-      setToast(`Logged ${food.name} ✓`);
-      setQuickAddQuery('');
-      setQuickAddResults([]);
-      home.reload();
-    } catch (e) { setToast(e.message); }
-  };
-
   return (
     <div className="space-y-5 pb-24">
 
@@ -1033,7 +651,7 @@ export default function Nutrition() {
             </button>
           </div>
         </div>
-        <button onClick={() => setLogFoodMenuOpen(true)} className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95" style={{ background: t.accent, color: 'var(--accent-contrast)', boxShadow: `0 4px 15px color-mix(in srgb, ${t.accent} 40%, transparent)` }}>
+        <button onClick={() => setFoodLogSheetOpen(true)} className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95" style={{ background: t.accent, color: 'var(--accent-contrast)', boxShadow: `0 4px 15px color-mix(in srgb, ${t.accent} 40%, transparent)` }}>
           <span className="text-sm leading-none">+</span> Log Food
         </button>
       </div>
@@ -1069,252 +687,6 @@ export default function Nutrition() {
           <button onClick={() => setMealsExpanded(!mealsExpanded)} className="w-full mt-3 py-2 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: `${t.accentDim}` }}>
             {mealsExpanded ? 'Show less' : `See more (${mealState.length - 2} more)`}
           </button>
-        )}
-      </div>
-
-      {/* ══════ LOG FOOD ══════ */}
-      <div id="log-food-section" className="relative overflow-hidden rounded-3xl p-5 scroll-mt-20" style={{ background: `linear-gradient(135deg, ${t.surface} 0%, ${t.bg} 100%)`, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        {/* Subtle accent glow */}
-        <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, color-mix(in srgb, ${t.accent} 14%, transparent), transparent 70%)` }} />
-        <div className="relative z-10">
-          {/* Was 4 separate cards (AI text estimate, Quick Add search, My
-              Foods, My Meals) always visible at once -- now one search box
-              that does both jobs: type a food name to search & log the
-              real thing, or a plain-language description ("2 rotis, dal
-              and curd") and hit Estimate for an AI macro breakdown. Voice
-              and barcode both feed the SAME field now too (previously a
-              separate "What did you eat?" text box neither of them wrote
-              into). My Foods/My Meals -- genuinely different jobs (saving
-              your OWN foods with custom macros, building a meal from
-              multiple items) -- are preserved, not deleted, just tucked
-              under "Saved foods & meals" below instead of two more
-              always-open cards. */}
-          <SectionHeader title="Log Food" kicker subtitle="Search a food, or describe your meal for an AI estimate" t={t} />
-          <div className="relative">
-            <div className="flex items-center gap-2">
-              <input
-                className="flex-1 px-4 py-3 rounded-xl font-grotesk text-sm outline-none"
-                placeholder="Search food or type what you ate..."
-                value={quickAddQuery}
-                onChange={(e) => setQuickAddQuery(e.target.value)}
-                onFocus={() => setQuickAddFocused(true)}
-                onBlur={() => setTimeout(() => setQuickAddFocused(false), 200)}
-                onKeyDown={(e) => e.key === 'Enter' && (quickAddResults.length > 0 ? logQuickAddFood(quickAddResults[0]) : estimate())}
-                style={{ background: t.glass, border: `1px solid ${quickAddFocused ? 'color-mix(in srgb, var(--accent) 66%, transparent)' : t.border}`, color: t.ink }}
-              />
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={startVoice} title="Voice input" style={{ background: listening ? t.accentDim : t.glass, color: listening ? t.accent : t.mute, border: `1px solid ${listening ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}` }}>{listening ? '●' : '🎤'}</button>
-                <button className="w-10 h-10 rounded-xl grid place-items-center text-sm transition-all active:scale-90" onClick={() => { setFoodLogAutoScan(true); setFoodLogSheetOpen(true); }} title="Scan barcode" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>📷</button>
-              </div>
-            </div>
-            {/* Search results dropdown */}
-            {quickAddQuery.trim().length >= 2 && quickAddFocused && (
-              <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-xl z-10" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
-                {quickAddSearching && (
-                  <div className="p-3 text-center text-[11px]" style={{ color: t.mute }}>Searching…</div>
-                )}
-                {!quickAddSearching && quickAddResults.length === 0 && (
-                  <div className="p-3 text-center text-[11px]" style={{ color: t.mute }}>No foods found — try Estimate below</div>
-                )}
-                {!quickAddSearching && quickAddResults.map((f) => (
-                  <button key={f.id} onMouseDown={(e) => e.preventDefault()} onClick={() => logQuickAddFood(f)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors" style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                    <span className="min-w-0">
-                      <span className="block text-[12px] font-grotesk font-semibold truncate">{f.name}</span>
-                      <span className="text-[9px]" style={{ color: t.mute }}>{f.calories} kcal/100g · P{f.protein} C{f.carbs} F{f.fat}</span>
-                    </span>
-                    <span className="text-[10px] shrink-0 font-semibold px-2.5 py-1 rounded-lg" style={{ background: t.accentDim, color: t.accent, border: '1px solid color-mix(in srgb, var(--accent) 33%, transparent)' }}>Log</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Fallback into the AI estimate for free-text that isn't a
-              real food match ("2 rotis, dal and curd") */}
-          {!aiResult && (
-            <button className="w-full mt-2 py-2.5 rounded-xl font-grotesk text-[12px] font-semibold transition-all active:scale-95" onClick={estimate} disabled={estimating || !quickAddQuery.trim()} style={{ background: 'transparent', border: `1px dashed ${t.border}`, color: (estimating || !quickAddQuery.trim()) ? t.faint : t.mute, cursor: (estimating || !quickAddQuery.trim()) ? 'not-allowed' : 'pointer' }}>
-              {estimating ? 'Analyzing…' : "Can't find it? Estimate with AI →"}
-            </button>
-          )}
-
-          {aiResult && (
-            <div className="mt-3 rounded-xl p-4" style={{ background: t.goldDim, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)' }}>
-              {aiResult.items?.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {aiResult.items.map((it, i) => <span key={i} className="px-2 py-0.5 rounded-lg text-[10px] font-grotesk" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>{it.qty}× {it.name} (~{it.calories} kcal)</span>)}
-                </div>
-              )}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="font-grotesk text-sm font-bold" style={{ color: t.gold }}>~{aiResult.total.calories} kcal · P{aiResult.total.protein}g · C{aiResult.total.carbs}g · F{aiResult.total.fat}g</div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1.5 rounded-xl font-grotesk text-[11px] font-semibold active:scale-95" onClick={() => setAiResult(null)} style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>Edit</button>
-                  <button className="px-3 py-1.5 rounded-xl font-grotesk text-[11px] font-bold active:scale-95" onClick={logAi} disabled={logging} style={{ background: t.gold, color: 'var(--accent-contrast)' }}>{logging ? '…' : 'Log it'}</button>
-                </div>
-              </div>
-              <div className="text-[10px] mt-2" style={{ color: t.faint }}>⚠️ {aiResult.disclaimer}</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ══════ SAVED FOODS & MEALS ══════ */}
-      <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <SectionHeader title="Saved foods & meals" kicker subtitle={(foods.data?.mine?.length || myMeals.data?.meals?.length) ? `${foods.data?.mine?.length || 0} foods · ${myMeals.data?.meals?.length || 0} meal templates` : 'Nothing saved yet'} t={t} action={
-          <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold transition-colors" onClick={() => setManageOpen(!manageOpen)} style={{ background: manageOpen ? t.accentDim : t.glass, color: manageOpen ? t.accent : t.mute, border: `1px solid ${manageOpen ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}` }}>
-            {manageOpen ? 'Close' : 'Manage'}
-          </button>
-        } />
-
-        {!manageOpen && !!(foods.data?.mine?.length || myMeals.data?.meals?.length) && (
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {(foods.data?.mine || []).slice(0, 4).map((f) => (
-              <div key={f.id} className="shrink-0 rounded-xl px-3 py-2 min-w-[110px]" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                <div className="font-grotesk text-[11px] font-semibold truncate" style={{ color: t.ink }}>{f.name}</div>
-                <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{f.calories} kcal</div>
-              </div>
-            ))}
-            {(myMeals.data?.meals || []).slice(0, 4).map((m) => (
-              <div key={m.id} className="shrink-0 rounded-xl px-3 py-2 min-w-[110px]" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                <div className="font-grotesk text-[11px] font-semibold truncate" style={{ color: t.ink }}>{m.name}</div>
-                <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{m.calories} kcal</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {manageOpen && (
-          <div className="space-y-5">
-            {/* My Foods */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>My Foods{foods.data?.mine?.length ? ` · ${foods.data.mine.length}` : ''}</div>
-                <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold transition-colors" onClick={() => setOpenSection(openSection === 'foods' ? null : 'foods')} style={{ background: openSection === 'foods' ? t.accentDim : t.glass, color: openSection === 'foods' ? t.accent : t.mute, border: `1px solid ${openSection === 'foods' ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}` }}>
-                  {openSection === 'foods' ? 'Close' : '+ Add'}
-                </button>
-              </div>
-
-              {openSection === 'foods' && (
-                <div className="rounded-xl p-3 space-y-2 mb-2" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input className="px-3 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Food name" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.name} onChange={(e) => setFoodForm((f) => ({ ...f, name: e.target.value }))} />
-                    <input className="px-3 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Serving (e.g. 150 g)" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.serving} onChange={(e) => setFoodForm((f) => ({ ...f, serving: e.target.value }))} />
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="kcal" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.calories} onChange={(e) => setFoodForm((f) => ({ ...f, calories: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="P" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.protein} onChange={(e) => setFoodForm((f) => ({ ...f, protein: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="C" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.carbs} onChange={(e) => setFoodForm((f) => ({ ...f, carbs: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="F" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodForm.fat} onChange={(e) => setFoodForm((f) => ({ ...f, fat: e.target.value }))} />
-                  </div>
-                  <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={saving || !foodForm.name.trim()} onClick={async () => { setSaving(true); try { await api('/me/foods', { method: 'POST', body: JSON.stringify({ ...foodForm, calories: Number(foodForm.calories) || 0, protein: Number(foodForm.protein) || 0, carbs: Number(foodForm.carbs) || 0, fat: Number(foodForm.fat) || 0 }) }); setFoodForm({ name: '', unit: '', serving: '', calories: '', protein: '', carbs: '', fat: '' }); foods.reload(); setToast('Food saved ✓'); } catch (e) { setToast(e.message); } setSaving(false); }}
-                    style={{ background: (saving || !foodForm.name.trim()) ? t.surface : t.accent, color: (saving || !foodForm.name.trim()) ? t.mute : 'var(--accent-contrast)', cursor: (saving || !foodForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
-                    Save to My Foods
-                  </button>
-                </div>
-              )}
-
-              {!!foods.data?.mine?.length ? (
-                <div className="space-y-1.5">
-                  {foods.data.mine.map((f) => (
-                    <div key={f.id} className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-[13px] font-grotesk font-semibold" style={{ color: t.ink }}>{f.name}</span>
-                        <span className="text-[10px]" style={{ color: t.mute }}>{f.serving || f.unit || ''} · {f.calories} kcal · P{f.protein} C{f.carbs} F{f.fat}</span>
-                      </span>
-                      <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold shrink-0 transition-all active:scale-95" style={{ background: t.accentDim, color: t.accent }} onClick={async () => { try { await api(`/nutrition/clients/${clientId}/meals/log`, { method: 'POST', body: JSON.stringify({ name: f.name, slot: 'Snack', calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, source: 'custom', eaten: true }) }); setToast('Logged ' + f.name); home.reload(); } catch (e) { setToast(e.message); } }}>Log</button>
-                      <button className="text-[10px] shrink-0 transition-colors" style={{ color: t.danger + 'AA' }} onClick={async () => { try { await api(`/me/foods/${f.id}`, { method: 'DELETE' }); foods.reload(); } catch (e) { setToast(e.message); } }}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              ) : (openSection !== 'foods' && <div className="text-[11px] text-center py-3" style={{ color: t.faint }}>No saved foods yet</div>)}
-            </div>
-
-            {/* My Meals */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>My Meals{myMeals.data?.meals?.length ? ` · ${myMeals.data.meals.length}` : ''}</div>
-                <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold transition-colors" onClick={() => setOpenSection(openSection === 'meals' ? null : 'meals')} style={{ background: openSection === 'meals' ? t.accentDim : t.glass, color: openSection === 'meals' ? t.accent : t.mute, border: `1px solid ${openSection === 'meals' ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}` }}>
-                  {openSection === 'meals' ? 'Close' : '+ Add'}
-                </button>
-              </div>
-
-              {openSection === 'meals' && (
-                <div className="rounded-xl p-3 space-y-2 mb-2" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Slot" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.slot} onChange={(e) => setMealForm((f) => ({ ...f, slot: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="e.g. Post-Workout Shake" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.name} onChange={(e) => setMealForm((f) => ({ ...f, name: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Time" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.time} onChange={(e) => setMealForm((f) => ({ ...f, time: e.target.value }))} />
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="kcal" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.calories} onChange={(e) => setMealForm((f) => ({ ...f, calories: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="P" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.protein} onChange={(e) => setMealForm((f) => ({ ...f, protein: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="C" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.carbs} onChange={(e) => setMealForm((f) => ({ ...f, carbs: e.target.value }))} />
-                    <input className="px-2.5 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="F" type="number" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.fat} onChange={(e) => setMealForm((f) => ({ ...f, fat: e.target.value }))} />
-                  </div>
-                  <input className="w-full px-3 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Foods (e.g. 50g oats · 200ml milk)" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={mealForm.foods} onChange={(e) => setMealForm((f) => ({ ...f, foods: e.target.value }))} />
-                  <button className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" disabled={saving || !mealForm.name.trim()} onClick={async () => { setSaving(true); try { await api('/me/meals', { method: 'POST', body: JSON.stringify({ ...mealForm, calories: Number(mealForm.calories) || 0, protein: Number(mealForm.protein) || 0, carbs: Number(mealForm.carbs) || 0, fat: Number(mealForm.fat) || 0 }) }); setMealForm({ slot: 'Meal', name: '', time: '', calories: '', protein: '', carbs: '', fat: '', foods: '' }); myMeals.reload(); setToast('Meal template saved ✓'); } catch (e) { setToast(e.message); } setSaving(false); }}
-                    style={{ background: (saving || !mealForm.name.trim()) ? t.surface : t.accent, color: (saving || !mealForm.name.trim()) ? t.mute : 'var(--accent-contrast)', cursor: (saving || !mealForm.name.trim()) ? 'not-allowed' : 'pointer' }}>
-                    Save meal template
-                  </button>
-                </div>
-              )}
-
-              {!!myMeals.data?.meals?.length ? (
-                <div className="space-y-1.5">
-                  {myMeals.data.meals.map((m) => (
-                    <div key={m.id}>
-                      <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-[13px] font-grotesk font-semibold" style={{ color: t.ink }}>{m.name}</span>
-                          <span className="text-[10px]" style={{ color: t.mute }}>{m.slot}{m.time ? ` · ${m.time}` : ''} · {m.calories} kcal · P{m.protein} C{m.carbs} F{m.fat}{m.item_count ? ` · ${m.item_count} items` : ''}</span>
-                        </span>
-                        <button className="px-2 py-1 rounded-lg text-[10px] font-grotesk font-semibold shrink-0 active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} onClick={() => openComposer(m)}>Compose</button>
-                        <button className="px-2.5 py-1 rounded-lg text-[10px] font-grotesk font-semibold shrink-0 active:scale-95" style={{ background: t.accentDim, color: t.accent }} onClick={async () => { try { await api(`/me/meals/${m.id}/log`, { method: 'POST' }); setToast('Logged ' + m.name); home.reload(); } catch (e) { setToast(e.message); } }}>Eaten</button>
-                        <button className="text-[10px] shrink-0 transition-colors" style={{ color: t.danger + 'AA' }} onClick={async () => { try { await api(`/me/meals/${m.id}`, { method: 'DELETE' }); myMeals.reload(); } catch (e) { setToast(e.message); } }}>✕</button>
-                      </div>
-                      {composing?.id === m.id && (
-                        <div className="mt-2 rounded-xl p-3.5 space-y-2.5" style={{ background: t.goldDim, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)' }}>
-                          <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.gold }}>BUILD {m.name.toUpperCase()}</div>
-                          {items.length > 0 && (
-                            <div className="space-y-1.5">
-                              {items.map((it) => (
-                                <div key={it.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                                  <span className="flex-1 min-w-0">
-                                    <span className="block text-[12px] font-grotesk font-semibold truncate" style={{ color: t.ink }}>{it.name}</span>
-                                    <span className="text-[9px]" style={{ color: t.mute }}>{it.quantity}× {it.unit || 'serving'} · {it.calories} kcal</span>
-                                  </span>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <input type="number" min="0.1" step="0.1" className="w-14 px-1.5 py-1 rounded-lg font-grotesk text-[10px] outline-none" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={it.quantity} aria-label={`${it.name} quantity`} onChange={(e) => setItemQty(it, e.target.value)} />
-                                    <button className="text-[11px] transition-colors" style={{ color: t.danger + 'AA' }} onClick={async () => { try { await api(`/me/meals/${m.id}/items/${it.id}`, { method: 'DELETE' }); await reloadItems(); } catch (e) { setToast(e.message); } }} aria-label={`Remove ${it.name}`}>✕</button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <div className="flex gap-2">
-                            <input className="flex-1 px-3 py-2 rounded-lg font-grotesk text-xs outline-none" placeholder="Search foods…" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
-                            <input type="number" min="0.1" step="0.1" className="w-16 px-2 py-2 rounded-lg font-grotesk text-xs outline-none" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={foodQty} onChange={(e) => setFoodQty(e.target.value)} aria-label="Quantity" />
-                          </div>
-                          {!!foodSearch && (
-                            <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
-                              {allFoods.filter((f) => (f.name + ' ' + (f.scope || '')).toLowerCase().includes(foodSearch.toLowerCase())).slice(0, 15).map((f) => (
-                                <button key={f.id} onClick={() => addItem(f)} className="w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                                  <span className="min-w-0">
-                                    <span className="block text-[12px] font-grotesk font-semibold truncate" style={{ color: t.ink }}>{f.name}</span>
-                                    <span className="text-[9px]" style={{ color: t.mute }}>{f.scope} · {f.calories} kcal</span>
-                                  </span>
-                                  <span className="text-[10px] shrink-0 font-semibold" style={{ color: t.gold }}>+ Add</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (openSection !== 'meals' && <div className="text-[11px] text-center py-3" style={{ color: t.faint }}>No meal templates yet</div>)}
-            </div>
-          </div>
         )}
       </div>
 
@@ -1414,77 +786,10 @@ export default function Nutrition() {
       {/* ══════ TOAST ══════ */}
       {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
 
-      {/* ══════ LOG FOOD MENU ══════ */}
-      {logFoodMenuOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setLogFoodMenuOpen(false); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
-          <div className="w-full max-w-sm overflow-hidden rounded-3xl anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-            <div className="p-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${t.border}` }}>
-              <div>
-                <div className="font-grotesk font-bold" style={{ color: t.ink }}>Log Food</div>
-                <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>How do you want to log your food?</div>
-              </div>
-              <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={() => setLogFoodMenuOpen(false)} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
-            </div>
-            <div className="p-2">
-              {/* Voice Input */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); startVoice(); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.accentDim, border: `1px solid ${t.accent}30` }}>🎤</div>
-                <div>
-                  <div className="font-grotesk text-sm font-bold">Voice</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Say what you ate</div>
-                </div>
-              </button>
-              {/* Scan Barcode */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setFoodLogAutoScan(true); setFoodLogSheetOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.goldDim, border: `1px solid ${t.gold}25` }}>📷</div>
-                <div>
-                  <div className="font-grotesk text-sm font-bold">Scan Barcode</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Scan food packaging</div>
-                </div>
-              </button>
-              {/* Take Photo */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment'; input.onchange = (e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { setQuickAddQuery('[Photo uploaded]'); setToast('Photo captured — use Estimate to analyze'); }; reader.readAsDataURL(file); } }; input.click(); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: '#F0F0F010', border: `1px solid ${t.border}` }}>📸</div>
-                <div>
-                  <div className="font-grotesk text-sm font-bold">Take Photo</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Photograph your meal</div>
-                </div>
-              </button>
-              {/* Search / Select Food */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setFoodLogSheetOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.accentDim, border: `1px solid ${t.accent}25` }}>🔎</div>
-                <div>
-                  <div className="font-grotesk text-sm font-bold">Search Food</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Search and select from foods</div>
-                </div>
-              </button>
-              {/* Customize My Meal */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setCustomMealOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.goldDim, border: `1px solid ${t.gold}25` }}>🍳</div>
-                <div>
-                  <div className="font-grotesk text-sm font-bold">Customize My Meal</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Build a meal from ingredients</div>
-                </div>
-              </button>
-              {/* Saved Meals */}
-              <button className="w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors" onClick={() => { setLogFoodMenuOpen(false); setSavedMealsOpen(true); }} style={{ color: t.ink }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div className="w-11 h-11 rounded-2xl grid place-items-center text-lg shrink-0" style={{ background: t.accentDim, border: `1px solid ${t.accent}25` }}>📋</div>
-                <div>
-                  <div className="font-grotesk text-sm font-bold">Saved Meals</div>
-                  <div className="text-[11px]" style={{ color: t.mute }}>Log from your saved recipes</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ══════ NUTRITION TARGET SETUP ══════ */}
       <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload(); }} />
 
       {/* ══════ MODALS ══════ */}
-      <CustomMealModal open={customMealOpen} onClose={() => { setCustomMealOpen(false); setEditMeal(null); }} clientId={clientId} onSaved={() => { home.reload(); myMeals.reload(); foods.reload(); }} toast={(msg) => setToast(msg)} editMeal={editMeal} />
-      <SavedMealsModal open={savedMealsOpen} onClose={() => setSavedMealsOpen(false)} onEdit={(m) => { setEditMeal(m); setCustomMealOpen(true); }} toast={(msg) => setToast(msg)} onRefresh={() => { home.reload(); myMeals.reload(); }} />
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
       <DeleteLogConfirm open={deleteLogOpen} log={deleteLog} onClose={() => { setDeleteLogOpen(false); setDeleteLog(null); }} onConfirm={deleteLogEntry} t={t} />
 
