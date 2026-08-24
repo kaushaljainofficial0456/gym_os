@@ -61,6 +61,18 @@ export default function trackingRoutes(db) {
     res.status(201).json({ ok: true });
   });
 
+  // The frontend (Nutrition.jsx's supplement chip delete button) has called
+  // this since it was built; no matching route existed, so every delete
+  // 404'd. Soft delete (active = 0), not a hard DELETE: the GET above
+  // already filters on active = 1 for exactly this purpose, and it keeps
+  // the change reversible/consistent with how the column was designed.
+  r.delete('/clients/:id/supplements/:supplementId', async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    await db.run('UPDATE supplements SET active = 0 WHERE id = ? AND client_id = ?', [req.params.supplementId, client.id]);
+    res.json({ ok: true });
+  });
+
   // ---- client workout history (client portal) ----
   r.get('/me/workouts', async (req, res) => {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });

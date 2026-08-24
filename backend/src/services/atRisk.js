@@ -168,11 +168,30 @@ export async function evaluateOrg(db, orgId, trainerId = null) {
   const results = [];
   const nowIso = new Date().toISOString();
   const evaluated = await evaluateClients(db, clients);
+  // Was one `SELECT ... WHERE client_id = ?` per client -- this runs on
+  // every GET /alerts (alerts.js re-evaluates before listing), so an org
+  // with a few hundred clients meant a few hundred round trips just to
+  // read each client's currently-open alerts, before any writes even
+  // happen. Batched into one query + grouped in JS, same pattern already
+  // used for evaluateClients/withEvaluationBulk elsewhere in this
+  // codebase. Only the READ is batched -- the per-rule INSERT/UPDATE
+  // below is untouched, since that's real per-client state that only
+  // writes for clients whose alerts actually changed, not all of them.
+  const clientIds = clients.map((c) => c.id);
+  const allOpen = clientIds.length
+    ? await db.q(
+        `SELECT id, type, client_id FROM alerts WHERE client_id IN (${clientIds.map(() => '?').join(',')}) AND status = 'open'`,
+        clientIds)
+    : [];
+  const openByClient = new Map();
+  for (const a of allOpen) {
+    if (!openByClient.has(a.client_id)) openByClient.set(a.client_id, []);
+    openByClient.get(a.client_id).push(a);
+  }
   for (const c of clients) {
     const r = evaluated.get(c.id);
     results.push({ client: c, ...r });
-    const open = await db.q(
-      `SELECT id, type FROM alerts WHERE client_id = ? AND status = 'open'`, [c.id]);
+    const open = openByClient.get(c.id) || [];
     const openByType = new Map(open.map(a => [a.type, a.id]));
     const firedTypes = new Set();
     for (const rule of r.rules) {

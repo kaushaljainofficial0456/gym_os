@@ -601,6 +601,12 @@ CREATE TABLE IF NOT EXISTS alerts (
   resolved_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_org ON alerts(org_id, status);
+-- Every alerts query that isn't the org-wide list (trainer.js's client
+-- dashboard, dashboard.js's per-trainer view, atRisk.js's evaluateOrg)
+-- filters by client_id + status, which idx_alerts_org above doesn't cover
+-- at all -- found auditing atRisk.js's N+1 fix, where the batched
+-- client_id IN (...) AND status = 'open' query has no index to use.
+CREATE INDEX IF NOT EXISTS idx_alerts_client ON alerts(client_id, status);
 
 CREATE TABLE IF NOT EXISTS coach_insights (
   id            TEXT PRIMARY KEY,

@@ -173,7 +173,9 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setToast('Only JPG, PNG, or WebP images are supported'); return; }
-    if (file.size > 5 * 1024 * 1024) { setToast('Image too large (max 5 MB)'); return; }
+    // Matches POST /me/avatar's 1 MB cap — smaller than progress photos'
+    // 5 MB since this round-trips through GET /auth/me on every page load.
+    if (file.size > 1 * 1024 * 1024) { setToast('Image too large (max 1 MB)'); return; }
     try {
       const b64 = await new Promise((resolve, reject) => {
         const fr = new FileReader();

@@ -37,6 +37,40 @@ export default function meRoutes(db) {
     return c;
   };
 
+  // ---------------- avatar (profile photo) ----------------
+  // The frontend (Profile.jsx) has called POST/DELETE /me/avatar since it
+  // was built, but no matching route ever existed here -- every upload or
+  // removal 404'd. Scoped to req.user.sub directly (not getClient): this
+  // updates `users.avatar`, which every role has, not a client-only field.
+  //
+  // Stored as a data URL in the column itself rather than through
+  // storage.js's file-based driver: avatars need to be visible to OTHER
+  // users too (a trainer's client list shows each client's avatar), and
+  // storage.js's /uploads serving route only authorizes by client
+  // ownership -- extending that for a second, differently-shaped viewer
+  // rule is a bigger change than this fix calls for. A data URL keeps
+  // this self-contained. The cap here (1 MB raw) is intentionally
+  // tighter than progress photos' 5 MB: this value round-trips through
+  // GET /auth/me on every page load, so keeping it small matters more
+  // here than it does for a photo fetched on demand.
+  const AVATAR_MIME = { 'image/png': true, 'image/jpeg': true, 'image/webp': true };
+  const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
+  r.post('/avatar', async (req, res) => {
+    const { image } = req.body || {};
+    const m = typeof image === 'string' && image.match(/^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i);
+    if (!m) return res.status(400).json({ error: 'image must be a PNG, JPEG, or WebP data URL' });
+    if (!AVATAR_MIME[m[1].toLowerCase()]) return res.status(400).json({ error: 'Only PNG, JPEG, or WebP images are supported' });
+    const bytes = Buffer.byteLength(m[2], 'base64');
+    if (bytes > AVATAR_MAX_BYTES) return res.status(413).json({ error: 'Image too large (max 1 MB)' });
+    await db.run('UPDATE users SET avatar = ? WHERE id = ?', [image, req.user.sub]);
+    res.json({ avatar: image });
+  });
+
+  r.delete('/avatar', async (req, res) => {
+    await db.run('UPDATE users SET avatar = NULL WHERE id = ?', [req.user.sub]);
+    res.json({ ok: true });
+  });
+
   // ---------------- personal profile / goal --------------
   r.get('/profile', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;

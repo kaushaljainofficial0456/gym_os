@@ -11,6 +11,26 @@ export default function adminRoutes(db) {
   const r = Router();
   r.use(requireAuth, requireRole('GYM_OWNER', 'SUPER_ADMIN'), orgScope);
 
+  // subscriptions/payments/attendance all take a client_id straight from the
+  // request body (not the URL, so resolveClient's usual path-param flow
+  // doesn't apply) and, unlike every other client_id-bearing write route in
+  // this codebase, were never checking it belongs to the authenticated org
+  // before using it — an owner in one org could hand-craft a client_id
+  // belonging to a DIFFERENT org and the INSERT would silently attach a
+  // subscription/payment/attendance row to it. Client ids are unguessable
+  // random strings (see ids.js), so this was low practical exploitability,
+  // not a live incident — but it's exactly the tenant-isolation gap this
+  // audit exists to close, and every other write route in the app already
+  // enforces it. Real behavior for every legitimate caller is unchanged:
+  // the frontend only ever sends client ids from this org's own client list.
+  // Returns the client row if it belongs to this org, else writes a 404
+  // and returns null (mirrors resolveClient's not-found shape in auth.js).
+  async function requireOrgClient(req, res, clientId) {
+    const client = await db.q1('SELECT * FROM clients WHERE id = ? AND org_id = ?', [clientId, req.orgId]);
+    if (!client) { res.status(404).json({ error: 'Client not found' }); return null; }
+    return client;
+  }
+
   r.get('/overview', async (req, res) => {
     const orgId = req.orgId;
     const clients = await db.q('SELECT * FROM clients WHERE org_id = ?', [orgId]);
@@ -80,19 +100,28 @@ export default function adminRoutes(db) {
     package_id: z.string().min(1),
     start_date: z.string().optional()
   })), async (req, res) => {
+    const client = await requireOrgClient(req, res, req.body.client_id);
+    if (!client) return;
     const pkg = await db.q1('SELECT * FROM packages WHERE id = ? AND org_id = ?', [req.body.package_id, req.orgId]);
     if (!pkg) return res.status(404).json({ error: 'Package not found' });
     const start = req.body.start_date || dayKey();
     const end = addDays(new Date(start + 'T00:00:00Z'), pkg.period_days).toISOString().slice(0, 10);
     const subId = id('sub');
-    await db.run(
-      `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, renewal_date, status, payment_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid')`,
-      [subId, req.orgId, req.body.client_id, pkg.id, pkg.name, pkg.amount, pkg.currency, start, end, end]);
-    await db.run(
-      `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'cash', 'paid', ?)`,
-      [id('pay'), req.orgId, req.body.client_id, subId, pkg.amount, pkg.currency, now()]);
+    // Was two sequential db.run() calls: a failure on the second insert left
+    // an 'active, paid' subscription committed with no matching payment
+    // row -- a real bookkeeping gap for a money-related flow. Same db.tx()
+    // pattern already used in clients.js's client-creation route for the
+    // identical class of bug (a users row committed with no clients row).
+    await db.tx(async (tx) => {
+      await tx.run(
+        `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, renewal_date, status, payment_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid')`,
+        [subId, req.orgId, req.body.client_id, pkg.id, pkg.name, pkg.amount, pkg.currency, start, end, end]);
+      await tx.run(
+        `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'cash', 'paid', ?)`,
+        [id('pay'), req.orgId, req.body.client_id, subId, pkg.amount, pkg.currency, now()]);
+    });
     await track(db, { orgId: req.orgId, userId: req.user.sub, type: 'subscription_renewed', data: { subscriptionId: subId, amount: pkg.amount } });
     res.status(201).json({ id: subId });
   });
@@ -103,6 +132,8 @@ export default function adminRoutes(db) {
     method: z.string().max(30).default('cash'),
     subscription_id: z.string().optional()
   })), async (req, res) => {
+    const client = await requireOrgClient(req, res, req.body.client_id);
+    if (!client) return;
     const b = req.body;
     await db.run(
       `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
@@ -125,6 +156,8 @@ export default function adminRoutes(db) {
     client_id: z.string().min(1),
     present: z.boolean().default(true)
   })), async (req, res) => {
+    const client = await requireOrgClient(req, res, req.body.client_id);
+    if (!client) return;
     const d = dayKey();
     const existing = await db.q1('SELECT id FROM attendance WHERE org_id = ? AND client_id = ? AND date = ?',
       [req.orgId, req.body.client_id, d]);

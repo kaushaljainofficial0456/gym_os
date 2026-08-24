@@ -84,7 +84,13 @@ export async function buildApp() {
   // Upload-carrying routes (base64 data-URL images in JSON) get a larger body
   // limit; everything else stays small so ordinary API calls can't send huge
   // payloads. The more specific mounts are registered BEFORE the global parser.
-  app.use(['/api/intel', '/api/clients'], express.json({ limit: '8mb' }));
+  // /api/me added for POST /me/avatar: base64 inflates a raw file by ~33%,
+  // so even that route's own 1 MB (raw) cap needs headroom above the global
+  // 1mb default to ever be the thing that actually rejects an oversized
+  // image -- otherwise this body-parser limit trips first, on a slightly
+  // SMALLER effective ceiling than the route intends, and the client sees
+  // a generic "body too large" instead of the route's specific message.
+  app.use(['/api/intel', '/api/clients', '/api/me'], express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '1mb' }));
 
 app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.driver, ts: new Date().toISOString() }));
