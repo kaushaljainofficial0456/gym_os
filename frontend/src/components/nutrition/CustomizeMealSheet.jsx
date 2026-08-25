@@ -26,11 +26,18 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   const [adding, setAdding] = useState(false);
   const [saveStage, setSaveStage] = useState(null); // null | 'saving' | 'success'
   const [saveLabel, setSaveLabel] = useState('');
+  // AI fallback -- same Tier-4 estimator every other food-AI entry point
+  // uses (POST /me/foods/ai-estimate), never a second nutrition engine.
+  const [aiEstimating, setAiEstimating] = useState(false);
+  const [aiPreview, setAiPreview] = useState(null); // the estimate, awaiting "Add to Meal"
+  const [aiGrams, setAiGrams] = useState('100');
+  const [aiErr, setAiErr] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setName(''); setMealId(null); setItems([]); setTotals({ calories: 0, protein: 0, carbs: 0, fat: 0 });
     setServings(1); setQ(''); setResults([]); setSaveStage(null);
+    setAiEstimating(false); setAiPreview(null); setAiGrams('100'); setAiErr('');
   }, [open]);
 
   useEffect(() => {
@@ -55,22 +62,77 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
     setTotals({ calories: r.meal.calories || 0, protein: r.meal.protein || 0, carbs: r.meal.carbs || 0, fat: r.meal.fat || 0 });
   };
 
+  // Ensures the template exists (lazy-create on first item, named first),
+  // shared by both the database-match path and the AI-estimate path below.
+  const ensureMeal = async () => {
+    if (mealId) return mealId;
+    const created = await api('/me/meals', { method: 'POST', body: JSON.stringify({ name: name.trim(), slot: 'Meal' }) });
+    setMealId(created.id);
+    return created.id;
+  };
+
   const addFood = async (food) => {
     if (!name.trim()) { toast('Name your meal first'); return; }
     setAdding(true);
     try {
-      let id = mealId;
-      if (!id) {
-        const created = await api('/me/meals', { method: 'POST', body: JSON.stringify({ name: name.trim(), slot: 'Meal' }) });
-        id = created.id;
-        setMealId(id);
-      }
+      const id = await ensureMeal();
       await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: food.source_id || food.id, name: food.name, quantity: 1 }) });
       await refreshItems(id);
       setQ(''); setResults([]);
       toast(`+ ${food.name} added`);
     } catch (e) {
       toast(e.message || 'Could not add that food');
+    }
+    setAdding(false);
+  };
+
+  // AI fallback for a food the database search couldn't (well enough)
+  // match -- uses the EXACT original query the user typed, never the
+  // highest-scoring result, never a different food.
+  const estimateWithAI = async () => {
+    const query = q.trim();
+    if (!query) return;
+    setAiEstimating(true); setAiErr(''); setAiPreview(null);
+    try {
+      const res = await api('/me/foods/ai-estimate', { method: 'POST', body: JSON.stringify({ query }) });
+      if (!res.ok) { setAiErr(res.reason || 'Could not produce an AI estimate.'); return; }
+      setAiPreview(res);
+      setAiGrams(String(res.serving?.estimated_weight_g || 100));
+    } catch (e) {
+      setAiErr(e.message || 'Could not produce an AI estimate.');
+    }
+    setAiEstimating(false);
+  };
+
+  const addAIEstimateToMeal = async () => {
+    if (!name.trim()) { toast('Name your meal first'); return; }
+    if (!aiPreview) return;
+    const grams = Math.max(1, Number(aiGrams) || aiPreview.serving?.estimated_weight_g || 100);
+    const baseGrams = aiPreview.serving?.estimated_weight_g || 100;
+    const factor = grams / baseGrams;
+    setAdding(true);
+    try {
+      const id = await ensureMeal();
+      await api(`/me/meals/${id}/items`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ai_estimate: {
+            name: aiPreview.food_name, grams,
+            calories: Math.round((aiPreview.totals.calories || 0) * factor),
+            protein_g: r1((aiPreview.totals.protein || 0) * factor),
+            carbs_g: r1((aiPreview.totals.carbs || 0) * factor),
+            fat_g: r1((aiPreview.totals.fat || 0) * factor),
+            confidence: aiPreview.confidence,
+            provider: aiPreview.ai?.provider,
+            model: aiPreview.ai?.model,
+          },
+        }),
+      });
+      await refreshItems(id);
+      toast(`+ ${aiPreview.food_name} added`);
+      setAiPreview(null); setQ(''); setResults([]);
+    } catch (e) {
+      toast(e.message || 'Could not add that estimate');
     }
     setAdding(false);
   };
@@ -132,10 +194,13 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
 
         <div className="px-4 pb-4 space-y-3">
           <div className="relative">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="+ Add food…" className="input w-full !py-2.5 text-[13px]" />
-            {(searching || results.length > 0) && (
+            <input value={q} onChange={(e) => { setQ(e.target.value); setAiPreview(null); setAiErr(''); }} placeholder="+ Add food…" className="input w-full !py-2.5 text-[13px]" />
+            {(searching || results.length > 0 || (!searching && q.trim().length >= 2)) && !aiPreview && (
               <div className="mt-1.5 space-y-1">
                 {searching && !results.length && <div className="text-[11px] py-1" style={{ color: t.faint }}>Searching…</div>}
+                {!searching && !results.length && q.trim().length >= 2 && (
+                  <div className="text-[11px] py-1" style={{ color: t.faint }}>No close match found in SK OS for "{q.trim()}".</div>
+                )}
                 {results.map((f) => (
                   <button key={f.id || f.source_id} onClick={() => addFood(f)} disabled={adding}
                           className="w-full text-left rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ border: `1px solid ${t.border}` }}>
@@ -143,31 +208,77 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                     <span className="shrink-0 font-grotesk text-[10px]" style={{ color: t.mute }}>{f.calories == null ? '—' : Math.round(f.calories)} kcal/100g</span>
                   </button>
                 ))}
+                {/* AI fallback in BOTH branches -- has-matches and zero-matches
+                    -- exact original query, never the top result's name. */}
+                {!searching && q.trim().length >= 2 && (
+                  <button onClick={estimateWithAI} disabled={aiEstimating}
+                          className="w-full text-left rounded-xl px-3 py-2 flex items-center gap-2 font-grotesk text-[11px] font-semibold"
+                          style={{ border: `1px dashed ${t.border}`, color: t.accent }}>
+                    ✨ {aiEstimating ? 'Estimating…' : `Estimate "${q.trim()}" with AI`}
+                  </button>
+                )}
+                {aiErr && <div className="text-[11px]" style={{ color: t.danger }}>{aiErr}</div>}
+              </div>
+            )}
+
+            {aiPreview && (
+              <div className="mt-1.5 rounded-xl p-3 space-y-2 anim-fadeIn" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 font-grotesk text-[12px] font-bold truncate" style={{ color: t.ink }}>{aiPreview.food_name}</div>
+                  <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: t.accentDim, color: t.accent }}>
+                    {aiPreview.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ SK OS Estimated' : '✨ AI Estimated'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <input type="number" min="1" value={aiGrams} onChange={(e) => setAiGrams(e.target.value)}
+                           aria-label="Grams" className="w-14 text-[11px] rounded px-1.5 py-1 tabular-nums" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} />
+                    <span className="text-[10px]" style={{ color: t.faint }}>g</span>
+                  </div>
+                  <div className="text-right font-grotesk text-[11px]" style={{ color: t.mute }}>
+                    ~{Math.round((aiPreview.totals.calories || 0) * (Number(aiGrams) || 0) / (aiPreview.serving?.estimated_weight_g || 100))} kcal · confidence: {aiPreview.confidence}
+                  </div>
+                </div>
+                {aiPreview.assumptions?.length > 0 && (
+                  <div className="text-[9px] leading-relaxed" style={{ color: t.faint }}>Estimated assumptions: {aiPreview.assumptions.join(' · ')}</div>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => setAiPreview(null)} className="flex-1 py-1.5 rounded-lg font-grotesk text-[10px] font-semibold" style={{ border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
+                  <button onClick={addAIEstimateToMeal} disabled={adding} className="flex-1 py-1.5 rounded-lg font-grotesk text-[10px] font-bold" style={{ background: t.accent, color: 'var(--accent-contrast)' }}>Add to Meal</button>
+                </div>
               </div>
             )}
           </div>
 
           {items.length > 0 && (
             <div className="space-y-1.5">
-              {items.map((it) => (
+              {items.map((it) => {
+                const isAI = it.source === 'ai_estimated';
+                return (
                 <div key={it.id} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
                   <span className="min-w-0 flex-1 font-grotesk text-[12px] font-semibold" style={{ color: t.ink }}>
-                    <span className="block truncate">{it.name}</span>
-                    {/* meal_items.quantity is a SERVINGS multiplier, not grams
-                        (see database/schema.sql's own comment on that column)
-                        -- it.unit carries what ONE serving actually is (e.g.
-                        "100 g" for a catalogue food), so this reads as
-                        "1 x 100 g" rather than mislabeling the multiplier
-                        itself as if it were a gram value. */}
-                    {it.unit && <span className="block text-[9px] font-normal" style={{ color: t.faint }}>× {it.unit} each</span>}
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{it.name}</span>
+                      <span className="shrink-0 text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full" style={{ background: isAI ? t.accentDim : `${t.fat}18`, color: isAI ? t.accent : t.fat }}>
+                        {isAI ? '✨ AI Estimated' : '✓ Database'}
+                      </span>
+                    </span>
+                    {/* AI items store quantity as GRAMS directly (the AI's own
+                        natural unit); database items store a SERVINGS
+                        multiplier against it.unit's own descriptive serving
+                        (see database/schema.sql's column comment) -- "1 x
+                        100 g" for the latter, plain grams for the former. */}
+                    {!isAI && it.unit && <span className="block text-[9px] font-normal" style={{ color: t.faint }}>× {it.unit} each</span>}
                   </span>
-                  <input type="number" min="0" step="0.5" defaultValue={it.quantity} onBlur={(e) => updateItemQty(it, e.target.value)}
-                         aria-label={`${it.name} servings`}
+                  <input type="number" min="0" step={isAI ? 10 : 0.5} defaultValue={it.quantity} onBlur={(e) => updateItemQty(it, e.target.value)}
+                         aria-label={`${it.name} ${isAI ? 'grams' : 'servings'}`}
                          className="w-14 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} />
+                  {isAI && <span className="text-[9px] shrink-0" style={{ color: t.faint }}>g</span>}
                   <span className="w-14 text-right shrink-0 font-grotesk text-[11px] font-bold tabular-nums" style={{ color: t.mute }}>{Math.round(it.calories)} kcal</span>
                   <button onClick={() => removeItem(it)} aria-label={`Remove ${it.name}`} className="shrink-0 opacity-60 hover:opacity-100" style={{ color: t.danger }}>✕</button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import SavingOverlay from './SavingOverlay.jsx';
 
+// foods.serving is a free-text description ("150 g", "1 bowl", "1 slice") --
+// the LEADING number is the actual quantity, whatever the unit turns out to
+// be. Scaling that number linearly and re-deriving macros by the same ratio
+// is valid regardless of unit (2 slices really is 2x the nutrition of 1
+// slice, the same way 300g is 3x 100g) -- this is the SAME grams/100-style
+// linear scaling used everywhere else in this app, just generalized to
+// whatever unit the food's own serving string uses.
+function parseServing(serving) {
+  const s = String(serving || '100 g').trim();
+  const m = s.match(/^([\d.]+)\s*(.*)$/);
+  if (m && Number(m[1]) > 0) return { amount: Number(m[1]), suffix: m[2].trim() || 'g' };
+  return { amount: 1, suffix: s || 'g' }; // no leading number (e.g. just "bowl") -- treat as "1 of these"
+}
+
 /**
  * MY DIET — Saved Foods + Saved Meals, a REUSABLE library distinct from
  * Today's Eaten Meals (the actual log). Backed by existing, already-
@@ -101,6 +115,28 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
     setFoods((fs) => fs.filter((f) => f.id !== food.id));
     try { await api(`/me/foods/${food.id}`, { method: 'DELETE' }); } catch { load(); }
   };
+
+  // PERMANENT quantity edit -- the saved template only. Never touches
+  // today's already-logged entries or any past log: those were written
+  // with their own snapshot values at log time and stay that way (see
+  // meal_logs, which stores calories/protein/etc directly, not a live
+  // reference to this food row).
+  const saveFoodQuantity = async (food, rawAmount) => {
+    const { amount: oldAmount, suffix } = parseServing(food.serving);
+    const newAmount = Math.max(0.1, Number(rawAmount) || oldAmount);
+    if (newAmount === oldAmount) return; // no real change -- skip the write
+    const ratio = newAmount / oldAmount;
+    const updated = {
+      serving: `${newAmount} ${suffix}`,
+      calories: Math.round((food.calories || 0) * ratio),
+      protein: Math.round((food.protein || 0) * ratio * 10) / 10,
+      carbs: Math.round((food.carbs || 0) * ratio * 10) / 10,
+      fat: Math.round((food.fat || 0) * ratio * 10) / 10,
+    };
+    setFoods((fs) => fs.map((f) => (f.id === food.id ? { ...f, ...updated } : f)));
+    try { await api(`/me/foods/${food.id}`, { method: 'PUT', body: JSON.stringify(updated) }); }
+    catch (e) { toast(e.message || 'Could not update that quantity'); load(); }
+  };
   const removeMeal = async (meal) => {
     setMeals((ms) => ms.filter((m) => m.id !== meal.id));
     try { await api(`/me/meals/${meal.id}`, { method: 'DELETE' }); } catch { load(); }
@@ -153,7 +189,11 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
         )}
         <div className="min-w-0 flex-1">
           <div className="font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{label}</div>
-          <div className="font-grotesk text-[10px]" style={{ color: t.faint }}>{sub}</div>
+          {editing && kind === 'food' ? (
+            <div className="font-grotesk text-[10px] mt-0.5" style={{ color: t.faint }}>Default quantity</div>
+          ) : (
+            <div className="font-grotesk text-[10px]" style={{ color: t.faint }}>{sub}</div>
+          )}
         </div>
         {!editing && (
           <input
@@ -163,6 +203,19 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
             className="w-14 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums shrink-0"
             style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }}
           />
+        )}
+        {editing && kind === 'food' && (
+          <input
+            type="number" min="0.1" step="any"
+            defaultValue={parseServing(item.serving).amount}
+            onBlur={(e) => saveFoodQuantity(item, e.target.value)}
+            aria-label={`${item.name} default quantity`}
+            className="w-16 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums shrink-0"
+            style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }}
+          />
+        )}
+        {editing && kind === 'food' && (
+          <span className="text-[9px] shrink-0" style={{ color: t.faint }}>{parseServing(item.serving).suffix}</span>
         )}
       </div>
     );

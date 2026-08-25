@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { consumeReturnTo } from '../api.js';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
@@ -92,7 +93,12 @@ export default function Login() {
   const handleWelcomeComplete = useCallback(() => {
     setShowWelcome(false);
     if (pendingUser) {
-      nav('/app/client');
+      // A shared-meal preview (or similar) that sent this visitor to log in
+      // gets priority over the default client home -- consumed once, never
+      // re-applied to a later, unrelated login. Never auto-completes the
+      // action they were headed toward (e.g. saving a shared meal); it only
+      // returns them to the SAME page they were already looking at.
+      nav(consumeReturnTo() || '/app/client');
       setPendingUser(null);
     }
   }, [pendingUser, nav]);

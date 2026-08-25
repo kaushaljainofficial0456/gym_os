@@ -782,3 +782,26 @@ CREATE TABLE IF NOT EXISTS shared_meals (
   items_json     TEXT NOT NULL,            -- JSON array: [{type:'food'|'meal', name, quantity, unit, calories, protein, carbs, fat, components:[{name,quantity,unit,calories,protein,carbs,fat}]|null}]
   created_at     TEXT NOT NULL
 );
+
+-- Community feedback on a shared AI food estimate (ai_food_estimates).
+-- ONE row per correction event, never an in-place overwrite of the
+-- estimate itself -- a single user's edit must never silently become the
+-- new global value (see foodFeedback.js). Values are normalized to
+-- per-100g at write time so corrections logged at different quantities
+-- (100g vs 300g of the same dish) are actually comparable before they're
+-- ever aggregated together.
+CREATE TABLE IF NOT EXISTS ai_food_feedback (
+  id                  TEXT PRIMARY KEY,
+  canonical_key       TEXT NOT NULL REFERENCES ai_food_estimates(canonical_key) ON DELETE CASCADE,
+  original_calories   REAL, original_protein REAL, original_carbs REAL, original_fat REAL,   -- per 100g, what the AI said at feedback time
+  adjusted_calories   REAL, adjusted_protein REAL, adjusted_carbs REAL, adjusted_fat REAL,    -- per 100g, what the user corrected it to
+  quantity_g          REAL,                 -- the actual logged amount this feedback came from (context/audit only)
+  ai_provider         TEXT,
+  ai_model            TEXT,
+  -- Kept for anti-abuse (rate-limiting one account flooding feedback for
+  -- one dish) -- NEVER joined/exposed when reading feedback for another
+  -- user; aggregation reads only the numeric columns above.
+  client_id           TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  created_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_food_feedback_key ON ai_food_feedback(canonical_key);

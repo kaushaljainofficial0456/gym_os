@@ -19,6 +19,18 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // meal_items.source/ai_confidence/ai_provider/ai_model and
+  // ai_food_estimates.validation_status/version (food-AI Tier 4
+  // provenance + feedback promotion, see foodFeedback.js) exist only via
+  // scripts/init-db.js's guarded migrations, which this lightweight
+  // in-memory DB doesn't run -- same gap documented in
+  // nutrition-meal-log-api.test.js's memDb() for meal_logs.
+  for (const ddl of [`source TEXT NOT NULL DEFAULT 'database'`, 'ai_confidence TEXT', 'ai_provider TEXT', 'ai_model TEXT']) {
+    db.exec(`ALTER TABLE meal_items ADD COLUMN ${ddl}`);
+  }
+  for (const ddl of [`validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`, `version INTEGER NOT NULL DEFAULT 1`]) {
+    db.exec(`ALTER TABLE ai_food_estimates ADD COLUMN ${ddl}`);
+  }
   const mk = () => ({
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },

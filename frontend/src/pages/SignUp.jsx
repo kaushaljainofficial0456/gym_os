@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { consumeReturnTo } from '../api.js';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
@@ -25,7 +26,7 @@ export default function SignUp() {
 
   const handleWelcomeComplete = useCallback(() => {
     setShowWelcome(false);
-    nav('/app/client');
+    nav(consumeReturnTo() || '/app/client');
   }, [nav]);
 
   const submit = async (e) => {

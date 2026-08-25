@@ -395,6 +395,36 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
         ai_model: aiResult.ai?.model || null,
         ai_confidence: adjusted ? aiAdjusted.confidence : aiResult.confidence,
       });
+      // A user who edited the AI's numbers is telling us something --
+      // record it as ONE feedback observation toward the shared cache,
+      // never an immediate overwrite (see backend/.../foodFeedback.js).
+      // Best-effort: never blocks or fails the actual food log above.
+      if (adjusted) {
+        // original/adjusted can legitimately be different TOTAL weights
+        // (the user may have changed overall quantity, not just
+        // proportions) -- each side is normalized against its OWN actual
+        // weight, never a single shared grams figure, or the comparison
+        // itself would be wrong before it even reaches the server.
+        const originalGrams = aiResult.serving?.estimated_weight_g || aiTotalGrams;
+        api('/me/food-feedback', {
+          method: 'POST',
+          body: JSON.stringify({
+            query: aiResult.food_name,
+            original_grams: originalGrams,
+            adjusted_grams: aiTotalGrams,
+            original: {
+              calories: aiResult.totals.calories, protein_g: aiResult.totals.protein,
+              carbs_g: aiResult.totals.carbs, fat_g: aiResult.totals.fat,
+            },
+            adjusted: {
+              calories: totals.calories, protein_g: totals.protein,
+              carbs_g: totals.carbs, fat_g: totals.fat,
+            },
+            ai_provider: aiResult.ai?.provider || undefined,
+            ai_model: aiResult.ai?.model || undefined,
+          }),
+        }).catch(() => {}); // feedback collection must never surface as a user-facing error
+      }
       onClose();
     } catch (e) {
       setAiErr(e.message || 'Could not add that food');
@@ -540,7 +570,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
               {!searching && q.trim().length >= 2 && !results.length && (
                 <div className="py-3 space-y-2">
                   <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
-                    Nothing matched “{q.trim()}”.
+                    No close match found in SK OS for “{q.trim()}”.
                   </div>
 
                   {/* Tier 3 -- free, instant, no AI call. Offered first since
@@ -620,6 +650,21 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                   )}
                 </button>
               ))}
+
+              {/* AI fallback ALONGSIDE existing matches -- the user picks a
+                  database match above, OR estimates the EXACT food they
+                  typed (never the highest-scoring match, never a different
+                  food) if none of the above is actually what they meant. */}
+              {!searching && results.length > 0 && q.trim().length >= 2 && (
+                <div className="pt-1">
+                  <Pressable onClick={estimateWithAI} disabled={aiEstimating}
+                             className="btn w-full !py-2 text-[11px] font-semibold flex items-center justify-center gap-2">
+                    <Icon name="robot" size={14} />
+                    {aiEstimating ? 'Estimating…' : `Didn't find the exact food? Estimate "${q.trim()}" with AI`}
+                  </Pressable>
+                  {aiErr && <div className="text-[11px] mt-1.5" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
+                </div>
+              )}
             </div>
           )}
 
@@ -633,7 +678,11 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                 </div>
                 <span className="text-[9px] uppercase tracking-[.14em] font-semibold px-2 py-1 rounded-full shrink-0"
                       style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
-                  AI estimate{aiResult.from_cache ? ' · reused' : ''}
+                  {/* validation_status is about community evidence backing
+                      the CACHED value -- a completely different concept
+                      from a Tier-1/3 search-match percentage, never labelled
+                      the same way. */}
+                  {aiResult.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ SK OS Estimated' : '✨ AI Estimated'}
                 </span>
               </div>
 

@@ -841,6 +841,9 @@ export async function estimateFoodAI(db, params) {
     disclaimer,
     source: 'ai_estimated',
     ai: { provider: result.provider, model: FOOD_AI_MODEL || null },
+    // A brand-new estimate always starts here -- see foodFeedback.js for
+    // how (and only how) it can move to COMMUNITY_VALIDATED_CANDIDATE.
+    validation_status: 'AI_ESTIMATED',
     provenance: { tier: 4, source: 'ai_estimated', match_kind: 'ai_food_composition', grounded_components: groundedCount, total_components: totalCount },
     // Never write this result into the measured food DB or the ML
     // training set -- it is synthetic, not ground truth. See the
@@ -883,6 +886,12 @@ function shapeCachedResult(cached, displayName) {
     disclaimer: "We don't have a verified match for this food. We estimated it using the dish name and preparation assumptions (from a previously confirmed estimate).",
     source: cached.source || 'ai_estimated',
     ai: { provider: cached.ai_provider, model: cached.ai_model },
+    // AI_ESTIMATED | COMMUNITY_VALIDATED_CANDIDATE | VERIFIED_SHARED_FOOD --
+    // see foodFeedback.js. Distinct from `confidence` (the AI's own
+    // per-estimate confidence) -- this is about how much independent
+    // community evidence backs the CACHED value, never conflated with a
+    // Tier-1/3 search-match percentage (a completely different concept).
+    validation_status: cached.validation_status || 'AI_ESTIMATED',
     provenance: { tier: 4, source: 'ai_estimated', match_kind: 'ai_food_composition_cached' },
     from_cache: true,
     cache_key: cached.canonical_key,
@@ -894,6 +903,11 @@ function shapeCachedResult(cached, displayName) {
 // calls use (same food-v1 JSON contract, same measured-food anchoring)
 // rather than a second, drifting copy of the prompt.
 export { SYSTEM_PROMPT, buildUserMessage, gatherMeasuredReferences };
+// Exported for foodFeedback.js -- an aggregated community correction must
+// pass the SAME physical-plausibility bar a fresh AI response does before
+// it's ever allowed to update the shared cache. One centralized check,
+// not a second copy of the Atwater math.
+export { atwaterConsistent };
 
 // TEST-ONLY: clears the in-process rate-limit-cooldown and daily-call-count
 // state. Without this, one test that deliberately triggers a 429 leaves a

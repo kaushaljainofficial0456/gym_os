@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
-import { api, getToken } from '../../api.js';
+import { api, getToken, setReturnTo } from '../../api.js';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
 
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
@@ -114,7 +114,7 @@ export default function SharedMeal() {
 
               <div className="mt-4">
                 {!authed ? (
-                  <button onClick={() => navigate('/login')} className="w-full py-2.5 rounded-xl text-[12px] font-bold" style={{ background: `${accent}18`, color: accent }}>
+                  <button onClick={() => { setReturnTo(`/share/${id}`); navigate('/login'); }} className="w-full py-2.5 rounded-xl text-[12px] font-bold" style={{ background: `${accent}18`, color: accent }}>
                     Sign in to save this to your diet
                   </button>
                 ) : state === 'saved' || state === 'duplicate' ? (

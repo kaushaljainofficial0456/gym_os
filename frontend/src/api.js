@@ -1,5 +1,23 @@
 const TOKEN_KEY = 'pos_token';
 const USER_KEY = 'pos_user';
+const RETURN_TO_KEY = 'pos_return_to';
+
+// Preserves where a not-logged-in visitor was trying to go (currently:
+// a shared-meal preview) through the login/signup flow, so a successful
+// auth returns them there instead of the default client home -- without
+// auto-completing whatever action they were about to take (Login/SignUp
+// consume this to decide WHERE to navigate; they never act on the
+// visitor's behalf). sessionStorage, not localStorage: this is a single
+// pending navigation for the current tab's session, not a persisted
+// preference that should survive after being consumed or across tabs.
+export const setReturnTo = (path) => { try { sessionStorage.setItem(RETURN_TO_KEY, path); } catch { /* storage unavailable -- return-to is a convenience, not required */ } };
+export const consumeReturnTo = () => {
+  try {
+    const v = sessionStorage.getItem(RETURN_TO_KEY);
+    if (v) sessionStorage.removeItem(RETURN_TO_KEY);
+    return v || null;
+  } catch { return null; }
+};
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const getStoredUser = () => {

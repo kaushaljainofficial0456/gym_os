@@ -117,6 +117,19 @@ const MIGRATIONS = [
   ['meal_logs', 'ai_provider', `ai_provider TEXT`],
   ['meal_logs', 'ai_model', `ai_model TEXT`],
   ['meal_logs', 'ai_confidence', `ai_confidence TEXT`],
+
+  // --- AI-estimated ingredients inside a custom meal (Customize My Meals'
+  // AI fallback) -- distinguishes a "✨ AI Estimated" meal_item from a
+  // "✓ Database" one. Default 'database' so every pre-existing row (all
+  // resolved via the food model) is correctly labelled without a backfill. ---
+  ['meal_items', 'source', `source TEXT NOT NULL DEFAULT 'database'`],
+  ['meal_items', 'ai_confidence', `ai_confidence TEXT`],
+  ['meal_items', 'ai_provider', `ai_provider TEXT`],
+  ['meal_items', 'ai_model', `ai_model TEXT`],
+
+  // --- shared AI food-estimate cache: community feedback + promotion ---
+  ['ai_food_estimates', 'validation_status', `validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`],
+  ['ai_food_estimates', 'version', `version INTEGER NOT NULL DEFAULT 1`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

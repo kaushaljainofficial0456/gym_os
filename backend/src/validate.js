@@ -168,6 +168,34 @@ export const schemas = {
   shareSave: z.object({
     item_index: z.number().int().min(0).max(19)
   }),
+  // A user's correction to an AI food estimate -- recorded as ONE feedback
+  // observation, never a direct overwrite of the shared cache (see
+  // foodFeedback.js). `query` (the original food name, re-canonicalized
+  // server-side) rather than a client-supplied canonical_key, so this can
+  // never target an arbitrary cache row that doesn't correspond to what
+  // was actually estimated.
+  foodFeedback: z.object({
+    query: z.string().min(1).max(150),
+    // Separate weights: the AI's own estimated serving and the user's
+    // final (possibly re-quantified) total can legitimately differ --
+    // each side must be normalized against its OWN actual weight.
+    original_grams: z.number().finite().positive(),
+    adjusted_grams: z.number().finite().positive(),
+    original: z.object({
+      calories: z.number().finite().nonnegative(),
+      protein_g: z.number().finite().nonnegative(),
+      carbs_g: z.number().finite().nonnegative(),
+      fat_g: z.number().finite().nonnegative()
+    }),
+    adjusted: z.object({
+      calories: z.number().finite().nonnegative(),
+      protein_g: z.number().finite().nonnegative(),
+      carbs_g: z.number().finite().nonnegative(),
+      fat_g: z.number().finite().nonnegative()
+    }),
+    ai_provider: z.string().max(40).optional(),
+    ai_model: z.string().max(80).optional()
+  }),
   insightAction: z.object({
     action: z.enum(['accept', 'modify', 'dismiss']),
     summary: z.string().max(1000).optional(),

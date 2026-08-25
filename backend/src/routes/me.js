@@ -28,6 +28,8 @@ import {
   estimateFoodAI, isFoodAIAvailable, recomputeAdjustedComponents,
   resolveUncertainty, deriveConfidence,
 } from '../services/intelligence/foodAI.js';
+import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
+import { submitFeedback } from '../services/intelligence/foodFeedback.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -1084,11 +1086,43 @@ export default function meRoutes(db) {
 
   // Add a food to a client meal (scoped: only global, own-gym, or own foods).
   // If food_id doesn't exist in the foods table (e.g. a SKOS food), auto-create it.
+  //
+  // ai_estimate: an alternative to food_id/name -- the food came from
+  // Customize My Meals' AI fallback (POST /foods/ai-estimate was already
+  // called; this just adds ITS result as a meal item). Skips food_id/SKOS
+  // resolution entirely and inserts the AI's own totals directly, at the
+  // AI's own estimated grams -- quantity here is GRAMS for an AI item
+  // (not a servings multiplier the way a database-matched item's is),
+  // since that's what the AI naturally returned and what the review UI
+  // already showed the user. PUT .../items/:itemId's existing food_id-less
+  // fallback (density = calories/quantity, reapplied to a new quantity)
+  // already handles rescaling this correctly with no route change needed.
   r.post('/meals/:id/items', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
-    const { food_id, name, quantity = 1 } = req.body || {};
+    const { food_id, name, quantity = 1, ai_estimate } = req.body || {};
+
+    if (ai_estimate) {
+      const grams = Math.max(0.1, Number(ai_estimate.grams) || 100);
+      const label = String(ai_estimate.name || name || 'AI estimated item').slice(0, 80);
+      const itemId = id('mi');
+      const pos = (await db.q1('SELECT COALESCE(MAX(position)+1, 0) p FROM meal_items WHERE meal_template_id = ?', [m.id]))?.p || 0;
+      await db.tx(async (tx) => {
+        await tx.run(
+          `INSERT INTO meal_items (id, meal_template_id, food_id, name, quantity, unit, calories, protein, carbs, fat, position, source, ai_confidence, ai_provider, ai_model)
+           VALUES (?,?,NULL,?,?,?,?,?,?,?,?,'ai_estimated',?,?,?)`,
+          [itemId, m.id, label, grams, 'g',
+           num(ai_estimate.calories) || 0, num(ai_estimate.protein_g) || 0, num(ai_estimate.carbs_g) || 0, num(ai_estimate.fat_g) || 0,
+           pos, ai_estimate.confidence || null, ai_estimate.provider || null, ai_estimate.model || null]);
+        const totals = await tx.q1(
+          'SELECT SUM(calories) c, SUM(protein) p, SUM(carbs) ca, SUM(fat) f FROM meal_items WHERE meal_template_id = ?', [m.id]);
+        await tx.run('UPDATE client_meal_templates SET calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?',
+          [totals?.c || 0, totals?.p || 0, totals?.ca || 0, totals?.f || 0, m.id]);
+      });
+      return res.json({ id: itemId, source: 'ai_estimated' });
+    }
+
     const qty = Math.max(0.01, Number(quantity) || 1);
     let food = null;
     if (food_id) {
@@ -1117,8 +1151,8 @@ export default function meRoutes(db) {
     const pos = (await db.q1('SELECT COALESCE(MAX(position)+1, 0) p FROM meal_items WHERE meal_template_id = ?', [m.id]))?.p || 0;
     await db.tx(async (tx) => {
       await tx.run(
-        `INSERT INTO meal_items (id, meal_template_id, food_id, name, quantity, unit, calories, protein, carbs, fat, position)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO meal_items (id, meal_template_id, food_id, name, quantity, unit, calories, protein, carbs, fat, position, source)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,'database')`,
         [itemId, m.id, food?.id || null, label, qty, food?.serving || food?.unit || null,
          (food?.calories || 0) * qty, (food?.protein || 0) * qty, (food?.carbs || 0) * qty, (food?.fat || 0) * qty, pos]);
       // recompute the meal template totals from its items
@@ -1127,7 +1161,7 @@ export default function meRoutes(db) {
       await tx.run('UPDATE client_meal_templates SET calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ?',
         [totals?.c || 0, totals?.p || 0, totals?.ca || 0, totals?.f || 0, m.id]);
     });
-    res.json({ id: itemId });
+    res.json({ id: itemId, source: 'database' });
   });
 
   // Edit an item's quantity/serving — macros scale and the meal totals recompute.
@@ -1289,6 +1323,27 @@ export default function meRoutes(db) {
        item.calories || 0, item.protein || 0, item.carbs || 0, item.fat || 0]);
     track(db, 'shared_meal_saved', req.user.org, req.user.sub, { client_id: c.id, share_id: share.id, type: 'food' });
     res.status(201).json({ ok: true, type: 'food', id: foodId, saved_as: savedName, duplicate: !!existing });
+  });
+
+  // ---------------- AI food estimate feedback ----------------
+  // Records a user's correction to an AI estimate as ONE observation
+  // toward the shared cache -- never an immediate overwrite (spec: "one
+  // user correction must NOT automatically change the global food value").
+  // See foodFeedback.js for the aggregation/promotion rule this feeds.
+  r.post('/food-feedback', validate(schemas.foodFeedback), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { key } = canonicalizeFoodQuery(req.body.query);
+    const result = await submitFeedback(db, {
+      canonicalKey: key,
+      originalGrams: req.body.original_grams,
+      adjustedGrams: req.body.adjusted_grams,
+      original: req.body.original,
+      adjusted: req.body.adjusted,
+      aiProvider: req.body.ai_provider,
+      aiModel: req.body.ai_model,
+      clientId: c.id,
+    });
+    res.json(result);
   });
 
   return r;
