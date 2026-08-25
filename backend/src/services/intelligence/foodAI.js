@@ -37,6 +37,7 @@ import { callProviderRaw, isProviderConfigured, parseJSON } from './aiProvider.j
 import { getFoodSearch, getCompositionalCalculator, scaleNutrition } from '../foodEstimator.js';
 import { canonicalizeFoodQuery, getCachedEstimate, saveCachedEstimate, bumpCacheUsage } from './foodAICache.js';
 import { track } from '../events.js';
+import { now } from '../../ids.js';
 
 // ------------------------------------------------------------------
 // PROVIDER SELECTION / FAILOVER CHAIN — independent of the app-wide
@@ -83,7 +84,30 @@ export function isFoodAIAvailable() {
   return PROVIDER_CHAIN.some((p) => isProviderConfigured(p));
 }
 
-export function foodAIConfigSummary() {
+// `db` is optional: pass it (the real call path always does) to get the
+// TRUE cross-instance dailyUsage/cooldown picture from
+// ai_provider_cost_state; omit it (as existing tests that only care about
+// the static chain/limits shape do) and it falls back to this process's
+// own in-memory counters, same as before this function needed a db at all.
+export async function foodAIConfigSummary(db) {
+  const dailyUsage = {};
+  const cooldownActive = {};
+  for (const p of PROVIDER_CHAIN) {
+    dailyUsage[p] = _dailyCount.get(p) || 0;
+    cooldownActive[p] = false;
+  }
+  if (db) {
+    try {
+      const rows = await db.q('SELECT provider, cooldown_until, daily_count, daily_count_date FROM ai_provider_cost_state');
+      const today = todayKeyUTC();
+      for (const row of rows) {
+        if (!PROVIDER_CHAIN.includes(row.provider)) continue;
+        dailyUsage[row.provider] = row.daily_count_date === today ? (row.daily_count || 0) : 0;
+        const until = row.cooldown_until ? Date.parse(row.cooldown_until) : NaN;
+        cooldownActive[row.provider] = Number.isFinite(until) && Date.now() < until;
+      }
+    } catch { /* diagnostics only -- fall back to the in-memory values already filled in above */ }
+  }
   return {
     // New: the full ordered chain and which entries are actually usable.
     chain: PROVIDER_CHAIN,
@@ -95,7 +119,8 @@ export function foodAIConfigSummary() {
     fallbackAvailable: FALLBACK_PROVIDER ? isProviderConfigured(FALLBACK_PROVIDER) : false,
     model: FOOD_AI_MODEL,
     dailyLimits: DAILY_LIMITS,
-    dailyUsage: Object.fromEntries(PROVIDER_CHAIN.map((p) => [p, _dailyCount.get(p) || 0])),
+    dailyUsage,
+    cooldownActive,
   };
 }
 
@@ -133,22 +158,46 @@ export function foodAIConfigSummary() {
 /*     with AI" at all, so a capped-out AI layer still leaves a usable,  */
 /*     zero-cost estimate on screen, not a dead end.                     */
 /*                                                                      */
-/*  HONEST LIMITATION: both trackers are in-process memory, not a DB or */
-/*  shared store -- correct for this single-process deployment, but a   */
-/*  restart resets them and a multi-instance deployment would need a    */
-/*  shared counter (Redis, a DB row) to enforce one TRUE daily ceiling   */
-/*  across instances rather than one per process.                       */
+/*  DURABLE ACROSS INSTANCES: both trackers are backed by                */
+/*  ai_provider_cost_state (see database/schema.sql) whenever a `db` is  */
+/*  available -- this app runs on Vercel serverless, where every cold    */
+/*  start gets fresh in-process memory and concurrent requests can land  */
+/*  on entirely separate instances sharing nothing. A DB row is the      */
+/*  actual source of truth; the in-process Maps below are kept ONLY as   */
+/*  a same-instance fast path and as the fallback when `db` is           */
+/*  unavailable (e.g. a caller that genuinely has none, or a transient   */
+/*  DB error -- this backstop must never itself become a hard dependency */
+/*  that could block food logging, so every DB read/write here is       */
+/*  best-effort and silently falls back to the in-memory value on        */
+/*  failure).                                                            */
 /* ------------------------------------------------------------------ */
 
 const RATE_LIMIT_COOLDOWN_MS = Number(process.env.FOOD_AI_RATE_LIMIT_COOLDOWN_MS) || 5 * 60_000; // 5 min
-const _cooldownUntil = new Map(); // provider -> epoch ms
+const _cooldownUntil = new Map(); // provider -> epoch ms (same-instance fast path / db-unavailable fallback)
 
-function isOnCooldown(provider) {
+async function isOnCooldown(db, provider) {
+  if (db) {
+    try {
+      const row = await db.q1('SELECT cooldown_until FROM ai_provider_cost_state WHERE provider = ?', [provider]);
+      const until = row?.cooldown_until ? Date.parse(row.cooldown_until) : NaN;
+      if (Number.isFinite(until)) return Date.now() < until;
+      return false; // no row / no cooldown recorded -- not on cooldown
+    } catch { /* DB unavailable -- fall through to the in-memory value below */ }
+  }
   const until = _cooldownUntil.get(provider);
   return !!until && Date.now() < until;
 }
-function markRateLimitCooldown(provider) {
-  _cooldownUntil.set(provider, Date.now() + RATE_LIMIT_COOLDOWN_MS);
+async function markRateLimitCooldown(db, provider) {
+  const until = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+  _cooldownUntil.set(provider, until); // always kept in sync -- same-instance fast path / test fallback
+  if (!db) return;
+  try {
+    await db.run(
+      `INSERT INTO ai_provider_cost_state (provider, cooldown_until, daily_count, daily_count_date, updated_at)
+       VALUES (?, ?, 0, ?, ?)
+       ON CONFLICT (provider) DO UPDATE SET cooldown_until = excluded.cooldown_until, updated_at = excluded.updated_at`,
+      [provider, new Date(until).toISOString(), todayKeyUTC(), now()]);
+  } catch { /* best-effort -- in-memory value above still protects this instance */ }
 }
 
 function numOrNull(v) {
@@ -161,22 +210,41 @@ const DAILY_LIMITS = {
   openrouter: numOrNull(process.env.FOOD_AI_DAILY_LIMIT_OPENROUTER),
 };
 let _dayKey = null;
-const _dailyCount = new Map(); // provider -> count so far today (UTC)
+const _dailyCount = new Map(); // provider -> count so far today, UTC (same-instance fast path / db-unavailable fallback)
 
 function todayKeyUTC() { return new Date().toISOString().slice(0, 10); }
 function resetDailyCountIfNewDay() {
   const key = todayKeyUTC();
   if (_dayKey !== key) { _dayKey = key; _dailyCount.clear(); }
 }
-function withinDailyBudget(provider) {
+async function withinDailyBudget(db, provider) {
   const limit = DAILY_LIMITS[provider];
   if (!limit) return true; // no configured ceiling -- existing behaviour
+  if (db) {
+    try {
+      const row = await db.q1('SELECT daily_count, daily_count_date FROM ai_provider_cost_state WHERE provider = ?', [provider]);
+      const count = (row && row.daily_count_date === todayKeyUTC()) ? (row.daily_count || 0) : 0;
+      return count < limit;
+    } catch { /* fall through to the in-memory value below */ }
+  }
   resetDailyCountIfNewDay();
   return (_dailyCount.get(provider) || 0) < limit;
 }
-function bumpDailyCount(provider) {
+async function bumpDailyCount(db, provider) {
   resetDailyCountIfNewDay();
-  _dailyCount.set(provider, (_dailyCount.get(provider) || 0) + 1);
+  _dailyCount.set(provider, (_dailyCount.get(provider) || 0) + 1); // always kept in sync -- same-instance fast path / test fallback
+  if (!db) return;
+  const today = todayKeyUTC();
+  try {
+    await db.run(
+      `INSERT INTO ai_provider_cost_state (provider, cooldown_until, daily_count, daily_count_date, updated_at)
+       VALUES (?, NULL, 1, ?, ?)
+       ON CONFLICT (provider) DO UPDATE SET
+         daily_count = CASE WHEN daily_count_date = excluded.daily_count_date THEN daily_count + 1 ELSE 1 END,
+         daily_count_date = excluded.daily_count_date,
+         updated_at = excluded.updated_at`,
+      [provider, today, now()]);
+  } catch { /* best-effort -- in-memory value above still protects this instance */ }
 }
 
 /* ------------------------------------------------------------------ */
@@ -658,7 +726,7 @@ export function deriveConfidence({ groundedCount, totalCount, uncertainty, total
  * observability trail (provider name + outcome + reason + latency, NEVER
  * a key or auth header) a caller can log without needing to re-derive it.
  */
-async function callWithFallback(system, user) {
+async function callWithFallback(db, system, user) {
   const attempts = [];
   let fallbackDepth = 0;
 
@@ -667,11 +735,11 @@ async function callWithFallback(system, user) {
       attempts.push({ provider, outcome: 'skipped_unconfigured' });
       continue;
     }
-    if (isOnCooldown(provider)) {
+    if (await isOnCooldown(db, provider)) {
       attempts.push({ provider, outcome: 'skipped_cooldown' });
       continue;
     }
-    if (!withinDailyBudget(provider)) {
+    if (!(await withinDailyBudget(db, provider))) {
       attempts.push({ provider, outcome: 'skipped_daily_budget', limit: DAILY_LIMITS[provider] });
       continue;
     }
@@ -688,7 +756,7 @@ async function callWithFallback(system, user) {
         json: true, model: FOOD_AI_MODEL, timeoutMs: FOOD_AI_TIMEOUT_MS,
       });
       const latencyMs = Date.now() - t0;
-      bumpDailyCount(provider); // a completed call, success or not -- it still spent one of the day's allotment
+      await bumpDailyCount(db, provider); // a completed call, success or not -- it still spent one of the day's allotment
       const parsed = parseJSON(raw);
       if (!parsed) {
         attempts.push({ provider, outcome: 'failure', reason: 'invalid_json', latencyMs });
@@ -708,8 +776,8 @@ async function callWithFallback(system, user) {
       const isRateLimit = /429|rate.?limit/i.test(String(e.message || ''));
       const isTimeout = /timed out/i.test(String(e.message || ''));
       const reason = isRateLimit ? 'rate_limited' : isTimeout ? 'timeout' : 'error';
-      if (isRateLimit) markRateLimitCooldown(provider); // back off this provider for a while instead of re-hitting it next request
-      else bumpDailyCount(provider); // a rate-limit never reached the vendor as a counted call in most APIs; other failures (timeout aside) generally did
+      if (isRateLimit) await markRateLimitCooldown(db, provider); // back off this provider for a while instead of re-hitting it next request
+      else await bumpDailyCount(db, provider); // a rate-limit never reached the vendor as a counted call in most APIs; other failures (timeout aside) generally did
       attempts.push({ provider, outcome: 'failure', reason, detail: e.message, latencyMs });
       fallbackDepth++;
       continue; // try the next provider in the chain
@@ -778,7 +846,7 @@ export async function estimateFoodAI(db, params) {
 
   track(db, { type: 'food_ai_tier4_call', orgId, userId, data: { key, chain: PROVIDER_CHAIN } }).catch(() => {});
   const t0 = Date.now();
-  const result = await callWithFallback(SYSTEM_PROMPT, userMessage);
+  const result = await callWithFallback(db, SYSTEM_PROMPT, userMessage);
   const latencyMs = Date.now() - t0;
   // Observability trail -- provider names, outcomes, reasons and latency
   // ONLY. Never a key, an auth header, or a raw provider response body.

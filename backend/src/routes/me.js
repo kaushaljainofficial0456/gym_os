@@ -520,6 +520,12 @@ export default function meRoutes(db) {
    * that endpoint rather than duplicating a second logging path.
    */
   const foodAILimit = rateLimit({ windowMs: 60_000, max: 12, keyFn: (req) => req.user?.sub || 'anon' });
+  // A genuine user submits feedback occasionally (one edit per logged AI
+  // food, at most). Capped well above that but well below
+  // foodFeedback.js's MIN_FEEDBACK_COUNT-per-minute -- a scripted client
+  // flooding feedback to try to manufacture a fake community-validated
+  // promotion needs meaningfully longer than a minute to do it now.
+  const foodFeedbackLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
   r.post('/foods/ai-estimate', foodAILimit, validate(schemas.foodAIEstimate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     if (!isFoodAIAvailable()) {
@@ -588,7 +594,7 @@ export default function meRoutes(db) {
    * calibrated model; re-implementing either in the UI is how the numbers
    * drift apart.
    */
-  r.post('/foods/resolve', async (req, res) => {
+  r.post('/foods/resolve', validate(schemas.foodResolveQuantity), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
     const { source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
@@ -611,7 +617,7 @@ export default function meRoutes(db) {
    * source of truth and re-derivable, so polluting the shared global
    * library from a user action would be the wrong default.
    */
-  r.post('/foods/from-model', async (req, res) => {
+  r.post('/foods/from-model', validate(schemas.foodFromModel), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
     const { source_id, name } = req.body || {};
@@ -654,7 +660,7 @@ export default function meRoutes(db) {
     res.status(201).json({ food, created: true });
   });
 
-  r.post('/foods', async (req, res) => {
+  r.post('/foods', validate(schemas.foodCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const { name, unit, serving, calories, protein, carbs, fat, category } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Food name is required' });
@@ -678,7 +684,7 @@ export default function meRoutes(db) {
   // edit mode -- distinct from a one-time quantity edit on a single log
   // entry, and distinct from today's log: this changes the TEMPLATE every
   // future quick-log reads from, never today's already-logged entries.
-  r.put('/foods/:id', async (req, res) => {
+  r.put('/foods/:id', validate(schemas.foodUpdate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const food = await db.q1('SELECT * FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!food) return res.status(404).json({ error: 'Food not found' });
@@ -718,7 +724,7 @@ export default function meRoutes(db) {
     res.json({ meals });
   });
 
-  r.post('/meals', async (req, res) => {
+  r.post('/meals', validate(schemas.mealCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const { slot, name, time, calories, protein, carbs, fat, foods } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Meal name is required' });
@@ -737,7 +743,7 @@ export default function meRoutes(db) {
   // only (quick-log quantity control) -- never modifies the saved template
   // itself. Defaults to 1 (the template's own totals, unscaled) so every
   // existing caller of this route is unaffected.
-  r.post('/meals/:id/log', async (req, res) => {
+  r.post('/meals/:id/log', validate(schemas.mealLogFromTemplate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
@@ -757,7 +763,7 @@ export default function meRoutes(db) {
   });
 
   // Update a meal template (name, nutrition, foods)
-  r.put('/meals/:id', async (req, res) => {
+  r.put('/meals/:id', validate(schemas.mealUpdate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
@@ -805,7 +811,7 @@ export default function meRoutes(db) {
   });
 
   // Edit a logged entry's quantity (recalculates nutrition from food data)
-  r.put('/meal-logs/:logId', async (req, res) => {
+  r.put('/meal-logs/:logId', validate(schemas.mealLogEntryUpdate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const { logId } = req.params;
     const { quantity, unit } = req.body || {};
@@ -1097,7 +1103,7 @@ export default function meRoutes(db) {
   // already showed the user. PUT .../items/:itemId's existing food_id-less
   // fallback (density = calories/quantity, reapplied to a new quantity)
   // already handles rescaling this correctly with no route change needed.
-  r.post('/meals/:id/items', async (req, res) => {
+  r.post('/meals/:id/items', validate(schemas.mealItemAdd), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
@@ -1165,7 +1171,7 @@ export default function meRoutes(db) {
   });
 
   // Edit an item's quantity/serving — macros scale and the meal totals recompute.
-  r.put('/meals/:id/items/:itemId', async (req, res) => {
+  r.put('/meals/:id/items/:itemId', validate(schemas.mealItemQuantityUpdate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
@@ -1330,7 +1336,7 @@ export default function meRoutes(db) {
   // toward the shared cache -- never an immediate overwrite (spec: "one
   // user correction must NOT automatically change the global food value").
   // See foodFeedback.js for the aggregation/promotion rule this feeds.
-  r.post('/food-feedback', validate(schemas.foodFeedback), async (req, res) => {
+  r.post('/food-feedback', foodFeedbackLimit, validate(schemas.foodFeedback), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const { key } = canonicalizeFoodQuery(req.body.query);
     const result = await submitFeedback(db, {

@@ -35,9 +35,32 @@
 // ============================================================
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 process.env.ALLOW_PAID_AI = 'true'; // must be set before aiProvider.js's first import
 process.env.FOOD_AI_TIMEOUT_MS = '400'; // fast timeout for Scenario B, read once at foodAI.js's own import time
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
+
+// In-memory SQLite, same pattern every other test file in this suite uses --
+// needed here specifically to prove ai_provider_cost_state persistence
+// (Scenario P below), which by definition can't be proven with db: null.
+async function memDb() {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON;');
+  db.exec(schema);
+  return {
+    driver: 'sqlite',
+    async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },
+    async q1(sql, params = []) { const rows = await this.q(sql, params); return rows[0] || null; },
+    async run(sql, params = []) { const stmt = db.prepare(sql); const res = params.length ? stmt.run(...params) : stmt.run(); return { changes: Number(res.changes) }; },
+    raw: db,
+  };
+}
 
 let foodAI; // default chain: groq -> gemini -> openrouter -> ollama
 
@@ -288,7 +311,7 @@ test('Scenario L — explicit FOOD_AI_PROVIDER=groq + FOOD_AI_FALLBACK_PROVIDER=
     assert.equal(result.ok, false, 'must fail once both explicitly-configured providers fail, not fall through to the default chain');
     assert.equal(calls.openrouter, 0);
     assert.equal(calls.ollama, 0);
-    const summary = explicitFoodAI.foodAIConfigSummary();
+    const summary = await explicitFoodAI.foodAIConfigSummary();
     assert.deepEqual(summary.chain, ['groq', 'gemini']);
   } finally {
     if (savedProvider === undefined) delete process.env.FOOD_AI_PROVIDER; else process.env.FOOD_AI_PROVIDER = savedProvider;
@@ -368,6 +391,82 @@ test('Scenario O — AI provenance: falls back to the resolved request-side mode
 });
 
 /* ------------------------------------------------------------------ */
+/*  DURABLE COST-SAFETY STATE -- proves the cooldown/daily-budget        */
+/*  trackers survive a "fresh serverless instance" (fresh in-process     */
+/*  memory, same database) by explicitly wiping the in-memory Maps       */
+/*  between calls via _resetCostSafetyStateForTests() and confirming the */
+/*  DB row alone still enforces the protection. Without this, these      */
+/*  mechanisms would silently do nothing across Vercel's actual          */
+/*  multi-instance deployment shape -- see ai_provider_cost_state in     */
+/*  database/schema.sql.                                                 */
+/* ------------------------------------------------------------------ */
+
+test('Scenario P — rate-limit cooldown survives a simulated cold start (fresh in-memory state, same DB)', async (t) => {
+  const db = await memDb();
+  setKeys();
+  const calls1 = mockProviders(t, {
+    groq: () => new Response('rate limited', { status: 429 }),
+    gemini: () => geminiOk(validAIResponse()),
+  });
+  const r1 = await foodAI.estimateFoodAI(db, { query: `scenario p first ${Date.now()}` });
+  assert.equal(r1.ok, true);
+  assert.equal(r1.ai.provider, 'gemini');
+  assert.equal(calls1.groq, 1, 'groq must genuinely be called the first time, and 429 written to the DB');
+
+  // Simulate a cold start: wipe the in-process Maps entirely. If the
+  // cooldown were still only in-memory, this would erase it and Groq
+  // would be hit again below -- the whole point of this test.
+  foodAI._resetCostSafetyStateForTests();
+
+  const calls2 = mockProviders(t, {
+    groq: () => { throw new Error('groq must not be called again -- the cooldown must have been read back from the DB, not memory'); },
+    gemini: () => geminiOk(validAIResponse()),
+  });
+  const r2 = await foodAI.estimateFoodAI(db, { query: `scenario p second ${Date.now()}` });
+  assert.equal(r2.ok, true);
+  assert.equal(r2.ai.provider, 'gemini');
+  assert.equal(calls2.groq, 0, 'a provider on cooldown must stay skipped even after in-memory state is wiped, because the DB remembers');
+
+  const row = await db.q1('SELECT * FROM ai_provider_cost_state WHERE provider = ?', ['groq']);
+  assert.ok(row, 'the cooldown must actually be persisted as a row');
+  assert.ok(Date.parse(row.cooldown_until) > Date.now(), 'cooldown_until must be in the future');
+});
+
+test('Scenario Q — daily call budget survives a simulated cold start (fresh in-memory state, same DB)', async (t) => {
+  const db = await memDb();
+  const savedLimit = process.env.FOOD_AI_DAILY_LIMIT_GROQ;
+  process.env.FOOD_AI_DAILY_LIMIT_GROQ = '1';
+  try {
+    const cappedFoodAI = await import(`../src/services/intelligence/foodAI.js?scenario=durable-daily-limit-${Date.now()}`);
+    setKeys();
+    const calls = mockProviders(t, {
+      groq: () => groqOk(validAIResponse({ food_name: 'from groq' })),
+      gemini: () => geminiOk(validAIResponse({ food_name: 'from gemini' })),
+    });
+
+    const r1 = await cappedFoodAI.estimateFoodAI(db, { query: `scenario q first ${Date.now()}` });
+    assert.equal(r1.ai.provider, 'groq');
+    assert.equal(calls.groq, 1, 'the single allowed groq call for the day, written to the DB');
+
+    // Simulate a cold start: wipe the in-process Maps. If the daily count
+    // were still only in-memory, this would reset it to 0 and groq would
+    // be allowed a second call below -- the whole point of this test.
+    cappedFoodAI._resetCostSafetyStateForTests();
+
+    const r2 = await cappedFoodAI.estimateFoodAI(db, { query: `scenario q second ${Date.now()}` });
+    assert.equal(r2.ok, true);
+    assert.equal(r2.ai.provider, 'gemini', 'groq must stay capped even after in-memory state is wiped, because the DB remembers today\'s count');
+    assert.equal(calls.groq, 1, 'groq must NOT receive a 2nd call once its daily ceiling is reached, cold start or not');
+
+    const row = await db.q1('SELECT * FROM ai_provider_cost_state WHERE provider = ?', ['groq']);
+    assert.equal(row.daily_count, 1);
+    assert.equal(row.daily_count_date, new Date().toISOString().slice(0, 10));
+  } finally {
+    if (savedLimit === undefined) delete process.env.FOOD_AI_DAILY_LIMIT_GROQ; else process.env.FOOD_AI_DAILY_LIMIT_GROQ = savedLimit;
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /*  COST SAFETY BEYOND THE ZERO-COST GATE -- added per explicit request: */
 /*  "if limit reaches then it should not use credits or money, fall     */
 /*  back to our own model". Two independent mechanisms, tested          */
@@ -424,7 +523,7 @@ test('Cost safety — an optional daily call ceiling caps a provider at N calls/
     assert.equal(r3.ai.provider, 'gemini');
     assert.equal(calls.groq, 2, 'groq must NOT receive a 3rd call once its daily ceiling is reached');
 
-    const summary = cappedFoodAI.foodAIConfigSummary();
+    const summary = await cappedFoodAI.foodAIConfigSummary(null);
     assert.equal(summary.dailyLimits.groq, 2);
     assert.equal(summary.dailyUsage.groq, 2);
   } finally {

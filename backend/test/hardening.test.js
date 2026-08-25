@@ -257,6 +257,47 @@ test('meal item quantity edits recompute totals', async (t) => {
   await api.close();
 });
 
+// Regression coverage for a real bug found by inspection: PUT
+// /me/meal-logs/:logId used to do `Math.max(0.1, Number(quantity))` with
+// no finiteness check -- a non-numeric quantity produced NaN (Math.max
+// with a NaN argument is ALWAYS NaN), which both node:sqlite and pg bind
+// without erroring, silently overwriting that log entry's
+// calories/protein/carbs/fat with NaN. Now caught by schema validation
+// before the route ever runs.
+test('PUT /me/meal-logs/:logId rejects a non-numeric quantity instead of silently storing NaN', async (t) => {
+  const db = await twoOrgFixture();
+  await db.run(`INSERT INTO foods (id, org_id, client_id, name, calories, protein, carbs, fat, is_global) VALUES ('fG', NULL, NULL, 'Rice', 150, 4, 32, 0, 1)`);
+  await db.run(`INSERT INTO meal_logs (id, client_id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit) VALUES ('mlg1', 'c1', '2026-01-01', 'Lunch', 'Rice', 150, 4, 32, 0, 1, 'manual', 100, 'g')`);
+  const api = await startMeApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
+  t.after(() => api.close());
+
+  const bad = await api.call('PUT', '/me/meal-logs/mlg1', { quantity: 'not-a-number' });
+  assert.equal(bad.status, 422, 'a non-numeric quantity must be rejected, not coerced to NaN');
+
+  const untouched = await db.q1(`SELECT * FROM meal_logs WHERE id = 'mlg1'`);
+  assert.equal(untouched.calories, 150, 'the log entry must be completely untouched by the rejected request');
+  assert.ok(!Number.isNaN(untouched.calories));
+  await api.close();
+});
+
+// Regression coverage: a malformed ai_estimate payload (wrong type on a
+// numeric field) must be rejected by schema validation, not silently
+// coerced (e.g. the old `Number(ai_estimate.grams) || 100` fallback would
+// have quietly substituted 100g for whatever nonsense was actually sent).
+test('POST /me/meals/:id/items rejects a malformed ai_estimate payload (wrong type on a numeric field)', async (t) => {
+  const db = await twoOrgFixture();
+  await db.run(`INSERT INTO client_meal_templates (id, org_id, client_id, slot, name, position) VALUES ('mt1', 'o1', 'c1', 'Lunch', 'Lunch', 0)`);
+  const api = await startMeApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
+  t.after(() => api.close());
+
+  const bad = await api.call('POST', '/me/meals/mt1/items', { ai_estimate: { name: 'Bad Item', grams: 'a lot', calories: 200 } });
+  assert.equal(bad.status, 422, 'a non-numeric grams value must be rejected outright');
+
+  const items = await db.q(`SELECT * FROM meal_items WHERE meal_template_id = 'mt1'`);
+  assert.equal(items.length, 0, 'nothing should have been inserted from the rejected request');
+  await api.close();
+});
+
 test('client cannot log or delete another client\'s metric entries', async (t) => {
   const db = await twoOrgFixture();
   const secret = 'test-secret';

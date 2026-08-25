@@ -217,5 +217,31 @@ export default function adminRoutes(db) {
     res.json(snapshot);
   });
 
+  // ---- recent errors, backend + frontend (real observability, no external service) ----
+  // Two sources land here: the global error handler (src/index.js)
+  // persists every unhandled REQUEST failure as 'server_error'; the
+  // frontend's ErrorBoundary (clientError.js) persists every RENDER
+  // crash as 'client_error'. Both are org-scoped where known, message
+  // already truncated and never containing a raw stack trace or secret.
+  // Without this route the only way to see what actually broke on a live
+  // deployment was direct DB access -- this is the same "what's actually
+  // happening in production" question that took a full manual debugging
+  // session to answer for the food-AI provider config; this route
+  // answers the general version of it going forward.
+  r.get('/errors', async (req, res) => {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const rows = await db.q(
+      `SELECT id, type, user_id, data_json, created_at FROM events
+        WHERE org_id = ? AND type IN ('server_error', 'client_error')
+        ORDER BY created_at DESC LIMIT ?`,
+      [req.orgId, limit]);
+    const errors = rows.map((r) => {
+      let data = {};
+      try { data = JSON.parse(r.data_json || '{}'); } catch { /* leave empty */ }
+      return { id: r.id, source: r.type === 'client_error' ? 'client' : 'server', user_id: r.user_id, created_at: r.created_at, ...data };
+    });
+    res.json({ errors, count: errors.length });
+  });
+
   return r;
 }

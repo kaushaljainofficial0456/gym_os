@@ -93,6 +93,107 @@ export const schemas = {
     ai_model: z.string().max(80).optional(),
     ai_confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional()
   }),
+  // ---- My Diet: saved foods + saved meal templates + today's log entries ----
+  // These routes previously did type coercion inline (Number()/String()
+  // with manual clamping) rather than a schema. That coercion is still
+  // permissive by design where a field is genuinely optional (a partial
+  // PUT should be able to touch just one field) -- these schemas exist to
+  // reject the WRONG TYPE outright (e.g. a non-numeric quantity, which
+  // used to silently become NaN and get written to a log entry) rather
+  // than to change what a well-formed request is allowed to look like.
+  foodCreate: z.object({
+    name: z.string().min(1).max(80),
+    unit: z.string().max(30).optional(),
+    serving: z.string().max(60).optional(),
+    calories: z.number().finite().optional(),
+    protein: z.number().finite().optional(),
+    carbs: z.number().finite().optional(),
+    fat: z.number().finite().optional(),
+    category: z.string().max(40).optional()
+  }),
+  // Partial update -- every field optional, exactly like the route's own
+  // existing "only touch what's present" behavior.
+  foodUpdate: z.object({
+    name: z.string().min(1).max(80).optional(),
+    serving: z.string().max(60).optional(),
+    unit: z.string().max(30).optional(),
+    calories: z.number().finite().optional(),
+    protein: z.number().finite().optional(),
+    carbs: z.number().finite().optional(),
+    fat: z.number().finite().optional()
+  }),
+  foodResolveQuantity: z.object({
+    source_id: z.string().max(100).optional(),
+    name: z.string().max(150).optional(),
+    portion_key: z.string().max(60).optional(),
+    count: z.number().finite().positive().max(1000).optional(),
+    grams: z.number().finite().positive().max(100000).optional(),
+    oil_level: z.string().max(20).optional()
+  }),
+  foodFromModel: z.object({
+    source_id: z.string().max(100).optional(),
+    name: z.string().max(150).optional()
+  }),
+  mealCreate: z.object({
+    name: z.string().min(1).max(80),
+    slot: z.string().max(30).optional(),
+    time: z.string().max(10).optional(),
+    calories: z.number().finite().optional(),
+    protein: z.number().finite().optional(),
+    carbs: z.number().finite().optional(),
+    fat: z.number().finite().optional(),
+    foods: z.string().max(300).optional()
+  }),
+  mealUpdate: z.object({
+    name: z.string().min(1).max(80).optional(),
+    slot: z.string().max(30).optional(),
+    calories: z.number().finite().optional(),
+    protein: z.number().finite().optional(),
+    carbs: z.number().finite().optional(),
+    fat: z.number().finite().optional(),
+    foods: z.string().max(300).optional()
+  }),
+  // `servings` scales a saved meal template's totals for ONE log entry --
+  // optional, defaults to 1 (the route's own existing fallback).
+  mealLogFromTemplate: z.object({
+    servings: z.number().finite().positive().max(1000).optional()
+  }),
+  // POST /me/meals/:id/items has two mutually-exclusive shapes: a
+  // database-food reference (food_id and/or a free-text name to search),
+  // or a pre-computed AI estimate (see foodAI.js's response shape). Both
+  // sides stay optional here -- the route itself is what 404s when
+  // neither resolves to anything usable -- but every field IS typed now,
+  // closing the class of bug where e.g. a non-numeric `grams` silently
+  // became 100 (the `|| 100` fallback) instead of being rejected.
+  mealItemAdd: z.object({
+    food_id: z.string().max(60).optional(),
+    name: z.string().max(150).optional(),
+    quantity: z.number().finite().positive().max(100000).optional(),
+    ai_estimate: z.object({
+      name: z.string().max(150).optional(),
+      grams: z.number().finite().positive().max(100000).optional(),
+      calories: z.number().finite().nonnegative().optional(),
+      protein_g: z.number().finite().nonnegative().optional(),
+      carbs_g: z.number().finite().nonnegative().optional(),
+      fat_g: z.number().finite().nonnegative().optional(),
+      confidence: z.string().max(20).optional(),
+      provider: z.string().max(40).optional(),
+      model: z.string().max(80).optional()
+    }).optional()
+  }),
+  mealItemQuantityUpdate: z.object({
+    quantity: z.number().finite().positive().max(100000).optional()
+  }),
+  // Editing today's already-logged entry -- quantity is effectively
+  // required (the route itself 400s without it today); the real fix here
+  // is that a non-numeric quantity is now REJECTED instead of silently
+  // becoming NaN and overwriting that entry's calories/protein/carbs/fat
+  // with NaN (Math.max(0.1, Number('garbage')) === NaN, which node:sqlite
+  // and pg both happily bind without erroring).
+  mealLogEntryUpdate: z.object({
+    quantity: z.number().finite().positive().max(100000),
+    unit: z.string().max(30).optional()
+  }),
   waterLog: z.object({ date: z.string().optional(), litres: z.number().min(0).max(20) }),
   sleepLog: z.object({
     date: z.string().optional(),
@@ -240,5 +341,13 @@ export const schemas = {
     status: z.enum(['ON_TRACK', 'NEEDS_ATTENTION', 'AT_RISK', 'INACTIVE']).optional(),
     trainer_id: z.string().optional(),
     name: z.string().min(1).max(80).optional()
+  }),
+  // Frontend ErrorBoundary crash report -- see clientError.js. Public
+  // route (no auth required), so this schema is the only real gate on
+  // shape/size.
+  clientError: z.object({
+    message: z.string().min(1).max(1000),
+    path: z.string().max(300).optional(),
+    component_stack: z.string().max(2000).optional()
   })
 };

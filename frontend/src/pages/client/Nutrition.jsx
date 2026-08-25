@@ -506,7 +506,16 @@ export default function Nutrition() {
   const toggleMeal = async (m) => {
     const next = !m.eaten;
     setMeals(mealState.map((x) => (x.id === m.id ? { ...x, eaten: next } : x)));
-    await api(`/nutrition/clients/${clientId}/meals/toggle`, { method: 'POST', body: JSON.stringify({ meal_id: m.id, eaten: next }) }).catch(() => home.reload());
+    // Optimistic update -- on failure, reconcile back to server truth AND
+    // say why, rather than the toggle silently reverting itself a moment
+    // later with no explanation (what a bare `.catch(() => home.reload())`
+    // looked like to the user).
+    try {
+      await api(`/nutrition/clients/${clientId}/meals/toggle`, { method: 'POST', body: JSON.stringify({ meal_id: m.id, eaten: next }) });
+    } catch (e) {
+      setToast(e.message || "Couldn't update that — reverted");
+      home.reload();
+    }
   };
 
   const editLogEntry = async (logId, updates) => {
@@ -537,7 +546,14 @@ export default function Nutrition() {
   const addWater = async (litres = 0.25) => {
     const next = Math.min(data.water.target, Math.round((waterState + litres) * 100) / 100);
     setWater(next);
-    await api(`/tracking/clients/${clientId}/water`, { method: 'POST', body: JSON.stringify({ litres: next }) }).catch(() => home.reload());
+    // Same reasoning as toggleMeal above -- a silent revert with no toast
+    // reads as "the app randomly undid my tap", not "that failed".
+    try {
+      await api(`/tracking/clients/${clientId}/water`, { method: 'POST', body: JSON.stringify({ litres: next }) });
+    } catch (e) {
+      setToast(e.message || "Couldn't log water — reverted");
+      home.reload();
+    }
   };
 
   const logEntry = async (entry) => {

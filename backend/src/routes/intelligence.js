@@ -689,7 +689,7 @@ export default function intelligenceRoutes(db) {
   // specifically so a deployment's env var config (ALLOW_PAID_AI,
   // GROQ_API_KEY, etc.) can be verified live without reading server logs.
   r.get('/food-ai/status', async (_req, res) => {
-    res.json({ ok: true, ...foodAIConfigSummary(), diagnostics: paidProviderDiagnostics() });
+    res.json({ ok: true, ...(await foodAIConfigSummary(db)), diagnostics: paidProviderDiagnostics() });
   });
 
   // Daily Coach Brief — 3-5 data-driven insights + today's priority.

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { Spinner } from './components/UI.jsx';
 import ClickSparkLazy from './components/ClickSparkLazy.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 // Login/SignUp stay eager: they're the first thing an unauthenticated visitor
 // needs, so there's no "next page" to defer them in favor of.
 import Login from './pages/Login.jsx';
@@ -46,7 +47,13 @@ const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
 const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
 // Small helper so each route below stays a one-liner instead of repeating
 // the same <Suspense fallback={...}> wrapper 16 times.
-const page = (El) => <Suspense fallback={PageFallback}><El /></Suspense>;
+// ErrorBoundary here, not just Suspense: a render crash anywhere in a
+// lazy-loaded page previously white-screened the ENTIRE app (nav, sidebar,
+// everything) with no recovery but a manual refresh -- now it's contained
+// to the page that broke, with a real recovery affordance and a reported
+// crash (see ErrorBoundary.jsx). One boundary per route means one page
+// crashing never takes the rest of the app down with it.
+const page = (El) => <ErrorBoundary><Suspense fallback={PageFallback}><El /></Suspense></ErrorBoundary>;
 
 // `fallback` distinguishes "not logged in" from "logged in, wrong role for
 // this subtree" — e.g. a trainer hitting an /app/client/* URL is still

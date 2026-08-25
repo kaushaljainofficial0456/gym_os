@@ -805,3 +805,20 @@ CREATE TABLE IF NOT EXISTS ai_food_feedback (
   created_at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ai_food_feedback_key ON ai_food_feedback(canonical_key);
+
+-- Durable, cross-instance backing store for foodAI.js's cost-safety
+-- mechanisms (rate-limit cooldown + optional daily call budget per
+-- provider). These were originally in-process memory only -- correct for
+-- a single persistent Node process, but this app runs on Vercel
+-- serverless, where every cold start gets fresh memory and concurrent
+-- requests can land on entirely separate instances with nothing shared.
+-- Without a real backing store, "back off after a 429" and "stop at N
+-- calls/day" were unreliable exactly when they mattered most (sustained
+-- load). One row per provider name (groq/gemini/openrouter/...).
+CREATE TABLE IF NOT EXISTS ai_provider_cost_state (
+  provider          TEXT PRIMARY KEY,
+  cooldown_until    TEXT,              -- ISO timestamp; NULL or in the past = not on cooldown
+  daily_count       INTEGER NOT NULL DEFAULT 0,
+  daily_count_date  TEXT,              -- UTC date key (YYYY-MM-DD) daily_count applies to; a new day resets it
+  updated_at        TEXT NOT NULL
+);

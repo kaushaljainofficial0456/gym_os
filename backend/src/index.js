@@ -19,6 +19,7 @@ import clientRoutes from './routes/clients.js';
 import workoutRoutes from './routes/workouts.js';
 import nutritionRoutes from './routes/nutrition.js';
 import trackingRoutes from './routes/tracking.js';
+import { track } from './services/events.js';
 import insightRoutes from './routes/insights.js';
 import alertRoutes from './routes/alerts.js';
 import reportRoutes from './routes/reports.js';
@@ -26,6 +27,7 @@ import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import meRoutes from './routes/me.js';
 import shareRoutes from './routes/share.js';
+import clientErrorRoutes from './routes/clientError.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 
@@ -124,6 +126,7 @@ app.use('/api/admin', adminRoutes(db)); // alias — Business page calls /admin/
 app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail dashboard
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
+app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under
@@ -155,6 +158,19 @@ app.use('/uploads', requireAuth, async (req, res) => {
     if (code === 413) return res.status(413).json({ error: 'Request body too large' });
     // log diagnostics server-side only — never expose SQL/stack/secrets to clients
     console.error(`[error] req=${req.id || '-'}`, err?.message || err);
+    // Also persist to the events table (best-effort, never blocks the
+    // response) -- console.error alone is invisible on Vercel unless
+    // someone is actively watching function logs at the exact moment it
+    // happens. This makes a real 500 queryable after the fact instead of
+    // only discoverable by a user reporting "it's broken" and someone
+    // manually re-deriving what happened, the way today's whole
+    // diagnostic session had to.
+    track(db, {
+      type: 'server_error',
+      orgId: req.user?.org || null,
+      userId: req.user?.sub || null,
+      data: { path: req.originalUrl, method: req.method, status: code, message: String(err?.message || err).slice(0, 500), reqId: req.id || null },
+    }).catch(() => {});
     res.status(500).json({ error: 'Internal server error', message: config.nodeEnv === 'production' ? undefined : err.message });
   });
 

@@ -86,9 +86,9 @@ test('POST /me/foods rejects a physically impossible macro combination', async (
   assert.equal(r.status, 400);
 });
 
-test('POST /me/foods still requires a name (pre-existing check untouched)', async (t) => {
+test('POST /me/foods still requires a name (now enforced by schema validation, 422 -- the route\'s own manual check behind it is still there too, just never reached first)', async (t) => {
   const { call, close } = await startApi();
   t.after(() => close());
   const r = await call('POST', '/api/me/foods', { calories: 100 });
-  assert.equal(r.status, 400);
+  assert.equal(r.status, 422);
 });

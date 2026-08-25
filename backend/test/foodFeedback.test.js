@@ -18,6 +18,7 @@ import express from 'express';
 import { config } from '../src/config.js';
 import { canonicalizeFoodQuery } from '../src/services/intelligence/foodAICache.js';
 import { submitFeedback, aggregateAndMaybePromote, MIN_FEEDBACK_COUNT } from '../src/services/intelligence/foodFeedback.js';
+import { resetRateLimits } from '../src/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -204,6 +205,34 @@ test('POST /me/food-feedback records a normalized observation without touching t
   const est = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [key]);
   assert.equal(JSON.parse(est.nutrition_json).calories, 350, 'original AI estimate unchanged');
   assert.equal(est.validation_status, 'AI_ESTIMATED');
+});
+
+test('POST /me/food-feedback is rate-limited -- a burst past the per-minute cap gets 429, not silently accepted', async (t) => {
+  resetRateLimits(); // this limiter's state is shared/module-level across the whole test file's process
+  const db = await memDb();
+  const user = await orgFixture(db);
+  const { key } = canonicalizeFoodQuery('rate limit test dish burst scenario');
+  await db.run(
+    `INSERT INTO ai_food_estimates (id, canonical_key, canonical_name, cuisine, component_template_json, nutrition_json, uncertainty_json, assumptions_json, source, ai_provider, ai_model, confidence, times_used, user_confirmation_count, created_at, updated_at)
+     VALUES ('afe_rl', ?, 'Rate Limit Test Dish', 'Indian', '[]', ?, '{}', '[]', 'ai_estimated', 'groq', 'test-model', 'medium', 1, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+    [key, JSON.stringify({ calories: 300, protein: 10, carbs: 40, fat: 8 })]);
+  const api = await startMeApi(db, user);
+  t.after(() => api.close());
+
+  const body = {
+    query: 'rate limit test dish burst scenario', original_grams: 100, adjusted_grams: 100,
+    original: { calories: 300, protein_g: 10, carbs_g: 40, fat_g: 8 },
+  };
+  const results = [];
+  for (let i = 0; i < 12; i++) {
+    // A tiny variation per request so none of them get short-circuited as
+    // "no meaningful change" (which would return 200 without ever
+    // touching the rate limiter's own pass/fail path).
+    results.push(await api.call('POST', '/me/food-feedback', { ...body, adjusted: { calories: 300 + i, protein_g: 10, carbs_g: 40, fat_g: 8 } }));
+  }
+  const statuses = results.map((r) => r.status);
+  assert.ok(statuses.includes(429), `expected at least one 429 in a 12-request burst against a 10/min limit, got: ${statuses.join(',')}`);
+  assert.ok(statuses.slice(0, 10).every((s) => s !== 429), 'the first 10 requests (at the configured limit) must all succeed');
 });
 
 test('a no-op correction (within rounding) is not recorded as feedback', async (t) => {

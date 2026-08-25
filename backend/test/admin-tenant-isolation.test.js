@@ -138,3 +138,57 @@ test('POST /business/attendance succeeds for a same-org client_id (regression ch
   const r = await call('POST', '/api/business/attendance', { client_id: 'c1', present: true });
   assert.equal(r.status, 201);
 });
+
+/* ------------------------------------------------------------------ */
+/*  GET /admin/errors -- read side of the observability wiring in       */
+/*  src/index.js's global error handler (that handler itself isn't      */
+/*  unit-testable here: buildApp() always opens the real getDb(), not   */
+/*  an injectable one, so this proves the READ path -- org-scoping,     */
+/*  shape, ordering -- using events rows shaped exactly as the error    */
+/*  handler writes them).                                               */
+/* ------------------------------------------------------------------ */
+
+test('GET /admin/errors returns only this org\'s server_error + client_error events, newest first, with parsed data', async (t) => {
+  const { db, call, close } = await startAdminApi();
+  t.after(() => close());
+  await db.run(`INSERT INTO events (id, org_id, user_id, type, data_json, created_at) VALUES (?,?,?,?,?,?)`,
+    ['evt_old', 'o1', 'u1', 'server_error', JSON.stringify({ path: '/api/me/old', method: 'GET', status: 500, message: 'first failure' }), '2026-01-01T00:00:00Z']);
+  await db.run(`INSERT INTO events (id, org_id, user_id, type, data_json, created_at) VALUES (?,?,?,?,?,?)`,
+    ['evt_new', 'o1', 'u1', 'server_error', JSON.stringify({ path: '/api/me/new', method: 'POST', status: 500, message: 'second, later failure' }), '2026-01-02T00:00:00Z']);
+  // A frontend crash report -- must show up here too, tagged as client-sourced.
+  await db.run(`INSERT INTO events (id, org_id, user_id, type, data_json, created_at) VALUES (?,?,?,?,?,?)`,
+    ['evt_client', 'o1', 'u1', 'client_error', JSON.stringify({ message: 'Cannot read properties of undefined', path: '/app/client/nutrition' }), '2026-01-03T00:00:00Z']);
+  // A different org's error -- must never leak into org 1's list.
+  await db.run(`INSERT INTO events (id, org_id, user_id, type, data_json, created_at) VALUES (?,?,?,?,?,?)`,
+    ['evt_other_org', 'o2', 'u2', 'server_error', JSON.stringify({ path: '/api/me/secret', method: 'GET', status: 500, message: 'another gym\'s failure' }), '2026-01-02T00:00:00Z']);
+  // A non-error event -- must never show up here either.
+  await db.run(`INSERT INTO events (id, org_id, user_id, type, data_json, created_at) VALUES (?,?,?,?,?,?)`,
+    ['evt_unrelated', 'o1', 'u1', 'meal_logged', JSON.stringify({ client_id: 'c1' }), '2026-01-02T00:00:00Z']);
+
+  const r = await call('GET', '/api/business/errors');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.count, 3, 'this org\'s 2 server_error + 1 client_error, never the other org\'s or the unrelated event type');
+  assert.deepEqual(r.json.errors.map((e) => e.id), ['evt_client', 'evt_new', 'evt_old'], 'newest first');
+  assert.equal(r.json.errors[0].source, 'client');
+  assert.equal(r.json.errors[0].message, 'Cannot read properties of undefined');
+  assert.equal(r.json.errors[1].source, 'server');
+  assert.equal(r.json.errors[1].message, 'second, later failure');
+  assert.equal(r.json.errors[1].path, '/api/me/new');
+  assert.equal(r.json.errors[1].status, 500);
+});
+
+test('GET /admin/errors requires GYM_OWNER/SUPER_ADMIN -- a CLIENT role is rejected outright', async (t) => {
+  const db = await memDb();
+  await seedTwoOrgs(db);
+  const adminRoutes = (await import('../src/routes/admin.js')).default;
+  const app = express();
+  app.use(express.json());
+  app.use('/api/business', adminRoutes(db));
+  const server = app.listen(0);
+  await new Promise((r) => server.on('listening', r));
+  t.after(() => new Promise((r) => { server.closeAllConnections(); server.close(r); }));
+  const port = server.address().port;
+  const clientToken = jwt.sign({ sub: 'u1', role: 'CLIENT', org: 'o1', name: 'Client A' }, config.jwtSecret, { expiresIn: '1h' });
+  const res = await fetch(`http://127.0.0.1:${port}/api/business/errors`, { headers: { Authorization: `Bearer ${clientToken}` } });
+  assert.equal(res.status, 403, 'requireRole must reject a CLIENT before the route ever runs');
+});
