@@ -34,6 +34,7 @@ import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, p
 import { evaluatePRs } from '../services/personalRecords.js';
 import { todayNutrition, lastPerformance, weightTrend, todayTraining, clientProfileContext } from '../services/intelligence/context.js';
 import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured, ping as aiPing, configSummary } from '../services/intelligence/aiProvider.js';
+import { foodAIConfigSummary } from '../services/intelligence/foodAI.js';
 import { buildClientAIContext } from '../services/intelligence/aiContext.js';
 import { buildBrief, buildWeekly, pickPriority, computeInsights, suggestFoods } from '../services/intelligence/coachEngine.js';
 
@@ -680,6 +681,15 @@ export default function intelligenceRoutes(db) {
   r.get('/coach/status', async (_req, res) => {
     const p = await aiPing();
     res.json({ ok: true, ...configSummary(), available: p.available, ollama: p });
+  });
+
+  // Food-AI (Tier 4) provider chain status -- same "diagnostics only, no
+  // secrets" shape as /coach/status above (foodAIConfigSummary() returns
+  // provider NAMES, booleans and counts -- never a key value), added
+  // specifically so a deployment's env var config (ALLOW_PAID_AI,
+  // GROQ_API_KEY, etc.) can be verified live without reading server logs.
+  r.get('/food-ai/status', async (_req, res) => {
+    res.json({ ok: true, ...foodAIConfigSummary() });
   });
 
   // Daily Coach Brief — 3-5 data-driven insights + today's priority.
