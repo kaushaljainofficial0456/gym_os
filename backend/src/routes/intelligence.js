@@ -33,7 +33,7 @@ import { generateProgram } from '../services/intelligence/generateProgram.js';
 import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { todayNutrition, lastPerformance, weightTrend, todayTraining, clientProfileContext } from '../services/intelligence/context.js';
-import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured, ping as aiPing, configSummary } from '../services/intelligence/aiProvider.js';
+import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured, ping as aiPing, configSummary, paidProviderDiagnostics } from '../services/intelligence/aiProvider.js';
 import { foodAIConfigSummary } from '../services/intelligence/foodAI.js';
 import { buildClientAIContext } from '../services/intelligence/aiContext.js';
 import { buildBrief, buildWeekly, pickPriority, computeInsights, suggestFoods } from '../services/intelligence/coachEngine.js';
@@ -689,7 +689,7 @@ export default function intelligenceRoutes(db) {
   // specifically so a deployment's env var config (ALLOW_PAID_AI,
   // GROQ_API_KEY, etc.) can be verified live without reading server logs.
   r.get('/food-ai/status', async (_req, res) => {
-    res.json({ ok: true, ...foodAIConfigSummary() });
+    res.json({ ok: true, ...foodAIConfigSummary(), diagnostics: paidProviderDiagnostics() });
   });
 
   // Daily Coach Brief — 3-5 data-driven insights + today's priority.

@@ -88,6 +88,24 @@ export function configSummary() {
   };
 }
 
+// Diagnostics-only, never a key value: which of the two gates
+// isProviderConfigured() checks is actually failing for a given cloud
+// provider -- the zero-cost opt-in flag, or a missing key specifically.
+// Lets a live deployment's env var config be verified precisely (e.g.
+// "ALLOW_PAID_AI isn't being read as true" vs "GROQ_API_KEY is missing")
+// without ever exposing the key itself.
+export function paidProviderDiagnostics() {
+  return {
+    allowPaidAI: ALLOW_PAID_AI,
+    hasKey: {
+      groq: !!keyFor('groq'),
+      gemini: !!keyFor('gemini'),
+      openrouter: !!keyFor('openrouter'),
+      openai: !!keyFor('openai'),
+    },
+  };
+}
+
 // ------------------------------------------------------------------
 // OLLAMA — local LLM. POST /api/chat (OpenAI-compatible shape).
 // Ollama's /api/chat returns { message: { role, content } }.
