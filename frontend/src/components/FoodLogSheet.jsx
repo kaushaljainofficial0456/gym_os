@@ -56,6 +56,17 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  // Tier 3 (kNN similarity fallback) -- GET /foods/search already includes
+  // this alongside an empty `foods` array (see foodEstimator.js's
+  // estimateFoodKnn); it's free, local and instant (no AI call), so it's
+  // offered before "Estimate with AI" rather than only after. No source_id
+  // (it's a synthesized estimate, not a real matched row) and no portion
+  // catalogue, so quantity is a plain editable grams field, scaled
+  // client-side from the SAME per-100g fields the backend already
+  // computed -- identical math to scaleNutrition(), not a new formula.
+  const [knnEstimate, setKnnEstimate] = useState(null);
+  const [knnGrams, setKnnGrams] = useState('100');
+  const [knnLogging, setKnnLogging] = useState(false);
   const [food, setFood] = useState(null);
   const [portionKey, setPortionKey] = useState(null);
   const [count, setCount] = useState(1);
@@ -133,19 +144,25 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
       setManualAdd(false); setManualBarcode(''); setManualForm(EMPTY_MANUAL); setManualErr('');
       setLabelScanning(false); setLabelNote('');
       setAiResult(null); setAiErr(''); setAiEstimating(false);
+      setKnnEstimate(null); setKnnGrams('100'); setKnnLogging(false);
     }
   }, [open, autoScan]);
 
   // Type-ahead. Debounced so a fast typist does not fire a request per key.
   useEffect(() => {
     const term = q.trim();
-    if (food || term.length < 2) { setResults([]); setSearching(false); return undefined; }
+    if (food || term.length < 2) { setResults([]); setKnnEstimate(null); setSearching(false); return undefined; }
     setSearching(true);
     let dead = false;
     const h = setTimeout(() => {
       api(`/me/foods/search?q=${encodeURIComponent(term)}`)
-        .then((r) => { if (!dead) setResults(r.foods || []); })
-        .catch(() => { if (!dead) setResults([]); })
+        .then((r) => {
+          if (dead) return;
+          setResults(r.foods || []);
+          setKnnEstimate(r.knn_estimate || null);
+          setKnnGrams('100');
+        })
+        .catch(() => { if (!dead) { setResults([]); setKnnEstimate(null); } })
         .finally(() => { if (!dead) setSearching(false); });
     }, 200);
     return () => { dead = true; clearTimeout(h); };
@@ -204,6 +221,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   const pick = (f) => {
     setFood(f);
     setResults([]);
+    setKnnEstimate(null);
     // Default to the food's own serving when it has one, else grams entry.
     const first = (f.portions || []).find((p) => p.basis === 'serving')
       || (f.portions || []).find((p) => p.group === 'bowl')
@@ -248,6 +266,32 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
       setErr(e.message || 'Could not add that food');
     }
     setBusy(false);
+  };
+
+  // Tier 3: log the kNN estimate at the user's chosen grams. Purely local
+  // arithmetic -- no server round-trip needed, since the response already
+  // carries per-100g values and this is the SAME grams/100 scaling
+  // scaleNutrition() does everywhere else, not a new formula.
+  const commitKnn = async () => {
+    if (!knnEstimate) return;
+    const g = Number(knnGrams);
+    if (!(g > 0)) { setErr('Enter a valid amount in grams'); return; }
+    const factor = g / 100;
+    setKnnLogging(true);
+    try {
+      await onAdd({
+        name: knnEstimate.food_name,
+        calories: Math.round((knnEstimate.energy_kcal || 0) * factor),
+        protein: Math.round((knnEstimate.protein_g || 0) * factor * 10) / 10,
+        carbs: Math.round((knnEstimate.carb_g || 0) * factor * 10) / 10,
+        fat: Math.round((knnEstimate.fat_g || 0) * factor * 10) / 10,
+        source: 'knn_estimated',
+      });
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Could not add that food');
+    }
+    setKnnLogging(false);
   };
 
   const estimateWithAI = async () => {
@@ -484,10 +528,59 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                   <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
                     Nothing matched “{q.trim()}”.
                   </div>
+
+                  {/* Tier 3 -- free, instant, no AI call. Offered first since
+                      it costs nothing and needs no round-trip beyond the
+                      search itself; "Estimate with AI" stays available right
+                      below for when this isn't a good enough match. */}
+                  {knnEstimate && (
+                    <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ border: '1px solid var(--line)' }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{knnEstimate.food_name}</div>
+                          <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                            similar to “{knnEstimate.matched_neighbor}” · {Math.round((knnEstimate.top_similarity || 0) * 100)}% match
+                          </div>
+                        </div>
+                        <span className="text-[9px] uppercase tracking-[.14em] font-semibold px-2 py-1 rounded-full shrink-0"
+                              style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                          estimated
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number" min="0" step="1" value={knnGrams}
+                            onChange={(e) => setKnnGrams(e.target.value)}
+                            aria-label="Grams"
+                            className="w-16 text-[12px] rounded px-1.5 py-1 tabular-nums"
+                            style={{ background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                          />
+                          <span className="text-[11px]" style={{ color: 'var(--faint)' }}>g</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-[15px] tabular-nums" style={{ color: 'var(--ink)' }}>
+                            ~{Math.round((knnEstimate.energy_kcal || 0) * (Number(knnGrams) || 0) / 100)} kcal
+                          </div>
+                          <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
+                            P {r1((knnEstimate.protein_g || 0) * (Number(knnGrams) || 0) / 100)} ·
+                            C {r1((knnEstimate.carb_g || 0) * (Number(knnGrams) || 0) / 100)} ·
+                            F {r1((knnEstimate.fat_g || 0) * (Number(knnGrams) || 0) / 100)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] leading-relaxed" style={{ color: 'var(--faint)' }}>{knnEstimate.disclaimer}</div>
+                      <Pressable onClick={commitKnn} disabled={knnLogging || !(Number(knnGrams) > 0)}
+                                 className="btn-primary w-full !py-2 text-[12px] font-bold">
+                        {knnLogging ? 'Adding…' : 'Log it'}
+                      </Pressable>
+                    </div>
+                  )}
+
                   <Pressable onClick={estimateWithAI} disabled={aiEstimating}
                              className="btn w-full !py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2">
                     <Icon name="robot" size={15} />
-                    {aiEstimating ? 'Estimating…' : 'Estimate with AI'}
+                    {aiEstimating ? 'Estimating…' : knnEstimate ? 'Not quite right? Estimate with AI' : 'Estimate with AI'}
                   </Pressable>
                   {aiErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
                 </div>

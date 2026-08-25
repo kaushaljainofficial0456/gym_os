@@ -81,8 +81,10 @@ export const schemas = {
     eaten: z.boolean().default(true),
     // ai_estimated/ai_estimated_user_adjusted are additive (food-AI Tier 4,
     // see foodAI.js) -- 'ai' keeps its existing meaning (the older photo/
-    // text AI-estimate flow) untouched, never repurposed.
-    source: z.enum(['plan', 'ai', 'manual', 'ai_estimated', 'ai_estimated_user_adjusted']).default('manual'),
+    // text AI-estimate flow) untouched, never repurposed. knn_estimated is
+    // Tier 3 (similarity-weighted kNN, foodEstimator.js's estimateFoodKnn) --
+    // distinct from ai_estimated because no AI provider is involved.
+    source: z.enum(['plan', 'ai', 'manual', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']).default('manual'),
     estimate: z.boolean().default(false),
     // Tier-4 provenance, optional -- only present when source starts with
     // 'ai_estimated'. Never used to mark a result "measured": these are
