@@ -39,6 +39,7 @@ const Progress = lazy(() => import('./pages/client/Progress.jsx'));
 const Profile = lazy(() => import('./pages/client/Profile.jsx'));
 const Settings = lazy(() => import('./pages/client/Settings.jsx'));
 const Help = lazy(() => import('./pages/client/Help.jsx'));
+const Community = lazy(() => import('./pages/client/Community.jsx'));
 // Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="progress" element={page(Progress)} />
         <Route path="profile" element={page(Profile)} />
         <Route path="settings" element={page(Settings)} />
+        <Route path="community" element={page(Community)} />
         <Route path="help" element={page(Help)} />
       </Route>
       <Route path="*" element={<Navigate to={authed ? (isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />

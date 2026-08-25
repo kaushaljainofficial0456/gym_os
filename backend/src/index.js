@@ -27,6 +27,7 @@ import adminRoutes from './routes/admin.js';
 import meRoutes from './routes/me.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
+import communityRoutes from './routes/community.js';
 
 // Builds the Express app without starting a listener, so it can be reused
 // both by the traditional long-running server below (for local dev or a
@@ -122,6 +123,7 @@ app.use('/api/business', adminRoutes(db));
 app.use('/api/admin', adminRoutes(db)); // alias — Business page calls /admin/*
 app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail dashboard
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
+app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under

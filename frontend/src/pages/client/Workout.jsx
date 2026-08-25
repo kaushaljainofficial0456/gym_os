@@ -73,7 +73,9 @@ export default function Workout() {
   const [infoEx, setInfoEx] = useState(null);   // main-page info panel
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
-  const [intensity, setIntensity] = useState(null); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
+  const [intensity, setIntensity] = useState(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
   const [burnLoading, setBurnLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   // this week preview
@@ -1186,9 +1188,36 @@ export default function Workout() {
               different-looking calorie figures a few pixels apart. One
               honest range beats two numbers that disagree. */}
 
-          <button className="btn w-full mt-5" onClick={() => { setMode('browse'); setResult(null); setExProgress({}); setSetLog({}); setElapsed(0); setBurn(null); setBurnInput(null); setIntensity(null); }}>Done</button>
+          {/* Share workout button */}
+          {workout?.id && (
+            <button
+              className="btn w-full mt-3 flex items-center justify-center gap-2"
+              disabled={sharing}
+              onClick={async () => {
+                setSharing(true);
+                try {
+                  await api('/community/shares', {
+                    method: 'POST',
+                    body: JSON.stringify({ workout_id: workout.id }),
+                  });
+                  setShareToast('Workout shared with your gym!');
+                } catch (e) {
+                  setShareToast(e.message || 'Could not share');
+                }
+                setSharing(false);
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+              {sharing ? 'Sharing…' : 'Share Workout'}
+            </button>
+          )}
+          <button className="btn w-full mt-3" onClick={() => { setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setBurn(null); setBurnInput(null); setIntensity(null); setSharing(false); setShareToast(''); }}>Done</button>
         </div>
       </div>
+      {shareToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card anim-toast">
+          <span className="text-good mr-2">✓</span>{shareToast}
+        </div>
+      )}
     </div>
   );
 }

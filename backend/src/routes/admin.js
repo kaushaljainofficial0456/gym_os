@@ -183,18 +183,19 @@ export default function adminRoutes(db) {
   // ---- gym settings (branding, crowd capacity, default client permissions) ----
   r.get('/settings', async (req, res) => {
     const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
-    res.json({ settings: s || { org_id: req.orgId, brand_name: 'SK OS', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1 } });
+    res.json({ settings: s || { org_id: req.orgId, brand_name: 'SK OS', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
   });
 
   r.put('/settings', async (req, res) => {
-    const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets } = req.body || {};
+    const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, community_enabled, community_leaderboard_enabled } = req.body || {};
     await db.run(
-      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, community_enabled, community_leaderboard_enabled, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(org_id) DO UPDATE SET brand_name=excluded.brand_name, tagline=excluded.tagline,
          crowd_capacity=excluded.crowd_capacity, crowd_enabled=excluded.crowd_enabled,
          workout_mode_default=excluded.workout_mode_default, allow_substitute=excluded.allow_substitute,
          allow_add_exercise=excluded.allow_add_exercise, allow_edit_targets=excluded.allow_edit_targets,
+         community_enabled=excluded.community_enabled, community_leaderboard_enabled=excluded.community_leaderboard_enabled,
          updated_at=excluded.updated_at`,
       [req.orgId,
        String(brand_name ?? 'SK OS').slice(0, 40),
@@ -205,6 +206,8 @@ export default function adminRoutes(db) {
        allow_substitute === false || allow_substitute === 0 ? 0 : 1,
        allow_add_exercise === false || allow_add_exercise === 0 ? 0 : 1,
        allow_edit_targets === false || allow_edit_targets === 0 ? 0 : 1,
+       community_enabled === false || community_enabled === 0 ? 0 : 1,
+       community_leaderboard_enabled === false || community_leaderboard_enabled === 0 ? 0 : 1,
        now()]);
     track(db, 'gym_settings_updated', req.orgId, req.user.sub, {});
     res.json({ ok: true });

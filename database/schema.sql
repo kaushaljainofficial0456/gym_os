@@ -402,6 +402,8 @@ CREATE TABLE IF NOT EXISTS gym_settings (
   allow_substitute  INTEGER NOT NULL DEFAULT 1,
   allow_add_exercise INTEGER NOT NULL DEFAULT 1,
   allow_edit_targets INTEGER NOT NULL DEFAULT 1,
+  community_enabled INTEGER NOT NULL DEFAULT 1,
+  community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1,
   updated_at   TEXT
 );
 
@@ -738,3 +740,30 @@ CREATE TABLE IF NOT EXISTS ai_feedback (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ai_feedback_client ON ai_feedback(client_id, created_at);
+
+-- ============================================================
+-- GYM COMMUNITY — opt-in participation, leaderboards, workout sharing
+-- ============================================================
+
+-- Per-client opt-in to gym community (privacy-first: default OFF)
+CREATE TABLE IF NOT EXISTS community_members (
+  client_id   TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  enabled     INTEGER NOT NULL DEFAULT 0,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_community_members_org ON community_members(org_id, enabled);
+
+-- Workout shares visible within a gym's community feed
+CREATE TABLE IF NOT EXISTS community_workout_shares (
+  id           TEXT PRIMARY KEY,
+  org_id       TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id    TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workout_id   TEXT NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+  workout_name TEXT NOT NULL,
+  payload      TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cws_org_feed ON community_workout_shares(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_cws_client ON community_workout_shares(client_id);
+

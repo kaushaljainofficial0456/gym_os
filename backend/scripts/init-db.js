@@ -112,6 +112,9 @@ const MIGRATIONS = [
   ['foods', 'barcode', `barcode TEXT`],
   ['foods', 'ingredients_text', `ingredients_text TEXT`],
   ['foods', 'image_url', `image_url TEXT`],
+  // --- gym community: org-level feature toggles ---
+  ['gym_settings', 'community_enabled', `community_enabled INTEGER NOT NULL DEFAULT 1`],
+  ['gym_settings', 'community_leaderboard_enabled', `community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
