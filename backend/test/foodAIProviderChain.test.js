@@ -45,6 +45,13 @@ test.before(async () => {
   foodAI = await import('../src/services/intelligence/foodAI.js');
 });
 
+// Cooldown/daily-budget state is module-level and persists for this whole
+// file's process (same as PROVIDER_CHAIN itself) -- without resetting it,
+// Scenario C's deliberate 429 would leave Groq on cooldown for every
+// scenario that runs after it, silently turning "Groq fails, cascade" into
+// "Groq was skipped before it was ever called". Reset before each test.
+test.beforeEach(() => { foodAI._resetCostSafetyStateForTests(); });
+
 const validAIResponse = (over = {}) => ({
   food_name: 'Test dish', food_type: 'composite_dish', cuisine: null,
   is_branded_or_restaurant: false,
@@ -304,4 +311,78 @@ test('Scenario M — observability trail contains no API keys, and reports corre
   const trail = JSON.stringify(result); // the full response, as it would be logged/returned
   assert.ok(!trail.includes('SUPER_SECRET_VALUE'), 'groq key must never appear in the result/observability trail');
   assert.ok(!trail.includes('SECRET_GEMINI_VALUE'), 'gemini key must never appear in the result/observability trail');
+});
+
+/* ------------------------------------------------------------------ */
+/*  COST SAFETY BEYOND THE ZERO-COST GATE -- added per explicit request: */
+/*  "if limit reaches then it should not use credits or money, fall     */
+/*  back to our own model". Two independent mechanisms, tested          */
+/*  separately: rate-limit cooldown (skip a just-429'd provider instead  */
+/*  of re-hitting it) and an optional hard daily call ceiling this app   */
+/*  enforces itself, independent of the vendor account's own settings.  */
+/* ------------------------------------------------------------------ */
+
+test('Cost safety — a provider that just 429\'d is skipped (no network call) on the NEXT request, not re-hit', async (t) => {
+  setKeys();
+  const calls1 = mockProviders(t, {
+    groq: () => new Response('rate limited', { status: 429 }),
+    gemini: () => geminiOk(validAIResponse()),
+  });
+  const r1 = await foodAI.estimateFoodAI(null, { query: `cooldown first ${Date.now()}` });
+  assert.equal(r1.ok, true);
+  assert.equal(r1.ai.provider, 'gemini');
+  assert.equal(calls1.groq, 1, 'groq must genuinely be called the first time');
+
+  // Second, independent request -- groq must be skipped outright (still
+  // within the cooldown window), never given a second chance to 429 again.
+  const calls2 = mockProviders(t, {
+    groq: () => { throw new Error('groq must not be called again while on cooldown'); },
+    gemini: () => geminiOk(validAIResponse()),
+  });
+  const r2 = await foodAI.estimateFoodAI(null, { query: `cooldown second ${Date.now()}` });
+  assert.equal(r2.ok, true);
+  assert.equal(r2.ai.provider, 'gemini');
+  assert.equal(calls2.groq, 0, 'a provider on cooldown must not be called at all');
+});
+
+test('Cost safety — an optional daily call ceiling caps a provider at N calls/day, then falls through, independent of the vendor account', async (t) => {
+  const savedLimit = process.env.FOOD_AI_DAILY_LIMIT_GROQ;
+  process.env.FOOD_AI_DAILY_LIMIT_GROQ = '2';
+  try {
+    const cappedFoodAI = await import(`../src/services/intelligence/foodAI.js?scenario=daily-limit-${Date.now()}`);
+    setKeys();
+    const calls = mockProviders(t, {
+      groq: () => groqOk(validAIResponse({ food_name: 'from groq' })),
+      gemini: () => geminiOk(validAIResponse({ food_name: 'from gemini' })),
+    });
+
+    const r1 = await cappedFoodAI.estimateFoodAI(null, { query: `budget one ${Date.now()}` });
+    assert.equal(r1.ai.provider, 'groq');
+    const r2 = await cappedFoodAI.estimateFoodAI(null, { query: `budget two ${Date.now()}` });
+    assert.equal(r2.ai.provider, 'groq');
+    assert.equal(calls.groq, 2, 'exactly 2 real groq calls -- the configured ceiling');
+
+    // Third call: groq must be skipped for the day, falling to gemini --
+    // never a third real call to groq, regardless of what groq's own
+    // account would otherwise allow.
+    const r3 = await cappedFoodAI.estimateFoodAI(null, { query: `budget three ${Date.now()}` });
+    assert.equal(r3.ok, true);
+    assert.equal(r3.ai.provider, 'gemini');
+    assert.equal(calls.groq, 2, 'groq must NOT receive a 3rd call once its daily ceiling is reached');
+
+    const summary = cappedFoodAI.foodAIConfigSummary();
+    assert.equal(summary.dailyLimits.groq, 2);
+    assert.equal(summary.dailyUsage.groq, 2);
+  } finally {
+    if (savedLimit === undefined) delete process.env.FOOD_AI_DAILY_LIMIT_GROQ; else process.env.FOOD_AI_DAILY_LIMIT_GROQ = savedLimit;
+  }
+});
+
+test('Cost safety — with every cloud provider capped/unavailable, Tier 4 reports unresolved gracefully (never throws, never fabricates)', async (t) => {
+  setKeys({ groq: null, gemini: null, openrouter: null });
+  mockProviders(t, {}); // no handlers at all -- ollama (unreachable here) is the only configured entry
+  const result = await foodAI.estimateFoodAI(null, { query: `all capped ${Date.now()}` });
+  assert.equal(result.ok, false);
+  assert.equal(result.estimate_status, 'unresolved');
+  assert.ok(result.reason && result.error);
 });

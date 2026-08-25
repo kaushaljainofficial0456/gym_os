@@ -15,10 +15,17 @@ import fs from 'node:fs';
 import {
   validateAIFoodResponse, resolveUncertainty, resolveComponents,
   sumComponentTotals, deriveConfidence, estimateFoodAI, isFoodAIAvailable,
-  recomputeAdjustedComponents,
+  recomputeAdjustedComponents, _resetCostSafetyStateForTests,
 } from '../src/services/intelligence/foodAI.js';
 import { getFoodSearch } from '../src/services/foodEstimator.js';
 import { canonicalizeFoodQuery, isPersonalQuery } from '../src/services/intelligence/foodAICache.js';
+
+// A rate-limit (429) response mocked in one test marks that provider on
+// cooldown for the rest of this file's process (see foodAI.js's own
+// comment on why this state is module-level, not per-call) -- without
+// resetting it between tests, an earlier 429 test silently turns a later
+// "ollama succeeds" test into "ollama was skipped, on cooldown".
+test.beforeEach(() => { _resetCostSafetyStateForTests(); });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');

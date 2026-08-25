@@ -94,7 +94,89 @@ export function foodAIConfigSummary() {
     fallbackProvider: FALLBACK_PROVIDER,
     fallbackAvailable: FALLBACK_PROVIDER ? isProviderConfigured(FALLBACK_PROVIDER) : false,
     model: FOOD_AI_MODEL,
+    dailyLimits: DAILY_LIMITS,
+    dailyUsage: Object.fromEntries(PROVIDER_CHAIN.map((p) => [p, _dailyCount.get(p) || 0])),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cost safety beyond the zero-cost provider gate                     */
+/*                                                                      */
+/*  A free-tier account with NO payment method attached already cannot */
+/*  be billed by hitting its quota -- Groq/Gemini just return 429 and   */
+/*  the chain below already falls through to the next provider, never  */
+/*  throwing or blocking food logging. That protection lives entirely  */
+/*  on the vendor's own account settings, though, which this codebase  */
+/*  cannot see or control -- if a payment method IS attached to either  */
+/*  account, an over-quota call succeeds and bills, and looks identical */
+/*  to a normal free response from here. These two mechanisms are the   */
+/*  app's OWN, account-independent backstop:                            */
+/*                                                                      */
+/*  1. RATE-LIMIT COOLDOWN -- once a provider returns 429, skip it (no  */
+/*     network call at all) for a cooldown window instead of hammering  */
+/*     it again on every subsequent request while its quota is still    */
+/*     exhausted. Purely a latency/politeness improvement, not a money  */
+/*     control by itself (a skipped 429 was never going to bill either  */
+/*     way) -- but it's what makes "the app noticed the limit and       */
+/*     backed off" true rather than aspirational.                       */
+/*  2. DAILY CALL BUDGET (optional, unset by default -- no behaviour     */
+/*     change unless configured) -- a hard ceiling THIS APP enforces on  */
+/*     how many real calls it will ever send a given provider per UTC   */
+/*     day, independent of whatever the vendor's own dashboard would     */
+/*     otherwise allow through. Once hit, that provider is skipped for   */
+/*     the rest of the day exactly like an unconfigured one -- the      */
+/*     chain falls through to the next provider, and if every cloud      */
+/*     provider is capped/unavailable, Tier 4 returns 'unresolved'       */
+/*     exactly as it always has. Tier 1-3 (measured DB, compositional,   */
+/*     kNN) are entirely local and free and are unaffected -- and the    */
+/*     UI already shows the Tier-3 estimate BEFORE offering "Estimate    */
+/*     with AI" at all, so a capped-out AI layer still leaves a usable,  */
+/*     zero-cost estimate on screen, not a dead end.                     */
+/*                                                                      */
+/*  HONEST LIMITATION: both trackers are in-process memory, not a DB or */
+/*  shared store -- correct for this single-process deployment, but a   */
+/*  restart resets them and a multi-instance deployment would need a    */
+/*  shared counter (Redis, a DB row) to enforce one TRUE daily ceiling   */
+/*  across instances rather than one per process.                       */
+/* ------------------------------------------------------------------ */
+
+const RATE_LIMIT_COOLDOWN_MS = Number(process.env.FOOD_AI_RATE_LIMIT_COOLDOWN_MS) || 5 * 60_000; // 5 min
+const _cooldownUntil = new Map(); // provider -> epoch ms
+
+function isOnCooldown(provider) {
+  const until = _cooldownUntil.get(provider);
+  return !!until && Date.now() < until;
+}
+function markRateLimitCooldown(provider) {
+  _cooldownUntil.set(provider, Date.now() + RATE_LIMIT_COOLDOWN_MS);
+}
+
+function numOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+const DAILY_LIMITS = {
+  groq: numOrNull(process.env.FOOD_AI_DAILY_LIMIT_GROQ),
+  gemini: numOrNull(process.env.FOOD_AI_DAILY_LIMIT_GEMINI),
+  openrouter: numOrNull(process.env.FOOD_AI_DAILY_LIMIT_OPENROUTER),
+};
+let _dayKey = null;
+const _dailyCount = new Map(); // provider -> count so far today (UTC)
+
+function todayKeyUTC() { return new Date().toISOString().slice(0, 10); }
+function resetDailyCountIfNewDay() {
+  const key = todayKeyUTC();
+  if (_dayKey !== key) { _dayKey = key; _dailyCount.clear(); }
+}
+function withinDailyBudget(provider) {
+  const limit = DAILY_LIMITS[provider];
+  if (!limit) return true; // no configured ceiling -- existing behaviour
+  resetDailyCountIfNewDay();
+  return (_dailyCount.get(provider) || 0) < limit;
+}
+function bumpDailyCount(provider) {
+  resetDailyCountIfNewDay();
+  _dailyCount.set(provider, (_dailyCount.get(provider) || 0) + 1);
 }
 
 /* ------------------------------------------------------------------ */
@@ -585,12 +667,21 @@ async function callWithFallback(system, user) {
       attempts.push({ provider, outcome: 'skipped_unconfigured' });
       continue;
     }
+    if (isOnCooldown(provider)) {
+      attempts.push({ provider, outcome: 'skipped_cooldown' });
+      continue;
+    }
+    if (!withinDailyBudget(provider)) {
+      attempts.push({ provider, outcome: 'skipped_daily_budget', limit: DAILY_LIMITS[provider] });
+      continue;
+    }
     const t0 = Date.now();
     try {
       const raw = await callProviderRaw(provider, system, user, {
         json: true, model: FOOD_AI_MODEL, timeoutMs: FOOD_AI_TIMEOUT_MS,
       });
       const latencyMs = Date.now() - t0;
+      bumpDailyCount(provider); // a completed call, success or not -- it still spent one of the day's allotment
       const parsed = parseJSON(raw);
       if (!parsed) {
         attempts.push({ provider, outcome: 'failure', reason: 'invalid_json', latencyMs });
@@ -610,6 +701,8 @@ async function callWithFallback(system, user) {
       const isRateLimit = /429|rate.?limit/i.test(String(e.message || ''));
       const isTimeout = /timed out/i.test(String(e.message || ''));
       const reason = isRateLimit ? 'rate_limited' : isTimeout ? 'timeout' : 'error';
+      if (isRateLimit) markRateLimitCooldown(provider); // back off this provider for a while instead of re-hitting it next request
+      else bumpDailyCount(provider); // a rate-limit never reached the vendor as a counted call in most APIs; other failures (timeout aside) generally did
       attempts.push({ provider, outcome: 'failure', reason, detail: e.message, latencyMs });
       fallbackDepth++;
       continue; // try the next provider in the chain
@@ -801,6 +894,18 @@ function shapeCachedResult(cached, displayName) {
 // calls use (same food-v1 JSON contract, same measured-food anchoring)
 // rather than a second, drifting copy of the prompt.
 export { SYSTEM_PROMPT, buildUserMessage, gatherMeasuredReferences };
+
+// TEST-ONLY: clears the in-process rate-limit-cooldown and daily-call-count
+// state. Without this, one test that deliberately triggers a 429 leaves a
+// LATER test's supposedly-fresh scenario silently skipping that provider
+// (skipped_cooldown) instead of genuinely exercising it -- module state
+// persists for the whole test file's process, the same way PROVIDER_CHAIN
+// itself does. Never used outside tests.
+export function _resetCostSafetyStateForTests() {
+  _cooldownUntil.clear();
+  _dailyCount.clear();
+  _dayKey = null;
+}
 
 export default {
   isFoodAIAvailable, foodAIConfigSummary, estimateFoodAI, validateAIFoodResponse,
