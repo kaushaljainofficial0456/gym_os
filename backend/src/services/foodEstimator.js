@@ -55,6 +55,9 @@ const {
   BarcodeIndex, autoLogFromBarcode, cleanCode, canonicalEan13, resolveServing,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'barcodeLookup.reference.js'));
 
+const { CompositionalCalculator } = require(path.join(ML, 'models', 'skos-food-v1', 'compositional.reference.js'));
+const { FallbackKnnIndex } = require(path.join(ML, 'models', 'skos-food-v1', 'fallbackKnn.reference.js'));
+
 // Re-exported for barcodeLookup.js (live/DB-cache fallback layered on top of
 // this local snapshot): same code-cleaning and per-100g-scaling primitives
 // the static index uses, so an external-API or DB-cached hit is scaled
@@ -74,6 +77,9 @@ export { scaleNutrition };
 let _search = null;
 let _barcodes = null;
 let _loadError = null;
+let _compositional = null;
+let _knn = null;
+let _knnLoadError = null;
 
 function readJSON(file) {
   return JSON.parse(fs.readFileSync(path.join(PROC, file), 'utf8'));
@@ -117,6 +123,42 @@ export function getBarcodeIndex() {
 
 export function modelAvailable() {
   return getFoodSearch() !== null;
+}
+
+/**
+ * Tier 2 — compositional calculator (ml/models/skos-food-v1/compositional.reference.js).
+ * Prices a dish from a user-supplied ingredient list against the SAME
+ * measured database and search engine Tier 1 uses. Returns null if the
+ * search index itself is unavailable (same degrade-gracefully contract as
+ * every other lazy singleton here).
+ */
+export function getCompositionalCalculator() {
+  if (_compositional) return _compositional;
+  const search = getFoodSearch();
+  if (!search) return null;
+  _compositional = new CompositionalCalculator(search);
+  return _compositional;
+}
+
+/**
+ * Tier 3 — similarity-weighted kNN fallback (ml/models/skos-food-v1/
+ * fallbackKnn.reference.js), reading the static index exported by
+ * ml/src/inference/export_fallback_v4_index.py. Returns null if the
+ * artifact hasn't been generated for this deployment -- a missing Tier 3
+ * index must degrade to "not available", never throw and never fall back
+ * to inventing a match.
+ */
+export function getKnnFallback() {
+  if (_knn || _knnLoadError) return _knn;
+  try {
+    const payload = JSON.parse(
+      fs.readFileSync(path.join(ML, 'models', 'skos-food-v1', 'fallback_v4_index.json'), 'utf8'));
+    _knn = new FallbackKnnIndex(payload);
+  } catch (err) {
+    _knnLoadError = err;
+    _knn = null;
+  }
+  return _knn;
 }
 
 /* ------------------------------------------------------------------ */
@@ -668,4 +710,84 @@ export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLev
  */
 export function estimateFromBarcode(code, servings = 1) {
   return autoLogFromBarcode(code, servings, getBarcodeIndex());
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tier 2 — compositional (ingredients known)                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Price a dish from a user-supplied ingredient list.
+ * ingredients: [{ name, amount, unit }, ...]
+ * Returns null if the model isn't available on this deployment; otherwise
+ * the calculator's own result shape (CompositionalCalculator.compute()),
+ * ok:true/false per-call, never throws on a bad/partial ingredient list.
+ */
+export function estimateCompositional(ingredients, { servings = 1, dishName = null } = {}) {
+  const calc = getCompositionalCalculator();
+  if (!calc) return null;
+  return calc.compute(ingredients, { servings, dishName });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tier 3 — similarity-weighted kNN (name only)                       */
+/* ------------------------------------------------------------------ */
+
+/** Confidence bands derived from the MEASURED regime accuracy in
+ *  fallback_v4_metrics.json (regime A ~17% / regime B ~15% median APE at
+ *  reasonable similarity) -- not invented thresholds. A low top-similarity
+ *  means the nearest measured neighbour is still a poor stand-in for the
+ *  query, which is exactly when this tier should say so rather than
+ *  present a number with unearned confidence. */
+function knnConfidence(topSimilarity) {
+  if (topSimilarity >= 0.55) return 'medium';
+  if (topSimilarity >= 0.3) return 'low';
+  return 'unreliable';
+}
+
+/**
+ * Tier 3: similarity-weighted kNN estimate for a food name search found
+ * nothing for. Shaped like a Tier-1 food match (same per-100g field names)
+ * so a caller that already knows how to render/scale a "food" object needs
+ * minimal special-casing, but explicitly tagged as an estimate throughout
+ * -- never presented with Tier-1's confidence.
+ *
+ * Returns null when the model artifact isn't available on this deployment,
+ * or when the query shares nothing at all with the measured corpus (no
+ * neighbours found) -- never a fabricated match.
+ */
+export function estimateFoodKnn(query, { grams = 100 } = {}) {
+  const knn = getKnnFallback();
+  if (!knn) return null;
+  const result = knn.predict(query);
+  if (!result) return null;
+
+  const factor = grams / 100;
+  const p = result.predicted;
+  return {
+    schema_version: 'food-v1',
+    tier: 3,
+    estimate: true,
+    estimate_status: 'knn_estimated',
+    source_id: null,
+    food_name: query,
+    matched_neighbor: result.neighbors[0]?.name || null,
+    neighbors: result.neighbors,
+    top_similarity: round1(result.top_similarity * 100) / 100,
+    confidence: knnConfidence(result.top_similarity),
+    trustworthy: false, // an estimate, never a measured value -- callers must not treat it as Tier 1
+    match_kind: 'knn_similarity',
+    energy_kcal: round1(p.energy_kcal),
+    protein_g: round1(p.protein_g),
+    fat_g: round1(p.fat_g),
+    carb_g: round1(p.carb_g),
+    grams: round1(grams),
+    totals: {
+      calories: Math.round(p.energy_kcal * factor),
+      protein: round1(p.protein_g * factor),
+      carbs: round1(p.carb_g * factor),
+      fat: round1(p.fat_g * factor),
+    },
+    disclaimer: 'No exact or ingredient-based match was found. This is an estimate based on similar measured foods, not a direct measurement.',
+  };
 }

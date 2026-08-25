@@ -15,7 +15,9 @@ import fs from 'node:fs';
 import {
   validateAIFoodResponse, resolveUncertainty, resolveComponents,
   sumComponentTotals, deriveConfidence, estimateFoodAI, isFoodAIAvailable,
+  recomputeAdjustedComponents,
 } from '../src/services/intelligence/foodAI.js';
+import { getFoodSearch } from '../src/services/foodEstimator.js';
 import { canonicalizeFoodQuery, isPersonalQuery } from '../src/services/intelligence/foodAICache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -461,4 +463,98 @@ test('estimateFoodAI — a well-formed provider response produces a valid, fully
   const result2 = await estimateFoodAI(db, { query: 'end to end test biryani unique marker' });
   assert.equal(result2.from_cache, true);
   assert.equal(calls2.length, 0);
+});
+
+/* ------------------------------------------------------------------ */
+/*  recomputeAdjustedComponents — user adjustment flow, never a second  */
+/*  AI call. Spec: "do NOT blindly trust the original AI total".        */
+/* ------------------------------------------------------------------ */
+
+test('recomputeAdjustedComponents — no edits reproduces the same grounded totals deterministically', () => {
+  const search = getFoodSearch();
+  if (!search) { assert.ok(true, 'model DB not present -- skipping'); return; }
+  const { components: original } = resolveComponents([
+    { name: 'cooked rice', estimated_weight_g: 200, calories: 1, protein_g: 1, carbs_g: 1, fat_g: 1 },
+  ]);
+  const { components, totals } = recomputeAdjustedComponents(original, [null]);
+  assert.equal(components.length, 1);
+  assert.equal(components[0].provenance.name, 'ai_original');
+  assert.equal(components[0].provenance.estimated_weight_g, 'ai_original');
+  if (original[0].db_grounded) {
+    assert.equal(components[0].calories, original[0].calories);
+    assert.equal(totals.calories, original[0].calories);
+  }
+});
+
+test('recomputeAdjustedComponents — grams-only edit re-scales the SAME matched food, linearly', () => {
+  const search = getFoodSearch();
+  if (!search) { assert.ok(true, 'model DB not present -- skipping'); return; }
+  const { components: original } = resolveComponents([
+    { name: 'cooked rice', estimated_weight_g: 200, calories: 1, protein_g: 1, carbs_g: 1, fat_g: 1 },
+  ]);
+  if (!original[0].db_grounded) { assert.ok(true, 'rice did not ground in this DB snapshot -- skipping'); return; }
+
+  const { components } = recomputeAdjustedComponents(original, [{ estimated_weight_g: 400 }]);
+  assert.equal(components[0].matched_source_id, original[0].matched_source_id);
+  assert.equal(components[0].db_grounded, true);
+  assert.equal(components[0].provenance.estimated_weight_g, 'user_adjusted');
+  assert.equal(components[0].provenance.name, 'ai_original');
+  // 400g is exactly 2x 200g -- calories must double exactly (real scaleNutrition, not approximated).
+  assert.ok(Math.abs(components[0].calories - original[0].calories * 2) < 0.5);
+});
+
+test('recomputeAdjustedComponents — an ingredient NAME swap re-resolves through Tier 2\'s alias-aware lookup', () => {
+  const search = getFoodSearch();
+  if (!search) { assert.ok(true, 'model DB not present -- skipping'); return; }
+  const { components: original } = resolveComponents([
+    { name: 'rice', estimated_weight_g: 200, calories: 1, protein_g: 1, carbs_g: 1, fat_g: 1 },
+  ]);
+  // Swap "rice" for "mutton" -- must re-resolve to real goat meat via the
+  // SAME curated alias map Tier 2 uses, not stay pinned to the rice match.
+  const { components } = recomputeAdjustedComponents(original, [{ name: 'mutton', estimated_weight_g: 300 }]);
+  assert.equal(components[0].name, 'mutton');
+  assert.equal(components[0].provenance.name, 'user_adjusted');
+  assert.equal(components[0].provenance.estimated_weight_g, 'user_adjusted');
+  if (components[0].db_grounded) {
+    assert.ok(!/tallow|lard|korma|curry/i.test(components[0].matched_food || ''),
+      `mutton swap must not resolve to rendered fat or a dish, got "${components[0].matched_food}"`);
+  }
+});
+
+test('recomputeAdjustedComponents — removing a component drops it from totals entirely', () => {
+  // Names deliberately unresolvable against the real DB (unlike "rice"/
+  // "oil", which the alias-aware lookup WOULD ground -- and correctly so,
+  // even on an untouched sibling component, since re-deriving via the same
+  // deterministic function on the same inputs always reproduces the same
+  // result. Using genuinely unresolvable names here keeps this test about
+  // removal, not about whether Case 2's re-resolution attempt fires.
+  const original = [
+    { name: 'zzqxvv-fixture-food-a', estimated_weight_g: 200, calories: 260, protein_g: 5, carbs_g: 56, fat_g: 1, db_grounded: false, matched_source_id: null },
+    { name: 'zzqxvv-fixture-food-b', estimated_weight_g: 20, calories: 177, protein_g: 0, carbs_g: 0, fat_g: 20, db_grounded: false, matched_source_id: null },
+  ];
+  const { components, totals } = recomputeAdjustedComponents(original, [null, { removed: true }]);
+  assert.equal(components.length, 1);
+  assert.equal(components[0].name, 'zzqxvv-fixture-food-a');
+  assert.equal(Math.round(totals.calories), 260);
+});
+
+test('recomputeAdjustedComponents — an unresolvable swapped name carries forward the ORIGINAL implied density, never fabricates a number', () => {
+  const original = [
+    { name: 'mystery sauce', estimated_weight_g: 100, calories: 200, protein_g: 2, carbs_g: 20, fat_g: 10, db_grounded: false, matched_source_id: null },
+  ];
+  const { components } = recomputeAdjustedComponents(original, [{ name: 'zzqxvv-still-not-real', estimated_weight_g: 50 }]);
+  assert.equal(components[0].db_grounded, false);
+  // Density (2 kcal/g) carried forward and applied to the new 50g, not a
+  // fabricated or zeroed-out value: 50g x 2kcal/g = 100kcal.
+  assert.equal(components[0].calories, 100);
+  assert.equal(components[0].provenance.name, 'user_adjusted');
+});
+
+test('recomputeAdjustedComponents — all components removed returns an empty result, not a crash', () => {
+  const original = [
+    { name: 'rice', estimated_weight_g: 200, calories: 260, protein_g: 5, carbs_g: 56, fat_g: 1, db_grounded: false },
+  ];
+  const { components, totals } = recomputeAdjustedComponents(original, [{ removed: true }]);
+  assert.equal(components.length, 0);
+  assert.deepEqual(totals, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
 });

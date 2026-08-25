@@ -123,6 +123,33 @@ export const schemas = {
     cooking_method: z.string().max(60).optional(),
     ingredients: z.array(z.string().max(60)).max(15).optional()
   }),
+  // Recompute a Tier-4 AI estimate's totals after the user edits serving
+  // quantity / an ingredient's grams / an ingredient name (e.g. "rice" ->
+  // "brown rice", or the oil component) -- deterministic, no second AI
+  // call. `components` is the estimate's own components array as
+  // returned by POST /foods/ai-estimate; `edits` is aligned by index,
+  // one entry per component (or null/absent for "no change at this index").
+  foodAIAdjust: z.object({
+    components: z.array(z.object({
+      name: z.string().min(1).max(150),
+      estimated_weight_g: z.number().finite().nonnegative(),
+      calories: z.number().finite().nonnegative().optional(),
+      protein_g: z.number().finite().nonnegative().optional(),
+      carbs_g: z.number().finite().nonnegative().optional(),
+      fat_g: z.number().finite().nonnegative().optional(),
+      matched_source_id: z.string().nullable().optional(),
+      db_grounded: z.boolean().optional(),
+      assumption: z.string().nullable().optional()
+    })).min(1).max(20),
+    edits: z.array(
+      z.object({
+        name: z.string().max(150).optional(),
+        estimated_weight_g: z.number().finite().nonnegative().optional(),
+        removed: z.boolean().optional()
+      }).nullable()
+    ).max(20).optional(),
+    is_branded_or_restaurant: z.boolean().optional()
+  }),
   insightAction: z.object({
     action: z.enum(['accept', 'modify', 'dismiss']),
     summary: z.string().max(1000).optional(),

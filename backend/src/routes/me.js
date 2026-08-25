@@ -19,11 +19,15 @@ import {
   searchFoods as searchFoodModel,
   modelAvailable as foodModelAvailable,
   resolveFoodQuantity,
+  estimateFoodKnn,
 } from '../services/foodEstimator.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
-import { estimateFoodAI, isFoodAIAvailable } from '../services/intelligence/foodAI.js';
+import {
+  estimateFoodAI, isFoodAIAvailable, recomputeAdjustedComponents,
+  resolveUncertainty, deriveConfidence,
+} from '../services/intelligence/foodAI.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -468,13 +472,30 @@ export default function meRoutes(db) {
     // library row the catalogue did not already cover by name.
     const norm = (n) => String(n).toLowerCase().trim();
     const claimed = new Set([...mine, ...model].map((f) => norm(f.name)));
+    const foods = [
+      ...mine.map(enrich),
+      ...model.filter((f) => !new Set(mine.map((m) => norm(m.name))).has(norm(f.name))),
+      ...library.filter((f) => !claimed.has(norm(f.name))).map(enrich),
+    ];
+
+    /* TIER 3 — reached only when nothing above found anything at all.
+       Per the skos-food-v1 hierarchy (Tier 1 exact/alias -> Tier 2
+       ingredients-known -> Tier 3 kNN similarity -> Tier 4 AI), a plain
+       name-only search miss should try the free, local, instant kNN
+       fallback BEFORE the client is offered the AI estimate button --
+       "Do not display 'no data' if a lower-cost tier can already produce
+       a valid estimate" applies here too, not just to Tier 4. Included as
+       a clearly-labelled `estimate: true` result, never mixed into
+       `foods` as if it were a measured match. */
+    let knnEstimate = null;
+    if (!foods.length) {
+      try { knnEstimate = estimateFoodKnn(q); } catch { knnEstimate = null; }
+    }
+
     res.json({
-      foods: [
-        ...mine.map(enrich),
-        ...model.filter((f) => !new Set(mine.map((m) => norm(m.name))).has(norm(f.name))),
-        ...library.filter((f) => !claimed.has(norm(f.name))).map(enrich),
-      ],
+      foods,
       model_available: foodModelAvailable(),
+      knn_estimate: knnEstimate,
     });
   });
 
@@ -513,6 +534,44 @@ export default function meRoutes(db) {
       orgId: c.org_id, userId: req.user.sub,
     });
     res.status(result.ok ? 200 : 502).json(result);
+  });
+
+  /**
+   * Recompute a Tier-4 AI estimate's totals after the user edits serving
+   * quantity / an ingredient's grams / an ingredient name (e.g. rice ->
+   * brown rice, or the oil component) in the review UI. Deterministic --
+   * NEVER calls the AI a second time, never blindly trusts the original
+   * AI total. No rate limit beyond the ordinary route limit: unlike
+   * /foods/ai-estimate this never calls an external provider.
+   */
+  r.post('/foods/ai-estimate/adjust', validate(schemas.foodAIAdjust), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { components, edits = [], is_branded_or_restaurant = false } = req.body;
+
+    const { components: resolved, totals, groundedCount, totalCount } =
+      recomputeAdjustedComponents(components, edits);
+    if (!resolved.length) {
+      return res.status(422).json({ error: 'No components remain after your edits' });
+    }
+
+    const uncertainty = resolveUncertainty(null, totals); // no AI-provided interval for a recompute -- conservative fallback band
+    const confidence = deriveConfidence({
+      groundedCount, totalCount, uncertainty, totals, isBrandedOrRestaurant: is_branded_or_restaurant,
+    });
+
+    res.json({
+      ok: true,
+      components: resolved,
+      totals: {
+        calories: Math.round(totals.calories),
+        protein: Math.round(totals.protein_g * 10) / 10,
+        carbs: Math.round(totals.carbs_g * 10) / 10,
+        fat: Math.round(totals.fat_g * 10) / 10,
+      },
+      uncertainty,
+      confidence,
+      user_adjusted: resolved.some((r) => r.provenance.name === 'user_adjusted' || r.provenance.estimated_weight_g === 'user_adjusted'),
+    });
   });
 
   /**

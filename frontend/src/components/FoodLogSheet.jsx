@@ -75,6 +75,13 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   const [aiResult, setAiResult] = useState(null);
   const [aiErr, setAiErr] = useState('');
   const [aiLogging, setAiLogging] = useState(false);
+  // User-adjustment flow: `aiEdits[i]` holds { estimated_weight_g?, removed? }
+  // for component i, aligned by index to aiResult.components. `aiAdjusted` is
+  // the backend's deterministic recompute of the edited components -- never
+  // a second AI call. null means "no edits yet, show the AI's own totals".
+  const [aiEdits, setAiEdits] = useState([]);
+  const [aiAdjusted, setAiAdjusted] = useState(null);
+  const [aiAdjusting, setAiAdjusting] = useState(false);
   const inputRef = useRef(null);
 
   // ── barcode scan state ──
@@ -246,34 +253,89 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   const estimateWithAI = async () => {
     const query = q.trim();
     if (!query) return;
-    setAiEstimating(true); setAiErr(''); setAiResult(null);
+    setAiEstimating(true); setAiErr(''); setAiResult(null); setAiEdits([]); setAiAdjusted(null);
     try {
       const res = await api('/me/foods/ai-estimate', { method: 'POST', body: JSON.stringify({ query }) });
       if (!res.ok) { setAiErr(res.reason || 'Could not produce an AI estimate.'); return; }
       setAiResult(res);
+      setAiEdits((res.components || []).map(() => null));
     } catch (e) {
       setAiErr(e.message || 'Could not produce an AI estimate.');
     }
     setAiEstimating(false);
   };
 
+  // Deterministic recompute after a user edit -- NEVER a second AI call.
+  // Debounced per-keystroke via the caller (onBlur/onChange with a small
+  // delay) so it doesn't fire a request per digit typed.
+  const recomputeAI = async (nextEdits) => {
+    if (!aiResult?.components?.length) return;
+    setAiAdjusting(true);
+    try {
+      const res = await api('/me/foods/ai-estimate/adjust', {
+        method: 'POST',
+        body: JSON.stringify({
+          components: aiResult.components,
+          edits: nextEdits,
+          is_branded_or_restaurant: !!aiResult.is_branded_or_restaurant,
+        }),
+      });
+      setAiAdjusted(res);
+    } catch (e) {
+      setAiErr(e.message || 'Could not recalculate that change');
+    }
+    setAiAdjusting(false);
+  };
+
+  const editComponentGrams = (i, value) => {
+    const next = aiEdits.slice();
+    const grams = value === '' ? null : Number(value);
+    next[i] = { ...(next[i] || {}), estimated_weight_g: Number.isFinite(grams) ? grams : undefined };
+    setAiEdits(next);
+  };
+
+  const commitComponentEdit = (i) => {
+    // Only send a real recompute once the field actually differs from what
+    // was last sent, so tabbing through untouched inputs doesn't fire
+    // requests. `null` estimated_weight_g/undefined -> falls back to no-op.
+    const edit = aiEdits[i];
+    if (edit && edit.estimated_weight_g != null) recomputeAI(aiEdits);
+  };
+
+  const removeComponent = (i) => {
+    const next = aiEdits.slice();
+    next[i] = { ...(next[i] || {}), removed: true };
+    setAiEdits(next);
+    recomputeAI(next);
+  };
+
+  const resetAIAdjustments = () => {
+    setAiEdits((aiResult?.components || []).map(() => null));
+    setAiAdjusted(null);
+  };
+
   const commitAI = async () => {
     if (!aiResult) return;
+    const adjusted = !!aiAdjusted;
+    const totals = adjusted ? aiAdjusted.totals : aiResult.totals;
     setAiLogging(true);
     try {
       await onAdd({
         name: aiResult.food_name,
-        calories: Math.round(aiResult.totals.calories ?? 0),
-        protein: aiResult.totals.protein ?? 0,
-        carbs: aiResult.totals.carbs ?? 0,
-        fat: aiResult.totals.fat ?? 0,
+        calories: Math.round(totals.calories ?? 0),
+        protein: totals.protein ?? 0,
+        carbs: totals.carbs ?? 0,
+        fat: totals.fat ?? 0,
         // Provenance: never "measured", never plain "manual" -- see the
         // source enum in backend/src/validate.js. Nutrition.jsx's onAdd
         // must pass these through rather than hardcoding source: 'manual'.
-        source: 'ai_estimated',
+        // A user-edited quantity gets its own source value so it's visibly
+        // distinct from an unmodified AI estimate, per the adjustment-flow
+        // provenance rule.
+        source: adjusted ? 'ai_estimated_user_adjusted' : 'ai_estimated',
         ai_provider: aiResult.ai?.provider || null,
         ai_model: aiResult.ai?.model || null,
-        ai_confidence: aiResult.confidence || null,
+        ai_confidence: adjusted ? aiAdjusted.confidence : aiResult.confidence,
       });
       onClose();
     } catch (e) {
@@ -470,32 +532,75 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
 
               <div className="text-[11px] leading-relaxed" style={{ color: 'var(--mute)' }}>{aiResult.disclaimer}</div>
 
-              {/* Totals + uncertainty range -- never a bare confident number */}
+              {/* Totals + uncertainty range -- never a bare confident number.
+                  Once the user edits a component, these are the DETERMINISTIC
+                  recompute, not the AI's original total -- never blindly
+                  trusted past an edit. */}
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)' }}>
                 <div className="flex items-baseline justify-between">
-                  <span className="font-black text-[22px] tabular-nums" style={{ color: 'var(--ink)' }}>~{Math.round(aiResult.totals.calories)}</span>
+                  <span className="font-black text-[22px] tabular-nums" style={{ color: 'var(--ink)' }}>
+                    ~{Math.round((aiAdjusted || aiResult).totals.calories)}
+                  </span>
                   <span className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
-                    likely {Math.round(aiResult.uncertainty.calories_low)}–{Math.round(aiResult.uncertainty.calories_high)} kcal
+                    likely {Math.round((aiAdjusted || aiResult).uncertainty.calories_low)}–{Math.round((aiAdjusted || aiResult).uncertainty.calories_high)} kcal
                   </span>
                 </div>
                 <div className="text-[10px] mt-1" style={{ color: 'var(--mute)' }}>
-                  P {r1(aiResult.totals.protein)} · C {r1(aiResult.totals.carbs)} · F {r1(aiResult.totals.fat)}
+                  P {r1((aiAdjusted || aiResult).totals.protein)} · C {r1((aiAdjusted || aiResult).totals.carbs)} · F {r1((aiAdjusted || aiResult).totals.fat)}
                   {aiResult.serving?.description ? ` · ${aiResult.serving.description}` : ''}
                 </div>
+                {aiAdjusted && (
+                  <div className="flex items-center justify-between mt-1.5">
+                    <span className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--accent)' }}>
+                      recalculated from your edits
+                    </span>
+                    <button onClick={resetAIAdjustments} className="text-[9px] underline" style={{ color: 'var(--mute)' }}>
+                      reset to AI estimate
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Component breakdown -- shows how much of the estimate is
-                  grounded in real measured data vs. an AI guess */}
+                  grounded in real measured data vs. an AI guess. Grams are
+                  EDITABLE: serving size, an individual ingredient, or oil
+                  quantity, per the adjustment-flow spec. A recompute is
+                  deterministic (scaleNutrition against the real matched
+                  food, or the component's own implied density) -- never a
+                  second AI call. */}
               {aiResult.components?.length > 0 && (
                 <div className="space-y-1">
-                  {aiResult.components.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 text-[11px] rounded-lg px-2.5 py-1.5" style={{ background: 'var(--glass, rgba(128,128,128,.05))' }}>
-                      <span className="min-w-0 truncate" style={{ color: 'var(--ink)' }}>
-                        {c.name} <span style={{ color: 'var(--faint)' }}>· {Math.round(c.estimated_weight_g)}g</span>
-                      </span>
-                      <span className="shrink-0 tabular-nums" style={{ color: 'var(--mute)' }}>{Math.round(c.calories)} kcal</span>
-                    </div>
-                  ))}
+                  {aiResult.components.map((c, i) => {
+                    if (aiEdits[i]?.removed) return null;
+                    const shown = aiAdjusted?.components?.[i] || c;
+                    const editedValue = aiEdits[i]?.estimated_weight_g;
+                    const gramsValue = editedValue != null ? editedValue : shown.estimated_weight_g;
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-[11px] rounded-lg px-2.5 py-1.5" style={{ background: 'var(--glass, rgba(128,128,128,.05))' }}>
+                        <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--ink)' }}>
+                          {c.name}
+                          {shown.db_grounded === false && (
+                            <span className="ml-1" style={{ color: 'var(--faint)' }} title="Not matched to a measured food -- AI-guessed macros">*</span>
+                          )}
+                        </span>
+                        <input
+                          type="number" min="0" step="1" value={gramsValue}
+                          onChange={(e) => editComponentGrams(i, e.target.value)}
+                          onBlur={() => commitComponentEdit(i)}
+                          aria-label={`${c.name} grams`}
+                          className="w-14 text-right text-[11px] rounded px-1 py-0.5 tabular-nums"
+                          style={{ background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                        />
+                        <span className="shrink-0" style={{ color: 'var(--faint)' }}>g</span>
+                        <span className="shrink-0 tabular-nums w-14 text-right" style={{ color: 'var(--mute)' }}>{Math.round(shown.calories)} kcal</span>
+                        <button onClick={() => removeComponent(i)} aria-label={`Remove ${c.name}`}
+                                className="shrink-0 opacity-50 hover:opacity-100" style={{ color: 'var(--bad)' }}>
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {aiAdjusting && <div className="text-[10px]" style={{ color: 'var(--faint)' }}>Recalculating…</div>}
                 </div>
               )}
 
@@ -509,7 +614,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
               {aiErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
 
               <div className="flex gap-2">
-                <button onClick={() => { setAiResult(null); setAiErr(''); }}
+                <button onClick={() => { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); }}
                         className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold" style={{ border: '1px solid var(--line)', color: 'var(--mute)' }}>
                   Close
                 </button>

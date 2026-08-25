@@ -34,7 +34,7 @@
 // ============================================================
 
 import { callProviderRaw, isProviderConfigured, parseJSON } from './aiProvider.js';
-import { getFoodSearch, scaleNutrition } from '../foodEstimator.js';
+import { getFoodSearch, getCompositionalCalculator, scaleNutrition } from '../foodEstimator.js';
 import { canonicalizeFoodQuery, getCachedEstimate, saveCachedEstimate, bumpCacheUsage } from './foodAICache.js';
 import { track } from '../events.js';
 
@@ -285,6 +285,30 @@ const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
 /* ------------------------------------------------------------------ */
 
 /**
+ * Resolve one component name to a measured food row. Tries Tier 2's
+ * curated ingredient-alias resolution first (the SAME resolution recipe
+ * ingredients get: "mutton" -> goat round leg, not a plain-search
+ * mismatch onto rendered fat or a composite dish) and falls back to a
+ * plain Tier-1 search if the calculator itself isn't available. Returns
+ * the matched row, or null.
+ */
+function resolveComponentFood(name) {
+  const calc = getCompositionalCalculator();
+  if (calc) {
+    const { row, negligible } = calc.lookupIngredient(name);
+    if (negligible) return null; // trace item -- no measured row, and correctly so
+    if (row && row.energy_kcal != null) return row;
+  }
+  const search = getFoodSearch();
+  if (!search) return null;
+  try {
+    const hits = search.search(name, { limit: 1 }) || [];
+    if (hits.length && hits[0].trustworthy !== false) return hits[0];
+  } catch { /* fall through to null */ }
+  return null;
+}
+
+/**
  * For each AI-proposed component, try to ground it in a real measured
  * food row. A component that resolves gets ITS macros computed by
  * scaleNutrition() against the matched row -- the same deterministic math
@@ -294,19 +318,12 @@ const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
  * is measured-derived vs. AI-guessed.
  */
 export function resolveComponents(components) {
-  const search = getFoodSearch();
   const resolved = [];
   let groundedCount = 0;
 
   for (const c of components) {
     const grams = Number(c.estimated_weight_g) || 0;
-    let hit = null;
-    if (search && grams > 0) {
-      try {
-        const hits = search.search(c.name, { limit: 1 }) || [];
-        if (hits.length && hits[0].trustworthy !== false) hit = hits[0];
-      } catch { hit = null; }
-    }
+    const hit = grams > 0 ? resolveComponentFood(c.name) : null;
 
     if (hit) {
       const scaled = scaleNutrition(hit, grams);
@@ -343,6 +360,140 @@ export function resolveComponents(components) {
   }
 
   return { components: resolved, groundedCount, totalCount: components.length };
+}
+
+/* ------------------------------------------------------------------ */
+/*  User adjustment — deterministic recompute, never a second AI call  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Re-price a set of AI-estimate components after the user edits serving
+ * quantity, an individual ingredient's grams, an ingredient NAME (e.g.
+ * swapping "rice" for "brown rice", or adjusting "oil"), or removes a
+ * component entirely -- WITHOUT calling the AI again. Spec: "do NOT
+ * blindly trust the original AI total".
+ *
+ * originalComponents: the array resolveComponents() already produced
+ *   (each has name/estimated_weight_g/calories/protein_g/carbs_g/fat_g/
+ *   matched_source_id/db_grounded from the initial estimate).
+ * edits: [{ name?, estimated_weight_g?, removed? }, ...] aligned by index
+ *   to originalComponents -- omit a field to leave it unchanged, an
+ *   explicit null/absent entry for an index means "no edit to this one".
+ *
+ * For each component:
+ *   - grams-only change on an already db_grounded component: re-scale the
+ *     SAME matched food row via scaleNutrition() -- exact, not approximated.
+ *   - a name change: re-resolve via Tier 2's alias-aware lookup (same
+ *     resolveComponentFood() every AI component already goes through). If
+ *     the new name resolves, its real measured density is used. If it does
+ *     NOT resolve, there is no second AI call to ask for new macros -- the
+ *     ORIGINAL component's own implied per-gram density carries over to the
+ *     new gram amount instead of fabricating a number, and the component is
+ *     flagged accordingly so this is visible, not silent.
+ *
+ * Returns { components, totals, groundedCount, totalCount } where every
+ * returned component carries `provenance: { name, estimated_weight_g }`
+ * each one of 'ai_original' | 'user_adjusted', so the caller can render
+ * exactly which values came from the AI and which the user changed.
+ */
+export function recomputeAdjustedComponents(originalComponents, edits = []) {
+  const resolved = [];
+  let groundedCount = 0;
+  let totalCount = 0;
+
+  originalComponents.forEach((orig, i) => {
+    const edit = edits[i] || {};
+    if (edit.removed) return; // user removed this component entirely -- drop it from totals
+
+    totalCount++;
+    const nameChanged = edit.name != null && String(edit.name).trim() && edit.name !== orig.name;
+    const name = nameChanged ? String(edit.name).trim() : orig.name;
+    const gramsProvided = edit.estimated_weight_g != null && Number.isFinite(Number(edit.estimated_weight_g));
+    const grams = gramsProvided ? Number(edit.estimated_weight_g) : Number(orig.estimated_weight_g) || 0;
+    const gramsChanged = gramsProvided && grams !== Number(orig.estimated_weight_g);
+
+    const provenance = {
+      name: nameChanged ? 'user_adjusted' : 'ai_original',
+      estimated_weight_g: gramsChanged ? 'user_adjusted' : 'ai_original',
+    };
+
+    // Case 1: name unchanged, already grounded -- re-scale the SAME matched
+    // row at the new grams. Exact, no approximation.
+    if (!nameChanged && orig.db_grounded && orig.matched_source_id && grams > 0) {
+      const search = getFoodSearch();
+      const row = search?.foods?.find((f) => f.source_id === orig.matched_source_id);
+      if (row) {
+        const scaled = scaleNutrition(row, grams);
+        if (scaled?.totals) {
+          groundedCount++;
+          resolved.push({
+            name, matched_food: row.food_name, matched_source_id: row.source_id,
+            estimated_weight_g: grams,
+            calories: round1(scaled.totals.energy_kcal ?? 0),
+            protein_g: round1(scaled.totals.protein_g ?? 0),
+            carbs_g: round1(scaled.totals.carb_g ?? 0),
+            fat_g: round1(scaled.totals.fat_g ?? 0),
+            assumption: orig.assumption || null,
+            db_grounded: true,
+            provenance,
+          });
+          return;
+        }
+      }
+    }
+
+    // Case 2: name changed (or the original had no match to reuse) -- try a
+    // fresh resolution against the real database via the same alias-aware
+    // path every AI component goes through.
+    if (grams > 0) {
+      const hit = resolveComponentFood(name);
+      if (hit) {
+        const scaled = scaleNutrition(hit, grams);
+        if (scaled?.totals) {
+          groundedCount++;
+          resolved.push({
+            name, matched_food: hit.food_name, matched_source_id: hit.source_id,
+            estimated_weight_g: grams,
+            calories: round1(scaled.totals.energy_kcal ?? 0),
+            protein_g: round1(scaled.totals.protein_g ?? 0),
+            carbs_g: round1(scaled.totals.carb_g ?? 0),
+            fat_g: round1(scaled.totals.fat_g ?? 0),
+            assumption: orig.assumption || null,
+            db_grounded: true,
+            provenance,
+          });
+          return;
+        }
+      }
+    }
+
+    // Case 3: nothing resolves (an unrecognised swapped-in name, or a
+    // grams-only edit on a component the AI never grounded). No second AI
+    // call is made -- the ORIGINAL component's own implied per-gram
+    // density is carried forward to the new gram amount rather than
+    // inventing a number, and db_grounded stays false so this is visible.
+    const origGrams = Number(orig.estimated_weight_g) || 0;
+    const density = origGrams > 0 ? {
+      calories: (orig.calories || 0) / origGrams,
+      protein_g: (orig.protein_g || 0) / origGrams,
+      carbs_g: (orig.carbs_g || 0) / origGrams,
+      fat_g: (orig.fat_g || 0) / origGrams,
+    } : { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+    resolved.push({
+      name, matched_food: null, matched_source_id: null,
+      estimated_weight_g: grams,
+      calories: round1(density.calories * grams),
+      protein_g: round1(density.protein_g * grams),
+      carbs_g: round1(density.carbs_g * grams),
+      fat_g: round1(density.fat_g * grams),
+      assumption: orig.assumption || null,
+      db_grounded: false,
+      provenance,
+    });
+  });
+
+  const totals = sumComponentTotals(resolved);
+  return { components: resolved, totals, groundedCount, totalCount };
 }
 
 export function sumComponentTotals(components) {
@@ -564,4 +715,5 @@ function shapeCachedResult(cached, displayName) {
 export default {
   isFoodAIAvailable, foodAIConfigSummary, estimateFoodAI, validateAIFoodResponse,
   resolveUncertainty, resolveComponents, sumComponentTotals, deriveConfidence,
+  recomputeAdjustedComponents,
 };
