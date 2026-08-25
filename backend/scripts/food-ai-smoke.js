@@ -56,8 +56,13 @@ async function testProvider(provider) {
 
   const t0 = Date.now();
   try {
-    const raw = await callProviderRaw(provider, SYSTEM_PROMPT, userMessage, { json: true, timeoutMs: TIMEOUT_MS });
+    const { content: raw, model: actualModel } = await callProviderRaw(provider, SYSTEM_PROMPT, userMessage, { json: true, timeoutMs: TIMEOUT_MS });
     row.latencyMs = Date.now() - t0;
+    // Overwrite the pre-call guess above with the model this call actually
+    // used (vendor-echoed where the API confirms one) -- more accurate
+    // than modelFor()'s own hardcoded fallback chain, which can drift from
+    // the real env-var-driven resolution in aiProvider.js over time.
+    if (actualModel) row.model = actualModel;
     const parsed = parseJSON(raw);
     row.validResponse = !!parsed;
     if (!parsed) {

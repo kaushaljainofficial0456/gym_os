@@ -314,6 +314,60 @@ test('Scenario M — observability trail contains no API keys, and reports corre
 });
 
 /* ------------------------------------------------------------------ */
+/*  AI PROVENANCE -- the model recorded on a successful estimate must    */
+/*  be the model the call ACTUALLY used, never a fabricated value and    */
+/*  never left null just because FOOD_AI_MODEL (a separate, optional     */
+/*  operator override) happens to be unset. Regression coverage for the  */
+/*  bug where every estimate recorded `model: FOOD_AI_MODEL || null`     */
+/*  directly -- see aiProvider.js's callProviderRaw/call*WithKey.        */
+/* ------------------------------------------------------------------ */
+
+test('Scenario N — AI provenance: Groq\'s vendor-echoed "model" field is what gets recorded, not just the requested id', async (t) => {
+  setKeys();
+  mockProviders(t, {
+    // Deliberately a DIFFERENT string than any request-side default/env
+    // var this test sets -- proves the ECHOED value wins, not a guess.
+    groq: () => okJson({
+      choices: [{ message: { content: JSON.stringify(validAIResponse()) } }],
+      model: 'llama-3.3-70b-versatile',
+    }),
+  });
+  const result = await foodAI.estimateFoodAI(null, { query: `scenario n groq ${Date.now()}` });
+  assert.equal(result.ok, true);
+  assert.equal(result.ai.provider, 'groq');
+  assert.equal(result.ai.model, 'llama-3.3-70b-versatile');
+});
+
+test('Scenario N2 — AI provenance: Gemini\'s vendor-echoed "modelVersion" field (a different field name than Groq/OpenRouter) is recorded', async (t) => {
+  setKeys();
+  mockProviders(t, {
+    groq: () => new Response('server error', { status: 500 }), // cascade to gemini
+    gemini: () => okJson({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(validAIResponse()) }] } }],
+      modelVersion: 'gemini-3.5-flash-lite-001',
+    }),
+  });
+  const result = await foodAI.estimateFoodAI(null, { query: `scenario n2 gemini ${Date.now()}` });
+  assert.equal(result.ok, true);
+  assert.equal(result.ai.provider, 'gemini');
+  assert.equal(result.ai.model, 'gemini-3.5-flash-lite-001');
+});
+
+test('Scenario O — AI provenance: falls back to the resolved request-side model id when the response does not echo one, never null', async (t) => {
+  const savedModel = process.env.GROQ_MODEL;
+  process.env.GROQ_MODEL = 'provenance-fallback-test-model'; // read live at call time, not module-load time
+  try {
+    setKeys();
+    mockProviders(t, { groq: () => groqOk(validAIResponse()) }); // groqOk's body carries no top-level "model" field
+    const result = await foodAI.estimateFoodAI(null, { query: `scenario o ${Date.now()}` });
+    assert.equal(result.ok, true);
+    assert.equal(result.ai.model, 'provenance-fallback-test-model', 'falls back to the resolved request model id, never fabricated, never null');
+  } finally {
+    if (savedModel === undefined) delete process.env.GROQ_MODEL; else process.env.GROQ_MODEL = savedModel;
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /*  COST SAFETY BEYOND THE ZERO-COST GATE -- added per explicit request: */
 /*  "if limit reaches then it should not use credits or money, fall     */
 /*  back to our own model". Two independent mechanisms, tested          */

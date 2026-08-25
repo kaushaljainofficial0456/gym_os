@@ -37,6 +37,14 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // ai_food_estimates.validation_status/version (feedback promotion, see
+  // foodFeedback.js) exist only via scripts/init-db.js's guarded
+  // migrations, which this lightweight in-memory DB doesn't run -- same
+  // gap documented in hardening.test.js's and foodFeedback.test.js's
+  // memDb() helpers.
+  for (const ddl of [`validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`, `version INTEGER NOT NULL DEFAULT 1`]) {
+    db.exec(`ALTER TABLE ai_food_estimates ADD COLUMN ${ddl}`);
+  }
   return {
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },
@@ -470,6 +478,45 @@ test('estimateFoodAI — a well-formed provider response produces a valid, fully
   const result2 = await estimateFoodAI(db, { query: 'end to end test biryani unique marker' });
   assert.equal(result2.from_cache, true);
   assert.equal(calls2.length, 0);
+});
+
+/* ------------------------------------------------------------------ */
+/*  AI provenance -- provider/model/version/created_at/validation_status */
+/*  must all be recorded correctly for a newly generated estimate,      */
+/*  both in the response and in the ai_food_estimates cache row it      */
+/*  writes. Regression coverage for the bug where `model` was recorded  */
+/*  as the (usually unset) FOOD_AI_MODEL env var directly instead of    */
+/*  the model the call actually used -- see aiProvider.js's             */
+/*  callProviderRaw/call*WithKey for the fix (vendor-echoed model when  */
+/*  the response provides one, else the resolved request-side id).      */
+/* ------------------------------------------------------------------ */
+test('estimateFoodAI — records real AI provenance (provider, model, version, created_at, validation_status), never a fabricated or null model', async (t) => {
+  const db = await memDb();
+  mockOllama(t, () => new Response(JSON.stringify({
+    message: { content: JSON.stringify(validResponse({ food_name: 'Provenance test dish' })) },
+  }), { status: 200 }));
+
+  const result = await estimateFoodAI(db, { query: 'provenance test dish unique marker' });
+  assert.equal(result.ok, true);
+  assert.equal(result.ai.provider, 'ollama');
+  // Ollama has no per-call model override -- it always uses the fixed
+  // OLLAMA_MODEL constant, so the recorded model must equal whatever that
+  // resolves to in this process, and must never be null even though
+  // FOOD_AI_MODEL (a DIFFERENT, unrelated env var) is unset in this test.
+  const expectedOllamaModel = process.env.OLLAMA_MODEL || 'llama3.2';
+  assert.equal(result.ai.model, expectedOllamaModel);
+  assert.ok(result.ai.model, 'model must never be null for a successful estimate');
+  assert.equal(result.validation_status, 'AI_ESTIMATED');
+
+  const row = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [result.cache_key]);
+  assert.ok(row, 'a fresh estimate must write a cache row');
+  assert.equal(row.ai_provider, 'ollama');
+  assert.equal(row.ai_model, expectedOllamaModel, 'the cache row must record the REAL model used, not the unset FOOD_AI_MODEL env var');
+  assert.ok(row.ai_model, 'ai_model must never be null/empty on the persisted row');
+  assert.equal(row.validation_status, 'AI_ESTIMATED');
+  assert.equal(row.version, 1);
+  assert.ok(row.created_at, 'created_at must be recorded');
+  assert.ok(!Number.isNaN(Date.parse(row.created_at)), 'created_at must be a valid timestamp');
 });
 
 /* ------------------------------------------------------------------ */

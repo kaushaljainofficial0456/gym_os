@@ -260,6 +260,13 @@ async function callOpenRouter(system, user, { json = true, model } = {}) {
 // ------------------------------------------------------------------
 const DEFAULT_TIMEOUT_MS = 12_000;
 
+// Returns { content, model } -- `model` is the real model identifier this
+// call actually used (see the call*WithKey functions' own comment). Ollama
+// has no per-call model override (callOllama always uses the fixed
+// OLLAMA_MODEL constant, ignoring opts.model) and its response body isn't
+// parsed here for an echoed model field, so OLLAMA_MODEL itself is reported
+// -- genuinely accurate, not a guess, since it's the exact value every
+// ollama request actually sends.
 export async function callProviderRaw(provider, system, user, opts = {}) {
   const p = String(provider || '').toLowerCase();
   if (!isProviderConfigured(p)) {
@@ -272,7 +279,10 @@ export async function callProviderRaw(provider, system, user, opts = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const fetchOpts = { ...opts, signal: controller.signal };
   try {
-    if (p === 'ollama') return await callOllama(system, user, fetchOpts);
+    if (p === 'ollama') {
+      const content = await callOllama(system, user, fetchOpts);
+      return { content, model: OLLAMA_MODEL };
+    }
     if (p === 'mock') throw new Error('mock provider has no raw call — callers should special-case it');
     const key = keyFor(p);
     if (p === 'groq') return await callGroqWithKey(system, user, { ...fetchOpts, apiKey: key });
@@ -297,12 +307,23 @@ export async function callProviderRaw(provider, system, user, opts = {}) {
 // the module-wide PROVIDER/KEY this file otherwise runs on). Kept as thin
 // wrappers rather than rewriting the originals so every existing caller of
 // interpret()/coach()/etc. is byte-for-byte unaffected.
+//
+// Each returns { content, model } rather than a bare string -- `model` is
+// the REAL model identifier this call actually used: the vendor's own
+// echoed value from its response body when it provides one (OpenAI/Groq/
+// OpenRouter all echo `model`; Gemini echoes `modelVersion`), falling back
+// to the resolved request-side model id (model param -> provider-specific
+// env var -> LLM_MODEL -> hardcoded default) when the response doesn't
+// confirm one. Never a guess disconnected from what was actually sent or
+// returned -- see foodAI.js's use of this for why (AI provenance recorded
+// against a real food estimate must never be fabricated).
 async function callOpenAIWithKey(system, user, { json = true, model, apiKey, signal } = {}) {
+  const modelId = model || process.env.LLM_MODEL || 'gpt-4o-mini';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: model || process.env.LLM_MODEL || 'gpt-4o-mini',
+      model: modelId,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       temperature: 0.2
@@ -310,7 +331,7 @@ async function callOpenAIWithKey(system, user, { json = true, model, apiKey, sig
   });
   if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  return { content: data.choices?.[0]?.message?.content || '', model: data.model || modelId };
 }
 
 async function callGeminiWithKey(system, user, { json = true, model, apiKey, signal } = {}) {
@@ -333,15 +354,16 @@ async function callGeminiWithKey(system, user, { json = true, model, apiKey, sig
     });
   if (!res.ok) throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '', model: data.modelVersion || modelId };
 }
 
 async function callGroqWithKey(system, user, { json = true, model, apiKey, signal } = {}) {
+  const modelId = model || process.env.GROQ_MODEL || process.env.LLM_MODEL || 'openai/gpt-oss-120b';
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: model || process.env.GROQ_MODEL || process.env.LLM_MODEL || 'openai/gpt-oss-120b',
+      model: modelId,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       temperature: 0.2
@@ -349,10 +371,11 @@ async function callGroqWithKey(system, user, { json = true, model, apiKey, signa
   });
   if (!res.ok) throw new Error(`groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  return { content: data.choices?.[0]?.message?.content || '', model: data.model || modelId };
 }
 
 async function callOpenRouterWithKey(system, user, { json = true, model, apiKey, signal } = {}) {
+  const modelId = model || process.env.OPENROUTER_MODEL || process.env.LLM_MODEL || 'openrouter/free';
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST', signal,
     headers: {
@@ -362,7 +385,7 @@ async function callOpenRouterWithKey(system, user, { json = true, model, apiKey,
       'X-Title': 'SK OS'
     },
     body: JSON.stringify({
-      model: model || process.env.OPENROUTER_MODEL || process.env.LLM_MODEL || 'openrouter/free',
+      model: modelId,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       temperature: 0.2
@@ -370,7 +393,7 @@ async function callOpenRouterWithKey(system, user, { json = true, model, apiKey,
   });
   if (!res.ok) throw new Error(`openrouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  return { content: data.choices?.[0]?.message?.content || '', model: data.model || modelId };
 }
 
 async function callAI(system, user, opts = {}) {

@@ -677,7 +677,14 @@ async function callWithFallback(system, user) {
     }
     const t0 = Date.now();
     try {
-      const raw = await callProviderRaw(provider, system, user, {
+      // FOOD_AI_MODEL (if set) is passed through as the REQUESTED model --
+      // an explicit operator override. What gets RECORDED as provenance is
+      // `resolvedModel` below: the vendor's own echoed model from its
+      // response when it provides one, else the resolved request-side id
+      // -- see callProviderRaw's own comment. Never the bare env var alone,
+      // which is null in the (common) case nobody set it and would
+      // otherwise record a real estimate against an unknown model.
+      const { content: raw, model: resolvedModel } = await callProviderRaw(provider, system, user, {
         json: true, model: FOOD_AI_MODEL, timeoutMs: FOOD_AI_TIMEOUT_MS,
       });
       const latencyMs = Date.now() - t0;
@@ -695,7 +702,7 @@ async function callWithFallback(system, user) {
         continue;
       }
       attempts.push({ provider, outcome: 'success', latencyMs });
-      return { ok: true, provider, value: validated.value, attempts, fallbackDepth };
+      return { ok: true, provider, model: resolvedModel || null, value: validated.value, attempts, fallbackDepth };
     } catch (e) {
       const latencyMs = Date.now() - t0;
       const isRateLimit = /429|rate.?limit/i.test(String(e.message || ''));
@@ -840,7 +847,14 @@ export async function estimateFoodAI(db, params) {
     needs_user_confirmation: Array.isArray(ai.needs_user_confirmation) ? ai.needs_user_confirmation.slice(0, 10) : [],
     disclaimer,
     source: 'ai_estimated',
-    ai: { provider: result.provider, model: FOOD_AI_MODEL || null },
+    // model is the REAL identifier this specific call used (vendor-echoed
+    // where available, else the resolved request-side id) -- see
+    // callWithFallback's own comment. Never FOOD_AI_MODEL directly: that
+    // env var is only an optional operator override of the REQUESTED
+    // model and is null on the (default, common) unconfigured case, which
+    // would otherwise record every estimate's provenance as "model:
+    // unknown" even though a real model was in fact used.
+    ai: { provider: result.provider, model: result.model || null },
     // A brand-new estimate always starts here -- see foodFeedback.js for
     // how (and only how) it can move to COMMUNITY_VALIDATED_CANDIDATE.
     validation_status: 'AI_ESTIMATED',
@@ -859,7 +873,7 @@ export async function estimateFoodAI(db, params) {
       assumptions: out.assumptions,
       source: 'ai_estimated',
       aiProvider: result.provider,
-      aiModel: FOOD_AI_MODEL,
+      aiModel: result.model || null,
       confidence,
       cuisine: out.cuisine,
     });
