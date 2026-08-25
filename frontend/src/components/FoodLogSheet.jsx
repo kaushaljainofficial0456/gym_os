@@ -216,6 +216,20 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
     return GROUP_ORDER.filter((g) => by[g]?.length).map((g) => [g, by[g]]);
   }, [food]);
 
+  // Total logged weight for the AI estimate -- sums CURRENT (post-edit,
+  // server-recomputed) component grams, the same values already driving
+  // each row's own grams input, so this always matches what "Log it" will
+  // actually save. serving.description alone ("1 plate") never told the
+  // user how much that plate now weighs after they'd doubled the rice.
+  const aiTotalGrams = useMemo(() => {
+    if (!aiResult?.components?.length) return 0;
+    return aiResult.components.reduce((sum, c, i) => {
+      if (aiEdits[i]?.removed) return sum;
+      const shown = aiAdjusted?.components?.[i] || c;
+      return sum + (Number(shown.estimated_weight_g) || 0);
+    }, 0);
+  }, [aiResult, aiAdjusted, aiEdits]);
+
   if (!open) return null;
 
   const pick = (f) => {
@@ -640,7 +654,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                 </div>
                 <div className="text-[10px] mt-1" style={{ color: 'var(--mute)' }}>
                   P {r1((aiAdjusted || aiResult).totals.protein)} · C {r1((aiAdjusted || aiResult).totals.carbs)} · F {r1((aiAdjusted || aiResult).totals.fat)}
-                  {aiResult.serving?.description ? ` · ${aiResult.serving.description}` : ''}
+                  {' · '}
+                  <span className="font-semibold" style={{ color: 'var(--ink)' }}>{Math.round(aiTotalGrams)}g total</span>
+                  {aiResult.serving?.description ? ` (${aiResult.serving.description})` : ''}
                 </div>
                 {aiAdjusted && (
                   <div className="flex items-center justify-between mt-1.5">
