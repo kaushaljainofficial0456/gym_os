@@ -367,6 +367,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes breathe { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
 @keyframes limePulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / .3); } 50% { box-shadow: 0 0 0 8px rgb(var(--accent-rgb) / 0); } }
 
+/* SavingOverlay (nutrition redesign): rotating ring / pulsing center /
+   checkmark draw-in, shared by every "save this" flow on the Nutrition
+   page instead of five bespoke animations. */
+@keyframes so-spin { to { transform: rotate(360deg); } }
+@keyframes so-pulse { 0%, 100% { transform: scale(0.85); opacity: .75; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes so-draw { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+
 .anim-progressFill { animation: progressFill .8s cubic-bezier(.22,.8,.3,1) both; }
 .anim-countUp { animation: countUp .4s cubic-bezier(.22,.8,.3,1) both; }
 .anim-slideInRight { animation: slideInRight .3s cubic-bezier(.22,.8,.3,1) both; }

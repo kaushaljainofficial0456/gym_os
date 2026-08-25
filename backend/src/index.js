@@ -25,6 +25,7 @@ import reportRoutes from './routes/reports.js';
 import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import meRoutes from './routes/me.js';
+import shareRoutes from './routes/share.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 
@@ -122,6 +123,7 @@ app.use('/api/business', adminRoutes(db));
 app.use('/api/admin', adminRoutes(db)); // alias — Business page calls /admin/*
 app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail dashboard
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
+app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under

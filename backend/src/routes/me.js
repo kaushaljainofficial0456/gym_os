@@ -672,6 +672,27 @@ export default function meRoutes(db) {
     res.json({ id: fId });
   });
 
+  // Permanently edit a saved food's own default values (My Diet's global
+  // edit mode -- distinct from a one-time quantity edit on a single log
+  // entry, and distinct from today's log: this changes the TEMPLATE every
+  // future quick-log reads from, never today's already-logged entries.
+  r.put('/foods/:id', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const food = await db.q1('SELECT * FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!food) return res.status(404).json({ error: 'Food not found' });
+    const { name, serving, unit, calories, protein, carbs, fat } = req.body || {};
+    const sets = [], params = [];
+    if (name !== undefined) { sets.push('name = ?'); params.push(String(name).trim().slice(0, 80)); }
+    if (serving !== undefined) { sets.push('serving = ?'); params.push(String(serving).slice(0, 60)); }
+    if (unit !== undefined) { sets.push('unit = ?'); params.push(String(unit).slice(0, 30)); }
+    if (calories !== undefined) { sets.push('calories = ?'); params.push(num(calories)); }
+    if (protein !== undefined) { sets.push('protein = ?'); params.push(num(protein)); }
+    if (carbs !== undefined) { sets.push('carbs = ?'); params.push(num(carbs)); }
+    if (fat !== undefined) { sets.push('fat = ?'); params.push(num(fat)); }
+    if (sets.length) { params.push(food.id); await db.run(`UPDATE foods SET ${sets.join(', ')} WHERE id = ?`, params); }
+    res.json({ ok: true });
+  });
+
   r.delete('/foods/:id', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     await db.run('DELETE FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
@@ -710,18 +731,26 @@ export default function meRoutes(db) {
   });
 
   // Log a client meal template as eaten today (drives the calorie ring + macros).
+  // Optional `servings` scales the template's own totals for THIS log entry
+  // only (quick-log quantity control) -- never modifies the saved template
+  // itself. Defaults to 1 (the template's own totals, unscaled) so every
+  // existing caller of this route is unaffected.
   r.post('/meals/:id/log', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
+    const servings = Number(req.body?.servings);
+    const scale = Number.isFinite(servings) && servings > 0 ? servings : 1;
     const tz = req.tz || 'Asia/Kolkata';
     const d = dayKey(new Date(), tz);
     const lId = id('mlg');
+    const r1 = (n) => Math.round(n * 10) / 10;
     await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, meal_template_id)
-       VALUES (?,?,NULL,?,?,?,?,?,?,?,1,'custom',?)`,
-      [lId, c.id, d, m.slot, m.name, m.calories, m.protein, m.carbs, m.fat, m.id]);
-    track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'client_custom' });
+      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit, meal_template_id)
+       VALUES (?,?,NULL,?,?,?,?,?,?,?,1,'custom',?,?,?)`,
+      [lId, c.id, d, m.slot, m.name, Math.round(m.calories * scale), r1(m.protein * scale), r1(m.carbs * scale), r1(m.fat * scale),
+       scale, 'serving', m.id]);
+    track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'client_custom', servings: scale });
     res.json({ id: lId });
   });
 
@@ -1141,6 +1170,125 @@ export default function meRoutes(db) {
         [totals?.c || 0, totals?.p || 0, totals?.ca || 0, totals?.f || 0, m.id]);
     });
     res.json({ ok: true });
+  });
+
+  // ---------------- share meals ----------------
+  // POST /me/share: bundle one or more of the CLIENT'S OWN saved foods/
+  // meals into one shareable snapshot (see database/schema.sql's
+  // shared_meals comment for why it's a snapshot, never a live reference).
+  // Only the sender's own rows can ever be shared -- every lookup below is
+  // scoped to client_id = c.id, so this can never leak another client's
+  // saved food/meal even if its id were guessed.
+  r.post('/share', validate(schemas.shareCreate), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const mealIds = req.body.meal_ids || [];
+    const foodIds = req.body.food_ids || [];
+    if (!mealIds.length && !foodIds.length) {
+      return res.status(400).json({ error: 'Select at least one saved food or meal to share' });
+    }
+
+    const items = [];
+    for (const mealId of mealIds) {
+      const meal = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [mealId, c.id]);
+      if (!meal) continue; // silently skip an id that isn't (or no longer is) this client's own -- never error the whole share over one stale selection
+      const mealItems = await db.q('SELECT * FROM meal_items WHERE meal_template_id = ? ORDER BY position', [meal.id]);
+      items.push({
+        type: 'meal',
+        name: meal.name,
+        quantity: 1,
+        unit: 'serving',
+        calories: meal.calories, protein: meal.protein, carbs: meal.carbs, fat: meal.fat,
+        components: mealItems.map((it) => ({
+          name: it.name, quantity: it.quantity, unit: it.unit || 'serving',
+          calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
+        })),
+      });
+    }
+    for (const foodId of foodIds) {
+      const food = await db.q1('SELECT * FROM foods WHERE id = ? AND client_id = ?', [foodId, c.id]);
+      if (!food) continue;
+      items.push({
+        type: 'food',
+        name: food.name,
+        quantity: 1,
+        // foods.serving is the food's OWN full description of one unit --
+        // "100 g" for a gram-based item, "1 bowl" for a count-based one.
+        // Hardcoding quantity:100 + unit:'g' assumed every saved food is
+        // gram-based, which produced nonsense like "100 bowl" for anything
+        // that isn't. quantity:1 x this food's own descriptive serving
+        // means exactly the same thing the calories/protein/etc below
+        // already represent (one full serving as saved), for any unit type.
+        unit: food.serving || food.unit || 'serving',
+        calories: food.calories || 0, protein: food.protein || 0, carbs: food.carbs || 0, fat: food.fat || 0,
+        components: null,
+      });
+    }
+    if (!items.length) return res.status(404).json({ error: 'None of the selected items could be found' });
+
+    const shareId = id('shr');
+    await db.run(
+      `INSERT INTO shared_meals (id, org_id, client_id, shared_by_name, items_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [shareId, c.org_id, c.id, c.name || null, JSON.stringify(items), now()]);
+    track(db, 'meals_shared', req.user.org, req.user.sub, { client_id: c.id, item_count: items.length });
+    res.status(201).json({ id: shareId });
+  });
+
+  // POST /me/share/:id/save: save ONE item from a (possibly someone else's)
+  // shared link into the AUTHENTICATED client's own diet. item_index is
+  // resolved against the SERVER's own stored items array -- the client
+  // never supplies nutrition values here, only which index to save, so
+  // this route can never be used to inject arbitrary macros into My Diet.
+  //
+  // Duplicate handling: never silently overwrites an existing same-named
+  // saved food/meal. If one already exists, the shared item is saved
+  // alongside it under a disambiguated name (spec: "safe duplicate
+  // handling", explicitly not "overwrite" and not "block").
+  r.post('/share/:id/save', validate(schemas.shareSave), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const share = await db.q1('SELECT * FROM shared_meals WHERE id = ?', [req.params.id]);
+    if (!share) return res.status(404).json({ error: 'This shared link is invalid or has expired' });
+    let items = [];
+    try { items = JSON.parse(share.items_json) || []; } catch { items = []; }
+    const item = items[req.body.item_index];
+    if (!item) return res.status(404).json({ error: 'That shared item was not found' });
+
+    if (item.type === 'meal') {
+      const existing = await db.q1(
+        'SELECT id FROM client_meal_templates WHERE client_id = ? AND lower(name) = ?', [c.id, item.name.toLowerCase()]);
+      const savedName = existing ? `${item.name} (shared)` : item.name;
+      const mealId = id('cmt');
+      await db.run(
+        `INSERT INTO client_meal_templates (id, org_id, client_id, slot, name, calories, protein, carbs, fat, position)
+         VALUES (?,?,?,?,?,?,?,?,?, COALESCE((SELECT MAX(position)+1 FROM client_meal_templates WHERE client_id = ?), 0))`,
+        [mealId, c.org_id, c.id, 'Meal', savedName.slice(0, 80), item.calories || 0, item.protein || 0, item.carbs || 0, item.fat || 0, c.id]);
+      for (const [i, comp] of (item.components || []).entries()) {
+        await db.run(
+          `INSERT INTO meal_items (id, meal_template_id, name, quantity, unit, calories, protein, carbs, fat, position)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [id('mi'), mealId, String(comp.name || 'Item').slice(0, 80), Number(comp.quantity) || 1, comp.unit || null,
+           comp.calories || 0, comp.protein || 0, comp.carbs || 0, comp.fat || 0, i]);
+      }
+      track(db, 'shared_meal_saved', req.user.org, req.user.sub, { client_id: c.id, share_id: share.id, type: 'meal' });
+      return res.status(201).json({ ok: true, type: 'meal', id: mealId, saved_as: savedName, duplicate: !!existing });
+    }
+
+    // type === 'food'
+    const existing = await db.q1(
+      'SELECT id FROM foods WHERE client_id = ? AND lower(name) = ?', [c.id, item.name.toLowerCase()]);
+    const savedName = existing ? `${item.name} (shared)` : item.name;
+    const foodId = id('food');
+    // item.unit already carries the food's own full serving description
+    // (e.g. "100 g" or "1 bowl", see POST /share above) -- not a short
+    // unit suffix, so it maps straight to foods.serving, matching exactly
+    // what item.calories/etc already represent (one full serving).
+    await db.run(
+      `INSERT INTO foods (id, org_id, client_id, name, serving, calories, protein, carbs, fat, source, is_global)
+       VALUES (?,?,?,?,?,?,?,?,?,'USER_ENTERED',0)`,
+      [foodId, c.org_id, c.id, savedName.slice(0, 80), item.unit || '100 g',
+       item.calories || 0, item.protein || 0, item.carbs || 0, item.fat || 0]);
+    track(db, 'shared_meal_saved', req.user.org, req.user.sub, { client_id: c.id, share_id: share.id, type: 'food' });
+    res.status(201).json({ ok: true, type: 'food', id: foodId, saved_as: savedName, duplicate: !!existing });
   });
 
   return r;

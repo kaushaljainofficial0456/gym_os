@@ -152,6 +152,22 @@ export const schemas = {
     ).max(20).optional(),
     is_branded_or_restaurant: z.boolean().optional()
   }),
+  // Share Meals: bundle one or more of the client's OWN saved foods/meals
+  // into one shareable snapshot. At least one of meal_ids/food_ids must be
+  // non-empty (checked in the route, not here -- z.union of "at least one
+  // array non-empty" is awkward to express and the route's own 400 message
+  // is clearer than a generic schema mismatch).
+  shareCreate: z.object({
+    meal_ids: z.array(z.string().min(1)).max(20).optional(),
+    food_ids: z.array(z.string().min(1)).max(20).optional()
+  }),
+  // Save one item from a previously-created share into the recipient's own
+  // My Diet. item_index indexes into that share's own items array (server-
+  // side, from the DB row -- never client-supplied item data, so a
+  // recipient can never inject arbitrary nutrition values through this route).
+  shareSave: z.object({
+    item_index: z.number().int().min(0).max(19)
+  }),
   insightAction: z.object({
     action: z.enum(['accept', 'modify', 'dismiss']),
     summary: z.string().max(1000).optional(),

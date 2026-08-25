@@ -41,6 +41,7 @@ const Settings = lazy(() => import('./pages/client/Settings.jsx'));
 const Help = lazy(() => import('./pages/client/Help.jsx'));
 // Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
+const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
 
 const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
 // Small helper so each route below stays a one-liner instead of repeating
@@ -73,6 +74,12 @@ export default function App() {
           only static demo data, and needing a login to check a colour token
           is friction that stops people checking. */}
       <Route path="/design" element={page(DesignSystem)} />
+      {/* Share Meals preview -- PUBLIC on purpose (see SharedMeal.jsx):
+          a recipient must be able to preview a shared meal before ever
+          being asked to log in. Saving it into their own diet still
+          requires auth, enforced by the API route it calls, not by this
+          route being gated. */}
+      <Route path="/share/:id" element={page(SharedMeal)} />
       <Route path="/app" element={
         <Require ready={ready} ok={() => authed}>
           {isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}

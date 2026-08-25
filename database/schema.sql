@@ -765,3 +765,20 @@ CREATE TABLE IF NOT EXISTS ai_food_estimates (
   updated_at              TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ai_food_estimates_key ON ai_food_estimates(canonical_key);
+
+-- Share Meals: a point-in-time SNAPSHOT of one or more saved foods/meals
+-- packaged into one shareable link. Deliberately NOT a live reference to
+-- client_meal_templates/foods -- the sender editing or deleting the
+-- original afterward must never change what a recipient previews or
+-- saves, and the recipient must see exactly what they'll get before
+-- saving (never a stale join at view time). id doubles as the token in
+-- the public /share/:id URL -- same high-entropy id() generator every
+-- other table's PK uses, no separate token column needed.
+CREATE TABLE IF NOT EXISTS shared_meals (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id      TEXT REFERENCES clients(id) ON DELETE SET NULL, -- sender; kept NULL-able so a deleted account doesn't break outstanding links
+  shared_by_name TEXT,                     -- denormalized sender display name at share time
+  items_json     TEXT NOT NULL,            -- JSON array: [{type:'food'|'meal', name, quantity, unit, calories, protein, carbs, fat, components:[{name,quantity,unit,calories,protein,carbs,fat}]|null}]
+  created_at     TEXT NOT NULL
+);

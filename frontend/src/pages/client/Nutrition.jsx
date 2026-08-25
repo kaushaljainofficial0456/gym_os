@@ -6,6 +6,11 @@ import { useCountUp } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
+import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
+import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
+import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
+import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
+import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -29,13 +34,6 @@ const T = {
     goldDim: 'var(--accent-soft)',
     secondary: '#FB7185',
     secondaryDim: 'rgba(251,113,133,0.10)',
-    /* Was bright orange/yellow/teal -- read as a children's-app rainbow
-       next to the rest of this warm, restrained palette. Reused instead
-       of invented: accent is already the terracotta brand colour (protein
-       gets top billing as the usual hero macro), warn/good are the same
-       muted amber and sage already tuned for contrast and used for status
-       everywhere else in the app. Three tokens sourced from the one
-       palette reads as considered; three unrelated saturated hues don't. */
     protein: 'var(--accent)',
     carbs: 'var(--warn)',
     fat: 'var(--good)',
@@ -52,11 +50,6 @@ const T = {
   },
   light: {
     bg: 'var(--bg)',
-    // Was rgba(0,0,0,0.03): a 3% black tint OVER the peach page background,
-    // meaning every "card" on this page was ~97% peach and barely
-    // distinguishable from the page itself -- text sat with almost no
-    // background separation. var(--panel) is solid white, the same value
-    // the app's own .card class uses everywhere else.
     surface: 'var(--panel)',
     surfaceHover: 'rgba(0,0,0,0.06)',
     border: 'var(--line)',
@@ -93,7 +86,6 @@ const T = {
 function CalorieRing({ value, max, t }) {
   const size = 200;
   const stroke = 14;
-  const gap = 6;
   const r = (size - stroke) / 2;
   const C = 2 * Math.PI * r;
   const frac = max > 0 ? Math.min(value / max, 1.5) : 0;
@@ -102,11 +94,8 @@ function CalorieRing({ value, max, t }) {
   const animMax = useCountUp(Math.round(max || 0), 1200);
   const uid = useMemo(() => 'cr_' + Math.random().toString(36).slice(2, 8), []);
 
-  const strokeColor = overTarget ? t.danger : t.accent;
-
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      {/* Subtle glow behind ring */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background: `radial-gradient(circle at 50% 50%, ${overTarget ? 'rgba(255,107,107,0.08)' : t.accentDim}, transparent 65%)`,
       }} />
@@ -119,31 +108,20 @@ function CalorieRing({ value, max, t }) {
           </linearGradient>
           <filter id={`${uid}_glow`}>
             <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
-        {/* Track */}
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={t.ringTrack} strokeWidth={stroke} />
-        {/* Fill */}
         <circle
           cx={size/2} cy={size/2} r={r} fill="none"
-          stroke={`url(#${uid}_grad)`}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={C}
-          strokeDashoffset={C * (1 - Math.min(frac, 1))}
+          stroke={`url(#${uid}_grad)`} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(frac, 1))}
           filter={`url(#${uid}_glow)`}
           style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(.22,.8,.3,1)' }}
         />
       </svg>
-      {/* Center label */}
       <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-        <div className="font-black leading-none" style={{ fontSize: 38, color: t.ink, letterSpacing: '-0.02em' }}>
-          {animValue.toLocaleString()}
-        </div>
+        <div className="font-black leading-none" style={{ fontSize: 38, color: t.ink, letterSpacing: '-0.02em' }}>{animValue.toLocaleString()}</div>
         <div className="font-grotesk text-[11px] mt-1" style={{ color: t.mute, letterSpacing: '0.06em' }}>kcal</div>
         <div className="mt-1.5 px-3 py-0.5 rounded-full font-grotesk text-[10px] font-semibold" style={{
           background: overTarget ? 'rgba(255,107,107,0.12)' : t.accentDim,
@@ -157,16 +135,13 @@ function CalorieRing({ value, max, t }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   MACRO BAR — refined progress display
+   MACRO BAR
    ════════════════════════════════════════════════════════════════ */
 
-function MacroBar({ label, value, max, color, t, icon }) {
+function MacroBar({ label, value, max, color, t }) {
   const frac = max > 0 ? Math.min(value / max, 1.5) : 0;
   const animVal = useCountUp(Math.round(value), 1000);
   const over = value > max && max > 0;
-  // color is now a token reference (var(--accent) etc.), not a raw hex --
-  // `${color}40`-style string-suffix alpha only works on hex. color-mix()
-  // does the same fade for any valid CSS colour, hex or var() alike.
   const faded = (pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 
   return (
@@ -202,26 +177,15 @@ function HydrationCard({ waterState, target, onAdd, t }) {
   const animLitres = useCountUp(waterState * 10, 800) / 10;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl p-5" style={{
-      background: t.surface,
-      border: `1px solid ${t.border}`,
-      boxShadow: t.cardShadow,
-    }}>
-      {/* Subtle water gradient bg */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: `linear-gradient(180deg, transparent 60%, ${t.waterDim})`,
-        opacity: pct * 0.6,
-      }} />
-
+    <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, transparent 60%, ${t.waterDim})`, opacity: pct * 0.6 }} />
       <div className="relative z-10">
-        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm" style={{ background: t.waterDim, color: t.water }}>💧</div>
             <div>
               <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2" style={{ color: t.mute }}>
-                <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
-                Water
+                <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />Water
               </div>
               <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{Math.round(pct * 100)}% of daily goal</div>
             </div>
@@ -230,61 +194,44 @@ function HydrationCard({ waterState, target, onAdd, t }) {
             {animLitres.toFixed(1)}<span className="text-xs font-medium" style={{ color: t.mute }}> / {target}L</span>
           </div>
         </div>
-
-        {/* Water level bar */}
         <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: t.ringTrack }}>
-          <div className="h-full rounded-full relative" style={{
-            width: `${pct * 100}%`,
-            background: `linear-gradient(90deg, ${t.water}88, ${t.water})`,
-            transition: 'width 0.6s cubic-bezier(.22,.8,.3,1)',
-          }}>
-            <div className="absolute inset-0 rounded-full" style={{
-              background: `linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%)`,
-            }} />
+          <div className="h-full rounded-full relative" style={{ width: `${pct * 100}%`, background: `linear-gradient(90deg, ${t.water}88, ${t.water})`, transition: 'width 0.6s cubic-bezier(.22,.8,.3,1)' }}>
+            <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%)` }} />
           </div>
         </div>
-
-        {/* Glass buttons */}
         <div className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${Math.min(glasses, 12)}, 1fr)` }}>
           {Array.from({ length: Math.min(glasses, 12) }).map((_, i) => {
             const filled = waterState >= (i + 1) * 0.25;
             return (
               <button key={i} onClick={() => onAdd(filled ? -0.25 : 0.25)}
                 className="aspect-square rounded-lg grid place-items-center text-[10px] transition-all duration-300 active:scale-90"
-                style={{
-                  background: filled ? `${t.water}25` : t.glass,
-                  border: `1px solid ${filled ? t.water + '50' : t.border}`,
-                  color: filled ? t.water : t.faint,
-                  boxShadow: filled ? `0 0 8px ${t.water}20` : 'none',
-                }}
-                aria-label={`Water glass ${i + 1}`}
-              >
+                style={{ background: filled ? `${t.water}25` : t.glass, border: `1px solid ${filled ? t.water + '50' : t.border}`, color: filled ? t.water : t.faint, boxShadow: filled ? `0 0 8px ${t.water}20` : 'none' }}
+                aria-label={`Water glass ${i + 1}`}>
                 {filled ? '💧' : ''}
               </button>
             );
           })}
         </div>
-
-        <div className="text-center text-[10px]" style={{ color: t.faint }}>
-          Tap a glass to fill · tap filled to remove
-        </div>
+        <div className="text-center text-[10px]" style={{ color: t.faint }}>Tap a glass to fill · tap filled to remove</div>
       </div>
     </div>
   );
 }
 
 /* ════════════════════════════════════════════════════════════════
-   MEAL TIMELINE — premium meal display
+   TODAY'S EATEN MEALS — the actual log, separate from My Diet's
+   reusable Saved Foods/Meals library. Edit mode reveals [-] remove +
+   [Edit Quantity] per row; removals/edits persist immediately (per-
+   action, same as before) -- "Save Changes" is the confirming exit
+   flourish the spec asks for, not a second write.
    ════════════════════════════════════════════════════════════════ */
 
-function MealTimeline({ meals, onToggle, onEditLog, onDeleteLog, t }) {
+function TodaysEatenList({ meals, editing, onToggle, onEditQty, onDelete, t }) {
   if (!meals || meals.length === 0) {
     return (
       <div className="text-center py-10 px-6">
-        <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center text-2xl mb-3" style={{
-          background: t.surface, border: `1px solid ${t.border}`,
-        }}>🍽️</div>
-        <div className="font-grotesk text-sm font-semibold" style={{ color: t.ink }}>No meals logged</div>
+        <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center text-2xl mb-3" style={{ background: t.surface, border: `1px solid ${t.border}` }}>🍽️</div>
+        <div className="font-grotesk text-sm font-semibold" style={{ color: t.ink }}>No foods logged today</div>
         <div className="text-xs mt-1 max-w-xs mx-auto" style={{ color: t.mute }}>Your nutrition day is waiting to be filled.</div>
       </div>
     );
@@ -293,69 +240,57 @@ function MealTimeline({ meals, onToggle, onEditLog, onDeleteLog, t }) {
   return (
     <div className="space-y-2.5">
       {meals.map((m) => {
-        // Custom logged entries (AI, manual, custom) have no meal_id and have an id from meal_logs
         const isCustomLog = !m.meal_id && m.id && !m.id.startsWith('plan_');
         return (
           <div key={m.id} className="flex gap-3 items-start group transition-all">
-            {/* Eaten checkbox -- was a timeline dot on a connecting line;
-                this is a plain list of meals, not a chronological timeline,
-                so a checkbox reads its actual meaning (done / not done)
-                instead of borrowing a metaphor the layout didn't use. */}
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={!!m.eaten}
-              aria-label={m.eaten ? `Mark ${m.name} as not eaten` : `Mark ${m.name} as eaten`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle(m);
-              }}
-              className="mt-3 w-5 h-5 rounded-md border-2 shrink-0 grid place-items-center transition-all duration-200 cursor-pointer"
-              style={{
-                borderColor: m.eaten ? t.accent : t.border,
-                background: m.eaten ? t.accent : 'transparent',
-              }}
-            >
-              {m.eaten && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-              )}
-            </button>
+            {editing ? (
+              <button
+                onClick={() => onDelete(m)}
+                aria-label={`Remove ${m.name}`}
+                className="mt-3 w-6 h-6 rounded-md grid place-items-center shrink-0 text-sm font-bold transition-transform active:scale-90"
+                style={{ background: `${t.danger}12`, color: t.danger, border: `1px solid ${t.danger}30` }}
+              >−</button>
+            ) : (
+              <button
+                type="button" role="checkbox" aria-checked={!!m.eaten}
+                aria-label={m.eaten ? `Mark ${m.name} as not eaten` : `Mark ${m.name} as eaten`}
+                onClick={(e) => { e.stopPropagation(); onToggle(m); }}
+                className="mt-3 w-5 h-5 rounded-md border-2 shrink-0 grid place-items-center transition-all duration-200 cursor-pointer"
+                style={{ borderColor: m.eaten ? t.accent : t.border, background: m.eaten ? t.accent : 'transparent' }}
+              >
+                {m.eaten && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+              </button>
+            )}
 
-            {/* Meal card */}
             <div className="flex-1 rounded-xl p-3.5 transition-all duration-200" style={{
               background: m.eaten ? t.accentDim : t.surface,
               border: `1px solid ${m.eaten ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}`,
             }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-grotesk text-sm font-bold" style={{ color: t.ink }}>{m.name}</span>
-                      {m.time && <span className="font-grotesk text-[10px] px-1.5 py-px rounded-md" style={{ background: t.glass, color: t.mute }}>{m.time}</span>}
-                    </div>
-                    <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{m.slot}{m.quantity ? ` · ${m.quantity}${m.unit || 'g'}` : ''}</div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-grotesk text-sm font-bold" style={{ color: t.ink }}>{m.name}</span>
+                    {m.time && <span className="font-grotesk text-[10px] px-1.5 py-px rounded-md" style={{ background: t.glass, color: t.mute }}>{m.time}</span>}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="font-grotesk text-sm font-bold shrink-0" style={{ color: m.eaten ? t.accent : t.mute }}>
-                      {m.calories}<span className="text-[10px] font-normal" style={{ color: t.faint }}> kcal</span>
-                    </div>
-                    {/* Edit/Remove menu for custom logged entries */}
-                    {isCustomLog && (
-                      <div className="relative shrink-0">
-                        <button className="w-6 h-6 rounded-lg grid place-items-center text-[10px] transition-colors" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }} onClick={(e) => { e.stopPropagation(); const menu = e.currentTarget.nextElementSibling; menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex'; }} aria-label="Actions">⋮</button>
-                        <div className="hidden absolute right-0 top-full mt-1 z-20 flex-col min-w-[120px] rounded-xl overflow-hidden" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>
-                          <button className="px-3 py-2 text-left font-grotesk text-[11px] font-semibold transition-colors" style={{ color: t.ink }} onClick={(e) => { e.stopPropagation(); e.currentTarget.parentElement.style.display = 'none'; onEditLog(m); }} onMouseEnter={(e) => e.currentTarget.style.background = t.surfaceHover} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>Edit</button>
-                          <button className="px-3 py-2 text-left font-grotesk text-[11px] font-semibold transition-colors" style={{ color: t.danger }} onClick={(e) => { e.stopPropagation(); e.currentTarget.parentElement.style.display = 'none'; onDeleteLog(m); }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.06)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>Remove</button>
-                        </div>
-                      </div>
-                    )}
+                  <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{m.slot}{m.quantity ? ` · ${m.quantity}${m.unit || 'g'}` : ''}</div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="font-grotesk text-sm font-bold shrink-0" style={{ color: m.eaten ? t.accent : t.mute }}>
+                    {m.calories}<span className="text-[10px] font-normal" style={{ color: t.faint }}> kcal</span>
                   </div>
+                  {editing && isCustomLog && (
+                    <button onClick={() => onEditQty(m)} className="px-2 py-1 rounded-lg font-grotesk text-[9px] font-bold shrink-0" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>
+                      Edit Quantity
+                    </button>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.protein }}>P {m.protein}g</span>
-                  <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.carbs }}>C {m.carbs}g</span>
-                  <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.fat }}>F {m.fat}g</span>
-                  {m.eaten && <span className="ml-auto font-grotesk text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: t.accentDim, color: t.accent }}>Logged</span>}
-                </div>
+              </div>
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.protein }}>P {m.protein}g</span>
+                <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.carbs }}>C {m.carbs}g</span>
+                <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.fat }}>F {m.fat}g</span>
+                {m.eaten && !editing && <span className="ml-auto font-grotesk text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: t.accentDim, color: t.accent }}>Logged</span>}
+              </div>
               {m.foods && <div className="text-[10px] mt-1 truncate" style={{ color: t.faint }}>{m.foods}</div>}
             </div>
           </div>
@@ -366,7 +301,7 @@ function MealTimeline({ meals, onToggle, onEditLog, onDeleteLog, t }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   NUTRITION INSIGHT — data-driven micro insights
+   NUTRITION INSIGHT
    ════════════════════════════════════════════════════════════════ */
 
 function NutritionInsight({ plan, eaten, t }) {
@@ -376,31 +311,19 @@ function NutritionInsight({ plan, eaten, t }) {
     const proteinPct = plan.protein > 0 ? Math.round((eaten.protein / plan.protein) * 100) : 0;
     const carbPct = plan.carbs > 0 ? Math.round((eaten.carbs / plan.carbs) * 100) : 0;
     const fatPct = plan.fat > 0 ? Math.round((eaten.fat / plan.fat) * 100) : 0;
-
     if (remaining <= 0) return { text: `You've reached your calorie target.`, tone: 'gold' };
-    if (proteinPct < carbPct && proteinPct < fatPct && proteinPct < 100) {
-      return { text: `Protein is your lowest macro — ${plan.protein - eaten.protein}g remaining.`, tone: 'protein' };
-    }
+    if (proteinPct < carbPct && proteinPct < fatPct && proteinPct < 100) return { text: `Protein is your lowest macro — ${plan.protein - eaten.protein}g remaining.`, tone: 'protein' };
     if (remaining > 0) return { text: `${remaining} kcal away from today's target.`, tone: 'accent' };
     return null;
   }, [plan, eaten]);
 
   if (!insight) return null;
-
   const colors = { accent: t.accent, gold: t.gold, protein: t.protein };
   const color = colors[insight.tone] || t.accent;
-  // color is a token reference (var(--accent) etc.), not a raw hex -- see
-  // MacroBar's identical fix above. `${color}08` was already invalid CSS
-  // before that (accent/gold were already var(--accent)), just never
-  // visibly broken since the browser silently drops an invalid background/
-  // border value and the div still renders, transparent.
   const faded = (pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 
   return (
-    <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{
-      background: faded(8),
-      border: `1px solid ${faded(18)}`,
-    }}>
+    <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: faded(8), border: `1px solid ${faded(18)}` }}>
       <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 6px ${faded(60)}` }} />
       <span className="font-grotesk text-[11px] font-medium" style={{ color }}>{insight.text}</span>
     </div>
@@ -408,7 +331,7 @@ function NutritionInsight({ plan, eaten, t }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   SECTION HEADER — reusable premium section title
+   SECTION HEADER
    ════════════════════════════════════════════════════════════════ */
 
 function SectionHeader({ title, subtitle, action, t, kicker = false }) {
@@ -417,8 +340,7 @@ function SectionHeader({ title, subtitle, action, t, kicker = false }) {
       <div className="flex items-end justify-between mb-4">
         <div>
           <div className="font-grotesk text-[11px] font-semibold uppercase tracking-[.16em] flex items-center gap-2 mb-1" style={{ color: t.mute }}>
-            <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
-            {title}
+            <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />{title}
           </div>
           {subtitle && <div className="font-grotesk text-[11px] font-medium" style={{ color: t.mute }}>{subtitle}</div>}
         </div>
@@ -445,10 +367,7 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
   const [quantity, setQuantity] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (open && log) setQuantity(String(log.quantity || 100));
-  }, [open, log?.id]);
-
+  useEffect(() => { if (open && log) setQuantity(String(log.quantity || 100)); }, [open, log?.id]);
   if (!open || !log) return null;
 
   const origQty = Number(log.quantity) || 100;
@@ -461,16 +380,11 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
     fat: Math.round(log.fat * scale * 10) / 10,
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave(log.id, { quantity: newQty, unit: log.unit });
-    setSaving(false);
-  };
+  const handleSave = async () => { setSaving(true); await onSave(log.id, { quantity: newQty, unit: log.unit }); setSaving(false); };
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
       <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-        {/* Header */}
         <div className="px-5 pt-5 pb-3 flex items-start justify-between">
           <div>
             <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Edit Entry</div>
@@ -478,14 +392,10 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
           </div>
           <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
         </div>
-
-        {/* Quantity input */}
         <div className="px-5 pb-4">
           <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Quantity ({log.unit || 'g'})</label>
           <input type="number" className="w-full px-4 py-3 rounded-xl font-grotesk text-sm font-bold outline-none" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} value={quantity} onChange={(e) => setQuantity(e.target.value)} autoFocus />
         </div>
-
-        {/* Nutrition preview */}
         <div className="px-5 pb-4">
           <div className="rounded-xl p-3" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
             <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.mute }}>Updated Nutrition</div>
@@ -494,16 +404,12 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
                 <div key={label}>
                   <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{label}</div>
                   <div className="font-grotesk text-xs font-bold" style={{ color: t.ink }}>{old}{unit}</div>
-                  {Math.abs(old - newVal) > 0.5 && (
-                    <div className="font-grotesk text-[10px] font-semibold" style={{ color: t.accent }}>→ {newVal}{unit}</div>
-                  )}
+                  {Math.abs(old - newVal) > 0.5 && <div className="font-grotesk text-[10px] font-semibold" style={{ color: t.accent }}>→ {newVal}{unit}</div>}
                 </div>
               ))}
             </div>
           </div>
         </div>
-
-        {/* Actions */}
         <div className="px-5 pb-5 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
           <button onClick={handleSave} disabled={saving || newQty <= 0} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: (saving || newQty <= 0) ? t.surface : t.accent, color: (saving || newQty <= 0) ? t.mute : 'var(--accent-contrast)', border: `1px solid ${(saving || newQty <= 0) ? t.border : t.accent}`, opacity: (saving || newQty <= 0) ? 0.5 : 1, cursor: (saving || newQty <= 0) ? 'not-allowed' : 'pointer' }}>{saving ? 'Saving…' : 'Save Changes'}</button>
@@ -519,7 +425,6 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
 
 function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
   if (!open || !log) return null;
-
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
       <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
@@ -546,8 +451,6 @@ export default function Nutrition() {
   const { theme } = useTheme();
   const t = T[theme] || T.dark;
 
-  // Already fetched once by the persistent ClientLayout — reuse it instead
-  // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
   const home = useOutletContext();
   const [meals, setMeals] = useState(null);
   const [water, setWater] = useState(null);
@@ -564,16 +467,20 @@ export default function Nutrition() {
   const [supplementsExpanded, setSupplementsExpanded] = useState(false);
   const [mealsExpanded, setMealsExpanded] = useState(false);
   const [showAddSupplement, setShowAddSupplement] = useState(false);
-  // The single "Log Food" entry point (header button): search, voice,
-  // barcode scan, manual entry and label-scan all live inside FoodLogSheet
-  // itself now -- was three parallel, half-duplicate flows on this page
-  // (an inline search box, a separate free-text AI-estimate box, and a
-  // 6-option "how do you want to log" menu on top of THOSE) that FoodLogSheet
-  // already covered better on its own. Saving a custom food/meal template
-  // for reuse is gone too, on request -- whatever gets logged shows up in
-  // My Diet, which is now the only place saved/logged items live.
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
+
+  // Today's Eaten Meals edit mode -- [-]/[Edit Quantity] per row, "Save
+  // Changes" is a confirming exit flourish (each action already persisted
+  // immediately, same as before this redesign).
+  const [todaysEditing, setTodaysEditing] = useState(false);
+  const [savingTodaysEdit, setSavingTodaysEdit] = useState(false);
+  const [todaysSaveStage, setTodaysSaveStage] = useState(null);
+
+  // Food & Meal Tools sheets
+  const [shareOpen, setShareOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const data = home.data;
   const clientId = data?.client?.id;
@@ -582,10 +489,7 @@ export default function Nutrition() {
 
   const plan = data?.nutrition?.plan;
 
-  // Auto-open target setup if no plan exists after data loads
-  useEffect(() => {
-    if (data && !plan && !targetSetupOpen) setTargetSetupOpen(true);
-  }, [data, plan]);
+  useEffect(() => { if (data && !plan && !targetSetupOpen) setTargetSetupOpen(true); }, [data, plan]);
   const mealState = meals || data?.nutrition?.meals || [];
   const waterState = water ?? (data ? data.water.litres : 0);
 
@@ -609,8 +513,7 @@ export default function Nutrition() {
     try {
       await api(`/me/meal-logs/${logId}`, { method: 'PUT', body: JSON.stringify(updates) });
       setToast('Entry updated ✓');
-      setEditLogOpen(false);
-      setEditLog(null);
+      setEditLogOpen(false); setEditLog(null);
       home.reload();
     } catch (e) { setToast(e.message); }
   };
@@ -619,10 +522,16 @@ export default function Nutrition() {
     try {
       await api(`/me/meal-logs/${logId}`, { method: 'DELETE' });
       setToast('Entry removed ✓');
-      setDeleteLogOpen(false);
-      setDeleteLog(null);
+      setDeleteLogOpen(false); setDeleteLog(null);
       home.reload();
     } catch (e) { setToast(e.message); }
+  };
+
+  const finishTodaysEdit = async () => {
+    setSavingTodaysEdit(true); setTodaysSaveStage('saving');
+    await new Promise((res) => setTimeout(res, 300));
+    setTodaysSaveStage('success');
+    setTimeout(() => { setSavingTodaysEdit(false); setTodaysSaveStage(null); setTodaysEditing(false); }, 700);
   };
 
   const addWater = async (litres = 0.25) => {
@@ -630,6 +539,23 @@ export default function Nutrition() {
     setWater(next);
     await api(`/tracking/clients/${clientId}/water`, { method: 'POST', body: JSON.stringify({ litres: next }) }).catch(() => home.reload());
   };
+
+  const logEntry = async (entry) => {
+    await api(`/nutrition/clients/${clientId}/meals/log`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: entry.name, slot: 'Snack',
+        calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
+        source: entry.source || 'manual', eaten: true,
+        ai_provider: entry.ai_provider || undefined,
+        ai_model: entry.ai_model || undefined,
+        ai_confidence: entry.ai_confidence || undefined,
+      }),
+    });
+    home.reload();
+  };
+
+  const eatenTodayList = mealState.filter((m) => m.eaten);
 
   return (
     <div className="space-y-5 pb-24">
@@ -642,17 +568,21 @@ export default function Nutrition() {
             <span className="text-[13px] font-medium" style={{ color: t.mute }}>
               {plan ? `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g` : 'No plan assigned'}
             </span>
-            {/* Edit target -- reopens the same calculator used on first
-                setup (NutritionTargetSetup), recalculated from the client's
-                current stats and fully editable before saving. There was
-                previously no way back into this screen once dismissed. */}
             <button onClick={() => setTargetSetupOpen(true)} aria-label="Edit calorie target" className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-colors" style={{ color: t.mute, background: t.glass }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
             </button>
           </div>
         </div>
-        <button onClick={() => setFoodLogSheetOpen(true)} className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95" style={{ background: t.accent, color: 'var(--accent-contrast)', boxShadow: `0 4px 15px color-mix(in srgb, ${t.accent} 40%, transparent)` }}>
-          <span className="text-sm leading-none">+</span> Log Food
+        {/* Share Meals -- replaces the old "Log Food" header button. Log/
+            estimate now lives in Food & Meal Tools below, alongside
+            Customize and Information, as one cohesive tool group. */}
+        <button onClick={() => setShareOpen(true)} aria-label="Share meals"
+                className="shrink-0 w-10 h-10 rounded-xl grid place-items-center transition-all active:scale-90"
+                style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+            <path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5" />
+          </svg>
         </button>
       </div>
 
@@ -661,12 +591,7 @@ export default function Nutrition() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: t.heroGlow }} />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row items-center gap-6">
-            {/* Calorie Ring */}
-            <div className="shrink-0">
-              <CalorieRing value={eaten.calories} max={plan?.calories || 0} t={t} />
-            </div>
-
-            {/* Macro Bars */}
+            <div className="shrink-0"><CalorieRing value={eaten.calories} max={plan?.calories || 0} t={t} /></div>
             <div className="flex-1 w-full space-y-4">
               <MacroBar label="Protein" value={eaten.protein} max={plan?.protein || 0} color={t.protein} t={t} />
               <MacroBar label="Carbs" value={eaten.carbs} max={plan?.carbs || 0} color={t.carbs} t={t} />
@@ -679,15 +604,64 @@ export default function Nutrition() {
       {/* ══════ INSIGHT ══════ */}
       <NutritionInsight plan={plan} eaten={eaten} t={t} />
 
-      {/* ══════ TODAY'S MEALS ══════ */}
-      <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <SectionHeader title="My Diet" kicker subtitle={`${mealState.filter(m => m.eaten).length} of ${mealState.length} logged`} t={t} />
-        <MealTimeline meals={mealsExpanded ? mealState : mealState.slice(0, 2)} onToggle={toggleMeal} onEditLog={(m) => { setEditLog(m); setEditLogOpen(true); }} onDeleteLog={(m) => { setDeleteLog(m); setDeleteLogOpen(true); }} t={t} />
+      {/* ══════ TODAY'S EATEN MEALS ══════ */}
+      <div className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+        <SectionHeader
+          title="Today's Eaten Meals" kicker
+          subtitle={`${eatenTodayList.length} of ${mealState.length} logged`}
+          t={t}
+          action={
+            <button
+              onClick={() => (todaysEditing ? finishTodaysEdit() : setTodaysEditing(true))}
+              disabled={savingTodaysEdit}
+              className="px-3 py-1.5 rounded-xl font-grotesk text-[10px] font-bold transition-all active:scale-95"
+              style={{ background: todaysEditing ? t.accent : t.glass, color: todaysEditing ? 'var(--accent-contrast)' : t.mute, border: `1px solid ${todaysEditing ? t.accent : t.border}` }}
+            >
+              {todaysEditing ? 'Save Changes' : 'Edit'}
+            </button>
+          }
+        />
+        <TodaysEatenList
+          meals={mealsExpanded ? mealState : mealState.slice(0, 2)}
+          editing={todaysEditing}
+          onToggle={toggleMeal}
+          onEditQty={(m) => { setEditLog(m); setEditLogOpen(true); }}
+          onDelete={(m) => { setDeleteLog(m); setDeleteLogOpen(true); }}
+          t={t}
+        />
         {mealState.length > 2 && (
-          <button onClick={() => setMealsExpanded(!mealsExpanded)} className="w-full mt-3 py-2 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: `${t.accentDim}` }}>
+          <button onClick={() => setMealsExpanded(!mealsExpanded)} className="w-full mt-3 py-2 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
             {mealsExpanded ? 'Show less' : `See more (${mealState.length - 2} more)`}
           </button>
         )}
+        {mealState.length === 0 && (
+          <button onClick={() => setFoodLogSheetOpen(true)} className="w-full mt-2 py-2.5 rounded-xl font-grotesk text-[12px] font-bold" style={{ background: t.accentDim, color: t.accent }}>
+            Log / Estimate Food
+          </button>
+        )}
+        <SavingOverlay open={savingTodaysEdit} stage={todaysSaveStage} label={todaysSaveStage === 'success' ? 'Changes Saved' : 'Saving changes'} mode="overlay" size="sm" />
+      </div>
+
+      {/* ══════ MY DIET (Saved Foods + Saved Meals) ══════ */}
+      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload())} t={t} toast={setToast} />
+
+      {/* ══════ FOOD & MEAL TOOLS ══════ */}
+      <div className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+        <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
+        <div className="grid grid-cols-3 gap-1.5 p-1">
+          {[
+            { label: 'Log / Estimate Food', icon: '🍽️', onClick: () => setFoodLogSheetOpen(true) },
+            { label: 'Customize My Meals', icon: '🧩', onClick: () => setCustomizeOpen(true) },
+            { label: 'Meal Information', icon: '📊', onClick: () => setInfoOpen(true) },
+          ].map((tool) => (
+            <button key={tool.label} onClick={tool.onClick}
+                    className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
+                    style={{ background: t.glass, border: `1px solid ${t.border}` }}>
+              <span className="text-lg">{tool.icon}</span>
+              <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: t.ink }}>{tool.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ══════ SUPPLEMENTS ══════ */}
@@ -699,7 +673,6 @@ export default function Nutrition() {
           const supPct = sups.length > 0 ? Math.round((takenCount / sups.length) * 100) : 0;
           return (
             <>
-              {/* Header with progress ring */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="relative w-14 h-14">
@@ -707,14 +680,11 @@ export default function Nutrition() {
                       <circle cx="28" cy="28" r={26} fill="none" stroke={t.ringTrack} strokeWidth="4" />
                       <circle cx="28" cy="28" r={26} fill="none" stroke={supPct === 100 ? t.accent : t.gold} strokeWidth="4" strokeLinecap="round" strokeDasharray={2 * Math.PI * 26} strokeDashoffset={2 * Math.PI * 26 * (1 - supPct / 100)} style={{ transition: 'stroke-dashoffset 0.6s cubic-bezier(.22,.8,.3,1)' }} />
                     </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="font-grotesk text-[13px] font-bold" style={{ color: supPct === 100 ? t.accent : t.gold }}>{supPct}%</span>
-                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center"><span className="font-grotesk text-[13px] font-bold" style={{ color: supPct === 100 ? t.accent : t.gold }}>{supPct}%</span></div>
                   </div>
                   <div>
                     <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2" style={{ color: t.mute }}>
-                      <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
-                      Supplements
+                      <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />Supplements
                     </div>
                     <div className="font-grotesk text-[10px]" style={{ color: t.faint }}>{takenCount} of {sups.length} taken</div>
                   </div>
@@ -723,8 +693,6 @@ export default function Nutrition() {
                   {showAddSupplement ? '✕ Close' : '+ Add'}
                 </button>
               </div>
-
-              {/* Supplement list */}
               {visible.length > 0 && (
                 <div className="space-y-1.5 mb-3">
                   {visible.map((s) => {
@@ -734,7 +702,6 @@ export default function Nutrition() {
                         <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] shrink-0" style={{ background: taken ? t.accent : 'transparent', color: taken ? 'var(--accent-contrast)' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}>✓</span>
                         <span className="flex-1 min-w-0">
                           <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{s.name}</span>
-                          {/* Linear progress bar */}
                           <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: t.ringTrack }}>
                             <div className="h-full rounded-full" style={{ width: taken ? '100%' : '0%', background: t.accent, transition: 'width 0.4s ease' }} />
                           </div>
@@ -746,21 +713,14 @@ export default function Nutrition() {
                   })}
                 </div>
               )}
-
               {sups.length === 0 && !showAddSupplement && (
-                <div className="text-center py-4 mb-3">
-                  <div className="font-grotesk text-[11px]" style={{ color: t.mute }}>No supplements added yet</div>
-                </div>
+                <div className="text-center py-4 mb-3"><div className="font-grotesk text-[11px]" style={{ color: t.mute }}>No supplements added yet</div></div>
               )}
-
-              {/* See more / See less */}
               {sups.length > 2 && (
                 <button onClick={() => setSupplementsExpanded(!supplementsExpanded)} className="w-full py-2 text-center font-grotesk text-[11px] font-semibold rounded-xl mb-3 transition-colors" style={{ color: t.accent, background: t.accentDim + '40' }}>
                   {supplementsExpanded ? 'Show less' : `See more (${sups.length - 2} more)`}
                 </button>
               )}
-
-              {/* Add supplement form */}
               {showAddSupplement && (
                 <div className="rounded-xl p-3.5 space-y-2.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
                   <div className="flex items-center justify-between">
@@ -793,37 +753,27 @@ export default function Nutrition() {
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
       <DeleteLogConfirm open={deleteLogOpen} log={deleteLog} onClose={() => { setDeleteLogOpen(false); setDeleteLog(null); }} onConfirm={deleteLogEntry} t={t} />
 
-      {/* ══════ FOOD LOG SHEET (search, or scan a barcode) ══════ */}
+      {/* ══════ FOOD LOG SHEET (search, barcode, mic, AI estimate) ══════ */}
       <FoodLogSheet
         open={foodLogSheetOpen}
         autoScan={foodLogAutoScan}
         onClose={() => { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }}
         onAdd={async (entry) => {
-          // Same endpoint + body shape every other "log this to today" action
-          // in this file already uses (e.g. the quick-add food chips above).
-          // source/ai_* pass through entry's own values (an AI-estimated
-          // log via FoodLogSheet's "Estimate with AI" sets entry.source to
-          // 'ai_estimated') rather than always hardcoding 'manual' -- see
-          // the source enum in backend/src/validate.js. Never overwritten
-          // to 'measured': AI-generated data stays labelled as such even
-          // once logged.
-          await api(`/nutrition/clients/${clientId}/meals/log`, {
-            method: 'POST',
-            body: JSON.stringify({
-              name: entry.name, slot: 'Snack',
-              calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
-              source: entry.source || 'manual', eaten: true,
-              ai_provider: entry.ai_provider || undefined,
-              ai_model: entry.ai_model || undefined,
-              ai_confidence: entry.ai_confidence || undefined,
-            }),
-          });
+          await logEntry(entry);
           setFoodLogSheetOpen(false);
           setFoodLogAutoScan(false);
-          home.reload();
           setToast('Food logged ✓');
         }}
       />
+
+      {/* ══════ SHARE MEALS ══════ */}
+      <ShareMealsSheet open={shareOpen} onClose={() => setShareOpen(false)} t={t} />
+
+      {/* ══════ CUSTOMIZE MY MEALS ══════ */}
+      <CustomizeMealSheet open={customizeOpen} onClose={() => setCustomizeOpen(false)} onLogged={home.reload} t={t} toast={setToast} />
+
+      {/* ══════ INFORMATION ABOUT MY MEALS ══════ */}
+      <MealInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} meals={eatenTodayList} plan={plan} goal={data?.client?.goal} t={t} />
     </div>
   );
 }
