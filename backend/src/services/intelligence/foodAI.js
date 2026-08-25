@@ -39,24 +39,56 @@ import { canonicalizeFoodQuery, getCachedEstimate, saveCachedEstimate, bumpCache
 import { track } from '../events.js';
 
 // ------------------------------------------------------------------
-// PROVIDER SELECTION — independent of the app-wide AI_PROVIDER (food
-// estimation may reasonably want a different model/vendor than chat
-// coaching does). Defaults to the SAME default as the rest of the app
-// (ollama, local, free) so Tier 4 works out of the box in dev with no
-// cloud dependency, and degrades to "unavailable" if Ollama isn't
-// actually running -- never throws, never blocks food logging.
+// PROVIDER SELECTION / FAILOVER CHAIN — independent of the app-wide
+// AI_PROVIDER (food estimation may reasonably want a different model/
+// vendor than chat coaching does).
+//
+// TARGET HIERARCHY (production, all three cloud keys configured):
+//   Groq (primary) -> Gemini (secondary) -> OpenRouter (tertiary) ->
+//   Ollama (optional local) -> graceful unresolved.
+// Each step is tried ONLY if the previous one genuinely FAILED -- a
+// successful call never triggers the next provider (cost safety). A
+// provider that isn't configured (no key, or a paid provider blocked by
+// the zero-cost ALLOW_PAID_AI gate) is skipped without counting as a
+// "failure", exactly like today.
+//
+// BACKWARD COMPATIBILITY / ESCAPE HATCH: if FOOD_AI_PROVIDER (or the
+// app-wide AI_PROVIDER) is explicitly set, that exact single-provider (+
+// optional FOOD_AI_FALLBACK_PROVIDER) behaviour from before this change is
+// preserved UNCHANGED -- the full 4-provider chain does not get silently
+// appended on top of someone's deliberate single-provider configuration.
+// The full chain is what happens when NEITHER is set, which is also
+// exactly the zero-cost dev default (nothing configured -> only Ollama is
+// actually attempted, everything else is skipped as unconfigured) and the
+// natural production case (set the cloud keys, leave FOOD_AI_PROVIDER
+// unset, get the full ordered chain).
 // ------------------------------------------------------------------
-const PRIMARY_PROVIDER = (process.env.FOOD_AI_PROVIDER || process.env.AI_PROVIDER || 'ollama').toLowerCase();
-const FALLBACK_PROVIDER = (process.env.FOOD_AI_FALLBACK_PROVIDER || '').toLowerCase() || null;
+const DEFAULT_CHAIN = ['groq', 'gemini', 'openrouter', 'ollama'];
+
+const EXPLICIT_PROVIDER = (process.env.FOOD_AI_PROVIDER || process.env.AI_PROVIDER || '').toLowerCase() || null;
+const EXPLICIT_FALLBACK = (process.env.FOOD_AI_FALLBACK_PROVIDER || '').toLowerCase() || null;
+
+const PROVIDER_CHAIN = EXPLICIT_PROVIDER
+  ? [EXPLICIT_PROVIDER, EXPLICIT_FALLBACK].filter(Boolean)
+  : DEFAULT_CHAIN;
+
+// Kept for compatibility with anything reading the old two-slot shape.
+const PRIMARY_PROVIDER = PROVIDER_CHAIN[0] || 'ollama';
+const FALLBACK_PROVIDER = PROVIDER_CHAIN[1] || null;
+
 const FOOD_AI_MODEL = process.env.FOOD_AI_MODEL || null;
 const FOOD_AI_TIMEOUT_MS = Number(process.env.FOOD_AI_TIMEOUT_MS) || 15_000;
 
 export function isFoodAIAvailable() {
-  return isProviderConfigured(PRIMARY_PROVIDER) || (FALLBACK_PROVIDER && isProviderConfigured(FALLBACK_PROVIDER));
+  return PROVIDER_CHAIN.some((p) => isProviderConfigured(p));
 }
 
 export function foodAIConfigSummary() {
   return {
+    // New: the full ordered chain and which entries are actually usable.
+    chain: PROVIDER_CHAIN,
+    chainAvailability: Object.fromEntries(PROVIDER_CHAIN.map((p) => [p, isProviderConfigured(p)])),
+    // Kept for compatibility with any existing caller of the old shape.
     primaryProvider: PRIMARY_PROVIDER,
     primaryAvailable: isProviderConfigured(PRIMARY_PROVIDER),
     fallbackProvider: FALLBACK_PROVIDER,
@@ -534,28 +566,63 @@ export function deriveConfidence({ groundedCount, totalCount, uncertainty, total
 /*  Provider call with fallback                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Walks PROVIDER_CHAIN in order, calling each configured provider ONLY if
+ * the previous one genuinely failed (timeout / rate-limited / 4xx-5xx /
+ * malformed JSON / schema-validation failure / unavailable). Stops and
+ * returns immediately on the first success -- a successful call NEVER
+ * triggers the next provider, which is the whole point of a failover
+ * chain rather than a fan-out. `attempts` in the return value is an
+ * observability trail (provider name + outcome + reason + latency, NEVER
+ * a key or auth header) a caller can log without needing to re-derive it.
+ */
 async function callWithFallback(system, user) {
-  const attempts = [PRIMARY_PROVIDER, FALLBACK_PROVIDER].filter(Boolean);
-  let lastError = null;
-  for (const provider of attempts) {
-    if (!isProviderConfigured(provider)) continue;
+  const attempts = [];
+  let fallbackDepth = 0;
+
+  for (const provider of PROVIDER_CHAIN) {
+    if (!isProviderConfigured(provider)) {
+      attempts.push({ provider, outcome: 'skipped_unconfigured' });
+      continue;
+    }
+    const t0 = Date.now();
     try {
       const raw = await callProviderRaw(provider, system, user, {
         json: true, model: FOOD_AI_MODEL, timeoutMs: FOOD_AI_TIMEOUT_MS,
       });
+      const latencyMs = Date.now() - t0;
       const parsed = parseJSON(raw);
-      if (!parsed) { lastError = { provider, reason: 'invalid_json' }; continue; }
+      if (!parsed) {
+        attempts.push({ provider, outcome: 'failure', reason: 'invalid_json', latencyMs });
+        fallbackDepth++;
+        continue;
+      }
       const validated = validateAIFoodResponse(parsed);
-      if (!validated.ok) { lastError = { provider, reason: 'validation_failed', detail: validated.reason }; continue; }
-      return { ok: true, provider, value: validated.value };
+      if (!validated.ok) {
+        attempts.push({ provider, outcome: 'failure', reason: 'validation_failed', detail: validated.reason, latencyMs });
+        fallbackDepth++;
+        continue;
+      }
+      attempts.push({ provider, outcome: 'success', latencyMs });
+      return { ok: true, provider, value: validated.value, attempts, fallbackDepth };
     } catch (e) {
+      const latencyMs = Date.now() - t0;
       const isRateLimit = /429|rate.?limit/i.test(String(e.message || ''));
       const isTimeout = /timed out/i.test(String(e.message || ''));
-      lastError = { provider, reason: isRateLimit ? 'rate_limited' : isTimeout ? 'timeout' : 'error', detail: e.message };
-      continue; // try the next configured provider
+      const reason = isRateLimit ? 'rate_limited' : isTimeout ? 'timeout' : 'error';
+      attempts.push({ provider, outcome: 'failure', reason, detail: e.message, latencyMs });
+      fallbackDepth++;
+      continue; // try the next provider in the chain
     }
   }
-  return { ok: false, error: lastError || { reason: 'no_provider_configured' } };
+
+  const lastFailure = [...attempts].reverse().find((a) => a.outcome === 'failure');
+  return {
+    ok: false,
+    error: lastFailure || { reason: attempts.length ? 'all_providers_failed' : 'no_provider_configured' },
+    attempts,
+    fallbackDepth,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -609,15 +676,25 @@ export async function estimateFoodAI(db, params) {
   const references = gatherMeasuredReferences(query);
   const userMessage = buildUserMessage(params, references);
 
-  track(db, { type: 'food_ai_tier4_call', orgId, userId, data: { key, provider: PRIMARY_PROVIDER } }).catch(() => {});
+  track(db, { type: 'food_ai_tier4_call', orgId, userId, data: { key, chain: PROVIDER_CHAIN } }).catch(() => {});
   const t0 = Date.now();
   const result = await callWithFallback(SYSTEM_PROMPT, userMessage);
   const latencyMs = Date.now() - t0;
+  // Observability trail -- provider names, outcomes, reasons and latency
+  // ONLY. Never a key, an auth header, or a raw provider response body.
+  const providersAttempted = result.attempts.filter((a) => a.outcome !== 'skipped_unconfigured').map((a) => a.provider);
+  const providersFailed = result.attempts.filter((a) => a.outcome === 'failure').map((a) => ({ provider: a.provider, reason: a.reason }));
 
   if (!result.ok) {
     const reason = result.error?.reason || 'unknown_error';
-    track(db, { type: `food_ai_failure_${reason}`, orgId, userId, data: { key, detail: result.error?.detail, latencyMs } }).catch(() => {});
-    track(db, { type: 'food_ai_tier4_failure', orgId, userId, data: { key, reason } }).catch(() => {});
+    track(db, {
+      type: `food_ai_failure_${reason}`, orgId, userId,
+      data: { key, detail: result.error?.detail, latencyMs, provider_attempted: providersAttempted, provider_failure: providersFailed, fallback_depth: result.fallbackDepth },
+    }).catch(() => {});
+    track(db, {
+      type: 'food_ai_tier4_failure', orgId, userId,
+      data: { key, reason, provider_attempted: providersAttempted, failure_reason: reason, fallback_depth: result.fallbackDepth },
+    }).catch(() => {});
     const message = `Could not produce an AI estimate (${reason}).`;
     return {
       ok: false, schema_version: 'food-v1', tier: 4, estimate_status: 'unresolved',
@@ -626,7 +703,14 @@ export async function estimateFoodAI(db, params) {
     };
   }
 
-  track(db, { type: 'food_ai_tier4_success', orgId, userId, data: { key, provider: result.provider, latencyMs } }).catch(() => {});
+  track(db, {
+    type: 'food_ai_tier4_success', orgId, userId,
+    data: {
+      key, provider: result.provider, latencyMs,
+      provider_attempted: providersAttempted, provider_success: result.provider,
+      provider_failure: providersFailed, fallback_depth: result.fallbackDepth,
+    },
+  }).catch(() => {});
 
   const ai = result.value;
   const { components, groundedCount, totalCount } = resolveComponents(ai.components);
@@ -711,6 +795,12 @@ function shapeCachedResult(cached, displayName) {
     cache_key: cached.canonical_key,
   };
 }
+
+// Exported for backend/scripts/food-ai-smoke.js -- the optional real-API
+// smoke test reuses the EXACT prompt/reference-gathering logic production
+// calls use (same food-v1 JSON contract, same measured-food anchoring)
+// rather than a second, drifting copy of the prompt.
+export { SYSTEM_PROMPT, buildUserMessage, gatherMeasuredReferences };
 
 export default {
   isFoodAIAvailable, foodAIConfigSummary, estimateFoodAI, validateAIFoodResponse,

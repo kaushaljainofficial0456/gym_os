@@ -5,7 +5,8 @@
 //   Implementations: ollama (local — default for dev),
 //                    openai (chat-completions compatible),
 //                    gemini (REST), groq (OpenAI-compatible, fast/cheap
-//                    inference), mock (deterministic fallback).
+//                    inference), openrouter (OpenAI-compatible proxy over
+//                    many models), mock (deterministic fallback).
 // Deterministic intelligence (parsing, search, calculation,
 // permissions) NEVER goes through here — only ambiguous NL,
 // vision, contextual coaching and recommendation framing.
@@ -49,6 +50,7 @@ function keyFor(provider) {
   if (provider === 'openai') return process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || '';
   if (provider === 'gemini') return process.env.GEMINI_API_KEY || '';
   if (provider === 'groq') return process.env.GROQ_API_KEY || '';
+  if (provider === 'openrouter') return process.env.OPENROUTER_API_KEY || '';
   return '';
 }
 
@@ -167,7 +169,7 @@ async function callOpenAI(system, user, { json = true, model } = {}) {
 }
 
 async function callGemini(system, user, { json = true, model } = {}) {
-  const modelId = model || process.env.LLM_MODEL || 'gemini-1.5-flash';
+  const modelId = model || process.env.LLM_MODEL || 'gemini-3.5-flash-lite';
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`,
     {
@@ -197,7 +199,7 @@ async function callGroq(system, user, { json = true, model } = {}) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
     body: JSON.stringify({
-      model: model || process.env.GROQ_MODEL || process.env.LLM_MODEL || 'llama-3.3-70b-versatile',
+      model: model || process.env.GROQ_MODEL || process.env.LLM_MODEL || 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user }
@@ -207,6 +209,40 @@ async function callGroq(system, user, { json = true, model } = {}) {
     })
   });
   if (!res.ok) throw new Error(`groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callOpenRouter(system, user, { json = true, model } = {}) {
+  // OpenRouter is ALSO OpenAI-compatible chat-completions, at yet another
+  // host/model namespace -- same near-duplicate-on-purpose reasoning as
+  // Groq above. Two OpenRouter-specific optional headers (HTTP-Referer,
+  // X-Title) identify the calling app for OpenRouter's own analytics/
+  // leaderboard; requests work without them, they are not auth.
+  // response_format JSON mode is best-effort here: unlike Groq/OpenAI,
+  // OpenRouter proxies many underlying models and not all of them honour
+  // response_format -- parseJSON()'s fenced-code/prose-stripping fallback
+  // (already required for Ollama's looser JSON mode) is the real safety
+  // net for this provider, not a guarantee from the API shape.
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${KEY}`,
+      'HTTP-Referer': process.env.OPENROUTER_APP_URL || 'https://skos.app',
+      'X-Title': 'SK OS'
+    },
+    body: JSON.stringify({
+      model: model || process.env.OPENROUTER_MODEL || process.env.LLM_MODEL || 'openrouter/free',
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ],
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+      temperature: 0.2
+    })
+  });
+  if (!res.ok) throw new Error(`openrouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content || '';
 }
@@ -241,7 +277,13 @@ export async function callProviderRaw(provider, system, user, opts = {}) {
     const key = keyFor(p);
     if (p === 'groq') return await callGroqWithKey(system, user, { ...fetchOpts, apiKey: key });
     if (p === 'gemini') return await callGeminiWithKey(system, user, { ...fetchOpts, apiKey: key });
-    return await callOpenAIWithKey(system, user, { ...fetchOpts, apiKey: key });
+    if (p === 'openrouter') return await callOpenRouterWithKey(system, user, { ...fetchOpts, apiKey: key });
+    if (p === 'openai') return await callOpenAIWithKey(system, user, { ...fetchOpts, apiKey: key });
+    // Unknown provider name: fail loudly rather than silently dispatching
+    // to OpenAI's endpoint with a key that isn't an OpenAI key. This WAS a
+    // bug before openrouter existed as a name -- any unrecognised provider
+    // fell through here and got dispatched to callOpenAIWithKey regardless.
+    throw new Error(`Unknown provider '${p}'`);
   } catch (e) {
     if (e?.name === 'AbortError') throw new Error(`${p} timed out after ${timeoutMs}ms`);
     throw e;
@@ -272,7 +314,13 @@ async function callOpenAIWithKey(system, user, { json = true, model, apiKey, sig
 }
 
 async function callGeminiWithKey(system, user, { json = true, model, apiKey, signal } = {}) {
-  const modelId = model || process.env.LLM_MODEL || 'gemini-1.5-flash';
+  // GEMINI_MODEL was documented in .env.example (and set in some
+  // deployments' env) but never actually read here -- only the
+  // module-wide, non-provider-specific LLM_MODEL was. A caller through
+  // callProviderRaw (food-AI Tier 4, which explicitly names its own
+  // provider+model independent of the app-wide AI_PROVIDER) is exactly
+  // the case this env var exists for.
+  const modelId = model || process.env.GEMINI_MODEL || process.env.LLM_MODEL || 'gemini-3.5-flash-lite';
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`,
     {
@@ -293,13 +341,34 @@ async function callGroqWithKey(system, user, { json = true, model, apiKey, signa
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: model || process.env.GROQ_MODEL || process.env.LLM_MODEL || 'llama-3.3-70b-versatile',
+      model: model || process.env.GROQ_MODEL || process.env.LLM_MODEL || 'openai/gpt-oss-120b',
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       temperature: 0.2
     })
   });
   if (!res.ok) throw new Error(`groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callOpenRouterWithKey(system, user, { json = true, model, apiKey, signal } = {}) {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST', signal,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': process.env.OPENROUTER_APP_URL || 'https://skos.app',
+      'X-Title': 'SK OS'
+    },
+    body: JSON.stringify({
+      model: model || process.env.OPENROUTER_MODEL || process.env.LLM_MODEL || 'openrouter/free',
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+      temperature: 0.2
+    })
+  });
+  if (!res.ok) throw new Error(`openrouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content || '';
 }

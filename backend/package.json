@@ -14,7 +14,8 @@
     "reset": "node scripts/init-db.js --force && node scripts/seed.js",
     "export:training": "node scripts/export-training-data.js",
     "test": "node --test",
-    "pg:validate": "node scripts/pg-validate.js"
+    "pg:validate": "node scripts/pg-validate.js",
+    "smoke:food-ai": "node scripts/food-ai-smoke.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
