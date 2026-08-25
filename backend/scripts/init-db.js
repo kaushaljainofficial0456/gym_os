@@ -130,6 +130,10 @@ const MIGRATIONS = [
   // --- shared AI food-estimate cache: community feedback + promotion ---
   ['ai_food_estimates', 'validation_status', `validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`],
   ['ai_food_estimates', 'version', `version INTEGER NOT NULL DEFAULT 1`],
+
+  // --- gym community: org-level feature toggles ---
+  ['gym_settings', 'community_enabled', `community_enabled INTEGER NOT NULL DEFAULT 1`],
+  ['gym_settings', 'community_leaderboard_enabled', `community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

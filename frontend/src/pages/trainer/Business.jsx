@@ -210,6 +210,15 @@ export default function Business() {
                   {label}
                 </label>
               ))}
+              <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mt-3">COMMUNITY</div>
+              <label className="flex items-center gap-2 text-xs text-mute">
+                <input type="checkbox" className="accent-gold" checked={!!setForm.community_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_enabled: e.target.checked ? 1 : 0 }))} />
+                Enable gym community
+              </label>
+              <label className="flex items-center gap-2 text-xs text-mute">
+                <input type="checkbox" className="accent-gold" checked={!!setForm.community_leaderboard_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_leaderboard_enabled: e.target.checked ? 1 : 0 }))} />
+                Enable leaderboards
+              </label>
               <button className="btn-primary w-full" disabled={savingSet} onClick={async () => {
                 setSavingSet(true);
                 try {

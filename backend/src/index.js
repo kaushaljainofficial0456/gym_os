@@ -30,6 +30,7 @@ import shareRoutes from './routes/share.js';
 import clientErrorRoutes from './routes/clientError.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
+import communityRoutes from './routes/community.js';
 
 // Builds the Express app without starting a listener, so it can be reused
 // both by the traditional long-running server below (for local dev or a
@@ -127,6 +128,7 @@ app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail d
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
+app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under

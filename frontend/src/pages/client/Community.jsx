@@ -1,0 +1,432 @@
+/**
+ * GYM COMMUNITY — leaderboards, activity feed, workout sharing
+ * Opt-in participation. Org-scoped. Privacy-first (default OFF).
+ */
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../../api.js';
+import { useFetch } from '../../utils.js';
+import { Spinner, ErrorState, Avatar, Empty, Toast, Skeleton } from '../../components/UI.jsx';
+import Icon from '../../components/Icon.jsx';
+
+const MEDAL = ['🥇', '🥈', '🥉'];
+const MEDAL_TONE = ['var(--gold, #C4A06A)', '#C0C0C0', '#CD7F32'];
+
+export default function Community() {
+  const nav = useNavigate();
+  const membershipFetch = useFetch(() => api('/community/membership'));
+  const [period, setPeriod] = useState('week');
+  const lbFetch = useFetch(() => api(`/community/leaderboards?period=${period}`), [period]);
+  const feedFetch = useFetch(() => api('/community/feed'));
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
+  const showToast = (msg) => {
+    showToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => showToast(''), 3000);
+  };
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const [sharing, setSharing] = useState(null); // workout_id being shared
+  const [copyModal, setCopyModal] = useState(null); // share object
+  const [copyForm, setCopyForm] = useState({ name: '', exercises: [] });
+  const [copying, setCopying] = useState(false);
+
+  const membership = membershipFetch.data?.membership;
+  const settings = membershipFetch.data?.settings;
+  const gym = membershipFetch.data?.gym;
+  const isMember = !!membership?.enabled;
+  const communityEnabled = settings?.community_enabled !== false;
+
+  const toggleMembership = async () => {
+    try {
+      const res = await api('/community/membership', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: !isMember }),
+      });
+      membershipFetch.reload();
+      lbFetch.reload();
+      feedFetch.reload();
+      showToast(isMember ? 'Left community' : 'Welcome to the community!');
+    } catch (e) {
+      showToast(e.message || 'Could not update membership');
+    }
+  };
+
+  const shareWorkout = async (workoutId) => {
+    setSharing(workoutId);
+    try {
+      await api('/community/shares', {
+        method: 'POST',
+        body: JSON.stringify({ workout_id: workoutId }),
+      });
+      showToast('Workout shared with your gym!');
+      feedFetch.reload();
+    } catch (e) {
+      showToast(e.message || 'Could not share workout');
+    }
+    setSharing(null);
+  };
+
+  const unshare = async (shareId) => {
+    try {
+      await api(`/community/shares/${shareId}`, { method: 'DELETE' });
+      showToast('Share removed');
+      feedFetch.reload();
+    } catch (e) {
+      showToast(e.message || 'Could not remove share');
+    }
+  };
+
+  const openCopy = (share) => {
+    setCopyModal(share);
+    setCopyForm({
+      name: share.workoutName,
+      exercises: (share.payload || []).map(e => ({
+        ...e,
+        exercise_id: e.exercise_id || null,
+      })),
+    });
+  };
+
+  const doCopy = async () => {
+    if (!copyModal) return;
+    setCopying(true);
+    try {
+      const res = await api(`/community/shares/${copyModal.id}/copy`, {
+        method: 'POST',
+        body: JSON.stringify({ name: copyForm.name, exercises: copyForm.exercises }),
+      });
+      showToast('Workout added to your library!');
+      setCopyModal(null);
+    } catch (e) {
+      showToast(e.message || 'Could not copy workout');
+    }
+    setCopying(false);
+  };
+
+  if (membershipFetch.loading) return <Spinner label="Loading community…" />;
+  if (membershipFetch.error) return <ErrorState error={membershipFetch.error} onRetry={membershipFetch.reload} />;
+
+  // Community not enabled by gym
+  if (!communityEnabled) {
+    return (
+      <div className="space-y-4 pb-28">
+        <div className="card p-8 text-center">
+          <Icon name="lock" size={40} className="mx-auto mb-3" style={{ color: 'var(--faint)' }} />
+          <h2 className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>Community not available</h2>
+          <p className="text-sm mt-2" style={{ color: 'var(--mute)' }}>
+            Your gym hasn't enabled the community feature yet.
+          </p>
+        </div>
+        {toast && <Toast message={toast} />}
+      </div>
+    );
+  }
+
+  // Not a member yet — show join prompt
+  if (!isMember) {
+    return (
+      <div className="space-y-4 pb-28">
+        <div className="card p-8 text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center mb-4"
+               style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
+            <Icon name="trending" size={28} style={{ color: 'var(--accent)' }} />
+          </div>
+          <h2 className="font-grotesk font-bold text-xl" style={{ color: 'var(--ink)' }}>
+            Join {gym?.name || 'your gym'}'s community
+          </h2>
+          <p className="text-sm mt-2 max-w-xs mx-auto" style={{ color: 'var(--mute)' }}>
+            See leaderboards, compare progress, and share workouts with your gym friends.
+            You control what's visible — participation is always optional.
+          </p>
+          <div className="mt-6 space-y-3">
+            <button className="btn-primary w-full !py-3" onClick={toggleMembership}>
+              Join Community
+            </button>
+            <button className="btn w-full" onClick={() => nav(-1)}>Maybe later</button>
+          </div>
+        </div>
+        {toast && <Toast message={toast} />}
+      </div>
+    );
+  }
+
+  // ---- Member view ----
+  const lb = lbFetch.data?.leaderboards || { streak: [], volume: [], completedWorkouts: [] };
+  const shares = feedFetch.data?.shares || [];
+  const periods = [
+    { value: 'day', label: 'Today' },
+    { value: 'week', label: 'This Week' },
+    { value: 'month', label: 'This Month' },
+  ];
+
+  return (
+    <div className="space-y-5 pb-28">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-grotesk font-bold text-xl" style={{ color: 'var(--ink)' }}>
+            {gym?.name || 'Community'}
+          </h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--mute)' }}>
+            Member leaderboards &amp; workout sharing
+          </p>
+        </div>
+        <button className="btn !text-xs !py-1.5" onClick={toggleMembership}>Leave</button>
+      </div>
+
+      {/* Period tabs */}
+      <div className="flex gap-1.5 border rounded-full p-1 overflow-x-auto"
+           style={{ background: 'rgba(128,128,128,.06)', borderColor: 'var(--line)' }}>
+        {periods.map(p => (
+          <button key={p.value}
+            className={`flex-1 text-center py-2 px-3 rounded-full text-xs font-grotesk font-semibold transition-all
+              ${period === p.value
+                ? 'bg-[var(--accent)] text-white shadow-sm'
+                : 'text-[var(--mute)] hover:text-[var(--ink)]'}`}
+            onClick={() => setPeriod(p.value)}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ---- LEADERBOARDS ---- */}
+      {lbFetch.loading ? (
+        <Skeleton lines={6} />
+      ) : lbFetch.error ? (
+        <div className="card p-4 text-center">
+          <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load leaderboards</p>
+          <button className="btn !text-xs" onClick={lbFetch.reload}>Retry</button>
+        </div>
+      ) : (
+        <>
+          <LeaderboardSection
+            title="Top Streaks"
+            subtitle="Consecutive training days"
+            entries={lb.streak}
+            valueLabel={(v) => v === 1 ? '1 day' : `${v} days`}
+          />
+          <LeaderboardSection
+            title="Workout Volume"
+            subtitle="Total weight lifted (kg)"
+            entries={lb.volume}
+            valueLabel={(v) => `${Number(v).toLocaleString()} kg`}
+          />
+          <LeaderboardSection
+            title="Most Workouts"
+            subtitle="Sessions completed"
+            entries={lb.completedWorkouts}
+            valueLabel={(v) => v === 1 ? '1 workout' : `${v} workouts`}
+          />
+        </>
+      )}
+
+      {/* ---- COMMUNITY ACTIVITY ---- */}
+      <div>
+        <div className="text-[10px] uppercase tracking-[.14em] font-grotesk font-semibold mb-3"
+             style={{ color: 'var(--mute)' }}>
+          Community Activity
+        </div>
+        {feedFetch.loading ? (
+          <Skeleton lines={3} />
+        ) : feedFetch.error ? (
+          <div className="card p-4 text-center">
+            <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load activity feed</p>
+            <button className="btn !text-xs" onClick={feedFetch.reload}>Retry</button>
+          </div>
+        ) : shares.length === 0 ? (
+          <Empty title="No shared workouts yet" hint="Complete a workout and share it with your gym friends!" icon="trending" />
+        ) : (
+          <div className="space-y-3">
+            {shares.map(share => (
+              <div key={share.id} className="card p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Avatar name={share.authorName} size="w-8 h-8" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-grotesk text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>
+                      {share.authorName}
+                    </div>
+                    <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                      {share.workoutName} · {new Date(share.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Exercise preview */}
+                <div className="space-y-1 mb-3">
+                  {(share.payload || []).slice(0, 4).map((ex, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span style={{ color: 'var(--ink)' }}>{ex.name}</span>
+                      <span style={{ color: 'var(--mute)' }}>{ex.sets} × {ex.reps} · {ex.weight}</span>
+                    </div>
+                  ))}
+                  {(share.payload || []).length > 4 && (
+                    <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                      +{share.payload.length - 4} more exercises
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button className="btn-primary flex-1 !text-xs !py-2"
+                    onClick={() => openCopy(share)}>
+                    Copy Workout
+                  </button>
+                  {share.clientId === membership?.client_id && (
+                    <button className="btn !text-xs !py-2"
+                      onClick={() => unshare(share.id)}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Copy modal */}
+      {copyModal && (
+        <div className="fixed inset-0 z-50 bg-[var(--bg)]/80 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={() => setCopyModal(null)}>
+          <div className="card w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden"
+               onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b flex items-center justify-between"
+                 style={{ borderColor: 'var(--line)' }}>
+              <div>
+                <div className="font-grotesk font-bold">Copy Workout</div>
+                <div className="text-[10px]" style={{ color: 'var(--mute)' }}>Edit and add to your library</div>
+              </div>
+              <button className="text-lg" style={{ color: 'var(--mute)' }} onClick={() => setCopyModal(null)}>✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <input className="input" placeholder="Workout name" value={copyForm.name}
+                onChange={e => setCopyForm(f => ({ ...f, name: e.target.value }))} />
+              {copyForm.exercises.map((ex, i) => (
+                <div key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--line)', background: 'var(--panel2)' }}>
+                  <div className="font-grotesk text-[13px] font-semibold mb-2" style={{ color: 'var(--ink)' }}>
+                    {i + 1}. {ex.name}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Sets</label>
+                      <input type="number" className="input !py-1 !text-xs" value={ex.sets}
+                        onChange={e => setCopyForm(f => ({
+                          ...f,
+                          exercises: f.exercises.map((x, j) => j === i ? { ...x, sets: parseInt(e.target.value) || 3 } : x),
+                        }))} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Reps</label>
+                      <input className="input !py-1 !text-xs" value={ex.reps}
+                        onChange={e => setCopyForm(f => ({
+                          ...f,
+                          exercises: f.exercises.map((x, j) => j === i ? { ...x, reps: e.target.value } : x),
+                        }))} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Weight</label>
+                      <input className="input !py-1 !text-xs" value={ex.weight}
+                        onChange={e => setCopyForm(f => ({
+                          ...f,
+                          exercises: f.exercises.map((x, j) => j === i ? { ...x, weight: e.target.value } : x),
+                        }))} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t" style={{ borderColor: 'var(--line)' }}>
+              <button className="btn-primary w-full"
+                disabled={copying || !copyForm.name.trim() || !copyForm.exercises.length}
+                onClick={doCopy}>
+                {copying ? 'Copying…' : 'Add to My Workouts'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <Toast message={toast} />}
+    </div>
+  );
+}
+
+// ---- Leaderboard section component ----
+
+function LeaderboardSection({ title, subtitle, entries, valueLabel }) {
+  if (!entries || entries.length === 0) {
+    return (
+      <div>
+        <div className="text-[10px] uppercase tracking-[.14em] font-grotesk font-semibold mb-2"
+             style={{ color: 'var(--mute)' }}>{title}</div>
+        <div className="card p-4 text-center text-xs" style={{ color: 'var(--faint)' }}>
+          No data yet
+        </div>
+      </div>
+    );
+  }
+
+  const top3 = entries.slice(0, 3);
+  const rest = entries.slice(3);
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-[.14em] font-grotesk font-semibold"
+               style={{ color: 'var(--mute)' }}>{title}</div>
+          {subtitle && <div className="text-[9px] mt-0.5" style={{ color: 'var(--faint)' }}>{subtitle}</div>}
+        </div>
+      </div>
+
+      {/* Top 3 podium */}
+      {top3.length > 0 && (
+        <div className="card p-4 mb-2">
+          <div className="flex items-end justify-center gap-4">
+            {/* 2nd place (left) */}
+            {top3[1] && <PodiumSpot entry={top3[1]} medal={1} />}
+            {/* 1st place (center, tallest) */}
+            {top3[0] && <PodiumSpot entry={top3[0]} medal={0} tall />}
+            {/* 3rd place (right) */}
+            {top3[2] && <PodiumSpot entry={top3[2]} medal={2} />}
+          </div>
+        </div>
+      )}
+
+      {/* Rest of list */}
+      {rest.map((entry, i) => (
+        <div key={entry.clientId}
+          className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0"
+          style={{ borderColor: 'var(--line)' }}>
+          <span className="text-xs font-grotesk w-6 text-center" style={{ color: 'var(--faint)' }}>
+            {entry.rank}
+          </span>
+          <Avatar name={entry.name} size="w-7 h-7" />
+          <span className="flex-1 min-w-0 font-grotesk text-sm font-semibold truncate"
+                style={{ color: 'var(--ink)' }}>{entry.name}</span>
+          <span className="text-xs font-grotesk tabular-nums" style={{ color: 'var(--mute)' }}>
+            {valueLabel(entry.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PodiumSpot({ entry, medal, tall }) {
+  const heights = tall ? 'h-20' : medal === 1 ? 'h-16' : 'h-14';
+  return (
+    <div className="flex flex-col items-center gap-1.5" style={{ flex: 1 }}>
+      <div className="text-2xl">{MEDAL[medal]}</div>
+      <Avatar name={entry.name} size={tall ? 'w-11 h-11' : 'w-9 h-9'} />
+      <div className="font-grotesk text-[11px] font-semibold text-center truncate max-w-full"
+           style={{ color: 'var(--ink)' }}>{entry.name}</div>
+      <div className="font-grotesk text-xs font-bold tabular-nums"
+           style={{ color: MEDAL_TONE[medal] }}>{entry.value}</div>
+      <div className={`w-full rounded-t-lg ${heights}`}
+           style={{ background: `linear-gradient(to top, ${MEDAL_TONE[medal]}22, transparent)` }} />
+    </div>
+  );
+}

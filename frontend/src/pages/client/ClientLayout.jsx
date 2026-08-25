@@ -40,6 +40,7 @@ const PROFILE_MENU = [
   // at 9 other sites. 'bulb' has no dedicated question-mark glyph in the
   // shared icon set; it's the closest semantic fit ("here's something to
   // know") rather than adding a one-off icon for a single menu row.
+  { to: '/app/client/community', label: 'Community', icon: 'users' },
   { to: '/app/client/settings', label: 'Settings', icon: 'settings' },
   { to: '/app/client/help', label: 'Help', icon: 'bulb' },
 ];
