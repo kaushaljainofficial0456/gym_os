@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import jwt from 'jsonwebtoken';
 import express from 'express';
 import { config } from '../src/config.js';
+import { resetRateLimits } from '../src/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -189,6 +190,24 @@ test('custom mode allows planner creation; duplicate + schedule work', async (t)
   assert.equal(plan2.json.schedule.length, 1);
   assert.equal(plan2.json.schedule[0].day_of_week, 0);
   await api.close();
+});
+
+// Regression coverage: the whole client-workout/planner surface in me.js
+// had no rate limit at all before this (workoutWriteLimit).
+test('client-workout/planner writes are rate-limited -- a burst past the per-minute cap gets 429', async (t) => {
+  resetRateLimits();
+  const db = await twoOrgFixture();
+  await db.run(`INSERT INTO gym_settings (org_id, workout_mode_default) VALUES ('o1', 'custom')`);
+  await db.run(`INSERT INTO exercise_library (id, name, primary_muscle, equipment, is_global) VALUES ('ex1', 'Squat', 'QUADS', 'BARBELL', 1)`);
+  const api = await startMeApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
+  t.after(() => api.close());
+
+  const statuses = [];
+  for (let i = 0; i < 45; i++) {
+    statuses.push((await api.call('POST', '/me/planner/workouts', { name: `Burst ${i}`, exercises: [{ exercise_id: 'ex1', sets: 3, reps: '10' }] })).status);
+  }
+  assert.ok(statuses.includes(429), `expected at least one 429 in a 45-request burst against a 40/min limit, got ${statuses.filter((s) => s === 429).length} 429s`);
+  assert.ok(statuses.slice(0, 40).every((s) => s === 200), 'the first 40 requests (at the configured limit) must all succeed');
 });
 
 test('client cannot inject another gym\'s exercise id into a workout', async (t) => {

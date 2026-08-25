@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
+import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
 import { suggestNextTarget } from '../services/progressiveOverload.js';
@@ -14,6 +15,12 @@ export default function workoutRoutes(db) {
   // Router-level: any authenticated user (clients need to complete their own
   // workouts and toggle exercises). Trainer-only actions are guarded per-route.
   r.use(requireAuth, orgScope);
+  // Baseline rate limit for the whole router -- generous enough for a
+  // genuinely active session (the /progress autosave is debounced to one
+  // call per 800ms client-side, so even a user tapping continuously for a
+  // full minute stays well under this) while still capping runaway/
+  // scripted abuse. Nothing in this router had any rate limit before this.
+  r.use(rateLimit({ windowMs: 60_000, max: 120, keyFn: (req) => req.user?.sub || 'anon' }));
 
   // ---- exercise library ----
   r.get('/exercises', requireRole('GYM_OWNER', 'TRAINER', 'CLIENT', 'SUPER_ADMIN'), async (req, res) => {
@@ -243,7 +250,15 @@ export default function workoutRoutes(db) {
    * and the burn estimate stay derived exclusively from finished
    * sessions.
    */
-  r.put('/:id/progress', async (req, res) => {
+  r.put('/:id/progress', validate(z.object({
+    // Deliberately loose on the VALUE shape -- these are draft, per-exercise
+    // set ticks stored as an opaque blob (see the comment above this route),
+    // not a schema-worthy domain object. This only closes the type-confusion
+    // gap (progress being a string/array/number instead of an object at
+    // all) -- the actual byte-size protection is the manual cap below,
+    // which a schema alone can't express as cleanly for a JSON.stringify'd blob.
+    progress: z.record(z.string(), z.unknown()).optional()
+  })), async (req, res) => {
     const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });
     const client = await resolveClient(db, req, res, w.client_id);

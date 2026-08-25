@@ -349,5 +349,73 @@ export const schemas = {
     message: z.string().min(1).max(1000),
     path: z.string().max(300).optional(),
     component_stack: z.string().max(2000).optional()
+  }),
+  // ---- client-side custom workouts (My Diet's workout equivalent) ----
+  // sets/reps/weight/rest_sec stay loosely typed here on purpose: the
+  // routes already do parseInt(x, 10) || <default> BEFORE Math.max/min
+  // (the safe order -- NaN is caught by the `||` before it can reach
+  // Math.max, unlike the bug this pattern is a sibling-fix for in
+  // PUT /me/meal-logs/:logId), so a wrong type degrades to a sane default
+  // rather than corrupting anything. This schema exists to reject the
+  // wrong SHAPE (exercises not even being an array of objects, a
+  // non-string exercise_id) rather than to re-litigate types the route
+  // already coerces safely.
+  workoutExerciseItem: z.object({
+    exercise_id: z.string().min(1).max(60),
+    name: z.string().max(80).optional(),
+    sets: z.union([z.number(), z.string()]).optional(),
+    reps: z.union([z.number(), z.string()]).optional(),
+    weight: z.union([z.number(), z.string()]).optional(),
+    rest_sec: z.union([z.number(), z.string()]).optional(),
+    tempo: z.string().max(20).optional(),
+    notes: z.string().max(200).optional()
+  }),
+  clientWorkoutCreate: z.object({
+    name: z.string().min(1).max(80),
+    exercises: z.array(z.object({
+      exercise_id: z.string().min(1).max(60),
+      sets: z.union([z.number(), z.string()]).optional(),
+      reps: z.union([z.number(), z.string()]).optional(),
+      weight: z.union([z.number(), z.string()]).optional(),
+      rest_sec: z.union([z.number(), z.string()]).optional()
+    })).min(1).max(20)
+  }),
+  plannerWorkoutCreate: z.object({
+    name: z.string().min(1).max(80),
+    notes: z.string().max(300).optional(),
+    exercises: z.array(z.object({
+      exercise_id: z.string().min(1).max(60),
+      name: z.string().max(80).optional(),
+      sets: z.union([z.number(), z.string()]).optional(),
+      reps: z.union([z.number(), z.string()]).optional(),
+      weight: z.union([z.number(), z.string()]).optional(),
+      rest_sec: z.union([z.number(), z.string()]).optional(),
+      tempo: z.string().max(20).optional(),
+      notes: z.string().max(200).optional()
+    })).min(1).max(20)
+  }),
+  // Partial update -- name/notes/exercises all independently optional,
+  // exactly matching the route's own existing "only touch what's present" logic.
+  plannerWorkoutUpdate: z.object({
+    name: z.string().max(80).optional(),
+    notes: z.string().max(300).optional(),
+    exercises: z.array(z.object({
+      exercise_id: z.string().min(1).max(60).optional(),
+      name: z.string().max(80).optional(),
+      sets: z.union([z.number(), z.string()]).optional(),
+      reps: z.union([z.number(), z.string()]).optional(),
+      weight: z.union([z.number(), z.string()]).optional(),
+      rest_sec: z.union([z.number(), z.string()]).optional(),
+      tempo: z.string().max(20).optional(),
+      notes: z.string().max(200).optional()
+    })).max(20).optional()
+  }),
+  // Keys are day-of-week strings ("0".."6") once JSON round-trips a plain
+  // object -- the route itself already validates 0..6 by looping and
+  // validates each value is a workout this client actually owns. This
+  // schema only rejects the wrong TOP-LEVEL shape (schedule not being an
+  // object at all, or a value that isn't a string/null).
+  workoutScheduleUpdate: z.object({
+    schedule: z.record(z.string(), z.string().nullable())
   })
 };

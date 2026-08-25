@@ -14,6 +14,7 @@ import jwt from 'jsonwebtoken';
 import express from 'express';
 import { config } from '../src/config.js';
 import { runWithProvider, MODULES } from './helpers/providerRunner.js';
+import { resetRateLimits } from '../src/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -435,4 +436,25 @@ test('todaySession meta.calorie: preview while assigned, persisted after complet
   const w = await db.q1('SELECT * FROM workouts WHERE id = ?', ['wko_1']);
   assert.ok(w.estimated_active_kcal != null, 'persisted');
   await api.close();
+});
+
+/* ------------------------------------------------------------------ */
+/*  Rate limiting -- workoutRoutes had NO rate limit at all before      */
+/*  this. A single router-level baseline now covers every route in     */
+/*  this file (see workoutRoutes' r.use(rateLimit(...))).               */
+/* ------------------------------------------------------------------ */
+test('workoutRoutes: a burst past the router-level rate limit gets 429, not silently accepted', async (t) => {
+  resetRateLimits();
+  const { db, wId } = await workoutFixture();
+  const api = await startWorkoutsApi(db, CLIENT);
+  t.after(() => api.close());
+
+  const statuses = [];
+  for (let i = 0; i < 125; i++) {
+    // /:id/start is idempotent and side-effect-light -- a good burst target
+    // that doesn't itself corrupt state on repeat calls.
+    statuses.push((await api.call('POST', `/workouts/${wId}/start`)).status);
+  }
+  assert.ok(statuses.includes(429), `expected at least one 429 in a 125-request burst against a 120/min limit, got ${statuses.filter((s) => s === 429).length} 429s`);
+  assert.ok(statuses.slice(0, 120).every((s) => s === 200), 'the first 120 requests (at the configured limit) must all succeed');
 });

@@ -526,6 +526,11 @@ export default function meRoutes(db) {
   // flooding feedback to try to manufacture a fake community-validated
   // promotion needs meaningfully longer than a minute to do it now.
   const foodFeedbackLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
+  // Custom-workout + planner writes had no rate limit at all -- same class
+  // of gap as food-feedback above, just without a specific poisoning
+  // vector, so a single generous shared limiter (not per-route) covers the
+  // whole client-workout/planner surface below.
+  const workoutWriteLimit = rateLimit({ windowMs: 60_000, max: 40, keyFn: (req) => req.user?.sub || 'anon' });
   r.post('/foods/ai-estimate', foodAILimit, validate(schemas.foodAIEstimate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     if (!isFoodAIAvailable()) {
@@ -854,7 +859,7 @@ export default function meRoutes(db) {
   });
 
   // Build a client's own workout for today (becomes "today's session" via /me/today).
-  r.post('/workouts', async (req, res) => {
+  r.post('/workouts', workoutWriteLimit, validate(schemas.clientWorkoutCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const { name, exercises } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Workout name is required' });
@@ -891,7 +896,7 @@ export default function meRoutes(db) {
     res.json({ id: wId, scheduled_date: d });
   });
 
-  r.delete('/workouts/:id', async (req, res) => {
+  r.delete('/workouts/:id', workoutWriteLimit, async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const w = await db.q1('SELECT * FROM workouts WHERE id = ? AND client_id = ? AND source = ?', [req.params.id, c.id, 'client_custom']);
     if (!w) return res.status(404).json({ error: 'Workout not found' });
@@ -957,7 +962,7 @@ export default function meRoutes(db) {
     return c;
   };
 
-  r.post('/planner/workouts', async (req, res) => {
+  r.post('/planner/workouts', workoutWriteLimit, validate(schemas.plannerWorkoutCreate), async (req, res) => {
     const c = await plannerAccess(req, res); if (!c) return;
     const { name, notes, exercises } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Workout name is required' });
@@ -990,7 +995,7 @@ export default function meRoutes(db) {
     res.json({ id: wId });
   });
 
-  r.put('/planner/workouts/:id', async (req, res) => {
+  r.put('/planner/workouts/:id', workoutWriteLimit, validate(schemas.plannerWorkoutUpdate), async (req, res) => {
     const c = await plannerAccess(req, res); if (!c) return;
     const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
     if (s && (s.allow_edit_targets === 0 || s.allow_edit_targets === false)) {
@@ -1032,7 +1037,7 @@ export default function meRoutes(db) {
     res.json({ ok: true });
   });
 
-  r.post('/planner/workouts/:id/duplicate', async (req, res) => {
+  r.post('/planner/workouts/:id/duplicate', workoutWriteLimit, async (req, res) => {
     const c = await plannerAccess(req, res); if (!c) return;
     const w = await db.q1('SELECT * FROM client_workouts WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });
@@ -1051,7 +1056,7 @@ export default function meRoutes(db) {
     res.json({ id: nId });
   });
 
-  r.delete('/planner/workouts/:id', async (req, res) => {
+  r.delete('/planner/workouts/:id', workoutWriteLimit, async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     await db.tx(async (tx) => {
       await tx.run('DELETE FROM client_workout_schedule WHERE workout_id = ?', [req.params.id]);
@@ -1062,7 +1067,7 @@ export default function meRoutes(db) {
   });
 
   // client's weekly schedule: { schedule: { 0: workoutId|null, 1: ..., 6: ... } }
-  r.put('/planner/schedule', async (req, res) => {
+  r.put('/planner/schedule', workoutWriteLimit, validate(schemas.workoutScheduleUpdate), async (req, res) => {
     const c = await plannerAccess(req, res); if (!c) return;
     const { schedule } = req.body || {};
     if (!schedule || typeof schedule !== 'object') return res.status(400).json({ error: 'schedule object required' });
