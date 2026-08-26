@@ -53,7 +53,16 @@ export default function EnterpriseQR() {
     try { await navigator.clipboard.writeText(text); setToast('Copied'); } catch { setToast('Could not copy'); }
   };
 
-  const availableCapacity = status.data?.availableCapacity ?? 0;
+  // null (not 0) while /enterprise/status is still loading -- "we don't
+  // know yet" and "capacity is confirmed zero" must never collapse into
+  // the same value. They used to (both fell back to 0), so on a slower
+  // connection/cold start a client with plenty of room would briefly see
+  // "No client capacity remaining" and a disabled button before the real
+  // fetch resolved -- caught live against the deployed Vercel/Postgres
+  // backend, where a serverless cold start makes this window long enough
+  // to actually notice and click during.
+  const availableCapacity = status.data ? status.data.availableCapacity : null;
+  const capacityKnownZero = availableCapacity === 0;
 
   return (
     <div className="space-y-6">
@@ -70,11 +79,11 @@ export default function EnterpriseQR() {
               <option value="">Select a plan…</option>
               {(plans.data?.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.amount}/{p.period_days}d</option>)}
             </select>
-            {availableCapacity === 0 && <div className="text-xs text-bad mt-2">No client capacity remaining — buy more from Billing before generating a client QR.</div>}
+            {capacityKnownZero && <div className="text-xs text-bad mt-2">No client capacity remaining — buy more from Billing before generating a client QR.</div>}
           </div>
         )}
-        <button className="btn-primary" disabled={busy || (purpose === 'CLIENT' && (!planId || availableCapacity === 0))} onClick={generate}>
-          {busy ? 'Generating…' : `Generate ${purpose === 'CLIENT' ? 'client' : 'trainer'} QR`}
+        <button className="btn-primary" disabled={busy || status.loading || (purpose === 'CLIENT' && (!planId || capacityKnownZero))} onClick={generate}>
+          {busy ? 'Generating…' : status.loading ? 'Checking capacity…' : `Generate ${purpose === 'CLIENT' ? 'client' : 'trainer'} QR`}
         </button>
 
         {issued && (

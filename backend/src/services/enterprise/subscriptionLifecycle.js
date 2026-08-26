@@ -44,9 +44,21 @@ export async function getOrgBillingSnapshot(db, orgId) {
   const addonRows = subscription
     ? await db.q(`SELECT COALESCE(SUM(increment), 0) AS total FROM org_capacity_purchases WHERE subscription_id = ?`, [subscription.id])
     : [{ total: 0 }];
-  const purchasedCapacity = (subscription?.client_capacity || 0) + (addonRows[0]?.total || 0);
+  // Number(...) is load-bearing, not defensive: Postgres reports SUM()/
+  // COUNT() as `bigint`, and the `pg` driver deliberately returns bigint
+  // values as STRINGS (not numbers) to avoid silently losing precision
+  // beyond 2^53 -- SQLite's driver returns real numbers for the exact
+  // same query, so this was invisible in every local/test run and only
+  // surfaced against a real Postgres deployment. Without this, `+` on a
+  // number and that string is JS string CONCATENATION, not addition --
+  // 75 + "0" produced the string "750", not the number 75 (caught live:
+  // a fresh 75-capacity purchase showed as "PURCHASED CAPACITY 750" and
+  // blocked QR generation from a stale/loading availableCapacity of 0
+  // in the frontend before this fetch even resolved -- see
+  // EnterpriseQR.jsx's own fix for that half of it).
+  const purchasedCapacity = (subscription?.client_capacity || 0) + Number(addonRows[0]?.total || 0);
   const activeClientsRow = await db.q1(`SELECT COUNT(*) AS n FROM clients WHERE org_id = ?`, [orgId]);
-  const activeClients = activeClientsRow?.n || 0;
+  const activeClients = Number(activeClientsRow?.n || 0);
   const reservedSlots = billingState?.reserved_slots || 0;
 
   return {
@@ -117,7 +129,11 @@ export async function releaseCapacitySlot(db, orgId) {
 
 export async function getActiveTrainerCount(db, orgId) {
   const row = await db.q1(`SELECT COUNT(*) AS n FROM trainers WHERE org_id = ? AND status = 'ACTIVE'`, [orgId]);
-  return row?.n || 0;
+  // See getOrgBillingSnapshot's comment above -- Postgres COUNT() comes
+  // back as a bigint string via the pg driver ("0", "1", ...), and "0"
+  // is a TRUTHY string in JS, so the old `row?.n || 0` fallback never
+  // even fired -- it returned the STRING "0" straight through.
+  return Number(row?.n || 0);
 }
 
 /**
