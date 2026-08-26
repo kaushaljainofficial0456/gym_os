@@ -187,24 +187,39 @@ export default function adminRoutes(db) {
   });
 
   r.put('/settings', async (req, res) => {
-    const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets } = req.body || {};
+    const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
+      contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description } = req.body || {};
+    const existing = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
+    // Gym PROFILE fields (spec: "Do not allow owner to edit: gym_id,
+    // organization_id..." -- everything else, including these, IS
+    // editable) -- partial-update semantics like every other settings
+    // field here: omit a field to leave it unchanged, explicit null/''
+    // to clear it. Never touches organizations.id/slug.
+    const pick = (incoming, current) => (incoming !== undefined ? (incoming === null || incoming === '' ? null : String(incoming).slice(0, 300)) : (current ?? null));
     await db.run(
-      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
+         contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(org_id) DO UPDATE SET brand_name=excluded.brand_name, tagline=excluded.tagline,
          crowd_capacity=excluded.crowd_capacity, crowd_enabled=excluded.crowd_enabled,
          workout_mode_default=excluded.workout_mode_default, allow_substitute=excluded.allow_substitute,
          allow_add_exercise=excluded.allow_add_exercise, allow_edit_targets=excluded.allow_edit_targets,
+         contact_email=excluded.contact_email, contact_phone=excluded.contact_phone, address=excluded.address,
+         city=excluded.city, country=excluded.country, logo_url=excluded.logo_url, website=excluded.website,
+         instagram_url=excluded.instagram_url, description=excluded.description,
          updated_at=excluded.updated_at`,
       [req.orgId,
-       String(brand_name ?? 'SK OS').slice(0, 40),
-       String(tagline ?? 'Your fitness OS.').slice(0, 80),
-       Math.max(1, Math.min(2000, parseInt(crowd_capacity, 10) || 150)),
-       crowd_enabled === false || crowd_enabled === 0 ? 0 : 1,
-       ['prescribed','custom','hybrid'].includes(workout_mode_default) ? workout_mode_default : 'hybrid',
-       allow_substitute === false || allow_substitute === 0 ? 0 : 1,
-       allow_add_exercise === false || allow_add_exercise === 0 ? 0 : 1,
-       allow_edit_targets === false || allow_edit_targets === 0 ? 0 : 1,
+       String(brand_name ?? existing?.brand_name ?? 'SK OS').slice(0, 40),
+       String(tagline ?? existing?.tagline ?? 'Your fitness OS.').slice(0, 80),
+       Math.max(1, Math.min(2000, parseInt(crowd_capacity, 10) || existing?.crowd_capacity || 150)),
+       crowd_enabled === false || crowd_enabled === 0 ? 0 : (crowd_enabled === undefined ? (existing?.crowd_enabled ?? 1) : 1),
+       ['prescribed','custom','hybrid'].includes(workout_mode_default) ? workout_mode_default : (existing?.workout_mode_default || 'hybrid'),
+       allow_substitute === false || allow_substitute === 0 ? 0 : (allow_substitute === undefined ? (existing?.allow_substitute ?? 1) : 1),
+       allow_add_exercise === false || allow_add_exercise === 0 ? 0 : (allow_add_exercise === undefined ? (existing?.allow_add_exercise ?? 1) : 1),
+       allow_edit_targets === false || allow_edit_targets === 0 ? 0 : (allow_edit_targets === undefined ? (existing?.allow_edit_targets ?? 1) : 1),
+       pick(contact_email, existing?.contact_email), pick(contact_phone, existing?.contact_phone), pick(address, existing?.address),
+       pick(city, existing?.city), pick(country, existing?.country), pick(logo_url, existing?.logo_url),
+       pick(website, existing?.website), pick(instagram_url, existing?.instagram_url), pick(description, existing?.description),
        now()]);
     track(db, 'gym_settings_updated', req.orgId, req.user.sub, {});
     res.json({ ok: true });

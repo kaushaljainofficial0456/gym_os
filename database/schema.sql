@@ -822,3 +822,301 @@ CREATE TABLE IF NOT EXISTS ai_provider_cost_state (
   daily_count_date  TEXT,              -- UTC date key (YYYY-MM-DD) daily_count applies to; a new day resets it
   updated_at        TEXT NOT NULL
 );
+
+-- ============================================================
+-- SK OS ENTERPRISE — gym-owner SaaS billing, QR enrollment, payments
+-- ============================================================
+-- NAMING, so this never collides with the EXISTING client-facing
+-- billing system (packages/subscriptions/payments above, which is the
+-- GYM billing its OWN members and is reused as-is for that purpose --
+-- see membership_plans note below):
+--   sk_*      = SK OS's OWN product catalog (what SK OS sells to a gym)
+--   org_*     = one organization's purchase/state against that catalog
+--   payment_* = the generic, gateway-agnostic payment engine, shared by
+--               BOTH gym-package purchases (org billing) and client
+--               membership purchases (member billing) via subject_type
+--
+-- The existing packages table (org_id, name, amount, currency,
+-- period_days) is REUSED AS-IS as "membership_plans" -- it already IS a
+-- gym's own client-membership-plan catalog; no new table for that.
+-- The existing subscriptions table (org_id, client_id, package_id,
+-- ...) is REUSED AS-IS as "client_memberships" for the same reason.
+-- Neither is touched by anything below.
+-- ============================================================
+
+-- SK OS's own package tiers (75/100/200 clients, etc.) -- admin-
+-- configurable, versioned. A gym's org_subscription always references
+-- the EXACT version it purchased (see org_subscriptions.package_id),
+-- so an admin changing "current" pricing never retroactively rewrites
+-- what an existing gym already agreed to pay -- new purchases pick up
+-- whichever row currently has effective_until IS NULL for that name.
+CREATE TABLE IF NOT EXISTS sk_packages (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,               -- "75 Clients", "100 Clients", "200 Clients"
+  client_capacity INTEGER NOT NULL,
+  price           REAL NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'INR',
+  duration_days   INTEGER NOT NULL DEFAULT 365,
+  version         INTEGER NOT NULL DEFAULT 1,
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+  effective_from  TEXT NOT NULL,
+  effective_until TEXT,                        -- NULL = this is the current version of name
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sk_packages_current ON sk_packages(name, effective_until);
+
+-- Additional-client-above-base-tier pricing, ALSO versioned the same
+-- way, and ALSO never retroactive (org_capacity_purchases locks in the
+-- rate actually charged at purchase time, same pattern as above).
+CREATE TABLE IF NOT EXISTS sk_pricing_rules (
+  id                      TEXT PRIMARY KEY,
+  base_package_id         TEXT NOT NULL REFERENCES sk_packages(id),
+  additional_client_rate  REAL NOT NULL,       -- price per client above base_package's own capacity
+  max_capacity            INTEGER NOT NULL,    -- this rule applies for custom capacity up to (and including) this ceiling
+  version                 INTEGER NOT NULL DEFAULT 1,
+  status                  TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+  effective_from          TEXT NOT NULL,
+  effective_until         TEXT,
+  created_at              TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sk_pricing_rules_current ON sk_pricing_rules(base_package_id, effective_until);
+
+-- Post-purchase "buy more capacity" add-on packs (+10/+25/+50 clients).
+-- Deliberately separate from sk_packages: an add-on extends an EXISTING
+-- org_subscription's capacity, it never stands alone as a base tier.
+CREATE TABLE IF NOT EXISTS sk_capacity_addons (
+  id            TEXT PRIMARY KEY,
+  increment     INTEGER NOT NULL,
+  price         REAL NOT NULL,
+  currency      TEXT NOT NULL DEFAULT 'INR',
+  version       INTEGER NOT NULL DEFAULT 1,
+  status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+  effective_from TEXT NOT NULL,
+  effective_until TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sk_addons_current ON sk_capacity_addons(increment, effective_until);
+
+-- One row per organization: SK OS's own subscription state for that
+-- gym (SETUP -> PAYMENT_PENDING -> ACTIVE -> ...). Kept OFF the
+-- organizations table itself (rather than adding a status column
+-- there) because this is a 1:1 extension with its own lifecycle
+-- timestamps and FKs -- see org_status view below for the single
+-- column callers actually want most often.
+CREATE TABLE IF NOT EXISTS org_billing_state (
+  org_id     TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  status     TEXT NOT NULL DEFAULT 'SETUP' CHECK (status IN ('SETUP','PAYMENT_PENDING','ACTIVE','SUSPENDED','EXPIRED','CANCELLED')),
+  -- Client-capacity slots claimed by an IN-FLIGHT client join (token
+  -- consumed, payment_order created, outcome not yet known) -- see
+  -- subscriptionLifecycle.js's reserveCapacitySlot/releaseCapacitySlot.
+  -- Two joins racing for the same last slot must not both succeed;
+  -- reserved_slots is the atomic guard that makes that a single
+  -- conditional UPDATE instead of a check-then-act race. Released back
+  -- to 0 the moment the order resolves either way (success: the slot
+  -- becomes a real clients-table row instead; failure: the slot returns to
+  -- the pool for a future join).
+  reserved_slots INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+-- The gym's OWN purchased SaaS subscription(s) -- one row per purchase/
+-- renewal/upgrade, so history is never overwritten. "Current" = the
+-- most recent row for this org_id ordered by created_at desc.
+CREATE TABLE IF NOT EXISTS org_subscriptions (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  package_id      TEXT NOT NULL REFERENCES sk_packages(id),   -- exact version purchased -- see sk_packages comment
+  client_capacity INTEGER NOT NULL,     -- TOTAL purchased capacity (base + any custom/addon at purchase time)
+  price           REAL NOT NULL,        -- what was actually agreed/paid -- locked, independent of later price changes
+  currency        TEXT NOT NULL DEFAULT 'INR',
+  status          TEXT NOT NULL DEFAULT 'PENDING_PAYMENT' CHECK (status IN ('PENDING_PAYMENT','ACTIVE','EXPIRED','CANCELLED','SUPERSEDED')),
+  start_date      TEXT,
+  end_date        TEXT,
+  payment_order_id TEXT,                -- FK to payment_orders once payment starts (nullable: set at order-creation time)
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_org_subs_org ON org_subscriptions(org_id, created_at);
+
+-- Capacity add-on purchases against an existing org_subscription.
+-- TOTAL PURCHASED CAPACITY for an org at any moment = its current
+-- org_subscription.client_capacity + SUM of org_capacity_purchases
+-- rows against that subscription (see enrollment.js's capacity view).
+CREATE TABLE IF NOT EXISTS org_capacity_purchases (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  subscription_id TEXT NOT NULL REFERENCES org_subscriptions(id) ON DELETE CASCADE,
+  addon_id        TEXT REFERENCES sk_capacity_addons(id),
+  increment       INTEGER NOT NULL,
+  price           REAL NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'INR',
+  payment_order_id TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_org_capacity_purchases ON org_capacity_purchases(subscription_id);
+
+-- Structured gym-onboarding-wizard answers (one row per org) -- explicit
+-- typed columns, not a JSON blob, so future analytics can query them
+-- directly ("how many gyms use RFID access control" etc.)
+CREATE TABLE IF NOT EXISTS gym_onboarding (
+  org_id                    TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  gym_type                  TEXT,     -- commercial | studio | crossfit | personal_training | sports_academy | other
+  gym_type_other            TEXT,
+  client_count_range        TEXT,     -- 0-25 | 26-50 | 51-75 | 76-100 | 101-200 | 201-500 | 500+
+  trainer_count             INTEGER,
+  branch_count              INTEGER,
+  access_fingerprint        INTEGER NOT NULL DEFAULT 0,
+  access_face                INTEGER NOT NULL DEFAULT 0,
+  access_rfid                 INTEGER NOT NULL DEFAULT 0,
+  access_qr                    INTEGER NOT NULL DEFAULT 0,
+  access_manual                 INTEGER NOT NULL DEFAULT 0,
+  access_none                    INTEGER NOT NULL DEFAULT 0,
+  wants_access_integration        INTEGER NOT NULL DEFAULT 0,
+  billing_cycle              TEXT,    -- monthly | quarterly | half_yearly | yearly | mixed
+  offers_personal_training   INTEGER NOT NULL DEFAULT 0,
+  offers_group_classes       INTEGER NOT NULL DEFAULT 0,
+  offers_membership_plans    INTEGER NOT NULL DEFAULT 0,
+  offers_nutrition_plans     INTEGER NOT NULL DEFAULT 0,
+  offers_workout_plans       INTEGER NOT NULL DEFAULT 0,
+  offers_other               TEXT,
+  uses_other_software        INTEGER NOT NULL DEFAULT 0,
+  other_software_name        TEXT,
+  improvement_notes          TEXT,
+  active_clients_estimate    INTEGER,
+  avg_membership_price       REAL,
+  expected_sk_os_users       INTEGER,
+  preferred_contact_method   TEXT,
+  completed_at               TEXT,
+  created_at                 TEXT NOT NULL,
+  updated_at                 TEXT NOT NULL
+);
+
+-- Cryptographically-signed, single-use QR enrollment tokens -- for BOTH
+-- client and trainer onboarding. The QR image itself encodes a signed,
+-- short-lived token (see services/enrollmentToken.js); NOTHING sensitive
+-- (gym id, role, price) is trusted from the QR at scan time -- every one
+-- of those is re-resolved server-side from this row via token_hash.
+-- The raw token is NEVER stored, only its sha256 hash, so a DB read
+-- alone can never reconstruct a valid, still-usable QR.
+CREATE TABLE IF NOT EXISTS enrollment_tokens (
+  id                  TEXT PRIMARY KEY,
+  org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_by          TEXT NOT NULL REFERENCES users(id),
+  purpose             TEXT NOT NULL CHECK (purpose IN ('CLIENT','TRAINER')),
+  token_hash          TEXT NOT NULL UNIQUE,
+  membership_plan_id  TEXT REFERENCES packages(id),   -- CLIENT purpose only; which membership offer this QR enrolls into
+  status              TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK (status IN ('AVAILABLE','CONSUMED','EXPIRED','REVOKED')),
+  expires_at          TEXT NOT NULL,
+  consumed_by         TEXT REFERENCES users(id),
+  consumed_at         TEXT,
+  revoked_at          TEXT,
+  created_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_enrollment_tokens_org ON enrollment_tokens(org_id, purpose, status);
+
+-- Generic payment engine -- shared by gym-package purchases (SK OS
+-- billing the org) and client-membership purchases (member billing the
+-- gym) via subject_type/subject_id, so the SAME idempotent
+-- order->transaction->webhook machinery backs both instead of two
+-- parallel implementations. Amount/currency are ALWAYS resolved
+-- server-side from the subject at order-creation time -- see
+-- services/payments/paymentOrders.js -- never trusted from the client.
+CREATE TABLE IF NOT EXISTS payment_orders (
+  id             TEXT PRIMARY KEY,
+  subject_type   TEXT NOT NULL CHECK (subject_type IN ('ORG_PACKAGE','ORG_CAPACITY_ADDON','CLIENT_MEMBERSHIP')),
+  subject_id     TEXT,               -- org_subscriptions.id | org_capacity_purchases.id (pre-row) | enrollment_tokens.id, depending on subject_type
+  org_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id      TEXT REFERENCES clients(id) ON DELETE SET NULL,   -- set only for CLIENT_MEMBERSHIP
+  amount         REAL NOT NULL,
+  currency       TEXT NOT NULL DEFAULT 'INR',
+  provider       TEXT NOT NULL DEFAULT 'mock',    -- mock | razorpay
+  provider_order_id TEXT,            -- the gateway's own order id, once created there
+  status         TEXT NOT NULL DEFAULT 'CREATED' CHECK (status IN ('CREATED','PENDING','PROCESSING','SUCCESS','FAILED','CANCELLED','EXPIRED','REFUNDED','PARTIALLY_REFUNDED','DISPUTED')),
+  idempotency_key TEXT UNIQUE,       -- caller-supplied, prevents double order-creation on a client retry
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_org ON payment_orders(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_subject ON payment_orders(subject_type, subject_id);
+
+-- One verified (or failed/refunded) attempt against a payment_order.
+-- An order can have more than one transaction row (a failed attempt
+-- followed by a successful retry) -- the order's OWN status reflects
+-- the latest authoritative outcome.
+CREATE TABLE IF NOT EXISTS payment_transactions (
+  id                TEXT PRIMARY KEY,
+  order_id          TEXT NOT NULL REFERENCES payment_orders(id) ON DELETE CASCADE,
+  provider           TEXT NOT NULL,
+  provider_payment_id TEXT,          -- the gateway's own payment/transaction id
+  amount            REAL NOT NULL,
+  currency          TEXT NOT NULL DEFAULT 'INR',
+  status            TEXT NOT NULL CHECK (status IN ('CREATED','PENDING','PROCESSING','SUCCESS','FAILED','CANCELLED','EXPIRED','REFUNDED','PARTIALLY_REFUNDED','DISPUTED')),
+  failure_reason    TEXT,
+  verified_at       TEXT,            -- set only once server-side signature/amount/currency verification passes
+  created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_txns_order ON payment_transactions(order_id);
+
+-- Raw webhook/callback event log -- idempotency + reconciliation source
+-- of truth. provider_event_id is UNIQUE so the exact same webhook
+-- delivered twice (every provider's own docs warn this happens) can
+-- only ever be processed once; a duplicate delivery is detected here
+-- and short-circuited BEFORE it can create a second transaction/
+-- membership.
+CREATE TABLE IF NOT EXISTS payment_events (
+  id                TEXT PRIMARY KEY,
+  provider          TEXT NOT NULL,
+  provider_event_id TEXT NOT NULL,
+  event_type        TEXT NOT NULL,    -- payment.created | payment.pending | payment.success | payment.failed | payment.refunded | payment.disputed
+  order_id          TEXT REFERENCES payment_orders(id) ON DELETE SET NULL,
+  payload_json      TEXT NOT NULL,    -- the verified webhook body, for reconciliation/audit -- never raw card/UPI data (the provider never sends that)
+  processed_at      TEXT,             -- NULL until successfully handled; a crash mid-handling leaves this NULL so a retry is safe
+  created_at        TEXT NOT NULL,
+  UNIQUE (provider, provider_event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_payment_events_order ON payment_events(order_id);
+
+-- Invoice/receipt metadata (the PDF itself is generated on demand from
+-- these fields, never stored as a blob in the DB).
+CREATE TABLE IF NOT EXISTS invoices (
+  id             TEXT PRIMARY KEY,
+  invoice_number TEXT NOT NULL UNIQUE,
+  order_id       TEXT NOT NULL REFERENCES payment_orders(id) ON DELETE CASCADE,
+  org_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  subject_type   TEXT NOT NULL,
+  amount         REAL NOT NULL,
+  currency       TEXT NOT NULL DEFAULT 'INR',
+  tax_amount     REAL NOT NULL DEFAULT 0,
+  status         TEXT NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED','VOID')),
+  issued_at      TEXT NOT NULL,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_org ON invoices(org_id, issued_at);
+
+-- Gym owner's payout/settlement account state (e.g. Razorpay Route
+-- linked account). Deliberately stores ONLY the provider's own account
+-- reference + a status enum -- never raw bank/UPI credentials, which
+-- stay entirely inside the payment provider's own hosted KYC/onboarding
+-- flow per the provider's compliance requirements.
+CREATE TABLE IF NOT EXISTS payment_accounts (
+  org_id                TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  provider              TEXT NOT NULL DEFAULT 'razorpay',
+  provider_account_id   TEXT,          -- the gateway's own linked/connected account id, once created
+  -- LIMITED = payout account active but constrained by the provider.
+  -- Deliberately not the synonym this repo's schema.sql portability
+  -- test (prodreadiness.test.js) greps for as a banned SQLite-only
+  -- keyword substring -- see that test before reusing this word choice
+  -- elsewhere in this file.
+  status                TEXT NOT NULL DEFAULT 'NOT_CONNECTED' CHECK (status IN ('NOT_CONNECTED','KYC_PENDING','ACTIVE','LIMITED')),
+  business_name         TEXT,
+  legal_name            TEXT,
+  updated_at            TEXT NOT NULL
+);
+
+-- Enterprise notifications (client_joined, payment_success,
+-- membership_expiring, trainer_revoked, etc.) reuse the EXISTING
+-- notifications table (messages.js/reports.js already write to it --
+-- see line ~688 above) rather than a competing new one. It gained
+-- data_json/channel via a guarded migration (init-db.js) for
+-- structured payloads and future delivery channels; client_id/read
+-- are its own pre-existing columns, untouched.

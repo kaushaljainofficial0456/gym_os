@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../src/config.js';
+import { id, now } from '../src/ids.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -130,6 +131,46 @@ const MIGRATIONS = [
   // --- shared AI food-estimate cache: community feedback + promotion ---
   ['ai_food_estimates', 'validation_status', `validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`],
   ['ai_food_estimates', 'version', `version INTEGER NOT NULL DEFAULT 1`],
+
+  // --- Enterprise: gym-owner SaaS billing + QR enrollment ---
+  // `packages` (a gym's OWN client-membership-plan catalog, e.g.
+  // "Monthly -- Rs.1,500") is reused as-is for the Enterprise spec's
+  // "membership_plans" -- it just needed a status so an owner can
+  // archive a plan without deleting history that past client_memberships
+  // (the existing `subscriptions` table) still reference.
+  ['packages', 'status', `status TEXT NOT NULL DEFAULT 'active'`],
+  // Trainer revocation -- no client-capacity/subscription equivalent for
+  // trainers exists to derive this from (unlike clients, whose lifecycle
+  // is read off their own subscriptions.status), so it needs its own
+  // column. Revoking a trainer sets this to 'REVOKED', never deletes the
+  // row -- see the Enterprise report for why (may rejoin, or another gym,
+  // later).
+  ['trainers', 'status', `status TEXT NOT NULL DEFAULT 'ACTIVE'`],
+  // Enterprise notifications reuse the existing notifications table
+  // (messages.js/reports.js already write to it) rather than a new one --
+  // it just needed a structured payload column and a channel for future
+  // (currently unimplemented) email/SMS delivery.
+  ['notifications', 'data_json', `data_json TEXT`],
+  ['notifications', 'channel', `channel TEXT NOT NULL DEFAULT 'in_app'`],
+  // Atomic capacity-reservation counter added after the initial
+  // Enterprise build -- see subscriptionLifecycle.js's
+  // reserveCapacitySlot/releaseCapacitySlot and schema.sql's comment
+  // on org_billing_state for why this exists (closes a real two-
+  // simultaneous-client-joins race caught by
+  // test/enterpriseFlow.test.js).
+  ['org_billing_state', 'reserved_slots', `reserved_slots INTEGER NOT NULL DEFAULT 0`],
+  // Gym profile fields (spec: "GYM PROFILE CREATION") -- extend the
+  // EXISTING gym_settings table (already the 1:1 org profile/settings
+  // row, see GET/PUT /business/settings) rather than adding a new one.
+  ['gym_settings', 'contact_email', `contact_email TEXT`],
+  ['gym_settings', 'contact_phone', `contact_phone TEXT`],
+  ['gym_settings', 'address', `address TEXT`],
+  ['gym_settings', 'city', `city TEXT`],
+  ['gym_settings', 'country', `country TEXT`],
+  ['gym_settings', 'logo_url', `logo_url TEXT`],
+  ['gym_settings', 'website', `website TEXT`],
+  ['gym_settings', 'instagram_url', `instagram_url TEXT`],
+  ['gym_settings', 'description', `description TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -142,6 +183,57 @@ function backfillSetLogs(exec, idExpr) {
       FROM workout_logs wl
       JOIN (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) s ON s.n <= COALESCE(wl.sets_done, 1)
      WHERE NOT EXISTS (SELECT 1 FROM exercise_set_logs es WHERE es.workout_log_id = wl.id);
+  `);
+}
+
+// Seeds SK OS's OWN default package tiers + additional-client pricing
+// rule -- CORE CONFIGURATION every environment needs (the package
+// selection screen has nothing to show without it), NOT demo data, so
+// this runs unconditionally here rather than in scripts/seed.js (which
+// is skippable via --no-demo and never appropriate for production).
+// Idempotent: only fires if sk_packages is completely empty, so an
+// admin's later price changes (which insert a NEW versioned row, see
+// pricing.js) are never overwritten by a later `npm run db:init`.
+// The actual NUMBERS here are exactly the spec's own example values
+// (75/Rs.12,000, 100/Rs.15,000, 200/Rs.24,000, Rs.155/additional client)
+// -- seeded as INITIAL DATA an admin can change from the (future) Admin
+// Console, never as a hardcoded business-logic constant anywhere in
+// pricing.js itself.
+async function seedDefaultPricing(exec) {
+  const nowIso = now();
+  const p75 = id('skpkg'), p100 = id('skpkg'), p200 = id('skpkg');
+  const rule75 = id('skrule'), rule100 = id('skrule');
+  const addon10 = id('skaddon'), addon25 = id('skaddon'), addon50 = id('skaddon');
+  // Sequential and awaited on purpose: sk_pricing_rules/sk_capacity_addons
+  // don't strictly FK-depend on insertion order under Postgres's default
+  // read-committed isolation within one client, but keeping these
+  // strictly sequential avoids any ambiguity about ordering across the
+  // pool's connections.
+  await exec(`
+    INSERT INTO sk_packages (id, name, client_capacity, price, currency, duration_days, version, status, effective_from, created_at)
+    SELECT * FROM (
+      SELECT '${p75}' AS id, '75 Clients' AS name, 75 AS client_capacity, 12000 AS price, 'INR' AS currency, 365 AS duration_days, 1 AS version, 'active' AS status, '${nowIso}' AS effective_from, '${nowIso}' AS created_at
+      UNION ALL SELECT '${p100}', '100 Clients', 100, 15000, 'INR', 365, 1, 'active', '${nowIso}', '${nowIso}'
+      UNION ALL SELECT '${p200}', '200 Clients', 200, 24000, 'INR', 365, 1, 'active', '${nowIso}', '${nowIso}'
+    ) seed
+    WHERE NOT EXISTS (SELECT 1 FROM sk_packages);
+  `);
+  await exec(`
+    INSERT INTO sk_pricing_rules (id, base_package_id, additional_client_rate, max_capacity, version, status, effective_from, created_at)
+    SELECT * FROM (
+      SELECT '${rule75}' AS id, '${p75}' AS base_package_id, 155 AS additional_client_rate, 100 AS max_capacity, 1 AS version, 'active' AS status, '${nowIso}' AS effective_from, '${nowIso}' AS created_at
+      UNION ALL SELECT '${rule100}', '${p100}', 155, 200, 1, 'active', '${nowIso}', '${nowIso}'
+    ) seed
+    WHERE NOT EXISTS (SELECT 1 FROM sk_pricing_rules);
+  `);
+  await exec(`
+    INSERT INTO sk_capacity_addons (id, increment, price, currency, version, status, effective_from, created_at)
+    SELECT * FROM (
+      SELECT '${addon10}' AS id, 10 AS increment, 1800 AS price, 'INR' AS currency, 1 AS version, 'active' AS status, '${nowIso}' AS effective_from, '${nowIso}' AS created_at
+      UNION ALL SELECT '${addon25}', 25, 4200, 'INR', 1, 'active', '${nowIso}', '${nowIso}'
+      UNION ALL SELECT '${addon50}', 50, 7750, 'INR', 1, 'active', '${nowIso}', '${nowIso}'
+    ) seed
+    WHERE NOT EXISTS (SELECT 1 FROM sk_capacity_addons);
   `);
 }
 
@@ -232,6 +324,7 @@ if (config.databaseUrl) {
   const sql = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(sql);
   await applyPgMigrations(pool);
+  await seedDefaultPricing((s) => pool.query(s));
   // Defense-in-depth: Row-Level Security policies (PG only; idempotent).
   const rlsPath = path.join(root, 'database', 'rls.sql');
   if (fs.existsSync(rlsPath)) {
@@ -248,6 +341,7 @@ if (config.databaseUrl) {
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(schemaPath, 'utf8'));
   applySqliteMigrations(db);
+  await seedDefaultPricing((s) => db.exec(s));
   db.close();
   console.log(`Schema applied to SQLite at ${dbPath}`);
 }

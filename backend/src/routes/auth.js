@@ -87,14 +87,48 @@ export default function authRoutes(db) {
   // weight, height etc. are collected right after by OnboardingWizard
   // (ClientLayout already shows it automatically while onboarding_completed
   // is false), so this form stays a 30-second signup, not a full profile.
+  // gymCode is now OPTIONAL -- this is the one behavior change to an
+  // existing route in this whole Enterprise build, and it's additive
+  // only: every EXISTING caller that already sends a real gymCode gets
+  // byte-for-byte the same response as before (same branch, untouched
+  // below). Omitting it is the NEW path: the spec's "client enters SK
+  // OS, creates an account, THEN scans a gym QR separately" flow --
+  // this account is created with org_id NULL and no clients row at all
+  // yet (clients.org_id is NOT NULL, so a real clients row literally
+  // cannot exist before a gym is known), and the frontend is told to
+  // show "Join your gym" instead of the normal app shell. See
+  // enrollment.js's /enrollment/client/join for what completes this.
   r.post('/register', rateLimit({ windowMs: 60_000, max: 10 }),
     validate(z.object({
       name: z.string().min(1).max(80),
       email: z.string().email(),
       password: z.string().min(6),
-      gymCode: z.string().min(1).max(80)
+      gymCode: z.string().min(1).max(80).optional()
     })), async (req, res) => {
     const email = req.body.email.toLowerCase().trim();
+
+    if (!req.body.gymCode) {
+      const userId = id('usr');
+      try {
+        const passwordHash = await hashPassword(req.body.password);
+        await db.run(
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+           VALUES (?, NULL, ?, ?, 'CLIENT', ?, 1, ?)`,
+          [userId, email, passwordHash, req.body.name, now()]);
+        await track(db, { userId, type: 'client_self_registered_pending_gym', data: {} });
+        const user = { id: userId, org_id: null, role: 'CLIENT', name: req.body.name, email };
+        const token = signToken(user);
+        setAuthCookie(res, token);
+        return res.status(201).json({
+          token,
+          user: { id: userId, name: req.body.name, email, role: 'CLIENT', orgId: null, pendingGymEnrollment: true }
+        });
+      } catch (e) {
+        if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+        throw e;
+      }
+    }
+
     const slug = req.body.gymCode.toLowerCase().trim();
     const org = await db.q1('SELECT id, name, slug FROM organizations WHERE slug = ?', [slug]);
     if (!org) return res.status(404).json({ error: 'Gym code not found. Check with your trainer or gym owner.' });
@@ -126,6 +160,39 @@ export default function authRoutes(db) {
       res.status(201).json({
         token,
         user: { id: userId, name: req.body.name, email, role: 'CLIENT', orgId: org.id, orgName: org.name, orgSlug: org.slug }
+      });
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      throw e;
+    }
+  });
+
+  // Trainer self-registration -- did not exist before (trainers were
+  // previously only ever created BY an owner/admin). Same
+  // pending-enrollment shape as /register's gymCode-less path: org_id
+  // NULL, no `trainers` row yet, "Join a gym" screen until a QR scan
+  // completes it via /enrollment/trainer/join.
+  r.post('/register-trainer', rateLimit({ windowMs: 60_000, max: 10 }),
+    validate(z.object({
+      name: z.string().min(1).max(80),
+      email: z.string().email(),
+      password: z.string().min(6)
+    })), async (req, res) => {
+    const email = req.body.email.toLowerCase().trim();
+    const userId = id('usr');
+    try {
+      const passwordHash = await hashPassword(req.body.password);
+      await db.run(
+        `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+         VALUES (?, NULL, ?, ?, 'TRAINER', ?, 1, ?)`,
+        [userId, email, passwordHash, req.body.name, now()]);
+      await track(db, { userId, type: 'trainer_self_registered_pending_gym', data: {} });
+      const user = { id: userId, org_id: null, role: 'TRAINER', name: req.body.name, email };
+      const token = signToken(user);
+      setAuthCookie(res, token);
+      res.status(201).json({
+        token,
+        user: { id: userId, name: req.body.name, email, role: 'TRAINER', orgId: null, pendingGymEnrollment: true }
       });
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
@@ -268,7 +335,15 @@ export default function authRoutes(db) {
       ownerName: z.string().min(2).max(80),
       email: z.string().email(),
       password: z.string().min(6),
-      type: z.enum(['gym', 'independent']).default('gym')
+      type: z.enum(['gym', 'independent']).default('gym'),
+      // Enterprise signup's optional gym-profile fields (spec: "Gym
+      // Contact Number, Country, City, Address"). All optional so
+      // /independent's own setup-org call (type: 'independent', no
+      // profile form) is completely unaffected.
+      contactPhone: z.string().max(30).optional(),
+      country: z.string().max(60).optional(),
+      city: z.string().max(60).optional(),
+      address: z.string().max(300).optional()
     })), async (req, res) => {
     // Only gate when a secret has actually been configured.
     if (setupSecret) {
@@ -306,6 +381,7 @@ export default function authRoutes(db) {
       // owner — an orphaned org, unrecoverable except by hand, and its slug
       // permanently unavailable to a retry. Same db.tx() pattern already
       // used for workout completion.
+      const { contactPhone, country, city, address } = req.body;
       await db.tx(async (tx) => {
         await tx.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)',
           [orgId, orgName, slug, type, now()]);
@@ -313,6 +389,20 @@ export default function authRoutes(db) {
           `INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
            VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, 1, ?)`,
           [userId, orgId, email.toLowerCase().trim(), passwordHash, ownerName, now()]);
+        // Enterprise (gym) signups start in SETUP -- the dashboard gates
+        // most features behind onboarding + a purchased package (see
+        // enterprise.js). Independent-client-style orgs (type:
+        // 'independent', used only by /auth/google's own org bootstrap,
+        // never by this route's own UI) have no such concept and never
+        // read this table, so leaving it unset for them is correct.
+        if (type === 'gym') {
+          await tx.run(`INSERT INTO org_billing_state (org_id, status, updated_at) VALUES (?, 'SETUP', ?)`, [orgId, now()]);
+        }
+        if (contactPhone || country || city || address) {
+          await tx.run(
+            `INSERT INTO gym_settings (org_id, contact_email, contact_phone, address, city, country, updated_at) VALUES (?,?,?,?,?,?,?)`,
+            [orgId, email.toLowerCase().trim(), contactPhone || null, address || null, city || null, country || null, now()]);
+        }
       });
       await track(db, { orgId, userId, type: 'org_created', data: { orgName } });
       const user = { id: userId, org_id: orgId, role: 'GYM_OWNER', name: ownerName, email: email.toLowerCase().trim() };
