@@ -41,6 +41,7 @@ async function memDb() {
   for (const ddl of ['data_json TEXT', `channel TEXT NOT NULL DEFAULT 'in_app'`]) {
     db.exec(`ALTER TABLE notifications ADD COLUMN ${ddl}`);
   }
+  db.exec(`ALTER TABLE subscriptions ADD COLUMN lifecycle_status TEXT CHECK (lifecycle_status IN ('PENDING_PAYMENT','ACTIVE','PAUSED','SUSPENDED','EXPIRED','CANCELLED','REFUND_PENDING','REFUNDED','TRANSFERRED'))`);
   const mk = () => ({
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },
@@ -139,7 +140,9 @@ test('FULL FLOW: signup -> onboarding -> package -> payment -> activation -> cli
   assert.equal(calc.json.price, 12775, 'matches the spec\'s own worked example');
 
   // ---- 4. Payment order for the gym package ----
-  const order = await api.call('POST', '/api/enterprise/payment/order', { capacity: 80 }, ownerToken);
+  const quote80 = await api.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_PACKAGE', capacity: 80 }, ownerToken);
+  assert.equal(quote80.status, 200);
+  const order = await api.call('POST', '/api/enterprise/payment/order', { quoteId: quote80.json.quote.id }, ownerToken);
   assert.equal(order.status, 200);
   assert.equal(order.json.order.amount, 12775);
   assert.equal(order.json.order.status, 'CREATED');
@@ -263,7 +266,8 @@ test('capacity exhaustion: generating a client QR at zero remaining capacity is 
   // Buy the smallest possible capacity via a direct 1-client purchase --
   // simplest way to reach zero remaining after exactly one join.
   const calc = await api.call('POST', '/api/enterprise/packages/calculate', { capacity: 75 }, ownerToken);
-  const order = await api.call('POST', '/api/enterprise/payment/order', { capacity: 75 }, ownerToken);
+  const quote75a = await api.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_PACKAGE', capacity: 75 }, ownerToken);
+  const order = await api.call('POST', '/api/enterprise/payment/order', { quoteId: quote75a.json.quote.id }, ownerToken);
   const { paymentId, signature } = mockSimulateCheckout(order.json.order.provider_order_id);
   await api.call('POST', '/api/enterprise/payment/verify', { orderId: order.json.order.id, providerPaymentId: paymentId, signature }, ownerToken);
 
@@ -320,7 +324,8 @@ test('RACE: two different clients scanning QR codes for the LAST remaining capac
   const signup = await api.call('POST', '/api/auth/setup-org', { orgName: 'Race Gym', ownerName: 'Owner', email: 'owner4@test.in', password: 'ownerpass1' });
   const ownerToken = signup.json.token;
   const orgId = signup.json.user.orgId;
-  const order = await api.call('POST', '/api/enterprise/payment/order', { capacity: 75 }, ownerToken);
+  const quote75b = await api.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_PACKAGE', capacity: 75 }, ownerToken);
+  const order = await api.call('POST', '/api/enterprise/payment/order', { quoteId: quote75b.json.quote.id }, ownerToken);
   const { paymentId, signature } = mockSimulateCheckout(order.json.order.provider_order_id);
   await api.call('POST', '/api/enterprise/payment/verify', { orderId: order.json.order.id, providerPaymentId: paymentId, signature }, ownerToken);
 

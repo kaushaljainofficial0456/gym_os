@@ -129,27 +129,42 @@ export async function getActiveTrainerCount(db, orgId) {
  * from the org_subscriptions.package_id's duration_days (never a
  * default -- see the caller's own resolution).
  */
-registerActivationHandler('ORG_PACKAGE', async (db, order, tx) => {
-  const subscription = await tx.q1('SELECT * FROM org_subscriptions WHERE id = ?', [order.subject_id]);
-  if (!subscription) return; // defensive -- should be unreachable if enterprise.js's order creation is correct
+/**
+ * Activates a PENDING_PAYMENT org_subscriptions row: supersedes any
+ * other row still ACTIVE for the org (an upgrade/downgrade/renewal
+ * purchase mid-cycle -- history is preserved, never deleted), stamps
+ * real start/end dates from the package's duration, flips the org's
+ * billing state to ACTIVE. Shared by two callers: the ORG_PACKAGE
+ * activation handler below (a real payment just succeeded) and
+ * enterprise.js's zero-amount quote path (a downgrade fully covered by
+ * unused credit has nothing to charge, so there's no payment_order to
+ * activate FROM -- but the actual state change is identical, so it
+ * must not be reimplemented a second time).
+ */
+export async function activateOrgSubscription(db, tx, { orgId, subscriptionId }) {
+  const subscription = await tx.q1('SELECT * FROM org_subscriptions WHERE id = ?', [subscriptionId]);
+  if (!subscription) return null; // defensive -- should be unreachable if the caller's own order/quote creation is correct
   const pkg = await tx.q1('SELECT * FROM sk_packages WHERE id = ?', [subscription.package_id]);
   const startDate = now();
   const endDate = new Date(Date.now() + (pkg?.duration_days || 365) * 86_400_000).toISOString();
 
-  // Supersede any OTHER row still marked ACTIVE for this org (an
-  // upgrade purchase mid-cycle) -- history is preserved, never deleted.
   await tx.run(`UPDATE org_subscriptions SET status = 'SUPERSEDED', updated_at = ? WHERE org_id = ? AND status = 'ACTIVE' AND id != ?`,
-    [now(), order.org_id, subscription.id]);
+    [now(), orgId, subscription.id]);
   await tx.run(`UPDATE org_subscriptions SET status = 'ACTIVE', start_date = ?, end_date = ?, updated_at = ? WHERE id = ?`,
     [startDate, endDate, now(), subscription.id]);
-  await tx.run(`UPDATE org_billing_state SET status = 'ACTIVE', updated_at = ? WHERE org_id = ?`, [now(), order.org_id]);
+  await tx.run(`UPDATE org_billing_state SET status = 'ACTIVE', updated_at = ? WHERE org_id = ?`, [now(), orgId]);
 
-  await notifyOwners(db, order.org_id, {
+  await notifyOwners(db, orgId, {
     type: 'gym_package_activated',
     title: 'Your SK OS package is active',
     body: `${subscription.client_capacity} client capacity, active until ${endDate.slice(0, 10)}.`,
     data: { subscriptionId: subscription.id },
   });
+  return tx.q1('SELECT * FROM org_subscriptions WHERE id = ?', [subscription.id]);
+}
+
+registerActivationHandler('ORG_PACKAGE', async (db, order, tx) => {
+  await activateOrgSubscription(db, tx, { orgId: order.org_id, subscriptionId: order.subject_id });
 });
 
 /**

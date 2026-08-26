@@ -159,6 +159,18 @@ const MIGRATIONS = [
   // simultaneous-client-joins race caught by
   // test/enterpriseFlow.test.js).
   ['org_billing_state', 'reserved_slots', `reserved_slots INTEGER NOT NULL DEFAULT 0`],
+  // Hardening pass 2: a richer, explicit membership lifecycle state
+  // ADDITIVE alongside the pre-existing `status` column -- every
+  // existing route that filters on status IN ('active','overdue',
+  // 'expired','cancelled') keeps working completely unchanged.
+  // lifecycle_status is the new fine-grained source of truth
+  // (membershipLifecycle.js keeps both columns in sync on every
+  // transition); NULL on already-existing rows until the one-time
+  // backfill below runs. No DEFAULT here on purpose -- a literal
+  // default would apply to every pre-existing row regardless of its
+  // actual (varying) coarse status, which is exactly wrong; see the
+  // backfill UPDATE right after this array is applied.
+  ['subscriptions', 'lifecycle_status', `lifecycle_status TEXT CHECK (lifecycle_status IN ('PENDING_PAYMENT','ACTIVE','PAUSED','SUSPENDED','EXPIRED','CANCELLED','REFUND_PENDING','REFUNDED','TRANSFERRED'))`],
   // Gym profile fields (spec: "GYM PROFILE CREATION") -- extend the
   // EXISTING gym_settings table (already the 1:1 org profile/settings
   // row, see GET/PUT /business/settings) rather than adding a new one.
@@ -268,6 +280,21 @@ function applySqliteMigrations(db) {
   backfillSetLogs((sql) => db.exec(sql), `'stl_' || lower(hex(randomblob(8)))`);
   // Backfill: existing clients already in the system are considered onboarded
   db.exec(`UPDATE clients SET onboarding_completed = 1 WHERE onboarding_completed = 0`);
+  // One-time backfill of subscriptions.lifecycle_status from the
+  // pre-existing coarse `status` column -- guarded by `WHERE
+  // lifecycle_status IS NULL` so it's safe to run on every startup: a
+  // row that has since gone through a REAL transition (PAUSED,
+  // SUSPENDED, REFUND_PENDING, ...) already has a non-NULL value and is
+  // never touched again by this line. 'overdue' has no better fine-
+  // grained equivalent yet (payment_status already captures that
+  // distinction) so it maps to ACTIVE, same as a normal active row.
+  db.exec(`
+    UPDATE subscriptions SET lifecycle_status = CASE status
+      WHEN 'active' THEN 'ACTIVE' WHEN 'overdue' THEN 'ACTIVE'
+      WHEN 'expired' THEN 'EXPIRED' WHEN 'cancelled' THEN 'CANCELLED'
+      ELSE 'ACTIVE' END
+    WHERE lifecycle_status IS NULL
+  `);
 
   // ---- P1 indexes for production query performance ----
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)`);
@@ -306,6 +333,15 @@ async function applyPgMigrations(pool) {
   `);
   await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
+  // See the SQLite branch's identical backfill above for why this is
+  // safe to run on every startup (guarded by IS NULL).
+  await pool.query(`
+    UPDATE subscriptions SET lifecycle_status = CASE status
+      WHEN 'active' THEN 'ACTIVE' WHEN 'overdue' THEN 'ACTIVE'
+      WHEN 'expired' THEN 'EXPIRED' WHEN 'cancelled' THEN 'CANCELLED'
+      ELSE 'ACTIVE' END
+    WHERE lifecycle_status IS NULL
+  `);
   // ---- P1 indexes for production query performance ----
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);

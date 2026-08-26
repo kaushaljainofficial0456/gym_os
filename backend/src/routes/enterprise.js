@@ -20,7 +20,8 @@ import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
 import { track } from '../services/events.js';
 import { getCurrentPackages, getCurrentPricingRules, getCurrentCapacityAddons, calculatePackagePrice } from '../services/enterprise/pricing.js';
-import { getOrgBillingSnapshot, getActiveTrainerCount, createPendingOrgSubscription, createPendingCapacityPurchase } from '../services/enterprise/subscriptionLifecycle.js';
+import { getOrgBillingSnapshot, getActiveTrainerCount, createPendingOrgSubscription, createPendingCapacityPurchase, activateOrgSubscription } from '../services/enterprise/subscriptionLifecycle.js';
+import { createOrgPackageQuote, createOrgUpgradeQuote, createCapacityAddonQuote, getValidQuote, consumeQuote } from '../services/enterprise/quotes.js';
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, recordWebhookEvent } from '../services/payments/paymentActivation.js';
 import { issueInvoice } from '../services/payments/invoices.js';
@@ -159,22 +160,87 @@ export default function enterpriseRoutes(db) {
 
   // ---- gym package payment (SK OS billing the gym) ----
   const paymentLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
-  r.post('/payment/order', paymentLimit, validate(z.object({ capacity: z.number().int().min(1).max(100_000) })), async (req, res) => {
-    // Amount is ALWAYS resolved server-side from the current pricing
-    // config -- req.body.capacity selects WHICH tier/calculation, it is
-    // never itself a price. See pricing.js.
-    const priced = await calculatePackagePrice(db, req.body.capacity);
-    if (!priced.ok) return res.status(422).json({ error: priced.reason });
+
+  // ---- billing quotes: the ONE place a gym-level price gets locked,
+  // before ANY payment_order exists. See quotes.js's header comment.
+  r.post('/billing/quote', paymentLimit, validate(z.object({
+    kind: z.enum(['ORG_PACKAGE', 'ORG_UPGRADE', 'ORG_CAPACITY_ADDON']),
+    capacity: z.number().int().min(1).max(100_000).optional(),
+    addonId: z.string().min(1).optional(),
+  })), async (req, res) => {
+    const { kind, capacity, addonId } = req.body;
+    let result;
+    if (kind === 'ORG_CAPACITY_ADDON') {
+      if (!addonId) return res.status(400).json({ error: 'addonId is required for an ORG_CAPACITY_ADDON quote' });
+      result = await createCapacityAddonQuote(db, { orgId: req.orgId, addonId, createdBy: req.user.sub });
+    } else {
+      if (!capacity) return res.status(400).json({ error: 'capacity is required for this quote kind' });
+      result = kind === 'ORG_UPGRADE'
+        ? await createOrgUpgradeQuote(db, { orgId: req.orgId, capacity, createdBy: req.user.sub })
+        : await createOrgPackageQuote(db, { orgId: req.orgId, capacity, createdBy: req.user.sub });
+    }
+    if (!result.ok) {
+      if (result.reason === 'downgrade_blocked') {
+        return res.status(409).json({
+          error: result.reason, activeClients: result.activeClients, requestedCapacity: result.requestedCapacity,
+          message: `You currently have ${result.activeClients} active clients. You cannot downgrade to ${result.requestedCapacity} until active membership count is within the new capacity.`,
+        });
+      }
+      return res.status(422).json({ error: result.reason });
+    }
+    res.json({ quote: result.quote, direction: result.direction });
+  });
+
+  // A payment_order is ALWAYS created from a locked quote -- never from
+  // a raw capacity/price the frontend sends directly. See quotes.js.
+  r.post('/payment/order', paymentLimit, validate(z.object({ quoteId: z.string().min(1) })), async (req, res) => {
+    const resolved = await getValidQuote(db, req.body.quoteId, req.orgId);
+    if (!resolved.ok) return res.status(422).json({ error: resolved.reason });
+    const quote = resolved.quote;
+
+    if (quote.kind === 'ORG_CAPACITY_ADDON') {
+      const snapshot = await getOrgBillingSnapshot(db, req.orgId);
+      if (!snapshot.subscription || snapshot.subscription.status !== 'ACTIVE') {
+        return res.status(409).json({ error: 'An active package is required before buying additional capacity' });
+      }
+      if (!(await consumeQuote(db, quote.id))) return res.status(409).json({ error: 'quote_already_used' });
+      const purchase = await createPendingCapacityPurchase(db, {
+        orgId: req.orgId, subscriptionId: snapshot.subscription.id, addonId: quote.addon_id, increment: quote.capacity, price: quote.total, currency: quote.currency,
+      });
+      const order = await createPaymentOrder(db, {
+        subjectType: 'ORG_CAPACITY_ADDON', subjectId: purchase.id, orgId: req.orgId,
+        amount: quote.total, currency: quote.currency, idempotencyKey: `capacity-${purchase.id}`,
+      });
+      return res.json({ order, purchase, quote });
+    }
+
+    // ORG_PACKAGE (initial purchase / renewal) and ORG_UPGRADE both
+    // just create (or supersede-via-activation) an org_subscriptions
+    // row -- the SAME ORG_PACKAGE activation handler covers both.
+    if (!(await consumeQuote(db, quote.id))) return res.status(409).json({ error: 'quote_already_used' });
     const subscription = await createPendingOrgSubscription(db, {
-      orgId: req.orgId, packageId: priced.basePackage.id, clientCapacity: req.body.capacity, price: priced.price, currency: priced.currency,
+      orgId: req.orgId, packageId: quote.package_id, clientCapacity: quote.capacity, price: quote.total, currency: quote.currency,
     });
+
+    if (quote.total <= 0) {
+      // A downgrade fully covered by unused credit (or any other
+      // zero-amount quote) has nothing to charge -- no payment gateway
+      // round-trip, no payment_order. Activated immediately through the
+      // SAME state-change function a real payment would trigger, so
+      // this is never a second implementation of "what does activation
+      // mean" (see activateOrgSubscription's own doc comment).
+      const activated = await db.tx((tx) => activateOrgSubscription(db, tx, { orgId: req.orgId, subscriptionId: subscription.id }));
+      await track(db, { type: 'org_subscription_free_change', orgId: req.orgId, userId: req.user.sub, data: { subscriptionId: subscription.id, quoteId: quote.id } }).catch(() => {});
+      return res.json({ order: null, subscription: activated, quote, freeChange: true });
+    }
+
     const order = await createPaymentOrder(db, {
       subjectType: 'ORG_PACKAGE', subjectId: subscription.id, orgId: req.orgId,
-      amount: priced.price, currency: priced.currency, idempotencyKey: `org-pkg-${subscription.id}`,
+      amount: quote.total, currency: quote.currency, idempotencyKey: `org-pkg-${subscription.id}`,
     });
     await db.run(`UPDATE org_subscriptions SET payment_order_id = ? WHERE id = ?`, [order.id, subscription.id]);
     await db.run(`UPDATE org_billing_state SET status = 'PAYMENT_PENDING', updated_at = ? WHERE org_id = ?`, [now(), req.orgId]);
-    res.json({ order, subscription, priced: { price: priced.price, currency: priced.currency, breakdown: priced.breakdown } });
+    res.json({ order, subscription, quote });
   });
 
   r.post('/payment/verify', paymentLimit, validate(z.object({
@@ -188,28 +254,6 @@ export default function enterpriseRoutes(db) {
       await issueInvoice(db, order).catch(() => {}); // best-effort -- a receipt failing to generate must never undo a real payment
     }
     res.json({ ok: true, order: await db.q1('SELECT * FROM payment_orders WHERE id = ?', [order.id]) });
-  });
-
-  // ---- capacity add-ons ----
-  r.post('/capacity/order', paymentLimit, validate(z.object({ addonId: z.string().min(1) })), async (req, res) => {
-    const addon = await db.q1(`SELECT * FROM sk_capacity_addons WHERE id = ? AND status = 'active' AND effective_until IS NULL`, [req.body.addonId]);
-    if (!addon) return res.status(404).json({ error: 'Capacity add-on not found' });
-    const snapshot = await getOrgBillingSnapshot(db, req.orgId);
-    if (!snapshot.subscription || snapshot.subscription.status !== 'ACTIVE') {
-      return res.status(409).json({ error: 'An active package is required before buying additional capacity' });
-    }
-    // Proration: the spec allows either real proration or an explicit
-    // "billed for the remainder of the period" disclosure -- this
-    // deployment does the latter, and says so plainly rather than
-    // implying a discount that isn't actually calculated.
-    const purchase = await createPendingCapacityPurchase(db, {
-      orgId: req.orgId, subscriptionId: snapshot.subscription.id, addonId: addon.id, increment: addon.increment, price: addon.price, currency: addon.currency,
-    });
-    const order = await createPaymentOrder(db, {
-      subjectType: 'ORG_CAPACITY_ADDON', subjectId: purchase.id, orgId: req.orgId,
-      amount: addon.price, currency: addon.currency, idempotencyKey: `capacity-${purchase.id}`,
-    });
-    res.json({ order, purchase, billingNote: 'Additional capacity is billed for the remaining period of your current package -- not prorated.' });
   });
 
   // ---- invoices ----

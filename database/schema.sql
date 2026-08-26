@@ -1120,3 +1120,56 @@ CREATE TABLE IF NOT EXISTS payment_accounts (
 -- data_json/channel via a guarded migration (init-db.js) for
 -- structured payloads and future delivery channels; client_id/read
 -- are its own pre-existing columns, untouched.
+
+-- ============================================================
+-- HARDENING PASS 2 -- billing quotes + membership lifecycle history.
+-- (org_billing_state.reserved_slots, added the same pass as the
+-- capacity-race fix, lives up near org_billing_state's own CREATE
+-- TABLE above, not here.)
+-- ============================================================
+
+-- A SERVER-SIDE, PRICE-LOCKED quote created before every gym-level
+-- payment (initial package purchase, upgrade/downgrade, capacity
+-- add-on). The frontend never computes or sends a price -- it asks for
+-- a quote, gets back a locked total + a short expiry, and that quote
+-- id is the ONLY thing /payment/order accepts. This is what makes a
+-- later admin price change never retroactively change a checkout that
+-- was already in progress (see quotes.js's comment on why).
+CREATE TABLE IF NOT EXISTS billing_quotes (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  kind           TEXT NOT NULL CHECK (kind IN ('ORG_PACKAGE','ORG_UPGRADE','ORG_CAPACITY_ADDON')),
+  package_id     TEXT REFERENCES sk_packages(id),
+  addon_id       TEXT REFERENCES sk_capacity_addons(id),
+  capacity       INTEGER,           -- resolved target client_capacity (ORG_PACKAGE/ORG_UPGRADE) or increment (ORG_CAPACITY_ADDON)
+  base_price     REAL NOT NULL DEFAULT 0,
+  credit         REAL NOT NULL DEFAULT 0,   -- prorated credit applied (ORG_UPGRADE only, from the unused remainder of the current period)
+  total          REAL NOT NULL,             -- what /payment/order will actually charge -- floored at 0, never negative
+  currency       TEXT NOT NULL DEFAULT 'INR',
+  breakdown_json TEXT,               -- full calculation detail for the receipt/UI (never re-derived from "today's" pricing later)
+  status         TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','CONSUMED','EXPIRED','CANCELLED')),
+  created_by     TEXT REFERENCES users(id),
+  expires_at     TEXT NOT NULL,      -- 10-minute validity by default -- see quotes.js
+  created_at     TEXT NOT NULL,
+  consumed_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_billing_quotes_org ON billing_quotes(org_id, status);
+
+-- Immutable audit trail of every client-membership lifecycle
+-- transition (see membershipLifecycle.js's transition graph). Additive
+-- alongside the pre-existing subscriptions.status column, which stays
+-- exactly as every other route already reads it -- see subscriptions'
+-- own new lifecycle_status column (added via guarded migration, not
+-- here, since subscriptions already has real rows) for how the two
+-- relate.
+CREATE TABLE IF NOT EXISTS membership_status_history (
+  id              TEXT PRIMARY KEY,
+  subscription_id TEXT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  previous_status TEXT,
+  new_status      TEXT NOT NULL,
+  reason          TEXT,
+  changed_by      TEXT REFERENCES users(id),
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_membership_history_sub ON membership_status_history(subscription_id, created_at);

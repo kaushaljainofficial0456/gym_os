@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { z } from 'zod';
 import { validate } from '../validate.js';
+import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
 import { dayKey, addDays } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
+import { transitionMembership } from '../services/enterprise/membershipLifecycle.js';
 
 export default function adminRoutes(db) {
   const r = Router();
@@ -172,12 +174,45 @@ export default function adminRoutes(db) {
 
   r.get('/members', async (req, res) => {
     const rows = await db.q(
-      `SELECT c.id, u.name, c.status, c.goal, c.current_weight, s.plan_name, s.end_date, s.payment_status
+      `SELECT c.id, u.name, c.status, c.goal, c.current_weight, s.id AS subscription_id, s.plan_name, s.start_date, s.end_date, s.payment_status, s.lifecycle_status
          FROM clients c
          JOIN users u ON u.id = c.user_id
          LEFT JOIN subscriptions s ON s.client_id = c.id AND s.status = 'active'
         WHERE c.org_id = ? ORDER BY u.name`, [req.orgId]);
     res.json({ members: rows });
+  });
+
+  // ---- membership lifecycle actions (suspend / resume / cancel) ----
+  // "Dangerous actions require confirmation" (spec) is a frontend
+  // concern; the backend's own guard is transitionMembership's explicit
+  // state graph -- an invalid jump (e.g. cancel -> resume) is rejected
+  // outright, never silently applied.
+  const membershipActionLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
+  const MEMBERSHIP_ACTIONS = { suspend: 'SUSPENDED', resume: 'ACTIVE', pause: 'PAUSED', cancel: 'CANCELLED' };
+  r.post('/members/:clientId/membership/:action', membershipActionLimit, validate(z.object({ reason: z.string().max(500).optional() })), async (req, res) => {
+    const toStatus = MEMBERSHIP_ACTIONS[req.params.action];
+    if (!toStatus) return res.status(400).json({ error: 'Unknown membership action' });
+    const client = await requireOrgClient(req, res, req.params.clientId);
+    if (!client) return;
+    const subscription = await db.q1('SELECT * FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    if (!subscription) return res.status(404).json({ error: 'No membership found for this client' });
+    const result = await transitionMembership(db, {
+      subscriptionId: subscription.id, orgId: req.orgId, toStatus, reason: req.body.reason || null, changedBy: req.user.sub,
+    });
+    if (!result.ok) {
+      const code = result.reason === 'not_found' ? 404 : 409;
+      return res.status(code).json({ error: result.reason, from: result.from, to: result.to });
+    }
+    res.json({ ok: true, subscription: result.subscription });
+  });
+
+  r.get('/members/:clientId/membership/history', async (req, res) => {
+    const client = await requireOrgClient(req, res, req.params.clientId);
+    if (!client) return;
+    const subscription = await db.q1('SELECT id FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    if (!subscription) return res.json({ history: [] });
+    const history = await db.q('SELECT * FROM membership_status_history WHERE subscription_id = ? AND org_id = ? ORDER BY created_at DESC', [subscription.id, req.orgId]);
+    res.json({ history });
   });
 
   // ---- gym settings (branding, crowd capacity, default client permissions) ----

@@ -45,12 +45,51 @@ registerReleaseHandler('CLIENT_MEMBERSHIP', async (db, order, tx) => {
 });
 
 /**
+ * RENEWAL activation -- the OTHER shape CLIENT_MEMBERSHIP orders can
+ * take (see the dispatch below): order.subject_id is an EXISTING
+ * subscriptions.id, order.client_id is already set (the client already
+ * exists -- see /client/renew). Extends end_date from the CURRENT
+ * end_date if the membership hasn't lapsed yet (never shortens it by
+ * renewing early), or from now if it already expired.
+ */
+async function activateRenewal(db, order, tx) {
+  const subscription = await tx.q1('SELECT * FROM subscriptions WHERE id = ? AND org_id = ?', [order.subject_id, order.org_id]);
+  if (!subscription) return; // defensive -- should be unreachable
+  const plan = subscription.package_id ? await tx.q1('SELECT * FROM packages WHERE id = ?', [subscription.package_id]) : null;
+  const periodDays = plan?.period_days || 30;
+  const wasExpired = Date.parse(subscription.end_date) <= Date.now();
+  const base = wasExpired ? Date.now() : Date.parse(subscription.end_date);
+  const newEndDate = new Date(base + periodDays * 86_400_000).toISOString();
+  const nowIso = now();
+  const client = await tx.q1('SELECT user_id FROM clients WHERE id = ?', [order.client_id]);
+
+  await tx.run(`UPDATE subscriptions SET end_date = ?, status = 'active', payment_status = 'paid', lifecycle_status = 'ACTIVE' WHERE id = ?`, [newEndDate, subscription.id]);
+  await tx.run(
+    `INSERT INTO membership_status_history (id, subscription_id, org_id, previous_status, new_status, reason, changed_by, created_at)
+     VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
+    [id('msh'), subscription.id, order.org_id, subscription.lifecycle_status || 'ACTIVE', wasExpired ? 'renewed_after_expiry' : 'renewed', client?.user_id || null, nowIso]);
+  await tx.run(
+    `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at, external_ref)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)`,
+    [id('pay'), order.org_id, order.client_id, subscription.id, order.amount, order.currency, order.provider, nowIso, order.id]);
+
+  await notify(db, { orgId: order.org_id, userId: client?.user_id, type: 'membership_renewed', title: `Your membership is renewed through ${newEndDate.slice(0, 10)}`, data: { subscriptionId: subscription.id } });
+  await track(db, { type: 'client_membership_renewed', orgId: order.org_id, userId: client?.user_id, data: { subscriptionId: subscription.id, newEndDate, wasExpired } }).catch(() => {});
+}
+
+/**
  * CLIENT_MEMBERSHIP activation -- fires once inside the same transaction
- * that marks the payment order SUCCESS. Resolves org/plan/user entirely
- * from the enrollment_tokens row (order.subject_id), never from
- * anything the client's browser sent at payment time.
+ * that marks the payment order SUCCESS. Two shapes share this one
+ * subject_type: a fresh JOIN (order.client_id is null -- everything is
+ * resolved from the enrollment_tokens row instead, order.subject_id
+ * being that token's id) and a RENEWAL (order.client_id is already set
+ * at order-creation time -- see /client/renew -- and order.subject_id
+ * is an existing subscriptions.id, not a token). The two never collide:
+ * a fresh join's payment_order always has client_id NULL because the
+ * clients row doesn't exist until THIS handler creates it.
  */
 registerActivationHandler('CLIENT_MEMBERSHIP', async (db, order, tx) => {
+  if (order.client_id) return activateRenewal(db, order, tx);
   const enrollmentToken = await tx.q1('SELECT * FROM enrollment_tokens WHERE id = ?', [order.subject_id]);
   if (!enrollmentToken || !enrollmentToken.consumed_by) return; // defensive -- should be unreachable
   const userId = enrollmentToken.consumed_by;
@@ -82,8 +121,8 @@ registerActivationHandler('CLIENT_MEMBERSHIP', async (db, order, tx) => {
   const endDate = new Date(Date.now() + periodDays * 86_400_000).toISOString();
   const subId = id('sub');
   await tx.run(
-    `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, status, payment_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid')`,
+    `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, status, payment_status, lifecycle_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid', 'ACTIVE')`,
     [subId, orgId, clientId, plan?.id || null, plan?.name || 'Membership', order.amount, order.currency, startDate, endDate]);
   await tx.run(
     `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at, external_ref)
@@ -238,11 +277,19 @@ export default function enrollmentRoutes(db) {
   })), async (req, res) => {
     const order = await db.q1(`SELECT * FROM payment_orders WHERE id = ? AND subject_type = 'CLIENT_MEMBERSHIP'`, [req.body.orderId]);
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    // Ownership check via the enrollment_tokens row this order is FOR
-    // (consumed_by), not payment_orders.client_id -- see this file's own
-    // header comment on why client_id stays null until activation.
-    const enrollmentToken = await db.q1('SELECT consumed_by FROM enrollment_tokens WHERE id = ?', [order.subject_id]);
-    if (!enrollmentToken || enrollmentToken.consumed_by !== req.user.sub) return res.status(403).json({ error: 'Not your payment' });
+    // Two shapes share this one subject_type -- see the registered
+    // activation handler's own branch for why: a fresh JOIN (client_id
+    // still null -- the client row doesn't exist until activation, so
+    // ownership is checked via the enrollment_tokens row instead) vs a
+    // RENEWAL (client_id set at order-creation time, since the client
+    // already exists -- see /client/renew).
+    if (order.client_id) {
+      const client = await db.q1('SELECT user_id FROM clients WHERE id = ?', [order.client_id]);
+      if (!client || client.user_id !== req.user.sub) return res.status(403).json({ error: 'Not your payment' });
+    } else {
+      const enrollmentToken = await db.q1('SELECT consumed_by FROM enrollment_tokens WHERE id = ?', [order.subject_id]);
+      if (!enrollmentToken || enrollmentToken.consumed_by !== req.user.sub) return res.status(403).json({ error: 'Not your payment' });
+    }
     const result = await recordCheckoutVerification(db, { orderId: order.id, providerPaymentId: req.body.providerPaymentId, signature: req.body.signature });
     if (!result.ok) return res.status(422).json({ error: result.reason });
     if (!result.alreadyFinalized) await issueInvoice(db, order).catch(() => {});
@@ -259,6 +306,37 @@ export default function enrollmentRoutes(db) {
       setAuthCookie(res, token);
     }
     res.json({ ok: true, membershipActive: !!client, token });
+  });
+
+  /* ================= CLIENT: renew ================= */
+  // No new capacity slot is reserved here -- the client is already
+  // counted in activeClients (see getOrgBillingSnapshot), so renewing
+  // doesn't compete for a slot the way a fresh join does.
+  r.post('/client/renew', clientOnly, scanLimit, async (req, res) => {
+    const client = await db.q1('SELECT id, org_id FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.status(404).json({ error: 'not_a_client' });
+    const subscription = await db.q1('SELECT * FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    if (!subscription) return res.status(404).json({ error: 'no_membership_found' });
+    if (['CANCELLED', 'REFUNDED', 'TRANSFERRED'].includes(subscription.lifecycle_status)) {
+      return res.status(409).json({ error: 'membership_terminated' });
+    }
+    // Renews at the price the client is ALREADY locked into (their own
+    // subscription row's own amount), never re-priced from today's
+    // package rates -- a genuine plan CHANGE on renewal isn't built yet
+    // (out of scope for this pass; would need its own quote step,
+    // mirroring the org-level billing_quotes pattern).
+    const order = await createPaymentOrder(db, {
+      subjectType: 'CLIENT_MEMBERSHIP', subjectId: subscription.id, orgId: client.org_id, clientId: client.id,
+      amount: subscription.amount, currency: subscription.currency,
+      // Keyed to the subscription's CURRENT end_date -- a double-click
+      // before this renewal's payment resolves reuses the SAME order
+      // (createPaymentOrder's own idempotency_key dedup); once it
+      // actually completes, end_date moves, so a later, genuinely NEW
+      // renewal request naturally gets its own key instead of being
+      // silently merged into the last one.
+      idempotencyKey: `renew-${subscription.id}-${subscription.end_date}`,
+    });
+    res.json({ order, subscription });
   });
 
   /* ================= TRAINER: join (no payment) ================= */
