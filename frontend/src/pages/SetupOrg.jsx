@@ -7,9 +7,11 @@ import './../components/BorderGlow.css';
 
 // "Enterprise" on the login screen -- a gym's very first visit, before any
 // account exists. Creates the organization + its GYM_OWNER account in one
-// call (POST /auth/setup-org), then lands straight on the owner dashboard --
-// there's nothing to onboard into yet (no clients, no packages), so the
-// dashboard's own empty states carry that, not a separate wizard here.
+// call (POST /auth/setup-org), then lands on the Enterprise onboarding
+// wizard (gym profile -> package -> payment -> activation) -- see
+// EnterpriseOnboarding.jsx. After that FIRST purchase completes, the
+// owner never sees this screen or the wizard again; they land on the
+// normal Business/Enterprise dashboards from here on.
 export default function SetupOrg() {
   const { setupOrg } = useAuth();
   const nav = useNavigate();
@@ -25,7 +27,7 @@ export default function SetupOrg() {
     setBusy(true); setErr('');
     try {
       await setupOrg({ orgName, ownerName, email, password });
-      nav('/app/trainer/business');
+      nav('/app/trainer/enterprise/onboarding');
     } catch (ex) { setErr(ex.message); }
     finally { setBusy(false); }
   };

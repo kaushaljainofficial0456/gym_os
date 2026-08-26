@@ -19,6 +19,15 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // Columns added via scripts/init-db.js's guarded MIGRATIONS array (added
+  // by the Enterprise build, merged in after this file's own fixture was
+  // written), which this lightweight in-memory DB doesn't run -- same gap
+  // documented throughout the Enterprise test suite's memDb() helpers.
+  // Needed here because PUT /admin/settings now writes both this file's
+  // own community_* columns AND these gym-profile columns in one query.
+  for (const ddl of ['contact_email TEXT', 'contact_phone TEXT', 'address TEXT', 'city TEXT', 'country TEXT', 'logo_url TEXT', 'website TEXT', 'instagram_url TEXT', 'description TEXT']) {
+    db.exec(`ALTER TABLE gym_settings ADD COLUMN ${ddl}`);
+  }
   const mk = () => ({
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },

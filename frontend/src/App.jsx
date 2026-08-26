@@ -23,6 +23,8 @@ import ClientLayout from './pages/client/ClientLayout.jsx';
 // non-entry page rather than joining Login/SignUp's eager pair.
 const SetupOrg = lazy(() => import('./pages/SetupOrg.jsx'));
 const IndependentLogin = lazy(() => import('./pages/IndependentLogin.jsx'));
+const TrainerSignUp = lazy(() => import('./pages/TrainerSignUp.jsx'));
+const JoinGym = lazy(() => import('./pages/JoinGym.jsx'));
 const Dashboard = lazy(() => import('./pages/trainer/Dashboard.jsx'));
 const Clients = lazy(() => import('./pages/trainer/Clients.jsx'));
 const ClientProfile = lazy(() => import('./pages/trainer/ClientProfile.jsx'));
@@ -32,6 +34,10 @@ const Alerts = lazy(() => import('./pages/trainer/Alerts.jsx'));
 const Reports = lazy(() => import('./pages/trainer/Reports.jsx'));
 const Messages = lazy(() => import('./pages/trainer/Messages.jsx'));
 const Business = lazy(() => import('./pages/trainer/Business.jsx'));
+const EnterpriseOnboarding = lazy(() => import('./pages/trainer/EnterpriseOnboarding.jsx'));
+const EnterpriseDashboard = lazy(() => import('./pages/trainer/EnterpriseDashboard.jsx'));
+const EnterpriseQR = lazy(() => import('./pages/trainer/EnterpriseQR.jsx'));
+const EnterpriseBilling = lazy(() => import('./pages/trainer/EnterpriseBilling.jsx'));
 const Home = lazy(() => import('./pages/client/Home.jsx'));
 const Workout = lazy(() => import('./pages/client/Workout.jsx'));
 const Nutrition = lazy(() => import('./pages/client/Nutrition.jsx'));
@@ -41,6 +47,7 @@ const Profile = lazy(() => import('./pages/client/Profile.jsx'));
 const Settings = lazy(() => import('./pages/client/Settings.jsx'));
 const Help = lazy(() => import('./pages/client/Help.jsx'));
 const Community = lazy(() => import('./pages/client/Community.jsx'));
+const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 // Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
@@ -67,15 +74,28 @@ function Require({ ready, ok, fallback = '/login', children }) {
   return children;
 }
 
+// A CLIENT or TRAINER account can exist with no gym yet -- registered
+// directly (no gymCode) or self-served via /signup/trainer, waiting on a
+// QR scan to actually join an org (see auth.js's /register,
+// /register-trainer). orgId (camelCase, straight off login/register) and
+// org_id (snake_case, off /auth/me on a page refresh -- auth.jsx's own
+// comment on this pre-existing inconsistency) are both checked so this
+// never flips depending on which shape happened to load last.
+function needsGymJoin(user) {
+  return !!user && ['CLIENT', 'TRAINER'].includes(user.role) && !user.orgId && !user.org_id;
+}
+
 export default function App() {
   const { ready, user, isTrainer, isClient } = useAuth();
   const authed = !!user;
+  const pendingGym = needsGymJoin(user);
 
   return (
     <ClickSparkLazy>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/signup/trainer" element={page(TrainerSignUp)} />
       <Route path="/setup-org" element={page(SetupOrg)} />
       <Route path="/independent" element={page(IndependentLogin)} />
       {/* Design-system showcase. Intentionally unauthenticated: it renders
@@ -88,13 +108,20 @@ export default function App() {
           requires auth, enforced by the API route it calls, not by this
           route being gated. */}
       <Route path="/share/:id" element={page(SharedMeal)} />
+      {/* QR-based gym join -- any authenticated CLIENT or TRAINER with no
+          org yet lands here (see needsGymJoin above) instead of a normal
+          dashboard, which would otherwise 404/empty-state on every
+          org-scoped call it tries to make. */}
+      <Route path="/join" element={
+        <Require ready={ready} ok={() => authed && ['CLIENT', 'TRAINER'].includes(user?.role)}>{page(JoinGym)}</Require>
+      } />
       <Route path="/app" element={
         <Require ready={ready} ok={() => authed}>
-          {isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
+          {pendingGym ? <Navigate to="/join" replace /> : isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
         </Require>
       } />
       <Route path="/app/trainer" element={
-        <Require ready={ready} ok={() => authed && isTrainer} fallback={authed ? '/app/client' : '/login'}><TrainerLayout /></Require>
+        <Require ready={ready} ok={() => authed && isTrainer && !pendingGym} fallback={authed ? (pendingGym ? '/join' : '/app/client') : '/login'}><TrainerLayout /></Require>
       }>
         <Route index element={page(Dashboard)} />
         <Route path="clients" element={page(Clients)} />
@@ -105,9 +132,17 @@ export default function App() {
         <Route path="reports" element={page(Reports)} />
         <Route path="messages" element={page(Messages)} />
         <Route path="business" element={page(Business)} />
+        {/* Enterprise: SK OS billing THIS gym (packages/QR/upgrades) --
+            distinct from Business above (this gym billing ITS OWN
+            clients). Owner-only; TrainerLayout only shows the nav link
+            to isOwner, but the routes themselves are the real gate. */}
+        <Route path="enterprise" element={page(EnterpriseDashboard)} />
+        <Route path="enterprise/onboarding" element={page(EnterpriseOnboarding)} />
+        <Route path="enterprise/qr" element={page(EnterpriseQR)} />
+        <Route path="enterprise/billing" element={page(EnterpriseBilling)} />
       </Route>
       <Route path="/app/client" element={
-        <Require ready={ready} ok={() => authed && isClient} fallback={authed ? '/app/trainer' : '/login'}><ClientLayout /></Require>
+        <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : '/app/trainer') : '/login'}><ClientLayout /></Require>
       }>
         <Route index element={page(Home)} />
         <Route path="workout" element={page(Workout)} />
@@ -115,11 +150,12 @@ export default function App() {
         <Route path="nutrition-tracker" element={page(NutritionTracker)} />
         <Route path="progress" element={page(Progress)} />
         <Route path="profile" element={page(Profile)} />
+        <Route path="membership" element={page(Membership)} />
         <Route path="settings" element={page(Settings)} />
         <Route path="community" element={page(Community)} />
         <Route path="help" element={page(Help)} />
       </Route>
-      <Route path="*" element={<Navigate to={authed ? (isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={authed ? (pendingGym ? '/join' : isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
     </Routes>
     </ClickSparkLazy>
   );

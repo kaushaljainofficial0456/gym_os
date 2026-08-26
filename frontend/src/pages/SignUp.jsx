@@ -7,12 +7,16 @@ import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import './../components/BorderGlow.css';
 
-// Client self-signup -- the "New to SK OS?" path off Login. Deliberately
-// asks for only name/email/password/gym code: goal, weight, height etc.
-// are collected right after by OnboardingWizard, which ClientLayout already
-// shows automatically for any account with onboarding_completed = false.
-// The gym code is the org's slug (POST /auth/register resolves it) --
-// trainers/owners find theirs on the Business page under Gym settings.
+// Client self-signup -- the "New to SK OS?" path off Login. Asks for
+// name/email/password, and an OPTIONAL gym code: goal, weight, height
+// etc. are collected right after by OnboardingWizard, which ClientLayout
+// already shows automatically for any account with onboarding_completed
+// = false. The gym code is the org's slug (POST /auth/register resolves
+// it) -- trainers/owners find theirs on the Business page under Gym
+// settings. Leaving it blank is now a first-class path too (not a dead
+// end): the account is created with no gym yet, and App.jsx's own
+// needsGymJoin redirect sends them to /join to scan their gym's QR code
+// right after -- for someone who has the QR in hand but not a gym code.
 export default function SignUp() {
   const { register } = useAuth();
   const nav = useNavigate();
@@ -23,17 +27,20 @@ export default function SignUp() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [pendingGym, setPendingGym] = useState(false);
 
   const handleWelcomeComplete = useCallback(() => {
     setShowWelcome(false);
-    nav(consumeReturnTo() || '/app/client');
-  }, [nav]);
+    nav(pendingGym ? '/join' : (consumeReturnTo() || '/app/client'));
+  }, [nav, pendingGym]);
 
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
-      await register({ name, email, password, gymCode: gymCode.trim() });
+      const trimmedCode = gymCode.trim();
+      const { user } = await register({ name, email, password, ...(trimmedCode ? { gymCode: trimmedCode } : {}) });
+      setPendingGym(!!user.pendingGymEnrollment);
       setShowWelcome(true);
     } catch (ex) { setErr(ex.message); }
     finally { setBusy(false); }
@@ -101,9 +108,12 @@ export default function SignUp() {
                   placeholder="At least 6 characters" required minLength={6} />
               </div>
               <div>
-                <label htmlFor="gymCode" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Gym code</label>
+                <label htmlFor="gymCode" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Gym code <span style={{ color: 'var(--faint)' }}>(optional)</span></label>
                 <input id="gymCode" className="input mt-1" type="text" value={gymCode} onChange={(e) => setGymCode(e.target.value)}
-                  placeholder="e.g. ironforge-fitness" required />
+                  placeholder="Have a code? Enter it — or leave blank" />
+                <p className="text-[11px] mt-1" style={{ color: 'var(--faint)' }}>
+                  No code yet? Leave this blank — you'll scan your gym's QR code right after signing up.
+                </p>
               </div>
               {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
               <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">

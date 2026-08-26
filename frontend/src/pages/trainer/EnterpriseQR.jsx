@@ -1,0 +1,114 @@
+// ============================================================
+// ENTERPRISE QR — generate + manage single-use client/trainer
+// enrollment QR codes. The QR payload itself carries no sensitive
+// data (see enrollmentToken.js) -- just an opaque, short-lived,
+// signed reference the server resolves everything from.
+// ============================================================
+import { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { api } from '../../api.js';
+import { useFetch } from '../../utils.js';
+import { Card, PageHeader, Seg, Spinner, ErrorState, Empty, Toast } from '../../components/UI.jsx';
+
+function timeLeft(iso) {
+  const ms = Date.parse(iso) - Date.now();
+  if (ms <= 0) return 'expired';
+  const m = Math.floor(ms / 60_000);
+  return m < 60 ? `${m}m left` : `${Math.floor(m / 60)}h ${m % 60}m left`;
+}
+
+const STATUS_TONE = { AVAILABLE: 'text-good border-good/40 bg-good/10', CONSUMED: 'text-mute border-line bg-white/5', EXPIRED: 'text-warn border-warn/40 bg-warn/10', REVOKED: 'text-bad border-bad/40 bg-bad/10' };
+
+export default function EnterpriseQR() {
+  const [purpose, setPurpose] = useState('CLIENT');
+  const plans = useFetch(() => api('/admin/packages'));
+  const list = useFetch(() => api(`/enrollment/qr?purpose=${purpose}`), [purpose]);
+  const status = useFetch(() => api('/enterprise/status'));
+  const [planId, setPlanId] = useState('');
+  const [issued, setIssued] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const res = purpose === 'CLIENT'
+        ? await api('/enrollment/qr/client', { method: 'POST', body: JSON.stringify({ membershipPlanId: planId }) })
+        : await api('/enrollment/qr/trainer', { method: 'POST' });
+      setIssued(res);
+      list.reload();
+    } catch (e) { setToast(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const revoke = async (id) => {
+    try {
+      await api(`/enrollment/qr/${id}/revoke`, { method: 'POST' });
+      setToast('QR revoked'); list.reload();
+      if (issued?.id === id) setIssued(null);
+    } catch (e) { setToast(e.message); }
+  };
+
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); setToast('Copied'); } catch { setToast('Could not copy'); }
+  };
+
+  const availableCapacity = status.data?.availableCapacity ?? 0;
+
+  return (
+    <div className="space-y-6">
+      <Toast message={toast} tone={toast?.toLowerCase().includes('revoked') || toast === 'Copied' ? 'success' : 'error'} />
+      <PageHeader title="QR onboarding" sub="Generate a one-time code for a new client or trainer to scan." />
+
+      <Seg value={purpose} onChange={(v) => { setPurpose(v); setIssued(null); }} options={[{ value: 'CLIENT', label: 'Client' }, { value: 'TRAINER', label: 'Trainer' }]} />
+
+      <Card className="p-5 space-y-4">
+        {purpose === 'CLIENT' && (
+          <div>
+            <div className="text-[11px] uppercase tracking-wider font-grotesk mb-1" style={{ color: 'var(--mute)' }}>Membership plan</div>
+            <select className="input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+              <option value="">Select a plan…</option>
+              {(plans.data?.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.amount}/{p.period_days}d</option>)}
+            </select>
+            {availableCapacity === 0 && <div className="text-xs text-bad mt-2">No client capacity remaining — buy more from Billing before generating a client QR.</div>}
+          </div>
+        )}
+        <button className="btn-primary" disabled={busy || (purpose === 'CLIENT' && (!planId || availableCapacity === 0))} onClick={generate}>
+          {busy ? 'Generating…' : `Generate ${purpose === 'CLIENT' ? 'client' : 'trainer'} QR`}
+        </button>
+
+        {issued && (
+          <div className="rounded-xl border p-5 flex flex-col items-center gap-3" style={{ borderColor: 'var(--accent)' }}>
+            <QRCodeSVG value={issued.payload} size={200} bgColor="transparent" fgColor="var(--ink)" />
+            <div className="text-xs" style={{ color: 'var(--mute)' }}>{timeLeft(issued.expiresAt)}</div>
+            <button className="btn" onClick={() => copy(issued.payload)}>Copy code</button>
+          </div>
+        )}
+      </Card>
+
+      <div>
+        <div className="kicker">Recent {purpose === 'CLIENT' ? 'client' : 'trainer'} QR codes</div>
+        {list.loading ? <Spinner /> : list.error ? <ErrorState error={list.error} onRetry={list.reload} /> : !list.data?.tokens?.length ? (
+          <Empty title="No QR codes yet" hint="Generate one above to onboard your first person this way." />
+        ) : (
+          <div className="space-y-2">
+            {list.data.tokens.map((t) => (
+              <Card key={t.id} className="p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-grotesk font-semibold truncate">{t.membership_plan_name || (purpose === 'TRAINER' ? 'Trainer' : 'No plan')}</div>
+                  <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
+                    {t.status === 'CONSUMED' ? `Joined by ${t.consumed_by_name || 'someone'}` : t.status === 'AVAILABLE' ? timeLeft(t.expires_at) : t.status}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`chip border ${STATUS_TONE[t.status] || ''}`}>{t.status}</span>
+                  {t.status === 'AVAILABLE' && <button className="btn-ghost" onClick={() => revoke(t.id)}>Revoke</button>}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

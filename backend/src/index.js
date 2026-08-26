@@ -28,6 +28,9 @@ import adminRoutes from './routes/admin.js';
 import meRoutes from './routes/me.js';
 import shareRoutes from './routes/share.js';
 import clientErrorRoutes from './routes/clientError.js';
+import enterpriseRoutes from './routes/enterprise.js';
+import enrollmentRoutes from './routes/enrollment.js';
+import paymentsDevRoutes from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 import communityRoutes from './routes/community.js';
@@ -95,6 +98,14 @@ export async function buildApp() {
   // SMALLER effective ceiling than the route intends, and the client sees
   // a generic "body too large" instead of the route's specific message.
   app.use(['/api/intel', '/api/clients', '/api/me'], express.json({ limit: '8mb' }));
+  // Razorpay webhook signature verification needs the EXACT raw request
+  // bytes (re-serializing parsed JSON can silently change byte layout
+  // and break a genuinely authentic signature) -- this one path gets its
+  // body as a raw Buffer instead of parsed JSON, registered before the
+  // blanket express.json() below so it wins for this specific route.
+  // See enterprise.js's webhook handler, which converts it back to a
+  // string itself.
+  app.use('/api/enterprise/payment/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
   app.use(express.json({ limit: '1mb' }));
 
 app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.driver, ts: new Date().toISOString() }));
@@ -129,6 +140,9 @@ app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
+app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
+app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
+app.use('/api/payments', paymentsDevRoutes()); // browser-callable mock-checkout bridge (inert once a real gateway is configured) -- see paymentsDev.js
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under

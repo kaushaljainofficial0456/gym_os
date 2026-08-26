@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { z } from 'zod';
 import { validate } from '../validate.js';
+import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
 import { dayKey, addDays } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
+import { transitionMembership } from '../services/enterprise/membershipLifecycle.js';
 
 export default function adminRoutes(db) {
   const r = Router();
@@ -172,12 +174,45 @@ export default function adminRoutes(db) {
 
   r.get('/members', async (req, res) => {
     const rows = await db.q(
-      `SELECT c.id, u.name, c.status, c.goal, c.current_weight, s.plan_name, s.end_date, s.payment_status
+      `SELECT c.id, u.name, c.status, c.goal, c.current_weight, s.id AS subscription_id, s.plan_name, s.start_date, s.end_date, s.payment_status, s.lifecycle_status
          FROM clients c
          JOIN users u ON u.id = c.user_id
          LEFT JOIN subscriptions s ON s.client_id = c.id AND s.status = 'active'
         WHERE c.org_id = ? ORDER BY u.name`, [req.orgId]);
     res.json({ members: rows });
+  });
+
+  // ---- membership lifecycle actions (suspend / resume / cancel) ----
+  // "Dangerous actions require confirmation" (spec) is a frontend
+  // concern; the backend's own guard is transitionMembership's explicit
+  // state graph -- an invalid jump (e.g. cancel -> resume) is rejected
+  // outright, never silently applied.
+  const membershipActionLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
+  const MEMBERSHIP_ACTIONS = { suspend: 'SUSPENDED', resume: 'ACTIVE', pause: 'PAUSED', cancel: 'CANCELLED' };
+  r.post('/members/:clientId/membership/:action', membershipActionLimit, validate(z.object({ reason: z.string().max(500).optional() })), async (req, res) => {
+    const toStatus = MEMBERSHIP_ACTIONS[req.params.action];
+    if (!toStatus) return res.status(400).json({ error: 'Unknown membership action' });
+    const client = await requireOrgClient(req, res, req.params.clientId);
+    if (!client) return;
+    const subscription = await db.q1('SELECT * FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    if (!subscription) return res.status(404).json({ error: 'No membership found for this client' });
+    const result = await transitionMembership(db, {
+      subscriptionId: subscription.id, orgId: req.orgId, toStatus, reason: req.body.reason || null, changedBy: req.user.sub,
+    });
+    if (!result.ok) {
+      const code = result.reason === 'not_found' ? 404 : 409;
+      return res.status(code).json({ error: result.reason, from: result.from, to: result.to });
+    }
+    res.json({ ok: true, subscription: result.subscription });
+  });
+
+  r.get('/members/:clientId/membership/history', async (req, res) => {
+    const client = await requireOrgClient(req, res, req.params.clientId);
+    if (!client) return;
+    const subscription = await db.q1('SELECT id FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    if (!subscription) return res.json({ history: [] });
+    const history = await db.q('SELECT * FROM membership_status_history WHERE subscription_id = ? AND org_id = ? ORDER BY created_at DESC', [subscription.id, req.orgId]);
+    res.json({ history });
   });
 
   // ---- gym settings (branding, crowd capacity, default client permissions) ----
@@ -187,27 +222,44 @@ export default function adminRoutes(db) {
   });
 
   r.put('/settings', async (req, res) => {
-    const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, community_enabled, community_leaderboard_enabled } = req.body || {};
+    const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
+      community_enabled, community_leaderboard_enabled,
+      contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description } = req.body || {};
+    const existing = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
+    // Gym PROFILE fields (spec: "Do not allow owner to edit: gym_id,
+    // organization_id..." -- everything else, including these, IS
+    // editable) -- partial-update semantics like every other settings
+    // field here: omit a field to leave it unchanged, explicit null/''
+    // to clear it. Never touches organizations.id/slug.
+    const pick = (incoming, current) => (incoming !== undefined ? (incoming === null || incoming === '' ? null : String(incoming).slice(0, 300)) : (current ?? null));
     await db.run(
-      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, community_enabled, community_leaderboard_enabled, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
+         community_enabled, community_leaderboard_enabled,
+         contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(org_id) DO UPDATE SET brand_name=excluded.brand_name, tagline=excluded.tagline,
          crowd_capacity=excluded.crowd_capacity, crowd_enabled=excluded.crowd_enabled,
          workout_mode_default=excluded.workout_mode_default, allow_substitute=excluded.allow_substitute,
          allow_add_exercise=excluded.allow_add_exercise, allow_edit_targets=excluded.allow_edit_targets,
          community_enabled=excluded.community_enabled, community_leaderboard_enabled=excluded.community_leaderboard_enabled,
+         contact_email=excluded.contact_email, contact_phone=excluded.contact_phone, address=excluded.address,
+         city=excluded.city, country=excluded.country, logo_url=excluded.logo_url, website=excluded.website,
+         instagram_url=excluded.instagram_url, description=excluded.description,
          updated_at=excluded.updated_at`,
       [req.orgId,
-       String(brand_name ?? 'SK OS').slice(0, 40),
-       String(tagline ?? 'Your fitness OS.').slice(0, 80),
-       Math.max(1, Math.min(2000, parseInt(crowd_capacity, 10) || 150)),
-       crowd_enabled === false || crowd_enabled === 0 ? 0 : 1,
-       ['prescribed','custom','hybrid'].includes(workout_mode_default) ? workout_mode_default : 'hybrid',
-       allow_substitute === false || allow_substitute === 0 ? 0 : 1,
-       allow_add_exercise === false || allow_add_exercise === 0 ? 0 : 1,
-       allow_edit_targets === false || allow_edit_targets === 0 ? 0 : 1,
-       community_enabled === false || community_enabled === 0 ? 0 : 1,
-       community_leaderboard_enabled === false || community_leaderboard_enabled === 0 ? 0 : 1,
+       String(brand_name ?? existing?.brand_name ?? 'SK OS').slice(0, 40),
+       String(tagline ?? existing?.tagline ?? 'Your fitness OS.').slice(0, 80),
+       Math.max(1, Math.min(2000, parseInt(crowd_capacity, 10) || existing?.crowd_capacity || 150)),
+       crowd_enabled === false || crowd_enabled === 0 ? 0 : (crowd_enabled === undefined ? (existing?.crowd_enabled ?? 1) : 1),
+       ['prescribed','custom','hybrid'].includes(workout_mode_default) ? workout_mode_default : (existing?.workout_mode_default || 'hybrid'),
+       allow_substitute === false || allow_substitute === 0 ? 0 : (allow_substitute === undefined ? (existing?.allow_substitute ?? 1) : 1),
+       allow_add_exercise === false || allow_add_exercise === 0 ? 0 : (allow_add_exercise === undefined ? (existing?.allow_add_exercise ?? 1) : 1),
+       allow_edit_targets === false || allow_edit_targets === 0 ? 0 : (allow_edit_targets === undefined ? (existing?.allow_edit_targets ?? 1) : 1),
+       community_enabled === false || community_enabled === 0 ? 0 : (community_enabled === undefined ? (existing?.community_enabled ?? 1) : 1),
+       community_leaderboard_enabled === false || community_leaderboard_enabled === 0 ? 0 : (community_leaderboard_enabled === undefined ? (existing?.community_leaderboard_enabled ?? 1) : 1),
+       pick(contact_email, existing?.contact_email), pick(contact_phone, existing?.contact_phone), pick(address, existing?.address),
+       pick(city, existing?.city), pick(country, existing?.country), pick(logo_url, existing?.logo_url),
+       pick(website, existing?.website), pick(instagram_url, existing?.instagram_url), pick(description, existing?.description),
        now()]);
     track(db, 'gym_settings_updated', req.orgId, req.user.sub, {});
     res.json({ ok: true });
