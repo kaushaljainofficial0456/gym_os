@@ -91,11 +91,15 @@ async function mockCreateOrder({ amount, currency, receipt }) {
   return { providerOrderId, status: 'CREATED' };
 }
 
-/** TEST-ONLY: simulates the gateway completing a checkout -- returns the
+/** Simulates the gateway completing a checkout -- returns the
  *  { paymentId, signature } a real checkout would hand back to the
  *  frontend, for exercising the full verify path end to end without a
- *  browser or real gateway. `outcome` lets a test simulate success or
- *  failure without needing a second code path. */
+ *  browser or real gateway. `outcome` lets a caller simulate success or
+ *  failure without needing a second code path. Used by the test suite
+ *  directly, AND (only while providerName() === 'mock') by
+ *  routes/paymentsDev.js's POST /mock/complete, the one browser-callable
+ *  stand-in for a real gateway's checkout widget in local/dev use --
+ *  see that file's header comment for why this is safe. */
 export function mockSimulateCheckout(providerOrderId, { outcome = 'success' } = {}) {
   const order = _mockOrders.get(providerOrderId);
   if (!order) throw new Error(`mockSimulateCheckout: unknown order ${providerOrderId}`);
@@ -128,7 +132,14 @@ export function mockBuildWebhookEvent(providerOrderId, { eventType = 'payment.ca
 }
 
 /* ------------------------------------------------------------------ */
-/*  Razorpay provider — real API shape, gated, not yet live-tested      */
+/*  Razorpay provider — real API shape, gated behind PAYMENT_PROVIDER=
+    razorpay + both real keys. Order creation is LIVE-TESTED against
+    Razorpay's real TEST-mode Orders API (see scripts/payment-smoke.js,
+    run 2026-08-26 -- confirmed a real order_id back). Checkout-widget
+    completion and webhook delivery are NOT live-tested -- those need a
+    real browser session (PaymentCheckout.jsx) and a webhook URL
+    registered in the Razorpay dashboard, neither of which an
+    unattended script can drive.                                      */
 /* ------------------------------------------------------------------ */
 
 async function razorpayCreateOrder({ amount, currency, receipt, notes }) {

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { api, getStoredUser, setSession, clearSession } from './api.js';
+import { api, getStoredUser, setSession, setToken, setStoredUser, clearSession } from './api.js';
 
 const AuthCtx = createContext(null);
 
@@ -31,6 +31,19 @@ export function AuthProvider({ children }) {
     return { user: res.user, clientId: res.clientId };
   };
 
+  // Self-serve TRAINER signup -- no gym yet (org_id null, role TRAINER).
+  // Distinct from `register` (which is CLIENT-shaped and hits a
+  // different backend route) rather than overloading one function with
+  // a role switch, matching how setupOrg/loginWithGoogle are already
+  // each their own named action for their own distinct account-creation
+  // story.
+  const registerTrainer = async (data) => {
+    const res = await api('/auth/register-trainer', { method: 'POST', body: JSON.stringify(data) });
+    setSession(res);
+    setUser(res.user);
+    return res.user;
+  };
+
   const completeOnboarding = async (data) => {
     await api('/auth/complete-onboarding', { method: 'POST', body: JSON.stringify(data) });
   };
@@ -56,6 +69,21 @@ export function AuthProvider({ children }) {
 
   const logout = () => { clearSession(); setUser(null); location.href = '/login'; };
 
+  // Called after a QR join/renewal/trainer-join completes and the API
+  // handed back a FRESH token (org membership just changed mid-session,
+  // so the old token's stale claims are no longer good enough -- see
+  // enrollment.js's own comment on why each of those routes re-signs).
+  // Re-fetches /auth/me under the new token rather than trusting a
+  // caller-assembled user object, so this can never drift from what the
+  // server actually thinks is true.
+  const refreshSession = async (newToken) => {
+    if (newToken) setToken(newToken);
+    const { user: u } = await api('/auth/me');
+    setStoredUser(u);
+    setUser(u);
+    return u;
+  };
+
   const isTrainer = user && ['GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'].includes(user.role);
   const isOwner = user && ['GYM_OWNER', 'SUPER_ADMIN'].includes(user.role);
   const isClient = user && user.role === 'CLIENT';
@@ -66,7 +94,7 @@ export function AuthProvider({ children }) {
   const isIndependent = isClient && (user.orgSlug === 'independent' || user.org_slug === 'independent');
 
   return (
-    <AuthCtx.Provider value={{ user, ready, login, register, setupOrg, loginWithGoogle, completeOnboarding, logout, isTrainer, isOwner, isClient, isIndependent }}>
+    <AuthCtx.Provider value={{ user, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -372,3 +372,29 @@ test('tenant isolation: Gym A owner cannot suspend, view, or act on Gym B\'s cli
   const statusA = await api.call('GET', '/api/enterprise/status', undefined, ownerA.token);
   assert.equal(statusA.json.purchasedCapacity, 0);
 });
+
+// Regression: GET /qr joins enrollment_tokens against packages (for
+// membership_plan_name) -- once a real packages row exists for the org
+// (both tables have org_id AND status columns), an unqualified WHERE
+// clause becomes genuinely ambiguous and SQLite rejects the query
+// outright. Caught live in browser verification, not by any earlier
+// automated test -- none had a packages row in scope when calling this
+// route. See enrollment.js's GET /qr for the fix (every condition now
+// prefixed with the enrollment_tokens alias).
+test('GET /enrollment/qr does not 500 once the org has a real client-facing membership plan (packages row)', async (t) => {
+  const db = await memDb(); await seedPricing(db);
+  const api = await startApp(db); t.after(() => api.close());
+  const owner = await setupOwner(api, 'ownerqrbug@test.in', 'QR Bug Gym');
+  await buyPackage(api, owner.token, 75);
+  await db.run(`INSERT INTO packages (id, org_id, name, amount, currency, period_days, status) VALUES ('plan_qrbug', ?, 'Monthly', 1500, 'INR', 30, 'active')`, [owner.orgId]);
+  await api.call('POST', '/api/enrollment/qr/client', { membershipPlanId: 'plan_qrbug' }, owner.token);
+
+  const list = await api.call('GET', '/api/enrollment/qr?purpose=CLIENT', undefined, owner.token);
+  assert.equal(list.status, 200, JSON.stringify(list.json));
+  assert.equal(list.json.tokens.length, 1);
+  assert.equal(list.json.tokens[0].membership_plan_name, 'Monthly');
+
+  const filteredByStatus = await api.call('GET', '/api/enrollment/qr?status=AVAILABLE', undefined, owner.token);
+  assert.equal(filteredByStatus.status, 200, JSON.stringify(filteredByStatus.json));
+  assert.equal(filteredByStatus.json.tokens.length, 1);
+});

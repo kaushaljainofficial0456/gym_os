@@ -28,6 +28,7 @@ const ICON_PATHS = {
   chart: 'M4 20V13M11 20V6M18 20v-9',
   mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
   business: 'M4 21V9l8-5 8 5v12M9 21v-6h6v6',
+  enterprise: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M9 11h.01M9 8h.01M15 11h.01M15 8h.01',
   menu: 'M4 7h16M4 12h16M4 17h16',
   close: 'M6 6l12 12M18 6 6 18',
   signOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
@@ -46,7 +47,9 @@ export default function TrainerLayout() {
   const { user, logout, isOwner } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
-  const links = isOwner ? [...NAV, { to: '/app/trainer/business', label: 'Business', icon: 'business' }] : NAV;
+  const links = isOwner
+    ? [...NAV, { to: '/app/trainer/business', label: 'Business', icon: 'business' }, { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' }]
+    : NAV;
 
   /* Closed by default, on every screen size — the sidebar used to sit
      permanently open, eating a fixed 240px on every trainer screen

@@ -182,9 +182,18 @@ export default function enrollmentRoutes(db) {
     // allow-list instead (anything else is silently ignored, not an error).
     const purpose = ['CLIENT', 'TRAINER'].includes(req.query.purpose) ? req.query.purpose : null;
     const status = ['AVAILABLE', 'CONSUMED', 'EXPIRED', 'REVOKED'].includes(req.query.status) ? req.query.status : null;
-    const conds = ['org_id = ?']; const params = [req.orgId];
-    if (purpose) { conds.push('purpose = ?'); params.push(purpose); }
-    if (status) { conds.push('status = ?'); params.push(status); }
+    // Every condition is prefixed with the enrollment_tokens alias (t.) --
+    // packages ALSO has org_id and status columns (see its own guarded
+    // status migration), so once a membership plan row exists for this
+    // org, an unqualified `org_id = ?`/`status = ?` becomes genuinely
+    // ambiguous across the joined tables and SQLite rejects the whole
+    // query outright. Caught live in browser verification, not by any
+    // existing automated test (none had a `packages` row AND called this
+    // route in the same test) -- see hardeningPass2.test.js's tenant-
+    // isolation test for where this is now covered going forward.
+    const conds = ['t.org_id = ?']; const params = [req.orgId];
+    if (purpose) { conds.push('t.purpose = ?'); params.push(purpose); }
+    if (status) { conds.push('t.status = ?'); params.push(status); }
     const rows = await db.q(
       `SELECT t.*, u.name AS consumed_by_name, p.name AS membership_plan_name
          FROM enrollment_tokens t
@@ -306,6 +315,19 @@ export default function enrollmentRoutes(db) {
       setAuthCookie(res, token);
     }
     res.json({ ok: true, membershipActive: !!client, token });
+  });
+
+  /* ================= CLIENT: my membership ================= */
+  // The one client-facing read of "what am I actually subscribed to,
+  // where" -- the frontend's Membership page (and the renew button on
+  // it) is the only consumer; no other client-facing route exposed this
+  // before now.
+  r.get('/client/membership', clientOnly, async (req, res) => {
+    const client = await db.q1('SELECT id, org_id FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.json({ membership: null });
+    const subscription = await db.q1('SELECT * FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    const org = client.org_id ? await db.q1('SELECT id, name FROM organizations WHERE id = ?', [client.org_id]) : null;
+    res.json({ membership: subscription, gym: org });
   });
 
   /* ================= CLIENT: renew ================= */

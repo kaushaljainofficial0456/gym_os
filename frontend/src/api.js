@@ -27,6 +27,13 @@ export const setSession = ({ token, user }) => {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
+// Enterprise/enrollment routes that change a user's org membership mid-
+// session (QR join/verify, trainer join) return a FRESH token but not a
+// full user object in the shape /auth/me returns -- see auth.jsx's
+// refreshSession(), which pairs this with a re-fetch of /auth/me so the
+// stored user object never drifts out of sync with the stored token.
+export const setToken = (token) => { localStorage.setItem(TOKEN_KEY, token); };
+export const setStoredUser = (user) => { localStorage.setItem(USER_KEY, JSON.stringify(user)); };
 export const clearSession = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
@@ -51,6 +58,12 @@ export async function api(path, opts = {}) {
     // lookup's 'not_found' vs 'network_error' vs 'invalid_barcode') so a
     // caller can branch without parsing the human-readable message text.
     err.reason = data.reason;
+    // Generic passthrough of the full error body -- some routes attach
+    // extra structured fields beyond message/issues/reason (e.g. the
+    // Enterprise downgrade-blocked response's own human-readable
+    // `message` plus `activeClients`/`requestedCapacity`). Additive:
+    // nothing that only reads err.message/.issues/.reason is affected.
+    err.data = data;
     throw err;
   }
   return data;

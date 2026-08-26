@@ -229,13 +229,21 @@ export default function Login() {
                   </BorderGlow>
                 </form>
 
-                {/* Gym-code signup only applies to clients -- trainers and
-                    owners are created by an owner or via Enterprise, never
-                    self-serve. */}
+                {/* Self-serve signup exists for CLIENT and TRAINER (both
+                    join a gym afterward by scanning its QR code -- see
+                    /signup and /signup/trainer). Owners still only arrive
+                    via Enterprise (/setup-org), never a self-serve form
+                    here -- creating a gym is a genuinely different action. */}
                 {roleHint === 'CLIENT' && (
                   <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
                     New to SK OS?{' '}
                     <Link to="/signup" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
+                  </div>
+                )}
+                {roleHint === 'TRAINER' && (
+                  <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
+                    New to SK OS?{' '}
+                    <Link to="/signup/trainer" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
                   </div>
                 )}
 

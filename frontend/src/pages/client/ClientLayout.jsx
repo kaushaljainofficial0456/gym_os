@@ -35,6 +35,7 @@ const PROFILE_MENU = [
   { to: '/app/client/profile', label: 'Measurements', icon: 'ruler' },
   { to: '/app/client/profile', label: 'Goals', icon: 'target' },
   { to: '/app/client/nutrition-tracker', label: 'Nutrition Tracker', icon: 'food' },
+  { to: '/app/client/membership', label: 'Membership', icon: 'clipboard' },
   // Was '⚙️'/'❓' -- literal emoji, neither a key in Icon.jsx's PATHS table,
   // same bug class this file's own comment above already flags as fixed
   // at 9 other sites. 'bulb' has no dedicated question-mark glyph in the

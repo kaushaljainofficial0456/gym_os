@@ -30,6 +30,7 @@ import shareRoutes from './routes/share.js';
 import clientErrorRoutes from './routes/clientError.js';
 import enterpriseRoutes from './routes/enterprise.js';
 import enrollmentRoutes from './routes/enrollment.js';
+import paymentsDevRoutes from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 
@@ -139,6 +140,7 @@ app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods 
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
+app.use('/api/payments', paymentsDevRoutes()); // browser-callable mock-checkout bridge (inert once a real gateway is configured) -- see paymentsDev.js
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under

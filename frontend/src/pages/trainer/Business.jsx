@@ -15,6 +15,39 @@ const greeting = () => {
 
 const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
+// Membership lifecycle actions -- backed by membershipLifecycle.js's
+// explicit state graph on the server (an invalid jump like cancel ->
+// resume is rejected there, not just hidden here). Dangerous actions
+// (suspend/cancel) ask for confirmation, per spec.
+const MEMBERSHIP_TONE = {
+  ACTIVE: 'text-good border-good/40 bg-good/10', PAUSED: 'text-warn border-warn/40 bg-warn/10',
+  SUSPENDED: 'text-warn border-warn/40 bg-warn/10', EXPIRED: 'text-bad border-bad/40 bg-bad/10',
+  CANCELLED: 'text-mute border-line bg-white/5', REFUND_PENDING: 'text-warn border-warn/40 bg-warn/10',
+  REFUNDED: 'text-mute border-line bg-white/5',
+};
+function MembershipActions({ member, onChanged, onError }) {
+  const [busy, setBusy] = useState(false);
+  const act = async (action, confirmMsg) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    setBusy(true);
+    try {
+      await api(`/admin/members/${member.id}/membership/${action}`, { method: 'POST', body: JSON.stringify({}) });
+      onChanged();
+    } catch (e) { onError(e.data?.message || e.message); }
+    finally { setBusy(false); }
+  };
+  const s = member.lifecycle_status;
+  return (
+    <div className="flex gap-1.5 justify-end">
+      {s === 'ACTIVE' && <button className="btn-ghost !text-[11px] !px-2 !py-1" disabled={busy} onClick={() => act('suspend', `Suspend ${member.name}'s membership?`)}>Suspend</button>}
+      {s === 'SUSPENDED' || s === 'PAUSED' ? <button className="btn-ghost !text-[11px] !px-2 !py-1" disabled={busy} onClick={() => act('resume')}>Resume</button> : null}
+      {(s === 'ACTIVE' || s === 'SUSPENDED' || s === 'PAUSED') && (
+        <button className="btn-ghost !text-[11px] !px-2 !py-1 text-bad" disabled={busy} onClick={() => act('cancel', `Cancel ${member.name}'s membership? This cannot be undone.`)}>Cancel</button>
+      )}
+    </div>
+  );
+}
+
 export default function Business() {
   const { user } = useAuth();
   const ov = useFetch(() => api('/admin/overview'));
@@ -291,6 +324,8 @@ export default function Business() {
                 <th className="py-2.5 pr-3 font-semibold">Plan</th>
                 <th className="py-2.5 pr-3 font-semibold">Renews</th>
                 <th className="py-2.5 pr-3 font-semibold">Status</th>
+                <th className="py-2.5 pr-3 font-semibold">Membership</th>
+                <th className="py-2.5 pr-3 font-semibold"></th>
               </tr>
             </thead>
             <tbody>
@@ -305,6 +340,14 @@ export default function Business() {
                     <span className={`chip border ${m.payment_status === 'paid' ? 'text-good border-good/40 bg-good/10' : m.payment_status === 'overdue' ? 'text-bad border-bad/40 bg-bad/10' : 'text-mute border-line bg-white/5'}`}>
                       {(m.payment_status || '—').toUpperCase()}
                     </span>
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    {m.lifecycle_status && (
+                      <span className={`chip border ${MEMBERSHIP_TONE[m.lifecycle_status] || 'text-mute border-line bg-white/5'}`}>{m.lifecycle_status}</span>
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    {m.subscription_id && <MembershipActions member={m} onChanged={() => { members.reload(); setToast('Updated'); }} onError={(msg) => setToast(msg)} />}
                   </td>
                 </tr>
               ))}
