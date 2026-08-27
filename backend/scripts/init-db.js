@@ -187,6 +187,11 @@ const MIGRATIONS = [
   ['gym_settings', 'website', `website TEXT`],
   ['gym_settings', 'instagram_url', `instagram_url TEXT`],
   ['gym_settings', 'description', `description TEXT`],
+  // Phase 2 -- multi-branch: optional, additive. A user's PRIMARY org
+  // relationship (users.org_id) may also have a primary branch; NULL
+  // for every existing row (single-branch orgs) until a branch is
+  // actually created and assigned -- see gymMemberships.js.
+  ['users', 'branch_id', `branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

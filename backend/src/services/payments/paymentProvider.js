@@ -155,9 +155,84 @@ async function razorpayCreateOrder({ amount, currency, receipt, notes }) {
   return { providerOrderId: data.id, status: 'CREATED' };
 }
 
+/** Fetches an order's LATEST payment attempt from the gateway itself. */
+async function razorpayFetchOrderStatus(providerOrderId) {
+  const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${providerOrderId}/payments`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  if (res.status === 404) return { found: false };
+  if (!res.ok) throw new Error(`razorpay order-status fetch ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json();
+  const payments = data.items || [];
+  if (!payments.length) return { found: true, status: 'CREATED', amount: null, currency: null, providerPaymentId: null };
+  // Razorpay returns payment attempts oldest-first -- the last item is
+  // the most recent attempt, which is the order's current truth.
+  const latest = payments[payments.length - 1];
+  const statusMap = { created: 'CREATED', authorized: 'PROCESSING', captured: 'SUCCESS', failed: 'FAILED', refunded: 'REFUNDED' };
+  return {
+    found: true,
+    status: statusMap[latest.status] || null,
+    amount: latest.amount != null ? latest.amount / 100 : null,
+    currency: latest.currency || null,
+    providerPaymentId: latest.id,
+  };
+}
+
+function mockFetchOrderStatus(providerOrderId) {
+  const order = _mockOrders.get(providerOrderId);
+  if (!order) return { found: false };
+  const statusMap = { created: 'CREATED', paid: 'SUCCESS', failed: 'FAILED' };
+  return {
+    found: true,
+    status: statusMap[order.status] || null,
+    amount: order.amount != null ? order.amount / 100 : null,
+    currency: order.currency || null,
+    providerPaymentId: order.paymentId || null,
+  };
+}
+
+async function razorpayRefundPayment({ providerPaymentId, amount, notes }) {
+  const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+  const body = { notes: notes || {} };
+  if (amount != null) body.amount = Math.round(amount * 100); // omitted entirely = full refund of whatever remains captured
+  const res = await fetch(`https://api.razorpay.com/v1/payments/${providerPaymentId}/refund`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`razorpay refund ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json();
+  return { providerRefundId: data.id, status: data.status === 'processed' ? 'SUCCESS' : 'PROCESSING' };
+}
+
+function mockRefundPayment({ providerPaymentId }) {
+  if (!providerPaymentId) throw new Error('mockRefundPayment: providerPaymentId required');
+  return { providerRefundId: 'mock_rfnd_' + crypto.randomBytes(8).toString('hex'), status: 'SUCCESS' };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Public, provider-agnostic API                                      */
 /* ------------------------------------------------------------------ */
+
+/** Fetches the gateway's own view of an order's payment status --
+ *  independent of anything SK OS has stored. Used ONLY by the
+ *  reconciliation sweep (services/payments/reconciliation.js) to detect
+ *  drift between what we believe happened and what the provider
+ *  actually recorded -- never used to activate anything directly (only
+ *  a verified webhook/checkout-signature does that; see
+ *  paymentActivation.js's own header comment on why). */
+export async function fetchProviderOrderStatus(providerOrderId) {
+  return providerName() === 'razorpay' ? razorpayFetchOrderStatus(providerOrderId) : mockFetchOrderStatus(providerOrderId);
+}
+
+/** Issues a refund against a captured payment at the gateway. `amount`
+ *  is in RUPEES (converted to paise for Razorpay internally, matching
+ *  every other amount in this file) -- omit for a full refund of
+ *  whatever remains captured. Returns { providerRefundId, status }. */
+export async function refundProviderPayment({ providerPaymentId, amount, notes }) {
+  return providerName() === 'razorpay' ? razorpayRefundPayment({ providerPaymentId, amount, notes }) : mockRefundPayment({ providerPaymentId, amount });
+}
 
 /** Creates a gateway order. Caller MUST have already resolved amount/
  *  currency SERVER-SIDE (see paymentOrders.js) -- this function trusts

@@ -149,7 +149,7 @@ export async function todaySession(db, clientId, tz) {
       const token = mlCanonicalExerciseId({ animationKey: e.animation_key, isGlobal: e.is_global });
       if (token) mlExerciseCanonical[e.exercise_id] = token;
     }
-    const previewCalorie = await estimateWorkoutCalories(previewInput, { mlExerciseCanonical });
+    const previewCalorie = await estimateWorkoutCalories(previewInput, { mlExerciseCanonical, db, stage: 'preview' });
     calorie = {
       ...previewCalorie,
       source: 'preview',

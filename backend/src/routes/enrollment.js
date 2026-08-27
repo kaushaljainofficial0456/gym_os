@@ -29,6 +29,7 @@ import { id, now } from '../ids.js';
 import { track } from '../services/events.js';
 import { issueEnrollmentToken, verifyEnrollmentToken, consumeEnrollmentToken, revokeEnrollmentToken } from '../services/enterprise/enrollmentToken.js';
 import { getOrgBillingSnapshot, reserveCapacitySlot, releaseCapacitySlot } from '../services/enterprise/subscriptionLifecycle.js';
+import { syncPrimaryMembership } from '../services/enterprise/gymMemberships.js';
 import { notify, notifyOwners } from '../services/enterprise/notifications.js';
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, registerActivationHandler, registerReleaseHandler } from '../services/payments/paymentActivation.js';
@@ -105,6 +106,10 @@ registerActivationHandler('CLIENT_MEMBERSHIP', async (db, order, tx) => {
   await tx.run(
     `INSERT INTO clients (id, user_id, org_id, status, goal, created_at) VALUES (?, ?, ?, 'ON_TRACK', 'GENERAL', ?)`,
     [clientId, userId, orgId, nowIso]);
+  // Phase 2: mirrors the primary org_id/role relationship into
+  // gym_memberships too, in the SAME transaction -- see
+  // gymMemberships.js's own header comment.
+  await syncPrimaryMembership(tx, { userId, orgId, role: 'CLIENT' });
   // NOTE: the provisional reservation made at /client/join time (see
   // reserveCapacitySlot) is released by the registerReleaseHandler
   // call below, which paymentActivation.js fires in the SAME
@@ -377,6 +382,7 @@ export default function enrollmentRoutes(db) {
     // approval is required: activate immediately").
     await db.run('UPDATE users SET org_id = ? WHERE id = ?', [org.id, req.user.sub]);
     await db.run(`INSERT INTO trainers (user_id, org_id, status) VALUES (?, ?, 'ACTIVE')`, [req.user.sub, org.id]);
+    await syncPrimaryMembership(db, { userId: req.user.sub, orgId: org.id, role: 'TRAINER' }).catch(() => {});
     await notifyOwners(db, org.id, { type: 'trainer_joined', title: 'A trainer joined your gym', data: { trainerId: req.user.sub } });
     await track(db, { type: 'trainer_enrolled', orgId: org.id, userId: req.user.sub, data: { tokenId: consumed.token.id } }).catch(() => {});
     // Fresh token: this activation is synchronous (no payment step), so

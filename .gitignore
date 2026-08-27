@@ -20,3 +20,8 @@ build/
 .vscode/
 .DS_Store
 Thumbs.db.freebuff/
+
+# Claude Code local-only state -- launch.json (dev server configs) is
+# shared/committed; personal permissions and worktree checkouts are not.
+.claude/settings.local.json
+.claude/worktrees/
