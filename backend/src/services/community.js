@@ -5,6 +5,7 @@
 import { id, now } from '../ids.js';
 import { dayKey, todayKey } from '../utils/time.js';
 import { track } from './events.js';
+import { isFeatureEnabled } from './platform/featureFlags.js';
 
 // ---- Membership ----
 
@@ -27,7 +28,22 @@ export async function setMembership(db, clientId, orgId, enabled) {
 
 // ---- Gym settings helpers ----
 
+// Two independent layers, both must allow it: the PLATFORM's own
+// 'community' rollout flag (SK OS deciding which gyms see the feature
+// at all -- global off / percentage rollout / a specific-gym allow-
+// list, via the Admin Console's Feature Flags page) AND the gym
+// owner's own community_enabled toggle in gym_settings (their
+// preference, once the platform has made it available to them at
+// all). This is feature-flag adoption's first real call site --
+// isFeatureEnabled() existed and was tested since Phase 3c but nothing
+// actually called it until now. A 'community' flag row is seeded by
+// init-db.js at enabled=100% so this introduces ZERO behavior change
+// for any existing gym on deploy -- it only starts to matter the
+// moment a platform operator actually dials the rollout down for some
+// orgs, which is the entire point.
 export async function getCommunitySettings(db, orgId) {
+  const platformEnabled = await isFeatureEnabled(db, 'community', { orgId });
+  if (!platformEnabled) return { community_enabled: false, leaderboard_enabled: false };
   const s = await db.q1(
     'SELECT community_enabled, community_leaderboard_enabled FROM gym_settings WHERE org_id = ?',
     [orgId]);

@@ -19,6 +19,14 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // scripts/init-db.js seeds a 'community' feature flag ENABLED at 100%
+  // (see seedDefaultFeatureFlags) so getCommunitySettings' new platform-
+  // level gate never disables community by default -- this lightweight
+  // in-memory DB doesn't run that seed step, so every test in this file
+  // would otherwise see community as platform-disabled. Same gap as the
+  // MIGRATIONS backfill immediately below, different init-db.js step.
+  db.exec(`INSERT INTO feature_flags (id, key, name, enabled, rollout_percentage, enabled_org_ids_json, created_at, updated_at)
+           VALUES ('flag_test_community', 'community', 'Gym Community', 1, 100, '[]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
   // Columns added via scripts/init-db.js's guarded MIGRATIONS array (added
   // by the Enterprise build, merged in after this file's own fixture was
   // written), which this lightweight in-memory DB doesn't run -- same gap
@@ -590,4 +598,50 @@ test('share: cross-gym share cannot be deleted', async (t) => {
   // Arjun (o1) tries to delete CrossGyms (o2) share — must get 404 (share not found in o1 scope)
   const r = await call('DELETE', `/api/community/shares/${s.json.id}`);
   assert.equal(r.status, 404, 'Cross-gym share deletion blocked');
+});
+
+// ---------------------------------------------------------------
+// PLATFORM-LEVEL FEATURE FLAG GATE (isFeatureEnabled adoption)
+// ---------------------------------------------------------------
+
+test('platform flag: disabling the community flag globally turns it off for a gym even though the gym\'s OWN toggle is still on', async (t) => {
+  const { db, call, close } = await startApi();
+  t.after(() => close());
+
+  const before = await call('GET', '/api/community/membership');
+  assert.equal(before.json.settings.community_enabled, true, 'on by default -- the seeded flag is 100% enabled');
+
+  await db.run(`UPDATE feature_flags SET enabled = 0 WHERE key = 'community'`);
+
+  const after = await call('GET', '/api/community/membership');
+  assert.equal(after.json.settings.community_enabled, false);
+  assert.equal(after.json.settings.leaderboard_enabled, false);
+
+  const leaderboards = await call('GET', '/api/community/leaderboards?period=week');
+  assert.deepEqual(leaderboards.json.leaderboards, { streak: [], volume: [], completedWorkouts: [] }, 'platform-disabled behaves exactly like gym-disabled -- empty boards, not an error');
+});
+
+test('platform flag: a per-org allow-list entry overrides a 0% rollout for that specific gym only', async (t) => {
+  const { db, call, close, token } = await startApi();
+  t.after(() => close());
+
+  await db.run(`UPDATE feature_flags SET enabled = 1, rollout_percentage = 0, enabled_org_ids_json = '["o1"]' WHERE key = 'community'`);
+
+  const o1 = await call('GET', '/api/community/membership', undefined, token('u1', 'CLIENT', 'o1'));
+  assert.equal(o1.json.settings.community_enabled, true, 'o1 is on the explicit allow-list -- always wins regardless of rollout %');
+
+  const o2 = await call('GET', '/api/community/membership', undefined, token('u4', 'CLIENT', 'o2'));
+  assert.equal(o2.json.settings.community_enabled, false, 'o2 is NOT on the allow-list and rollout is 0% -- stays off');
+});
+
+test('platform flag: still respects the gym owner\'s OWN toggle once the platform allows it -- neither layer can force the other on', async (t) => {
+  const { db, call, close } = await startApi();
+  t.after(() => close());
+  // Platform stays fully enabled (the seeded default); turn OFF the
+  // gym's own toggle and confirm platform-on + gym-off still nets to
+  // disabled -- the platform flag only ever RESTRICTS, it never
+  // overrides a gym owner's own choice to keep it off.
+  await db.run(`UPDATE gym_settings SET community_enabled = 0 WHERE org_id = 'o1'`);
+  const r = await call('GET', '/api/community/membership');
+  assert.equal(r.json.settings.community_enabled, false, 'gym owner turned it off -- platform being 100% enabled must not override that');
 });

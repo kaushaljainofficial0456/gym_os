@@ -84,7 +84,7 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
 
   doc.fillColor('#000').fontSize(16).text(`Invoice ${invoice.invoice_number}`);
   doc.fontSize(10).fillColor('#666');
-  doc.text(`Issued: ${invoice.issued_at.slice(0, 10)}`);
+  doc.text(`Issued: ${String(invoice.issued_at).slice(0, 10)}`);
   doc.text(`Status: ${invoice.status}`);
   doc.moveDown(1);
 
