@@ -9,6 +9,7 @@ import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
 import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
+import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -256,6 +257,7 @@ export default function ClientLayout() {
 
       {/* ── MAIN CONTENT ── */}
       <div key={loc.pathname} className="anim-fadeUp pt-4">
+        <AnnouncementBanner />
         <Outlet context={homeCtx} />
       </div>
 

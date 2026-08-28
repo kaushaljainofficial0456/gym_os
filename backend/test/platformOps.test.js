@@ -261,10 +261,12 @@ test('toCsv: a null/undefined value renders as an empty field, never the literal
 async function startApp(db) {
   const authRoutes = (await import('../src/routes/auth.js')).default;
   const consoleRoutes = (await import('../src/routes/console.js')).default;
+  const meRoutes = (await import('../src/routes/me.js')).default;
   const app = express();
   app.use(express.json());
   app.use('/api/auth', authRoutes(db));
   app.use('/api/console', consoleRoutes(db));
+  app.use('/api/me', meRoutes(db));
   const server = app.listen(0);
   await new Promise((r) => server.on('listening', r));
   const port = server.address().port;
@@ -290,6 +292,15 @@ async function createSuperAdmin(db, api, email = 'admin@sk-os.test') {
   await db.run(`INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at) VALUES (?, NULL, ?, ?, 'SUPER_ADMIN', ?, 1, ?)`,
     [userId, email, await hashPassword('adminpass1'), 'Platform Admin', now()]);
   const login = await api.call('POST', '/api/auth/login', { email, password: 'adminpass1' });
+  assert.equal(login.status, 200, JSON.stringify(login.json));
+  return { token: login.json.token, userId };
+}
+
+async function createOrgUser(db, api, { orgId, role, email, password = 'userpass1' }) {
+  const userId = id('usr');
+  await db.run(`INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+    [userId, orgId, email, await hashPassword(password), role, `${role} user`, now()]);
+  const login = await api.call('POST', '/api/auth/login', { email, password });
   assert.equal(login.status, 200, JSON.stringify(login.json));
   return { token: login.json.token, userId };
 }
@@ -364,6 +375,33 @@ test('announcements: full CRUD via HTTP including the active-preview endpoint', 
   assert.ok(audit.json.logs.some((l) => l.action === 'announcement_created'));
   assert.ok(audit.json.logs.some((l) => l.action === 'announcement_updated'));
   assert.ok(audit.json.logs.some((l) => l.action === 'announcement_deleted'));
+});
+
+test('GET /api/me/announcements: the only announcement path a non-SUPER_ADMIN role can reach, audience derived from the caller\'s own role', async (t) => {
+  const db = await memDb();
+  const api = await startApp(db); t.after(() => api.close());
+  const admin = await createSuperAdmin(db, api);
+  await seedOrg(db, 'org1');
+  const owner = await createOrgUser(db, api, { orgId: 'org1', role: 'GYM_OWNER', email: 'owner@sk-os.test' });
+  const trainer = await createOrgUser(db, api, { orgId: 'org1', role: 'TRAINER', email: 'trainer@sk-os.test' });
+  const client = await createOrgUser(db, api, { orgId: 'org1', role: 'CLIENT', email: 'client@sk-os.test' });
+
+  await api.call('POST', '/api/console/announcements', { title: 'For owners', message: 'Owner-only notice', audience: 'OWNERS' }, admin.token);
+  await api.call('POST', '/api/console/announcements', { title: 'For everyone', message: 'Platform-wide notice', audience: 'ALL' }, admin.token);
+
+  const ownerView = await api.call('GET', '/api/me/announcements', undefined, owner.token);
+  assert.equal(ownerView.status, 200);
+  assert.equal(ownerView.json.announcements.length, 2, 'owner sees the OWNERS-only notice plus the ALL notice');
+
+  const trainerView = await api.call('GET', '/api/me/announcements', undefined, trainer.token);
+  assert.equal(trainerView.json.announcements.length, 1, 'trainer does not see the OWNERS-only notice');
+  assert.equal(trainerView.json.announcements[0].title, 'For everyone');
+
+  const clientView = await api.call('GET', '/api/me/announcements', undefined, client.token);
+  assert.equal(clientView.json.announcements.length, 1, 'client does not see the OWNERS-only notice');
+
+  const noAuth = await api.call('GET', '/api/me/announcements', undefined, undefined);
+  assert.equal(noAuth.status, 401, 'still requires authentication -- not a fully public route');
 });
 
 test('GET /api/console/system/health + /system/errors via HTTP', async (t) => {

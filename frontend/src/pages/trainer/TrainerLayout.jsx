@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
 import LineNavList from '../../components/LineNavList.jsx';
+import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import '../../components/LineNavList.css';
 
 const NAV = [
@@ -175,6 +176,7 @@ export default function TrainerLayout() {
       </AnimatePresence>
 
       <main className="p-4 md:p-8 max-w-7xl mx-auto">
+        <AnnouncementBanner />
         <div key={loc.pathname} className="anim-fadeUp">
           <Outlet />
         </div>
