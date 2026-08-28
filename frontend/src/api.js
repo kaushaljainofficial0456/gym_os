@@ -39,6 +39,31 @@ export const clearSession = () => {
   localStorage.removeItem(USER_KEY);
 };
 
+// Downloads a binary response (e.g. an invoice PDF) with the auth header
+// a plain <a href> download can't carry -- same pattern as admin/'s own
+// downloadCsv() helper. api()'s JSON-only parsing can't be reused here.
+export async function downloadFile(path, filename) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const res = await fetch('/api' + path, { headers, credentials: 'include' });
+  if (res.status === 401) {
+    clearSession();
+    if (!location.pathname.startsWith('/login')) location.href = '/login';
+    throw new Error('Session expired');
+  }
+  if (!res.ok) throw new Error('Download failed');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   const token = getToken();

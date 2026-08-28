@@ -132,6 +132,10 @@ const MIGRATIONS = [
   ['ai_food_estimates', 'validation_status', `validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`],
   ['ai_food_estimates', 'version', `version INTEGER NOT NULL DEFAULT 1`],
 
+  // --- gym community: org-level feature toggles ---
+  ['gym_settings', 'community_enabled', `community_enabled INTEGER NOT NULL DEFAULT 1`],
+  ['gym_settings', 'community_leaderboard_enabled', `community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1`],
+
   // --- Enterprise: gym-owner SaaS billing + QR enrollment ---
   // `packages` (a gym's OWN client-membership-plan catalog, e.g.
   // "Monthly -- Rs.1,500") is reused as-is for the Enterprise spec's
@@ -183,6 +187,15 @@ const MIGRATIONS = [
   ['gym_settings', 'website', `website TEXT`],
   ['gym_settings', 'instagram_url', `instagram_url TEXT`],
   ['gym_settings', 'description', `description TEXT`],
+  // Phase 2 -- multi-branch: optional, additive. A user's PRIMARY org
+  // relationship (users.org_id) may also have a primary branch; NULL
+  // for every existing row (single-branch orgs) until a branch is
+  // actually created and assigned -- see gymMemberships.js.
+  ['users', 'branch_id', `branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL`],
+  // "Email Invoice" (gap #9 of the production-hardening handoff) --
+  // NULL means never emailed, or every attempt so far failed. See
+  // emailProvider.js.
+  ['invoices', 'emailed_at', `emailed_at TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -246,6 +259,28 @@ async function seedDefaultPricing(exec) {
       UNION ALL SELECT '${addon50}', 50, 7750, 'INR', 1, 'active', '${nowIso}', '${nowIso}'
     ) seed
     WHERE NOT EXISTS (SELECT 1 FROM sk_capacity_addons);
+  `);
+}
+
+// Seeds the 'community' feature flag ENABLED at 100% rollout -- this is
+// the first real call site for isFeatureEnabled() (see
+// services/community.js's getCommunitySettings), and community was
+// already live/on for every gym before that flag existed. Seeding it
+// pre-enabled means introducing the platform-level gate changes NO
+// existing gym's behavior on deploy; a platform operator only sees an
+// effect once they deliberately dial the rollout down (or add specific
+// orgs to a reduced rollout) via the Admin Console's Feature Flags page.
+// ON CONFLICT(key) DO NOTHING, not a UNION-ALL/WHERE-NOT-EXISTS dance
+// like seedDefaultPricing above -- a single row with its own UNIQUE
+// key is exactly what ON CONFLICT is for, and it's portable across
+// both SQLite and Postgres here (already relied on elsewhere in this
+// file, e.g. gym_onboarding's upsert).
+async function seedDefaultFeatureFlags(exec) {
+  const nowIso = now();
+  await exec(`
+    INSERT INTO feature_flags (id, key, name, description, enabled, rollout_percentage, enabled_org_ids_json, created_at, updated_at)
+    VALUES ('${id('flag')}', 'community', 'Gym Community', 'Leaderboards, workout sharing, and copy-workout -- platform-wide rollout control, layered on top of each gym owner''s own community_enabled setting.', 1, 100, '[]', '${nowIso}', '${nowIso}')
+    ON CONFLICT (key) DO NOTHING;
   `);
 }
 
@@ -361,6 +396,7 @@ if (config.databaseUrl) {
   await pool.query(sql);
   await applyPgMigrations(pool);
   await seedDefaultPricing((s) => pool.query(s));
+  await seedDefaultFeatureFlags((s) => pool.query(s));
   // Defense-in-depth: Row-Level Security policies (PG only; idempotent).
   const rlsPath = path.join(root, 'database', 'rls.sql');
   if (fs.existsSync(rlsPath)) {
@@ -378,6 +414,7 @@ if (config.databaseUrl) {
   db.exec(fs.readFileSync(schemaPath, 'utf8'));
   applySqliteMigrations(db);
   await seedDefaultPricing((s) => db.exec(s));
+  await seedDefaultFeatureFlags((s) => db.exec(s));
   db.close();
   console.log(`Schema applied to SQLite at ${dbPath}`);
 }

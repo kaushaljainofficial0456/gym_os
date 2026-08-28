@@ -30,6 +30,7 @@ import {
 } from '../services/intelligence/foodAI.js';
 import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
 import { submitFeedback } from '../services/intelligence/foodFeedback.js';
+import { listActiveAnnouncements } from '../services/platform/announcements.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -79,6 +80,17 @@ export default function meRoutes(db) {
   r.delete('/avatar', async (req, res) => {
     await db.run('UPDATE users SET avatar = NULL WHERE id = ?', [req.user.sub]);
     res.json({ ok: true });
+  });
+
+  // ---------------- platform announcements ----------------
+  // The only consumption path for platform_announcements -- console.js's
+  // CRUD is SUPER_ADMIN-only, so this route (any authenticated role, via
+  // this router's plain requireAuth) is what a banner in frontend/ calls.
+  // Audience is derived from the caller's own role, never client input.
+  const ROLE_AUDIENCE = { GYM_OWNER: 'OWNERS', TRAINER: 'TRAINERS', CLIENT: 'CLIENTS' };
+  r.get('/announcements', async (req, res) => {
+    const audience = ROLE_AUDIENCE[req.user.role] || 'ALL';
+    res.json({ announcements: await listActiveAnnouncements(db, { audience }) });
   });
 
   // ---------------- personal profile / goal --------------

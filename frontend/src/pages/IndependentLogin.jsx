@@ -3,31 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
+import { loadGoogleIdentity } from '../googleIdentity.js';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const GSI_SRC = 'https://accounts.google.com/gsi/client';
-
-// Lazily loads Google Identity Services' script exactly once, however many
-// times this component mounts -- a second <script> tag would re-run GIS's
-// own init and can throw. Mirrors the app's established lazy-boundary
-// pattern (SplashCursorLazy, ClickSparkLazy): nothing is downloaded until
-// a visitor actually reaches this page.
-let gsiPromise = null;
-function loadGsi() {
-  if (window.google?.accounts?.id) return Promise.resolve();
-  if (!gsiPromise) {
-    gsiPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = GSI_SRC;
-      s.async = true;
-      s.defer = true;
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Could not load Google Sign-In. Check your connection and try again.'));
-      document.head.appendChild(s);
-    });
-  }
-  return gsiPromise;
-}
 
 // "Independent client" on the login screen -- no gym, no gym code, so the
 // gym-code SignUp.jsx flow doesn't apply. One-tap identity via Google
@@ -56,7 +34,7 @@ export default function IndependentLogin() {
       } catch (ex) { setErr(ex.message); setBusy(false); }
     };
 
-    loadGsi().then(() => {
+    loadGoogleIdentity().then(() => {
       if (cancelled) return;
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,

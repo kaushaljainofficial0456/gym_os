@@ -39,6 +39,17 @@ import {
 const _activationHandlers = new Map(); // subject_type -> async (db, order, tx) => void
 const _releaseHandlers = new Map();    // subject_type -> async (db, order, tx) => void
 
+// How stale an unprocessed payment_events row must be before a NEW
+// delivery of the same event is allowed to re-attempt finalize+activate
+// (see recordWebhookEvent). Long enough that two genuinely-simultaneous
+// deliveries of the same event (sub-second apart -- the provider double-
+// sending, or our own concurrent-request handling) still see each other
+// as "in flight" and correctly short-circuit as a duplicate rather than
+// racing _finalizeOrder's transaction twice; short enough that a REAL
+// crash (activation handler threw) recovers on the provider's own next
+// webhook retry, not stuck forever.
+const WEBHOOK_RETRY_STALE_MS = 30_000;
+
 /** Registered by the domain module that owns a subject_type. Called
  *  exactly once, inside the SAME transaction that marks the order
  *  SUCCESS, the first time (and only the first time) an order for that
@@ -83,28 +94,65 @@ export async function recordCheckoutVerification(db, { orderId, providerPaymentI
  */
 export async function recordWebhookEvent(db, { rawBody, signature }) {
   if (!verifyWebhookSignature(rawBody, signature)) return { ok: false, reason: 'invalid_webhook_signature' };
-  const parsed = parseWebhookPayload(rawBody);
+  let parsed;
+  try {
+    parsed = parseWebhookPayload(rawBody);
+  } catch {
+    // Genuinely malformed JSON -- nothing to retry, not the same as the
+    // "activation crashed" case below. Returned (not thrown) so the
+    // webhook route can tell the two apart and answer 400 vs 500
+    // correctly (a 500 is what makes the provider retry the delivery).
+    return { ok: false, reason: 'malformed_webhook_payload' };
+  }
   const status = mapProviderEventToStatus(parsed.eventType);
   if (!status) return { ok: false, reason: 'unrecognized_event_type', eventType: parsed.eventType };
 
   const order = parsed.providerOrderId
     ? await db.q1('SELECT * FROM payment_orders WHERE provider_order_id = ?', [parsed.providerOrderId])
     : null;
+  const provider = order?.provider || 'unknown';
+  const eventKey = parsed.providerOrderId ? `${parsed.eventType}:${parsed.providerOrderId}:${parsed.providerPaymentId || ''}` : null;
 
   // Log the raw event FIRST, unconditionally -- this is the
   // reconciliation source of truth even for an order we can't resolve
   // or a duplicate we're about to skip. The UNIQUE(provider, provider_event_id)
-  // constraint is the actual duplicate-delivery guard: a second delivery
-  // of the same event hits it and we catch that specifically.
-  const eventId = id('pevt');
-  try {
-    await db.run(
-      `INSERT INTO payment_events (id, provider, provider_event_id, event_type, order_id, payload_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [eventId, order?.provider || 'unknown', parsed.providerOrderId ? `${parsed.eventType}:${parsed.providerOrderId}:${parsed.providerPaymentId || ''}` : eventId, parsed.eventType, order?.id || null, rawBody, now()]);
-  } catch (e) {
-    if (String(e.message).includes('UNIQUE')) return { ok: true, duplicate: true, reason: 'duplicate_webhook_delivery' };
-    throw e;
+  // constraint is the actual duplicate-delivery guard.
+  //
+  // payment_events.processed_at is NULL until successfully handled (see
+  // its own schema comment: "a crash mid-handling leaves this NULL so a
+  // retry is safe") -- but the ORIGINAL code here never honored that: it
+  // treated ANY existing row for this event key as "already handled,
+  // skip", so a delivery whose activation handler threw was silently
+  // swallowed on every subsequent retry forever, never actually
+  // recovering. Check processed_at first; only a STALE unprocessed row
+  // (older than WEBHOOK_RETRY_STALE_MS) is safe to re-attempt -- a
+  // FRESH one (younger than that) is presumed still genuinely in flight
+  // (e.g. a near-simultaneous duplicate delivery) and is reported as a
+  // duplicate exactly as before, rather than racing a second
+  // _finalizeOrder transaction against the one still running.
+  let eventId;
+  if (eventKey) {
+    const existing = await db.q1('SELECT id, processed_at, created_at FROM payment_events WHERE provider = ? AND provider_event_id = ?', [provider, eventKey]);
+    if (existing) {
+      const stale = !existing.processed_at && (Date.now() - Date.parse(existing.created_at)) >= WEBHOOK_RETRY_STALE_MS;
+      if (!stale) return { ok: true, duplicate: true, reason: 'duplicate_webhook_delivery' };
+      eventId = existing.id; // a past attempt crashed before finishing -- reuse the row, don't insert a second one
+    }
+  }
+  if (!eventId) {
+    eventId = id('pevt');
+    try {
+      await db.run(
+        `INSERT INTO payment_events (id, provider, provider_event_id, event_type, order_id, payload_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [eventId, provider, eventKey || eventId, parsed.eventType, order?.id || null, rawBody, now()]);
+    } catch (e) {
+      if (!String(e.message).includes('UNIQUE')) throw e;
+      // Lost a race against a concurrent delivery of the exact same
+      // event -- by construction this is sub-second-fresh, well under
+      // the staleness threshold, so it's always a genuine duplicate.
+      return { ok: true, duplicate: true, reason: 'duplicate_webhook_delivery' };
+    }
   }
 
   if (!order) return { ok: false, reason: 'order_not_found', eventType: parsed.eventType };
@@ -114,6 +162,22 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
   });
   await db.run('UPDATE payment_events SET processed_at = ? WHERE id = ?', [now(), eventId]);
   return result;
+}
+
+/**
+ * THIRD entry point to the same idempotent _finalizeOrder path below --
+ * used only by the reconciliation sweep (services/payments/
+ * reconciliation.js) when it finds an order the PROVIDER confirms
+ * succeeded but SK OS still shows stuck in a non-terminal state (e.g. a
+ * webhook whose activation handler crashed and was never successfully
+ * retried, or a checkout-return that never made it back to the
+ * browser). Deliberately doesn't touch payment_events at all -- this
+ * isn't a webhook delivery, there's no event to dedup against.
+ * _finalizeOrder's own idempotency guard on payment_orders.status is
+ * what keeps this safe to call even if a genuine webhook is racing it.
+ */
+export async function recoverOrderFromProvider(db, order, { providerPaymentId, amount, currency, status }) {
+  return _finalizeOrder(db, order, { providerPaymentId, amount, currency, status, source: 'reconciliation_recovery' });
 }
 
 /**

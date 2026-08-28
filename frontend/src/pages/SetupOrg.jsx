@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { useTheme } from '../themeContext.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
+import { loadGoogleIdentity } from '../googleIdentity.js';
 import './../components/BorderGlow.css';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 // "Enterprise" on the login screen -- a gym's very first visit, before any
 // account exists. Creates the organization + its GYM_OWNER account in one
@@ -13,14 +17,17 @@ import './../components/BorderGlow.css';
 // owner never sees this screen or the wizard again; they land on the
 // normal Business/Enterprise dashboards from here on.
 export default function SetupOrg() {
-  const { setupOrg } = useAuth();
+  const { setupOrg, loginWithGoogleEnterprise } = useAuth();
   const nav = useNavigate();
+  const { theme } = useTheme();
   const [orgName, setOrgName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const orgNameRef = useRef(orgName);
+  orgNameRef.current = orgName; // read fresh inside the GIS callback below, which closes over render-time values otherwise
 
   const submit = async (e) => {
     e.preventDefault();
@@ -31,6 +38,50 @@ export default function SetupOrg() {
     } catch (ex) { setErr(ex.message); }
     finally { setBusy(false); }
   };
+
+  // "Continue with Google" -- an existing GYM_OWNER logs straight in; a
+  // brand-new signup needs a gym name (Google never supplies one), so
+  // this reuses the SAME "Gym / studio name" field the password form
+  // already has above rather than asking twice. If it's empty when they
+  // click, this fails with a friendly inline message instead of ever
+  // reaching the backend with a name-less signup.
+  const googleBtnRef = useRef(null);
+  const [googleReady, setGoogleReady] = useState(false);
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let cancelled = false;
+
+    const handleCredential = async (response) => {
+      if (!orgNameRef.current.trim()) {
+        setErr('Enter your gym / studio name above first, then continue with Google.');
+        return;
+      }
+      setBusy(true); setErr('');
+      try {
+        await loginWithGoogleEnterprise(response.credential, orgNameRef.current.trim());
+        nav('/app/trainer/enterprise/onboarding');
+      } catch (ex) { setErr(ex.message); setBusy(false); }
+    };
+
+    loadGoogleIdentity().then(() => {
+      if (cancelled) return;
+      window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredential, auto_select: false });
+      if (googleBtnRef.current) {
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          type: 'standard',
+          theme: theme === 'dark' ? 'filled_black' : 'outline',
+          size: 'large',
+          shape: 'pill',
+          text: 'continue_with',
+          logo_alignment: 'left',
+          width: 320,
+        });
+      }
+      setGoogleReady(true);
+    }).catch((ex) => setErr(ex.message));
+
+    return () => { cancelled = true; };
+  }, [theme]);
 
   return (
     <>
@@ -97,13 +148,28 @@ export default function SetupOrg() {
                 <input id="setup-password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters" required minLength={6} />
               </div>
-              {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
               <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
                 <button className="btn-primary w-full !py-3" disabled={busy}>
                   {busy ? 'Setting up…' : 'Create my gym'}
                 </button>
               </BorderGlow>
             </form>
+
+            {GOOGLE_CLIENT_ID && (
+              <div className="mt-5">
+                <div className="flex items-center gap-3 text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--faint)' }}>
+                  <div className="flex-1 h-px" style={{ background: 'var(--line)' }} />
+                  or
+                  <div className="flex-1 h-px" style={{ background: 'var(--line)' }} />
+                </div>
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <div ref={googleBtnRef} className="min-h-[44px]" />
+                  {!googleReady && <div className="text-xs" style={{ color: 'var(--faint)' }}>Loading Google sign-in…</div>}
+                </div>
+              </div>
+            )}
+
+            {err && <div className="mt-4 text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
 
             <div className="mt-6 text-center text-sm" style={{ color: 'var(--mute)' }}>
               Already have an account?{' '}

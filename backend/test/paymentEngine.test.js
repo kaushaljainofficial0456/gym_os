@@ -10,6 +10,7 @@
 // ============================================================
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -242,4 +243,64 @@ test('a failed payment (payment.failed webhook) marks the order FAILED, never ac
   assert.equal(activated, 0);
   const row = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [order.id]);
   assert.equal(row.status, 'FAILED');
+});
+
+test('recordWebhookEvent: a malformed (non-JSON) body is reported, never thrown, never logged', async () => {
+  const db = await memDb();
+  await seedOrg(db);
+  const rawBody = 'not-json-at-all';
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'mock-webhook-secret';
+  const signature = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const result = await recordWebhookEvent(db, { rawBody, signature });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'malformed_webhook_payload');
+  const events = await db.q('SELECT * FROM payment_events');
+  assert.equal(events.length, 0, 'a malformed payload never gets logged as a real event');
+});
+
+test('recordWebhookEvent: a delivery whose activation handler crashes is retryable once stale, but not before (payment recovery)', async () => {
+  const db = await memDb();
+  await seedOrg(db);
+  let attempts = 0;
+  registerActivationHandler('CLIENT_MEMBERSHIP', async () => {
+    attempts++;
+    if (attempts === 1) throw new Error('simulated activation crash');
+  });
+  const order = await createPaymentOrder(db, { subjectType: 'CLIENT_MEMBERSHIP', subjectId: 'enr1', orgId: 'o1', amount: 1500 });
+  mockSimulateCheckout(order.provider_order_id);
+  const { body, signature } = mockBuildWebhookEvent(order.provider_order_id);
+
+  // First delivery: activation handler throws -- the whole finalize
+  // transaction (status flip to SUCCESS included) rolls back with it.
+  // The provider genuinely got charged; SK OS must not look like it
+  // never happened, and must not be stuck that way forever.
+  await assert.rejects(() => recordWebhookEvent(db, { rawBody: body, signature }));
+  let row = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [order.id]);
+  assert.notEqual(row.status, 'SUCCESS', 'a crashed activation must not leave the order looking successful');
+  let events = await db.q('SELECT * FROM payment_events');
+  assert.equal(events.length, 1);
+  assert.equal(events[0].processed_at, null, 'processed_at stays NULL after a crash -- this is what makes a retry possible');
+
+  // An immediate redelivery (well within the staleness window) must
+  // still be treated as an in-flight duplicate, not retried yet -- this
+  // is what keeps the genuinely-concurrent-duplicate scenario safe
+  // (see the "TWO SIMULTANEOUS" test above).
+  const immediateRetry = await recordWebhookEvent(db, { rawBody: body, signature });
+  assert.equal(immediateRetry.ok, true);
+  assert.equal(immediateRetry.duplicate, true);
+  assert.equal(attempts, 1, 'an immediate redelivery must not re-attempt activation yet');
+
+  // Simulate real time passing (the provider's own retry, minutes/hours
+  // later) by backdating the logged event past the staleness threshold.
+  await db.run(`UPDATE payment_events SET created_at = ? WHERE order_id = ?`, ['2020-01-01T00:00:00Z', order.id]);
+
+  const staleRetry = await recordWebhookEvent(db, { rawBody: body, signature });
+  assert.equal(staleRetry.ok, true);
+  assert.equal(staleRetry.alreadyFinalized, false);
+  assert.equal(attempts, 2, 'a stale (crashed) delivery must be re-attempted');
+  row = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [order.id]);
+  assert.equal(row.status, 'SUCCESS');
+  events = await db.q('SELECT * FROM payment_events');
+  assert.equal(events.length, 1, 'the SAME event row is reused across retries, never duplicated');
+  assert.ok(events[0].processed_at, 'processed_at is finally stamped once activation actually succeeds');
 });

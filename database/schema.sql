@@ -402,6 +402,8 @@ CREATE TABLE IF NOT EXISTS gym_settings (
   allow_substitute  INTEGER NOT NULL DEFAULT 1,
   allow_add_exercise INTEGER NOT NULL DEFAULT 1,
   allow_edit_targets INTEGER NOT NULL DEFAULT 1,
+  community_enabled INTEGER NOT NULL DEFAULT 1,
+  community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1,
   updated_at   TEXT
 );
 
@@ -824,6 +826,32 @@ CREATE TABLE IF NOT EXISTS ai_provider_cost_state (
 );
 
 -- ============================================================
+-- GYM COMMUNITY — opt-in participation, leaderboards, workout sharing
+-- ============================================================
+
+-- Per-client opt-in to gym community (privacy-first: default OFF)
+CREATE TABLE IF NOT EXISTS community_members (
+  client_id   TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  enabled     INTEGER NOT NULL DEFAULT 0,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_community_members_org ON community_members(org_id, enabled);
+
+-- Workout shares visible within a gym's community feed
+CREATE TABLE IF NOT EXISTS community_workout_shares (
+  id           TEXT PRIMARY KEY,
+  org_id       TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id    TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workout_id   TEXT NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+  workout_name TEXT NOT NULL,
+  payload      TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cws_org_feed ON community_workout_shares(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_cws_client ON community_workout_shares(client_id);
+
+-- ============================================================
 -- SK OS ENTERPRISE — gym-owner SaaS billing, QR enrollment, payments
 -- ============================================================
 -- NAMING, so this never collides with the EXISTING client-facing
@@ -1089,7 +1117,12 @@ CREATE TABLE IF NOT EXISTS invoices (
   tax_amount     REAL NOT NULL DEFAULT 0,
   status         TEXT NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED','VOID')),
   issued_at      TEXT NOT NULL,
-  created_at     TEXT NOT NULL
+  created_at     TEXT NOT NULL,
+  -- Set on a successful "Email Invoice" send (see emailProvider.js);
+  -- NULL means never emailed, or every attempt so far failed. Informational
+  -- only -- re-sending is always allowed, this just lets the UI show
+  -- "Emailed Aug 28" instead of nothing.
+  emailed_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_org ON invoices(org_id, issued_at);
 
@@ -1173,3 +1206,231 @@ CREATE TABLE IF NOT EXISTS membership_status_history (
   created_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_membership_history_sub ON membership_status_history(subscription_id, created_at);
+
+-- ============================================================
+-- PHASE 1 PRODUCTION HARDENING -- refunds + reconciliation.
+-- ============================================================
+
+-- Refund engine. ONE row per refund ATTEMPT against a payment_order --
+-- a single order can accumulate several PARTIAL refund rows over time;
+-- the refundable remainder is always DERIVED (order.amount minus the
+-- SUM of this table's own SUCCESS rows for that order, see refunds.js),
+-- never stored as a separate counter that could drift out of sync.
+-- payment_orders.amount itself is NEVER mutated by a refund.
+CREATE TABLE IF NOT EXISTS refunds (
+  id                  TEXT PRIMARY KEY,
+  payment_order_id    TEXT NOT NULL REFERENCES payment_orders(id) ON DELETE CASCADE,
+  org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id           TEXT REFERENCES clients(id),
+  type                TEXT NOT NULL CHECK (type IN ('FULL','PARTIAL')),
+  amount              REAL NOT NULL,
+  currency            TEXT NOT NULL DEFAULT 'INR',
+  status              TEXT NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED','PROCESSING','SUCCESS','FAILED','CANCELLED')),
+  provider_refund_id  TEXT,
+  reason              TEXT,
+  failure_reason      TEXT,
+  initiated_by        TEXT REFERENCES users(id),
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(payment_order_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_org ON refunds(org_id, created_at);
+
+-- Payment reconciliation. One row per DETECTED mismatch between SK OS's
+-- own records and the payment provider's -- never a mechanism for
+-- silently correcting either side (see reconciliation.js's own header
+-- comment). A sweep that finds nothing wrong creates no rows at all.
+CREATE TABLE IF NOT EXISTS reconciliation_issues (
+  id                TEXT PRIMARY KEY,
+  payment_order_id  TEXT REFERENCES payment_orders(id) ON DELETE CASCADE,
+  org_id            TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  issue_type        TEXT NOT NULL CHECK (issue_type IN ('STATUS_MISMATCH','AMOUNT_MISMATCH','CURRENCY_MISMATCH','MISSING_LOCALLY','STUCK_NON_TERMINAL','RECOVERED')),
+  expected_json     TEXT,             -- SK OS's own recorded state at detection time
+  actual_json       TEXT,             -- the provider's reported state at detection time
+  status            TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','RESOLVED','DISMISSED')),
+  note              TEXT,
+  created_at        TEXT NOT NULL,
+  resolved_at       TEXT,
+  resolved_by       TEXT REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_org ON reconciliation_issues(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_order ON reconciliation_issues(payment_order_id);
+
+-- ============================================================
+-- PHASE 2 PRODUCTION HARDENING -- multi-gym identity + branches.
+--
+-- users.org_id/trainers/clients are UNCHANGED and remain the PRIMARY
+-- (single, default) org relationship every existing route already
+-- reads -- see auth.js's own header comment on why rewriting that
+-- everywhere at once would be a big-bang rewrite this pass explicitly
+-- avoids. gym_memberships is ADDITIVE: a user can hold further
+-- memberships at OTHER orgs (a trainer working two gyms, a manager
+-- helping run a second location) without ever needing a second user
+-- account -- see services/enterprise/gymMemberships.js.
+-- ============================================================
+
+-- A gym organization's physical locations. Single-branch orgs are
+-- completely unaffected -- nothing existing reads or requires this
+-- table; it exists so the architecture can grow into multi-branch
+-- without a later redesign, per the hardening spec's own instruction
+-- not to force this into the UI before it's needed.
+CREATE TABLE IF NOT EXISTS branches (
+  id            TEXT PRIMARY KEY,
+  org_id        TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  address       TEXT,
+  phone         TEXT,
+  status        TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','INACTIVE')),
+  timezone      TEXT,
+  settings_json TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_branches_org ON branches(org_id, status);
+
+-- One row per (user, org) the user has ANY relationship with -- the
+-- user's role AT THAT SPECIFIC GYM, which can differ from their
+-- primary users.role (e.g. a TRAINER at their home gym who also holds
+-- a MANAGER membership helping run a second location). Deliberately
+-- NOT named anything with "membership" alone -- that word already
+-- means a client's paid billing plan in this schema (packages/
+-- subscriptions) -- "gym_memberships" is unambiguous alongside it.
+-- MANAGER/STAFF are introduced HERE rather than widening users.role's
+-- existing CHECK constraint: every prior hardening pass in this
+-- codebase adds a NEW column/table for a NEW enum rather than
+-- rewriting an existing CHECK on a live NOT NULL column (see
+-- subscriptions.lifecycle_status for the established precedent) --
+-- gym_memberships.role is also the architecturally correct home for a
+-- PER-GYM role in a multi-gym system, since users.role alone becomes
+-- ambiguous the moment a user belongs to more than one gym.
+CREATE TABLE IF NOT EXISTS gym_memberships (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id   TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  role        TEXT NOT NULL CHECK (role IN ('SUPER_ADMIN','GYM_OWNER','MANAGER','STAFF','TRAINER','CLIENT')),
+  status      TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('PENDING','ACTIVE','PAUSED','SUSPENDED','EXPIRED','CANCELLED','TRANSFERRED')),
+  joined_at   TEXT NOT NULL,
+  left_at     TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  UNIQUE(user_id, org_id)
+);
+CREATE INDEX IF NOT EXISTS idx_gym_memberships_user ON gym_memberships(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_gym_memberships_org ON gym_memberships(org_id, status);
+
+-- ============================================================
+-- PHASE 3 PRODUCTION HARDENING -- Admin Console audit log.
+--
+-- Every SENSITIVE action taken through the separate Admin Console
+-- (suspend/reactivate a gym, resolve a reconciliation issue, etc.)
+-- writes one immutable row here -- see routes/console.js's own
+-- writeAuditLog() helper, the only thing that ever inserts into this
+-- table. Append-only from the Admin Console UI by construction: no
+-- route in this codebase updates or deletes a row here.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id          TEXT PRIMARY KEY,
+  admin_id    TEXT NOT NULL REFERENCES users(id),
+  action      TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id   TEXT,
+  before_json TEXT,
+  after_json  TEXT,
+  ip          TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_logs(admin_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_entity ON admin_audit_logs(entity_type, entity_id);
+
+-- ============================================================
+-- PHASE 3B -- Support tickets. Confirmed complete blank slate before
+-- this pass (no placeholder table, no partial route) -- built from
+-- scratch, gym-owner-facing (their own org's tickets) and platform-
+-- wide (Admin Console) both read/write the SAME two tables.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id                TEXT PRIMARY KEY,
+  org_id            TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_by        TEXT NOT NULL REFERENCES users(id),
+  category          TEXT NOT NULL CHECK (category IN ('PAYMENT','SUBSCRIPTION','QR','CLIENT','TRAINER','ACCOUNT','TECHNICAL','BILLING','OTHER')),
+  priority          TEXT NOT NULL DEFAULT 'MEDIUM' CHECK (priority IN ('LOW','MEDIUM','HIGH','URGENT')),
+  status            TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','IN_PROGRESS','WAITING_FOR_GYM','RESOLVED','CLOSED')),
+  subject           TEXT NOT NULL,
+  assigned_admin_id TEXT REFERENCES users(id),
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_org ON support_tickets(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status, priority);
+
+-- The internal messages (admin-only notes) are the one field this whole
+-- subsystem exists to keep safely separate -- see tickets.js's own
+-- comment: the gym-owner-facing read path filters these out at the
+-- QUERY level, not just in the UI.
+CREATE TABLE IF NOT EXISTS support_messages (
+  id         TEXT PRIMARY KEY,
+  ticket_id  TEXT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  author_id  TEXT NOT NULL REFERENCES users(id),
+  body       TEXT NOT NULL,
+  internal   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_support_messages_ticket ON support_messages(ticket_id, created_at);
+
+-- ============================================================
+-- PHASE 3B -- Fraud/risk monitoring. Confirmed complete blank slate
+-- before this pass. Scoped to detectors this codebase can honestly run
+-- from data it already collects (see riskEngine.js) -- no IP/device
+-- fingerprinting exists anywhere here, so "multiple accounts from the
+-- same device/IP" is deliberately NOT one of them; inventing that
+-- signal from data that doesn't exist would be exactly the kind of
+-- fabrication the hardening spec forbids elsewhere.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS risk_events (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT REFERENCES organizations(id) ON DELETE CASCADE,
+  entity_type TEXT NOT NULL,   -- 'user' | 'org'
+  entity_id   TEXT NOT NULL,
+  reason      TEXT NOT NULL CHECK (reason IN ('RAPID_QR_GENERATION', 'MULTIPLE_FAILED_PAYMENTS', 'UNUSUAL_REFUND_VOLUME')),
+  risk_score  INTEGER NOT NULL DEFAULT 0,
+  detail_json TEXT,
+  status      TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED')),
+  note        TEXT,
+  created_at  TEXT NOT NULL,
+  resolved_at TEXT,
+  resolved_by TEXT REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_risk_events_org ON risk_events(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_risk_events_entity ON risk_events(entity_type, entity_id);
+
+-- ============================================================
+-- PHASE 3C -- feature flags + platform announcements. Both confirmed
+-- complete blank slates before this pass.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS feature_flags (
+  id                   TEXT PRIMARY KEY,
+  key                  TEXT NOT NULL UNIQUE,
+  name                 TEXT NOT NULL,
+  description          TEXT,
+  enabled              INTEGER NOT NULL DEFAULT 0,
+  rollout_percentage   INTEGER NOT NULL DEFAULT 100 CHECK (rollout_percentage BETWEEN 0 AND 100),
+  enabled_org_ids_json TEXT,   -- JSON array of org ids always-on regardless of rollout %
+  created_by           TEXT REFERENCES users(id),
+  created_at           TEXT NOT NULL,
+  updated_at           TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS platform_announcements (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  audience   TEXT NOT NULL DEFAULT 'ALL' CHECK (audience IN ('ALL', 'OWNERS', 'TRAINERS', 'CLIENTS')),
+  priority   TEXT NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
+  starts_at  TEXT,
+  ends_at    TEXT,
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_announcements_window ON platform_announcements(starts_at, ends_at);

@@ -9,6 +9,7 @@ import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
 import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
+import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -41,6 +42,7 @@ const PROFILE_MENU = [
   // at 9 other sites. 'bulb' has no dedicated question-mark glyph in the
   // shared icon set; it's the closest semantic fit ("here's something to
   // know") rather than adding a one-off icon for a single menu row.
+  { to: '/app/client/community', label: 'Community', icon: 'users' },
   { to: '/app/client/settings', label: 'Settings', icon: 'settings' },
   { to: '/app/client/help', label: 'Help', icon: 'bulb' },
 ];
@@ -255,6 +257,7 @@ export default function ClientLayout() {
 
       {/* ── MAIN CONTENT ── */}
       <div key={loc.pathname} className="anim-fadeUp pt-4">
+        <AnnouncementBanner />
         <Outlet context={homeCtx} />
       </div>
 

@@ -67,6 +67,18 @@ export function AuthProvider({ children }) {
     return res.user;
   };
 
+  // "Enterprise" screen's Google option -- same ID-token verification as
+  // above, but a SEPARATE backend route (POST /auth/google/enterprise):
+  // an existing GYM_OWNER logs straight in; a brand-new signup creates a
+  // real org (needs orgName, which Google never supplies -- see
+  // SetupOrg.jsx for where that comes from), mirroring setupOrg() above.
+  const loginWithGoogleEnterprise = async (credential, orgName) => {
+    const res = await api('/auth/google/enterprise', { method: 'POST', body: JSON.stringify({ credential, orgName }) });
+    setSession(res);
+    setUser(res.user);
+    return res.user;
+  };
+
   const logout = () => { clearSession(); setUser(null); location.href = '/login'; };
 
   // Called after a QR join/renewal/trainer-join completes and the API
@@ -94,7 +106,7 @@ export function AuthProvider({ children }) {
   const isIndependent = isClient && (user.orgSlug === 'independent' || user.org_slug === 'independent');
 
   return (
-    <AuthCtx.Provider value={{ user, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent }}>
+    <AuthCtx.Provider value={{ user, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent }}>
       {children}
     </AuthCtx.Provider>
   );
