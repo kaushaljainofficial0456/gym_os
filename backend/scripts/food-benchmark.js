@@ -74,9 +74,10 @@ async function main() {
   }
 
   const adapter = getAdapter(args.engine);
-  if (args.engine === 'v1') {
-    const ok = v1Warmup();
-    if (!ok) console.error('WARNING: v1 model artifacts unavailable — every case will be unresolved');
+  // Warm the shared lazy index once (both engines use it) so the first real
+  // case is not billed the ~400 ms build.
+  if (!v1Warmup()) {
+    console.error('WARNING: skos-food-v1 model artifacts unavailable — every case will be unresolved');
   }
 
   const report = runBenchmark(dataset, adapter, {

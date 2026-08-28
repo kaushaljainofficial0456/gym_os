@@ -65,6 +65,14 @@ const {
 // Pure re-exports; no behaviour change.
 export { normalize, SOURCE_RANK };
 
+// Re-exported for food/engine.js's Phase-2 quarantine rescue: sizing a
+// rescued item's portion must use the SAME grams-precedence
+// (explicit mass → portion catalogue → the row's own serving → 100 g) the
+// live path uses, not a second copy. `resolveGrams` is defined below; the
+// re-export is hoisted here for visibility. Pure re-export; no behaviour
+// change to the estimate path.
+export { resolveGrams };
+
 const {
   BarcodeIndex, autoLogFromBarcode, cleanCode, canonicalEan13, resolveServing,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'barcodeLookup.reference.js'));

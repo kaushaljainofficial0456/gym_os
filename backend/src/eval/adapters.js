@@ -34,6 +34,7 @@
 
 import { performance } from 'node:perf_hooks';
 import * as V1 from '../services/foodEstimator.js';
+import * as FOOD from '../services/food/index.js';
 
 /* ---------------------------------------------------------------- */
 /*  Derived proxies — clearly labelled, never presented as engine output.     */
@@ -86,11 +87,15 @@ function rowFor(sourceId) {
   return (_search && _search.bySourceId && _search.bySourceId.get(sourceId)) || null;
 }
 
-/** Warm the lazy index once so the first real case is not billed the ~400 ms
- *  build. Returns whether the model is available at all. */
+/** Warm every lazily-built index once so the first real case (or the first V2
+ *  quarantine rescue) is not billed the one-time build. Returns whether the
+ *  core model is available at all. */
 export function v1Warmup() {
-  try { V1.estimateFood('rice'); return V1.modelAvailable(); }
-  catch { return false; }
+  try {
+    V1.estimateFood('rice');                 // builds the FoodSearch index
+    try { V1.estimateFoodKnn('warmup'); } catch { /* kNN artifact optional */ }
+    return V1.modelAvailable();
+  } catch { return false; }
 }
 
 export const v1Adapter = {
@@ -100,70 +105,84 @@ export const v1Adapter = {
 
   /** @param {{input:string}} c benchmark case  @returns {EvalResult} */
   run(c) {
-    const t0 = performance.now();
-    let raw;
-    try {
-      raw = V1.estimateFood(c.input);
-    } catch (err) {
-      return {
-        resolved: false, strategy: 'error', items: [],
-        total: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0 },
-        confidence: null,
-        unresolved: [{ fragment: c.input, reason: `engine threw: ${err.message}` }],
-        llm_calls: 0, est_cost_usd: 0, latency_ms: performance.now() - t0, error: String(err.message),
-      };
-    }
-    const latency_ms = performance.now() - t0;
-
-    const items = (raw.items || []).map((it) => {
-      const row = rowFor(it.source_id);
-      return {
-        name: it.name,
-        source_id: it.source_id ?? null,
-        source: it.source ?? row?.source ?? null,
-        grams: Number(it.grams) || 0,
-        grams_basis: it.grams_basis ?? null,
-        decomposed: false,
-        kcal: numOrNull(it.calories),
-        protein_g: numOrNull(it.protein),
-        carb_g: numOrNull(it.carbs),
-        fat_g: numOrNull(it.fat),
-        confidence: it.confidence ?? null,
-        prep_norm: normPrep({ cooking_state: it.cooking_state, food_name: it.name, ...row }, it.name),
-        class_proxy: deriveClass(row, it.name),
-        namespace_proxy: deriveNamespace(row),
-      };
-    });
-
-    return {
-      resolved: items.length > 0,
-      strategy: items.length > 0 ? 'direct' : 'unresolved',
-      items,
-      total: {
-        kcal: numOrNull(raw.total?.calories) ?? 0,
-        protein_g: numOrNull(raw.total?.protein) ?? 0,
-        carb_g: numOrNull(raw.total?.carbs) ?? 0,
-        fat_g: numOrNull(raw.total?.fat) ?? 0,
-      },
-      confidence: raw.confidence ?? null,
-      unresolved: raw.unresolved || [],
-      llm_calls: 0,
-      est_cost_usd: 0,          // deterministic engine — no external calls
-      latency_ms,
-    };
+    return runAndShape(c, () => V1.estimateFood(c.input), { engine: 'v1' });
   },
 };
 
-/** Placeholder so the harness, gate, and report code are all V2-ready. A later
- *  phase replaces the body with a call into the new `food/` engine. */
+/**
+ * V2 — the canonical `food/` engine with `ctx.engine === 'v2'` (architecture
+ * Phase 2: plausibility downgrade + quarantine rescue over the V1 result).
+ * Same normalised EvalResult contract as V1, graded on identical cases.
+ * Still deterministic and local — no LLM, no cost (Phase 2 introduces neither).
+ */
 export const v2Adapter = {
   id: 'v2',
-  label: 'v2 engine (not implemented in Phase 0)',
-  llm: true,
-  run() {
-    throw new Error('v2Adapter is a Phase-0 stub — no v2 engine exists yet');
+  label: 'v2 engine (food/engine.js, Phase 2 — plausibility gate + quarantine rescue)',
+  llm: false,
+  run(c) {
+    return runAndShape(c, () => FOOD.estimateMeal(c.input, { engine: 'v2' }), { engine: 'v2' });
   },
 };
+
+/** Shared: run an engine callable, shape its food-v1 envelope into an EvalResult. */
+function runAndShape(c, call, { engine }) {
+  const t0 = performance.now();
+  let raw;
+  try {
+    raw = call();
+  } catch (err) {
+    return {
+      resolved: false, strategy: 'error', items: [],
+      total: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0 },
+      confidence: null,
+      unresolved: [{ fragment: c.input, reason: `engine threw: ${err.message}` }],
+      llm_calls: 0, est_cost_usd: 0, latency_ms: performance.now() - t0, error: String(err.message),
+    };
+  }
+  const latency_ms = performance.now() - t0;
+
+  const items = (raw.items || []).map((it) => {
+    const row = rowFor(it.source_id);
+    return {
+      name: it.name,
+      source_id: it.source_id ?? null,
+      source: it.source ?? row?.source ?? null,
+      grams: Number(it.grams) || 0,
+      grams_basis: it.grams_basis ?? null,
+      // additive V2 signals — ignored by V1, used by the report for observability
+      decomposed: false,
+      estimate_status: it.estimate_status ?? null,          // 'quarantine_rescue' on a V2 rescue item
+      plausibility: it.plausibility?.verdict ?? null,        // 'soft_fail' | 'hard_fail' on a V2-flagged item
+      kcal: numOrNull(it.calories),
+      protein_g: numOrNull(it.protein),
+      carb_g: numOrNull(it.carbs),
+      fat_g: numOrNull(it.fat),
+      confidence: it.confidence ?? null,
+      prep_norm: normPrep({ cooking_state: it.cooking_state, food_name: it.name, ...row }, it.name),
+      class_proxy: deriveClass(row, it.name),
+      namespace_proxy: deriveNamespace(row),
+    };
+  });
+
+  const rescued = items.filter((i) => i.estimate_status === 'quarantine_rescue').length;
+  return {
+    resolved: items.length > 0,
+    strategy: items.length > 0 ? (rescued && rescued === items.length ? 'rescue' : 'direct') : 'unresolved',
+    items,
+    total: {
+      kcal: numOrNull(raw.total?.calories) ?? 0,
+      protein_g: numOrNull(raw.total?.protein) ?? 0,
+      carb_g: numOrNull(raw.total?.carbs) ?? 0,
+      fat_g: numOrNull(raw.total?.fat) ?? 0,
+    },
+    confidence: raw.confidence ?? null,
+    unresolved: raw.unresolved || [],
+    llm_calls: 0,               // Phase 2 adds no external calls (kNN rescue is local + deterministic)
+    est_cost_usd: 0,
+    latency_ms,
+    v2: raw.v2 ?? null,
+  };
+}
 
 export function getAdapter(id) {
   if (id === 'v1') return v1Adapter;

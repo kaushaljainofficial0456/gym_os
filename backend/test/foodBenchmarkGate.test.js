@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { v1Adapter, v1Warmup, getAdapter } from '../src/eval/adapters.js';
+import { v1Adapter, v2Adapter, v1Warmup, getAdapter } from '../src/eval/adapters.js';
 import { runBenchmark } from '../src/eval/runner.js';
 import { compareToBaseline, GATES } from '../src/eval/report.js';
 
@@ -66,6 +66,26 @@ test('V1 still reproduces the frozen baseline (guards estimator + harness)', { s
   }
 });
 
+test('PHASE 2 GATE: V2 vs the frozen V1 baseline PASSES (no blocking / hard regression)', { skip: !haveArtifacts }, () => {
+  const dataset = JSON.parse(fs.readFileSync(DATASET, 'utf8'));
+  const base = JSON.parse(fs.readFileSync(BASELINE, 'utf8'));
+  if (!v1Warmup()) return;
+
+  const rep = runBenchmark(dataset, v2Adapter, { keepResults: true });
+  const cmp = compareToBaseline(rep, base);
+
+  assert.equal(cmp.hardFail, false,
+    `HARD gate regression: ${JSON.stringify(cmp.blocking.filter((b) => b.hard))}`);
+  assert.equal(cmp.pass, true,
+    `blocking regression(s): ${JSON.stringify(cmp.blocking)}`);
+  // the three non-negotiables must not move the wrong way at all
+  assert.ok(rep.metrics['13_fabrication_rate'] <= base.metrics['13_fabrication_rate'] + 1e-9, 'fabrication rate rose');
+  assert.ok(rep.metrics['13d_silent_drop_rate_multi_food'] <= base.metrics['13d_silent_drop_rate_multi_food'] + 0.010 + 1e-9, 'multi-food silent-drop rose past tol');
+  assert.ok(rep.metrics['11_plausibility_false_negative'].rate <= base.metrics['11_plausibility_false_negative'].rate + 0.010 + 1e-9, 'plausibility-FN rose past tol');
+  // Phase 2 should not make V2 slower than V1 by an order of magnitude
+  assert.ok(rep.metrics['16_latency'].p95_ms <= base.metrics['16_latency'].p95_ms * 4, 'V2 p95 latency > 4x V1');
+});
+
 test('regression gate wiring: V1-vs-itself is a PASS with no blocking regressions', { skip: !haveArtifacts }, () => {
   const dataset = JSON.parse(fs.readFileSync(DATASET, 'utf8'));
   const base = JSON.parse(fs.readFileSync(BASELINE, 'utf8'));
@@ -79,10 +99,19 @@ test('regression gate wiring: V1-vs-itself is a PASS with no blocking regression
   assert.ok(Object.keys(GATES).length >= 12, 'the gate must cover the headline metrics');
 });
 
-test('V2 gate is wired but unimplemented in Phase 0', () => {
+test('V2 adapter is live (Phase 2) — runs, no LLM, no cost, shapes an EvalResult', () => {
   const v2 = getAdapter('v2');
   assert.equal(v2.id, 'v2');
-  assert.throws(() => v2.run({ input: 'x' }), /stub/i, 'v2Adapter must be an explicit stub until a v2 engine exists');
+  assert.equal(v2.llm, false, 'Phase 2 introduces no external model calls');
+  v1Warmup();
+  const r = v2.run({ input: '2 roti, dal and curd' });
+  assert.equal(typeof r.resolved, 'boolean');
+  assert.ok(Array.isArray(r.items));
+  assert.equal(r.llm_calls, 0);
+  assert.equal(r.est_cost_usd, 0);
+  // FLAG OFF default is byte-identical to V1 — the gate compares V2 (flag on)
+  // to the frozen V1 baseline, and a rescue/downgrade only ever moves a metric
+  // in the improving direction or within tolerance (asserted by bench:gate).
 });
 
 test('dataset integrity: ids unique, primaries valid, ranges well-formed', { skip: !haveArtifacts }, () => {
