@@ -71,7 +71,7 @@ export default function Announcements() {
     <div>
       <div className="page-header">
         <h1>Announcements</h1>
-        <p>Platform-wide messages by audience and priority, with an optional active window. This builds the data only — no banner exists yet in the gym-owner app to display them.</p>
+        <p>Platform-wide messages by audience and priority, with an optional active window. Shown as a dismissible banner in the gym-owner, trainer, and client apps, filtered to whichever audience each viewer belongs to.</p>
       </div>
 
       <div className="card">
