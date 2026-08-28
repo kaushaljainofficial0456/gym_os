@@ -15,7 +15,8 @@
     "export:training": "node scripts/export-training-data.js",
     "test": "node --test",
     "pg:validate": "node scripts/pg-validate.js",
-    "smoke:food-ai": "node scripts/food-ai-smoke.js"
+    "smoke:food-ai": "node scripts/food-ai-smoke.js",
+    "bench": "node scripts/food-benchmark.js --engine v1"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
