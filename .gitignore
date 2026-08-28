@@ -25,3 +25,4 @@ Thumbs.db.freebuff/
 # shared/committed; personal permissions and worktree checkouts are not.
 .claude/settings.local.json
 .claude/worktrees/
+.vercel
