@@ -192,6 +192,10 @@ const MIGRATIONS = [
   // for every existing row (single-branch orgs) until a branch is
   // actually created and assigned -- see gymMemberships.js.
   ['users', 'branch_id', `branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL`],
+  // "Email Invoice" (gap #9 of the production-hardening handoff) --
+  // NULL means never emailed, or every attempt so far failed. See
+  // emailProvider.js.
+  ['invoices', 'emailed_at', `emailed_at TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

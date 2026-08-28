@@ -1117,7 +1117,12 @@ CREATE TABLE IF NOT EXISTS invoices (
   tax_amount     REAL NOT NULL DEFAULT 0,
   status         TEXT NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED','VOID')),
   issued_at      TEXT NOT NULL,
-  created_at     TEXT NOT NULL
+  created_at     TEXT NOT NULL,
+  -- Set on a successful "Email Invoice" send (see emailProvider.js);
+  -- NULL means never emailed, or every attempt so far failed. Informational
+  -- only -- re-sending is always allowed, this just lets the UI show
+  -- "Emailed Aug 28" instead of nothing.
+  emailed_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_org ON invoices(org_id, issued_at);
 

@@ -11,6 +11,7 @@
 // ============================================================
 import { paymentConfigSummary } from '../payments/paymentProvider.js';
 import { foodAIConfigSummary } from '../intelligence/foodAI.js';
+import { emailConfigSummary } from '../notifications/emailProvider.js';
 
 function safeParseJson(json) {
   try { return JSON.parse(json || '{}'); } catch { return {}; }
@@ -55,11 +56,12 @@ export async function getSystemHealth(db) {
     dbHealthy = false;
   }
 
-  const [errorsLastHour, errorsLastDay, payment, ai] = await Promise.all([
+  const [errorsLastHour, errorsLastDay, payment, ai, email] = await Promise.all([
     countErrors(db, hourAgo),
     countErrors(db, dayAgo),
     Promise.resolve(paymentConfigSummary()),
     foodAIConfigSummary(db),
+    Promise.resolve(emailConfigSummary()),
   ]);
 
   return {
@@ -71,5 +73,6 @@ export async function getSystemHealth(db) {
       chainAvailability: ai.chainAvailability,
       anyProviderConfigured: Object.values(ai.chainAvailability).some(Boolean),
     },
+    email: { provider: email.provider, liveConfigured: email.liveConfigured },
   };
 }

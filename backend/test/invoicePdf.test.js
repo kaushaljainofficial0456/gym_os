@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { createPaymentOrder } from '../src/services/payments/paymentOrders.js';
 import { recordCheckoutVerification } from '../src/services/payments/paymentActivation.js';
 import { issueInvoice } from '../src/services/payments/invoices.js';
-import { renderInvoicePdf } from '../src/services/payments/invoicePdf.js';
+import { renderInvoicePdf, resolveInvoiceRecipient } from '../src/services/payments/invoicePdf.js';
 import { mockSimulateCheckout, _resetMockProviderStateForTests } from '../src/services/payments/paymentProvider.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -75,4 +75,31 @@ test('renderInvoicePdf: a nonexistent invoice id returns null, never throws', as
   await seedOrg(db);
   const pdf = await renderInvoicePdf(db, { invoiceId: 'inv_does_not_exist', orgId: 'o1' });
   assert.equal(pdf, null);
+});
+
+test('resolveInvoiceRecipient: an ORG_PACKAGE invoice has no resolvable customer (the gym paid SK OS, not a client)', async () => {
+  const db = await memDb();
+  await seedOrg(db);
+  const order = await createPaymentOrder(db, { subjectType: 'ORG_PACKAGE', subjectId: 'sub1', orgId: 'o1', amount: 12000 });
+  const { paymentId, signature } = mockSimulateCheckout(order.provider_order_id);
+  await recordCheckoutVerification(db, { orderId: order.id, providerPaymentId: paymentId, signature });
+  const invoice = await issueInvoice(db, await db.q1('SELECT * FROM payment_orders WHERE id = ?', [order.id]));
+
+  const recipient = await resolveInvoiceRecipient(db, { invoiceId: invoice.id, orgId: 'o1' });
+  assert.ok(recipient);
+  assert.equal(recipient.customer, null, 'no client to resolve for a gym-paid-SK-OS invoice -- the route falls back to the owner\'s own email');
+  assert.equal(recipient.invoice.id, invoice.id);
+});
+
+test('resolveInvoiceRecipient: an invoice belonging to a different org returns null', async () => {
+  const db = await memDb();
+  await seedOrg(db, 'o1');
+  await db.run('INSERT INTO organizations (id, name, slug, created_at) VALUES (?, ?, ?, ?)', ['o2', 'Other Gym', 'other-gym', '2026-01-01T00:00:00Z']);
+  const order = await createPaymentOrder(db, { subjectType: 'ORG_PACKAGE', subjectId: 'sub1', orgId: 'o1', amount: 12000 });
+  const { paymentId, signature } = mockSimulateCheckout(order.provider_order_id);
+  await recordCheckoutVerification(db, { orderId: order.id, providerPaymentId: paymentId, signature });
+  const invoice = await issueInvoice(db, await db.q1('SELECT * FROM payment_orders WHERE id = ?', [order.id]));
+
+  const recipient = await resolveInvoiceRecipient(db, { invoiceId: invoice.id, orgId: 'o2' });
+  assert.equal(recipient, null);
 });

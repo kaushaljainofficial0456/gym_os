@@ -25,7 +25,8 @@ import { createOrgPackageQuote, createOrgUpgradeQuote, createCapacityAddonQuote,
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, recordWebhookEvent } from '../services/payments/paymentActivation.js';
 import { issueInvoice } from '../services/payments/invoices.js';
-import { renderInvoicePdf } from '../services/payments/invoicePdf.js';
+import { renderInvoicePdf, resolveInvoiceRecipient } from '../services/payments/invoicePdf.js';
+import { sendEmail } from '../services/notifications/emailProvider.js';
 
 export default function enterpriseRoutes(db) {
   const r = Router();
@@ -271,17 +272,42 @@ export default function enterpriseRoutes(db) {
     res.json({ invoices: rows });
   });
 
-  // "Email Invoice" is intentionally not implemented -- no email
-  // provider is configured anywhere in this environment (see
-  // notifications.js's own header comment); this is the honest "Download
-  // Invoice" half only, per the spec's own "don't pretend a channel is
-  // implemented" rule.
   r.get('/invoices/:id/pdf', async (req, res) => {
     const pdf = await renderInvoicePdf(db, { invoiceId: req.params.id, orgId: req.orgId });
     if (!pdf) return res.status(404).json({ error: 'Invoice not found' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${req.params.id}.pdf"`);
     res.send(pdf);
+  });
+
+  // "Email Invoice" -- uses emailProvider.js's zero-cost gate (mock by
+  // default, real delivery only with EMAIL_PROVIDER=resend +
+  // RESEND_API_KEY both set), same posture as payments/AI. `to` defaults
+  // to the resolved client's email for a CLIENT_MEMBERSHIP invoice; an
+  // ORG_PACKAGE/ORG_CAPACITY_ADDON invoice has no client (the gym paid
+  // SK OS itself), so it falls back to the requesting owner's own
+  // account email -- always overridable explicitly in the body.
+  const emailLimit = rateLimit({ windowMs: 60_000, max: 5, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/invoices/:id/email', emailLimit, validate(z.object({
+    to: z.string().email().optional(),
+  })), async (req, res) => {
+    const recipient = await resolveInvoiceRecipient(db, { invoiceId: req.params.id, orgId: req.orgId });
+    if (!recipient) return res.status(404).json({ error: 'Invoice not found' });
+    const to = req.body.to || recipient.customer?.email || req.user.email;
+    if (!to) return res.status(422).json({ error: 'no_recipient', message: 'No email address to send this invoice to. Provide one explicitly.' });
+    const pdf = await renderInvoicePdf(db, { invoiceId: req.params.id, orgId: req.orgId });
+    const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [req.orgId]);
+    const { invoice } = recipient;
+    const result = await sendEmail({
+      to,
+      subject: `Invoice ${invoice.invoice_number} from ${org?.name || 'SK OS'}`,
+      html: `<p>Hi${recipient.customer?.name ? ' ' + recipient.customer.name : ''},</p>` +
+        `<p>Please find attached invoice <strong>${invoice.invoice_number}</strong> for ${invoice.currency} ${Number(invoice.amount).toFixed(2)}.</p>`,
+      attachments: [{ filename: `${invoice.invoice_number}.pdf`, content: pdf }],
+    });
+    if (!result.ok) return res.status(502).json({ error: 'email_send_failed', message: result.error, provider: result.provider });
+    await db.run('UPDATE invoices SET emailed_at = ? WHERE id = ?', [now(), invoice.id]);
+    res.json({ ok: true, to, provider: result.provider });
   });
 
   // ---- payout/KYC account status (Razorpay Route linked account, once configured) ----

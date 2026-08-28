@@ -4,7 +4,7 @@
 // capacity, and invoice history.
 // ============================================================
 import { useState } from 'react';
-import { api } from '../../api.js';
+import { api, downloadFile } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, PageHeader, Spinner, ErrorState, Modal, Empty, Toast } from '../../components/UI.jsx';
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
@@ -41,6 +41,31 @@ export default function EnterpriseBilling() {
   const [busy, setBusy] = useState(false);
   const [customCapacity, setCustomCapacity] = useState('');
   const [addonId, setAddonId] = useState('');
+  const [invoiceBusyId, setInvoiceBusyId] = useState(null);
+
+  const downloadInvoice = async (inv) => {
+    setInvoiceBusyId(inv.id); setToast('');
+    try {
+      await downloadFile(`/enterprise/invoices/${inv.id}/pdf`, `${inv.invoice_number}.pdf`);
+    } catch (e) {
+      setToast(e.message);
+    } finally {
+      setInvoiceBusyId(null);
+    }
+  };
+
+  const emailInvoice = async (inv) => {
+    setInvoiceBusyId(inv.id); setToast('');
+    try {
+      const res = await api(`/enterprise/invoices/${inv.id}/email`, { method: 'POST', body: JSON.stringify({}) });
+      setToast(`Invoice sent to ${res.to}`);
+      invoices.reload();
+    } catch (e) {
+      setToast(e.data?.message || e.message);
+    } finally {
+      setInvoiceBusyId(null);
+    }
+  };
 
   const currentCapacity = status.data?.purchasedCapacity || 0;
 
@@ -140,12 +165,19 @@ export default function EnterpriseBilling() {
         ) : (
           <div className="space-y-2">
             {invoices.data.invoices.map((inv) => (
-              <Card key={inv.id} className="p-3 flex items-center justify-between">
-                <div>
+              <Card key={inv.id} className="p-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
                   <div className="text-sm font-grotesk font-semibold">{inv.invoice_number}</div>
-                  <div className="text-[11px]" style={{ color: 'var(--faint)' }}>{new Date(inv.issued_at).toLocaleDateString()} · {inv.subject_type.replace('_', ' ')}</div>
+                  <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
+                    {new Date(inv.issued_at).toLocaleDateString()} · {inv.subject_type.replace('_', ' ')}
+                    {inv.emailed_at && <> · emailed {new Date(inv.emailed_at).toLocaleDateString()}</>}
+                  </div>
                 </div>
-                <div className="font-grotesk font-bold">₹{inv.amount.toLocaleString('en-IN')}</div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button className="btn-ghost text-xs" disabled={invoiceBusyId === inv.id} onClick={() => downloadInvoice(inv)}>Download</button>
+                  <button className="btn-ghost text-xs" disabled={invoiceBusyId === inv.id} onClick={() => emailInvoice(inv)}>Email</button>
+                  <div className="font-grotesk font-bold">₹{inv.amount.toLocaleString('en-IN')}</div>
+                </div>
               </Card>
             ))}
           </div>

@@ -212,6 +212,7 @@ test('getSystemHealth: a healthy in-memory DB reports database.healthy true with
   assert.equal(typeof health.database.latencyMs, 'number');
   assert.ok('provider' in health.payments);
   assert.ok('chain' in health.ai);
+  assert.equal(health.email.provider, 'mock');
 });
 
 test('listPlatformErrors: only returns client_error/server_error events, newest first, filterable by type', async () => {

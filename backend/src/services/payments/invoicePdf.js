@@ -54,6 +54,22 @@ async function resolveCustomer(db, order) {
 }
 
 /**
+ * Resolves who invoice `invoiceId` should be emailed to -- used by the
+ * "Email Invoice" route. Returns null only if the invoice doesn't exist
+ * for this org; `customer` itself is null for an ORG_PACKAGE/
+ * ORG_CAPACITY_ADDON invoice (the gym paying SK OS, not a client paying
+ * the gym) -- the caller falls back to the requesting owner's own
+ * account email in that case rather than this function guessing one.
+ */
+export async function resolveInvoiceRecipient(db, { invoiceId, orgId }) {
+  const invoice = await db.q1('SELECT * FROM invoices WHERE id = ? AND org_id = ?', [invoiceId, orgId]);
+  if (!invoice) return null;
+  const order = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [invoice.order_id]);
+  const customer = await resolveCustomer(db, order);
+  return { invoice, order, customer };
+}
+
+/**
  * Renders invoice `invoiceId` (must belong to `orgId`) as a PDF Buffer,
  * or null if no such invoice exists for that org. Never regenerates
  * historical pricing -- every number on the page comes from the STORED
