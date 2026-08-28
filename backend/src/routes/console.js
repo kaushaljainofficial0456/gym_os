@@ -27,6 +27,7 @@ import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
 import { runReconciliationSweep, listReconciliationIssues, resolveReconciliationIssue } from '../services/payments/reconciliation.js';
+import { initiateRefund, listRefunds } from '../services/payments/refunds.js';
 import { listTicketsPlatformWide, getTicket, listMessages, addMessage, updateTicketStatus, updateTicketPriority, assignTicket } from '../services/support/tickets.js';
 import {
   getFoodIntelligenceOverview, getActivityTimeSeries, getProviderPerformance,
@@ -160,6 +161,48 @@ export default function consoleRoutes(db) {
     const rows = await db.q(
       `SELECT p.*, o.name AS org_name FROM payment_orders p JOIN organizations o ON o.id = p.org_id ORDER BY p.created_at DESC LIMIT 200`);
     res.json({ payments: rows });
+  });
+
+  // ---- gym's OWN SK OS payment refund (ORG_PACKAGE / ORG_CAPACITY_ADDON
+  // only -- a CLIENT_MEMBERSHIP refund is the owner's own call to make
+  // about their own client and already has its route in admin.js;
+  // refunding what the GYM paid SK OS is a platform decision, so it
+  // lives here instead). initiateRefund() itself is subject-type-
+  // agnostic (see refunds.js) -- the restriction below is deliberate
+  // scope, not a technical limitation.
+  //
+  // NOT wrapped in db.tx() with its audit entry, unlike suspend/
+  // reactivate above -- initiateRefund() makes a real network call to
+  // the payment provider partway through its own sequence of writes
+  // (see refunds.js), and holding a DB transaction open across that
+  // network round-trip is exactly the kind of long-held-lock mistake
+  // this codebase avoids elsewhere (same reasoning admin.js's own
+  // CLIENT_MEMBERSHIP refund route already follows). Each of
+  // initiateRefund's own writes is independently durable by the time it
+  // returns, so -- like the reconciliation sweep's own audit entry just
+  // above -- this is a best-effort summary record, not paired atomically
+  // with a single mutation. ----
+  r.post('/gyms/:id/payments/:orderId/refund', dangerousGymAction, validate(z.object({
+    amount: z.number().positive().optional(), reason: z.string().max(500).optional(),
+  })), async (req, res) => {
+    const order = await db.q1('SELECT * FROM payment_orders WHERE id = ? AND org_id = ?', [req.params.orderId, req.params.id]);
+    if (!order) return res.status(404).json({ error: 'Payment order not found for this gym' });
+    if (!['ORG_PACKAGE', 'ORG_CAPACITY_ADDON'].includes(order.subject_type)) {
+      return res.status(400).json({ error: 'not_an_org_payment', message: 'Client membership refunds are issued by the gym owner, not the platform console.' });
+    }
+    const result = await initiateRefund(db, { orderId: order.id, orgId: req.params.id, amount: req.body.amount, reason: req.body.reason, initiatedBy: req.user.sub });
+    if (!result.ok) return res.status(422).json({ error: result.reason, ...result });
+    await writeAuditLog(db, req, {
+      action: 'org_payment_refunded', entityType: 'payment_order', entityId: order.id,
+      before: { status: order.status }, after: { status: result.orderStatus, refundId: result.refund.id, amount: result.refund.amount, orgSubscriptionCancelled: result.orgSubscriptionCancelled },
+    });
+    res.json(result);
+  });
+
+  r.get('/gyms/:id/payments/:orderId/refunds', async (req, res) => {
+    const order = await db.q1('SELECT id FROM payment_orders WHERE id = ? AND org_id = ?', [req.params.orderId, req.params.id]);
+    if (!order) return res.status(404).json({ error: 'Payment order not found for this gym' });
+    res.json({ refunds: await listRefunds(db, { orgId: req.params.id, orderId: order.id }) });
   });
 
   // ---- reconciliation (platform-wide -- reuses Phase 1's engine

@@ -7,13 +7,27 @@
 // edges already existed in the graph, just never invoked by anything
 // until now) rather than building parallel logic.
 //
-// Scope: CLIENT_MEMBERSHIP orders only for now -- the membership
-// transition graph above already supports it end to end. ORG_PACKAGE /
-// ORG_CAPACITY_ADDON refunds would need an additive enum migration on
-// org_billing_state/org_subscriptions (neither has a REFUNDED-adjacent
-// status today) and are intentionally out of scope for this pass; a
-// refund attempted against one of those still processes at the
-// provider and is recorded here, it just has no membership-side effect.
+// Scope: the payment-side lifecycle (refunds row, provider call,
+// payment_orders status) below is subject_type-agnostic and already
+// works for any order. The "consequence" branch at the end of
+// initiateRefund() is what differs per subject_type:
+//   - CLIENT_MEMBERSHIP: reuses membershipLifecycle.js's transition
+//     graph (see above).
+//   - ORG_PACKAGE: reuses the EXISTING 'CANCELLED' value already in
+//     org_subscriptions.status/org_billing_state.status -- no schema
+//     change needed. A full refund of the gym's own SK OS package
+//     cancels it, gating future capability (new QR generation, etc.)
+//     exactly the way an expired package already does; existing
+//     clients/trainers/workouts are untouched, per the same
+//     "preserve historical data" principle EXPIRED already follows.
+//   - ORG_CAPACITY_ADDON: no status flip needed at all -- see
+//     getOrgBillingSnapshot's own comment on why a fully-refunded
+//     add-on purchase is simply excluded from the capacity SUM by
+//     joining through payment_orders.status, the refund record itself
+//     already being the single source of truth.
+// A PARTIAL refund of either never triggers a consequence, mirroring
+// the client-membership rule exactly: a partial refund is a goodwill/
+// price adjustment, not grounds to revoke something still in use.
 //
 // payment_orders.amount is NEVER mutated -- the refundable remainder is
 // always DERIVED from the sum of this order's own SUCCESSFUL refund
@@ -117,10 +131,39 @@ export async function initiateRefund(db, { orderId, orgId, amount, reason, initi
     }
   }
 
-  await track(db, { type: 'payment_refunded', orgId, userId: initiatedBy, data: { orderId: order.id, refundId, amount: refundAmount, type, membershipTransitioned: !!membershipResult?.ok } }).catch(() => {});
+  // Org-package consequence -- same "only on a FULL refund" rule as
+  // CLIENT_MEMBERSHIP above. Resolved via THIS order's own
+  // org_subscriptions row (payment_order_id), not "whatever the org's
+  // current active subscription is" -- if the owner has since
+  // upgraded/renewed, that NEWER row already superseded this one, and
+  // refunding the OLD payment must never cancel a subscription it
+  // didn't pay for. Only flips CANCELLED if this specific row is
+  // STILL the org's active one.
+  let orgSubscriptionCancelled = false;
+  if (order.subject_type === 'ORG_PACKAGE' && newOrderStatus === 'REFUNDED') {
+    const orgSub = await db.q1(`SELECT * FROM org_subscriptions WHERE payment_order_id = ? AND status = 'ACTIVE'`, [order.id]);
+    if (orgSub) {
+      await db.run(`UPDATE org_subscriptions SET status = 'CANCELLED', updated_at = ? WHERE id = ?`, [now(), orgSub.id]);
+      await db.run(`UPDATE org_billing_state SET status = 'CANCELLED', updated_at = ? WHERE org_id = ? AND status != 'CANCELLED'`, [now(), orgId]);
+      orgSubscriptionCancelled = true;
+    }
+    // No currently-ACTIVE row tied to this order (already superseded,
+    // or was never activated) -- the payment-side refund still
+    // succeeded above; there's just no live subscription left to cancel.
+  }
+  // ORG_CAPACITY_ADDON needs no status flip here at all -- see
+  // getOrgBillingSnapshot's own comment: a fully-refunded add-on
+  // purchase is excluded from the capacity SUM by joining through
+  // payment_orders.status, so this refund record alone is already
+  // sufficient for capacity to reflect it correctly on the very next read.
+
+  await track(db, {
+    type: 'payment_refunded', orgId, userId: initiatedBy,
+    data: { orderId: order.id, refundId, amount: refundAmount, type, subjectType: order.subject_type, membershipTransitioned: !!membershipResult?.ok, orgSubscriptionCancelled },
+  }).catch(() => {});
 
   const refund = await db.q1('SELECT * FROM refunds WHERE id = ?', [refundId]);
-  return { ok: true, refund, orderStatus: newOrderStatus, membership: membershipResult?.subscription || null };
+  return { ok: true, refund, orderStatus: newOrderStatus, membership: membershipResult?.subscription || null, orgSubscriptionCancelled };
 }
 
 export async function listRefunds(db, { orgId, orderId = null }) {

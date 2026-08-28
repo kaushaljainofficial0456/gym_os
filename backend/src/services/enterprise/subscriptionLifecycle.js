@@ -41,8 +41,21 @@ export async function getOrgBillingSnapshot(db, orgId) {
     await track(db, { type: 'org_subscription_expired', orgId, data: { subscriptionId: subscription.id } }).catch(() => {});
   }
 
+  // A FULLY refunded capacity add-on purchase no longer counts toward
+  // purchased capacity -- joined through payment_orders rather than a
+  // status column of its own on org_capacity_purchases (there isn't
+  // one, and doesn't need to be: the refund is already the single
+  // source of truth for "did this purchase actually happen"). A
+  // PARTIAL refund is deliberately NOT excluded here, mirroring the
+  // exact same rule refunds.js applies to client memberships: a
+  // partial refund is a goodwill/price adjustment, not grounds to take
+  // capacity away that a client may already be occupying.
   const addonRows = subscription
-    ? await db.q(`SELECT COALESCE(SUM(increment), 0) AS total FROM org_capacity_purchases WHERE subscription_id = ?`, [subscription.id])
+    ? await db.q(
+        `SELECT COALESCE(SUM(ocp.increment), 0) AS total
+           FROM org_capacity_purchases ocp
+           LEFT JOIN payment_orders po ON po.id = ocp.payment_order_id
+          WHERE ocp.subscription_id = ? AND (po.status IS NULL OR po.status != 'REFUNDED')`, [subscription.id])
     : [{ total: 0 }];
   // Number(...) is load-bearing, not defensive: Postgres reports SUM()/
   // COUNT() as `bigint`, and the `pg` driver deliberately returns bigint
@@ -98,7 +111,11 @@ export async function reserveCapacitySlot(db, orgId) {
        AND status = 'ACTIVE'
        AND (
          COALESCE((
-           SELECT os.client_capacity + COALESCE((SELECT SUM(ocp.increment) FROM org_capacity_purchases ocp WHERE ocp.subscription_id = os.id), 0)
+           SELECT os.client_capacity + COALESCE((
+             SELECT SUM(ocp.increment) FROM org_capacity_purchases ocp
+             LEFT JOIN payment_orders po ON po.id = ocp.payment_order_id
+             WHERE ocp.subscription_id = os.id AND (po.status IS NULL OR po.status != 'REFUNDED')
+           ), 0)
            FROM org_subscriptions os
            WHERE os.org_id = org_billing_state.org_id AND os.status = 'ACTIVE'
            ORDER BY os.created_at DESC LIMIT 1
