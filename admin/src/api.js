@@ -36,7 +36,7 @@ export async function downloadCsv(path, filename) {
   const token = getToken();
   if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch('/api' + path, { headers, credentials: 'include' });
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
     clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
@@ -58,7 +58,12 @@ export async function api(path, opts = {}) {
   const token = getToken();
   if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch('/api' + path, { ...opts, headers, credentials: 'include' });
-  if (res.status === 401) {
+  // Only a 401 on a request that ACTUALLY carried a session token means
+  // the session itself expired/was revoked -- e.g. a rejected /auth/login
+  // attempt is also a 401 but never had a token to begin with, and was
+  // being swallowed into a misleading "Session expired" instead of the
+  // real "Invalid email or password" the backend sent back.
+  if (res.status === 401 && token) {
     clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
