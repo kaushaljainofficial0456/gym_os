@@ -7,6 +7,20 @@ import { dayKey, todayKey } from '../utils/time.js';
 import { track } from './events.js';
 import { isFeatureEnabled } from './platform/featureFlags.js';
 
+// A share's payload is written by shareWorkout() as JSON.stringify(exercises),
+// so it is well-formed for every row this codebase creates. It is still parsed
+// defensively: a single malformed row (hand-edited, a partial write, a future
+// migration) must not take down the WHOLE feed with a 500 -- the feed degrades
+// to an empty exercise list for that one share instead.
+function safePayload(raw) {
+  try {
+    const p = JSON.parse(raw);
+    return Array.isArray(p) ? p : [];
+  } catch {
+    return [];
+  }
+}
+
 // ---- Membership ----
 
 export async function getMembership(db, clientId) {
@@ -283,7 +297,7 @@ export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
       authorAvatar: r.author_avatar,
       workoutId: r.workout_id,
       workoutName: r.workout_name,
-      payload: JSON.parse(r.payload),
+      payload: safePayload(r.payload),
       createdAt: r.created_at,
     })),
   };
@@ -339,7 +353,7 @@ export async function getShare(db, orgId, shareId) {
   if (!share) return null;
   return {
     ...share,
-    payload: JSON.parse(share.payload),
+    payload: safePayload(share.payload),
   };
 }
 

@@ -96,6 +96,68 @@ test('RLS migration exists and only targets PostgreSQL-safe syntax', async () =>
   }
 });
 
+// ---------- schema/RLS coverage guards ----------
+// These exist because of a REAL production incident: community_members and
+// community_workout_shares shipped in schema.sql but were never applied to
+// the production database, so /api/community/* returned 500 for three days
+// (61 logged "relation ... does not exist" errors). The whole community suite
+// passed the entire time -- it runs on a SQLite DB rebuilt from schema.sql on
+// every run, so a table missing in PRODUCTION is structurally invisible to it.
+// These guards close the class of gap that hid that.
+test('every org-scoped table in schema.sql is covered by an RLS policy', async () => {
+  const schema = fs.readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
+  const rls = fs.readFileSync(path.join(root, 'database', 'rls.sql'), 'utf8');
+  // Tables that ARE the org/platform-level tables themselves, or whose scoping
+  // is derived from a parent row, are handled by their own policies.
+  const exempt = new Set(['organizations', 'gym_onboarding', 'org_billing_state']);
+  // KNOWN GAP (pre-existing, tracked separately -- NOT a licence to add more):
+  // these org-scoped tables carry no RLS policy today. They are listed
+  // explicitly rather than silently skipped so that (a) the debt is visible in
+  // code review, and (b) any NEWLY added org-scoped table fails this test until
+  // someone consciously decides its policy. Shrink this list, never grow it.
+  const knownGaps = new Set([
+    'shared_meals', 'org_subscriptions', 'org_capacity_purchases', 'enrollment_tokens',
+    'payment_orders', 'invoices', 'payment_accounts', 'billing_quotes',
+    'membership_status_history', 'refunds', 'reconciliation_issues', 'branches',
+    'gym_memberships', 'support_tickets', 'risk_events',
+  ]);
+  // Collect the tables rls.sql actually turns RLS on for. Built by scanning
+  // lines rather than composing a RegExp per table so the alignment padding in
+  // rls.sql ("ALTER TABLE users        ENABLE ...") can't cause a false miss.
+  const rlsEnabled = new Set();
+  for (const l of rls.split('\n')) {
+    const mm = l.match(/^\s*ALTER TABLE\s+(\w+)\s+ENABLE ROW LEVEL SECURITY/i);
+    if (mm) rlsEnabled.add(mm[1]);
+  }
+  const missing = [];
+  let table = null;
+  let hasOrgId = false;
+  for (const raw of schema.split('\n')) {
+    const line = raw.replace(/--.*$/, '');
+    const start = line.match(/^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\(/i);
+    if (start) { table = start[1]; hasOrgId = false; continue; }
+    if (!table) continue;
+    if (/^\s*org_id\s/.test(line)) hasOrgId = true;
+    if (/^\s*\)\s*;?\s*$/.test(line)) {
+      if (hasOrgId && !exempt.has(table) && !knownGaps.has(table) && !rlsEnabled.has(table)) {
+        missing.push(table);
+      }
+      table = null;
+    }
+  }
+  assert.deepEqual(missing, [], 'org-scoped tables missing RLS: ' + missing.join(', '));
+});
+
+test('every table the community feature queries is declared in schema.sql', async () => {
+  const schema = fs.readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'backend', 'src', 'services', 'community.js'), 'utf8');
+  const referenced = new Set();
+  for (const m of src.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE)\s+([a-z_]+)/g)) referenced.add(m[1]);
+  const missing = [...referenced].filter(
+    (t) => !schema.includes('CREATE TABLE IF NOT EXISTS ' + t + ' ('));
+  assert.deepEqual(missing, [], 'community.js queries tables absent from schema.sql: ' + missing.join(', '));
+});
+
 test('no SQLite-only rowid ordering remains in application SQL', async () => {
   const files = ['src/services/intelligence/aiContext.js', 'src/services/muscles.js'];
   for (const f of files) {

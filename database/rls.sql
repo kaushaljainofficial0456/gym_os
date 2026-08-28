@@ -75,6 +75,12 @@ ALTER TABLE ai_memory          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_memory          FORCE ROW LEVEL SECURITY;
 ALTER TABLE ai_feedback        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_feedback        FORCE ROW LEVEL SECURITY;
+-- Gym community (added with the community feature; both carry a NOT NULL
+-- org_id and are read/written exactly like the org-scoped tables above).
+ALTER TABLE community_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_members FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_workout_shares ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_workout_shares FORCE ROW LEVEL SECURITY;
 
 -- ---- tables with a direct org_id column that ALSO carry global rows ----
 -- (exercise/food libraries: org_id NULL = GLOBAL, visible to everyone)
@@ -142,7 +148,8 @@ BEGIN
     'nutrition_plans','intelligence_events','gym_settings','custom_metrics','metric_entries',
     'client_meal_templates','client_workouts','attendance_events','alerts','coach_insights',
     'packages','subscriptions','payments','attendance','messages','notifications','events',
-    'ai_memory','ai_feedback'
+    'ai_memory','ai_feedback',
+    'community_members','community_workout_shares'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (

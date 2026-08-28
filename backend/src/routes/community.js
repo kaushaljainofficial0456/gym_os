@@ -1,16 +1,24 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
+import { requireAuth, orgScope } from '../auth.js';
 import { validate } from '../validate.js';
+import { rateLimit } from '../rateLimit.js';
 import {
   getMembership, setMembership, getCommunitySettings,
-  leaderboards, feed, shareWorkout, unshareWorkout, copyWorkout, getShare,
+  leaderboards, feed, shareWorkout, unshareWorkout, copyWorkout,
   resolveMembers,
 } from '../services/community.js';
 
 export default function communityRoutes(db) {
   const r = Router();
   r.use(requireAuth, orgScope);
+
+  // Community writes are user-triggered and cheap to spam (a double-tapped
+  // Share button, a held-down Join toggle), and every one of them writes to
+  // the DB. Same shape/keyFn as admin.js's own action limiters -- per
+  // authenticated user, not per IP, so one gym behind a single NAT can't
+  // rate-limit its own members.
+  const writeLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
 
   // Resolve the authenticated client (CLIENT role only for mutations)
   const getClient = async (req, res) => {
@@ -34,7 +42,7 @@ export default function communityRoutes(db) {
     });
   });
 
-  r.put('/membership', validate(z.object({ enabled: z.boolean() })), async (req, res) => {
+  r.put('/membership', writeLimit, validate(z.object({ enabled: z.boolean() })), async (req, res) => {
     const client = await getClient(req, res);
     if (!client) return;
     const settings = await getCommunitySettings(db, req.orgId);
@@ -109,7 +117,7 @@ export default function communityRoutes(db) {
 
   // ---- Share ----
 
-  r.post('/shares', validate(z.object({ workout_id: z.string().min(1) })), async (req, res) => {
+  r.post('/shares', writeLimit, validate(z.object({ workout_id: z.string().min(1) })), async (req, res) => {
     const client = await getClient(req, res);
     if (!client) return;
 
@@ -136,7 +144,7 @@ export default function communityRoutes(db) {
     res.status(201).json({ ok: true, id: result.id, workoutName: result.workoutName });
   });
 
-  r.delete('/shares/:id', async (req, res) => {
+  r.delete('/shares/:id', writeLimit, async (req, res) => {
     const client = await getClient(req, res);
     if (!client) return;
 
@@ -147,7 +155,7 @@ export default function communityRoutes(db) {
 
   // ---- Copy ----
 
-  r.post('/shares/:id/copy', validate(z.object({
+  r.post('/shares/:id/copy', writeLimit, validate(z.object({
     name: z.string().max(80).optional(),
     exercises: z.array(z.object({
       exercise_id: z.string().nullish(),
