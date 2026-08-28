@@ -4,7 +4,7 @@ import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey, addDays, daysBetween } from '../utils/time.js';
-import { estimateFood } from '../services/foodEstimator.js';
+import { estimateFood } from '../services/food/index.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
 

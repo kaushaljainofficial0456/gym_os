@@ -1,6 +1,14 @@
 // ============================================================
 // FOOD LOGGING — backed by skos-food-v1.
 //
+// CANONICAL CORE (Phase 1): this file is the IMPLEMENTATION body of the food
+// engine. New callers should import from `services/food/index.js` (the
+// canonical surface: `estimateMeal` / `resolveFood` / `priceFood` + these
+// primitives re-exported + the staged pipeline). The route layer
+// (nutrition.js, me.js, intelligence.js) already does. `barcodeLookup.js` and
+// `intelligence/foodAI.js` still import here directly and are folded in by a
+// later phase — they use the same functions, there is only one FoodSearch.
+//
 // WHAT THIS REPLACED, AND WHY IT MATTERED:
 // This file was a 23-item hardcoded table with hand-typed macros and a
 // regex matcher. Its own header called it an MVP placeholder. It was also
@@ -48,8 +56,14 @@ const PROC = path.join(ML, 'data', 'processed');
 
 const {
   FoodSearch, toGrams, scaleNutrition, portionToGrams, canonicalPortion,
-  listPortions, adjustOil, OIL_LEVELS,
+  listPortions, adjustOil, OIL_LEVELS, normalize, SOURCE_RANK,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'foodEstimate.reference.js'));
+
+// Re-exported for food/pipeline.js (Phase 1 canonical core). The `normalize`
+// stage and the source-preference ordering are the SAME primitives the one
+// FoodSearch uses — surfaced here so the pipeline never grows a second copy.
+// Pure re-exports; no behaviour change.
+export { normalize, SOURCE_RANK };
 
 const {
   BarcodeIndex, autoLogFromBarcode, cleanCode, canonicalEan13, resolveServing,
@@ -541,8 +555,20 @@ export function searchFoods(query, { limit = 8, withPortions = true } = {}) {
         ...f,
         // These did not go through the calibrated ranker, so they must not
         // borrow its confidence labels. `low` is the honest floor.
-        confidence: f.confidence || 'low',
+        //
+        // BUT they must still carry the SAME trust / data-quality semantics
+        // the ranked path (_searchExact) assigns — otherwise a row with a
+        // `data_quality_flag` (frying-bath contamination etc.) reaches the
+        // picker as a plain `confidence: 'low'` with no `trustworthy` field
+        // and, because the UI only disables `trustworthy === false`, becomes
+        // loggable. A caller must not be able to tell a candidate came via
+        // the contains pass and thereby skip the trust check (CONTRACT
+        // §3.2 / §5). This mirrors _searchExact's own mapping exactly; it
+        // does not "fix" or reshape the row, only labels it honestly.
+        confidence: f.data_quality_flag ? 'unreliable' : (f.confidence || 'low'),
+        trustworthy: !f.data_quality_flag,
         match_kind: 'name_contains',
+        ...(f.data_quality_flag ? { data_quality_flag: f.data_quality_flag } : {}),
       }));
   }
 

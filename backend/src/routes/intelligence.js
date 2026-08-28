@@ -24,7 +24,7 @@ import {
   searchFoods as searchFoodModel,
   modelAvailable as foodModelAvailable,
   cleanCode, canonicalEan13,
-} from '../services/foodEstimator.js';
+} from '../services/food/index.js';
 import { resolveBarcodeProduct, buildBarcodeResponse, cacheProduct, foodRowToRecord, statusForReason } from '../services/barcodeLookup.js';
 import { resolveFood, searchFoods } from '../services/intelligence/foodSearch.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';

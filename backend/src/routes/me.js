@@ -14,13 +14,13 @@ import { id, now } from '../ids.js';
 import { dayKey, getOrgTz } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
-import { foodSearch } from '../services/skos-food/index.js';
 import {
+  foodSearch,
   searchFoods as searchFoodModel,
   modelAvailable as foodModelAvailable,
   resolveFoodQuantity,
   estimateFoodKnn,
-} from '../services/foodEstimator.js';
+} from '../services/food/index.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
@@ -713,12 +713,13 @@ export default function meRoutes(db) {
   });
 
   // NOTE: a second, simpler `GET /foods/search` used to be registered here,
-  // backed by skos-food/index.js's `foodSearch`. Express only ever dispatches
-  // to the FIRST matching route (see /foods/search above, ~line 342), so this
-  // one was dead code from the day both were merged in — never reachable.
-  // Removed rather than left as a trap for the next person who edits it
-  // expecting it to run. `foodSearch` is still imported and used below, in
-  // POST /meals/:id/items, as a fallback lookup — left as-is.
+  // backed by the old `skos-food/index.js` `foodSearch`. Express only ever
+  // dispatches to the FIRST matching route (see /foods/search above, ~line
+  // 342), so this one was dead code from the day both were merged in — never
+  // reachable. Removed rather than left as a trap. `foodSearch` is still
+  // imported and used below, in POST /meals/:id/items, as a fallback lookup —
+  // now sourced from the canonical `services/food/` core (Phase 1), which is
+  // the SAME FoodSearch every other path uses.
 
   // ---------------- my meal templates ----------------
   r.get('/meals', async (req, res) => {
