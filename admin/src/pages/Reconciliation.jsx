@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { useFetch } from '../utils.js';
+import { useFetch, formatDateTime } from '../utils.js';
+import { useToast } from '../components/Toast.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonRows } from '../components/Skeleton.jsx';
 
 const TONE = { OPEN: 'warn', RESOLVED: 'good', DISMISSED: 'mute' };
 
@@ -8,6 +11,7 @@ export default function Reconciliation() {
   const { data, loading, error, reload } = useFetch(() => api('/console/reconciliation'));
   const [running, setRunning] = useState(false);
   const [lastSummary, setLastSummary] = useState(null);
+  const toast = useToast();
 
   const runSweep = async () => {
     setRunning(true);
@@ -15,14 +19,14 @@ export default function Reconciliation() {
       const summary = await api('/console/reconciliation/run', { method: 'POST' });
       setLastSummary(summary);
       reload();
-    } finally {
-      setRunning(false);
-    }
+      toast.success(`Sweep complete: ${summary.flagged} flagged, ${summary.recovered} recovered`);
+    } catch (e) { toast.error(e.message || 'Sweep failed'); }
+    finally { setRunning(false); }
   };
 
   const resolveIssue = async (id, dismiss) => {
-    await api(`/console/reconciliation/${id}/resolve`, { method: 'POST', body: JSON.stringify({ dismiss }) });
-    reload();
+    try { await api(`/console/reconciliation/${id}/resolve`, { method: 'POST', body: JSON.stringify({ dismiss }) }); reload(); toast.success(dismiss ? 'Issue dismissed' : 'Issue resolved'); }
+    catch (e) { toast.error(e.message || 'Could not update issue'); }
   };
 
   return (
@@ -41,12 +45,14 @@ export default function Reconciliation() {
         )}
       </div>
 
-      {loading && <div className="spinner-row">Loading…</div>}
+      {loading && <div className="card"><SkeletonRows rows={4} cols={5} /></div>}
       {error && <div className="error-text">{error.message}</div>}
-      {data && !data.issues.length && <div className="empty-state">No reconciliation issues. Healthy.</div>}
+      {data && !data.issues.length && (
+        <div className="card"><EmptyState icon="reconciliation" title="Books balance" description="No reconciliation issues right now -- everything matches the payment provider's own records." /></div>
+      )}
 
       {data && data.issues.length > 0 && (
-        <div className="card">
+        <div className="card table-scroll">
           <table>
             <thead>
               <tr><th>Type</th><th>Status</th><th>Note</th><th>Created</th><th></th></tr>
@@ -57,7 +63,7 @@ export default function Reconciliation() {
                   <td className="faint">{i.issue_type}</td>
                   <td><span className={`badge ${TONE[i.status] || 'mute'}`}>{i.status}</span></td>
                   <td>{i.note}</td>
-                  <td className="faint">{String(i.created_at).slice(0, 16).replace('T', ' ')}</td>
+                  <td className="faint">{formatDateTime(i.created_at)}</td>
                   <td>
                     {i.status === 'OPEN' && (
                       <div style={{ display: 'flex', gap: 6 }}>

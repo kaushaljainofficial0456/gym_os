@@ -25,3 +25,19 @@ export function money(n) {
   if (n == null) return 'N/A';
   return '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 }
+
+/** YYYY-MM-DD, or an em dash for a null timestamp -- never a blank cell
+ *  with no explanation. */
+export function formatDate(iso) {
+  if (!iso) return '—';
+  return String(iso).slice(0, 10);
+}
+
+/** YYYY-MM-DD HH:mm, local-to-the-string (these are stored as UTC ISO
+ *  strings already formatted for display elsewhere in this app, so this
+ *  matches that existing convention rather than introducing a second
+ *  one that reformats via the Date object). */
+export function formatDateTime(iso) {
+  if (!iso) return '—';
+  return String(iso).slice(0, 16).replace('T', ' ');
+}

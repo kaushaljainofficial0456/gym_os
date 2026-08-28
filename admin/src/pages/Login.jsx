@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import Decoration from '../components/Decoration.jsx';
 
 export default function Login() {
   const { authed, ready, login } = useAuth();
@@ -24,8 +25,9 @@ export default function Login() {
   };
 
   return (
-    <div className="login-screen">
-      <div className="login-box">
+    <div className="login-screen" style={{ position: 'relative', overflow: 'hidden' }}>
+      <Decoration variant="login" />
+      <div className="login-box anim-scaleIn" style={{ position: 'relative', zIndex: 1 }}>
         <h1>SK OS Admin Console</h1>
         <p>Platform operator access only.</p>
         <form onSubmit={submit}>
@@ -40,7 +42,7 @@ export default function Login() {
           <button className="btn" type="submit" disabled={busy} style={{ width: '100%' }}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
-          {error && <div className="error-text">{error}</div>}
+          {error && <div className={`error-text ${error ? 'anim-shake' : ''}`}>{error}</div>}
         </form>
       </div>
     </div>

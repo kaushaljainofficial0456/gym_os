@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { useFetch } from '../utils.js';
+import { useFetch, formatDateTime } from '../utils.js';
+import { useToast } from '../components/Toast.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonRows } from '../components/Skeleton.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const emptyForm = { key: '', name: '', description: '' };
 
@@ -10,7 +14,9 @@ export default function FeatureFlags() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState(null);
   const [rolloutDrafts, setRolloutDrafts] = useState({});
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   const create = async (e) => {
     e.preventDefault();
@@ -20,36 +26,41 @@ export default function FeatureFlags() {
       await api('/console/features', { method: 'POST', body: JSON.stringify(form) });
       setForm(emptyForm);
       reload();
+      toast.success(`Flag "${form.key}" created`);
     } catch (err) {
       setFormError(err.data?.issues?.join('; ') || err.message);
     } finally { setCreating(false); }
   };
 
   const toggle = async (flag) => {
-    await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ enabled: !flag.enabled }) });
-    reload();
+    try { await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ enabled: !flag.enabled }) }); reload(); }
+    catch (e) { toast.error(e.message || 'Could not update flag'); }
   };
 
   const saveRollout = async (flag) => {
     const draft = rolloutDrafts[flag.id];
     if (draft == null || draft === '') return;
-    await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ rolloutPercentage: Number(draft) }) });
-    setRolloutDrafts((d) => { const next = { ...d }; delete next[flag.id]; return next; });
-    reload();
+    try {
+      await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ rolloutPercentage: Number(draft) }) });
+      setRolloutDrafts((d) => { const next = { ...d }; delete next[flag.id]; return next; });
+      reload();
+      toast.success('Rollout updated');
+    } catch (e) { toast.error(e.message || 'Could not update rollout'); }
   };
 
-  const remove = async (flag) => {
-    if (confirmDeleteId !== flag.id) { setConfirmDeleteId(flag.id); return; }
-    await api(`/console/features/${flag.id}`, { method: 'DELETE' });
-    setConfirmDeleteId(null);
-    reload();
+  const remove = async () => {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try { await api(`/console/features/${deleteTarget.id}`, { method: 'DELETE' }); setDeleteTarget(null); reload(); toast.success('Flag deleted'); }
+    catch (e) { toast.error(e.message || 'Could not delete flag'); }
+    finally { setBusy(false); }
   };
 
   return (
     <div>
       <div className="page-header">
         <h1>Feature Flags</h1>
-        <p>Global on/off, a percentage rollout, or an explicit per-gym allow-list (which always wins). This builds the store and evaluation only — no existing feature checks a flag yet.</p>
+        <p>Global on/off, a percentage rollout, or an explicit per-gym allow-list (which always wins). First real call site: <code>community.js</code> gates the Community feature behind the <code>community</code> flag, seeded pre-enabled so shipping the gate changed nothing until an operator deliberately narrows it.</p>
       </div>
 
       <div className="card">
@@ -75,14 +86,16 @@ export default function FeatureFlags() {
         </form>
       </div>
 
-      {loading && <div className="spinner-row">Loading…</div>}
+      {loading && <div className="card"><SkeletonRows rows={4} cols={6} /></div>}
       {error && <div className="error-text">{error.message}</div>}
-      {data && !data.flags.length && <div className="empty-state">No feature flags yet.</div>}
+      {data && !data.flags.length && (
+        <div className="card"><EmptyState icon="flag" title="No feature flags yet" description="Create one above to gate a feature behind a rollout percentage or an allow-list." /></div>
+      )}
 
       {data && data.flags.length > 0 && (
-        <div className="card">
+        <div className="card table-scroll">
           <table>
-            <thead><tr><th>Key</th><th>Name</th><th>Enabled</th><th>Rollout</th><th>Allow-listed gyms</th><th></th></tr></thead>
+            <thead><tr><th>Key</th><th>Name</th><th>Enabled</th><th>Rollout</th><th>Allow-listed gyms</th><th>Updated</th><th></th></tr></thead>
             <tbody>
               {data.flags.map((f) => (
                 <tr key={f.id}>
@@ -106,8 +119,9 @@ export default function FeatureFlags() {
                     </div>
                   </td>
                   <td className="faint">{f.enabled_org_ids.length || '—'}</td>
+                  <td className="faint">{formatDateTime(f.updated_at)}</td>
                   <td>
-                    <button className="btn ghost" onClick={() => remove(f)}>{confirmDeleteId === f.id ? 'Confirm?' : 'Delete'}</button>
+                    <button className="btn ghost" onClick={() => setDeleteTarget(f)}>Delete</button>
                   </td>
                 </tr>
               ))}
@@ -115,6 +129,16 @@ export default function FeatureFlags() {
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.key}"?`}
+        description="Every place that checks this flag will fall back to disabled. This cannot be undone."
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={remove}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

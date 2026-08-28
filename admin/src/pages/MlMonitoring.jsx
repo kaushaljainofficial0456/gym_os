@@ -1,5 +1,7 @@
 import { api } from '../api.js';
 import { useFetch } from '../utils.js';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonCards, SkeletonBlock, SkeletonRows } from '../components/Skeleton.jsx';
 
 const num = (n) => (n == null ? 'N/A' : n.toLocaleString());
 const pct = (n) => (n == null ? 'N/A' : `${n}%`);
@@ -18,7 +20,7 @@ export default function MlMonitoring() {
         <p>The calorie-estimation model (skos-cal-v1), monitored from two real sources: persisted per-workout estimates, and fallback/quality telemetry this pass newly instruments — honestly empty until real traffic accumulates.</p>
       </div>
 
-      {overview.loading && <div className="spinner-row">Loading…</div>}
+      {overview.loading && <SkeletonCards count={4} />}
       {overview.error && <div className="error-text">{overview.error.message}</div>}
 
       {overview.data && (
@@ -54,7 +56,7 @@ export default function MlMonitoring() {
       <div className="card">
         <h2>Activity — last 14 days</h2>
         <p className="faint">Real persisted completions per day, by provider.</p>
-        {activity.loading && <div className="spinner-row">Loading…</div>}
+        {activity.loading && <SkeletonBlock height={140} />}
         {activity.data && (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, marginTop: 12 }}>
             {activity.data.days.map((d) => {
@@ -84,7 +86,7 @@ export default function MlMonitoring() {
         <div className="two-col">
           <div className="card">
             <h2>Estimates by provider — last 30d</h2>
-            {!overview.data.estimateStats.byProvider.length && <div className="empty-state">No completed workouts with a calorie estimate yet.</div>}
+            {!overview.data.estimateStats.byProvider.length && <EmptyState icon="ml" title="No estimates yet" description="Completed workouts with a calorie estimate will show up here." />}
             {overview.data.estimateStats.byProvider.length > 0 && (
               <table>
                 <thead><tr><th>Provider</th><th>Count</th><th>Avg kcal</th><th>Median kcal</th><th>Avg range width</th></tr></thead>
@@ -106,10 +108,10 @@ export default function MlMonitoring() {
           <div className="card">
             <h2>ML fallbacks by cause — last 30d</h2>
             {!overview.data.mlHealth.instrumented && (
-              <div className="empty-state">No ml provider attempts recorded yet — this instrumentation is new this pass; data appears as real traffic runs with CALORIE_MODEL_PROVIDER=ml.</div>
+              <EmptyState icon="ml" title="No ml attempts recorded yet" description="Data appears here once real traffic runs with CALORIE_MODEL_PROVIDER=ml." />
             )}
             {overview.data.mlHealth.instrumented && !overview.data.mlHealth.fallbacksByCategory.length && (
-              <div className="empty-state">Zero fallbacks — every ml attempt in this window succeeded.</div>
+              <EmptyState icon="check" title="Zero fallbacks" description="Every ml attempt in this window succeeded." />
             )}
             {overview.data.mlHealth.instrumented && overview.data.mlHealth.fallbacksByCategory.length > 0 && (
               <table>

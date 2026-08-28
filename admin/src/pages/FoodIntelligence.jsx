@@ -1,6 +1,8 @@
-import { useState } from 'react';
 import { api } from '../api.js';
 import { useFetch } from '../utils.js';
+import { useToast } from '../components/Toast.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonCards, SkeletonRows, SkeletonBlock } from '../components/Skeleton.jsx';
 
 const pct = (n) => (n == null ? 'N/A' : `${Math.round(n * 1000) / 10}%`);
 const num = (n) => (n == null ? 'N/A' : n.toLocaleString());
@@ -13,10 +15,14 @@ export default function FoodIntelligence() {
   const corrected = useFetch(() => api('/console/intelligence/food/most-corrected'));
   const reviewQueue = useFetch(() => api('/console/intelligence/food/review-queue'));
   const dataQuality = useFetch(() => api('/console/intelligence/food/data-quality'));
+  const toast = useToast();
 
   const act = async (canonicalKey, action) => {
-    await api(`/console/intelligence/food/review-queue/${encodeURIComponent(canonicalKey)}/${action}`, { method: 'POST' });
-    reviewQueue.reload();
+    try {
+      await api(`/console/intelligence/food/review-queue/${encodeURIComponent(canonicalKey)}/${action}`, { method: 'POST' });
+      reviewQueue.reload();
+      toast.success(action === 'verify' ? 'Marked as human-reviewed' : 'Reverted to AI estimate');
+    } catch (e) { toast.error(e.message || 'Could not update'); }
   };
 
   const maxActivity = activity.data ? Math.max(1, ...activity.data.days.map((d) => d.cacheHits + d.cacheMisses + d.aiCalls)) : 1;
@@ -28,7 +34,7 @@ export default function FoodIntelligence() {
         <p>Every number below is a real query against actual events and food-estimate rows — never fabricated. A metric this platform genuinely can't compute yet (like $ savings, with no per-call pricing configured) shows N/A.</p>
       </div>
 
-      {overview.loading && <div className="spinner-row">Loading…</div>}
+      {overview.loading && <SkeletonCards count={8} />}
       {overview.data && (
         <>
           <div className="kpi-grid">
@@ -46,7 +52,7 @@ export default function FoodIntelligence() {
 
       <div className="card">
         <h2>Activity — last 14 days</h2>
-        {activity.loading && <div className="spinner-row">Loading…</div>}
+        {activity.loading && <SkeletonBlock height={140} />}
         {activity.data && (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, marginTop: 12 }}>
             {activity.data.days.map((d) => {
@@ -70,7 +76,7 @@ export default function FoodIntelligence() {
 
       <div className="card">
         <h2>Provider performance</h2>
-        {providers.loading && <div className="spinner-row">Loading…</div>}
+        {providers.loading && <SkeletonRows rows={4} cols={7} />}
         {providers.data && (
           <table>
             <thead><tr><th>Provider</th><th>Configured</th><th>Requests</th><th>Success rate</th><th>Avg latency</th><th>Today's usage</th><th>Status</th></tr></thead>
@@ -94,8 +100,8 @@ export default function FoodIntelligence() {
       <div className="card">
         <h2>Needs review — community-corrected candidates</h2>
         <p className="faint">Flagged by the system itself once enough independent corrections agreed the AI's original number was off. Verifying marks it human-reviewed; rejecting reverts it to a plain AI estimate.</p>
-        {reviewQueue.loading && <div className="spinner-row">Loading…</div>}
-        {reviewQueue.data && !reviewQueue.data.items.length && <div className="empty-state">Nothing needs review right now.</div>}
+        {reviewQueue.loading && <SkeletonRows rows={3} cols={5} />}
+        {reviewQueue.data && !reviewQueue.data.items.length && <EmptyState icon="check" title="Food intelligence looks healthy" description="No items currently require review." />}
         {reviewQueue.data && reviewQueue.data.items.length > 0 && (
           <table>
             <thead><tr><th>Food</th><th>Feedback count</th><th>Provider</th><th>Updated</th><th></th></tr></thead>
@@ -122,8 +128,8 @@ export default function FoodIntelligence() {
       <div className="two-col">
         <div className="card">
           <h2>Top cached / requested foods</h2>
-          {topFoods.loading && <div className="spinner-row">Loading…</div>}
-          {topFoods.data && !topFoods.data.foods.length && <div className="empty-state">No AI estimates yet.</div>}
+          {topFoods.loading && <SkeletonRows rows={4} cols={3} />}
+          {topFoods.data && !topFoods.data.foods.length && <EmptyState icon="food" title="No AI estimates yet" description="Foods estimated by AI will show up here." />}
           {topFoods.data && topFoods.data.foods.length > 0 && (
             <table>
               <thead><tr><th>Food</th><th>Used</th><th>Confidence</th></tr></thead>
@@ -142,8 +148,8 @@ export default function FoodIntelligence() {
 
         <div className="card">
           <h2>Most corrected foods</h2>
-          {corrected.loading && <div className="spinner-row">Loading…</div>}
-          {corrected.data && !corrected.data.foods.length && <div className="empty-state">No corrections submitted yet.</div>}
+          {corrected.loading && <SkeletonRows rows={4} cols={3} />}
+          {corrected.data && !corrected.data.foods.length && <EmptyState icon="check" title="No corrections yet" description="Community corrections to AI estimates will appear here." />}
           {corrected.data && corrected.data.foods.length > 0 && (
             <table>
               <thead><tr><th>Food</th><th>Corrections</th><th>Median Δ</th></tr></thead>
@@ -163,7 +169,7 @@ export default function FoodIntelligence() {
 
       <div className="card">
         <h2>Data quality — global food library</h2>
-        {dataQuality.loading && <div className="spinner-row">Loading…</div>}
+        {dataQuality.loading && <SkeletonCards count={4} />}
         {dataQuality.data && (
           <div className="kpi-grid" style={{ marginBottom: 0 }}>
             <Kpi label="Missing calories" value={num(dataQuality.data.missingCalories)} />
