@@ -45,7 +45,11 @@ export async function listTicketsPlatformWide(db, { status = null, priority = nu
   if (priority) { conds.push('t.priority = ?'); params.push(priority); }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
   return db.q(
-    `SELECT t.*, o.name AS org_name FROM support_tickets t JOIN organizations o ON o.id = t.org_id ${where} ORDER BY t.created_at DESC LIMIT 200`,
+    `SELECT t.*, o.name AS org_name, a.name AS assigned_admin_name
+       FROM support_tickets t
+       JOIN organizations o ON o.id = t.org_id
+       LEFT JOIN users a ON a.id = t.assigned_admin_id
+      ${where} ORDER BY t.created_at DESC LIMIT 200`,
     params);
 }
 
