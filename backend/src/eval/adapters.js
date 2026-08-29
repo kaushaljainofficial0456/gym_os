@@ -124,6 +124,21 @@ export const v2Adapter = {
   },
 };
 
+/**
+ * V3 — v2 + composite-dish classification/decomposition (architecture
+ * Phase 3, Strategy C1/C2). Still deterministic and local: composite_map.json
+ * is a curated overlay, decompose.js sums through the existing
+ * CompositionalCalculator — no LLM, no cost.
+ */
+export const v3Adapter = {
+  id: 'v3',
+  label: 'v3 engine (food/engine.js, Phase 3 — composite classification + decomposition)',
+  llm: false,
+  run(c) {
+    return runAndShape(c, () => FOOD.estimateMeal(c.input, { engine: 'v3' }), { engine: 'v3' });
+  },
+};
+
 /** Shared: run an engine callable, shape its food-v1 envelope into an EvalResult. */
 function runAndShape(c, call, { engine }) {
   const t0 = performance.now();
@@ -149,9 +164,9 @@ function runAndShape(c, call, { engine }) {
       source: it.source ?? row?.source ?? null,
       grams: Number(it.grams) || 0,
       grams_basis: it.grams_basis ?? null,
-      // additive V2 signals — ignored by V1, used by the report for observability
-      decomposed: false,
-      estimate_status: it.estimate_status ?? null,          // 'quarantine_rescue' on a V2 rescue item
+      // additive V2/V3 signals — ignored by V1, used by the report for observability
+      decomposed: it.estimate_status === 'composite_decomposed',
+      estimate_status: it.estimate_status ?? null,          // 'quarantine_rescue' (V2) | 'composite_decomposed' (V3)
       plausibility: it.plausibility?.verdict ?? null,        // 'soft_fail' | 'hard_fail' on a V2-flagged item
       kcal: numOrNull(it.calories),
       protein_g: numOrNull(it.protein),
@@ -177,17 +192,19 @@ function runAndShape(c, call, { engine }) {
     },
     confidence: raw.confidence ?? null,
     unresolved: raw.unresolved || [],
-    llm_calls: 0,               // Phase 2 adds no external calls (kNN rescue is local + deterministic)
+    llm_calls: 0,               // Phase 2/3 add no external calls (kNN rescue + composite decomposition are local + deterministic)
     est_cost_usd: 0,
     latency_ms,
     v2: raw.v2 ?? null,
+    v3: raw.v3 ?? null,
   };
 }
 
 export function getAdapter(id) {
   if (id === 'v1') return v1Adapter;
   if (id === 'v2') return v2Adapter;
-  throw new Error(`unknown engine "${id}" (expected v1 | v2)`);
+  if (id === 'v3') return v3Adapter;
+  throw new Error(`unknown engine "${id}" (expected v1 | v2 | v3)`);
 }
 
 function numOrNull(v) {

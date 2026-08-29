@@ -23,6 +23,8 @@
 
 import * as impl from '../foodEstimator.js';
 import { checkPlausibility, coarseClassOf } from './plausibility.js';
+import { classifyComposite, getCompositeDish } from './classify.js';
+import { decompose } from './decompose.js';
 
 /* ------------------------------------------------------------------ *
  *  Engine version selection                                          *
@@ -36,6 +38,14 @@ import { checkPlausibility, coarseClassOf } from './plausibility.js';
 
 function v2Enabled(ctx) {
   return ctx?.engine === 'v2' || process.env.FOOD_ENGINE_V2 === '1';
+}
+
+// V3 = V2 + composite decomposition (architecture Phase 3). Requesting v3
+// automatically gets Phase 2's improvements too -- each phase is additive
+// over the previous, never a fork. `engine:'v2'` alone stays byte-identical
+// to before Phase 3 existed.
+function v3Enabled(ctx) {
+  return ctx?.engine === 'v3' || process.env.FOOD_ENGINE_V3 === '1';
 }
 
 /* ------------------------------------------------------------------ *
@@ -61,8 +71,12 @@ function v2Enabled(ctx) {
  */
 export function estimateMeal(text, ctx = {}) {
   const base = impl.estimateFood(text);
-  if (!v2Enabled(ctx)) return base;
-  return applyPhase2(base);
+  const wantsV2 = v2Enabled(ctx);
+  const wantsV3 = v3Enabled(ctx);
+  if (!wantsV2 && !wantsV3) return base;
+  const afterV2 = applyPhase2(base);
+  if (!wantsV3) return afterV2;
+  return applyPhase3(afterV2, text);
 }
 
 /**
@@ -165,6 +179,10 @@ export {
 
 // Phase 2 — plausibility stage, exported for direct use + tests.
 export { checkPlausibility, coarseClassOf, coarsePrepOf, loadPlausibility } from './plausibility.js';
+
+// Phase 3 — composite classification + decomposition, exported for direct use + tests.
+export { classifyComposite, getCompositeDish, loadCompositeMap } from './classify.js';
+export { decompose } from './decompose.js';
 
 /* ================================================================== *
  *  PHASE 2 — post-COMPUTE plausibility + quarantine rescue            *
@@ -331,5 +349,155 @@ export function applyPhase2(base) {
         : base.disclaimer),
     engine: 'v2',
     v2: { plausibility_downgrades: downgrades, plausibility_advisories: advisories, quarantine_rescues: rescues },
+  };
+}
+
+/* ================================================================== *
+ *  PHASE 3 — composite-dish classification + decomposition            *
+ *  (architecture §10, Strategy C1/C2)                                 *
+ *                                                                      *
+ *  Operates on a completed V2 result PLUS the original input text (it *
+ *  needs to re-derive each fragment's raw text + qty/unit — the V1/V2 *
+ *  item/unresolved shapes don't carry those). For every fragment the   *
+ *  classifier marks `composite` with a curated `composite_map` entry:  *
+ *    - Strategy C1 (a trustworthy, plausible existing match) ALWAYS    *
+ *      wins — a composite fragment that already resolved to a good     *
+ *      single row is never second-guessed.                             *
+ *    - Otherwise Strategy C2: decompose the dish via its template,      *
+ *      price components through the existing CompositionalCalculator,  *
+ *      and — only if the decomposed total itself passes plausibility — *
+ *      replace the bad/missing match with it.                          *
+ *  A combo-pattern fragment with NO curated template (`dish_key: null`) *
+ *  is left completely alone: Phase 3 never guesses a dish's structure.  *
+ * ================================================================== */
+
+function coalesceGrams(parsed, dishKey, dish) {
+  const syntheticFood = {
+    food_name: dishKey.replace(/_/g, ' '),
+    cooking_state: 'cooked',
+    serving_grams: dish?.typical_serving_g || null,
+    serving_description: null,
+  };
+  try {
+    const q = impl.resolveGrams(parsed, syntheticFood);
+    if (Number(q.grams) > 0) return Number(q.grams);
+  } catch { /* fall through to the dish's own typical serving */ }
+  return dish?.typical_serving_g || 250;
+}
+
+export function applyPhase3(base, originalText) {
+  if (!base || !Array.isArray(base.items) || !originalText) return base;
+  const rawFragments = impl.splitItems(originalText);
+  if (!rawFragments.length) return base;
+
+  const items = [...base.items];
+  const unresolved = [...(base.unresolved || [])];
+  let changed = false;
+  let decomposedCount = 0;
+
+  for (const raw of rawFragments) {
+    const parsed = impl.parseFragment(raw);
+    if (!parsed || !parsed.name) continue;
+
+    const cls = classifyComposite(parsed.name);
+    if (cls.kind !== 'composite' || !cls.dish_key) continue; // no curated template: Phase 3 has nothing to add
+
+    const itemIdx = items.findIndex((it) => it.matched_from === raw);
+    const existingItem = itemIdx >= 0 ? items[itemIdx] : null;
+    const unresolvedIdx = unresolved.findIndex((u) => u.fragment === raw);
+
+    // Strategy C1 first: a trustworthy, plausible direct match to a genuine
+    // pre-composited DISH row is never second-guessed by a template guess.
+    // A BRANDED/packaged row does NOT qualify as a good C1 answer here even
+    // when it is internally trustworthy and plausible for its own class
+    // (a packaged snack at 420 kcal/100g is a perfectly plausible packaged
+    // snack) -- this is exactly the papdi-chaat failure mode: lexical
+    // overlap with a branded product standing in for a home-style dish.
+    // Plausibility can't catch this by design (it judges the matched row
+    // against its OWN class's bounds, never "is this the right class for
+    // the query" — that's this classifier's job, per plausibility.js's own
+    // docstring).
+    const existingIsGoodC1 = existingItem
+      && existingItem.trustworthy !== false
+      && existingItem.plausibility?.verdict !== 'hard_fail'
+      && coarseClassOf(existingItem, rowFor(existingItem.source_id)) !== 'branded_product';
+    if (existingIsGoodC1) continue;
+
+    const dish = getCompositeDish(cls.dish_key);
+    const grams = coalesceGrams(parsed, cls.dish_key, dish);
+    const result = decompose(cls.dish_key, grams, { getCompositionalCalculator: impl.getCompositionalCalculator });
+    if (!result.ok) continue; // decomposition unavailable: leave whatever V1/V2 already produced
+
+    const t = result.totals || {};
+    const newItem = {
+      name: titleCase(cls.dish_key.replace(/_/g, ' ')),
+      unit: `${Math.round(result.total_grams)} g (decomposed)`,
+      qty: parsed.qty == null ? 1 : parsed.qty,
+      calories: Math.round(t.energy_kcal || 0),
+      protein: t.protein_g ?? null,
+      carbs: t.carb_g ?? null,
+      fat: t.fat_g ?? null,
+      source_id: null,
+      source: 'composite_decompose',
+      grams: result.total_grams,
+      grams_basis: 'estimated',
+      grams_assumed: true,
+      confidence: result.confidence,
+      trustworthy: true,
+      match_kind: 'composite_template',
+      cooking_state: 'cooked',
+      matched_from: raw,
+      fiber_g: t.fiber_g ?? null,
+      sugar_g: t.sugar_g ?? null,
+      sodium_mg: t.sodium_mg ?? null,
+      estimate_status: 'composite_decomposed',
+      decomposition: {
+        dish_key: result.dish_key,
+        cuisine: result.cuisine,
+        components: result.components,
+        unresolved_components: result.unresolved_components,
+        mass_reconciliation: result.mass_reconciliation,
+      },
+    };
+
+    // The decomposed total must clear the SAME plausibility bar as any
+    // other item -- a bad fraction table must never silently outrank an
+    // honest "couldn't match this".
+    if (checkPlausibility(newItem, null).verdict === 'hard_fail') continue;
+
+    if (itemIdx >= 0) items[itemIdx] = newItem; else items.push(newItem);
+    if (unresolvedIdx >= 0) unresolved.splice(unresolvedIdx, 1);
+    changed = true;
+    decomposedCount++;
+  }
+
+  if (!changed) return base;
+
+  const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  let worst = 'high';
+  for (const it of items) {
+    total.calories += Number(it.calories) || 0;
+    total.protein += Number(it.protein) || 0;
+    total.carbs += Number(it.carbs) || 0;
+    total.fat += Number(it.fat) || 0;
+    if (RANK[it.confidence] > RANK[worst]) worst = it.confidence;
+  }
+
+  return {
+    ...base,
+    items,
+    total: {
+      calories: Math.round(total.calories),
+      protein: round1(total.protein),
+      carbs: round1(total.carbs),
+      fat: round1(total.fat),
+    },
+    confidence: items.length ? worst : null,
+    unresolved,
+    disclaimer: unresolved.length
+      ? 'Some items could not be matched and are NOT included in the total.'
+      : 'Some items are estimated from a typical recipe composition (composite-dish decomposition), not a single measured row — see the item labels.',
+    engine: 'v3',
+    v3: { composite_decompositions: decomposedCount },
   };
 }

@@ -1,0 +1,565 @@
+{
+  "_meta": {
+    "phase": 3,
+    "purpose": "Curated composite-dish templates for backend/src/services/food/decompose.js (Strategy C2). Each entry structures a dish that has NO reliable single measured DB row into its typical components, so a query like 'papdi chaat' is priced as papdi + potato + chickpeas + curd + chutneys + sev instead of matching whatever single row happens to contain both tokens (the failure mode documented in docs/FOOD_ESTIMATION_AUDIT_2026-08-28.md as the papdi-chaat bug).",
+    "component_name_convention": "Component `name` strings are deliberately generic, common-DB terms (rice, curd, boiled potato, tamarind chutney, papdi, sev, ...) so they resolve against the SAME unified_food_db.json every other tier searches -- never a name coined only for this file.",
+    "fraction_source": "Hand-curated from standard published recipes (household-measure proportions), cross-checked against indb_dishes.json where a close pre-composited analogue exists. NOT derived from a single authoritative recipe database -- treat as a reasonable typical proportion, not a lab measurement. `typical_fraction` values are of EDIBLE PORTION MASS and are expected to sum to ~1.0 per dish (decompose.js re-normalizes if they don't, before mass reconciliation against the requested total).",
+    "coverage": "54 dishes across chaat/street-food, North Indian combos, South Indian combos, and pav-based snacks -- the classes that dominated the worst-25 identity failures in the Phase-0 benchmark. NOT the full ~200-dish aspiration from the original architecture note; this is a first, benchmark-gated batch. Expand by adding entries here, never by hand-coding a dish in decompose.js.",
+    "schema": "{ <dish_key>: { aliases: string[], cuisine: string, typical_serving_g: number, components: [{ name: string, typical_fraction: number, prep_state: string }] } }"
+  },
+
+  "dishes": {
+    "papdi_chaat": {
+      "aliases": ["papdi chaat", "papri chaat", "papdi chat", "papri chat"],
+      "cuisine": "north_indian", "typical_serving_g": 150,
+      "components": [
+        { "name": "papdi", "typical_fraction": 0.22, "prep_state": "fried" },
+        { "name": "boiled potato", "typical_fraction": 0.20, "prep_state": "boiled" },
+        { "name": "boiled chickpeas", "typical_fraction": 0.10, "prep_state": "boiled" },
+        { "name": "curd", "typical_fraction": 0.25, "prep_state": "unspecified" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "mint chutney", "typical_fraction": 0.05, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.08, "prep_state": "fried" }
+      ]
+    },
+    "pani_puri": {
+      "aliases": ["pani puri", "golgappa", "gol gappa", "puchka", "pani puri chaat"],
+      "note": "typical_serving_g is PER PIECE (~20 g), not a whole plate -- unlike most entries in this file, pani puri is conventionally counted by piece ('6 pani puri', '4 golgappa'), so resolveGrams' qty x serving_grams must multiply per-piece weight, not a plate weight. Verified against this dish's own benchmark case (cmp-061, '4 pani puri' -> 80g expected).",
+      "cuisine": "north_indian", "typical_serving_g": 20,
+      "components": [
+        { "name": "puri", "typical_fraction": 0.30, "prep_state": "fried" },
+        { "name": "boiled potato", "typical_fraction": 0.22, "prep_state": "boiled" },
+        { "name": "boiled chickpeas", "typical_fraction": 0.10, "prep_state": "boiled" },
+        { "name": "tamarind chutney", "typical_fraction": 0.13, "prep_state": "unspecified" },
+        { "name": "mint water", "typical_fraction": 0.25, "prep_state": "unspecified" }
+      ]
+    },
+    "bhel_puri": {
+      "aliases": ["bhel puri", "bhelpuri", "bhel"],
+      "cuisine": "north_indian", "typical_serving_g": 140,
+      "components": [
+        { "name": "puffed rice", "typical_fraction": 0.40, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.12, "prep_state": "fried" },
+        { "name": "boiled potato", "typical_fraction": 0.15, "prep_state": "boiled" },
+        { "name": "onion", "typical_fraction": 0.10, "prep_state": "raw" },
+        { "name": "tomato", "typical_fraction": 0.08, "prep_state": "raw" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "mint chutney", "typical_fraction": 0.05, "prep_state": "unspecified" }
+      ]
+    },
+    "sev_puri": {
+      "aliases": ["sev puri"],
+      "cuisine": "north_indian", "typical_serving_g": 130,
+      "components": [
+        { "name": "puri", "typical_fraction": 0.28, "prep_state": "fried" },
+        { "name": "boiled potato", "typical_fraction": 0.22, "prep_state": "boiled" },
+        { "name": "onion", "typical_fraction": 0.10, "prep_state": "raw" },
+        { "name": "tomato", "typical_fraction": 0.08, "prep_state": "raw" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "mint chutney", "typical_fraction": 0.07, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.15, "prep_state": "fried" }
+      ]
+    },
+    "dahi_puri": {
+      "aliases": ["dahi puri", "dahipuri"],
+      "cuisine": "north_indian", "typical_serving_g": 140,
+      "components": [
+        { "name": "puri", "typical_fraction": 0.22, "prep_state": "fried" },
+        { "name": "boiled potato", "typical_fraction": 0.18, "prep_state": "boiled" },
+        { "name": "boiled chickpeas", "typical_fraction": 0.08, "prep_state": "boiled" },
+        { "name": "curd", "typical_fraction": 0.32, "prep_state": "unspecified" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.10, "prep_state": "fried" }
+      ]
+    },
+    "aloo_tikki_chaat": {
+      "aliases": ["aloo tikki chaat", "tikki chaat", "aloo tikki chat"],
+      "cuisine": "north_indian", "typical_serving_g": 160,
+      "components": [
+        { "name": "aloo tikki", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "curd", "typical_fraction": 0.25, "prep_state": "unspecified" },
+        { "name": "tamarind chutney", "typical_fraction": 0.12, "prep_state": "unspecified" },
+        { "name": "mint chutney", "typical_fraction": 0.06, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.07, "prep_state": "fried" },
+        { "name": "onion", "typical_fraction": 0.05, "prep_state": "raw" }
+      ]
+    },
+    "dahi_vada": {
+      "aliases": ["dahi vada", "dahi bhalla", "dahi bhalle", "curd vada"],
+      "cuisine": "north_indian", "typical_serving_g": 180,
+      "components": [
+        { "name": "urad dal vada", "typical_fraction": 0.35, "prep_state": "fried" },
+        { "name": "curd", "typical_fraction": 0.50, "prep_state": "unspecified" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "roasted cumin powder", "typical_fraction": 0.01, "prep_state": "roasted" },
+        { "name": "sev", "typical_fraction": 0.04, "prep_state": "fried" }
+      ]
+    },
+    "ragda_pattice": {
+      "aliases": ["ragda pattice", "ragda patties", "ragda pattis"],
+      "cuisine": "maharashtrian", "typical_serving_g": 200,
+      "components": [
+        { "name": "aloo tikki", "typical_fraction": 0.40, "prep_state": "fried" },
+        { "name": "white peas curry", "typical_fraction": 0.40, "prep_state": "cooked_wet" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "onion", "typical_fraction": 0.05, "prep_state": "raw" },
+        { "name": "sev", "typical_fraction": 0.05, "prep_state": "fried" }
+      ]
+    },
+    "corn_chaat": {
+      "aliases": ["corn chaat", "sweet corn chaat", "masala corn"],
+      "cuisine": "north_indian", "typical_serving_g": 150,
+      "components": [
+        { "name": "boiled corn", "typical_fraction": 0.70, "prep_state": "boiled" },
+        { "name": "onion", "typical_fraction": 0.10, "prep_state": "raw" },
+        { "name": "tomato", "typical_fraction": 0.10, "prep_state": "raw" },
+        { "name": "butter", "typical_fraction": 0.05, "prep_state": "unspecified" },
+        { "name": "lemon juice", "typical_fraction": 0.05, "prep_state": "raw" }
+      ]
+    },
+    "samosa_chaat": {
+      "aliases": ["samosa chaat", "samosa chat", "tokri chaat"],
+      "cuisine": "north_indian", "typical_serving_g": 220,
+      "components": [
+        { "name": "samosa", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "chole", "typical_fraction": 0.25, "prep_state": "cooked_wet" },
+        { "name": "curd", "typical_fraction": 0.15, "prep_state": "unspecified" },
+        { "name": "tamarind chutney", "typical_fraction": 0.08, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.07, "prep_state": "fried" }
+      ]
+    },
+    "dabeli": {
+      "aliases": ["dabeli", "kutchi dabeli"],
+      "cuisine": "gujarati", "typical_serving_g": 130,
+      "components": [
+        { "name": "pav", "typical_fraction": 0.35, "prep_state": "unspecified" },
+        { "name": "boiled potato", "typical_fraction": 0.35, "prep_state": "boiled" },
+        { "name": "tamarind chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "peanuts", "typical_fraction": 0.08, "prep_state": "roasted" },
+        { "name": "pomegranate", "typical_fraction": 0.02, "prep_state": "raw" },
+        { "name": "butter", "typical_fraction": 0.10, "prep_state": "unspecified" }
+      ]
+    },
+    "vada_pav": {
+      "aliases": ["vada pav", "wada pav", "batata vada pav"],
+      "cuisine": "maharashtrian", "typical_serving_g": 140,
+      "components": [
+        { "name": "pav", "typical_fraction": 0.40, "prep_state": "unspecified" },
+        { "name": "batata vada", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "dry garlic chutney", "typical_fraction": 0.08, "prep_state": "unspecified" },
+        { "name": "green chutney", "typical_fraction": 0.07, "prep_state": "unspecified" }
+      ]
+    },
+    "pav_bhaji": {
+      "aliases": ["pav bhaji"],
+      "cuisine": "maharashtrian", "typical_serving_g": 300,
+      "components": [
+        { "name": "mixed vegetable bhaji", "typical_fraction": 0.55, "prep_state": "cooked_wet" },
+        { "name": "pav", "typical_fraction": 0.35, "prep_state": "unspecified" },
+        { "name": "butter", "typical_fraction": 0.08, "prep_state": "unspecified" },
+        { "name": "onion", "typical_fraction": 0.02, "prep_state": "raw" }
+      ]
+    },
+    "misal_pav": {
+      "aliases": ["misal pav", "missal pav"],
+      "cuisine": "maharashtrian", "typical_serving_g": 280,
+      "components": [
+        { "name": "misal curry", "typical_fraction": 0.55, "prep_state": "cooked_wet" },
+        { "name": "farsan", "typical_fraction": 0.10, "prep_state": "fried" },
+        { "name": "pav", "typical_fraction": 0.30, "prep_state": "unspecified" },
+        { "name": "onion", "typical_fraction": 0.05, "prep_state": "raw" }
+      ]
+    },
+    "chole_bhature": {
+      "aliases": ["chole bhature", "chana bhatura", "chole bhatura"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "chole", "typical_fraction": 0.40, "prep_state": "cooked_wet" },
+        { "name": "bhatura", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "onion", "typical_fraction": 0.08, "prep_state": "raw" },
+        { "name": "pickle", "typical_fraction": 0.07, "prep_state": "unspecified" }
+      ]
+    },
+    "rajma_chawal": {
+      "aliases": ["rajma chawal", "rajma rice", "rajma chaval"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "rajma curry", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" }
+      ]
+    },
+    "chole_chawal": {
+      "aliases": ["chole chawal", "chana chawal", "chole rice"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "chole", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" }
+      ]
+    },
+    "kadhi_chawal": {
+      "aliases": ["kadhi chawal", "kadhi rice", "kadhi chaval"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "kadhi", "typical_fraction": 0.50, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.50, "prep_state": "cooked_dry" }
+      ]
+    },
+    "dal_makhani_rice": {
+      "aliases": ["dal makhani rice", "dal makhani chawal", "dal makhani with rice"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "dal makhani", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" }
+      ]
+    },
+    "sambar_rice": {
+      "aliases": ["sambar rice", "sambar sadam", "sambar chawal", "sambar chaval"],
+      "cuisine": "south_indian", "typical_serving_g": 320,
+      "components": [
+        { "name": "sambar", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.50, "prep_state": "cooked_dry" },
+        { "name": "ghee", "typical_fraction": 0.05, "prep_state": "unspecified" }
+      ]
+    },
+    "rasam_rice": {
+      "aliases": ["rasam rice", "rasam sadam", "rasam chawal"],
+      "cuisine": "south_indian", "typical_serving_g": 300,
+      "components": [
+        { "name": "rasam", "typical_fraction": 0.40, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" },
+        { "name": "ghee", "typical_fraction": 0.05, "prep_state": "unspecified" }
+      ]
+    },
+    "curd_rice_with_pickle": {
+      "aliases": ["curd rice with pickle", "thayir sadam with pickle"],
+      "cuisine": "south_indian", "typical_serving_g": 300,
+      "components": [
+        { "name": "curd rice", "typical_fraction": 0.90, "prep_state": "unspecified" },
+        { "name": "pickle", "typical_fraction": 0.10, "prep_state": "unspecified" }
+      ]
+    },
+    "paneer_bhurji_roti": {
+      "aliases": ["paneer bhurji roti", "paneer bhurji with roti", "paneer bhurji chapati"],
+      "cuisine": "north_indian", "typical_serving_g": 300,
+      "components": [
+        { "name": "paneer bhurji", "typical_fraction": 0.55, "prep_state": "cooked_dry" },
+        { "name": "roti", "typical_fraction": 0.45, "prep_state": "cooked_dry" }
+      ]
+    },
+    "egg_curry_rice": {
+      "aliases": ["egg curry rice", "egg curry chawal", "anda curry rice"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "egg curry", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" }
+      ]
+    },
+    "chicken_curry_rice": {
+      "aliases": ["chicken curry rice", "chicken curry chawal"],
+      "cuisine": "north_indian", "typical_serving_g": 380,
+      "components": [
+        { "name": "chicken curry", "typical_fraction": 0.50, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.50, "prep_state": "cooked_dry" }
+      ]
+    },
+    "veg_biryani": {
+      "aliases": ["veg biryani", "vegetable biryani"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "cooked rice", "typical_fraction": 0.60, "prep_state": "cooked_dry" },
+        { "name": "mixed vegetables", "typical_fraction": 0.25, "prep_state": "cooked_wet" },
+        { "name": "ghee", "typical_fraction": 0.08, "prep_state": "unspecified" },
+        { "name": "fried onion", "typical_fraction": 0.07, "prep_state": "fried" }
+      ]
+    },
+    "egg_biryani": {
+      "aliases": ["egg biryani", "anda biryani"],
+      "cuisine": "north_indian", "typical_serving_g": 380,
+      "components": [
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" },
+        { "name": "boiled egg", "typical_fraction": 0.25, "prep_state": "boiled" },
+        { "name": "ghee", "typical_fraction": 0.08, "prep_state": "unspecified" },
+        { "name": "fried onion", "typical_fraction": 0.12, "prep_state": "fried" }
+      ]
+    },
+    "tehri": {
+      "aliases": ["tehri", "tahiri", "vegetable tehri"],
+      "cuisine": "north_indian", "typical_serving_g": 320,
+      "components": [
+        { "name": "cooked rice", "typical_fraction": 0.65, "prep_state": "cooked_dry" },
+        { "name": "mixed vegetables", "typical_fraction": 0.25, "prep_state": "cooked_wet" },
+        { "name": "oil", "typical_fraction": 0.10, "prep_state": "unspecified" }
+      ]
+    },
+    "kachori_sabzi": {
+      "aliases": ["kachori sabzi", "kachori with sabzi", "khasta kachori sabzi"],
+      "cuisine": "north_indian", "typical_serving_g": 250,
+      "components": [
+        { "name": "kachori", "typical_fraction": 0.40, "prep_state": "fried" },
+        { "name": "aloo sabzi", "typical_fraction": 0.55, "prep_state": "cooked_wet" },
+        { "name": "tamarind chutney", "typical_fraction": 0.05, "prep_state": "unspecified" }
+      ]
+    },
+    "idli_sambar": {
+      "aliases": ["idli sambar", "idli with sambar", "idli sambhar"],
+      "cuisine": "south_indian", "typical_serving_g": 280,
+      "components": [
+        { "name": "idli", "typical_fraction": 0.45, "prep_state": "steamed" },
+        { "name": "sambar", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "coconut chutney", "typical_fraction": 0.10, "prep_state": "unspecified" }
+      ]
+    },
+    "dosa_sambar_chutney": {
+      "aliases": ["dosa sambar", "dosa with sambar and chutney", "dosa sambar chutney"],
+      "cuisine": "south_indian", "typical_serving_g": 260,
+      "components": [
+        { "name": "dosa", "typical_fraction": 0.55, "prep_state": "roasted" },
+        { "name": "sambar", "typical_fraction": 0.30, "prep_state": "cooked_wet" },
+        { "name": "coconut chutney", "typical_fraction": 0.15, "prep_state": "unspecified" }
+      ]
+    },
+    "medu_vada_sambar": {
+      "aliases": ["medu vada sambar", "vada sambar", "sambar vada"],
+      "cuisine": "south_indian", "typical_serving_g": 220,
+      "components": [
+        { "name": "medu vada", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "sambar", "typical_fraction": 0.40, "prep_state": "cooked_wet" },
+        { "name": "coconut chutney", "typical_fraction": 0.15, "prep_state": "unspecified" }
+      ]
+    },
+    "uttapam_chutney": {
+      "aliases": ["uttapam with chutney", "uttapam sambar"],
+      "cuisine": "south_indian", "typical_serving_g": 250,
+      "components": [
+        { "name": "uttapam", "typical_fraction": 0.65, "prep_state": "roasted" },
+        { "name": "sambar", "typical_fraction": 0.20, "prep_state": "cooked_wet" },
+        { "name": "coconut chutney", "typical_fraction": 0.15, "prep_state": "unspecified" }
+      ]
+    },
+    "poha_sev": {
+      "aliases": ["poha with sev", "sev poha", "indori poha"],
+      "cuisine": "north_indian", "typical_serving_g": 200,
+      "components": [
+        { "name": "poha", "typical_fraction": 0.85, "prep_state": "cooked_dry" },
+        { "name": "sev", "typical_fraction": 0.10, "prep_state": "fried" },
+        { "name": "pomegranate", "typical_fraction": 0.05, "prep_state": "raw" }
+      ]
+    },
+    "aloo_paratha_curd": {
+      "aliases": ["aloo paratha with curd", "aloo paratha curd", "aloo paratha with dahi"],
+      "cuisine": "north_indian", "typical_serving_g": 280,
+      "components": [
+        { "name": "aloo paratha", "typical_fraction": 0.70, "prep_state": "fried" },
+        { "name": "curd", "typical_fraction": 0.25, "prep_state": "unspecified" },
+        { "name": "pickle", "typical_fraction": 0.05, "prep_state": "unspecified" }
+      ]
+    },
+    "roti_sabzi_dal": {
+      "aliases": ["roti sabzi dal", "roti dal sabzi", "chapati dal sabzi", "dal roti sabzi"],
+      "cuisine": "north_indian", "typical_serving_g": 400,
+      "components": [
+        { "name": "roti", "typical_fraction": 0.30, "prep_state": "cooked_dry" },
+        { "name": "mixed vegetable sabzi", "typical_fraction": 0.35, "prep_state": "cooked_wet" },
+        { "name": "toor dal", "typical_fraction": 0.35, "prep_state": "cooked_wet" }
+      ]
+    },
+    "roti_dal": {
+      "aliases": ["roti dal", "chapati dal", "roti with dal", "chapati with dal", "2 roti dal"],
+      "cuisine": "north_indian", "typical_serving_g": 300,
+      "components": [
+        { "name": "roti", "typical_fraction": 0.35, "prep_state": "cooked_dry" },
+        { "name": "toor dal", "typical_fraction": 0.65, "prep_state": "cooked_wet" }
+      ]
+    },
+    "roti_sabzi": {
+      "aliases": ["roti sabzi", "chapati sabzi", "roti with sabzi", "roti with vegetable"],
+      "cuisine": "north_indian", "typical_serving_g": 300,
+      "components": [
+        { "name": "roti", "typical_fraction": 0.40, "prep_state": "cooked_dry" },
+        { "name": "mixed vegetable sabzi", "typical_fraction": 0.60, "prep_state": "cooked_wet" }
+      ]
+    },
+    "dal_rice": {
+      "aliases": ["dal rice", "dal chawal", "dal chaval", "dal with rice"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "toor dal", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" }
+      ]
+    },
+    "dal_rice_sabzi": {
+      "aliases": ["dal chawal sabzi", "dal rice sabzi", "dal chawal with sabzi"],
+      "cuisine": "north_indian", "typical_serving_g": 450,
+      "components": [
+        { "name": "toor dal", "typical_fraction": 0.30, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.40, "prep_state": "cooked_dry" },
+        { "name": "mixed vegetable sabzi", "typical_fraction": 0.30, "prep_state": "cooked_wet" }
+      ]
+    },
+    "khichdi_kadhi": {
+      "aliases": ["khichdi kadhi", "khichdi with kadhi", "khichdi kadi"],
+      "cuisine": "gujarati", "typical_serving_g": 350,
+      "components": [
+        { "name": "khichdi", "typical_fraction": 0.60, "prep_state": "cooked_wet" },
+        { "name": "kadhi", "typical_fraction": 0.40, "prep_state": "cooked_wet" }
+      ]
+    },
+    "thepla_curd": {
+      "aliases": ["thepla with curd", "thepla curd", "thepla dahi"],
+      "cuisine": "gujarati", "typical_serving_g": 220,
+      "components": [
+        { "name": "thepla", "typical_fraction": 0.75, "prep_state": "fried" },
+        { "name": "curd", "typical_fraction": 0.25, "prep_state": "unspecified" }
+      ]
+    },
+    "dhokla_chutney": {
+      "aliases": ["dhokla with chutney", "dhokla sev"],
+      "cuisine": "gujarati", "typical_serving_g": 180,
+      "components": [
+        { "name": "dhokla", "typical_fraction": 0.80, "prep_state": "steamed" },
+        { "name": "green chutney", "typical_fraction": 0.10, "prep_state": "unspecified" },
+        { "name": "sev", "typical_fraction": 0.10, "prep_state": "fried" }
+      ]
+    },
+    "undhiyu_puri": {
+      "aliases": ["undhiyu with puri", "undhiyu puri"],
+      "cuisine": "gujarati", "typical_serving_g": 300,
+      "components": [
+        { "name": "undhiyu", "typical_fraction": 0.65, "prep_state": "cooked_wet" },
+        { "name": "puri", "typical_fraction": 0.35, "prep_state": "fried" }
+      ]
+    },
+    "bisi_bele_bath_raita": {
+      "aliases": ["bisi bele bath with raita", "bisibelebath raita"],
+      "cuisine": "karnataka", "typical_serving_g": 350,
+      "components": [
+        { "name": "bisi bele bath", "typical_fraction": 0.80, "prep_state": "cooked_wet" },
+        { "name": "raita", "typical_fraction": 0.20, "prep_state": "unspecified" }
+      ]
+    },
+    "ragi_mudde_sambar": {
+      "aliases": ["ragi mudde with sambar", "ragi mudde sambar", "ragi ball sambar"],
+      "cuisine": "karnataka", "typical_serving_g": 320,
+      "components": [
+        { "name": "ragi mudde", "typical_fraction": 0.50, "prep_state": "cooked_dry" },
+        { "name": "sambar", "typical_fraction": 0.50, "prep_state": "cooked_wet" }
+      ]
+    },
+    "puri_bhaji": {
+      "aliases": ["puri bhaji", "poori bhaji", "puri sabzi", "poori sabzi", "puri aloo sabzi"],
+      "cuisine": "north_indian", "typical_serving_g": 300,
+      "components": [
+        { "name": "puri", "typical_fraction": 0.40, "prep_state": "fried" },
+        { "name": "aloo sabzi", "typical_fraction": 0.60, "prep_state": "cooked_wet" }
+      ]
+    },
+    "chana_bhatura": {
+      "aliases": ["chana bhatura", "chhole bhature"],
+      "cuisine": "north_indian", "typical_serving_g": 350,
+      "components": [
+        { "name": "chole", "typical_fraction": 0.40, "prep_state": "cooked_wet" },
+        { "name": "bhatura", "typical_fraction": 0.60, "prep_state": "fried" }
+      ]
+    },
+    "amritsari_kulcha_chole": {
+      "aliases": ["amritsari kulcha chole", "kulcha chole", "kulcha with chole"],
+      "cuisine": "punjabi", "typical_serving_g": 350,
+      "components": [
+        { "name": "kulcha", "typical_fraction": 0.50, "prep_state": "baked" },
+        { "name": "chole", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "butter", "typical_fraction": 0.05, "prep_state": "unspecified" }
+      ]
+    },
+    "makki_roti_sarson_saag": {
+      "aliases": ["makki di roti sarson da saag", "makki roti sarson saag", "sarson ka saag makki roti"],
+      "cuisine": "punjabi", "typical_serving_g": 380,
+      "components": [
+        { "name": "makki roti", "typical_fraction": 0.35, "prep_state": "cooked_dry" },
+        { "name": "sarson ka saag", "typical_fraction": 0.55, "prep_state": "cooked_wet" },
+        { "name": "butter", "typical_fraction": 0.10, "prep_state": "unspecified" }
+      ]
+    },
+    "dal_bati_churma": {
+      "aliases": ["dal bati churma", "dal baati churma"],
+      "cuisine": "rajasthani", "typical_serving_g": 400,
+      "components": [
+        { "name": "dal", "typical_fraction": 0.30, "prep_state": "cooked_wet" },
+        { "name": "bati", "typical_fraction": 0.40, "prep_state": "baked" },
+        { "name": "churma", "typical_fraction": 0.20, "prep_state": "unspecified" },
+        { "name": "ghee", "typical_fraction": 0.10, "prep_state": "unspecified" }
+      ]
+    },
+    "gatte_ki_sabzi_roti": {
+      "aliases": ["gatte ki sabzi with roti", "gatte ki sabzi roti"],
+      "cuisine": "rajasthani", "typical_serving_g": 350,
+      "components": [
+        { "name": "gatte ki sabzi", "typical_fraction": 0.55, "prep_state": "cooked_wet" },
+        { "name": "roti", "typical_fraction": 0.45, "prep_state": "cooked_dry" }
+      ]
+    },
+    "fish_curry_rice": {
+      "aliases": ["fish curry rice", "fish curry chawal", "maach jhol rice"],
+      "cuisine": "bengali", "typical_serving_g": 380,
+      "components": [
+        { "name": "fish curry", "typical_fraction": 0.45, "prep_state": "cooked_wet" },
+        { "name": "cooked rice", "typical_fraction": 0.55, "prep_state": "cooked_dry" }
+      ]
+    },
+    "luchi_aloo_dum": {
+      "aliases": ["luchi aloo dum", "luchi with aloo dum"],
+      "cuisine": "bengali", "typical_serving_g": 300,
+      "components": [
+        { "name": "luchi", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "aloo dum", "typical_fraction": 0.55, "prep_state": "cooked_wet" }
+      ]
+    },
+    "appam_stew": {
+      "aliases": ["appam with stew", "appam stew", "appam vegetable stew"],
+      "cuisine": "kerala", "typical_serving_g": 320,
+      "components": [
+        { "name": "appam", "typical_fraction": 0.40, "prep_state": "steamed" },
+        { "name": "vegetable stew", "typical_fraction": 0.60, "prep_state": "cooked_wet" }
+      ]
+    },
+    "kerala_parotta_curry": {
+      "aliases": ["kerala parotta curry", "parotta with curry", "malabar parotta curry"],
+      "cuisine": "kerala", "typical_serving_g": 350,
+      "components": [
+        { "name": "kerala parotta", "typical_fraction": 0.45, "prep_state": "fried" },
+        { "name": "vegetable curry", "typical_fraction": 0.55, "prep_state": "cooked_wet" }
+      ]
+    },
+    "puttu_kadala_curry": {
+      "aliases": ["puttu kadala curry", "puttu with kadala curry", "puttu chana curry"],
+      "cuisine": "kerala", "typical_serving_g": 320,
+      "components": [
+        { "name": "puttu", "typical_fraction": 0.50, "prep_state": "steamed" },
+        { "name": "kadala curry", "typical_fraction": 0.50, "prep_state": "cooked_wet" }
+      ]
+    },
+    "pesarattu_chutney": {
+      "aliases": ["pesarattu with chutney", "pesarattu upma"],
+      "cuisine": "andhra", "typical_serving_g": 250,
+      "components": [
+        { "name": "pesarattu", "typical_fraction": 0.75, "prep_state": "roasted" },
+        { "name": "ginger chutney", "typical_fraction": 0.25, "prep_state": "unspecified" }
+      ]
+    },
+    "pulihora_curd": {
+      "aliases": ["pulihora with curd", "pulihora curd"],
+      "cuisine": "andhra", "typical_serving_g": 300,
+      "components": [
+        { "name": "pulihora", "typical_fraction": 0.75, "prep_state": "cooked_dry" },
+        { "name": "curd", "typical_fraction": 0.25, "prep_state": "unspecified" }
+      ]
+    },
+    "biryani_raita": {
+      "aliases": ["biryani with raita", "biryani raita", "chicken biryani raita", "mutton biryani raita"],
+      "cuisine": "north_indian", "typical_serving_g": 420,
+      "components": [
+        { "name": "chicken biryani", "typical_fraction": 0.80, "prep_state": "cooked_wet" },
+        { "name": "raita", "typical_fraction": 0.20, "prep_state": "unspecified" }
+      ]
+    }
+  }
+}
