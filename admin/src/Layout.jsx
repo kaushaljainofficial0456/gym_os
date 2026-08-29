@@ -45,7 +45,8 @@ export default function Layout() {
 
   return (
     <div className="layout">
-      <button className="sidebar-toggle" onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-label="Open navigation">
+      <button className="sidebar-toggle" style={{ display: navOpen ? 'none' : 'inline-flex' }}
+        onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-label="Open navigation">
         <Icon name="menu" size={17} />
         Menu
       </button>
@@ -83,7 +84,7 @@ export default function Layout() {
             <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent-soft)', color: 'var(--accent)', display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 800, flexShrink: 0 }}>
               {initials}
             </div>
-            <div className="faint" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name}</div>
+            <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--sidebar-ink-soft)', fontSize: 12 }}>{user?.name}</div>
           </div>
           <button className="signout" onClick={logout}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, justifyContent: 'center', width: '100%' }}>
