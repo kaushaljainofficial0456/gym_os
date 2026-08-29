@@ -37,9 +37,9 @@ export default function Community() {
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
   const showToast = (msg) => {
-    showToast(msg);
+    setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => showToast(''), 3000);
+    toastTimer.current = setTimeout(() => setToast(''), 3000);
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
