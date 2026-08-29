@@ -9,6 +9,10 @@ import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Avatar, Empty, Toast, Skeleton } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 
+// Page size for the activity feed. The API caps limit at 100 and defaults to
+// 30; 10 keeps the first paint small on a phone, where this page lives.
+const FEED_PAGE_SIZE = 10;
+
 const MEDAL = ['🥇', '🥈', '🥉'];
 const MEDAL_TONE = ['var(--gold, #C4A06A)', '#C0C0C0', '#CD7F32'];
 
@@ -17,7 +21,19 @@ export default function Community() {
   const membershipFetch = useFetch(() => api('/community/membership'));
   const [period, setPeriod] = useState('week');
   const lbFetch = useFetch(() => api(`/community/leaderboards?period=${period}`), [period]);
-  const feedFetch = useFetch(() => api('/community/feed'));
+  // Page 1 stays on useFetch so it keeps the shared loading/error/Retry
+  // semantics, and so the reload() calls after share/unshare/copy below
+  // reset pagination for free. Later pages are appended separately.
+  const feedFetch = useFetch(() => api(`/community/feed?limit=${FEED_PAGE_SIZE}&offset=0`));
+  const [extraShares, setExtraShares] = useState([]);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [moreError, setMoreError] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  // Bumped whenever page 1 is refetched. A "load more" that was already in
+  // flight compares this before committing, so a slow older response can
+  // never append onto a newer feed (or resurrect a share that was just
+  // unshared).
+  const feedSeq = useRef(0);
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
   const showToast = (msg) => {
@@ -26,6 +42,35 @@ export default function Community() {
     toastTimer.current = setTimeout(() => showToast(''), 3000);
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // These two live up here with the other hooks, ABOVE the early returns
+  // further down (loading / community-disabled / not-a-member all return
+  // before the member view). A hook placed after a conditional return is only
+  // called on some renders, which React rejects with "Rendered more hooks
+  // than during the previous render" -- it crashed the whole page into the
+  // error boundary until they were moved here.
+  //
+  // A fresh page 1 (initial load, Retry, or reload() after share/unshare/copy)
+  // discards every appended page and invalidates in-flight ones.
+  useEffect(() => {
+    feedSeq.current += 1;
+    setExtraShares([]);
+    setMoreError(null);
+    setMoreLoading(false);
+    setHasMore(!!feedFetch.data?.hasMore);
+  }, [feedFetch.data]);
+
+  // Deduplicated by id: offset paging can still repeat a row if a share is
+  // deleted between two page requests and shifts everything down one slot.
+  const shares = useMemo(() => {
+    const page1 = feedFetch.data?.shares || [];
+    const seen = new Set(page1.map((s) => s.id));
+    const rest = [];
+    for (const s of extraShares) {
+      if (!seen.has(s.id)) { seen.add(s.id); rest.push(s); }
+    }
+    return page1.concat(rest);
+  }, [feedFetch.data, extraShares]);
   const [sharing, setSharing] = useState(null); // workout_id being shared
   const [copyModal, setCopyModal] = useState(null); // share object
   const [copyForm, setCopyForm] = useState({ name: '', exercises: [] });
@@ -153,7 +198,24 @@ export default function Community() {
 
   // ---- Member view ----
   const lb = lbFetch.data?.leaderboards || { streak: [], volume: [], completedWorkouts: [] };
-  const shares = feedFetch.data?.shares || [];
+
+  const loadMore = async () => {
+    if (moreLoading || !hasMore) return;   // no double-fire, no request past the end
+    const seq = feedSeq.current;
+    setMoreLoading(true);
+    setMoreError(null);
+    try {
+      const res = await api(`/community/feed?limit=${FEED_PAGE_SIZE}&offset=${shares.length}`);
+      if (seq !== feedSeq.current) return; // page 1 reloaded underneath us — drop it
+      setExtraShares((prev) => prev.concat(res.shares || []));
+      setHasMore(!!res.hasMore);
+    } catch (e) {
+      if (seq !== feedSeq.current) return;
+      setMoreError(e);
+    } finally {
+      if (seq === feedSeq.current) setMoreLoading(false);
+    }
+  };
   const periods = [
     { value: 'day', label: 'Today' },
     { value: 'week', label: 'This Week' },
@@ -282,6 +344,26 @@ export default function Community() {
                 </div>
               </div>
             ))}
+
+            {/* Pagination: load-more, its own error, and an explicit end. */}
+            {moreError ? (
+              <div className="card p-4 text-center">
+                <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load more activity</p>
+                <button className="btn !text-xs" onClick={loadMore}>Retry</button>
+              </div>
+            ) : hasMore ? (
+              <button
+                className="btn w-full !text-xs !py-2.5"
+                onClick={loadMore}
+                disabled={moreLoading}
+                aria-busy={moreLoading}>
+                {moreLoading ? 'Loading…' : 'Load more'}
+              </button>
+            ) : (
+              <p className="text-center text-[10px] py-1" style={{ color: 'var(--faint)' }}>
+                You&rsquo;re all caught up
+              </p>
+            )}
           </div>
         )}
       </div>
