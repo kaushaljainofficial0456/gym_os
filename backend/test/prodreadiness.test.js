@@ -125,14 +125,16 @@ test('every org-scoped table in schema.sql is covered by an RLS policy', async (
   // lines rather than composing a RegExp per table so the alignment padding in
   // rls.sql ("ALTER TABLE users        ENABLE ...") can't cause a false miss.
   const rlsEnabled = new Set();
-  for (const l of rls.split('\n')) {
+  // \r?\n, not '\n': schema.sql is checked out CRLF on Windows
+  // (core.autocrlf), and a stray \r breaks any regex that ends in $.
+  for (const l of rls.split(/\r?\n/)) {
     const mm = l.match(/^\s*ALTER TABLE\s+(\w+)\s+ENABLE ROW LEVEL SECURITY/i);
     if (mm) rlsEnabled.add(mm[1]);
   }
   const missing = [];
   let table = null;
   let hasOrgId = false;
-  for (const raw of schema.split('\n')) {
+  for (const raw of schema.split(/\r?\n/)) {
     const line = raw.replace(/--.*$/, '');
     const start = line.match(/^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\(/i);
     if (start) { table = start[1]; hasOrgId = false; continue; }

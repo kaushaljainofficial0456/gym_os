@@ -112,15 +112,24 @@ async function computeStreaks(db, orgId, tz) {
   lookback.setUTCDate(lookback.getUTCDate() - 365);
   const since = dayKey(lookback, tz);
 
-  // Fetch all completed workout dates for community members in this org
+  // Fetch the completed workout DATES for community members in this org.
+  //
+  // DISTINCT is load-bearing, not cosmetic: a streak only cares whether a
+  // member trained on a given day, and the grouping below drops the row into
+  // a Set anyway -- so a member who logs three workouts on the same day was
+  // costing three rows over the wire and three Set writes to produce one
+  // date. On a large gym (1k members x ~150 completed workouts a year) that
+  // is the difference between transferring every workout row in the org and
+  // transferring one row per member per active day. Served by
+  // idx_workouts_client_status_date (client_id, status, scheduled_date).
   const rows = await db.q(
-    `SELECT cm.client_id, w.scheduled_date AS d
+    `SELECT DISTINCT cm.client_id, w.scheduled_date AS d
        FROM community_members cm
        JOIN clients c ON c.id = cm.client_id
        JOIN workouts w ON w.client_id = c.id
      WHERE cm.org_id = ? AND cm.enabled = 1
        AND w.status = 'completed' AND w.scheduled_date >= ?
-     ORDER BY cm.client_id, w.scheduled_date DESC`,
+     ORDER BY cm.client_id, d DESC`,
     [orgId, since]);
 
   // Group by client

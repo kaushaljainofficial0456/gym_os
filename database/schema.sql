@@ -218,6 +218,11 @@ CREATE TABLE IF NOT EXISTS workouts (
 );
 CREATE INDEX IF NOT EXISTS idx_workouts_client ON workouts(client_id, scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status);
+-- Community leaderboards filter completed workouts by client over a date
+-- range (streaks look back 365 days, completed-workout boards use the
+-- selected period). Neither idx_workouts_client (client_id, scheduled_date)
+-- nor idx_workouts_status (client_id, status) covers all three columns.
+CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date);
 
 CREATE TABLE IF NOT EXISTS workout_exercises (
   id          TEXT PRIMARY KEY,

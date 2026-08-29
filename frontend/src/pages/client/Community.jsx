@@ -418,12 +418,18 @@ function LeaderboardSection({ title, subtitle, entries, valueLabel }) {
 function PodiumSpot({ entry, medal, tall }) {
   const heights = tall ? 'h-20' : medal === 1 ? 'h-16' : 'h-14';
   return (
-    <div className="flex flex-col items-center gap-1.5" style={{ flex: 1 }}>
+    // min-w-0 is load-bearing: a flex item defaults to min-width:auto, which
+    // refuses to shrink below its content, so a long member name widened this
+    // column past the card and `truncate` never engaged (a 51-character name
+    // pushed the page from 375px to 499px on a phone). users.name allows up
+    // to 80 characters, so this is reachable with a real display name. Same
+    // min-w-0 + truncate pairing the rest-of-list rows above already use.
+    <div className="flex flex-col items-center gap-1.5 min-w-0" style={{ flex: 1 }}>
       <div className="text-2xl">{MEDAL[medal]}</div>
       <Avatar name={entry.name} size={tall ? 'w-11 h-11' : 'w-9 h-9'} />
-      <div className="font-grotesk text-[11px] font-semibold text-center truncate max-w-full"
+      <div className="font-grotesk text-[11px] font-semibold text-center truncate max-w-full w-full"
            style={{ color: 'var(--ink)' }}>{entry.name}</div>
-      <div className="font-grotesk text-xs font-bold tabular-nums"
+      <div className="font-grotesk text-xs font-bold tabular-nums truncate max-w-full w-full text-center"
            style={{ color: MEDAL_TONE[medal] }}>{entry.value}</div>
       <div className={`w-full rounded-t-lg ${heights}`}
            style={{ background: `linear-gradient(to top, ${MEDAL_TONE[medal]}22, transparent)` }} />

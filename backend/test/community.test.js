@@ -266,7 +266,7 @@ test('privacy: disabled member absent from leaderboard', async (t) => {
 test('sharing: member can share a completed workout', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const r = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(r.status, 201);
   assert.ok(r.json.id, 'Share created');
@@ -292,7 +292,7 @@ test('sharing: non-member cannot share', async (t) => {
 test('sharing: member can unshare', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   const r = await call('DELETE', `/api/community/shares/${s.json.id}`);
@@ -304,7 +304,7 @@ test('sharing: member can unshare', async (t) => {
 test('copy: member can copy a shared workout into their planner', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   const tk2 = jwt.sign({ sub: 'u2', role: 'CLIENT', org: 'o1', name: 'Rahul' }, config.jwtSecret, { expiresIn: '1h' });
@@ -321,15 +321,18 @@ test('copy: member can copy a shared workout into their planner', async (t) => {
   assert.equal(exs.length, 1);
   assert.equal(exs[0].name, 'Bench Press');
   assert.equal(exs[0].sets, 4);
-  // Original unchanged
+  // Original unchanged. Compared against the row actually selected above,
+  // not a hardcoded name -- "LIMIT 1" without ORDER BY is planner-dependent,
+  // so hardcoding it made this assertion break the moment an index changed
+  // the scan order rather than when the code under test regressed.
   const origW = await db.q1('SELECT * FROM workouts WHERE id = ?', [w.id]);
-  assert.equal(origW.name, 'Session 1');
+  assert.equal(origW.name, w.name);
 });
 
 test('copy: non-member/cross-org cannot copy', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   const tk4 = jwt.sign({ sub: 'u4', role: 'CLIENT', org: 'o2', name: 'CrossGym' }, config.jwtSecret, { expiresIn: '1h' });
   const r = await call('POST', `/api/community/shares/${s.json.id}/copy`, {}, tk4);
@@ -339,7 +342,7 @@ test('copy: non-member/cross-org cannot copy', async (t) => {
 test('feed: shows shares with author names', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   await call('POST', '/api/community/shares', { workout_id: w.id });
   const feed = await call('GET', '/api/community/feed');
   assert.equal(feed.status, 200);
@@ -352,7 +355,7 @@ test('feed: shows shares with author names', async (t) => {
 test('disabling membership removes shares from feed', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   await call('POST', '/api/community/shares', { workout_id: w.id });
   let feed = await call('GET', '/api/community/feed');
   assert.ok(feed.json.shares.length >= 1);
@@ -454,7 +457,7 @@ test('copy: exercise_id: null accepted (UI flow)', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
   // Share Arjun's workout
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   // Rahul copies with exercise_id: null (matching UI payload)
@@ -474,7 +477,7 @@ test('copy: rest_sec preserved from shared workout', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
   // Share Arjun's workout — payload now includes rest_sec
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   // Rahul copies without overrides — should use snapshot rest_sec
@@ -491,7 +494,7 @@ test('copy: rest_sec preserved from shared workout', async (t) => {
 test('copy: >20 exercises rejected', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   const exercises = Array.from({ length: 21 }, (_, i) => ({ name: `Ex ${i}`, sets: 3, reps: '10', weight: 'BW' }));
   const tk2 = jwt.sign({ sub: 'u2', role: 'CLIENT', org: 'o1', name: 'Rahul' }, config.jwtSecret, { expiresIn: '1h' });
@@ -549,7 +552,7 @@ test('non-member client gets 403 on feed', async (t) => {
 test('share: owner can delete own share', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   const r = await call('DELETE', `/api/community/shares/${s.json.id}`);
@@ -562,7 +565,7 @@ test('share: owner can delete own share', async (t) => {
 test('share: cannot delete another users share', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   // Rahul (u2) tries to delete Arjuns (u1) share
