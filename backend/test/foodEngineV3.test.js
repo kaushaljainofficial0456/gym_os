@@ -216,3 +216,53 @@ test('a rejected sub-match from splitting is reported as unresolved, never silen
   const v1 = legacy.estimateFood('2 slices toast with butter');
   assert.ok(v3.items.length + v3.unresolved.length >= v1.items.length + v1.unresolved.length);
 });
+
+// ---------------------------------------------------------------------
+// Head-noun identity fallback (a modifier word with many UNRELATED prefix
+// matches -- e.g. "black" -- can swamp FoodSearch's ranked pool entirely,
+// so the top-1 match shares NOT ONE real word with the query)
+// ---------------------------------------------------------------------
+
+test('REGRESSION (identity bug): "black coffee" no longer resolves to an unrelated "Black X" row', () => {
+  const v1 = legacy.estimateFood('black coffee');
+  assert.equal(v1.items[0].name, 'Black berry (Rubus sp.)', 'confirms the known V1 bug is still reproducible pre-fix');
+
+  const v3 = estimateMeal('black coffee', { engine: 'v3' });
+  assert.equal(v3.items.length, 1);
+  assert.match(v3.items[0].name, /coffee/i, 'the head noun "coffee" must now actually appear in the match');
+  assert.equal(v3.items[0].match_kind, 'head_noun_fallback');
+  assert.ok(v3.items[0].calories < 60, `black coffee should be a near-zero-calorie beverage, got ${v3.items[0].calories}`);
+});
+
+test('the fallback checks the HEAD NOUN specifically, not "any" shared token (the modifier itself must not count as agreement)', () => {
+  // "black coffee" and "Black berry" share the token "black" -- that must
+  // NOT be read as "the match agrees with the query". Exercised directly
+  // via the public behavior above; this test locks in the reasoning: a
+  // control ingredient that legitimately shares its head noun with the
+  // query (not just a modifier) must be left alone.
+  const v3 = estimateMeal('brown rice', { engine: 'v3' });
+  const v1 = legacy.estimateFood('brown rice');
+  assert.deepEqual(v3.items.map((i) => i.name), v1.items.map((i) => i.name), 'a match that already contains the head noun must never be swapped');
+});
+
+test('the fallback never fires on a single-word query (no modifier/head-noun split to exploit)', () => {
+  const v3 = estimateMeal('paneer', { engine: 'v3' });
+  const v1 = legacy.estimateFood('paneer');
+  assert.deepEqual(v3.items.map((i) => i.name), v1.items.map((i) => i.name));
+});
+
+test('a fallback candidate must still clear plausibility -- never swap one wrong answer for another', () => {
+  // "coffee" alone top-ranks a coffee-FLAVORED dairy cream product, which
+  // is nutritionally nothing like black coffee (high fat/kcal vs near-
+  // zero) -- the fallback must skip it and keep looking rather than accept
+  // the first head-noun-containing candidate unconditionally.
+  const v3 = estimateMeal('black coffee', { engine: 'v3' });
+  const it = v3.items[0];
+  assert.ok(!/cream/i.test(it.name), 'must not accept an implausible dairy product just because "coffee" appears in its name');
+});
+
+test('a resolved item that already shares the head noun with the query is never touched', () => {
+  const v1 = legacy.estimateFood('green tea');
+  const v3 = estimateMeal('green tea', { engine: 'v3' });
+  assert.deepEqual(v3.items.map((i) => [i.name, i.calories]), v1.items.map((i) => [i.name, i.calories]));
+});

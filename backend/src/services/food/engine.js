@@ -407,6 +407,85 @@ function splitStandaloneConjunction(raw) {
   return parts.length >= 2 ? parts : null;
 }
 
+// Stopwords/quantity-noise words a query can carry that never help pick out
+// a distinctive candidate — deliberately small and conservative, not a full
+// linguistic stopword list, to keep this predictable.
+const COVERAGE_STOPWORDS = new Set(['a', 'an', 'the', 'of', 'with', 'and', 'some', 'my', 'i', 'had', 'for', 'plain', 'some']);
+
+function significantTokens(text) {
+  return impl.normalize(String(text || '')).split(' ').filter((t) => t.length >= 3 && !COVERAGE_STOPWORDS.has(t));
+}
+
+// A resolved item that shares NOT ONE token with the query's own significant
+// words is a strong signal the match is wrong, not merely imprecise —
+// confirmed empirically: "black coffee" retrieves zero coffee-containing
+// candidates anywhere in its own top 40 (the shared FoodSearch.score()'s
+// prefix-match weighting lets unrelated "Black berry"/"Black snapper"/
+// "Black Russian" swamp the pool entirely; same pattern for "masala chai"
+// vs unrelated "Masala Oats"/"Masala Munch"). A real fix belongs in
+// FoodSearch.score() itself (architecture's own "replace hand-weighted
+// score() with a feature-based rank" phase) — that function is shared by
+// every pipeline and rewriting it is deliberately out of scope for one
+// targeted correction here. This retries with just the LAST significant
+// token (the usual head noun in "modifier + noun" phrasing: black COFFEE,
+// masala CHAI, green TEA) and only accepts a fallback candidate that clears
+// the SAME plausibility + non-branded bar every other Phase 3 correction
+// uses — e.g. "coffee" alone top-ranks a coffee-FLAVORED cream product,
+// which this correctly rejects (dairy fat/kcal fails a beverage's
+// plausibility bounds), falling through to a genuine brewed-coffee row.
+function tryHeadNounFallback(raw, parsed, existingItem) {
+  if (!existingItem || existingItem.trustworthy === false) return null;
+  const qTokens = significantTokens(raw);
+  if (qTokens.length < 2) return null; // no modifier/head-noun split to exploit
+  const headNoun = qTokens[qTokens.length - 1];
+  const existingTokens = new Set(significantTokens(existingItem.name));
+  // Check the HEAD NOUN specifically, not "any" shared token — the modifier
+  // word is exactly what's polluting the match in the failure this targets
+  // ("black coffee" -> "Black berry" shares "black", which is worthless
+  // signal here; the query and the match must agree on the actual food).
+  if (existingTokens.has(headNoun)) return null; // the head noun itself is present — trust it
+
+  const search = impl.getFoodSearch();
+  if (!search) return null;
+  const candidates = search.search(headNoun, { limit: 8 }) || [];
+  for (const food of candidates) {
+    if (food.trustworthy === false) continue;
+    const candTokens = new Set(significantTokens(food.food_name));
+    if (!candTokens.has(headNoun)) continue; // must actually contain the head noun itself
+
+    const q = impl.resolveGrams(parsed, food);
+    const scaled = impl.scaleNutrition(food, q.grams);
+    if (!scaled) continue;
+    const t = scaled.totals;
+    const candidateItem = {
+      name: food.food_name,
+      unit: q.description,
+      qty: parsed.qty == null ? 1 : parsed.qty,
+      calories: Math.round(t.energy_kcal ?? 0),
+      protein: t.protein_g,
+      carbs: t.carb_g,
+      fat: t.fat_g,
+      source_id: food.source_id,
+      source: food.source,
+      grams: scaled.grams,
+      grams_basis: q.basis,
+      grams_assumed: q.assumed,
+      confidence: food.confidence,
+      trustworthy: true,
+      match_kind: 'head_noun_fallback',
+      cooking_state: food.cooking_state,
+      matched_from: raw,
+      fiber_g: t.fiber_g,
+      sugar_g: t.sugar_g,
+      sodium_mg: t.sodium_mg,
+    };
+    if (checkPlausibility(candidateItem, food).verdict === 'hard_fail') continue;
+    if (coarseClassOf(candidateItem, food) === 'branded_product') continue;
+    return candidateItem;
+  }
+  return null;
+}
+
 export function applyPhase3(base, originalText) {
   if (!base || !Array.isArray(base.items) || !originalText) return base;
   const rawFragments = impl.splitItems(originalText);
@@ -417,6 +496,7 @@ export function applyPhase3(base, originalText) {
   let changed = false;
   let decomposedCount = 0;
   let splitCount = 0;
+  let headNounFallbacks = 0;
 
   for (const raw of rawFragments) {
     const parsed = impl.parseFragment(raw);
@@ -430,11 +510,22 @@ export function applyPhase3(base, originalText) {
     // does its own normalization and is robust to a leading qty/unit either
     // way, so the raw fragment is a strictly safer input here.
     const cls = classifyComposite(raw);
-    if (cls.kind !== 'composite') continue; // nothing composite-shaped here at all
-
     const itemIdx = items.findIndex((it) => it.matched_from === raw);
     const existingItem = itemIdx >= 0 ? items[itemIdx] : null;
     const unresolvedIdx = unresolved.findIndex((u) => u.fragment === raw);
+
+    if (cls.kind !== 'composite') {
+      // Not composite-shaped at all — the only remaining Phase 3 correction
+      // is the head-noun identity fallback for a resolved-but-clearly-wrong
+      // match (see tryHeadNounFallback's own comment for why).
+      const fallback = tryHeadNounFallback(raw, parsed, existingItem);
+      if (fallback && itemIdx >= 0) {
+        items[itemIdx] = fallback;
+        changed = true;
+        headNounFallbacks++;
+      }
+      continue;
+    }
 
     if (!cls.dish_key) {
       // Combo-shaped but no curated template. The ONLY thing Phase 3 can
@@ -573,6 +664,6 @@ export function applyPhase3(base, originalText) {
         ? 'Some items are estimated from a typical recipe composition (composite-dish decomposition), not a single measured row — see the item labels.'
         : base.disclaimer,
     engine: 'v3',
-    v3: { composite_decompositions: decomposedCount, conjunction_splits: splitCount },
+    v3: { composite_decompositions: decomposedCount, conjunction_splits: splitCount, head_noun_fallbacks: headNounFallbacks },
   };
 }
