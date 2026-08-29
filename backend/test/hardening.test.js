@@ -2,7 +2,7 @@
 // Hardening-pass tests: tenant isolation, client permissions,
 // meal composition, occupancy engine, planner, PG compatibility.
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -202,9 +202,18 @@ test('client-workout/planner writes are rate-limited -- a burst past the per-min
   const api = await startMeApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
   t.after(() => api.close());
 
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const statuses = [];
-  for (let i = 0; i < 45; i++) {
-    statuses.push((await api.call('POST', '/me/planner/workouts', { name: `Burst ${i}`, exercises: [{ exercise_id: 'ex1', sets: 3, reps: '10' }] })).status);
+  try {
+    for (let i = 0; i < 45; i++) {
+      statuses.push((await api.call('POST', '/me/planner/workouts', { name: `Burst ${i}`, exercises: [{ exercise_id: 'ex1', sets: 3, reps: '10' }] })).status);
+    }
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(statuses.includes(429), `expected at least one 429 in a 45-request burst against a 40/min limit, got ${statuses.filter((s) => s === 429).length} 429s`);
   assert.ok(statuses.slice(0, 40).every((s) => s === 200), 'the first 40 requests (at the configured limit) must all succeed');

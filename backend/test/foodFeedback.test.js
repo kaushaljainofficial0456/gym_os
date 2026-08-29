@@ -8,7 +8,7 @@
 //     when the aggregate itself is Atwater-plausible, and NEVER touches an
 //     already-VERIFIED_SHARED_FOOD row
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -223,12 +223,21 @@ test('POST /me/food-feedback is rate-limited -- a burst past the per-minute cap 
     query: 'rate limit test dish burst scenario', original_grams: 100, adjusted_grams: 100,
     original: { calories: 300, protein_g: 10, carbs_g: 40, fat_g: 8 },
   };
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const results = [];
-  for (let i = 0; i < 12; i++) {
-    // A tiny variation per request so none of them get short-circuited as
-    // "no meaningful change" (which would return 200 without ever
-    // touching the rate limiter's own pass/fail path).
-    results.push(await api.call('POST', '/me/food-feedback', { ...body, adjusted: { calories: 300 + i, protein_g: 10, carbs_g: 40, fat_g: 8 } }));
+  try {
+    for (let i = 0; i < 12; i++) {
+      // A tiny variation per request so none of them get short-circuited as
+      // "no meaningful change" (which would return 200 without ever
+      // touching the rate limiter's own pass/fail path).
+      results.push(await api.call('POST', '/me/food-feedback', { ...body, adjusted: { calories: 300 + i, protein_g: 10, carbs_g: 40, fat_g: 8 } }));
+    }
+  } finally {
+    mock.timers.reset();
   }
   const statuses = results.map((r) => r.status);
   assert.ok(statuses.includes(429), `expected at least one 429 in a 12-request burst against a 10/min limit, got: ${statuses.join(',')}`);

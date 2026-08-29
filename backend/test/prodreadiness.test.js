@@ -183,6 +183,52 @@ test('rate limiter allows up to max then returns 429 with Retry-After', async ()
   assert.ok(Number(res.headers['Retry-After']) >= 1);
 });
 
+// Regression test for a real bug found while auditing the rate limiter for
+// production readiness: the pluggable-store branch (meant for a future
+// Redis/Vercel-KV adapter) never actually called store.get()/store.set() --
+// it fabricated a fresh {count:0} on every single request and discarded it,
+// so ANY non-MemoryStore implementation of the documented interface would
+// silently never rate-limit anything at all. Proven here with a minimal
+// fake store implementing exactly the documented { get, set, delete }
+// interface -- if this regresses, the pluggable-store abstraction is
+// broken again for whoever eventually wires up a real external store.
+test('rate limiter actually persists and enforces state through a pluggable external store, not just MemoryStore', async () => {
+  const { rateLimit, setRateLimitStore, resetToMemoryStore } = await import('../src/rateLimit.js');
+  const backing = new Map();
+  const fakeExternalStore = {
+    async get(key) { return backing.get(key) ?? null; },
+    async set(key, value) { backing.set(key, value); },
+    async delete(key) { backing.delete(key); },
+  };
+  setRateLimitStore(fakeExternalStore);
+  try {
+    const limiter = rateLimit({ windowMs: 60_000, max: 2, keyFn: () => 'same-client' });
+    const req = { ip: '5.6.7.8' };
+    const results = [];
+    // status() itself resolves the promise on a 429 (next() is never
+    // called in that case) -- avoids racing a queueMicrotask against the
+    // middleware's own internal promise chain to detect the short-circuit.
+    const runOnce = () => new Promise((resolve) => {
+      const res = {
+        statusCode: 0, headers: {},
+        set(k, v) { this.headers[k] = v; return this; },
+        status(c) { this.statusCode = c; if (c === 429) { results.push({ nexted: false }); resolve(); } return this; },
+        json() { return this; },
+      };
+      limiter(req, res, () => { results.push({ nexted: true }); resolve(); });
+    });
+    for (let i = 0; i < 3; i++) await runOnce();
+    assert.equal(backing.size, 1, 'the external store actually received a write, not just discarded a fresh bucket every time');
+    const nextedCount = results.filter((r) => r.nexted).length;
+    assert.equal(nextedCount, 2, 'the external store path enforces max exactly like MemoryStore does');
+    assert.ok(results.some((r) => !r.nexted), 'the 3rd request is rejected through the external store, not silently allowed');
+  } finally {
+    // Restore the default in-memory store so no other test in this
+    // process is affected by the fake store left behind.
+    resetToMemoryStore();
+  }
+});
+
 // ---------- storage abstraction ----------
 // valid 64x64 RGBA PNG (large enough to pass the dimension sanity check)
 const PNG_64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmElEQVR4nO3QoREAIBDAsB8CgWX/IWGMCCrie521z/3Z6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QHACfBLQ84XmAAAAAASUVORK5CYII=';

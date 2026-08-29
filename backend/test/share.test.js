@@ -11,7 +11,7 @@
 // rate-limited like every other unauthenticated write-adjacent surface
 // in this app (see clientError.js, the sibling public route).
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -199,9 +199,20 @@ test('GET /api/share/:id is rate-limited by IP so a scripted flood cannot hammer
   const shareId = await insertShare(db, { orgId, clientId, items: SAMPLE_ITEMS });
   const { call, close } = await startApi(db); t.after(() => close());
 
+  // The limiter keys its window on Date.now() (Math.floor(now / windowMs)),
+  // so a burst of real sequential requests can straddle an actual
+  // clock-minute boundary under system load and spuriously never hit the
+  // limit -- a test-timing flake, not a real bug (see rateLimit.js).
+  // Freezing time for the duration of the burst makes every request land
+  // in the exact same window deterministically.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const statuses = [];
-  for (let i = 0; i < 65; i++) {
-    statuses.push((await call(shareId)).status);
+  try {
+    for (let i = 0; i < 65; i++) {
+      statuses.push((await call(shareId)).status);
+    }
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(statuses.includes(429), `expected at least one 429 in a 65-request burst against a 60/min limit, got: ${statuses.filter((s) => s !== 200).join(',') || 'none'}`);
   assert.ok(statuses.slice(0, 60).every((s) => s === 200), 'the first 60 requests (at the configured limit) must all succeed');
