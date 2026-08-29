@@ -1,11 +1,12 @@
 /* ============================================================
    SK OS Admin Console — design tokens.
-   Palette: warm cream ground, dusty slate for structure, deep navy for
-   ink/accent — a paper-and-ledger feel suited to an operations console,
-   not a copy of the gym-owner app's own dark/gold identity. Light mode
-   is the PRIMARY design (the palette is a light one by nature); dark
-   mode is a deliberate, consistent inversion for system-preference
-   users, not an afterthought.
+   Palette: soft yellow gradient ground (#fff9c6 -> #fff6b3 -> #fff4a0)
+   with black for ink and structure -- user-directed palette (2026-08-29),
+   replacing the earlier cream/navy identity outright. Sidebar is solid
+   black for deliberate contrast against the yellow main content; the
+   brightest yellow (#fff4a0) does double duty as the accent-on-black
+   color (active nav, button labels) so the two-color identity reads
+   consistently everywhere, not just on the page background.
    Type: DM Sans carries headings, labels and anything that needs
    presence; DM Mono (same type family, built to pair with DM Sans)
    carries tabular data — KPI figures, table numbers, timestamps, ids —
@@ -13,74 +14,72 @@
    ============================================================ */
 
 :root {
-  --bg: #f6f3ed;
+  --bg: linear-gradient(160deg, #fff9c6 0%, #fff6b3 45%, #fff4a0 100%);
+  --bg-solid: #fff6b3;
   --panel: #ffffff;
-  --panel-alt: #fbf9f4;
-  --ink: #313851;
-  --ink-soft: #4a5170;
-  --mute: #6b7184;
-  --faint: #8f95a3;
-  --line: #e6e2d8;
-  --line-strong: #c2cbd3;
-  --accent: #313851;
-  --accent-ink: #ffffff;
-  --accent-soft: #e9eaf0;
-  --good: #2f7a5c;
-  --good-soft: #e3f0e9;
-  --warn: #a8681e;
-  --warn-soft: #f5ead4;
-  --bad: #b14a3d;
-  --bad-soft: #f6e4e1;
+  --panel-alt: #fffdf0;
+  --ink: #0a0a08;
+  --ink-soft: #2b2a1f;
+  --mute: #5c5a48;
+  --faint: #8a8770;
+  --line: #ece0a0;
+  --line-strong: #d6c85f;
+  --accent: #0a0a08;
+  --accent-ink: #fff4a0;
+  --accent-soft: #fff9c6;
+  --good: #2f7a4a;
+  --good-soft: #e3f0e5;
+  --warn: #b8620f;
+  --warn-soft: #f7e6cf;
+  --bad: #b1392e;
+  --bad-soft: #f6e0dd;
   --radius: 10px;
   --radius-lg: 14px;
-  --shadow-card: 0 1px 2px rgba(49, 56, 81, 0.04), 0 1px 8px rgba(49, 56, 81, 0.03);
+  --shadow-card: 0 1px 2px rgba(10, 10, 8, 0.05), 0 1px 8px rgba(10, 10, 8, 0.04);
   --font-sans: "DM Sans", -apple-system, "Segoe UI", sans-serif;
   --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --sidebar-bg: #0a0a08;
+  --sidebar-ink: #fff4a0;
+  --sidebar-ink-soft: rgba(255, 244, 160, 0.72);
+  --sidebar-line: rgba(255, 244, 160, 0.14);
+  --sidebar-hover: rgba(255, 244, 160, 0.08);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #1b1f30;
-    --panel: #242a40;
-    --panel-alt: #20253a;
-    --ink: #f3f1ea;
-    --ink-soft: #d6d9e6;
-    --mute: #a8adc0;
-    --faint: #767c92;
-    --line: #333a54;
-    --line-strong: #454d6c;
-    --accent: #c2cbd3;
-    --accent-ink: #232a40;
-    --accent-soft: #303752;
-    --good: #6bc79f;
-    --good-soft: #22352d;
-    --warn: #dcab5f;
-    --warn-soft: #3a331f;
-    --bad: #e19488;
-    --bad-soft: #3a2724;
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 8px rgba(0, 0, 0, 0.15);
-  }
-}
+/* Deliberately NOT gated behind @media (prefers-color-scheme: dark)
+   anymore -- that was the actual reason the earlier "light" redesign
+   never looked light: a viewer whose OS/browser prefers dark mode was
+   silently seeing the dark variant below the whole time, no matter how
+   light the default tokens were. The yellow palette is the app's one
+   identity now, shown to everyone regardless of system preference.
+   :root[data-theme="dark"] stays defined (unused today, no toggle
+   sets it) so a future explicit dark-mode toggle has real tokens to
+   flip to, without reintroducing the silent system-preference override. */
 :root[data-theme="dark"] {
-  --bg: #1b1f30;
-  --panel: #242a40;
-  --panel-alt: #20253a;
-  --ink: #f3f1ea;
-  --ink-soft: #d6d9e6;
-  --mute: #a8adc0;
-  --faint: #767c92;
-  --line: #333a54;
-  --line-strong: #454d6c;
-  --accent: #c2cbd3;
-  --accent-ink: #232a40;
-  --accent-soft: #303752;
-  --good: #6bc79f;
-  --good-soft: #22352d;
-  --warn: #dcab5f;
-  --warn-soft: #3a331f;
-  --bad: #e19488;
-  --bad-soft: #3a2724;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 8px rgba(0, 0, 0, 0.15);
+  --bg: linear-gradient(160deg, #14140c 0%, #0f0f08 55%, #0a0a08 100%);
+  --bg-solid: #0f0f08;
+  --panel: #1c1c12;
+  --panel-alt: #161610;
+  --ink: #fff9c6;
+  --ink-soft: #eee4a0;
+  --mute: #b8ae7c;
+  --faint: #7d7658;
+  --line: #34331f;
+  --line-strong: #4a4826;
+  --accent: #fff4a0;
+  --accent-ink: #0a0a08;
+  --accent-soft: #2c2a17;
+  --good: #7ec99a;
+  --good-soft: #1f2f24;
+  --warn: #e0a75f;
+  --warn-soft: #3a2c18;
+  --bad: #e08d80;
+  --bad-soft: #3a2420;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 10px rgba(0, 0, 0, 0.3);
+  --sidebar-bg: #000000;
+  --sidebar-ink: #fff4a0;
+  --sidebar-ink-soft: rgba(255, 244, 160, 0.72);
+  --sidebar-line: rgba(255, 244, 160, 0.12);
+  --sidebar-hover: rgba(255, 244, 160, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -104,8 +103,8 @@ a:hover { text-decoration: underline; }
 .sidebar {
   width: 236px;
   flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-line);
   padding: 22px 14px;
   display: flex;
   flex-direction: column;
@@ -115,11 +114,11 @@ a:hover { text-decoration: underline; }
   font-size: 17px;
   letter-spacing: -0.01em;
   padding: 2px 10px 22px;
-  color: var(--ink);
+  color: var(--sidebar-ink);
 }
 .sidebar .brand small {
   display: block;
-  color: var(--mute);
+  color: var(--sidebar-ink-soft);
   font-weight: 500;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -128,7 +127,7 @@ a:hover { text-decoration: underline; }
 }
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; }
 .sidebar nav a {
-  color: var(--ink-soft);
+  color: var(--sidebar-ink-soft);
   padding: 10px 12px;
   border-radius: var(--radius);
   font-size: 13.5px;
@@ -136,8 +135,8 @@ a:hover { text-decoration: underline; }
   text-decoration: none;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.sidebar nav a:hover { background: var(--panel-alt); color: var(--ink); text-decoration: none; }
-.sidebar nav a.active { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.sidebar nav a:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); text-decoration: none; }
+.sidebar nav a.active { background: var(--sidebar-ink); color: var(--sidebar-bg); font-weight: 700; }
 .sidebar .env-badge {
   margin-top: auto;
   font-size: 11px;
@@ -152,8 +151,8 @@ a:hover { text-decoration: underline; }
 .sidebar .signout {
   margin-top: 10px;
   background: none;
-  border: 1px solid var(--line-strong);
-  color: var(--mute);
+  border: 1px solid var(--sidebar-line);
+  color: var(--sidebar-ink-soft);
   border-radius: var(--radius);
   padding: 9px;
   cursor: pointer;
@@ -161,7 +160,7 @@ a:hover { text-decoration: underline; }
   font-weight: 600;
   font-family: var(--font-sans);
 }
-.sidebar .signout:hover { color: var(--ink); border-color: var(--ink-soft); background: var(--panel-alt); }
+.sidebar .signout:hover { color: var(--sidebar-ink); border-color: var(--sidebar-ink-soft); background: var(--sidebar-hover); }
 
 /* ---------- main ---------- */
 .main { flex: 1; min-width: 0; padding: 34px 40px; overflow-x: auto; }
@@ -273,14 +272,47 @@ tr:hover td { background: var(--panel-alt); }
 .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 textarea.input { font-family: var(--font-sans); resize: vertical; }
 
-/* ---------- login ---------- */
-.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
-.login-box { width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 32px; box-shadow: var(--shadow-card); }
-.login-box h1 { font-size: 20px; font-weight: 800; margin: 0 0 3px; letter-spacing: -0.01em; color: var(--ink); }
-.login-box p { color: var(--mute); font-size: 13px; margin: 0 0 22px; }
-.field { margin-bottom: 14px; }
-.field label { display: block; font-size: 11px; font-weight: 700; color: var(--mute); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+/* ---------- login: full-bleed video background, transparent form ---------- */
+.login-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-solid); position: relative; overflow: hidden;
+}
+.login-video {
+  position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
+}
+.login-scrim {
+  position: fixed; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(10,10,8,.55) 0%, rgba(10,10,8,.35) 45%, rgba(10,10,8,.6) 100%);
+}
+@media (prefers-reduced-motion: reduce) { .login-video { display: none; } }
+
+.login-box {
+  width: 380px; max-width: calc(100% - 40px); position: relative; z-index: 2;
+  padding: 32px; text-align: left;
+}
+.login-box h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.4); }
+.login-box p.login-sub { color: rgba(255,255,255,.78); font-size: 13.5px; margin: 0 0 26px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 11px; font-weight: 700; color: var(--mute); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.06em; }
+.login-box .field label { color: rgba(255, 255, 255, 0.7); }
+
+/* Transparent-on-video input: no fill, just a bottom rule -- stays
+   legible and typeable against a moving background without boxing it
+   off from the video like an opaque card would. */
+.input-ghost {
+  width: 100%; background: rgba(255, 255, 255, 0.06); border: none;
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.4);
+  color: #fff; padding: 10px 4px; font-size: 14.5px; font-family: var(--font-sans);
+  border-radius: 4px 4px 0 0; transition: border-color .15s ease, background .15s ease;
+}
+.input-ghost::placeholder { color: rgba(255, 255, 255, 0.45); }
+.input-ghost:focus { outline: none; border-bottom-color: var(--accent-ink, #fff4a0); background: rgba(255, 255, 255, 0.1); }
+
+.login-box .btn { background: #fff4a0; color: #0a0a08; }
+.login-box .btn:hover { opacity: .92; }
+
 .error-text { color: var(--bad); font-size: 12.5px; margin: 10px 0 0; font-weight: 500; }
+.login-box .error-text { color: #ffb3a3; font-weight: 600; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
 
 /* ---------- misc ---------- */
 .muted { color: var(--mute); }
@@ -357,32 +389,32 @@ textarea.input { font-family: var(--font-sans); resize: vertical; }
 .sidebar { width: 248px; gap: 4px; }
 .sidebar .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px; }
 .sidebar .brand .mark {
-  width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--accent-ink);
+  width: 30px; height: 30px; border-radius: 9px; background: var(--sidebar-ink); color: var(--sidebar-bg);
   display: grid; place-items: center; font-weight: 800; font-size: 14px; flex-shrink: 0;
 }
-.sidebar .brand .brand-text { display: flex; flex-direction: column; }
-.sidebar .brand .brand-text small { margin-top: 1px; }
+.sidebar .brand .brand-text { display: flex; flex-direction: column; color: var(--sidebar-ink); }
+.sidebar .brand .brand-text small { margin-top: 1px; color: var(--sidebar-ink-soft); }
 .nav-group { margin-bottom: 4px; }
 .nav-group-label {
   font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--faint); padding: 14px 12px 6px;
+  color: var(--sidebar-ink-soft); padding: 14px 12px 6px; opacity: .7;
 }
 .sidebar nav a.nav-item {
   display: flex; align-items: center; gap: 10px;
-  color: var(--ink-soft); padding: 9px 12px; border-radius: var(--radius);
+  color: var(--sidebar-ink-soft); padding: 9px 12px; border-radius: var(--radius);
   font-size: 13.5px; font-weight: 600; text-decoration: none;
   transition: background .12s ease, color .12s ease, transform .12s ease;
   position: relative;
 }
 .sidebar nav a.nav-item svg { flex-shrink: 0; opacity: .82; }
-.sidebar nav a.nav-item:hover { background: var(--panel-alt); color: var(--ink); text-decoration: none; transform: translateX(1px); }
-.sidebar nav a.nav-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.sidebar nav a.nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); text-decoration: none; transform: translateX(1px); }
+.sidebar nav a.nav-item.active { background: var(--sidebar-ink); color: var(--sidebar-bg); font-weight: 700; }
 .sidebar nav a.nav-item.active svg { opacity: 1; }
 .sidebar nav a.nav-item .count {
   margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
   background: var(--bad-soft); color: var(--bad); border-radius: 999px; padding: 1px 7px; line-height: 1.5;
 }
-.sidebar nav a.nav-item.active .count { background: rgba(255,255,255,.22); color: var(--accent-ink); }
+.sidebar nav a.nav-item.active .count { background: rgba(10,10,8,.18); color: var(--sidebar-bg); }
 
 .sidebar-toggle { display: none; }
 .sidebar-backdrop { display: none; }
@@ -391,17 +423,20 @@ textarea.input { font-family: var(--font-sans); resize: vertical; }
   .layout { position: relative; }
   .sidebar {
     position: fixed; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%);
-    transition: transform .26s cubic-bezier(.22,.8,.3,1); box-shadow: 24px 0 48px -20px rgba(0,0,0,.25);
+    transition: transform .26s cubic-bezier(.22,.8,.3,1); box-shadow: 24px 0 48px -20px rgba(0,0,0,.4);
   }
   .sidebar.open { transform: translateX(0); }
   .sidebar-toggle {
-    display: inline-flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 20;
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 9px 12px; margin: 14px 14px 0; font-family: var(--font-sans); font-weight: 700; font-size: 13px;
-    color: var(--ink); cursor: pointer; width: calc(100% - 28px);
+    display: inline-flex; align-items: center; gap: 8px; position: fixed; top: 14px; left: 14px; z-index: 45;
+    background: var(--sidebar-bg); border: 1px solid var(--sidebar-line); border-radius: var(--radius);
+    padding: 9px 14px; font-family: var(--font-sans); font-weight: 700; font-size: 13px;
+    color: var(--sidebar-ink); cursor: pointer; width: auto; box-shadow: 0 8px 20px -8px rgba(0,0,0,.35);
   }
-  .sidebar-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(20, 20, 30, .38); z-index: 30; animation: fadeIn .15s ease both; }
-  .main { padding: 8px 18px 34px; }
+  .sidebar .sidebar-toggle {
+    position: static; top: auto; left: auto; z-index: auto; box-shadow: none; border: none; background: transparent;
+  }
+  .sidebar-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(10, 10, 8, .5); z-index: 30; animation: fadeIn .15s ease both; }
+  .main { padding: 70px 18px 34px; }
 }
 
 /* ---------- skeleton loaders ---------- */
