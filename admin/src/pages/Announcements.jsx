@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { useFetch } from '../utils.js';
+import { useToast } from '../components/Toast.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonRows } from '../components/Skeleton.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const AUDIENCE_LABEL = { ALL: 'Everyone', OWNERS: 'Gym owners', TRAINERS: 'Trainers', CLIENTS: 'Clients' };
 const PRIORITY_TONE = { LOW: 'mute', NORMAL: 'mute', HIGH: 'warn', URGENT: 'bad' };
 const emptyForm = { title: '', message: '', audience: 'ALL', priority: 'NORMAL', startsAt: '', endsAt: '' };
+
+function windowStatus(a) {
+  const now = Date.now();
+  if (a.starts_at && new Date(a.starts_at).getTime() > now) return { label: 'SCHEDULED', tone: 'mute' };
+  if (a.ends_at && new Date(a.ends_at).getTime() < now) return { label: 'EXPIRED', tone: 'mute' };
+  return { label: 'ACTIVE', tone: 'good' };
+}
 
 // datetime-local wants "YYYY-MM-DDTHH:mm" in LOCAL time, not the ISO
 // string the API stores -- convert both directions explicitly rather
@@ -16,20 +27,14 @@ function toLocalInput(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function isActiveNow(a) {
-  const now = Date.now();
-  if (a.starts_at && new Date(a.starts_at).getTime() > now) return false;
-  if (a.ends_at && new Date(a.ends_at).getTime() < now) return false;
-  return true;
-}
-
 export default function Announcements() {
   const { data, loading, error, reload } = useFetch(() => api('/console/announcements'));
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const toast = useToast();
 
   const startEdit = (a) => {
     setEditingId(a.id);
@@ -53,18 +58,21 @@ export default function Announcements() {
     try {
       if (editingId) await api(`/console/announcements/${editingId}`, { method: 'POST', body: JSON.stringify(body) });
       else await api('/console/announcements', { method: 'POST', body: JSON.stringify(body) });
+      const wasEditing = !!editingId;
       cancelEdit();
       reload();
+      toast.success(wasEditing ? 'Announcement updated' : 'Announcement published');
     } catch (err) {
       setFormError(err.data?.issues?.join('; ') || err.message);
     } finally { setBusy(false); }
   };
 
-  const remove = async (a) => {
-    if (confirmDeleteId !== a.id) { setConfirmDeleteId(a.id); return; }
-    await api(`/console/announcements/${a.id}`, { method: 'DELETE' });
-    setConfirmDeleteId(null);
-    reload();
+  const remove = async () => {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try { await api(`/console/announcements/${deleteTarget.id}`, { method: 'DELETE' }); setDeleteTarget(null); reload(); toast.success('Announcement deleted'); }
+    catch (e) { toast.error(e.message || 'Could not delete'); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -117,38 +125,53 @@ export default function Announcements() {
         </form>
       </div>
 
-      {loading && <div className="spinner-row">Loading…</div>}
+      {loading && <div className="card"><SkeletonRows rows={4} cols={6} /></div>}
       {error && <div className="error-text">{error.message}</div>}
-      {data && !data.announcements.length && <div className="empty-state">No announcements yet.</div>}
+      {data && !data.announcements.length && (
+        <div className="card"><EmptyState icon="megaphone" title="No announcements yet" description="Publish one above to reach gym owners, trainers, or clients." /></div>
+      )}
 
       {data && data.announcements.length > 0 && (
-        <div className="card">
+        <div className="card table-scroll">
           <table>
-            <thead><tr><th>Title</th><th>Audience</th><th>Priority</th><th>Window</th><th>Active now</th><th></th></tr></thead>
+            <thead><tr><th>Title</th><th>Audience</th><th>Priority</th><th>Window</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {data.announcements.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.title}<div className="faint">{a.message.length > 80 ? a.message.slice(0, 80) + '…' : a.message}</div></td>
-                  <td className="faint">{AUDIENCE_LABEL[a.audience] || a.audience}</td>
-                  <td><span className={`badge ${PRIORITY_TONE[a.priority] || 'mute'}`}>{a.priority}</span></td>
-                  <td className="faint">
-                    {a.starts_at ? String(a.starts_at).slice(0, 16).replace('T', ' ') : 'Always'}
-                    {' → '}
-                    {a.ends_at ? String(a.ends_at).slice(0, 16).replace('T', ' ') : 'Open-ended'}
-                  </td>
-                  <td>{isActiveNow(a) ? <span className="badge good">Active</span> : <span className="badge mute">Inactive</span>}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn ghost" onClick={() => startEdit(a)}>Edit</button>
-                      <button className="btn ghost" onClick={() => remove(a)}>{confirmDeleteId === a.id ? 'Confirm?' : 'Delete'}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {data.announcements.map((a) => {
+                const ws = windowStatus(a);
+                return (
+                  <tr key={a.id}>
+                    <td>{a.title}<div className="faint">{a.message.length > 80 ? a.message.slice(0, 80) + '…' : a.message}</div></td>
+                    <td className="faint">{AUDIENCE_LABEL[a.audience] || a.audience}</td>
+                    <td><span className={`badge ${PRIORITY_TONE[a.priority] || 'mute'}`}>{a.priority}</span></td>
+                    <td className="faint">
+                      {a.starts_at ? String(a.starts_at).slice(0, 16).replace('T', ' ') : 'Always'}
+                      {' → '}
+                      {a.ends_at ? String(a.ends_at).slice(0, 16).replace('T', ' ') : 'Open-ended'}
+                    </td>
+                    <td><span className={`badge ${ws.tone}`}>{ws.label}</span></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn ghost" onClick={() => startEdit(a)}>Edit</button>
+                        <button className="btn ghost" onClick={() => setDeleteTarget(a)}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This announcement will stop appearing to anyone, immediately."
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={remove}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

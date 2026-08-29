@@ -205,6 +205,27 @@ export default function consoleRoutes(db) {
     res.json({ refunds: await listRefunds(db, { orgId: req.params.id, orderId: order.id }) });
   });
 
+  // ---- refunds, platform-wide (the Refunds nav item -- separate from
+  // the per-gym history above, which is scoped to one order). Same
+  // shape as /payments: no pagination, matching that route's own
+  // existing choice, capped at a sane LIMIT. Joins the initiating
+  // admin's name in for the "Requested by" column -- initiated_by is
+  // NULL for a gym-owner-initiated CLIENT_MEMBERSHIP refund (that flow
+  // lives in admin.js, not here), so the LEFT JOIN degrades to null
+  // rather than dropping the row. ----
+  r.get('/refunds', async (req, res) => {
+    const status = ['REQUESTED', 'PROCESSING', 'SUCCESS', 'FAILED', 'CANCELLED'].includes(req.query.status) ? req.query.status : null;
+    const rows = await db.q(
+      `SELECT rf.*, o.name AS org_name, u.name AS initiated_by_name
+         FROM refunds rf
+         JOIN organizations o ON o.id = rf.org_id
+         LEFT JOIN users u ON u.id = rf.initiated_by
+        ${status ? 'WHERE rf.status = ?' : ''}
+        ORDER BY rf.created_at DESC LIMIT 200`,
+      status ? [status] : []);
+    res.json({ refunds: rows });
+  });
+
   // ---- reconciliation (platform-wide -- reuses Phase 1's engine
   // completely unchanged, just without an org filter) ----
   r.post('/reconciliation/run', async (req, res) => {
@@ -247,8 +268,13 @@ export default function consoleRoutes(db) {
   r.get('/support/:id', async (req, res) => {
     const ticket = await getTicket(db, { ticketId: req.params.id });
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    // getTicket() itself never joins org_name (the owner-facing caller
+    // in admin.js already knows its own org and doesn't need it) --
+    // the console UI's ticket header/detail panel does, same as the
+    // platform-wide list already provides via listTicketsPlatformWide().
+    const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [ticket.org_id]);
     const messages = await listMessages(db, { ticketId: ticket.id, includeInternal: true });
-    res.json({ ticket, messages });
+    res.json({ ticket: { ...ticket, org_name: org?.name || null }, messages });
   });
 
   r.post('/support/:id/messages', validate(z.object({ body: z.string().min(1).max(4000), internal: z.boolean().optional() })), async (req, res) => {
@@ -269,17 +295,40 @@ export default function consoleRoutes(db) {
   });
 
   r.post('/support/:id/priority', validate(z.object({ priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']) })), async (req, res) => {
-    const ok = await updateTicketPriority(db, { ticketId: req.params.id, priority: req.body.priority });
-    if (!ok) return res.status(404).json({ error: 'Ticket not found' });
+    const before = await getTicket(db, { ticketId: req.params.id });
+    if (!before) return res.status(404).json({ error: 'Ticket not found' });
+    let ok = false;
+    await db.tx(async (tx) => {
+      ok = await updateTicketPriority(tx, { ticketId: req.params.id, priority: req.body.priority });
+      if (ok) await writeAuditLog(tx, req, { action: 'support_ticket_priority_changed', entityType: 'support_ticket', entityId: req.params.id, before: { priority: before.priority }, after: { priority: req.body.priority } });
+    });
     res.json({ ok: true });
   });
 
-  r.post('/support/:id/assign', validate(z.object({ adminId: z.string().min(1) })), async (req, res) => {
-    const admin = await db.q1(`SELECT id FROM users WHERE id = ? AND role = 'SUPER_ADMIN'`, [req.body.adminId]);
-    if (!admin) return res.status(422).json({ error: 'adminId must be an existing SUPER_ADMIN' });
-    const ok = await assignTicket(db, { ticketId: req.params.id, adminId: req.body.adminId });
-    if (!ok) return res.status(404).json({ error: 'Ticket not found' });
+  // adminId nullable -- an empty selection unassigns the ticket rather
+  // than being rejected, matching the "Unassigned" option the picker
+  // itself offers.
+  r.post('/support/:id/assign', validate(z.object({ adminId: z.string().min(1).nullable() })), async (req, res) => {
+    const before = await getTicket(db, { ticketId: req.params.id });
+    if (!before) return res.status(404).json({ error: 'Ticket not found' });
+    if (req.body.adminId) {
+      const admin = await db.q1(`SELECT id FROM users WHERE id = ? AND role = 'SUPER_ADMIN'`, [req.body.adminId]);
+      if (!admin) return res.status(422).json({ error: 'adminId must be an existing SUPER_ADMIN' });
+    }
+    let ok = false;
+    await db.tx(async (tx) => {
+      ok = await assignTicket(tx, { ticketId: req.params.id, adminId: req.body.adminId });
+      if (ok) await writeAuditLog(tx, req, { action: req.body.adminId ? 'support_ticket_assigned' : 'support_ticket_unassigned', entityType: 'support_ticket', entityId: req.params.id, before: { assignedAdminId: before.assigned_admin_id }, after: { assignedAdminId: req.body.adminId } });
+    });
     res.json({ ok: true });
+  });
+
+  // ---- SUPER_ADMIN roster -- for the support-ticket assignment picker.
+  // Never returns password_hash or anything beyond the three fields the
+  // picker actually needs. ----
+  r.get('/admins', async (req, res) => {
+    const admins = await db.q(`SELECT id, name, email FROM users WHERE role = 'SUPER_ADMIN' AND active = 1 ORDER BY name`);
+    res.json({ admins });
   });
 
   // ---- Food Intelligence dashboard (Phase 3b) -- see
@@ -545,11 +594,30 @@ export default function consoleRoutes(db) {
     sendCsv(res, 'refunds.csv', csv);
   });
 
-  // ---- audit log viewer ----
+  // ---- audit log viewer -- filterable + paginated. `q` is a plain
+  // substring match against action/entity_type/entity_id (no full-text
+  // index exists for this table, and its row volume doesn't warrant
+  // one yet) -- good enough for "find the suspend on gym X" without
+  // needing to scroll a 200-row page. ----
   r.get('/audit', async (req, res) => {
-    const rows = await db.q(
-      `SELECT a.*, u.name AS admin_name, u.email AS admin_email FROM admin_audit_logs a JOIN users u ON u.id = a.admin_id ORDER BY a.created_at DESC LIMIT 200`);
-    res.json({ logs: rows.map((l) => ({ ...l, before_json: safeParse(l.before_json), after_json: safeParse(l.after_json) })) });
+    const conds = []; const params = [];
+    if (req.query.adminId) { conds.push('a.admin_id = ?'); params.push(req.query.adminId); }
+    if (req.query.action) { conds.push('a.action = ?'); params.push(req.query.action); }
+    if (req.query.entityType) { conds.push('a.entity_type = ?'); params.push(req.query.entityType); }
+    if (req.query.since) { conds.push('a.created_at >= ?'); params.push(req.query.since); }
+    if (req.query.until) { conds.push('a.created_at <= ?'); params.push(req.query.until); }
+    if (req.query.q) { conds.push('(a.action LIKE ? OR a.entity_type LIKE ? OR a.entity_id LIKE ?)'); const like = `%${req.query.q}%`; params.push(like, like, like); }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const [rows, totalRow] = await Promise.all([
+      db.q(`SELECT a.*, u.name AS admin_name, u.email AS admin_email FROM admin_audit_logs a JOIN users u ON u.id = a.admin_id ${where} ORDER BY a.created_at DESC LIMIT ? OFFSET ?`, [...params, limit, offset]),
+      db.q1(`SELECT COUNT(*) AS n FROM admin_audit_logs a ${where}`, params),
+    ]);
+    res.json({
+      logs: rows.map((l) => ({ ...l, before_json: safeParse(l.before_json), after_json: safeParse(l.after_json) })),
+      total: Number(totalRow?.n || 0), limit, offset,
+    });
   });
 
   return r;

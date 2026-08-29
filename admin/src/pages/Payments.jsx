@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { api, downloadCsv } from '../api.js';
-import { useFetch, money } from '../utils.js';
+import { useFetch, money, formatDateTime } from '../utils.js';
+import { useToast } from '../components/Toast.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonRows } from '../components/Skeleton.jsx';
 
 const STATUS_TONE = { SUCCESS: 'good', CREATED: 'mute', PENDING: 'warn', PROCESSING: 'warn', FAILED: 'bad', CANCELLED: 'mute', EXPIRED: 'mute', DISPUTED: 'bad', REFUNDED: 'warn', PARTIALLY_REFUNDED: 'warn' };
 
 export default function Payments() {
   const { data, loading, error } = useFetch(() => api('/console/payments'));
   const [exporting, setExporting] = useState(false);
+  const toast = useToast();
 
   const exportCsv = async () => {
     setExporting(true);
-    try { await downloadCsv('/console/export/payments', 'payments.csv'); }
+    try { await downloadCsv('/console/export/payments', 'payments.csv'); toast.success('Payments CSV downloaded'); }
+    catch (e) { toast.error(e.message || 'Export failed'); }
     finally { setExporting(false); }
   };
 
@@ -22,28 +27,30 @@ export default function Payments() {
       </div>
 
       <div className="search-row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn ghost" onClick={exportCsv} disabled={exporting}>{exporting ? 'Exporting…' : 'Export CSV'}</button>
+        <button className="btn ghost" onClick={exportCsv} disabled={exporting}>{exporting ? 'Preparing CSV…' : 'Export CSV'}</button>
       </div>
 
-      {loading && <div className="spinner-row">Loading…</div>}
+      {loading && <div className="card"><SkeletonRows rows={6} cols={6} /></div>}
       {error && <div className="error-text">{error.message}</div>}
-      {data && !data.payments.length && <div className="empty-state">No payments yet.</div>}
+      {data && !data.payments.length && (
+        <div className="card"><EmptyState icon="payments" title="No payments yet" description="Payment orders across every gym will appear here." /></div>
+      )}
 
       {data && data.payments.length > 0 && (
-        <div className="card">
+        <div className="card table-scroll">
           <table>
             <thead>
-              <tr><th>Gym</th><th>Type</th><th>Amount</th><th>Provider</th><th>Status</th><th>Created</th></tr>
+              <tr><th>Gym</th><th>Type</th><th className="num">Amount</th><th>Provider</th><th>Status</th><th>Created</th></tr>
             </thead>
             <tbody>
               {data.payments.map((p) => (
                 <tr key={p.id}>
                   <td>{p.org_name}</td>
                   <td className="faint">{p.subject_type}</td>
-                  <td>{money(p.amount)} {p.currency}</td>
+                  <td className="num">{money(p.amount)} {p.currency}</td>
                   <td className="faint">{p.provider}</td>
                   <td><span className={`badge ${STATUS_TONE[p.status] || 'mute'}`}>{p.status}</span></td>
-                  <td className="faint">{String(p.created_at).slice(0, 16).replace('T', ' ')}</td>
+                  <td className="faint">{formatDateTime(p.created_at)}</td>
                 </tr>
               ))}
             </tbody>

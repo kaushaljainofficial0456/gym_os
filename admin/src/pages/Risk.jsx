@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { useFetch } from '../utils.js';
+import { useFetch, formatDateTime } from '../utils.js';
+import { useToast } from '../components/Toast.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { SkeletonRows } from '../components/Skeleton.jsx';
 
 const STATUS_TONE = { OPEN: 'warn', REVIEWING: 'warn', RESOLVED: 'good', DISMISSED: 'mute' };
 const REASON_LABEL = {
@@ -14,6 +17,7 @@ export default function Risk() {
   const { data, loading, error, reload } = useFetch(() => api(`/console/risk${status ? `?status=${status}` : ''}`), [status]);
   const [scanning, setScanning] = useState(false);
   const [lastSummary, setLastSummary] = useState(null);
+  const toast = useToast();
 
   const runScan = async () => {
     setScanning(true);
@@ -21,14 +25,14 @@ export default function Risk() {
       const summary = await api('/console/risk/scan', { method: 'POST' });
       setLastSummary(summary);
       reload();
-    } finally {
-      setScanning(false);
-    }
+      toast.success(summary.totalRaised ? `${summary.totalRaised} new signal(s) flagged` : 'Scan complete -- nothing new to review');
+    } catch (e) { toast.error(e.message || 'Scan failed'); }
+    finally { setScanning(false); }
   };
 
   const act = async (id, action, extra) => {
-    await api(`/console/risk/${id}/${action}`, { method: 'POST', body: JSON.stringify(extra || {}) });
-    reload();
+    try { await api(`/console/risk/${id}/${action}`, { method: 'POST', body: JSON.stringify(extra || {}) }); reload(); toast.success('Updated'); }
+    catch (e) { toast.error(e.message || 'Could not update'); }
   };
 
   return (
@@ -57,14 +61,16 @@ export default function Risk() {
         </select>
       </div>
 
-      {loading && <div className="spinner-row">Loading…</div>}
+      {loading && <div className="card"><SkeletonRows rows={4} cols={6} /></div>}
       {error && <div className="error-text">{error.message}</div>}
-      {data && !data.events.length && <div className="empty-state">No risk events for this filter.</div>}
+      {data && !data.events.length && (
+        <div className="card"><EmptyState icon="risk" title="Nothing flagged" description="No risk signals for this filter -- this is the expected, healthy state." /></div>
+      )}
 
       {data && data.events.length > 0 && (
-        <div className="card">
+        <div className="card table-scroll">
           <table>
-            <thead><tr><th>Reason</th><th>Entity</th><th>Score</th><th>Status</th><th>Detail</th><th>Created</th><th></th></tr></thead>
+            <thead><tr><th>Signal</th><th>Entity</th><th className="num">Score</th><th>Status</th><th>Detail</th><th>Created</th><th></th></tr></thead>
             <tbody>
               {data.events.map((e) => (
                 <tr key={e.id}>
@@ -73,7 +79,7 @@ export default function Risk() {
                   <td className="num">{e.risk_score}</td>
                   <td><span className={`badge ${STATUS_TONE[e.status] || 'mute'}`}>{e.status}</span></td>
                   <td className="faint">{e.detail_json ? `${e.detail_json.count} in window` : ''}</td>
-                  <td className="faint">{String(e.created_at).slice(0, 16).replace('T', ' ')}</td>
+                  <td className="faint">{formatDateTime(e.created_at)}</td>
                   <td>
                     {(e.status === 'OPEN' || e.status === 'REVIEWING') && (
                       <div style={{ display: 'flex', gap: 6 }}>
