@@ -32,7 +32,7 @@ export default function AuditLog() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 180px auto', gap: 10, alignItems: 'end' }}>
+        <div className="filter-grid">
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Search</label>
             <input className="input" placeholder="action, entity type, entity id…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />

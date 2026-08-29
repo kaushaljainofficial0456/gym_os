@@ -66,7 +66,7 @@ export default function FeatureFlags() {
       <div className="card">
         <h2>New flag</h2>
         <form onSubmit={create}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="form-grid-2">
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Key</label>
               <input className="input" value={form.key} onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))} placeholder="new_dashboard" />

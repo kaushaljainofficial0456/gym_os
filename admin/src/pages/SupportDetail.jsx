@@ -69,7 +69,7 @@ export default function SupportDetail() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 260px', gap: 18, alignItems: 'start' }}>
+      <div className="detail-grid">
         <div>
           <div className="card">
             <h2>Status</h2>
