@@ -93,7 +93,7 @@ export default function Announcements() {
             <label>Message</label>
             <textarea className="input" rows={3} value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          <div className="form-grid-4">
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Audience</label>
               <select className="input" value={form.audience} onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value }))}>

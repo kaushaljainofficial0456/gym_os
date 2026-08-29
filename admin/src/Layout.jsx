@@ -45,11 +45,12 @@ export default function Layout() {
 
   return (
     <div className="layout">
-      <button className="sidebar-toggle" style={{ display: navOpen ? 'none' : 'inline-flex' }}
-        onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-label="Open navigation">
-        <Icon name="menu" size={17} />
-        Menu
-      </button>
+      {!navOpen && (
+        <button className="sidebar-toggle" onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-label="Open navigation">
+          <Icon name="menu" size={17} />
+          Menu
+        </button>
+      )}
       <div className={`sidebar-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
 
       <aside className={`sidebar ${navOpen ? 'open' : ''}`} role="navigation" aria-label="Admin console">
@@ -59,10 +60,12 @@ export default function Layout() {
             SK OS
             <small>Admin Console</small>
           </span>
-          <button className="sidebar-toggle" style={{ display: navOpen ? 'inline-flex' : 'none', marginLeft: 'auto', width: 'auto', padding: 8 }}
-            onClick={() => setNavOpen(false)} aria-label="Close navigation">
-            <Icon name="close" size={16} />
-          </button>
+          {navOpen && (
+            <button className="sidebar-toggle" style={{ marginLeft: 'auto', width: 'auto', padding: 8 }}
+              onClick={() => setNavOpen(false)} aria-label="Close navigation">
+              <Icon name="close" size={16} />
+            </button>
+          )}
         </div>
 
         {GROUPS.map((g) => (
