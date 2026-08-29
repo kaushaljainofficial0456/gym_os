@@ -196,11 +196,11 @@ export default function nutritionRoutes(db) {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     // Default: V1 (frozen baseline), byte-identical to `estimateFood`. Opt in
-    // to the Phase-2 engine per-request with `?engine=v2` (plausibility
-    // downgrade + quarantine rescue over the V1 result) — for QA / shadow
-    // checks ahead of a later gated cutover. Anything other than exactly
-    // "v2" is V1.
-    const engine = req.query.engine === 'v2' ? 'v2' : undefined;
+    // per-request with `?engine=v2` (plausibility downgrade + quarantine
+    // rescue over V1) or `?engine=v3` (v2 + composite-dish classification/
+    // decomposition, architecture Phase 3) — for QA / shadow checks ahead of
+    // a later gated cutover. Anything else is V1.
+    const engine = ['v2', 'v3'].includes(req.query.engine) ? req.query.engine : undefined;
     res.json(engine ? estimateMeal(req.body.text, { engine }) : estimateFood(req.body.text));
   });
 
