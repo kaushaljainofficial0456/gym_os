@@ -1,12 +1,18 @@
 /* ============================================================
    SK OS Admin Console — design tokens.
-   Palette: soft yellow gradient ground (#fff9c6 -> #fff6b3 -> #fff4a0)
-   with black for ink and structure -- user-directed palette (2026-08-29),
-   replacing the earlier cream/navy identity outright. Sidebar is solid
-   black for deliberate contrast against the yellow main content; the
-   brightest yellow (#fff4a0) does double duty as the accent-on-black
-   color (active nav, button labels) so the two-color identity reads
-   consistently everywhere, not just on the page background.
+   Palette: off-white ground (#fdfaf8 -> #f7efec) with a muted wine/
+   brick red for ink accents and brand identity -- user-directed
+   (2026-08-29), replacing the earlier yellow/black identity because it
+   clashed with the login screen's red-toned video background. Sidebar
+   is now LIGHT too (not a dark rail) per an explicit "keep the whole
+   UI on the lighter, subtler side" -- a soft blush-white panel with
+   wine ink, distinguished from the main content only by a hairline
+   border and its own subtly different tint, so the whole app reads as
+   one calm, light surface rather than a light body + heavy dark chrome.
+   Semantic red (--bad, for errors/danger) is deliberately a brighter,
+   more saturated red than the brand accent (a deeper, quieter wine) so
+   the two stay visually distinct even though both are "red" -- an
+   error badge should never blend in with a normal button.
    Type: DM Sans carries headings, labels and anything that needs
    presence; DM Mono (same type family, built to pair with DM Sans)
    carries tabular data — KPI figures, table numbers, timestamps, ids —
@@ -14,60 +20,59 @@
    ============================================================ */
 
 :root {
-  --bg: linear-gradient(160deg, #fff9c6 0%, #fff6b3 45%, #fff4a0 100%);
-  --bg-solid: #fff6b3;
+  --bg: linear-gradient(160deg, #fdfaf8 0%, #faf4f1 50%, #f7efec 100%);
+  --bg-solid: #faf4f1;
   --panel: #ffffff;
-  --panel-alt: #fffdf0;
-  --ink: #0a0a08;
-  --ink-soft: #2b2a1f;
-  --mute: #5c5a48;
-  --faint: #8a8770;
-  --line: #ece0a0;
-  --line-strong: #d6c85f;
-  --accent: #0a0a08;
-  --accent-ink: #fff4a0;
-  --accent-soft: #fff9c6;
+  --panel-alt: #fbf3f0;
+  --ink: #241a18;
+  --ink-soft: #4a3532;
+  --mute: #8a6f6a;
+  --faint: #b3a09c;
+  --line: #efe0dc;
+  --line-strong: #dcbdb5;
+  --accent: #8c3a3a;
+  --accent-ink: #fdfaf8;
+  --accent-soft: #f6e3e0;
   --good: #2f7a4a;
   --good-soft: #e3f0e5;
   --warn: #b8620f;
   --warn-soft: #f7e6cf;
-  --bad: #b1392e;
-  --bad-soft: #f6e0dd;
+  --bad: #c0392b;
+  --bad-soft: #f8e2df;
   --radius: 10px;
   --radius-lg: 14px;
-  --shadow-card: 0 1px 2px rgba(10, 10, 8, 0.05), 0 1px 8px rgba(10, 10, 8, 0.04);
+  --shadow-card: 0 1px 2px rgba(36, 26, 24, 0.05), 0 1px 8px rgba(36, 26, 24, 0.04);
   --font-sans: "DM Sans", -apple-system, "Segoe UI", sans-serif;
   --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --sidebar-bg: #0a0a08;
-  --sidebar-ink: #fff4a0;
-  --sidebar-ink-soft: rgba(255, 244, 160, 0.72);
-  --sidebar-line: rgba(255, 244, 160, 0.14);
-  --sidebar-hover: rgba(255, 244, 160, 0.08);
+  --sidebar-bg: #fdf8f6;
+  --sidebar-ink: #3a201d;
+  --sidebar-ink-soft: rgba(58, 32, 29, 0.64);
+  --sidebar-line: #efe0dc;
+  --sidebar-hover: rgba(140, 58, 58, 0.08);
 }
 
 /* Deliberately NOT gated behind @media (prefers-color-scheme: dark)
-   anymore -- that was the actual reason the earlier "light" redesign
-   never looked light: a viewer whose OS/browser prefers dark mode was
-   silently seeing the dark variant below the whole time, no matter how
-   light the default tokens were. The yellow palette is the app's one
-   identity now, shown to everyone regardless of system preference.
+   anymore -- an earlier redesign here silently lost to a viewer's OS/
+   browser dark-mode preference no matter how light its default tokens
+   were. This off-white/wine palette is the app's one identity now,
+   shown to everyone regardless of system preference.
    :root[data-theme="dark"] stays defined (unused today, no toggle
    sets it) so a future explicit dark-mode toggle has real tokens to
    flip to, without reintroducing the silent system-preference override. */
 :root[data-theme="dark"] {
-  --bg: linear-gradient(160deg, #14140c 0%, #0f0f08 55%, #0a0a08 100%);
-  --bg-solid: #0f0f08;
-  --panel: #1c1c12;
-  --panel-alt: #161610;
-  --ink: #fff9c6;
-  --ink-soft: #eee4a0;
-  --mute: #b8ae7c;
-  --faint: #7d7658;
-  --line: #34331f;
-  --line-strong: #4a4826;
-  --accent: #fff4a0;
-  --accent-ink: #0a0a08;
-  --accent-soft: #2c2a17;
+  --bg: linear-gradient(160deg, #1c1210 0%, #170f0d 55%, #120b0a 100%);
+  --bg-solid: #170f0d;
+  --panel: #241816;
+  --panel-alt: #1c1210;
+  --ink: #f7ece9;
+  --ink-soft: #e3d0cc;
+  --mute: #b39d98;
+  --faint: #7d6a66;
+  --line: #3a2825;
+  --line-strong: #523430;
+  --accent: #d97b6c;
+  --accent-ink: #1c1210;
+  --accent-soft: #3a2420;
   --good: #7ec99a;
   --good-soft: #1f2f24;
   --warn: #e0a75f;
@@ -75,15 +80,16 @@
   --bad: #e08d80;
   --bad-soft: #3a2420;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 10px rgba(0, 0, 0, 0.3);
-  --sidebar-bg: #000000;
-  --sidebar-ink: #fff4a0;
-  --sidebar-ink-soft: rgba(255, 244, 160, 0.72);
-  --sidebar-line: rgba(255, 244, 160, 0.12);
-  --sidebar-hover: rgba(255, 244, 160, 0.08);
+  --sidebar-bg: #120b0a;
+  --sidebar-ink: #f0d9d3;
+  --sidebar-ink-soft: rgba(240, 217, 211, 0.7);
+  --sidebar-line: rgba(240, 217, 211, 0.12);
+  --sidebar-hover: rgba(240, 217, 211, 0.08);
 }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+button { font: inherit; color: inherit; background: none; border: none; padding: 0; margin: 0; }
 body {
   margin: 0;
   background: var(--bg);
@@ -306,9 +312,9 @@ textarea.input { font-family: var(--font-sans); resize: vertical; }
   border-radius: 4px 4px 0 0; transition: border-color .15s ease, background .15s ease;
 }
 .input-ghost::placeholder { color: rgba(255, 255, 255, 0.45); }
-.input-ghost:focus { outline: none; border-bottom-color: var(--accent-ink, #fff4a0); background: rgba(255, 255, 255, 0.1); }
+.input-ghost:focus { outline: none; border-bottom-color: #fdfaf8; background: rgba(255, 255, 255, 0.1); }
 
-.login-box .btn { background: #fff4a0; color: #0a0a08; }
+.login-box .btn { background: #fdfaf8; color: #3a201d; }
 .login-box .btn:hover { opacity: .92; }
 
 .error-text { color: var(--bad); font-size: 12.5px; margin: 10px 0 0; font-weight: 500; }
@@ -414,7 +420,7 @@ textarea.input { font-family: var(--font-sans); resize: vertical; }
   margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
   background: var(--bad-soft); color: var(--bad); border-radius: 999px; padding: 1px 7px; line-height: 1.5;
 }
-.sidebar nav a.nav-item.active .count { background: rgba(10,10,8,.18); color: var(--sidebar-bg); }
+.sidebar nav a.nav-item.active .count { background: rgba(255,255,255,.22); color: var(--sidebar-bg); }
 
 .sidebar-toggle { display: none; }
 .sidebar-backdrop { display: none; }
@@ -422,10 +428,11 @@ textarea.input { font-family: var(--font-sans); resize: vertical; }
 @media (max-width: 860px) {
   .layout { position: relative; }
   .sidebar {
-    position: fixed; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%);
+    position: fixed; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%) translateZ(0);
+    will-change: transform; backface-visibility: hidden;
     transition: transform .26s cubic-bezier(.22,.8,.3,1); box-shadow: 24px 0 48px -20px rgba(0,0,0,.4);
   }
-  .sidebar.open { transform: translateX(0); }
+  .sidebar.open { transform: translateX(0) translateZ(0); }
   .sidebar-toggle {
     display: inline-flex; align-items: center; gap: 8px; position: fixed; top: 14px; left: 14px; z-index: 45;
     background: var(--sidebar-bg); border: 1px solid var(--sidebar-line); border-radius: var(--radius);
