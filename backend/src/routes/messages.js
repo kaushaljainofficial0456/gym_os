@@ -24,12 +24,19 @@ export default function messageRoutes(db) {
     } else {
       if (client.user_id !== req.user.sub) return res.status(403).json({ error: 'No access' });
     }
+    // Most-recent-200, re-ordered oldest-first for display -- ORDER BY ...
+    // ASC LIMIT 200 alone always returns the SAME oldest 200 rows no matter
+    // how many more have been sent since, so any thread that outlives 200
+    // total messages would silently freeze: every message after the 200th
+    // ever sent becomes permanently invisible to both sides.
     const rows = await db.q(
-      `SELECT m.*, fu.name AS from_name, tu.name AS to_name
-         FROM messages m
-         JOIN users fu ON fu.id = m.from_user
-         LEFT JOIN users tu ON tu.id = m.to_user
-        WHERE m.client_id = ? ORDER BY m.created_at ASC LIMIT 200`, [client_id]);
+      `SELECT * FROM (
+         SELECT m.*, fu.name AS from_name, tu.name AS to_name
+           FROM messages m
+           JOIN users fu ON fu.id = m.from_user
+           LEFT JOIN users tu ON tu.id = m.to_user
+          WHERE m.client_id = ? ORDER BY m.created_at DESC, m.id DESC LIMIT 200
+       ) recent ORDER BY recent.created_at ASC, recent.id ASC`, [client_id]);
     res.json({ messages: rows });
   });
 
