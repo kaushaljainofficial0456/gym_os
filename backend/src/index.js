@@ -33,6 +33,8 @@ import enrollmentRoutes from './routes/enrollment.js';
 import paymentsDevRoutes from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
+import communityRoutes from './routes/community.js';
+import consoleRoutes from './routes/console.js';
 
 // Builds the Express app without starting a listener, so it can be reused
 // both by the traditional long-running server below (for local dev or a
@@ -138,10 +140,12 @@ app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail d
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
+app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
 app.use('/api/payments', paymentsDevRoutes()); // browser-callable mock-checkout bridge (inert once a real gateway is configured) -- see paymentsDev.js
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
+app.use('/api/console', consoleRoutes(db)); // Admin Console (Phase 3): platform-operator API, SUPER_ADMIN only -- see console.js. Deliberately NOT /api/admin (already owned by adminRoutes)
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under
 // data/uploads/tmp/<client_id>/ and cleaned up on save.

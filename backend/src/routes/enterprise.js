@@ -25,6 +25,8 @@ import { createOrgPackageQuote, createOrgUpgradeQuote, createCapacityAddonQuote,
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, recordWebhookEvent } from '../services/payments/paymentActivation.js';
 import { issueInvoice } from '../services/payments/invoices.js';
+import { renderInvoicePdf, resolveInvoiceRecipient } from '../services/payments/invoicePdf.js';
+import { sendEmail } from '../services/notifications/emailProvider.js';
 
 export default function enterpriseRoutes(db) {
   const r = Router();
@@ -43,16 +45,24 @@ export default function enterpriseRoutes(db) {
     try {
       result = await recordWebhookEvent(db, { rawBody, signature });
     } catch (e) {
-      // A malformed body (not valid JSON) must never 500 -- the provider
-      // will just retry a genuine failure; a 400 tells it not to.
-      return res.status(400).json({ error: 'invalid webhook payload' });
+      // A genuinely unexpected failure (DB error, an activation handler
+      // that threw, etc.) -- NOT the same as a malformed payload, which
+      // recordWebhookEvent returns rather than throws (see there). A
+      // non-2xx here is what makes the provider retry the delivery,
+      // which is exactly what's wanted: the failure is ours to recover
+      // from, not evidence the request itself was bad.
+      return res.status(500).json({ error: 'webhook processing failed' });
     }
     if (!result.ok && result.reason === 'invalid_webhook_signature') return res.status(401).json({ error: 'invalid signature' });
+    // A malformed body (not valid JSON) must never trigger a retry --
+    // the provider would just keep resending the same unparseable bytes.
+    if (!result.ok && result.reason === 'malformed_webhook_payload') return res.status(400).json({ error: 'invalid webhook payload' });
     // Every other outcome (order not found, unrecognized event, mismatch,
     // duplicate) still gets a 200 -- these are all legitimate, HANDLED
     // outcomes from the provider's point of view; a webhook retry storm
     // from returning non-2xx on something we've already correctly logged
-    // would help nobody. Only a bad signature is genuinely "reject this".
+    // would help nobody. Only a bad signature or bad payload is
+    // genuinely "reject this, don't bother retrying."
     res.json({ ok: true });
   });
 
@@ -260,6 +270,44 @@ export default function enterpriseRoutes(db) {
   r.get('/invoices', async (req, res) => {
     const rows = await db.q('SELECT * FROM invoices WHERE org_id = ? ORDER BY issued_at DESC LIMIT 100', [req.orgId]);
     res.json({ invoices: rows });
+  });
+
+  r.get('/invoices/:id/pdf', async (req, res) => {
+    const pdf = await renderInvoicePdf(db, { invoiceId: req.params.id, orgId: req.orgId });
+    if (!pdf) return res.status(404).json({ error: 'Invoice not found' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${req.params.id}.pdf"`);
+    res.send(pdf);
+  });
+
+  // "Email Invoice" -- uses emailProvider.js's zero-cost gate (mock by
+  // default, real delivery only with EMAIL_PROVIDER=resend +
+  // RESEND_API_KEY both set), same posture as payments/AI. `to` defaults
+  // to the resolved client's email for a CLIENT_MEMBERSHIP invoice; an
+  // ORG_PACKAGE/ORG_CAPACITY_ADDON invoice has no client (the gym paid
+  // SK OS itself), so it falls back to the requesting owner's own
+  // account email -- always overridable explicitly in the body.
+  const emailLimit = rateLimit({ windowMs: 60_000, max: 5, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/invoices/:id/email', emailLimit, validate(z.object({
+    to: z.string().email().optional(),
+  })), async (req, res) => {
+    const recipient = await resolveInvoiceRecipient(db, { invoiceId: req.params.id, orgId: req.orgId });
+    if (!recipient) return res.status(404).json({ error: 'Invoice not found' });
+    const to = req.body.to || recipient.customer?.email || req.user.email;
+    if (!to) return res.status(422).json({ error: 'no_recipient', message: 'No email address to send this invoice to. Provide one explicitly.' });
+    const pdf = await renderInvoicePdf(db, { invoiceId: req.params.id, orgId: req.orgId });
+    const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [req.orgId]);
+    const { invoice } = recipient;
+    const result = await sendEmail({
+      to,
+      subject: `Invoice ${invoice.invoice_number} from ${org?.name || 'SK OS'}`,
+      html: `<p>Hi${recipient.customer?.name ? ' ' + recipient.customer.name : ''},</p>` +
+        `<p>Please find attached invoice <strong>${invoice.invoice_number}</strong> for ${invoice.currency} ${Number(invoice.amount).toFixed(2)}.</p>`,
+      attachments: [{ filename: `${invoice.invoice_number}.pdf`, content: pdf }],
+    });
+    if (!result.ok) return res.status(502).json({ error: 'email_send_failed', message: result.error, provider: result.provider });
+    await db.run('UPDATE invoices SET emailed_at = ? WHERE id = ?', [now(), invoice.id]);
+    res.json({ ok: true, to, provider: result.provider });
   });
 
   // ---- payout/KYC account status (Razorpay Route linked account, once configured) ----

@@ -29,7 +29,7 @@
  * that would survive that preference.
  */
 import { useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
@@ -63,6 +63,34 @@ function Label({ children, className = '' }) {
     >
       {children}
     </div>
+  );
+}
+
+function CommunityCard() {
+  const nav = useNavigate();
+  const fetch = useFetch(() => api('/community/membership'));
+  if (fetch.loading || fetch.error || !fetch.data?.settings?.community_enabled) return null;
+  const membership = fetch.data?.membership;
+  const gym = fetch.data?.gym;
+  if (!membership?.enabled) return null;
+  return (
+    <Reveal delay={260}>
+      <Tilt max={4}>
+        <button onClick={() => nav('/app/client/community')}
+          className="card p-4 w-full text-left flex items-center gap-3 active:scale-[.98] transition-all">
+          <div className="w-10 h-10 rounded-2xl bg-gold/10 border border-gold/25 grid place-items-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 21v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-grotesk text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>{gym?.name || 'Community'}</div>
+            <div className="text-[10px]" style={{ color: 'var(--faint)' }}>Leaderboards &amp; shared workouts</div>
+          </div>
+          <span className="text-sm" style={{ color: 'var(--faint)' }}>→</span>
+        </button>
+      </Tilt>
+    </Reveal>
   );
 }
 
@@ -341,6 +369,9 @@ export default function Home() {
           </Reveal>
         )}
       </div>
+
+      {/* ═══ COMMUNITY LINK ═══ */}
+      <CommunityCard />
 
       <GymCrowdDetail open={crowdOpen} onClose={() => setCrowdOpen(false)} crowd={crowd} />
     </div>

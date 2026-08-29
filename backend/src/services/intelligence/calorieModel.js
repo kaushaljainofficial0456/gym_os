@@ -54,6 +54,7 @@
 import { dayKey } from '../../utils/time.js';
 import { config, CALORIE_PROVIDERS } from '../../config.js';
 import { mlEstimate as skosCalV1Estimate } from './mlModels/skosCalV1.js';
+import { track } from '../events.js';
 
 export const CALORIE_SCHEMA_VERSION = '0.2';
 export const BASELINE_MODEL_VERSION = 'skos-cal-baseline-v1';
@@ -163,6 +164,28 @@ function logCalorieFallback(category, meta = {}) {
   if (meta.model_version) fields.model_version = meta.model_version;
   if (Array.isArray(meta.issues) && meta.issues.length) fields.issues = meta.issues;
   console.warn('[sk-os] calorie: baseline fallback', fields);
+}
+
+// ------------------------------------------------------------------
+// ML monitoring telemetry (Admin Console §"ML monitoring") — mirrors
+// foodAI.js's own track()-into-events pattern, previously absent here
+// (this file only ever logged fallbacks to console.warn, nowhere a
+// dashboard could aggregate them). AWAITED (unlike a true fire-and-
+// forget call) so the insert lands inside the SAME transaction the
+// caller is usually already in before it commits -- on the Postgres
+// driver a genuinely unawaited call could otherwise still be in flight
+// when the surrounding db.tx() commits and returns its connection to
+// the pool. Never throws (track()'s own try/catch), and adds at most
+// one fast local write to the critical path -- `db` optional (a missing
+// db silently no-ops). Only ever called for the 'ml' provider —
+// baseline/mock have nothing to monitor. Payload is a SAFE whitelist
+// only: category/hasNote booleans and the calling stage, never workout
+// payloads, user data, or raw ML output — same whitelist discipline as
+// logCalorieFallback above.
+// ------------------------------------------------------------------
+async function trackCalorieMlEvent(db, type, data) {
+  if (!db) return;
+  await track(db, { type, data }).catch(() => {});
 }
 
 // ------------------------------------------------------------------
@@ -312,8 +335,16 @@ async function callMlProviderWithTimeout(input) {
 // mlCanonicalExerciseId() from already-fetched exercise_library rows.
 // Used ONLY to build the transient ml-provider input (toMlInput) —
 // omitted or empty is a safe no-op, unaffecting baseline/mock/persistence.
+//
+// `db` (optional): a db-like handle (or `tx`) used ONLY to record ML
+// monitoring telemetry (trackCalorieMlEvent above) — never read from,
+// never required. `stage` labels which call site this is for that same
+// telemetry ('completion' — an actually-persisted workout, the default;
+// 'preview' — trainingProgram.js's unpersisted next-session estimate) so
+// a dashboard can report on real completions without preview volume
+// silently inflating the count.
 // ------------------------------------------------------------------
-export async function estimateWorkoutCalories(input = {}, { mlExerciseCanonical } = {}) {
+export async function estimateWorkoutCalories(input = {}, { mlExerciseCanonical, db = null, stage = 'completion' } = {}) {
   const provider = resolveProvider();
   let result = null;
   let note = null;
@@ -330,8 +361,10 @@ export async function estimateWorkoutCalories(input = {}, { mlExerciseCanonical 
       timedOut = e instanceof MlTimeoutError;
     }
     if (!result) {
+      const category = timedOut ? 'ml_timeout' : 'ml_unavailable';
       note = timedOut ? 'ml provider timed out — baseline fallback' : 'ml provider unavailable — baseline fallback';
-      logCalorieFallback(timedOut ? 'ml_timeout' : 'ml_unavailable', { provider, workout_id: input?.session?.workout_id || null });
+      logCalorieFallback(category, { provider, workout_id: input?.session?.workout_id || null });
+      await trackCalorieMlEvent(db, 'calorie_ml_fallback', { category, stage });
       result = baselineEstimate(input);
     }
   } else {
@@ -347,7 +380,11 @@ export async function estimateWorkoutCalories(input = {}, { mlExerciseCanonical 
       model_version: result?.model_version || null,
       issues: check.issues
     });
+    if (provider === 'ml') await trackCalorieMlEvent(db, 'calorie_ml_fallback', { category: 'invalid_output', stage });
     return { ...baselineEstimate(input), note };
+  }
+  if (provider === 'ml' && check.result.provider === 'ml') {
+    await trackCalorieMlEvent(db, 'calorie_ml_success', { hasNote: !!check.result.note, stage });
   }
   return { ...check.result, ...(note ? { note } : {}) };
 }

@@ -5,6 +5,7 @@
 // signed reference the server resolves everything from.
 // ============================================================
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -63,6 +64,14 @@ export default function EnterpriseQR() {
   // to actually notice and click during.
   const availableCapacity = status.data ? status.data.availableCapacity : null;
   const capacityKnownZero = availableCapacity === 0;
+  // Loaded (not just "empty while still fetching") AND actually zero rows --
+  // without a plan to attach the QR to, generation is impossible, and the
+  // dropdown alone (just "Select a plan…" with no options) gave no hint why
+  // the button would never enable. Reported live as "QR generation still
+  // not working" -- the previous fix (bigint/capacity bug, see git log) was
+  // real but didn't cover this: a gym owner who hasn't created a membership
+  // plan yet hits this dead end regardless of capacity.
+  const noPackages = purpose === 'CLIENT' && plans.data && !(plans.data.packages || []).length;
 
   return (
     <div className="space-y-6">
@@ -75,16 +84,26 @@ export default function EnterpriseQR() {
         {purpose === 'CLIENT' && (
           <div>
             <div className="text-[11px] uppercase tracking-wider font-grotesk mb-1" style={{ color: 'var(--mute)' }}>Membership plan</div>
-            <select className="input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
-              <option value="">Select a plan…</option>
-              {(plans.data?.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.amount}/{p.period_days}d</option>)}
-            </select>
-            {capacityKnownZero && <div className="text-xs text-bad mt-2">No client capacity remaining — buy more from Billing before generating a client QR.</div>}
+            {noPackages ? (
+              <div className="text-sm" style={{ color: 'var(--mute)' }}>
+                You haven't added any membership plans yet — <Link to="/app/trainer/business" className="text-gold hover:underline">add one in Business</Link> to start generating client QR codes.
+              </div>
+            ) : (
+              <>
+                <select className="input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                  <option value="">Select a plan…</option>
+                  {(plans.data?.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.amount}/{p.period_days}d</option>)}
+                </select>
+                {capacityKnownZero && <div className="text-xs text-bad mt-2">No client capacity remaining — buy more from Billing before generating a client QR.</div>}
+              </>
+            )}
           </div>
         )}
-        <button className="btn-primary" disabled={busy || status.loading || (purpose === 'CLIENT' && (!planId || capacityKnownZero))} onClick={generate}>
-          {busy ? 'Generating…' : status.loading ? 'Checking capacity…' : `Generate ${purpose === 'CLIENT' ? 'client' : 'trainer'} QR`}
-        </button>
+        {!noPackages && (
+          <button className="btn-primary" disabled={busy || status.loading || (purpose === 'CLIENT' && (!planId || capacityKnownZero))} onClick={generate}>
+            {busy ? 'Generating…' : status.loading ? 'Checking capacity…' : `Generate ${purpose === 'CLIENT' ? 'client' : 'trainer'} QR`}
+          </button>
+        )}
 
         {issued && (
           <div className="rounded-xl border p-5 flex flex-col items-center gap-3" style={{ borderColor: 'var(--accent)' }}>

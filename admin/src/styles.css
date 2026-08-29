@@ -1,0 +1,515 @@
+/* ============================================================
+   SK OS Admin Console — design tokens.
+   Palette: soft yellow gradient ground (#fff9c6 -> #fff6b3 -> #fff4a0)
+   with black for ink and structure -- user-directed palette (2026-08-29),
+   replacing the earlier cream/navy identity outright. Sidebar is solid
+   black for deliberate contrast against the yellow main content; the
+   brightest yellow (#fff4a0) does double duty as the accent-on-black
+   color (active nav, button labels) so the two-color identity reads
+   consistently everywhere, not just on the page background.
+   Type: DM Sans carries headings, labels and anything that needs
+   presence; DM Mono (same type family, built to pair with DM Sans)
+   carries tabular data — KPI figures, table numbers, timestamps, ids —
+   so columns of digits actually align.
+   ============================================================ */
+
+:root {
+  --bg: linear-gradient(160deg, #fff9c6 0%, #fff6b3 45%, #fff4a0 100%);
+  --bg-solid: #fff6b3;
+  --panel: #ffffff;
+  --panel-alt: #fffdf0;
+  --ink: #0a0a08;
+  --ink-soft: #2b2a1f;
+  --mute: #5c5a48;
+  --faint: #8a8770;
+  --line: #ece0a0;
+  --line-strong: #d6c85f;
+  --accent: #0a0a08;
+  --accent-ink: #fff4a0;
+  --accent-soft: #fff9c6;
+  --good: #2f7a4a;
+  --good-soft: #e3f0e5;
+  --warn: #b8620f;
+  --warn-soft: #f7e6cf;
+  --bad: #b1392e;
+  --bad-soft: #f6e0dd;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 1px 2px rgba(10, 10, 8, 0.05), 0 1px 8px rgba(10, 10, 8, 0.04);
+  --font-sans: "DM Sans", -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --sidebar-bg: #0a0a08;
+  --sidebar-ink: #fff4a0;
+  --sidebar-ink-soft: rgba(255, 244, 160, 0.72);
+  --sidebar-line: rgba(255, 244, 160, 0.14);
+  --sidebar-hover: rgba(255, 244, 160, 0.08);
+}
+
+/* Deliberately NOT gated behind @media (prefers-color-scheme: dark)
+   anymore -- that was the actual reason the earlier "light" redesign
+   never looked light: a viewer whose OS/browser prefers dark mode was
+   silently seeing the dark variant below the whole time, no matter how
+   light the default tokens were. The yellow palette is the app's one
+   identity now, shown to everyone regardless of system preference.
+   :root[data-theme="dark"] stays defined (unused today, no toggle
+   sets it) so a future explicit dark-mode toggle has real tokens to
+   flip to, without reintroducing the silent system-preference override. */
+:root[data-theme="dark"] {
+  --bg: linear-gradient(160deg, #14140c 0%, #0f0f08 55%, #0a0a08 100%);
+  --bg-solid: #0f0f08;
+  --panel: #1c1c12;
+  --panel-alt: #161610;
+  --ink: #fff9c6;
+  --ink-soft: #eee4a0;
+  --mute: #b8ae7c;
+  --faint: #7d7658;
+  --line: #34331f;
+  --line-strong: #4a4826;
+  --accent: #fff4a0;
+  --accent-ink: #0a0a08;
+  --accent-soft: #2c2a17;
+  --good: #7ec99a;
+  --good-soft: #1f2f24;
+  --warn: #e0a75f;
+  --warn-soft: #3a2c18;
+  --bad: #e08d80;
+  --bad-soft: #3a2420;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 10px rgba(0, 0, 0, 0.3);
+  --sidebar-bg: #000000;
+  --sidebar-ink: #fff4a0;
+  --sidebar-ink-soft: rgba(255, 244, 160, 0.72);
+  --sidebar-line: rgba(255, 244, 160, 0.12);
+  --sidebar-hover: rgba(255, 244, 160, 0.08);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); font-weight: 600; text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: var(--accent-soft); }
+
+.layout { display: flex; min-height: 100vh; }
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  width: 236px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-line);
+  padding: 22px 14px;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar .brand {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  padding: 2px 10px 22px;
+  color: var(--sidebar-ink);
+}
+.sidebar .brand small {
+  display: block;
+  color: var(--sidebar-ink-soft);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+.sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar nav a {
+  color: var(--sidebar-ink-soft);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.sidebar nav a:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); text-decoration: none; }
+.sidebar nav a.active { background: var(--sidebar-ink); color: var(--sidebar-bg); font-weight: 700; }
+.sidebar .env-badge {
+  margin-top: auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  padding: 5px 8px;
+  text-align: center;
+}
+.sidebar .signout {
+  margin-top: 10px;
+  background: none;
+  border: 1px solid var(--sidebar-line);
+  color: var(--sidebar-ink-soft);
+  border-radius: var(--radius);
+  padding: 9px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+.sidebar .signout:hover { color: var(--sidebar-ink); border-color: var(--sidebar-ink-soft); background: var(--sidebar-hover); }
+
+/* ---------- main ---------- */
+.main { flex: 1; min-width: 0; padding: 34px 40px; overflow-x: auto; }
+.page-header { margin-bottom: 26px; }
+.page-header h1 { font-size: 27px; font-weight: 800; letter-spacing: -0.015em; margin: 0 0 6px; color: var(--ink); }
+.page-header p { color: var(--mute); margin: 0; font-size: 14px; max-width: 62ch; }
+
+/* ---------- KPI cards ---------- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 26px; }
+.kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+}
+.kpi-card .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); margin-bottom: 8px; }
+.kpi-card .value { font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.kpi-card .value.na { color: var(--faint); font-size: 17px; font-family: var(--font-sans); font-weight: 700; }
+
+/* ---------- cards ---------- */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-card);
+}
+.card h2 { font-size: 15.5px; font-weight: 800; margin: 0 0 14px; color: var(--ink); letter-spacing: -0.005em; }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left;
+  color: var(--faint);
+  font-weight: 700;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+th.num, td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-soft); }
+td:first-child { color: var(--ink); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--panel-alt); }
+
+/* ---------- badges ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-family: var(--font-sans);
+}
+.badge.good { background: var(--good-soft); color: var(--good); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.badge.mute { background: var(--accent-soft); color: var(--mute); }
+
+/* ---------- buttons ---------- */
+.btn {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 9px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: opacity 0.12s ease, transform 0.05s ease;
+}
+.btn:hover { opacity: 0.88; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.danger { background: var(--bad); color: #fff; }
+.btn.ghost { background: transparent; border: 1px solid var(--line-strong); color: var(--ink-soft); font-weight: 600; padding: 8px 13px; }
+.btn.ghost:hover { background: var(--panel-alt); color: var(--ink); border-color: var(--ink-soft); }
+
+/* ---------- switch (feature-flag enable toggle) ---------- */
+.switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch .track { position: absolute; inset: 0; background: var(--line-strong); border-radius: 999px; transition: background 0.15s ease; pointer-events: none; }
+.switch .track::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--panel); border-radius: 50%; transition: transform 0.15s ease; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.switch input:checked + .track { background: var(--good); }
+.switch input:checked + .track::before { transform: translateX(16px); }
+.switch input:disabled { cursor: not-allowed; }
+.switch input:disabled + .track { opacity: 0.5; }
+.switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* ---------- inputs ---------- */
+.input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  border-radius: 9px;
+  padding: 10px 13px;
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+}
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+textarea.input { font-family: var(--font-sans); resize: vertical; }
+
+/* ---------- login: full-bleed video background, transparent form ---------- */
+.login-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-solid); position: relative; overflow: hidden;
+}
+.login-video {
+  position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
+}
+.login-scrim {
+  position: fixed; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(10,10,8,.55) 0%, rgba(10,10,8,.35) 45%, rgba(10,10,8,.6) 100%);
+}
+@media (prefers-reduced-motion: reduce) { .login-video { display: none; } }
+
+.login-box {
+  width: 380px; max-width: calc(100% - 40px); position: relative; z-index: 2;
+  padding: 32px; text-align: left;
+}
+.login-box h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.4); }
+.login-box p.login-sub { color: rgba(255,255,255,.78); font-size: 13.5px; margin: 0 0 26px; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 11px; font-weight: 700; color: var(--mute); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.06em; }
+.login-box .field label { color: rgba(255, 255, 255, 0.7); }
+
+/* Transparent-on-video input: no fill, just a bottom rule -- stays
+   legible and typeable against a moving background without boxing it
+   off from the video like an opaque card would. */
+.input-ghost {
+  width: 100%; background: rgba(255, 255, 255, 0.06); border: none;
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.4);
+  color: #fff; padding: 10px 4px; font-size: 14.5px; font-family: var(--font-sans);
+  border-radius: 4px 4px 0 0; transition: border-color .15s ease, background .15s ease;
+}
+.input-ghost::placeholder { color: rgba(255, 255, 255, 0.45); }
+.input-ghost:focus { outline: none; border-bottom-color: var(--accent-ink, #fff4a0); background: rgba(255, 255, 255, 0.1); }
+
+.login-box .btn { background: #fff4a0; color: #0a0a08; }
+.login-box .btn:hover { opacity: .92; }
+
+.error-text { color: var(--bad); font-size: 12.5px; margin: 10px 0 0; font-weight: 500; }
+.login-box .error-text { color: #ffb3a3; font-weight: 600; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+
+/* ---------- misc ---------- */
+.muted { color: var(--mute); }
+.faint { color: var(--faint); font-size: 12px; }
+.empty-state { text-align: center; padding: 44px 0; color: var(--mute); font-size: 13.5px; }
+.spinner-row { padding: 34px 0; text-align: center; color: var(--mute); font-size: 13.5px; }
+.search-row { display: flex; gap: 8px; margin-bottom: 18px; }
+.search-row .input { max-width: 320px; }
+.kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px 14px; font-size: 13.5px; }
+.kv dt { color: var(--faint); font-weight: 600; }
+.kv dd { margin: 0; color: var(--ink-soft); }
+
+/* ============================================================
+   Gap-closing + redesign pass additions below -- everything above
+   this line is the original light/DM Sans design system from the
+   earlier "Admin Console visual redesign" work; everything below
+   extends it (sidebar grouping, priority badges, skeletons, modal,
+   toast, animation vocabulary, sparse decoration) rather than
+   replacing tokens that already do the job.
+   ============================================================ */
+
+/* ---------- motion vocabulary -- mirrors frontend/src/theme.css's
+   own keyframe names/easing so the two apps feel like one family ---- */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+@keyframes checkPop { 0% { transform: scale(.6); } 55% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes shakeX { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-3px); } 40%, 60% { transform: translateX(3px); } }
+@keyframes driftSlow { 0% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(10px, -14px) rotate(4deg); } 100% { transform: translate(0, 0) rotate(0deg); } }
+
+.anim-fadeUp { animation: fadeUp .32s cubic-bezier(.22,.8,.3,1) both; }
+.anim-fadeIn { animation: fadeIn .25s ease both; }
+.anim-scaleIn { animation: scaleIn .2s cubic-bezier(.22,.8,.3,1) both; }
+.anim-pop { animation: checkPop .3s cubic-bezier(.22,.8,.3,1) both; }
+.anim-shake { animation: shakeX .35s ease; }
+
+.page-header, .card, .kpi-card { animation: fadeUp .32s cubic-bezier(.22,.8,.3,1) both; }
+.kpi-grid .kpi-card:nth-child(1) { animation-delay: .02s; }
+.kpi-grid .kpi-card:nth-child(2) { animation-delay: .06s; }
+.kpi-grid .kpi-card:nth-child(3) { animation-delay: .1s; }
+.kpi-grid .kpi-card:nth-child(4) { animation-delay: .14s; }
+.kpi-grid .kpi-card:nth-child(5) { animation-delay: .18s; }
+.kpi-grid .kpi-card:nth-child(6) { animation-delay: .22s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- card / button micro-interactions ---------- */
+.card, .kpi-card { transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease; }
+.card.interactive, .kpi-card.interactive, tr.row-link { cursor: pointer; }
+.card.interactive:hover, .kpi-card.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(49, 56, 81, 0.06), 0 12px 28px -10px rgba(49, 56, 81, 0.14);
+  border-color: var(--line-strong);
+}
+:root[data-theme="dark"] .card.interactive:hover, :root[data-theme="dark"] .kpi-card.interactive:hover { box-shadow: 0 4px 10px rgba(0,0,0,.28), 0 14px 30px -10px rgba(0,0,0,.4); }
+.btn { transition: opacity .12s ease, transform .1s cubic-bezier(.34,1.56,.64,1), box-shadow .15s ease; }
+.btn:active:not(:disabled) { transform: scale(.96); }
+.btn:focus-visible, .input:focus-visible, a:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- tabular numbers everywhere digits line up ---------- */
+.kpi-card .value, td.num, .mono-num { font-variant-numeric: tabular-nums; }
+
+/* ---------- priority badges (support tickets) ---------- */
+.badge.priority-low { background: var(--accent-soft); color: var(--mute); }
+.badge.priority-medium { background: var(--line-strong); color: var(--ink-soft); }
+.badge.priority-high { background: var(--warn-soft); color: var(--warn); }
+.badge.priority-urgent { background: var(--bad-soft); color: var(--bad); font-weight: 800; }
+
+/* ---------- sidebar: grouped nav + icons + mobile drawer ---------- */
+.sidebar { width: 248px; gap: 4px; }
+.sidebar .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px; }
+.sidebar .brand .mark {
+  width: 30px; height: 30px; border-radius: 9px; background: var(--sidebar-ink); color: var(--sidebar-bg);
+  display: grid; place-items: center; font-weight: 800; font-size: 14px; flex-shrink: 0;
+}
+.sidebar .brand .brand-text { display: flex; flex-direction: column; color: var(--sidebar-ink); }
+.sidebar .brand .brand-text small { margin-top: 1px; color: var(--sidebar-ink-soft); }
+.nav-group { margin-bottom: 4px; }
+.nav-group-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--sidebar-ink-soft); padding: 14px 12px 6px; opacity: .7;
+}
+.sidebar nav a.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--sidebar-ink-soft); padding: 9px 12px; border-radius: var(--radius);
+  font-size: 13.5px; font-weight: 600; text-decoration: none;
+  transition: background .12s ease, color .12s ease, transform .12s ease;
+  position: relative;
+}
+.sidebar nav a.nav-item svg { flex-shrink: 0; opacity: .82; }
+.sidebar nav a.nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); text-decoration: none; transform: translateX(1px); }
+.sidebar nav a.nav-item.active { background: var(--sidebar-ink); color: var(--sidebar-bg); font-weight: 700; }
+.sidebar nav a.nav-item.active svg { opacity: 1; }
+.sidebar nav a.nav-item .count {
+  margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+  background: var(--bad-soft); color: var(--bad); border-radius: 999px; padding: 1px 7px; line-height: 1.5;
+}
+.sidebar nav a.nav-item.active .count { background: rgba(10,10,8,.18); color: var(--sidebar-bg); }
+
+.sidebar-toggle { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 860px) {
+  .layout { position: relative; }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%);
+    transition: transform .26s cubic-bezier(.22,.8,.3,1); box-shadow: 24px 0 48px -20px rgba(0,0,0,.4);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-toggle {
+    display: inline-flex; align-items: center; gap: 8px; position: fixed; top: 14px; left: 14px; z-index: 45;
+    background: var(--sidebar-bg); border: 1px solid var(--sidebar-line); border-radius: var(--radius);
+    padding: 9px 14px; font-family: var(--font-sans); font-weight: 700; font-size: 13px;
+    color: var(--sidebar-ink); cursor: pointer; width: auto; box-shadow: 0 8px 20px -8px rgba(0,0,0,.35);
+  }
+  .sidebar .sidebar-toggle {
+    position: static; top: auto; left: auto; z-index: auto; box-shadow: none; border: none; background: transparent;
+  }
+  .sidebar-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(10, 10, 8, .5); z-index: 30; animation: fadeIn .15s ease both; }
+  .main { padding: 70px 18px 34px; }
+}
+
+/* ---------- skeleton loaders ---------- */
+.skel {
+  background: linear-gradient(90deg, var(--line) 25%, var(--panel-alt) 37%, var(--line) 63%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+.skel-row { display: flex; gap: 14px; padding: 11px 12px; align-items: center; }
+.skel-row .skel { height: 13px; }
+.skel-text { height: 13px; width: 100%; }
+.skel-card { height: 84px; border-radius: var(--radius-lg); }
+
+/* ---------- empty states ---------- */
+.empty-block { text-align: center; padding: 52px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.empty-block .empty-icon { color: var(--faint); opacity: .55; }
+.empty-block h3 { font-size: 15px; font-weight: 800; color: var(--ink-soft); margin: 0; }
+.empty-block p { font-size: 13px; color: var(--mute); margin: 0; max-width: 40ch; }
+
+/* ---------- modal / confirm dialog ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(24, 22, 18, .42); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px;
+  animation: fadeIn .16s ease both;
+}
+:root[data-theme="dark"] .modal-backdrop { background: rgba(6, 7, 12, .58); }
+.modal-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 24px; width: 420px; max-width: 100%; box-shadow: 0 24px 60px -20px rgba(0,0,0,.35);
+  animation: scaleIn .18s cubic-bezier(.22,.8,.3,1) both;
+}
+.modal-panel h3 { font-size: 16.5px; font-weight: 800; margin: 0 0 8px; color: var(--ink); }
+.modal-panel p.modal-desc { color: var(--mute); font-size: 13.5px; margin: 0 0 16px; line-height: 1.55; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* ---------- toast ---------- */
+.toast-stack { position: fixed; bottom: 22px; right: 22px; z-index: 80; display: flex; flex-direction: column; gap: 8px; max-width: 340px; }
+.toast {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 12px 16px;
+  box-shadow: 0 12px 32px -12px rgba(0,0,0,.28); font-size: 13.5px; font-weight: 600; color: var(--ink);
+  display: flex; align-items: center; gap: 10px; animation: toastIn .22s cubic-bezier(.22,.8,.3,1) both;
+}
+.toast .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.toast.success .dot { background: var(--good); }
+.toast.error .dot { background: var(--bad); }
+.toast.error { animation: toastIn .22s cubic-bezier(.22,.8,.3,1) both, shakeX .35s ease .22s; }
+
+/* ---------- stat card (dashboard KPI, extends .kpi-card) ---------- */
+.stat-card { display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden; }
+.stat-card .stat-icon { position: absolute; top: 14px; right: 14px; color: var(--accent); opacity: .16; }
+.stat-card .stat-desc { font-size: 11.5px; color: var(--faint); }
+
+/* ---------- decorative background (sparse, restrained) ---------- */
+.deco-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.deco-layer svg { position: absolute; opacity: .05; color: var(--ink); }
+:root[data-theme="dark"] .deco-layer svg { opacity: .07; }
+.deco-layer .d1 { top: -30px; right: 6%; width: 140px; animation: driftSlow 22s ease-in-out infinite; }
+.deco-layer .d2 { bottom: 4%; left: 3%; width: 100px; animation: driftSlow 26s ease-in-out infinite reverse; }
+.deco-layer .d3 { top: 40%; right: -20px; width: 90px; animation: driftSlow 30s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .deco-layer svg { animation: none !important; } }
+
+/* ---------- two-column layout (Food Intelligence / ML Monitoring side-
+   by-side cards) -- used by two pages but never actually defined
+   anywhere, so both silently fell back to plain stacked divs. ---------- */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.two-col > .card { margin-bottom: 0; }
+@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ---------- responsive: tables scroll, never overflow the page ---------- */
+.table-scroll { overflow-x: auto; }
+@media (max-width: 640px) {
+  .page-header h1 { font-size: 22px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .modal-panel { width: 100%; }
+}

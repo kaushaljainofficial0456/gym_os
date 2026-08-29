@@ -132,6 +132,10 @@ const MIGRATIONS = [
   ['ai_food_estimates', 'validation_status', `validation_status TEXT NOT NULL DEFAULT 'AI_ESTIMATED'`],
   ['ai_food_estimates', 'version', `version INTEGER NOT NULL DEFAULT 1`],
 
+  // --- gym community: org-level feature toggles ---
+  ['gym_settings', 'community_enabled', `community_enabled INTEGER NOT NULL DEFAULT 1`],
+  ['gym_settings', 'community_leaderboard_enabled', `community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1`],
+
   // --- Enterprise: gym-owner SaaS billing + QR enrollment ---
   // `packages` (a gym's OWN client-membership-plan catalog, e.g.
   // "Monthly -- Rs.1,500") is reused as-is for the Enterprise spec's
@@ -183,6 +187,31 @@ const MIGRATIONS = [
   ['gym_settings', 'website', `website TEXT`],
   ['gym_settings', 'instagram_url', `instagram_url TEXT`],
   ['gym_settings', 'description', `description TEXT`],
+  // Phase 2 -- multi-branch: optional, additive. A user's PRIMARY org
+  // relationship (users.org_id) may also have a primary branch; NULL
+  // for every existing row (single-branch orgs) until a branch is
+  // actually created and assigned -- see gymMemberships.js.
+  ['users', 'branch_id', `branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL`],
+  // "Email Invoice" (gap #9 of the production-hardening handoff) --
+  // NULL means never emailed, or every attempt so far failed. See
+  // emailProvider.js.
+  ['invoices', 'emailed_at', `emailed_at TEXT`],
+  // ---- Reconciling production-only drift (audited 2026-08-28) ----
+  // Both columns already exist in the production database but were in
+  // neither schema.sql nor this list, so a freshly provisioned environment
+  // did not match production. They are declared here to make that
+  // relationship deliberate rather than accidental.
+  //
+  // NOTE: nothing in this codebase reads or writes either column today.
+  // Google sign-in matches an existing account by EMAIL alone and inserts
+  // without them (see routes/auth.js's /auth/google), so they are believed
+  // to be leftovers from an earlier identity implementation. They are added
+  // rather than dropped because dropping a populated production column is
+  // irreversible and needs its own deliberate, approved migration --
+  // auth_provider is NOT NULL DEFAULT 'local' in production and every one of
+  // this codebase's INSERT INTO users statements relies on that default.
+  ['users', 'auth_provider', `auth_provider TEXT NOT NULL DEFAULT 'local'`],
+  ['users', 'google_id', `google_id TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -249,6 +278,28 @@ async function seedDefaultPricing(exec) {
   `);
 }
 
+// Seeds the 'community' feature flag ENABLED at 100% rollout -- this is
+// the first real call site for isFeatureEnabled() (see
+// services/community.js's getCommunitySettings), and community was
+// already live/on for every gym before that flag existed. Seeding it
+// pre-enabled means introducing the platform-level gate changes NO
+// existing gym's behavior on deploy; a platform operator only sees an
+// effect once they deliberately dial the rollout down (or add specific
+// orgs to a reduced rollout) via the Admin Console's Feature Flags page.
+// ON CONFLICT(key) DO NOTHING, not a UNION-ALL/WHERE-NOT-EXISTS dance
+// like seedDefaultPricing above -- a single row with its own UNIQUE
+// key is exactly what ON CONFLICT is for, and it's portable across
+// both SQLite and Postgres here (already relied on elsewhere in this
+// file, e.g. gym_onboarding's upsert).
+async function seedDefaultFeatureFlags(exec) {
+  const nowIso = now();
+  await exec(`
+    INSERT INTO feature_flags (id, key, name, description, enabled, rollout_percentage, enabled_org_ids_json, created_at, updated_at)
+    VALUES ('${id('flag')}', 'community', 'Gym Community', 'Leaderboards, workout sharing, and copy-workout -- platform-wide rollout control, layered on top of each gym owner''s own community_enabled setting.', 1, 100, '[]', '${nowIso}', '${nowIso}')
+    ON CONFLICT (key) DO NOTHING;
+  `);
+}
+
 function applySqliteMigrations(db) {
   const hasCol = (table, col) => {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all();
@@ -301,6 +352,7 @@ function applySqliteMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
@@ -347,6 +399,7 @@ async function applyPgMigrations(pool) {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
@@ -361,6 +414,7 @@ if (config.databaseUrl) {
   await pool.query(sql);
   await applyPgMigrations(pool);
   await seedDefaultPricing((s) => pool.query(s));
+  await seedDefaultFeatureFlags((s) => pool.query(s));
   // Defense-in-depth: Row-Level Security policies (PG only; idempotent).
   const rlsPath = path.join(root, 'database', 'rls.sql');
   if (fs.existsSync(rlsPath)) {
@@ -378,6 +432,7 @@ if (config.databaseUrl) {
   db.exec(fs.readFileSync(schemaPath, 'utf8'));
   applySqliteMigrations(db);
   await seedDefaultPricing((s) => db.exec(s));
+  await seedDefaultFeatureFlags((s) => db.exec(s));
   db.close();
   console.log(`Schema applied to SQLite at ${dbPath}`);
 }

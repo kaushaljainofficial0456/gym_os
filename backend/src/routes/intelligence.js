@@ -244,7 +244,7 @@ export default function intelligenceRoutes(db) {
           const token = mlCanonicalExerciseId({ animationKey: ex.animation_key, isGlobal: ex.is_global });
           if (token) mlExerciseCanonical[ex.id] = token;
         }
-        calorie = await estimateWorkoutCalories(input, { mlExerciseCanonical });
+        calorie = await estimateWorkoutCalories(input, { mlExerciseCanonical, db: tx, stage: 'completion' });
         if (calorie) await persistCalorieResult(tx, wId, calorie);
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout logging.

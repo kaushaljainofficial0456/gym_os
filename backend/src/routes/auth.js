@@ -7,6 +7,7 @@ import { rateLimit } from '../rateLimit.js';
 import { validate } from '../validate.js';
 import { id, now } from '../ids.js';
 import { track } from '../services/events.js';
+import { syncPrimaryMembership, listUserMemberships, getActiveMembership } from '../services/enterprise/gymMemberships.js';
 
 // Simple in-memory login rate limit (dev-safe, no external deps).
 // 5 failed attempts per email+IP in 60s -> 429. Production should use a
@@ -301,12 +302,124 @@ export default function authRoutes(db) {
           [clientId]);
       });
       await track(db, { orgId, userId, type: 'client_google_registered', data: {} });
+      await syncPrimaryMembership(db, { userId, orgId, role: 'CLIENT' }).catch(() => {});
       const user = { id: userId, org_id: orgId, role: 'CLIENT', name, email };
       const token = signToken(user);
       setAuthCookie(res, token);
       res.status(201).json({
         token,
         user: { id: userId, name, email, role: 'CLIENT', orgId, orgName: 'Independent Clients', orgSlug: INDEPENDENT_ORG_SLUG }
+      });
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      throw e;
+    }
+  });
+
+  // Google Sign-In for GYM OWNERS -- the "Enterprise" flow's Google
+  // option. Shares the SAME googleClient/GOOGLE_CLIENT_ID as the
+  // independent-client route above: a Google OAuth Client ID is not a
+  // secret (it's the expected token AUDIENCE, meant to be public --
+  // unlike a client secret, which this app never uses at all, see the
+  // /google route's own comment on why), so reusing it across both
+  // entry points is fine.
+  //
+  // An EXISTING GYM_OWNER logs straight in via Google -- no password
+  // needed, identity is proven by the verified token instead. A
+  // brand-new signup creates the org + owner in one call, mirroring
+  // /setup-org's own transaction exactly (organizations, users,
+  // org_billing_state, gym_memberships), just with Google-verified
+  // identity standing in for a password.
+  //
+  // Deliberately a SEPARATE route from /google above rather than one
+  // handler branched by an `intent` parameter: the two outcomes (join
+  // the one shared "independent" pseudo-org vs. create a brand new
+  // org) are different enough that forcing them through one function
+  // would make both harder to read, and a bug in this path can never
+  // accidentally reach the independent-client flow's own tested
+  // behavior, or vice versa.
+  r.post('/google/enterprise', rateLimit({ windowMs: 60_000, max: 20 }),
+    validate(z.object({ credential: z.string().min(20), orgName: z.string().min(2).max(80).optional() })), async (req, res) => {
+    if (!googleClient) {
+      return res.status(503).json({ error: 'Google sign-in is not configured on this server yet.' });
+    }
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({ idToken: req.body.credential, audience: googleClientId });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ error: 'Could not verify Google sign-in. Please try again.' });
+    }
+    if (!payload?.email) return res.status(401).json({ error: 'Google did not share an email for this account.' });
+    const email = payload.email.toLowerCase().trim();
+
+    const existing = await db.q1('SELECT * FROM users WHERE email = ?', [email]);
+    if (existing) {
+      if (existing.role !== 'GYM_OWNER') {
+        // A client/trainer/admin account already owns this email --
+        // Google sign-in from the Enterprise screen only ever
+        // creates/logs into GYM_OWNER accounts, so this must fail
+        // rather than silently cross role boundaries (mirrors the
+        // /google route's own reverse-direction check).
+        return res.status(409).json({ error: 'This email is registered to a different kind of account. Sign in from the right option on the login screen.' });
+      }
+      if (!existing.active) return res.status(403).json({ error: 'Account disabled' });
+      const org = existing.org_id ? await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [existing.org_id]) : null;
+      const token = signToken(existing);
+      setAuthCookie(res, token);
+      return res.json({
+        token,
+        user: { id: existing.id, name: existing.name, email: existing.email, role: 'GYM_OWNER', orgId: existing.org_id, orgName: org?.name || null, orgSlug: org?.slug || null }
+      });
+    }
+
+    // Brand-new gym owner -- creating an org needs a name, which Google
+    // never supplies, so the frontend collects it (see SetupOrg.jsx)
+    // and sends it alongside the credential. Same opt-in invite gate as
+    // /setup-org (SETUP_SECRET) -- checked here too since this is
+    // another path to the identical "create a new org" outcome; a
+    // deployment that locks one must lock both.
+    const setupSecretEnterprise = process.env.SETUP_SECRET || '';
+    if (setupSecretEnterprise) {
+      const provided = req.headers['x-setup-secret'] || '';
+      const providedBuf = Buffer.from(provided, 'utf8');
+      const secretBuf = Buffer.from(setupSecretEnterprise, 'utf8');
+      const lengthOk = providedBuf.length === secretBuf.length;
+      const contentOk = lengthOk && crypto.timingSafeEqual(providedBuf, secretBuf);
+      if (!contentOk) return res.status(403).json({ error: 'Setup not available. An invitation is required.' });
+    }
+    if (!req.body.orgName) return res.status(422).json({ error: 'orgName is required to create a new gym.' });
+
+    const orgId = id('org');
+    const userId = id('usr');
+    const orgName = req.body.orgName;
+    // Same slugify + collision-safe suffix as /setup-org -- see that
+    // route's own comment on why .toLowerCase() must cover the WHOLE
+    // string, id() suffix included.
+    const slug = (orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + orgId.slice(-4)).toLowerCase();
+    const name = String(payload.name || email.split('@')[0]).slice(0, 80);
+    try {
+      // Google users never set a password -- see the /google route's
+      // own comment on why a random unusable hash is correct here.
+      const passwordHash = await hashPassword(crypto.randomUUID() + crypto.randomUUID());
+      await db.tx(async (tx) => {
+        await tx.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)', [orgId, orgName, slug, 'gym', now()]);
+        await tx.run(
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, created_at)
+           VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, ?, 1, ?)`,
+          [userId, orgId, email, passwordHash, name, payload.picture || null, now()]);
+        // Enterprise (gym) signups start in SETUP, exactly like
+        // /setup-org's own gym-type branch.
+        await tx.run(`INSERT INTO org_billing_state (org_id, status, updated_at) VALUES (?, 'SETUP', ?)`, [orgId, now()]);
+      });
+      await track(db, { orgId, userId, type: 'org_created_via_google', data: { orgName } });
+      await syncPrimaryMembership(db, { userId, orgId, role: 'GYM_OWNER' }).catch(() => {});
+      const user = { id: userId, org_id: orgId, role: 'GYM_OWNER', name, email };
+      const token = signToken(user);
+      setAuthCookie(res, token);
+      res.status(201).json({
+        token,
+        user: { id: userId, name, email, role: 'GYM_OWNER', orgId, orgName, orgSlug: slug }
       });
     } catch (e) {
       if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
@@ -405,6 +518,11 @@ export default function authRoutes(db) {
         }
       });
       await track(db, { orgId, userId, type: 'org_created', data: { orgName } });
+      // Phase 2: mirrors the primary org_id/role relationship just
+      // created into gym_memberships too, so multi-gym features (switch-
+      // gym, permission checks scoped per-membership) see this owner's
+      // home gym from day one, without needing a separate backfill.
+      await syncPrimaryMembership(db, { userId, orgId, role: 'GYM_OWNER' }).catch(() => {});
       const user = { id: userId, org_id: orgId, role: 'GYM_OWNER', name: ownerName, email: email.toLowerCase().trim() };
       const token = signToken(user);
       setAuthCookie(res, token);
@@ -428,6 +546,31 @@ export default function authRoutes(db) {
     await db.run('UPDATE users SET password_hash = ? WHERE id = ?',
       [await hashPassword(req.body.new_password), user.id]);
     res.json({ ok: true });
+  });
+
+  // ---- Phase 2: multi-gym identity ----
+  // A user's SINGLE primary org (users.org_id, still the source of
+  // truth for every existing route) is what the JWT's `org` claim
+  // normally carries. These two routes are the ADDITIVE layer on top:
+  // list every gym this user also has an active membership at, and
+  // (only if one genuinely exists -- never a bare client-supplied org
+  // id) re-sign a fresh token scoped to it for this session. Switching
+  // never mutates users.org_id/role -- it's a per-session context
+  // change, not a permanent identity change.
+  r.get('/my-gyms', requireAuth, async (req, res) => {
+    const memberships = await listUserMemberships(db, req.user.sub);
+    res.json({ memberships, currentOrgId: req.user.org || null });
+  });
+
+  r.post('/switch-gym', requireAuth, validate(z.object({ orgId: z.string().min(1) })), async (req, res) => {
+    const membership = await getActiveMembership(db, { userId: req.user.sub, orgId: req.body.orgId });
+    if (!membership) return res.status(403).json({ error: 'You do not have an active membership at that gym' });
+    const user = await db.q1('SELECT id, name, email FROM users WHERE id = ?', [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const token = signToken({ id: user.id, org_id: membership.org_id, role: membership.role, name: user.name, email: user.email });
+    setAuthCookie(res, token);
+    const org = await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [membership.org_id]);
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: membership.role, orgId: membership.org_id, orgName: org?.name || null, orgSlug: org?.slug || null } });
   });
 
   r.get('/me', requireAuth, async (req, res) => {

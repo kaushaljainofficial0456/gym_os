@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -209,11 +209,20 @@ test('assign missing plan_id -> 422', async (t) => {
 test('plan creation rate limit -> 429', async (t) => {
   resetRateLimits();
   const { call, close } = await startPlanApi(); t.after(() => { resetRateLimits(); close(); });
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   let hitLimit = false;
-  for (let i = 0; i < 25; i++) {
-    const r = await call('POST', '/api/nutrition/plans', { ...PLAN, name: `Plan ${i}` });
-    if (r.status === 429) { hitLimit = true; break; }
-    assert.equal(r.status, 201);
+  try {
+    for (let i = 0; i < 25; i++) {
+      const r = await call('POST', '/api/nutrition/plans', { ...PLAN, name: `Plan ${i}` });
+      if (r.status === 429) { hitLimit = true; break; }
+      assert.equal(r.status, 201);
+    }
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(hitLimit, 'rate limit triggered');
 });

@@ -1,0 +1,88 @@
+name: tests
+
+# Three layers, cheapest first:
+#   1. SQLite/unit  -- the existing suite, no services, runs on every push
+#   2. PostgreSQL   -- real Postgres so RLS and PG-only semantics are actually
+#                      executed, not just asserted by reading rls.sql
+#   3. build        -- the production frontend build
+#
+# Layer 2 exists because of a real incident: community_members shipped in
+# schema.sql but was never applied to production, and /api/community/* served
+# 500s for three days while the whole suite stayed green -- SQLite rebuilds
+# the schema from scratch every run, so it can never notice what a real
+# database is missing, and it has no row-level security at all.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: unit + integration (SQLite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run setup
+      # communityPg.test.js self-skips without TEST_DATABASE_URL, so this job
+      # stays fast and service-free.
+      - run: npm test
+
+  postgres:
+    name: database integration (PostgreSQL + RLS)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: skos_test
+          POSTGRES_PASSWORD: skos_test
+          POSTGRES_DB: skos_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run setup
+      # Throwaway service container: it is created and destroyed with the job,
+      # holds no real data, and its credentials are meaningless outside it --
+      # which is the point. Never aim this at a real database.
+      # Two separate steps, not one `node --test a.test.js b.test.js` --
+      # node:test runs multiple files as CONCURRENT subprocesses by
+      # default (verified: two files' start timestamps land within a few
+      # ms of each other), and both of these independently invoke
+      # init-db.js's full schema+migrations+RLS DDL against the SAME
+      # shared Postgres service container. Running them concurrently
+      # raced two schema-mutating processes against one database and
+      # broke the run; sequential steps give each its own clean pass.
+      - name: community RLS + schema integration
+        env:
+          TEST_DATABASE_URL: postgres://skos_test:skos_test@localhost:5432/skos_test
+        run: node --test backend/test/communityPg.test.js
+      - name: financial/membership RLS integration
+        env:
+          TEST_DATABASE_URL: postgres://skos_test:skos_test@localhost:5432/skos_test
+        run: node --test backend/test/financialRls.test.js
+
+  build:
+    name: production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run setup
+      # db:check needs a live database and self-skips without DATABASE_URL, so
+      # here this only verifies the frontend build. The real schema gate runs
+      # in the Vercel build, which does have DATABASE_URL.
+      - run: npm run build

@@ -96,6 +96,70 @@ test('RLS migration exists and only targets PostgreSQL-safe syntax', async () =>
   }
 });
 
+// ---------- schema/RLS coverage guards ----------
+// These exist because of a REAL production incident: community_members and
+// community_workout_shares shipped in schema.sql but were never applied to
+// the production database, so /api/community/* returned 500 for three days
+// (61 logged "relation ... does not exist" errors). The whole community suite
+// passed the entire time -- it runs on a SQLite DB rebuilt from schema.sql on
+// every run, so a table missing in PRODUCTION is structurally invisible to it.
+// These guards close the class of gap that hid that.
+test('every org-scoped table in schema.sql is covered by an RLS policy', async () => {
+  const schema = fs.readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
+  const rls = fs.readFileSync(path.join(root, 'database', 'rls.sql'), 'utf8');
+  // Tables that ARE the org/platform-level tables themselves, or whose scoping
+  // is derived from a parent row, are handled by their own policies.
+  const exempt = new Set(['organizations', 'gym_onboarding', 'org_billing_state']);
+  // KNOWN GAP (pre-existing, tracked separately -- NOT a licence to add more):
+  // these org-scoped tables carry no RLS policy today. They are listed
+  // explicitly rather than silently skipped so that (a) the debt is visible in
+  // code review, and (b) any NEWLY added org-scoped table fails this test until
+  // someone consciously decides its policy. Shrink this list, never grow it.
+  const knownGaps = new Set([
+    'shared_meals', 'org_subscriptions', 'org_capacity_purchases', 'enrollment_tokens',
+    'payment_orders', 'invoices', 'payment_accounts', 'billing_quotes',
+    'membership_status_history', 'refunds', 'reconciliation_issues', 'branches',
+    'gym_memberships', 'support_tickets', 'risk_events',
+  ]);
+  // Collect the tables rls.sql actually turns RLS on for. Built by scanning
+  // lines rather than composing a RegExp per table so the alignment padding in
+  // rls.sql ("ALTER TABLE users        ENABLE ...") can't cause a false miss.
+  const rlsEnabled = new Set();
+  // \r?\n, not '\n': schema.sql is checked out CRLF on Windows
+  // (core.autocrlf), and a stray \r breaks any regex that ends in $.
+  for (const l of rls.split(/\r?\n/)) {
+    const mm = l.match(/^\s*ALTER TABLE\s+(\w+)\s+ENABLE ROW LEVEL SECURITY/i);
+    if (mm) rlsEnabled.add(mm[1]);
+  }
+  const missing = [];
+  let table = null;
+  let hasOrgId = false;
+  for (const raw of schema.split(/\r?\n/)) {
+    const line = raw.replace(/--.*$/, '');
+    const start = line.match(/^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\(/i);
+    if (start) { table = start[1]; hasOrgId = false; continue; }
+    if (!table) continue;
+    if (/^\s*org_id\s/.test(line)) hasOrgId = true;
+    if (/^\s*\)\s*;?\s*$/.test(line)) {
+      if (hasOrgId && !exempt.has(table) && !knownGaps.has(table) && !rlsEnabled.has(table)) {
+        missing.push(table);
+      }
+      table = null;
+    }
+  }
+  assert.deepEqual(missing, [], 'org-scoped tables missing RLS: ' + missing.join(', '));
+});
+
+test('every table the community feature queries is declared in schema.sql', async () => {
+  const schema = fs.readFileSync(path.join(root, 'database', 'schema.sql'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'backend', 'src', 'services', 'community.js'), 'utf8');
+  const referenced = new Set();
+  for (const m of src.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE)\s+([a-z_]+)/g)) referenced.add(m[1]);
+  const missing = [...referenced].filter(
+    (t) => !schema.includes('CREATE TABLE IF NOT EXISTS ' + t + ' ('));
+  assert.deepEqual(missing, [], 'community.js queries tables absent from schema.sql: ' + missing.join(', '));
+});
+
 test('no SQLite-only rowid ordering remains in application SQL', async () => {
   const files = ['src/services/intelligence/aiContext.js', 'src/services/muscles.js'];
   for (const f of files) {
@@ -117,6 +181,52 @@ test('rate limiter allows up to max then returns 429 with Retry-After', async ()
   assert.equal(nexted, 2, 'only max requests pass');
   assert.equal(res.statusCode, 429);
   assert.ok(Number(res.headers['Retry-After']) >= 1);
+});
+
+// Regression test for a real bug found while auditing the rate limiter for
+// production readiness: the pluggable-store branch (meant for a future
+// Redis/Vercel-KV adapter) never actually called store.get()/store.set() --
+// it fabricated a fresh {count:0} on every single request and discarded it,
+// so ANY non-MemoryStore implementation of the documented interface would
+// silently never rate-limit anything at all. Proven here with a minimal
+// fake store implementing exactly the documented { get, set, delete }
+// interface -- if this regresses, the pluggable-store abstraction is
+// broken again for whoever eventually wires up a real external store.
+test('rate limiter actually persists and enforces state through a pluggable external store, not just MemoryStore', async () => {
+  const { rateLimit, setRateLimitStore, resetToMemoryStore } = await import('../src/rateLimit.js');
+  const backing = new Map();
+  const fakeExternalStore = {
+    async get(key) { return backing.get(key) ?? null; },
+    async set(key, value) { backing.set(key, value); },
+    async delete(key) { backing.delete(key); },
+  };
+  setRateLimitStore(fakeExternalStore);
+  try {
+    const limiter = rateLimit({ windowMs: 60_000, max: 2, keyFn: () => 'same-client' });
+    const req = { ip: '5.6.7.8' };
+    const results = [];
+    // status() itself resolves the promise on a 429 (next() is never
+    // called in that case) -- avoids racing a queueMicrotask against the
+    // middleware's own internal promise chain to detect the short-circuit.
+    const runOnce = () => new Promise((resolve) => {
+      const res = {
+        statusCode: 0, headers: {},
+        set(k, v) { this.headers[k] = v; return this; },
+        status(c) { this.statusCode = c; if (c === 429) { results.push({ nexted: false }); resolve(); } return this; },
+        json() { return this; },
+      };
+      limiter(req, res, () => { results.push({ nexted: true }); resolve(); });
+    });
+    for (let i = 0; i < 3; i++) await runOnce();
+    assert.equal(backing.size, 1, 'the external store actually received a write, not just discarded a fresh bucket every time');
+    const nextedCount = results.filter((r) => r.nexted).length;
+    assert.equal(nextedCount, 2, 'the external store path enforces max exactly like MemoryStore does');
+    assert.ok(results.some((r) => !r.nexted), 'the 3rd request is rejected through the external store, not silently allowed');
+  } finally {
+    // Restore the default in-memory store so no other test in this
+    // process is affected by the fake store left behind.
+    resetToMemoryStore();
+  }
 });
 
 // ---------- storage abstraction ----------

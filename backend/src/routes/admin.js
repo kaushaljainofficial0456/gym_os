@@ -8,6 +8,10 @@ import { dayKey, addDays } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
 import { transitionMembership } from '../services/enterprise/membershipLifecycle.js';
+import { runReconciliationSweep, listReconciliationIssues, resolveReconciliationIssue } from '../services/payments/reconciliation.js';
+import { initiateRefund, listRefunds } from '../services/payments/refunds.js';
+import { requirePermission } from '../permissions.js';
+import { createTicket, listTicketsForOrg, getTicket, listMessages, addMessage } from '../services/support/tickets.js';
 
 export default function adminRoutes(db) {
   const r = Router();
@@ -32,6 +36,8 @@ export default function adminRoutes(db) {
     if (!client) { res.status(404).json({ error: 'Client not found' }); return null; }
     return client;
   }
+
+  const safeParse = (json) => { try { return JSON.parse(json || 'null'); } catch { return null; } };
 
   r.get('/overview', async (req, res) => {
     const orgId = req.orgId;
@@ -206,6 +212,38 @@ export default function adminRoutes(db) {
     res.json({ ok: true, subscription: result.subscription });
   });
 
+  // ---- refunds (Phase 1 production hardening) ----
+  // Deliberately its OWN route, not folded into MEMBERSHIP_ACTIONS above
+  // -- a refund needs an orderId + optional amount, which the other 4
+  // actions (suspend/resume/pause/cancel) never take. See refunds.js's
+  // own header comment for why orderId is required rather than
+  // "whichever payment is most recent" -- a client can have several
+  // (join + renewals) and guessing wrong would refund the wrong one.
+  const refundLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/members/:clientId/membership/refund', refundLimit, requirePermission('billing.refund'), validate(z.object({
+    orderId: z.string().min(1), amount: z.number().positive().optional(), reason: z.string().max(500).optional(),
+  })), async (req, res) => {
+    const client = await requireOrgClient(req, res, req.params.clientId);
+    if (!client) return;
+    const order = await db.q1('SELECT * FROM payment_orders WHERE id = ? AND org_id = ?', [req.body.orderId, req.orgId]);
+    if (!order) return res.status(404).json({ error: 'Payment order not found' });
+    if (order.client_id && order.client_id !== client.id) {
+      return res.status(409).json({ error: 'That payment order does not belong to this client' });
+    }
+    const result = await initiateRefund(db, {
+      orderId: order.id, orgId: req.orgId, amount: req.body.amount, reason: req.body.reason, initiatedBy: req.user.sub,
+    });
+    if (!result.ok) return res.status(409).json({ error: result.reason, ...result });
+    res.json(result);
+  });
+
+  r.get('/members/:clientId/membership/refunds', async (req, res) => {
+    const client = await requireOrgClient(req, res, req.params.clientId);
+    if (!client) return;
+    const all = await listRefunds(db, { orgId: req.orgId });
+    res.json({ refunds: all.filter((r) => r.client_id === client.id) });
+  });
+
   r.get('/members/:clientId/membership/history', async (req, res) => {
     const client = await requireOrgClient(req, res, req.params.clientId);
     if (!client) return;
@@ -218,11 +256,12 @@ export default function adminRoutes(db) {
   // ---- gym settings (branding, crowd capacity, default client permissions) ----
   r.get('/settings', async (req, res) => {
     const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
-    res.json({ settings: s || { org_id: req.orgId, brand_name: 'SK OS', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1 } });
+    res.json({ settings: s || { org_id: req.orgId, brand_name: 'SK OS', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
   });
 
   r.put('/settings', async (req, res) => {
     const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
+      community_enabled, community_leaderboard_enabled,
       contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description } = req.body || {};
     const existing = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
     // Gym PROFILE fields (spec: "Do not allow owner to edit: gym_id,
@@ -233,12 +272,14 @@ export default function adminRoutes(db) {
     const pick = (incoming, current) => (incoming !== undefined ? (incoming === null || incoming === '' ? null : String(incoming).slice(0, 300)) : (current ?? null));
     await db.run(
       `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
+         community_enabled, community_leaderboard_enabled,
          contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(org_id) DO UPDATE SET brand_name=excluded.brand_name, tagline=excluded.tagline,
          crowd_capacity=excluded.crowd_capacity, crowd_enabled=excluded.crowd_enabled,
          workout_mode_default=excluded.workout_mode_default, allow_substitute=excluded.allow_substitute,
          allow_add_exercise=excluded.allow_add_exercise, allow_edit_targets=excluded.allow_edit_targets,
+         community_enabled=excluded.community_enabled, community_leaderboard_enabled=excluded.community_leaderboard_enabled,
          contact_email=excluded.contact_email, contact_phone=excluded.contact_phone, address=excluded.address,
          city=excluded.city, country=excluded.country, logo_url=excluded.logo_url, website=excluded.website,
          instagram_url=excluded.instagram_url, description=excluded.description,
@@ -252,6 +293,8 @@ export default function adminRoutes(db) {
        allow_substitute === false || allow_substitute === 0 ? 0 : (allow_substitute === undefined ? (existing?.allow_substitute ?? 1) : 1),
        allow_add_exercise === false || allow_add_exercise === 0 ? 0 : (allow_add_exercise === undefined ? (existing?.allow_add_exercise ?? 1) : 1),
        allow_edit_targets === false || allow_edit_targets === 0 ? 0 : (allow_edit_targets === undefined ? (existing?.allow_edit_targets ?? 1) : 1),
+       community_enabled === false || community_enabled === 0 ? 0 : (community_enabled === undefined ? (existing?.community_enabled ?? 1) : 1),
+       community_leaderboard_enabled === false || community_leaderboard_enabled === 0 ? 0 : (community_leaderboard_enabled === undefined ? (existing?.community_leaderboard_enabled ?? 1) : 1),
        pick(contact_email, existing?.contact_email), pick(contact_phone, existing?.contact_phone), pick(address, existing?.address),
        pick(city, existing?.city), pick(country, existing?.country), pick(logo_url, existing?.logo_url),
        pick(website, existing?.website), pick(instagram_url, existing?.instagram_url), pick(description, existing?.description),
@@ -265,6 +308,98 @@ export default function adminRoutes(db) {
     const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
     const snapshot = await computeOccupancy(db, req.orgId, req.tz, settings);
     res.json(snapshot);
+  });
+
+  // ---- payment reconciliation (Phase 1 production hardening) ----
+  // Owner-triggered, org-scoped only -- see reconciliation.js's own
+  // header comment for why this is a sweep, not a background worker
+  // (no cron infra exists in this codebase), and why it never silently
+  // rewrites a financial record.
+  const reconciliationLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/reconciliation/run', reconciliationLimit, async (req, res) => {
+    const summary = await runReconciliationSweep(db, { orgId: req.orgId });
+    await track(db, { type: 'reconciliation_swept', orgId: req.orgId, userId: req.user.sub, data: summary }).catch(() => {});
+    res.json(summary);
+  });
+
+  r.get('/reconciliation', async (req, res) => {
+    const status = ['OPEN', 'RESOLVED', 'DISMISSED'].includes(req.query.status) ? req.query.status : null;
+    const issues = await listReconciliationIssues(db, { orgId: req.orgId, status });
+    res.json({ issues: issues.map((i) => ({ ...i, expected_json: safeParse(i.expected_json), actual_json: safeParse(i.actual_json) })) });
+  });
+
+  r.post('/reconciliation/:id/resolve', validate(z.object({ note: z.string().max(500).optional(), dismiss: z.boolean().optional() })), async (req, res) => {
+    const ok = await resolveReconciliationIssue(db, {
+      orgId: req.orgId, issueId: req.params.id, resolvedBy: req.user.sub, note: req.body.note, dismiss: !!req.body.dismiss,
+    });
+    if (!ok) return res.status(409).json({ error: 'Issue not found or already resolved' });
+    res.json({ ok: true });
+  });
+
+  // ---- branches (Phase 2 production hardening) ----
+  // Architecture-ready, not UI-forced -- a single-branch gym never has
+  // to touch this. Demonstrates requirePermission() layered alongside
+  // this router's existing requireRole('GYM_OWNER','SUPER_ADMIN') gate
+  // (see permissions.js's own comment on why that's additive, not a
+  // replacement): MANAGER-level gym_memberships holders will be able to
+  // view branches once a MANAGER can authenticate as themselves (a
+  // later pass), but creating/editing one stays GYM_OWNER/SUPER_ADMIN-
+  // only per the permission matrix.
+  r.get('/branches', requirePermission('branches.view'), async (req, res) => {
+    const branches = await db.q('SELECT * FROM branches WHERE org_id = ? ORDER BY created_at', [req.orgId]);
+    res.json({ branches });
+  });
+
+  r.post('/branches', requirePermission('branches.manage'), validate(z.object({
+    name: z.string().min(1).max(120), address: z.string().max(300).optional(), phone: z.string().max(30).optional(), timezone: z.string().max(60).optional(),
+  })), async (req, res) => {
+    const branchId = id('brch');
+    await db.run(
+      `INSERT INTO branches (id, org_id, name, address, phone, timezone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [branchId, req.orgId, req.body.name, req.body.address || null, req.body.phone || null, req.body.timezone || null, now(), now()]);
+    await track(db, { type: 'branch_created', orgId: req.orgId, userId: req.user.sub, data: { branchId } }).catch(() => {});
+    res.status(201).json({ id: branchId });
+  });
+
+  r.post('/branches/:id/status', requirePermission('branches.manage'), validate(z.object({ status: z.enum(['ACTIVE', 'INACTIVE']) })), async (req, res) => {
+    const result = await db.run(`UPDATE branches SET status = ?, updated_at = ? WHERE id = ? AND org_id = ?`, [req.body.status, now(), req.params.id, req.orgId]);
+    if (result.changes === 0) return res.status(404).json({ error: 'Branch not found' });
+    res.json({ ok: true });
+  });
+
+  // ---- support tickets (Phase 3b) ----
+  // Owner-facing: this org's own tickets only. Every read here goes
+  // through listMessages(..., { includeInternal: false }) -- an admin's
+  // internal note must never reach this surface, not just be hidden by
+  // the frontend (see tickets.js's own header comment).
+  r.post('/support', validate(z.object({
+    category: z.enum(['PAYMENT', 'SUBSCRIPTION', 'QR', 'CLIENT', 'TRAINER', 'ACCOUNT', 'TECHNICAL', 'BILLING', 'OTHER']),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+    subject: z.string().min(1).max(200),
+    body: z.string().min(1).max(4000),
+  })), async (req, res) => {
+    const ticket = await createTicket(db, { orgId: req.orgId, createdBy: req.user.sub, category: req.body.category, priority: req.body.priority, subject: req.body.subject, body: req.body.body });
+    res.status(201).json({ ticket });
+  });
+
+  r.get('/support', async (req, res) => {
+    const status = ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_GYM', 'RESOLVED', 'CLOSED'].includes(req.query.status) ? req.query.status : null;
+    const tickets = await listTicketsForOrg(db, { orgId: req.orgId, status });
+    res.json({ tickets });
+  });
+
+  r.get('/support/:id', async (req, res) => {
+    const ticket = await getTicket(db, { ticketId: req.params.id, orgId: req.orgId });
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    const messages = await listMessages(db, { ticketId: ticket.id, includeInternal: false });
+    res.json({ ticket, messages });
+  });
+
+  r.post('/support/:id/messages', validate(z.object({ body: z.string().min(1).max(4000) })), async (req, res) => {
+    const ticket = await getTicket(db, { ticketId: req.params.id, orgId: req.orgId });
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    const message = await addMessage(db, { ticketId: ticket.id, authorId: req.user.sub, body: req.body.body, internal: false });
+    res.status(201).json({ message });
   });
 
   // ---- recent errors, backend + frontend (real observability, no external service) ----

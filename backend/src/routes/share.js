@@ -16,11 +16,19 @@
 // router whose defining property is "everything here requires login".
 // ============================================================
 import { Router } from 'express';
+import { rateLimit } from '../rateLimit.js';
 
 export default function shareRoutes(db) {
   const r = Router();
+  // Public + IP-keyed, same reasoning as clientError.js's limiter: this is
+  // unauthenticated and freely triggerable (a link, not a login), so it's
+  // the one class of route worth guarding against a scripted flood even
+  // though the id itself (10 random chars, ~60 bits) isn't practically
+  // guessable. Generous ceiling -- a real viewer's page load/retries/SPA
+  // refetches must never be the thing that trips it.
+  const limit = rateLimit({ windowMs: 60_000, max: 60, keyFn: (req) => req.ip || 'anon' });
 
-  r.get('/:id', async (req, res) => {
+  r.get('/:id', limit, async (req, res) => {
     const row = await db.q1('SELECT * FROM shared_meals WHERE id = ?', [req.params.id]);
     if (!row) return res.status(404).json({ error: 'This shared link is invalid or has expired' });
     let items = [];

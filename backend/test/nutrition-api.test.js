@@ -10,7 +10,7 @@
 //   * response contains text, items, total, estimate, disclaimer
 //   * repeated requests hit the configured rate limit -> 429
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -161,18 +161,27 @@ test('rate limit returns 429 after exceeding threshold', async (t) => {
 
   // The rate limit is 30/min. Send 31 requests to exceed it.
   // Use a unique client_id that exists to avoid 404s.
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   let hitLimit = false;
-  for (let i = 0; i < 35; i++) {
-    const r = await call('POST', '/api/nutrition/clients/c1/meals/ai-estimate', { text: '1 banana' });
-    if (r.status === 429) {
-      hitLimit = true;
-      assert.ok(r.json.error.includes('many') || r.json.error.includes('rate') || r.json.error.includes('try again'),
-        '429 response has rate-limit message');
-      assert.ok(r.headers['retry-after'], 'Retry-After header present');
-      break;
+  try {
+    for (let i = 0; i < 35; i++) {
+      const r = await call('POST', '/api/nutrition/clients/c1/meals/ai-estimate', { text: '1 banana' });
+      if (r.status === 429) {
+        hitLimit = true;
+        assert.ok(r.json.error.includes('many') || r.json.error.includes('rate') || r.json.error.includes('try again'),
+          '429 response has rate-limit message');
+        assert.ok(r.headers['retry-after'], 'Retry-After header present');
+        break;
+      }
+      // Before hitting the limit, requests should succeed (200 or 404 for bad client)
+      assert.ok(r.status === 200 || r.status === 404, `request ${i + 1} returned ${r.status}`);
     }
-    // Before hitting the limit, requests should succeed (200 or 404 for bad client)
-    assert.ok(r.status === 200 || r.status === 404, `request ${i + 1} returned ${r.status}`);
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(hitLimit, 'rate limit was triggered within 35 requests');
 });

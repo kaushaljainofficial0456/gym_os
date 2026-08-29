@@ -2,7 +2,7 @@
 // Production-readiness tests — validates P0/P1 fixes and
 // critical API flows for authorization, persistence, and safety.
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -176,18 +176,27 @@ test('Client creation rate limit prevents rapid-fire client creation', async (t)
 
   const token = makeToken(trainerId, 'TRAINER', orgId);
 
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   let hitLimit = false;
-  for (let i = 0; i < 25; i++) {
-    const r = await fetch(`${base}/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: `Client ${i}`, email: `c${i}@test.com`, password: 'test1234', goal: 'GENERAL' })
-    });
-    if (r.status === 429) {
-      hitLimit = true;
-      break;
+  try {
+    for (let i = 0; i < 25; i++) {
+      const r = await fetch(`${base}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: `Client ${i}`, email: `c${i}@test.com`, password: 'test1234', goal: 'GENERAL' })
+      });
+      if (r.status === 429) {
+        hitLimit = true;
+        break;
+      }
+      assert.ok(r.status === 201 || r.status === 409, `request ${i + 1} returned ${r.status}`);
     }
-    assert.ok(r.status === 201 || r.status === 409, `request ${i + 1} returned ${r.status}`);
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(hitLimit, 'rate limit triggered on client creation');
 });
