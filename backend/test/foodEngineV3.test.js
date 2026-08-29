@@ -14,9 +14,12 @@
 //         — Phase 3 never guesses a dish's structure.
 //       - A genuinely simple food (no composite classification at all) is
 //         never decomposed.
-//   * Regression coverage for the two bugs found and fixed while building
-//     this phase: the papdi-chaat branded-mismatch bug, and the pani-puri
-//     per-piece-vs-per-plate portion bug.
+//   * Regression coverage for the bugs found and fixed while building this
+//     phase: the papdi-chaat branded-mismatch bug, the pani-puri per-piece-
+//     vs-per-plate portion bug, and the multi-food "with"-conjunction
+//     silent-drop bug (a combo-shaped fragment with NO curated template,
+//     e.g. "paneer bhurji with 2 rotis", is split into standalone foods
+//     and each half re-resolved — never decomposed as if it were one dish).
 // ============================================================
 'use strict';
 
@@ -142,4 +145,74 @@ test('decomposed item never claims high confidence', () => {
   const v3 = estimateMeal('4 sambar rice', { engine: 'v3' });
   const it = v3.items.find((i) => i.source === 'composite_decompose');
   if (it) assert.notEqual(it.confidence, 'high');
+});
+
+// ---------------------------------------------------------------------
+// Multi-food "with"-conjunction splitting (silent-drop fix)
+// ---------------------------------------------------------------------
+
+test('REGRESSION (silent-drop bug): "X with Y" combo with no curated template splits into standalone foods', () => {
+  const v1 = legacy.estimateFood('paneer bhurji with 2 rotis');
+  assert.equal(v1.items.length, 1, 'confirms V1 silently collapsed this into one wrong match');
+  assert.equal(v1.items[0].name, 'Paneer', 'confirms the roti component was silently dropped entirely');
+
+  const v3 = estimateMeal('paneer bhurji with 2 rotis', { engine: 'v3' });
+  assert.equal(v3.items.length, 2, 'both the paneer dish and the roti must now be present');
+  assert.ok(v3.items.some((i) => /roti|chapati/i.test(i.name)), 'the roti must no longer be silently dropped');
+  assert.equal(v3.unresolved.length, 0);
+  assert.ok(v3.total.calories >= 350 && v3.total.calories <= 700, `${v3.total.calories} kcal should fit paneer bhurji + 2 roti`);
+  assert.ok(v3.v3.conjunction_splits >= 1);
+});
+
+test('"dosa with sambar and chutney" resolves as 3 separate items, matching the benchmark ground truth', () => {
+  // Surprising at first (a composite_map "dosa_sambar_chutney" entry DOES
+  // exist), but this is actually correct: V1's own splitItems() already
+  // separates "and chutney" off ("and" -> comma) BEFORE Phase 3 ever sees
+  // the fragment, so the classifier only ever sees "dosa with sambar" —
+  // never the full alias text -- and correctly falls through to the
+  // with-splitter instead. The benchmark's own case for this exact input
+  // (x-mel-002) confirms 3 separate items (strategy 'direct') is the
+  // WANTED answer, not one decomposed dish: idli/dosa/sambar/chutney are
+  // independently orderable and independently portioned in a way papdi
+  // chaat's components are not, so this is a real behavioral distinction,
+  // not a bug. (The dosa_sambar_chutney composite_map entry still exists
+  // for phrasing with no "and"/"with" conjunction at all, e.g. a single
+  // run-together "dosa sambar chutney".)
+  const v3 = estimateMeal('dosa with sambar and chutney', { engine: 'v3' });
+  assert.equal(v3.items.length, 3);
+  assert.ok(v3.items.some((i) => /dosa/i.test(i.name)));
+  assert.ok(v3.items.some((i) => /sambar/i.test(i.name)));
+  assert.ok(v3.items.some((i) => /chutney/i.test(i.name)));
+  assert.equal(v3.unresolved.length, 0);
+});
+
+test('a "with"-conjunction that only yields ONE usable food after quality filtering is left alone, never worse than V1', () => {
+  // "butter" alone is known to sometimes resolve to a branded/implausible
+  // row when split out of its sentence context (loses the disambiguating
+  // token overlap) -- splitting must never trade one wrong confident
+  // answer (V1's collapsed match) for a DIFFERENT set of wrong answers.
+  const v1 = legacy.estimateFood('2 slices toast with butter');
+  const v3 = estimateMeal('2 slices toast with butter', { engine: 'v3' });
+  // Either the split was correctly declined (identical to V1) or it
+  // produced a strict improvement -- it must never regress the total.
+  if (v3.v3?.conjunction_splits) {
+    assert.ok(v3.items.length >= v1.items.length);
+  } else {
+    assert.deepEqual(v3.items.map((i) => i.name), v1.items.map((i) => i.name));
+  }
+});
+
+test('splitting never fires on a phrase with no "with" at all', () => {
+  const v1 = legacy.estimateFood('2 roti and dal');
+  const v3 = estimateMeal('2 roti and dal', { engine: 'v3' });
+  assert.equal(v3.v3, undefined, 'no composite classification or split should have triggered here');
+  assert.deepEqual(v3.items.map((i) => i.name), v1.items.map((i) => i.name));
+});
+
+test('a rejected sub-match from splitting is reported as unresolved, never silently dropped again', () => {
+  const v3 = estimateMeal('2 slices toast with butter', { engine: 'v3' });
+  // Whatever Phase 3 decided, the total food count reported (items + unresolved)
+  // must account for both halves of the conjunction -- never fewer than V1 saw.
+  const v1 = legacy.estimateFood('2 slices toast with butter');
+  assert.ok(v3.items.length + v3.unresolved.length >= v1.items.length + v1.unresolved.length);
 });

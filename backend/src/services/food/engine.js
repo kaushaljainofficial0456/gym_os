@@ -385,6 +385,28 @@ function coalesceGrams(parsed, dishKey, dish) {
   return dish?.typical_serving_g || 250;
 }
 
+// A "X with Y [and Z]" fragment where NO curated dish recognizes the whole
+// phrase (e.g. "paneer bhurji with 2 rotis", "toast with butter and jam") is
+// almost always MULTIPLE STANDALONE FOODS, not one dish to decompose —
+// confirmed against the benchmark's own "with" cases: 9/13 expect separate
+// items (strategy 'direct'), only 4/13 are genuine composite dishes (and
+// those 4 all resolve via a curated alias BEFORE this function ever runs,
+// since composite_map lookup happens first). `foodEstimator.js`'s shared
+// `splitItems`/`parseFragment` never split on "with" at all (it's treated as
+// a noise word) — a real segmentation gap, not something to patch in the
+// frozen V1 primitives themselves (architecture §28 keeps those as-is).
+// Reuses `estimateFood` itself on each half — zero new resolution logic.
+function splitStandaloneConjunction(raw) {
+  if (!/\bwith\b/i.test(raw)) return null;
+  const idx = raw.search(/\bwith\b/i);
+  if (idx < 0) return null;
+  const before = raw.slice(0, idx).trim();
+  const after = raw.slice(idx).replace(/^with\b/i, '').trim();
+  if (!before || !after) return null;
+  const parts = [...impl.splitItems(before), ...impl.splitItems(after)];
+  return parts.length >= 2 ? parts : null;
+}
+
 export function applyPhase3(base, originalText) {
   if (!base || !Array.isArray(base.items) || !originalText) return base;
   const rawFragments = impl.splitItems(originalText);
@@ -394,17 +416,68 @@ export function applyPhase3(base, originalText) {
   const unresolved = [...(base.unresolved || [])];
   let changed = false;
   let decomposedCount = 0;
+  let splitCount = 0;
 
   for (const raw of rawFragments) {
     const parsed = impl.parseFragment(raw);
     if (!parsed || !parsed.name) continue;
 
-    const cls = classifyComposite(parsed.name);
-    if (cls.kind !== 'composite' || !cls.dish_key) continue; // no curated template: Phase 3 has nothing to add
+    // Classify against the RAW fragment, not the parsed/noise-stripped name:
+    // parseFragment's own unit/portion detection can consume a word the
+    // classifier needs (e.g. "dosa with sambar and chutney" -> parseFragment
+    // reads "dosa" as a unit token, leaving "sambar chutney" -- silently
+    // unmatchable against the "dosa_sambar_chutney" alias). The classifier
+    // does its own normalization and is robust to a leading qty/unit either
+    // way, so the raw fragment is a strictly safer input here.
+    const cls = classifyComposite(raw);
+    if (cls.kind !== 'composite') continue; // nothing composite-shaped here at all
 
     const itemIdx = items.findIndex((it) => it.matched_from === raw);
     const existingItem = itemIdx >= 0 ? items[itemIdx] : null;
     const unresolvedIdx = unresolved.findIndex((u) => u.fragment === raw);
+
+    if (!cls.dish_key) {
+      // Combo-shaped but no curated template. The ONLY thing Phase 3 can
+      // still safely do here is recognize a "with"-conjunction of separate
+      // foods and re-resolve each half — never invent a dish structure.
+      const parts = splitStandaloneConjunction(raw);
+      if (!parts) continue;
+      const subItems = [];
+      const subUnresolved = [];
+      for (const part of parts) {
+        const sub = impl.estimateFood(part);
+        for (const it of sub.items) {
+          // Splitting a generic single word ("butter", "toast") out of its
+          // sentence context removes exactly the token overlap that used to
+          // (wrongly) disambiguate it, and can now just as easily surface a
+          // branded/implausible row on its own (confirmed empirically: bare
+          // "butter" matched a branded popcorn-flavor product). Each
+          // sub-match must clear the SAME bar a composite decomposition
+          // does — a bad split must never trade one confident wrong answer
+          // for several.
+          const chk = checkPlausibility(it, rowFor(it.source_id));
+          const branded = coarseClassOf(it, rowFor(it.source_id)) === 'branded_product';
+          if (chk.verdict === 'hard_fail' || branded) {
+            subUnresolved.push({ fragment: raw, matched: it.name, reason: branded ? 'best match was a branded/packaged product for a generic term' : 'best match failed the plausibility check' });
+            continue;
+          }
+          subItems.push({ ...it, matched_from: raw });
+        }
+        subUnresolved.push(...sub.unresolved.map((u) => ({ ...u, fragment: raw })));
+      }
+      // Only accept the split when it resolves at least two distinct foods
+      // that both cleared plausibility — strictly more REAL coverage than
+      // the single (right-or-wrong) match V1 already produced from the
+      // un-split phrase. Anything less is no improvement; leave V1's
+      // original outcome alone rather than trade one guess for a worse one.
+      if (subItems.length < 2) continue;
+      if (itemIdx >= 0) items.splice(itemIdx, 1); else if (unresolvedIdx >= 0) unresolved.splice(unresolvedIdx, 1);
+      items.push(...subItems);
+      unresolved.push(...subUnresolved);
+      changed = true;
+      splitCount++;
+      continue;
+    }
 
     // Strategy C1 first: a trustworthy, plausible direct match to a genuine
     // pre-composited DISH row is never second-guessed by a template guess.
@@ -496,8 +569,10 @@ export function applyPhase3(base, originalText) {
     unresolved,
     disclaimer: unresolved.length
       ? 'Some items could not be matched and are NOT included in the total.'
-      : 'Some items are estimated from a typical recipe composition (composite-dish decomposition), not a single measured row — see the item labels.',
+      : decomposedCount
+        ? 'Some items are estimated from a typical recipe composition (composite-dish decomposition), not a single measured row — see the item labels.'
+        : base.disclaimer,
     engine: 'v3',
-    v3: { composite_decompositions: decomposedCount },
+    v3: { composite_decompositions: decomposedCount, conjunction_splits: splitCount },
   };
 }

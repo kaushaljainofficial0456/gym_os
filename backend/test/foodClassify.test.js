@@ -107,3 +107,19 @@ test('every curated dish has at least one alias and a cuisine tag', () => {
     assert.ok(typeof dish.cuisine === 'string' && dish.cuisine.length > 0, `${key}: needs a cuisine tag`);
   }
 });
+
+test('an alias containing the literal word "with" still matches on the RAW phrase', () => {
+  // Regression guard: engine.js must classify against the raw fragment, not
+  // foodEstimator's parseFragment()-cleaned name -- parseFragment strips
+  // "with" as noise (and can misread a leading dish word as a unit token),
+  // so an alias like "dosa with sambar and chutney" or "aloo paratha with
+  // curd" would be silently unmatchable if fed the cleaned name instead.
+  for (const [phrase, expectedKey] of [
+    ['dosa with sambar and chutney', 'dosa_sambar_chutney'],
+    ['aloo paratha with curd', 'aloo_paratha_curd'],
+    ['undhiyu with puri', 'undhiyu_puri'],
+  ]) {
+    const r = classifyComposite(phrase);
+    assert.equal(r.dish_key, expectedKey, `"${phrase}" should match ${expectedKey} on the raw phrase`);
+  }
+});
