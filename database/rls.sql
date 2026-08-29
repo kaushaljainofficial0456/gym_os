@@ -252,3 +252,193 @@ BEGIN
     OR workout_id IN (SELECT id FROM client_workouts WHERE org_id = current_setting('app.org_id', true))
   );
 END $$;
+
+-- ============================================================
+-- PRODUCTION-READINESS PASS -- 20 org/client-scoped tables that were
+-- added across several later features (enterprise billing, refunds/
+-- reconciliation, support tickets, multi-gym membership) without ever
+-- being added here. Every one of them already has correct app-level
+-- org scoping (req.orgId, derived from the JWT via orgScope -- see
+-- auth.js -- never client-controlled), so none of this is closing a
+-- live IDOR; it's the SAME defense-in-depth this file exists for
+-- everywhere else, extended to cover financial/billing/membership data
+-- that had been missed.
+--
+-- Verified safe against every CURRENT write path before writing these
+-- policies (not just asserted): every write into these tables is
+-- either (a) a plain db.run()/db.q() call outside any db.tx() --
+-- app.org_id is never set for these, so RLS stays fully dormant for
+-- them exactly like it already does for most of the tables above -- or
+-- (b) inside a db.tx() where the org_id being written always equals
+-- the transaction's own app.org_id (traced through paymentActivation.js
+-- and its registered per-subject-type activation handlers, and
+-- support/tickets.js). The one path that looked risky at first --
+-- CLIENT_MEMBERSHIP's fresh-join activation, which sets a NEW org_id on
+-- an existing user inside a transaction -- is provably safe because
+-- enrollment.js's own /client/join guard (`if (req.user.org) return
+-- 409 'already_in_a_gym'`) means a user can only be mid-join while
+-- their token's org claim is NULL, so app.org_id is unset (RLS
+-- dormant) for that entire transaction, the same way it already is for
+-- the pre-existing `users`/`clients`/`subscriptions`/`payments` writes
+-- that same handler makes today.
+-- ============================================================
+
+-- ---- direct org_id, NOT NULL, no global rows ----
+ALTER TABLE billing_quotes          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_quotes          FORCE ROW LEVEL SECURITY;
+ALTER TABLE branches                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE branches                FORCE ROW LEVEL SECURITY;
+ALTER TABLE enrollment_tokens       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enrollment_tokens       FORCE ROW LEVEL SECURITY;
+ALTER TABLE gym_memberships         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gym_memberships         FORCE ROW LEVEL SECURITY;
+ALTER TABLE gym_onboarding          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gym_onboarding          FORCE ROW LEVEL SECURITY;
+ALTER TABLE invoices                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices                FORCE ROW LEVEL SECURITY;
+ALTER TABLE membership_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE membership_status_history FORCE ROW LEVEL SECURITY;
+ALTER TABLE org_billing_state       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE org_billing_state       FORCE ROW LEVEL SECURITY;
+ALTER TABLE org_capacity_purchases  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE org_capacity_purchases  FORCE ROW LEVEL SECURITY;
+ALTER TABLE org_subscriptions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE org_subscriptions       FORCE ROW LEVEL SECURITY;
+ALTER TABLE payment_accounts        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_accounts        FORCE ROW LEVEL SECURITY;
+ALTER TABLE payment_orders          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_orders          FORCE ROW LEVEL SECURITY;
+ALTER TABLE reconciliation_issues   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reconciliation_issues   FORCE ROW LEVEL SECURITY;
+ALTER TABLE refunds                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refunds                 FORCE ROW LEVEL SECURITY;
+-- risk_events.org_id is nullable (an entity_type='user' event may have
+-- none) -- treated the same as this bucket rather than the "global
+-- rows" bucket below: a null-org_id row is platform-level, not
+-- everyone's-tenant-data, so it should stay invisible (not universally
+-- visible) under an org-scoped transaction. It's only ever read via
+-- SUPER_ADMIN admin-console routes, which run with no org context
+-- (app.org_id unset), where it stays visible exactly as it is today.
+ALTER TABLE risk_events             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE risk_events             FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_tickets         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_tickets         FORCE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'billing_quotes','branches','enrollment_tokens','gym_memberships','gym_onboarding',
+    'invoices','membership_status_history','org_billing_state','org_capacity_purchases',
+    'org_subscriptions','payment_accounts','payment_orders','reconciliation_issues',
+    'refunds','risk_events','support_tickets'
+  ] LOOP
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (
+      NULLIF(current_setting(''app.org_id'', true), '''') IS NULL
+      OR org_id = current_setting(''app.org_id'', true)
+    ) WITH CHECK (
+      NULLIF(current_setting(''app.org_id'', true), '''') IS NULL
+      OR org_id = current_setting(''app.org_id'', true)
+    )', t);
+  END LOOP;
+END $$;
+
+-- ---- direct org_id, NULLABLE, genuinely global-when-null ----
+-- shared_meals.org_id/client_id are both nullable (ON DELETE SET NULL /
+-- kept nullable so a deleted sender never breaks an outstanding link --
+-- see its own schema comment). The public preview route (share.js)
+-- reads with no auth and no transaction at all, so it's unaffected by
+-- this either way; this only matters for any future org-scoped
+-- transactional read, where a null-org_id row (a share whose org was
+-- since deleted) should stay visible rather than vanish.
+ALTER TABLE shared_meals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_meals FORCE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS tenant_isolation ON shared_meals;
+  CREATE POLICY tenant_isolation ON shared_meals USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR org_id IS NULL
+    OR org_id = current_setting('app.org_id', true)
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR org_id IS NULL
+    OR org_id = current_setting('app.org_id', true)
+  );
+END $$;
+
+-- ---- parent-scoped (org derived via a parent row) ----
+ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_transactions FORCE ROW LEVEL SECURITY;
+ALTER TABLE payment_events       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_events       FORCE ROW LEVEL SECURITY;
+ALTER TABLE support_messages     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_messages     FORCE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS tenant_isolation ON payment_transactions;
+  CREATE POLICY tenant_isolation ON payment_transactions USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR order_id IN (SELECT id FROM payment_orders WHERE org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR order_id IN (SELECT id FROM payment_orders WHERE org_id = current_setting('app.org_id', true))
+  );
+
+  -- payment_events.order_id is nullable (a webhook that never resolved
+  -- to a known order) -- such a row stays invisible under an org-scoped
+  -- transaction, same reasoning as risk_events above; reconciliation/
+  -- admin reads run with no org context and are unaffected.
+  DROP POLICY IF EXISTS tenant_isolation ON payment_events;
+  CREATE POLICY tenant_isolation ON payment_events USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR order_id IN (SELECT id FROM payment_orders WHERE org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR order_id IN (SELECT id FROM payment_orders WHERE org_id = current_setting('app.org_id', true))
+  );
+
+  DROP POLICY IF EXISTS tenant_isolation ON support_messages;
+  CREATE POLICY tenant_isolation ON support_messages USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR ticket_id IN (SELECT id FROM support_tickets WHERE org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR ticket_id IN (SELECT id FROM support_tickets WHERE org_id = current_setting('app.org_id', true))
+  );
+END $$;
+
+-- ============================================================
+-- INTENTIONALLY NOT RLS'd -- reviewed and excluded, not overlooked:
+--
+--   organizations, users*                    -- *users already has RLS above;
+--                                                organizations is the tenant
+--                                                root itself, resolved by id/
+--                                                slug pre-auth (setup, login,
+--                                                enrollment-token preview) with
+--                                                no org context to scope by,
+--                                                and carries no field more
+--                                                sensitive than name/slug/
+--                                                currency/timezone.
+--   admin_audit_logs                         -- platform-admin action log,
+--                                                not tenant data; every read
+--                                                path is SUPER_ADMIN-only.
+--   feature_flags                            -- platform config, admin-managed.
+--   sk_packages, sk_pricing_rules,
+--   sk_capacity_addons                       -- SK's own SaaS catalog/pricing,
+--                                                identical for every org by
+--                                                design (no org_id column at
+--                                                all).
+--   muscles, exercise_muscles                -- global exercise-library
+--                                                reference/join data, no
+--                                                tenant column.
+--   ai_provider_cost_state                   -- singleton per provider
+--                                                (PRIMARY KEY = provider),
+--                                                platform-wide cost-safety
+--                                                state, no tenant column.
+--   ai_food_estimates, ai_food_feedback      -- food-estimation domain,
+--                                                out of scope for this pass
+--                                                (see phase1-foundational-
+--                                                architecture's own audit).
+-- ============================================================
