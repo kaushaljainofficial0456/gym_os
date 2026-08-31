@@ -417,5 +417,16 @@ export const schemas = {
   // object at all, or a value that isn't a string/null).
   workoutScheduleUpdate: z.object({
     schedule: z.record(z.string(), z.string().nullable())
+  }),
+  // ---- Workout sharing ----
+  workoutShareCreate: z.object({
+    workout_id: z.string().min(1),
+    exercise_ids: z.array(z.string().min(1)).max(50).optional()
+  }),
+  workoutImport: z.object({
+    exercise_indexes: z.array(z.number().int().min(0)).max(50).optional(),
+    destination: z.enum(['today', 'planner', 'planner_day']),
+    day_of_week: z.union([z.number().int().min(0).max(6), z.string()]).optional(),
+    workout_name: z.string().max(80).optional()
   })
 };

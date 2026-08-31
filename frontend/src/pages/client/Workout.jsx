@@ -7,6 +7,7 @@ import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
+import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
@@ -75,7 +76,10 @@ export default function Workout() {
   const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
   const [intensity, setIntensity] = useState(null);
   const [sharing, setSharing] = useState(false);
-  const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
+  const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model
+  // Workout link sharing (personal share, NOT community)
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [shareSheetData, setShareSheetData] = useState(null); // { workoutId, workoutName, exercises } (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
   const [burnLoading, setBurnLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   // this week preview
@@ -514,6 +518,15 @@ export default function Workout() {
                 </div>
               ))}
             </div>
+            {/* Share Workout — personal link sharing (NOT community) */}
+            <button onClick={() => setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }) && setShareSheetOpen(true)}
+              className="w-full mt-2.5 py-2 rounded-xl text-[11px] font-grotesk font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[.98]"
+              style={{ color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'var(--accent-soft)' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Share Workout
+            </button>
           </div>
         ) : (
           <div className="card p-10 text-center anim-fadeUp" style={{ animationDelay: '120ms' }}>
@@ -909,6 +922,14 @@ export default function Workout() {
         )}
 
         {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+        <ShareWorkoutSheet
+          open={shareSheetOpen}
+          onClose={() => setShareSheetOpen(false)}
+          workoutId={shareSheetData?.workoutId}
+          workoutName={shareSheetData?.workoutName}
+          exercises={shareSheetData?.exercises || []}
+          t={{}}
+        />
       </div>
     );
   }
@@ -1188,10 +1209,21 @@ export default function Workout() {
               different-looking calorie figures a few pixels apart. One
               honest range beats two numbers that disagree. */}
 
-          {/* Share workout button */}
+          {/* Share Workout — personal link sharing */}
           {workout?.id && (
             <button
               className="btn w-full mt-3 flex items-center justify-center gap-2"
+              onClick={() => setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }) && setShareSheetOpen(true)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              Share Workout
+            </button>
+          )}
+          {/* Share to Community — gym community feed (separate from personal link sharing) */}
+          {workout?.id && (
+            <button
+              className="btn w-full mt-2 flex items-center justify-center gap-2"
               disabled={sharing}
               onClick={async () => {
                 setSharing(true);
@@ -1207,7 +1239,7 @@ export default function Workout() {
                 setSharing(false);
               }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
-              {sharing ? 'Sharing…' : 'Share Workout'}
+              {sharing ? 'Sharing…' : 'Share to Community'}
             </button>
           )}
           <button className="btn w-full mt-3" onClick={() => { setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setBurn(null); setBurnInput(null); setIntensity(null); setSharing(false); setShareToast(''); }}>Done</button>
@@ -1218,6 +1250,14 @@ export default function Workout() {
           <span className="text-good mr-2">✓</span>{shareToast}
         </div>
       )}
+      <ShareWorkoutSheet
+        open={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        workoutId={shareSheetData?.workoutId}
+        workoutName={shareSheetData?.workoutName}
+        exercises={shareSheetData?.exercises || []}
+        t={{}}
+      />
     </div>
   );
 }

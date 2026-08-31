@@ -857,6 +857,25 @@ CREATE INDEX IF NOT EXISTS idx_cws_org_feed ON community_workout_shares(org_id, 
 CREATE INDEX IF NOT EXISTS idx_cws_client ON community_workout_shares(client_id);
 
 -- ============================================================
+-- WORKOUT SHARING — cross-account shareable workout link
+-- Analogous to shared_meals: an immutable snapshot of a workout and its
+-- exercises, packaged into one shareable link. The sender's original
+-- workout is never referenced after snapshot creation — edits or
+-- deletions to the source workout never change what a recipient sees.
+-- id doubles as the token in the public /workout-share/:id URL.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS shared_workouts (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id      TEXT REFERENCES clients(id) ON DELETE SET NULL, -- sender; NULL-able so a deleted account doesn't break outstanding links
+  shared_by_name TEXT,                     -- denormalized sender display name at share time
+  workout_name   TEXT NOT NULL,
+  payload_json   TEXT NOT NULL,            -- JSON: { type: 'workout', name, notes, exercises: [{exercise_id, name, sets, reps, weight, rest_sec, tempo, notes, position}] }
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shared_workouts_id ON shared_workouts(id);
+
+-- ============================================================
 -- SK OS ENTERPRISE — gym-owner SaaS billing, QR enrollment, payments
 -- ============================================================
 -- NAMING, so this never collides with the EXISTING client-facing
