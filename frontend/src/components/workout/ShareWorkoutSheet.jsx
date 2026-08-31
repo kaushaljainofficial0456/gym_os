@@ -34,6 +34,15 @@ export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutNam
     setCopied(false);
   }, [open, exercises]);
 
+  // Keep selectAll in sync — MUST be before any early return
+  useEffect(() => {
+    if (selected.size === exercises.length && exercises.length > 0) {
+      setSelectAll(true);
+    } else {
+      setSelectAll(false);
+    }
+  }, [selected.size, exercises.length]);
+
   if (!open) return null;
 
   const toggleSelect = (idx) => {
@@ -54,15 +63,6 @@ export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutNam
       setSelectAll(true);
     }
   };
-
-  // Keep selectAll in sync
-  useEffect(() => {
-    if (selected.size === exercises.length && exercises.length > 0) {
-      setSelectAll(true);
-    } else {
-      setSelectAll(false);
-    }
-  }, [selected.size, exercises.length]);
 
   const doShare = async () => {
     if (selected.size === 0 || !workoutId) return;

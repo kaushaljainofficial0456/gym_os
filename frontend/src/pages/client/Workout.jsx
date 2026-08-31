@@ -489,14 +489,9 @@ export default function Workout() {
         {/* ── 3. TODAY'S TRAINING ── */}
         {workout ? (
           <div className="anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div>
-                <div className="kicker">Today's training</div>
-                <h1 className="font-grotesk font-bold text-2xl leading-tight">{workout.name}</h1>
-              </div>
-              <button data-start-workout className="btn-primary shrink-0 !px-4 !py-2.5 !text-xs active:scale-95" onClick={startWorkout} disabled={!exercises.length || starting}>
-                {starting ? 'Starting…' : 'START SESSION'}
-              </button>
+            <div className="mb-2">
+              <div className="kicker">Today's training</div>
+              <h1 className="font-grotesk font-bold text-2xl leading-tight">{workout.name}</h1>
             </div>
             <div className="grid grid-cols-3 gap-2.5 mt-3">
               {[
@@ -518,15 +513,19 @@ export default function Workout() {
                 </div>
               ))}
             </div>
-            {/* Share Workout — personal link sharing (NOT community) */}
-            <button onClick={() => setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }) && setShareSheetOpen(true)}
-              className="w-full mt-2.5 py-2 rounded-xl text-[11px] font-grotesk font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[.98]"
-              style={{ color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', background: 'var(--accent-soft)' }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-              </svg>
-              Share Workout
-            </button>
+            {/* Share Workout + Start Session — side by side, both prominent */}
+            <div className="flex gap-2.5 mt-3">
+              <button onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}
+                className="btn flex-1 !py-2.5 !text-xs active:scale-95 flex items-center justify-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+                </svg>
+                Share Workout
+              </button>
+              <button data-start-workout className="btn-primary flex-1 !py-2.5 !text-xs active:scale-95" onClick={startWorkout} disabled={!exercises.length || starting}>
+                {starting ? 'Starting…' : 'START SESSION'}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="card p-10 text-center anim-fadeUp" style={{ animationDelay: '120ms' }}>
@@ -1213,7 +1212,7 @@ export default function Workout() {
           {workout?.id && (
             <button
               className="btn w-full mt-3 flex items-center justify-center gap-2"
-              onClick={() => setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }) && setShareSheetOpen(true)}>
+              onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
               </svg>
