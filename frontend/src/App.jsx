@@ -58,6 +58,7 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy.jsx'));
 const DevOnboardingPreview = import.meta.env.DEV
   ? lazy(() => import('./pages/DevOnboardingPreview.jsx'))
   : null;
+const SharedWorkout = lazy(() => import('./pages/public/SharedWorkout.jsx'));
 
 const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
 // Small helper so each route below stays a one-liner instead of repeating
@@ -118,6 +119,11 @@ export default function App() {
           requires auth, enforced by the API route it calls, not by this
           route being gated. */}
       <Route path="/share/:id" element={page(SharedMeal)} />
+      {/* Shared Workout preview — PUBLIC on purpose (see SharedWorkout.jsx):
+          a recipient must be able to preview a shared workout before ever
+          being asked to log in. Importing it still requires auth, enforced
+          by the API route it calls. */}
+      <Route path="/workout-share/:id" element={page(SharedWorkout)} />
       {/* QR-based gym join -- any authenticated CLIENT or TRAINER with no
           org yet lands here (see needsGymJoin above) instead of a normal
           dashboard, which would otherwise 404/empty-state on every

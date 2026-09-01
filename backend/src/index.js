@@ -34,6 +34,7 @@ import paymentsDevRoutes from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 import communityRoutes from './routes/community.js';
+import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
 
 // Builds the Express app without starting a listener, so it can be reused
@@ -139,6 +140,7 @@ app.use('/api/admin', adminRoutes(db)); // alias — Business page calls /admin/
 app.use('/api/trainer', trainerRoutes(db)); // trainer-specific: client detail dashboard
 app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics, foods, meals, workouts, crowd
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
+app.use('/api/workout-share', workoutShareRoutes(db)); // PUBLIC: preview a shared workout link (no auth) -- importing requires auth, see POST /api/me/workout-share/:id/import
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
