@@ -296,6 +296,32 @@ entire session, unrelated to any change made in this pass.
     data — including their own genuine "paneer", "lkn", and "maggi"
     entries — untouched.
 
+## 12b. Database connections and serverless cold-start (Sections 23–24)
+
+Both audited this pass, nothing changed — verified already correct:
+
+- **Connection pooling** (`backend/src/db.js`): `getDb()` is a
+  module-level singleton — the `pg.Pool` is created once per warm
+  process and reused across every request, never per-request. Every
+  transaction (`client.tx`) properly `c.release()`s its connection in a
+  `finally` block — no leak path found. Pool size uses `pg`'s own
+  default (not blindly raised, per this prompt's own instruction).
+  **Not verifiable from code alone**: whether the deployed `DATABASE_URL`
+  points at Neon's pooled endpoint (vs. the direct one) is an
+  environment-variable choice made in Vercel's dashboard, invisible to
+  this repo — worth the user double-checking directly, since that
+  matters more for serverless connection-count limits than anything in
+  application code.
+- **Serverless cold-start** (`backend/api/index.js`, `backend/src/index.js`,
+  the food-model loaders): the Express app is already memoized across
+  warm invocations (`if (!appPromise) appPromise = buildApp()`, with an
+  explicit comment already reasoning about cold vs. warm starts). The
+  food-model JSON artifacts (`foodEstimator.js`'s kNN index,
+  `plausibility.js`/`classify.js`'s config overlays) are lazily loaded
+  and cached on first *use*, not read at module-import time — confirmed
+  by grepping for any eager top-level call to their loader functions
+  (none found). Nothing here needed fixing.
+
 ## 13. Remaining bottlenecks
 
 Being explicit about what was **not** independently re-measured or fixed
