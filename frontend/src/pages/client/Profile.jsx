@@ -682,7 +682,7 @@ export default function Profile() {
       {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-gold/40 px-4 py-2 text-sm shadow-card anim-fadeUp" style={{ background: 'var(--panel)', color: 'var(--ink)' }}>{toast}</div>}
 
       {/* Profile header — always visible */}
-      <div className="card p-5 flex items-center gap-4">
+      <div data-tour="profile-header" className="card p-5 flex items-center gap-4">
         {/* Avatar with photo menu */}
         <div className="relative shrink-0">
           <button onClick={() => setAvatarMenuOpen(!avatarMenuOpen)} className="w-14 h-14 rounded-full grid place-items-center font-grotesk font-bold text-lg border transition-all hover:scale-105 active:scale-95" style={{ background: (localAvatar || c.avatar) ? 'none' : 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.08))', borderColor: 'var(--line)', overflow: 'hidden' }} title="Change profile photo">

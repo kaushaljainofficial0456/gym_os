@@ -281,7 +281,7 @@ export default function WorkoutBuilder() {
 
       <div className="grid lg:grid-cols-5 gap-6">
         {/* template list */}
-        <Card className="lg:col-span-2 self-start">
+        <Card className="lg:col-span-2 self-start" data-tour="trainer-workouts-templates">
           <Kicker>Your templates</Kicker>
           <div className="space-y-1.5">
             {templates.map((t) => (
@@ -388,7 +388,7 @@ export default function WorkoutBuilder() {
       </div>
 
       {/* ---- training programs ---- */}
-      <Card>
+      <Card data-tour="trainer-workouts-programs">
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
             <Kicker>Training programs</Kicker>

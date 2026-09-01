@@ -126,7 +126,7 @@ export default function Business() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="trainer-business">
       <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
         <div>
           <div className="text-[11px] text-mute uppercase tracking-[.18em] font-grotesk">{todayLabel}</div>

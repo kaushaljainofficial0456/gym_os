@@ -66,7 +66,7 @@ export default function Dashboard() {
           reads as washed-out rather than premium, and it put the visual
           emphasis on the trainer's own name, which is not information. */}
       <Reveal>
-        <div className="flex items-end justify-between flex-wrap gap-4">
+        <div className="flex items-end justify-between flex-wrap gap-4" data-tour="trainer-dashboard-hero">
           <div className="min-w-0">
             <div className="font-serif text-[15px]" style={{ color: 'var(--mute)' }}>
               {greeting()}, {firstName}
@@ -104,7 +104,7 @@ export default function Dashboard() {
           dot hues to one: amber-vs-terracotta was a second colour
           distinction the reference doesn't make -- both actionable tiles
           use the same accent-family dot now. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="trainer-dashboard-kpis">
         <Kpi label="Active clients" value={k.activeClients} sub={k.newClients != null ? `${k.newClients} new · ${k.inactive} inactive` : `${k.totalClients} total · ${k.inactive} inactive`} />
         <Kpi label="On track" value={k.onTrack} sub="adherence above 70%" />
         <Kpi label="Needs attention" value={k.needsAttention} dot="bg-bad" />

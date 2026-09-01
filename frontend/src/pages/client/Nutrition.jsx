@@ -177,7 +177,7 @@ function HydrationCard({ waterState, target, onAdd, t }) {
   const animLitres = useCountUp(waterState * 10, 800) / 10;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+    <div data-tour="nutrition-water" className="relative overflow-hidden rounded-2xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
       <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, transparent 60%, ${t.waterDim})`, opacity: pct * 0.6 }} />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
@@ -603,7 +603,7 @@ export default function Nutrition() {
       </div>
 
       {/* ══════ TODAY'S FUEL HERO ══════ */}
-      <div className="relative overflow-hidden rounded-3xl p-6" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+      <div data-tour="nutrition-hero" className="relative overflow-hidden rounded-3xl p-6" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <div className="absolute inset-0 pointer-events-none" style={{ background: t.heroGlow }} />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row items-center gap-6">
@@ -621,7 +621,7 @@ export default function Nutrition() {
       <NutritionInsight plan={plan} eaten={eaten} t={t} />
 
       {/* ══════ TODAY'S EATEN MEALS ══════ */}
-      <div className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+      <div data-tour="nutrition-meals" className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <SectionHeader
           title="Today's Eaten Meals" kicker
           subtitle={`${eatenTodayList.length} of ${mealState.length} logged`}
@@ -662,7 +662,7 @@ export default function Nutrition() {
       <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload())} t={t} toast={setToast} />
 
       {/* ══════ FOOD & MEAL TOOLS ══════ */}
-      <div className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+      <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
         <div className="grid grid-cols-3 gap-1.5 p-1">
           {[

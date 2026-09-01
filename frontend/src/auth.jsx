@@ -20,15 +20,23 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const res = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
     setSession(res);
-    setUser(res.user);
-    return res.user;
+    // Re-fetch /auth/me so the user object includes terms status and all
+    // server-side fields (the login response is a minimal shape).
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
   };
 
   const register = async (data) => {
     const res = await api('/auth/register', { method: 'POST', body: JSON.stringify(data) });
     setSession(res);
-    setUser(res.user);
-    return { user: res.user, clientId: res.clientId };
+    // Re-fetch /auth/me so the user object includes terms status and all
+    // server-side fields (the register response is a minimal shape).
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return { user: full, clientId: res.clientId };
   };
 
   // Self-serve TRAINER signup -- no gym yet (org_id null, role TRAINER).
@@ -40,8 +48,10 @@ export function AuthProvider({ children }) {
   const registerTrainer = async (data) => {
     const res = await api('/auth/register-trainer', { method: 'POST', body: JSON.stringify(data) });
     setSession(res);
-    setUser(res.user);
-    return res.user;
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
   };
 
   const completeOnboarding = async (data) => {
@@ -53,8 +63,10 @@ export function AuthProvider({ children }) {
   const setupOrg = async (data) => {
     const res = await api('/auth/setup-org', { method: 'POST', body: JSON.stringify(data) });
     setSession(res);
-    setUser(res.user);
-    return res.user;
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
   };
 
   // "Independent client" on the login screen -- Google Identity Services
@@ -63,8 +75,10 @@ export function AuthProvider({ children }) {
   const loginWithGoogle = async (credential) => {
     const res = await api('/auth/google', { method: 'POST', body: JSON.stringify({ credential }) });
     setSession(res);
-    setUser(res.user);
-    return res.user;
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
   };
 
   // "Enterprise" screen's Google option -- same ID-token verification as
@@ -75,8 +89,10 @@ export function AuthProvider({ children }) {
   const loginWithGoogleEnterprise = async (credential, orgName) => {
     const res = await api('/auth/google/enterprise', { method: 'POST', body: JSON.stringify({ credential, orgName }) });
     setSession(res);
-    setUser(res.user);
-    return res.user;
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
   };
 
   const logout = () => { clearSession(); setUser(null); location.href = '/login'; };
@@ -105,8 +121,24 @@ export function AuthProvider({ children }) {
   // introduced here. Both are checked so this doesn't flip after a refresh.
   const isIndependent = isClient && (user.orgSlug === 'independent' || user.org_slug === 'independent');
 
+  // Legal consent: terms_accepted_at / terms_version come from /auth/me.
+  // A user has accepted current terms iff both fields are present and
+  // the version matches the required version the backend enforces.
+  const REQUIRED_TERMS_VERSION = '1.0';
+  const termsAccepted = !!(user?.terms_accepted_at && user?.terms_version === REQUIRED_TERMS_VERSION);
+
+  // Accept terms after user reviews and checks the consent box.
+  const acceptTerms = async () => {
+    await api('/auth/terms/accept', { method: 'POST', body: JSON.stringify({ version: REQUIRED_TERMS_VERSION }) });
+    // Re-fetch /auth/me so the user object carries the updated fields.
+    const { user: fresh } = await api('/auth/me');
+    setStoredUser(fresh);
+    setUser(fresh);
+    return fresh;
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent }}>
+    <AuthCtx.Provider value={{ user, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
       {children}
     </AuthCtx.Provider>
   );
