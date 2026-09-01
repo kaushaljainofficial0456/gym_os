@@ -76,7 +76,18 @@ export async function api(path, opts = {}) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || data.message || 'Request failed');
+    // Fold validate.js's per-field detail into the message itself (not
+    // just err.issues below) -- a real bug, found live: every one of this
+    // app's many `catch (e) { toast(e.message) }` call sites only ever
+    // read `.message`, so a 422 always showed the bare, useless
+    // "Validation failed" with zero indication of what was actually
+    // wrong or how to fix it -- even though the backend was already
+    // sending the real reason (e.g. "calories: Number must be less than
+    // or equal to 10000") in `issues`, just never surfaced. One fix here
+    // fixes it everywhere, with no per-call-site changes needed.
+    const base = data.error || data.message || 'Request failed';
+    const detail = Array.isArray(data.issues) && data.issues.length ? ` — ${data.issues.join('; ')}` : '';
+    const err = new Error(base + detail);
     err.issues = data.issues;
     err.status = res.status;
     // Machine-readable failure reason some endpoints attach (e.g. barcode

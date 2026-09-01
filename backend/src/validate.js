@@ -114,14 +114,29 @@ export const schemas = {
   // reject the WRONG TYPE outright (e.g. a non-numeric quantity, which
   // used to silently become NaN and get written to a log entry) rather
   // than to change what a well-formed request is allowed to look like.
+  // Upper bounds here MUST stay >= mealLog's own calories/protein/carbs/fat
+  // caps below (10000 / 1000 / 1000 / 1000) -- a real bug, found live: a
+  // custom food could be CREATED with no upper bound at all, then every
+  // attempt to LOG it (mealLog's own schema, which DOES cap) rejected with
+  // a bare "Validation failed" and no indication the food itself was the
+  // problem. A food this app tracks is a single serving/item, and nothing
+  // realistic exceeds these numbers in one serving -- capping creation to
+  // match what can actually be logged closes the trap at the source
+  // rather than only improving the error message for it (see api.js).
+  // Deliberately NOT adding a lower bound (.min(0)) here: the route itself
+  // already rejects negative/impossible values via validateFoodRecord(),
+  // with a 400 + a per-field `details` array richer than this schema
+  // layer's own generic 422 -- a schema-level .min(0) would intercept
+  // first and downgrade that into the same bare 422 this whole change is
+  // trying to get away from, for a case that already worked correctly.
   foodCreate: z.object({
     name: z.string().min(1).max(80),
     unit: z.string().max(30).optional(),
     serving: z.string().max(60).optional(),
-    calories: z.number().finite().optional(),
-    protein: z.number().finite().optional(),
-    carbs: z.number().finite().optional(),
-    fat: z.number().finite().optional(),
+    calories: z.number().finite().max(10000).optional(),
+    protein: z.number().finite().max(1000).optional(),
+    carbs: z.number().finite().max(1000).optional(),
+    fat: z.number().finite().max(1000).optional(),
     // Optional-detail macros (Part 14's "optional" list) -- the `foods`
     // table has always had these columns; this is the first route to let
     // a client actually populate them for a Custom Macros entry.
@@ -131,15 +146,17 @@ export const schemas = {
     category: z.string().max(40).optional()
   }),
   // Partial update -- every field optional, exactly like the route's own
-  // existing "only touch what's present" behavior.
+  // existing "only touch what's present" behavior. Same bounds as
+  // foodCreate, for the same reason (an edit shouldn't be able to push a
+  // food back over the loggable ceiling either).
   foodUpdate: z.object({
     name: z.string().min(1).max(80).optional(),
     serving: z.string().max(60).optional(),
     unit: z.string().max(30).optional(),
-    calories: z.number().finite().optional(),
-    protein: z.number().finite().optional(),
-    carbs: z.number().finite().optional(),
-    fat: z.number().finite().optional(),
+    calories: z.number().finite().max(10000).optional(),
+    protein: z.number().finite().max(1000).optional(),
+    carbs: z.number().finite().max(1000).optional(),
+    fat: z.number().finite().max(1000).optional(),
     fiber: z.number().finite().nonnegative().optional(),
     sugar: z.number().finite().nonnegative().optional(),
     sodium: z.number().finite().nonnegative().optional()
