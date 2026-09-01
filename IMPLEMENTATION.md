@@ -1,261 +1,338 @@
-# Nutrition Follow-Up Hardening Pass — Implementation Report
+# SK OS — Full-System Performance + Nutrition Bug-Fix Pass
 
-Scope: the 31-section "MASTER FOLLOW-UP PROMPT — NUTRITION / FOOD LOGGING UI
-+ CUSTOM FOOD + PERFORMANCE HARDENING". No photo food recognition / computer
-vision was added, per the prompt's explicit exclusion.
+Report for the "MASTER PROMPT — SK OS FULL-SYSTEM PERFORMANCE OPTIMIZATION +
+NUTRITION GAP FIXES". No UI/UX redesign, no new features, no business-logic
+changes, no photo food recognition — see confirmations at the bottom.
 
-## 1. Files changed
+## 1. Bugs fixed
 
-**Backend**
-- [backend/src/routes/me.js](backend/src/routes/me.js) — `POST /foods/resolve` gained a `food_id` branch; `GET /foods/search`'s `enrich()` fixed to stop attaching model-catalogue data to non-catalogue rows.
-- [backend/src/validate.js](backend/src/validate.js) — added `food_id` to the resolve-quantity schema.
-- [backend/test/meFoodsResolve.test.js](backend/test/meFoodsResolve.test.js) — 6 new tests.
-- [backend/test/meFoodsSearch.test.js](backend/test/meFoodsSearch.test.js) — new file, 4 tests.
+**Nutrition (Phase 1 items 1–6 of this prompt)** — all six were already
+implemented and verified in the immediately preceding session turn (My Diet
+1-item default, custom-food `food_id` resolution, Recent capped to 1 in
+both entry points, silent-reload "+"→"✓" with no page remount, Customize
+Meal's one-active-block workspace, Back/Close semantics unchanged). Not
+re-done here; spot-checked live in this pass and still correct.
 
-**Frontend**
-- [frontend/src/utils.js](frontend/src/utils.js) — `useFetch`'s `reload()` gained an opt-in `{ silent: true }` mode.
-- [frontend/src/pages/client/Nutrition.jsx](frontend/src/pages/client/Nutrition.jsx) — every in-page-action `home.reload()` call switched to silent; `toast` wired into `FoodLogSheet`.
-- [frontend/src/components/FoodLogSheet.jsx](frontend/src/components/FoodLogSheet.jsx) — `food_id`-first resolve calls, "Custom food" badge, Recent capped at 1, per-row "+"→"✓" confirmation + failure toast, Recent quick-log given the same treatment.
-- [frontend/src/components/nutrition/MyDietCard.jsx](frontend/src/components/nutrition/MyDietCard.jsx) — My Diet default-visible-count limited to 1 saved food / 1 saved meal.
-- [frontend/src/components/nutrition/CustomizeMealSheet.jsx](frontend/src/components/nutrition/CustomizeMealSheet.jsx) — one-active-block workspace model; `addFoodItem` fixed to send `food.id` first.
-- [frontend/src/components/nutrition/MealFoodRow.jsx](frontend/src/components/nutrition/MealFoodRow.jsx) — Recent capped at 1 (pre-existing fix from earlier in this branch, confirmed intact); new `onAdded` callback wired into all four add paths.
+**Newly found and fixed in this pass:**
 
-## 2. Bugs fixed
+1. **`POST /me/foods/resolve` rejected almost every custom/library food**
+   with `"Validation failed — source_id: Expected string, received null"`
+   — reported live by the user mid-session (`paneer`, 400 kcal/100g). Every
+   frontend call site builds this request from a search result's own
+   `source_id`, which is a genuine SQL `NULL` (not merely absent) for any
+   food without a materialized model twin — i.e. almost every custom food.
+   `JSON.stringify` keeps an explicit `null` in the wire payload (unlike
+   `undefined`, which it drops), and the schema's `source_id` was
+   `.optional()` only, which accepts `string | undefined` but rejects
+   `null`. The route body already treated a null `source_id` exactly like
+   an absent one — this was purely a schema gap.
+2. **Custom-food creation had no upper bound**, but the food-*logging*
+   route caps calories/protein/carbs/fat at 10000/1000/1000/1000 — a food
+   saved above that ceiling became permanently unloggable with only the
+   generic `"Validation failed"` message to show for it.
+3. **The generic message itself**: `validate.js` already computed a
+   helpful per-field `issues` array, but the frontend's `api()` only ever
+   read `data.error` into the thrown error's `.message` — every one of
+   this app's many `catch (e) { toast(e.message) }` call sites showed the
+   same useless string for every validation failure, anywhere in the app.
+4. **Gym owner's Business dashboard "Revenue · 6 months" chart was
+   silently wrong for 5 of 6 months, always** — found while auditing
+   `GET /business/overview` for the performance pass, not reported by the
+   user. The `payments` query only ever fetched the current calendar
+   month; a "last 6 months" trend loop then filtered *that same*
+   month-scoped array by month, so every month except the current one
+   could only ever match zero rows. A gym with real prior-month revenue
+   could see 5 blank bars, or the whole chart falling into "No revenue
+   recorded yet" whenever the current month itself had no payments yet.
+5. **Home dashboard's Protein/Carbs/Fat totals were raw, unrounded
+   floats** (`252.29999999999998 / 800 g`) — reported live by the user. A
+   duplicated inline sum, drifted from the shared `sumEatenTotals()`
+   helper `nutritionCalc.js` already exists for exactly this.
+6. **`GET /tracking/me/home`** (the single highest-traffic endpoint in the
+   app — every client page loads it once via `ClientLayout`'s shared
+   fetch) **ran a completely unused query** on every call: a `meals`
+   fetch across every nutrition plan the client has ever had, whose
+   result was never read anywhere in the function (confirmed via a
+   full-body grep before removing, not assumed). Also parallelized two
+   independent lookups (`user`, `client`) that were sequential for no
+   reason.
 
-1. **Custom-food selection could resolve to the wrong food** (Section 2, the prompt's own "serious correctness bug"). Root cause below.
-2. **Tapping "+" on a quick-log row visually reloaded the whole Nutrition page**, closing the search sheet and wiping its state (Sections 5-7, 15). Root cause below.
-3. **Customize Meal's per-block Recent list showed the same 5 items N times** (Sections 8-9) — capped to 1 per block (this fix predates this exact session turn but is part of the same hardening pass and was re-verified here).
-4. **`CustomizeMealSheet.addFoodItem` sent `food.source_id || food.id`** — wrong priority; `source_id` only means anything to a model-catalogue lookup, and preferring it over a real row's own `id` could route a meal-builder add through the same name-search fallback as bug #1.
-5. **My Diet showed up to 2 saved foods/meals by default** instead of exactly 1 (Section 1).
-6. **Log/Estimate Food's Recent section showed up to 6 items** instead of 1 (Section 4).
+## 2. Performance bottlenecks found
 
-## 3. Root cause — custom-food selection bug (Section 2)
+- **`/tracking/me/home`**: one wasted query per call (see #6 above) — the
+  highest-value fix in this pass, since this endpoint loads on every
+  single client-side page view.
+- **`/tracking/me/home`**: `user` and `client` lookups ran sequentially
+  despite having no dependency on each other.
+- **Admin console (`admin/` package) ships as a single, non-code-split
+  bundle** (241 kB / 72.8 kB gzip, `admin/dist/assets/index-*.js`) — the
+  main frontend has 33 lazy-loaded routes; the admin console has none.
+  Identified, not fixed (see §14 — deliberately not touched, below).
+- **Duplicate requests observed on Nutrition page load** (`/me/foods`,
+  `/me/meals`, `/tracking/clients/:id/supplements`, `/tracking/me/home`,
+  etc. each firing twice). Investigated and confirmed this is
+  `<React.StrictMode>` (wraps the whole app in `main.jsx`) deliberately
+  double-invoking effects in **development only** — not a real
+  duplicate-fetch bug in the app's own code, and does not happen in a
+  production build. No fix applied (removing StrictMode would reduce the
+  app's own bug-catching ability for no real production benefit).
 
-`POST /me/foods/resolve` never consulted the `foods` table at all. Regardless
-of which food a user tapped — including their own private custom food —
-the route always ran a NAME-based search against the static model catalogue
-(`searchFoodModel(name || source_id || '', ...)`) and priced whatever that
-search's top/matching hit was. A custom food's own row (its own stored
-calories/protein/carbs/fat) was never the source of truth for pricing it.
+## 3. Performance optimizations implemented
 
-This was compounded by `GET /foods/search`'s `enrich()` helper, which
-attached a name-matched model-catalogue "twin" (`source_id` + `portions`) to
-**any** `mine`/`library` row, not just genuine `VERIFIED_DATABASE` rows —
-so a custom food could carry a `source_id` that belonged to a same-named but
-different catalogue food, further steering `/resolve` toward the wrong data
-even when a `source_id` was present.
+| Change | File | Effect |
+|---|---|---|
+| Removed unused `meals` query from `Promise.all` | `backend/src/routes/tracking.js` | One fewer DB round-trip on every load of the app's single highest-traffic endpoint |
+| Parallelized `user`/`client` lookups | `backend/src/routes/tracking.js` | One fewer sequential round-trip on the same endpoint |
 
-**Fix**: `/foods/resolve` now accepts an optional `food_id`. When present,
-it queries the `foods` table directly —
-`WHERE id = ? AND (client_id = ? OR client_id IS NULL)`, the same
-ownership-scoped pattern already used elsewhere in this codebase — and
-prices linearly off that row's own `calories`/`protein`/`carbs`/`fat` and
-parsed `serving` baseline (same `grams / baseServingAmount` scaling
-`MyDietCard.jsx` already used, factored into a shared backend helper).
-`enrich()` now only attaches catalogue-twin data when
-`row.source === 'VERIFIED_DATABASE'`. Three frontend call sites
-(`FoodLogSheet.jsx`'s two resolve calls, `CustomizeMealSheet.jsx`'s
-`addFoodItem`) were fixed to send `food.id` first, never `food.source_id`
-first.
+Everything else audited (see §13 below) was **already** optimized from
+earlier work on this codebase, and is called out as verified-fine rather
+than re-implemented:
 
-**Regression tests** (backend/test/meFoodsResolve.test.js,
-backend/test/meFoodsSearch.test.js — 10 new tests, all passing) cover the
-prompt's own Tests A-D: a custom food resolves to its own id/macros; a
-same-named global-database food is never substituted; a second client can
-never resolve or search another client's custom food by id or by name; two
-clients' identically-named custom foods each resolve to their own distinct
-row.
+- **Frontend code-splitting**: 33 routes already behind `React.lazy()` in
+  `App.jsx` (Admin/Enterprise/Business/WorkoutBuilder/NutritionBuilder/
+  Reports/Messages/etc.) — Section 11's requirement was already met.
+- **Database indexing**: 85 `CREATE INDEX` statements in
+  `database/schema.sql`, already covering exactly the columns this
+  prompt calls out — `client_id`+`date` on every log table, `org_id`+
+  `status` on subscriptions/payments/refunds/support tickets/risk events,
+  `org_id`+`created_at` on payment orders/invoices/admin audit logs,
+  food search/name/source, meal items, AI food-estimate `canonical_key`.
+  No new index added — nothing found that was missing and justified.
+- **AI cost/performance**: a dedicated cache (`foodAICache.js`,
+  `ai_food_estimates` table, keyed by a canonicalized query) is already
+  fully wired into the estimate flow (`foodAI.js` imports and calls
+  `getCachedEstimate`/`saveCachedEstimate`/`bumpCacheUsage`) — Section
+  17's requirement was already met.
+- **Admin dashboard KPIs** (`GET /console/overview`,
+  `GET /business/overview`'s non-trend fields): already computed via SQL
+  `COUNT`/`SUM` aggregates, not fetched wholesale and reduced in
+  JavaScript — Section 18's requirement was already met, with one
+  exception (the revenue trend, fixed above — that one *was* JS-side
+  aggregation, over a dataset that happened to be broken, not over-fetched).
+- **Nutrition search debounce/race-safety**: `FoodLogSheet.jsx` (200ms)
+  and `MealFoodRow.jsx` (220ms) both already debounce and both already
+  guard stale responses with a `dead` flag set in the effect's own
+  cleanup — confirmed by reading the code directly, not assumed. No
+  change needed for Section 10/14.
+- **Trainer client list** (`GET /clients`): already bounded
+  (`LIMIT` default 500, max 1000, org/trainer-scoped), filtered/sorted in
+  JS only after that bounded fetch — reasonable for a gym roster's actual
+  scale; no evidence of this being a real bottleneck was found.
 
-## 4. Root cause — food-logging "full page reload" (Sections 5-7, 15)
+## 4. Files / modules changed
 
-Nutrition.jsx renders `if (home.loading) return <Spinner .../>` gating its
-entire returned tree on a SHARED, whole-app `/tracking/me/home` fetch
-(`useFetch`, owned by `ClientLayout.jsx` and passed down via Outlet
-context — one fetch shared by every client page, specifically to avoid
-duplicate per-page fetches). Every action in Nutrition.jsx that wanted
-fresh totals — including the food-logging path — called `home.reload()`.
+- `backend/src/routes/tracking.js` — `/me/home` query fixes.
+- `backend/src/routes/admin.js` — revenue-trend window fix.
+- `backend/src/validate.js` — `source_id` nullable, `foodCreate`/
+  `foodUpdate` upper bounds.
+- `frontend/src/api.js` — surfaces `issues` in thrown error messages.
+- `frontend/src/components/FoodLogSheet.jsx` — `source_id || undefined`
+  at 3 call sites; earlier `+`/`✓`/toast work (prior turn).
+- `frontend/src/pages/client/Home.jsx` — shared `sumEatenTotals()` +
+  rounding instead of a duplicated, unrounded inline sum.
+- `backend/test/meFoodsResolve.test.js` — 1 new test (null `source_id`).
+- `backend/test/businessRevenueTrend.test.js` — new file, 3 tests.
 
-`useFetch`'s `reload()` triggers a `setLoading(true)` synchronously, before
-the refetch resolves. That flips `home.loading` true for the duration of
-the round-trip, and Nutrition.jsx's render gate then swaps its ENTIRE
-returned JSX to a bare `<Spinner/>`. Nutrition.jsx itself doesn't unmount
-(same component instance across its own re-renders), but every CHILD that
-only existed in the "real" tree — including an open `FoodLogSheet`, with
-all of its own local search-query/results/grams state — does: gone on the
-trip through `<Spinner/>`, mounted fresh (blank) on the way back. That is
-the actual mechanism behind "search interface disappears/reopens" for what
-looks, from the fetch log, like one background refetch.
+## 5. Database migrations
 
-**Fix**: `useFetch`'s `reload()` now accepts an optional `{ silent: true }`
-argument that skips the `loading` toggle for that one refetch — `data`
-stays visibly present (stale-but-shown) throughout, and swaps in place once
-the fresh response lands. Every `home.reload()` call in Nutrition.jsx that
-fires from an in-page action (quick-log, edit, delete, meal toggle, water,
-target setup, Customize Meal save) now passes `{ silent: true }`; the one
-exception left as a bare `reload()` is the genuine full-page error-retry
-button, where a blocking spinner is the correct UX. This is an additive,
-backward-compatible change — every other `useFetch` consumer in the app
-that never opts into silent mode is unaffected.
+None. Every fix in this pass changed either a request-validation rule, a
+query's date window, or which pre-existing columns a query selects —
+never the schema itself. No new table, column, or index was added or
+needed.
 
-**Live-verified** (see §13): quick-logging a food via search results and
-via Recent both leave the sheet open, the search query intact, and update
-Today's Fuel's totals in the background, with no spinner flash and no
-console errors.
+## 6. API / database query improvements
 
-## 5. Recent-search UX changes (Section 4, 8-9)
+- `/tracking/me/home`: 7 parallel queries → 6 (one genuinely unused
+  query removed), plus 2 previously-sequential queries now parallel — 2
+  fewer round-trips per call on the app's busiest endpoint.
+- `/business/overview`: query window widened from "this month only" to
+  "6 months" (a correctness fix that happens to touch the same query the
+  performance audit was inspecting) — no new query added, same query,
+  wider `WHERE paid_at >= ?` bound.
 
-- `FoodLogSheet.jsx`'s idle-screen Recent section: `limit=6` → `limit=1`.
-- `MealFoodRow.jsx`'s per-block Recent section: `limit=5` → `limit=1`
-  (verified intact in this pass; the underlying `GET /me/foods/recent`
-  history itself is untouched — only the UI's own requested `limit` changed,
-  so nothing about a user's logging history was deleted or altered).
+## 7. Frontend rendering improvements
 
-## 6. My Diet visibility changes (Section 1)
+None implemented this pass. `useMemo`/`useCallback` are already used in
+86 places across 30 files, including the exact hot paths this prompt
+calls out (`Nutrition.jsx`, `Workout.jsx`, `ClientLayout.jsx`,
+`WorkoutBuilder.jsx`, the 3D muscle-anatomy view). No `React.memo` usage
+was found on food-search-result rows or similar list items. This is
+flagged, not fixed: without a React DevTools Profiler session actually
+run against this app, wrapping components in `memo()` on code-reading
+alone would be exactly the "blind memoization" this prompt's own Section
+8 explicitly warns against — no profiling evidence of a real re-render
+bottleneck was gathered in this pass.
 
-`MyDietCard.jsx` now slices to `foods.slice(0, 1)` / `meals.slice(0, 1)`
-when not expanded (was effectively showing more), and the "See more" label
-now reads the correct remaining count. Zero-items empty state was already
-correct and untouched.
+## 8. Bundle / network improvements
 
-## 7. Customize Meal workspace redesign (Sections 8-11)
+No bundle-size change from this pass's edits (confirmed: `Nutrition-*.js`
+chunk is 125.90 kB after vs. 126.21 kB before this pass's edits — the
+~0.3 kB difference is the `|| undefined` guards and comment text added,
+not a structural change). Main frontend bundle-size profile is unchanged
+from the pre-existing, already-code-split baseline (see §9 for numbers).
 
-Replaced the old "N reusable rows can be open simultaneously, each resets
-to blank after adding a food" model with a one-active-block model:
-`CustomizeMealSheet`'s `rowIds` now holds at most one id. `MealFoodRow`
-gained an `onAdded` callback, fired after any successful add (database
-search result, Custom Macros, "use existing" duplicate resolution, or AI
-estimate) — the parent drops that row's id from `rowIds` on `onAdded`,
-collapsing it. A row's contribution is already rendered as a compact
-`✓ Name · qty · kcal [remove]` card in the existing `items` list directly
-below (a small `✓` was added to that card for clarity — the card format
-itself, including inline-edit-quantity and remove, already existed and did
-not need to be rebuilt). "+ Add another food" always replaces `rowIds` with
-exactly one fresh id (never appends), so at most one search field is ever
-live, and tapping it while an earlier not-yet-completed block is still
-half-typed discards that never-committed state rather than stacking a
-second active search field. Live-verified end to end (see §13).
+## 9. Before/after measurements
 
-## 8. Performance findings (Section 12-14, 27)
+**Frontend build** (`frontend/`, production):
+- Clean before and after every change in this pass; no new build
+  warnings introduced. Existing warning (3 chunks over 500 kB —
+  `three.module` 734 kB, `charts` 387 kB, `index` 394 kB) is unchanged
+  from before this pass and was not investigated (out of scope — none of
+  it was touched, and Three.js/charting libraries are large by nature;
+  splitting them further would be a real architecture change, not a
+  small targeted one).
+- `Nutrition-*.js` chunk: 125.90 kB gzip 30.30 kB (was 126.21 kB / 30.40
+  kB before this pass's 3 small guard-clause edits).
 
-- **Search debounce/race safety** (Section 14): already correctly
-  implemented in both `FoodLogSheet.jsx` (200ms debounce) and
-  `MealFoodRow.jsx` (220ms debounce), each with a `dead` flag set in the
-  effect's cleanup so a stale in-flight response can never overwrite a
-  newer one. Confirmed by reading the code directly, not assumed. No change
-  needed.
-- **Duplicate network requests observed on Nutrition page load**
-  (`/me/announcements`, `/intel/coach/brief`, `/intel/coach/weekly`,
-  `/tracking/me/home`, `/me/foods`, `/me/meals`,
-  `/tracking/clients/:id/supplements` each fired twice). Investigated and
-  confirmed this is `<React.StrictMode>` (wrapping the whole app in
-  `main.jsx`) double-invoking effects in **development only** — a
-  deliberate React dev-mode safeguard for catching missing effect cleanup,
-  not a genuine duplicate-fetch bug in this app's own code. It does not
-  happen in a production build. No fix applied (removing StrictMode would
-  reduce, not improve, the app's own bug-catching ability, for no real
-  production benefit).
-- **The full-page-reload/remount bug itself** (§4 above) was the dominant
-  perceived-performance issue described in the prompt ("the entire
-  application feels slow" was largely this: every logged food triggered a
-  visible spinner-flash and full remount of the open sheet). Fixing it
-  removes that remount/re-render cost on every quick-log, edit, delete, and
-  meal-toggle action across the whole Nutrition page.
-- Not undertaken this pass: a full N+1/index audit of the backend or a
-  bundle-size pass (Section 12's other listed areas). These weren't touched
-  by any change in this pass and no user-reported symptom pointed at them;
-  flagging as unexamined rather than claiming them clean.
+**Admin console build** (`admin/`, production): clean, 241.05 kB / 72.83
+kB gzip, single bundle (no code-splitting present — see §2/§14).
 
-## 9. Database changes
+**Backend**: 1020/1023 tests passing both before and after this pass's
+changes (the 3 new tests added by this pass, plus everything that already
+passed). The 1 failure is `community.test.js:226`, a pre-existing flake
+(`1800 !== 9000`) unrelated to anything touched this session — present
+identically before this pass, and present across every prior test run
+this entire multi-phase session.
 
-None. The `food_id` resolve branch queries the existing `foods` table with
-an existing ownership-scoping pattern; no new table, column, index, or
-migration was added or needed (Section 25).
+**Request counts**: not independently re-measured with tooling beyond
+manual network-log inspection in the browser during live verification
+(see §12). The `/me/home` fix removes exactly 1 query from that
+endpoint's own execution per call — this is a code-level count (7→6
+parallel queries, `user`+`client` moved from 2 sequential calls to 1
+parallel Promise.all), not a measured wall-clock timing, and is reported
+as such rather than inventing a millisecond figure I did not measure.
 
 ## 10. Tests added
 
-10 new backend tests, all passing:
-- `backend/test/meFoodsResolve.test.js` — 6 new (food_id resolution,
-  Tests A/B/D, linear scaling, invalid-id handling).
-- `backend/test/meFoodsSearch.test.js` — new file, 4 tests (own custom food
-  visible + correctly labeled, Test C cross-client privacy, two clients'
-  identically-named foods stay distinct, unauthenticated rejection).
+- `backend/test/meFoodsResolve.test.js` — 1 new test: an explicit
+  `source_id: null` (what every real call site actually sends for a
+  custom food) is accepted, not rejected.
+- `backend/test/businessRevenueTrend.test.js` — new file, 3 tests: a
+  payment from 3 months ago appears in its own month in the trend (not
+  silently dropped); `monthlyRevenue` stays scoped to just the current
+  month even though the underlying query now spans 6 months; a gym with
+  zero payments *this* month but real prior history is not shown as "no
+  revenue" in the trend.
 
-No frontend test framework exists in this repository (no test script in
-`frontend/package.json`, no Vitest/Jest config) — this is a pre-existing
-condition, not something introduced or left broken by this pass. Frontend
-behavior (the reload/remount fix, the block-collapse redesign, the
-checkmark/toast UX) was verified live in a real browser session instead
-(§13), consistent with how every other frontend change in this codebase's
-history has been verified.
+(Nutrition Phase-1 items already had their own regression tests from the
+immediately preceding turn: 10 tests across `meFoodsResolve.test.js` and
+`meFoodsSearch.test.js` for custom-food selection/privacy.)
 
-## 11. Existing tests passed
+## 11. Full test result
 
-`npm test` (backend, Node's built-in test runner): **1016/1019 passing**.
-The one failure (`community.test.js:226`, a leaderboard period-aggregation
-assertion) is a pre-existing flake unrelated to this work — present before
-any change in this pass and consistent with every prior test run this
-session.
+`npm test` (backend, Node's built-in test runner): **1020/1023 passing.**
+1 failure, 2 skipped — the failure is the same pre-existing
+`community.test.js` leaderboard-aggregation flake seen throughout this
+entire session, unrelated to any change made in this pass.
 
-## 12. Frontend build result
+## 12. Production build result
 
-`npm run build` (frontend): clean, no errors, after every batch of changes
-in this pass (utils.js, Nutrition.jsx, FoodLogSheet.jsx,
-CustomizeMealSheet.jsx, MealFoodRow.jsx).
+- `frontend/`: `npm run build` — clean, no errors.
+- `admin/`: `npm run build` — clean, no errors.
+- Live browser verification (local dev, both servers running):
+  - The exact reported "paneer" custom-food quick-log now succeeds
+    end-to-end (`resolve → 200` → `meals/log → 201` → background
+    `tracking/me/home → 200`), sheet stays open, search query preserved,
+    no page reload.
+  - Home dashboard's macro totals now show `252.3` instead of
+    `252.29999999999998`.
+  - Overflow custom-food creation (15000 kcal) is now rejected at save
+    time with `"Validation failed — calories: Number must be less than
+    or equal to 10000"` shown inline, instead of silently succeeding and
+    failing unexplained later.
+  - Console: zero errors throughout every verification pass this session.
+  - All test data created during verification was cleaned up afterward
+    (deleted test foods/meals/log entries), leaving the client's real
+    data — including their own genuine "paneer", "lkn", and "maggi"
+    entries — untouched.
 
-## 13. Live browser verification result
+## 13. Remaining bottlenecks
 
-Verified against the local dev servers (backend :4000, frontend :5173) as
-the existing logged-in test client:
+Being explicit about what was **not** independently re-measured or fixed
+in this pass, per this prompt's own "if exact timings cannot be measured,
+say so honestly" instruction:
 
-- **Quick-log, no reload** (Section 29 Flow 4): searched "rice", tapped a
-  result's "+". Network log showed `POST /me/foods/resolve` →
-  `POST /nutrition/clients/:id/meals/log` → `GET /tracking/me/home`
-  (silent). The sheet stayed open, the search query and result list stayed
-  visible/unchanged, no spinner appeared. Repeated via the Recent
-  quick-log path with the same result. Confirmed via `console` (zero
-  errors throughout the session) and via reopening the page fresh: Today's
-  Fuel totals reflected both new logs correctly (kcal/protein/carbs/fat).
-- **Customize Meal one-active-block workspace** (Section 29 Flow 5):
-  created a test meal, added one food via search — the search block
-  collapsed immediately into a `✓ Rice, cooked, NFS · ✓ DATABASE ·
-  ×100g each · 129 kcal · ✕` card, "+ Add another food" appeared, and
-  tapping it opened exactly one fresh, blank block (Recent + search),
-  with no second active search field and no duplicated card.
-- **My Diet default visibility**: confirmed exactly 1 saved food and 1
-  saved meal shown by default, with an accurate "See more (N more)" count.
-- Cleaned up all test artifacts created during verification (the test
-  meal and the two log entries) before finishing, restoring the client's
-  data to its pre-verification state.
-- **Mobile viewport**: visually verified at 375×812 — layout reflows
-  correctly with no horizontal overflow or clipped content. Interactive
-  click-testing at that viewport size hit a rendering limitation in this
-  browser-automation environment (not a reproducible app error — no
-  console errors, no failed requests) and could not be completed live in
-  this pass; the desktop-verified interaction logic is not
-  viewport-conditional (the sheets use the same fixed-overlay pattern with
-  only cosmetic `sm:` breakpoint differences), so this is a lower-confidence
-  gap, not a known-broken path.
+- No systematic N+1 audit was completed for every route in the app —
+  only the highest-traffic client endpoint (`/me/home`) and a sampling of
+  `Promise.all` sites across `console.js`, `admin.js`, `clients.js`,
+  `tracking.js` (all found correct/already-optimal on inspection). A few
+  write-loop patterns were found (see §14) and deliberately left alone.
+- No bundle-size reduction was attempted for the 3 chunks already over
+  500 kB (`three.module`, `charts`, `index`) — real, but pre-existing and
+  outside what a small, low-risk change could safely address.
+- No React re-render profiling was run (no Profiler session available in
+  this environment) — §7's finding is a code-reading observation, not a
+  measured bottleneck.
+- The admin console's lack of route-level code-splitting (§2) was
+  identified but not implemented — see §14.
+- Asset optimization (images/icons/animations, Section 12 of the master
+  prompt) was not audited in this pass — no evidence-gathering was done
+  here at all, and this is reported as unexamined rather than "checked,
+  found fine."
+- Serverless/cold-start specifics (Section 24 — Vercel route module
+  weight, expensive module-init work) were not audited in this pass.
 
-## 14. Remaining performance bottlenecks / follow-up work
+## 14. Optimizations deliberately NOT made
 
-Being explicit about what was **not** fully covered in this pass, so
-nothing here is overstated:
+- **Admin console code-splitting**: identified as genuinely missing
+  (single 241 kB bundle, no `React.lazy()` anywhere in that package), but
+  not implemented — doing this safely means reading and restructuring
+  that package's own routing first, and there is no evidence yet that its
+  current load time is actually a problem for anyone; a real architecture
+  touch deserves its own reviewed pass, not a rushed addition at the tail
+  of an already-large one.
+- **Batch-rewriting the alert-reconciliation write loop**
+  (`backend/src/services/atRisk.js`, called from the trainer dashboard):
+  currently issues one `UPDATE`/`INSERT` per client per fired/resolved
+  alert rule inside a loop. A genuine N+1-shaped write pattern, but
+  rewriting it into a bulk upsert changes SQL structure in a way that
+  needs careful correctness verification for an alerts system trainers
+  actively make decisions from — not something to touch without dedicated
+  testing, per this prompt's own "correctness takes priority" rule.
+- **Batch-rewriting `POST /me/meals/share`'s per-item loop**
+  (`backend/src/routes/me.js`): loops over user-selected meal/food ids
+  fetching each individually. Left alone: user-initiated, bounded by
+  however many items someone manually picked to share (realistically
+  single digits), not a page-load hot path — the risk of subtly changing
+  its existing "silently skip a stale/foreign id" behavior via a batched
+  `WHERE id IN (...)` rewrite outweighs the benefit for this call
+  frequency.
+- **Schema-level `.min(0)` on `foodCreate`/`foodUpdate`'s
+  calories/protein/carbs/fat**: deliberately NOT added alongside the
+  upper-bound fix. The route already rejects negative/impossible macro
+  combinations via `validateFoodRecord()`, with a richer 400 response
+  (`{error, details}`) than the generic schema-level 422 — adding a
+  lower bound at the schema layer would have intercepted first and
+  downgraded that into the same generic message this whole pass is
+  trying to get away from. Caught by re-running the existing test suite
+  before finalizing this fix, not assumed correct.
+- **Adding new indexes speculatively**: none added. 85 already exist,
+  covering every access pattern this prompt calls out by name. Adding
+  more without a specific slow query to point at would violate this
+  prompt's own "add indexes only where justified" / "avoid duplicate
+  indexes" rules.
 
-- No systematic backend N+1-query or missing-index audit was performed
-  (Section 12's backend/database bullets). Nothing observed suggested a
-  problem, but nothing was actively measured either.
-- No bundle-size work was done; the existing `vite build` warning about
-  chunks over 500kB (`three.module`, `charts`, `index`) predates this pass
-  and was not investigated.
-- Accessibility (Section 22) and full mobile-width interactive sweep
-  (320/390/430px, Section 23) were not exhaustively re-verified beyond the
-  375px visual check above and the aria-labels already present on the
-  touched buttons (`Quick log {name}`, `{name} logged`, `Cancel this food
-  entry`, etc.).
-- Sections 20-21's toast/error-copy audit was applied to the specific flows
-  touched in this pass (quick-log success/failure) but not swept across
-  every existing toast in the app for wording consistency.
+## 15. UI/UX confirmation
 
-No claim of "fully optimized" or a numeric score is made anywhere in this
-report — see the measured/verified facts above for what was actually
-checked.
+**Not redesigned.** No color, layout, typography, spacing, icon,
+navigation, modal, animation, or visual-hierarchy change was made
+anywhere in this pass. Every change was either backend query/validation
+logic, or a frontend data-correctness fix (rounding, a `|| undefined`
+guard, reusing an existing shared helper) — none of which alter what
+anything looks like or how it's arranged on screen.
+
+## 16. No photo recognition confirmation
+
+**Confirmed.** No computer-vision, image-based food-recognition, or any
+new AI capability was added, touched, or proposed anywhere in this pass.
+
+## 17. Existing features/business logic confirmation
+
+**Confirmed preserved.** No pricing, permission, authentication, payment,
+workout, AI-provider-selection, gym-owner, trainer, or client behavior
+was changed except the two explicit correctness bugs listed in §1 (the
+revenue-trend window and the food-macro overflow cap) — both are bug
+fixes that make already-intended behavior work correctly, not changes to
+what that behavior is supposed to be. Every fix in this pass was
+verified against the existing test suite (1020/1023, same pre-existing
+unrelated flake) before being considered done.
