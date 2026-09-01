@@ -17,6 +17,10 @@ dist/
 build/
 *.log
 
+# food benchmark: regenerable run outputs (baseline.v1.json + food_eval_set.v1.json ARE committed)
+ml/data/benchmark/report.*.json
+ml/data/benchmark/report.*.txt
+
 .vscode/
 .DS_Store
 Thumbs.db.freebuff/

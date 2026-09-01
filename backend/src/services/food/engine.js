@@ -1,0 +1,669 @@
+// ============================================================
+// SKOS FOOD ENGINE — CANONICAL CORE  (Phase 1)
+//
+// THE single import surface for food identification, search, and nutrition
+// estimation. Routes and food-facing services import from here (or the
+// food/index.js barrel), never from a second engine.
+//
+// PHASE 1 CONTRACT: this layer is BEHAVIOUR-IDENTICAL to the pre-existing
+// `foodEstimator.js`. `estimateMeal` / `resolveFood` / `priceFood` are
+// thin, documented wrappers that return exactly what `estimateFood` /
+// `searchFoods` / `resolveFoodQuantity` return today — same `food-v1`
+// shapes, same numbers, same parsing, same never-fabricate behaviour. The
+// implementation still lives in `foodEstimator.js` (unchanged apart from the
+// contains-pass trust fix and two additive re-exports); this module makes it
+// the one canonical entry point and hangs the future pipeline (food/
+// pipeline.js) off the same core. The staged pipeline is NOT wired into any
+// live estimate in Phase 1.
+//
+// No LLM. No composite engine. No food-specific logic. No nutrition math
+// changes.
+// ============================================================
+'use strict';
+
+import * as impl from '../foodEstimator.js';
+import { checkPlausibility, coarseClassOf } from './plausibility.js';
+import { classifyComposite, getCompositeDish } from './classify.js';
+import { decompose } from './decompose.js';
+
+/* ------------------------------------------------------------------ *
+ *  Engine version selection                                          *
+ *                                                                    *
+ *  V1 is the immutable baseline. V2 = V1 + a post-COMPUTE plausibility*
+ *  pass + a quarantine-rescue pass (architecture Phase 2). V2 runs    *
+ *  ONLY when explicitly requested — `ctx.engine === 'v2'` or          *
+ *  FOOD_ENGINE_V2=1 — so every live route stays byte-identical to V1  *
+ *  until a later, gated cutover.                                      *
+ * ------------------------------------------------------------------ */
+
+function v2Enabled(ctx) {
+  return ctx?.engine === 'v2' || process.env.FOOD_ENGINE_V2 === '1';
+}
+
+// V3 = V2 + composite decomposition (architecture Phase 3). Requesting v3
+// automatically gets Phase 2's improvements too -- each phase is additive
+// over the previous, never a fork. `engine:'v2'` alone stays byte-identical
+// to before Phase 3 existed.
+function v3Enabled(ctx) {
+  return ctx?.engine === 'v3' || process.env.FOOD_ENGINE_V3 === '1';
+}
+
+/* ------------------------------------------------------------------ *
+ *  Canonical entry points                                            *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Estimate a whole logged meal from free text.
+ *
+ * DEFAULT (no `ctx.engine`): byte-identical to `estimateFood(text)` — the
+ * frozen V1 behaviour and permanent regression floor.
+ *
+ * `ctx.engine === 'v2'` (or FOOD_ENGINE_V2=1): applies Phase-2 post-processing
+ * over the V1 result — a plausibility pass that DOWNGRADES CONFIDENCE (never a
+ * number, never an unresolve) on an implausible record, and a quarantine
+ * rescue that turns a data-quality-flagged drop into a clearly-labelled
+ * similar-food estimate instead of a silent zero. Parsing, nutrition
+ * arithmetic and the never-fabricate contract are untouched.
+ *
+ * @param {string} text
+ * @param {import('./types.js').Ctx & {engine?:string}} [ctx]
+ * @returns {import('./types.js').MealEstimate}
+ */
+export function estimateMeal(text, ctx = {}) {
+  const base = impl.estimateFood(text);
+  const wantsV2 = v2Enabled(ctx);
+  const wantsV3 = v3Enabled(ctx);
+  if (!wantsV2 && !wantsV3) return base;
+  const afterV2 = applyPhase2(base);
+  if (!wantsV3) return afterV2;
+  return applyPhase3(afterV2, text);
+}
+
+/**
+ * Ranked food search for the picker UI (FoodMatch shapes + portions).
+ * PHASE 1: identical to `searchFoods(query, opts)`.
+ *
+ * @param {string} query
+ * @param {{limit?:number, withPortions?:boolean}} [opts]
+ * @param {import('./types.js').Ctx} [ctx]
+ */
+export function resolveFood(query, opts = {}, ctx = {}) {
+  void ctx;
+  return impl.searchFoods(query, opts);
+}
+
+/**
+ * Resolve a chosen portion (+ optional oil level) into grams and final macros
+ * for ONE food, without logging.
+ * PHASE 1: identical to `resolveFoodQuantity(food, opts)`.
+ *
+ * @param {Object} food
+ * @param {{portionKey?:string,count?:number,grams?:number,oilLevel?:string}} [opts]
+ * @param {import('./types.js').Ctx} [ctx]
+ */
+export function priceFood(food, opts = {}, ctx = {}) {
+  void ctx;
+  return impl.resolveFoodQuantity(food, opts);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Legacy-named primitives — re-exported verbatim so no caller needs *
+ *  to import `foodEstimator.js` directly. Zero behaviour change.     *
+ * ------------------------------------------------------------------ */
+
+export const {
+  estimateFood,
+  searchFoods,
+  resolveFoodQuantity,
+  getFoodSearch,
+  modelAvailable,
+  scaleNutrition,
+  estimateFromBarcode,
+  estimateCompositional,
+  estimateFoodKnn,
+  getCompositionalCalculator,
+  getKnnFallback,
+  getBarcodeIndex,
+  cleanCode,
+  canonicalEan13,
+  resolveServing,
+  splitItems,
+  parseFragment,
+  SOURCE_RANK,
+} = impl;
+
+// NOTE: the raw string→string `normalize` (reference primitive) is NOT
+// re-exported here — the barrel's `normalize` is the pipeline STAGE below
+// (`{ raw, text, tokens }`). `pipeline.js` gets the raw primitive from
+// `foodEstimator.js` directly. Nothing else needs the raw form.
+
+/* ------------------------------------------------------------------ *
+ *  `foodSearch` — the ONE FoodSearch instance, exposed for the       *
+ *  meal-template builder's SKOS fallback (me.js). Replaces the       *
+ *  retired, encoding-corrupted second copy at                        *
+ *  backend/src/services/skos-food/foodEstimate.reference.cjs.        *
+ *                                                                     *
+ *  Same `.search(query, opts)` surface that the old `foodSearch`     *
+ *  exposed, now backed by the lazily-built canonical index so the    *
+ *  meal builder resolves a name identically to every other path      *
+ *  (and with correct Unicode normalisation — the retired copy's      *
+ *  combining-marks regex was mojibake and stripped nothing).         *
+ * ------------------------------------------------------------------ */
+
+export const foodSearch = {
+  /**
+   * @param {string} query
+   * @param {{limit?:number,cuisine?:string|null,allowBackoff?:boolean,allowFuzzy?:boolean}} [opts]
+   */
+  search(query, opts = {}) {
+    const s = impl.getFoodSearch();
+    if (!s) return [];
+    return s.search(query, opts);
+  },
+};
+
+/* ------------------------------------------------------------------ *
+ *  Pipeline stages + IR types — the future staged engine, hung off   *
+ *  the same core. Not wired into `estimateMeal` in Phase 1.          *
+ * ------------------------------------------------------------------ */
+
+export {
+  normalize, segment, classify, retrieve,
+  filter as filterCandidates, rank, selectStrategy, inspect,
+} from './pipeline.js';
+
+export {
+  makeCtx, emptyClassification, isFragment, isMealEstimate,
+  FOOD_KINDS, STRATEGIES,
+} from './types.js';
+
+// Phase 2 — plausibility stage, exported for direct use + tests.
+export { checkPlausibility, coarseClassOf, coarsePrepOf, loadPlausibility } from './plausibility.js';
+
+// Phase 3 — composite classification + decomposition, exported for direct use + tests.
+export { classifyComposite, getCompositeDish, loadCompositeMap } from './classify.js';
+export { decompose } from './decompose.js';
+
+/* ================================================================== *
+ *  PHASE 2 — post-COMPUTE plausibility + quarantine rescue            *
+ *                                                                    *
+ *  Operates on a COMPLETED V1 result. It may:                        *
+ *    - attach `item.plausibility` and, on a hard fail, drop that      *
+ *      item's `confidence` to 'low' (never 'high'/'medium' on a       *
+ *      record whose scaled numbers are implausible for its kind);     *
+ *    - move a data-quality-flagged `unresolved` entry into `items`    *
+ *      as a labelled similar-food estimate (`source: 'knn_estimate'`, *
+ *      `trustworthy: false`, `estimate_status: 'quarantine_rescue'`,  *
+ *      `confidence: 'low'`) — never a silent zero.                    *
+ *  It NEVER changes a matched record's nutrition values, NEVER        *
+ *  re-parses differently, NEVER unresolves a food that V1 resolved.   *
+ * ================================================================== */
+
+const RANK = { high: 0, medium: 1, low: 2, unreliable: 3 };
+const round1 = (x) => Math.round(x * 10) / 10;
+const downgrade = (band) => (band === 'unreliable' ? 'unreliable' : 'low');
+
+// Only rescue a quarantined drop when kNN actually has a defensible similar
+// food. Below this, a rough guess is worse than an honest "couldn't match
+// this" — so we leave it unresolved (V1 behaviour) rather than resolve it wrong.
+const RESCUE_MIN_SIMILARITY = 0.40;
+
+const titleCase = (s) => String(s || '').replace(/\b\w/g, (m) => m.toUpperCase());
+
+function rowFor(sourceId) {
+  const s = impl.getFoodSearch();
+  return (s && s.bySourceId && s.bySourceId.get(sourceId)) || null;
+}
+
+/** A trust-gate (quarantine) drop is the ONLY `unresolved` entry that carries
+ *  `matched` AND is not the "could not resolve a quantity" case. */
+function isQuarantineDrop(u) {
+  return !!u && typeof u.matched === 'string' && u.matched.length > 0
+    && u.reason !== 'could not resolve a quantity'
+    && u.reason !== 'no food named in this part'
+    && !/^no match for /.test(String(u.reason || ''));
+}
+
+function tryRescue(u) {
+  const parsed = impl.parseFragment(u.fragment);
+  if (!parsed || !parsed.name) return null;
+
+  // Re-locate the quarantined record for its COOKING-STATE hint only.
+  const s = impl.getFoodSearch();
+  const qrow = (s ? s.search(parsed.name, { limit: 1 })[0] : null) || null;
+
+  // Portion: size from the parsed qty/unit against the household-portion
+  // catalogue, NOT the quarantined row's own `serving_grams` — some
+  // data-quality flags ARE "this serving weight is impossible". An explicit
+  // mass/volume the user typed still wins (resolveGrams handles that first).
+  let grams = 100;
+  try {
+    const q = impl.resolveGrams(parsed, { food_name: parsed.name });
+    if (q && Number(q.grams) > 0) grams = Math.min(1500, Math.max(10, Number(q.grams)));
+  } catch { /* keep 100 */ }
+
+  const knn = impl.estimateFoodKnn(parsed.name, { grams });
+  if (!knn || !knn.totals || !(Number(knn.totals.calories) >= 0)) return null;
+  if (!(Number(knn.top_similarity) >= RESCUE_MIN_SIMILARITY)) return null; // weak → stay honestly unresolved
+
+  const rescue = {
+    // The name is the USER'S term, not the quarantined record's — this is an
+    // estimate FOR THE QUERY from similar foods, using the quarantined record
+    // for nothing but a cooking-state hint.
+    name: titleCase(parsed.name),
+    unit: `${Math.round(grams)} g (estimated)`,
+    qty: parsed.qty == null ? 1 : parsed.qty,
+    calories: Math.round(knn.totals.calories),
+    protein: knn.totals.protein,
+    carbs: knn.totals.carbs,
+    fat: knn.totals.fat,
+    source_id: null,
+    source: 'knn_estimate',
+    grams: round1(grams),
+    grams_basis: 'estimated',
+    grams_assumed: true,
+    // a rescue of a QUARANTINED match is inherently shaky — capped at 'low'
+    // so it can never be presented confidently and can never trip the
+    // fabrication ceiling check (which exempts low/unreliable).
+    confidence: 'low',
+    trustworthy: false,
+    match_kind: 'knn_similarity',
+    cooking_state: (qrow && qrow.cooking_state) || 'unspecified',
+    matched_from: u.fragment,
+    fiber_g: null, sugar_g: null, sodium_mg: null,
+    // additive labelling
+    estimate_status: 'quarantine_rescue',
+    matched_neighbor: knn.matched_neighbor || null,
+    replaced_reason: u.reason,
+  };
+
+  // Don't emit a rescue we can't stand behind: if the similar-food estimate is
+  // itself nutritionally implausible for its kind, an honest "couldn't match
+  // this" is better than a wrong number wearing an "estimated" label.
+  if (checkPlausibility(rescue, null).verdict === 'hard_fail') return null;
+  return rescue;
+}
+
+export function applyPhase2(base) {
+  if (!base || !Array.isArray(base.items)) return base;
+
+  let worst = 'high';
+  let changed = false;
+  const items = [];
+  const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  let downgrades = 0, advisories = 0, rescues = 0;
+
+  // 1 — plausibility pass over the items V1 already resolved
+  for (const it of base.items) {
+    const chk = checkPlausibility(it, rowFor(it.source_id));
+    let out = it;
+    if (chk.verdict === 'hard_fail') {
+      out = { ...it, confidence: downgrade(it.confidence), plausibility: { verdict: 'hard_fail', reasons: chk.reasons, details: chk.details } };
+      if (out.confidence !== it.confidence) changed = true;
+      changed = true; downgrades++;
+    } else if (chk.verdict === 'soft_fail') {
+      out = { ...it, plausibility: { verdict: 'soft_fail', reasons: chk.reasons, details: chk.details } };
+      changed = true; advisories++;
+    }
+    items.push(out);
+    if (RANK[out.confidence] > RANK[worst]) worst = out.confidence;
+    total.calories += Number(out.calories) || 0;
+    total.protein += Number(out.protein) || 0;
+    total.carbs += Number(out.carbs) || 0;
+    total.fat += Number(out.fat) || 0;
+  }
+
+  // 2 — quarantine rescue over the trust-gate drops (never touches a genuine
+  //     "no match" / "no food named" entry)
+  const stillUnresolved = [];
+  for (const u of (base.unresolved || [])) {
+    if (!isQuarantineDrop(u)) { stillUnresolved.push(u); continue; }
+    const rescued = tryRescue(u);
+    if (!rescued) { stillUnresolved.push(u); continue; }
+    items.push(rescued);
+    rescues++; changed = true;
+    if (RANK[rescued.confidence] > RANK[worst]) worst = rescued.confidence;
+    total.calories += rescued.calories || 0;
+    total.protein += rescued.protein || 0;
+    total.carbs += rescued.carbs || 0;
+    total.fat += rescued.fat || 0;
+  }
+
+  if (!changed) return base;
+
+  return {
+    ...base,
+    items,
+    total: {
+      calories: Math.round(total.calories),
+      protein: round1(total.protein),
+      carbs: round1(total.carbs),
+      fat: round1(total.fat),
+    },
+    confidence: items.length ? worst : null,
+    unresolved: stillUnresolved,
+    disclaimer: stillUnresolved.length
+      ? 'Some items could not be matched and are NOT included in the total.'
+      : (rescues
+        ? 'Some items are estimated from similar foods, not direct matches — see the item labels.'
+        : base.disclaimer),
+    engine: 'v2',
+    v2: { plausibility_downgrades: downgrades, plausibility_advisories: advisories, quarantine_rescues: rescues },
+  };
+}
+
+/* ================================================================== *
+ *  PHASE 3 — composite-dish classification + decomposition            *
+ *  (architecture §10, Strategy C1/C2)                                 *
+ *                                                                      *
+ *  Operates on a completed V2 result PLUS the original input text (it *
+ *  needs to re-derive each fragment's raw text + qty/unit — the V1/V2 *
+ *  item/unresolved shapes don't carry those). For every fragment the   *
+ *  classifier marks `composite` with a curated `composite_map` entry:  *
+ *    - Strategy C1 (a trustworthy, plausible existing match) ALWAYS    *
+ *      wins — a composite fragment that already resolved to a good     *
+ *      single row is never second-guessed.                             *
+ *    - Otherwise Strategy C2: decompose the dish via its template,      *
+ *      price components through the existing CompositionalCalculator,  *
+ *      and — only if the decomposed total itself passes plausibility — *
+ *      replace the bad/missing match with it.                          *
+ *  A combo-pattern fragment with NO curated template (`dish_key: null`) *
+ *  is left completely alone: Phase 3 never guesses a dish's structure.  *
+ * ================================================================== */
+
+function coalesceGrams(parsed, dishKey, dish) {
+  const syntheticFood = {
+    food_name: dishKey.replace(/_/g, ' '),
+    cooking_state: 'cooked',
+    serving_grams: dish?.typical_serving_g || null,
+    serving_description: null,
+  };
+  try {
+    const q = impl.resolveGrams(parsed, syntheticFood);
+    if (Number(q.grams) > 0) return Number(q.grams);
+  } catch { /* fall through to the dish's own typical serving */ }
+  return dish?.typical_serving_g || 250;
+}
+
+// A "X with Y [and Z]" fragment where NO curated dish recognizes the whole
+// phrase (e.g. "paneer bhurji with 2 rotis", "toast with butter and jam") is
+// almost always MULTIPLE STANDALONE FOODS, not one dish to decompose —
+// confirmed against the benchmark's own "with" cases: 9/13 expect separate
+// items (strategy 'direct'), only 4/13 are genuine composite dishes (and
+// those 4 all resolve via a curated alias BEFORE this function ever runs,
+// since composite_map lookup happens first). `foodEstimator.js`'s shared
+// `splitItems`/`parseFragment` never split on "with" at all (it's treated as
+// a noise word) — a real segmentation gap, not something to patch in the
+// frozen V1 primitives themselves (architecture §28 keeps those as-is).
+// Reuses `estimateFood` itself on each half — zero new resolution logic.
+function splitStandaloneConjunction(raw) {
+  if (!/\bwith\b/i.test(raw)) return null;
+  const idx = raw.search(/\bwith\b/i);
+  if (idx < 0) return null;
+  const before = raw.slice(0, idx).trim();
+  const after = raw.slice(idx).replace(/^with\b/i, '').trim();
+  if (!before || !after) return null;
+  const parts = [...impl.splitItems(before), ...impl.splitItems(after)];
+  return parts.length >= 2 ? parts : null;
+}
+
+// Stopwords/quantity-noise words a query can carry that never help pick out
+// a distinctive candidate — deliberately small and conservative, not a full
+// linguistic stopword list, to keep this predictable.
+const COVERAGE_STOPWORDS = new Set(['a', 'an', 'the', 'of', 'with', 'and', 'some', 'my', 'i', 'had', 'for', 'plain', 'some']);
+
+function significantTokens(text) {
+  return impl.normalize(String(text || '')).split(' ').filter((t) => t.length >= 3 && !COVERAGE_STOPWORDS.has(t));
+}
+
+// A resolved item that shares NOT ONE token with the query's own significant
+// words is a strong signal the match is wrong, not merely imprecise —
+// confirmed empirically: "black coffee" retrieves zero coffee-containing
+// candidates anywhere in its own top 40 (the shared FoodSearch.score()'s
+// prefix-match weighting lets unrelated "Black berry"/"Black snapper"/
+// "Black Russian" swamp the pool entirely; same pattern for "masala chai"
+// vs unrelated "Masala Oats"/"Masala Munch"). A real fix belongs in
+// FoodSearch.score() itself (architecture's own "replace hand-weighted
+// score() with a feature-based rank" phase) — that function is shared by
+// every pipeline and rewriting it is deliberately out of scope for one
+// targeted correction here. This retries with just the LAST significant
+// token (the usual head noun in "modifier + noun" phrasing: black COFFEE,
+// masala CHAI, green TEA) and only accepts a fallback candidate that clears
+// the SAME plausibility + non-branded bar every other Phase 3 correction
+// uses — e.g. "coffee" alone top-ranks a coffee-FLAVORED cream product,
+// which this correctly rejects (dairy fat/kcal fails a beverage's
+// plausibility bounds), falling through to a genuine brewed-coffee row.
+function tryHeadNounFallback(raw, parsed, existingItem) {
+  if (!existingItem || existingItem.trustworthy === false) return null;
+  const qTokens = significantTokens(raw);
+  if (qTokens.length < 2) return null; // no modifier/head-noun split to exploit
+  const headNoun = qTokens[qTokens.length - 1];
+  const existingTokens = new Set(significantTokens(existingItem.name));
+  // Check the HEAD NOUN specifically, not "any" shared token — the modifier
+  // word is exactly what's polluting the match in the failure this targets
+  // ("black coffee" -> "Black berry" shares "black", which is worthless
+  // signal here; the query and the match must agree on the actual food).
+  if (existingTokens.has(headNoun)) return null; // the head noun itself is present — trust it
+
+  const search = impl.getFoodSearch();
+  if (!search) return null;
+  const candidates = search.search(headNoun, { limit: 8 }) || [];
+  for (const food of candidates) {
+    if (food.trustworthy === false) continue;
+    const candTokens = new Set(significantTokens(food.food_name));
+    if (!candTokens.has(headNoun)) continue; // must actually contain the head noun itself
+
+    const q = impl.resolveGrams(parsed, food);
+    const scaled = impl.scaleNutrition(food, q.grams);
+    if (!scaled) continue;
+    const t = scaled.totals;
+    const candidateItem = {
+      name: food.food_name,
+      unit: q.description,
+      qty: parsed.qty == null ? 1 : parsed.qty,
+      calories: Math.round(t.energy_kcal ?? 0),
+      protein: t.protein_g,
+      carbs: t.carb_g,
+      fat: t.fat_g,
+      source_id: food.source_id,
+      source: food.source,
+      grams: scaled.grams,
+      grams_basis: q.basis,
+      grams_assumed: q.assumed,
+      confidence: food.confidence,
+      trustworthy: true,
+      match_kind: 'head_noun_fallback',
+      cooking_state: food.cooking_state,
+      matched_from: raw,
+      fiber_g: t.fiber_g,
+      sugar_g: t.sugar_g,
+      sodium_mg: t.sodium_mg,
+    };
+    if (checkPlausibility(candidateItem, food).verdict === 'hard_fail') continue;
+    if (coarseClassOf(candidateItem, food) === 'branded_product') continue;
+    return candidateItem;
+  }
+  return null;
+}
+
+export function applyPhase3(base, originalText) {
+  if (!base || !Array.isArray(base.items) || !originalText) return base;
+  const rawFragments = impl.splitItems(originalText);
+  if (!rawFragments.length) return base;
+
+  const items = [...base.items];
+  const unresolved = [...(base.unresolved || [])];
+  let changed = false;
+  let decomposedCount = 0;
+  let splitCount = 0;
+  let headNounFallbacks = 0;
+
+  for (const raw of rawFragments) {
+    const parsed = impl.parseFragment(raw);
+    if (!parsed || !parsed.name) continue;
+
+    // Classify against the RAW fragment, not the parsed/noise-stripped name:
+    // parseFragment's own unit/portion detection can consume a word the
+    // classifier needs (e.g. "dosa with sambar and chutney" -> parseFragment
+    // reads "dosa" as a unit token, leaving "sambar chutney" -- silently
+    // unmatchable against the "dosa_sambar_chutney" alias). The classifier
+    // does its own normalization and is robust to a leading qty/unit either
+    // way, so the raw fragment is a strictly safer input here.
+    const cls = classifyComposite(raw);
+    const itemIdx = items.findIndex((it) => it.matched_from === raw);
+    const existingItem = itemIdx >= 0 ? items[itemIdx] : null;
+    const unresolvedIdx = unresolved.findIndex((u) => u.fragment === raw);
+
+    if (cls.kind !== 'composite') {
+      // Not composite-shaped at all — the only remaining Phase 3 correction
+      // is the head-noun identity fallback for a resolved-but-clearly-wrong
+      // match (see tryHeadNounFallback's own comment for why).
+      const fallback = tryHeadNounFallback(raw, parsed, existingItem);
+      if (fallback && itemIdx >= 0) {
+        items[itemIdx] = fallback;
+        changed = true;
+        headNounFallbacks++;
+      }
+      continue;
+    }
+
+    if (!cls.dish_key) {
+      // Combo-shaped but no curated template. The ONLY thing Phase 3 can
+      // still safely do here is recognize a "with"-conjunction of separate
+      // foods and re-resolve each half — never invent a dish structure.
+      const parts = splitStandaloneConjunction(raw);
+      if (!parts) continue;
+      const subItems = [];
+      const subUnresolved = [];
+      for (const part of parts) {
+        const sub = impl.estimateFood(part);
+        for (const it of sub.items) {
+          // Splitting a generic single word ("butter", "toast") out of its
+          // sentence context removes exactly the token overlap that used to
+          // (wrongly) disambiguate it, and can now just as easily surface a
+          // branded/implausible row on its own (confirmed empirically: bare
+          // "butter" matched a branded popcorn-flavor product). Each
+          // sub-match must clear the SAME bar a composite decomposition
+          // does — a bad split must never trade one confident wrong answer
+          // for several.
+          const chk = checkPlausibility(it, rowFor(it.source_id));
+          const branded = coarseClassOf(it, rowFor(it.source_id)) === 'branded_product';
+          if (chk.verdict === 'hard_fail' || branded) {
+            subUnresolved.push({ fragment: raw, matched: it.name, reason: branded ? 'best match was a branded/packaged product for a generic term' : 'best match failed the plausibility check' });
+            continue;
+          }
+          subItems.push({ ...it, matched_from: raw });
+        }
+        subUnresolved.push(...sub.unresolved.map((u) => ({ ...u, fragment: raw })));
+      }
+      // Only accept the split when it resolves at least two distinct foods
+      // that both cleared plausibility — strictly more REAL coverage than
+      // the single (right-or-wrong) match V1 already produced from the
+      // un-split phrase. Anything less is no improvement; leave V1's
+      // original outcome alone rather than trade one guess for a worse one.
+      if (subItems.length < 2) continue;
+      if (itemIdx >= 0) items.splice(itemIdx, 1); else if (unresolvedIdx >= 0) unresolved.splice(unresolvedIdx, 1);
+      items.push(...subItems);
+      unresolved.push(...subUnresolved);
+      changed = true;
+      splitCount++;
+      continue;
+    }
+
+    // Strategy C1 first: a trustworthy, plausible direct match to a genuine
+    // pre-composited DISH row is never second-guessed by a template guess.
+    // A BRANDED/packaged row does NOT qualify as a good C1 answer here even
+    // when it is internally trustworthy and plausible for its own class
+    // (a packaged snack at 420 kcal/100g is a perfectly plausible packaged
+    // snack) -- this is exactly the papdi-chaat failure mode: lexical
+    // overlap with a branded product standing in for a home-style dish.
+    // Plausibility can't catch this by design (it judges the matched row
+    // against its OWN class's bounds, never "is this the right class for
+    // the query" — that's this classifier's job, per plausibility.js's own
+    // docstring).
+    const existingIsGoodC1 = existingItem
+      && existingItem.trustworthy !== false
+      && existingItem.plausibility?.verdict !== 'hard_fail'
+      && coarseClassOf(existingItem, rowFor(existingItem.source_id)) !== 'branded_product';
+    if (existingIsGoodC1) continue;
+
+    const dish = getCompositeDish(cls.dish_key);
+    const grams = coalesceGrams(parsed, cls.dish_key, dish);
+    const result = decompose(cls.dish_key, grams, { getCompositionalCalculator: impl.getCompositionalCalculator });
+    if (!result.ok) continue; // decomposition unavailable: leave whatever V1/V2 already produced
+
+    const t = result.totals || {};
+    const newItem = {
+      name: titleCase(cls.dish_key.replace(/_/g, ' ')),
+      unit: `${Math.round(result.total_grams)} g (decomposed)`,
+      qty: parsed.qty == null ? 1 : parsed.qty,
+      calories: Math.round(t.energy_kcal || 0),
+      protein: t.protein_g ?? null,
+      carbs: t.carb_g ?? null,
+      fat: t.fat_g ?? null,
+      source_id: null,
+      source: 'composite_decompose',
+      grams: result.total_grams,
+      grams_basis: 'estimated',
+      grams_assumed: true,
+      confidence: result.confidence,
+      trustworthy: true,
+      match_kind: 'composite_template',
+      cooking_state: 'cooked',
+      matched_from: raw,
+      fiber_g: t.fiber_g ?? null,
+      sugar_g: t.sugar_g ?? null,
+      sodium_mg: t.sodium_mg ?? null,
+      estimate_status: 'composite_decomposed',
+      decomposition: {
+        dish_key: result.dish_key,
+        cuisine: result.cuisine,
+        components: result.components,
+        unresolved_components: result.unresolved_components,
+        mass_reconciliation: result.mass_reconciliation,
+      },
+    };
+
+    // The decomposed total must clear the SAME plausibility bar as any
+    // other item -- a bad fraction table must never silently outrank an
+    // honest "couldn't match this".
+    if (checkPlausibility(newItem, null).verdict === 'hard_fail') continue;
+
+    if (itemIdx >= 0) items[itemIdx] = newItem; else items.push(newItem);
+    if (unresolvedIdx >= 0) unresolved.splice(unresolvedIdx, 1);
+    changed = true;
+    decomposedCount++;
+  }
+
+  if (!changed) return base;
+
+  const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  let worst = 'high';
+  for (const it of items) {
+    total.calories += Number(it.calories) || 0;
+    total.protein += Number(it.protein) || 0;
+    total.carbs += Number(it.carbs) || 0;
+    total.fat += Number(it.fat) || 0;
+    if (RANK[it.confidence] > RANK[worst]) worst = it.confidence;
+  }
+
+  return {
+    ...base,
+    items,
+    total: {
+      calories: Math.round(total.calories),
+      protein: round1(total.protein),
+      carbs: round1(total.carbs),
+      fat: round1(total.fat),
+    },
+    confidence: items.length ? worst : null,
+    unresolved,
+    disclaimer: unresolved.length
+      ? 'Some items could not be matched and are NOT included in the total.'
+      : decomposedCount
+        ? 'Some items are estimated from a typical recipe composition (composite-dish decomposition), not a single measured row — see the item labels.'
+        : base.disclaimer,
+    engine: 'v3',
+    v3: { composite_decompositions: decomposedCount, conjunction_splits: splitCount, head_noun_fallbacks: headNounFallbacks },
+  };
+}

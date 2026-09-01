@@ -18,6 +18,16 @@ import { resetRateLimits } from '../src/rateLimit.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
 
+// This suite mocks OAuth2Client.prototype.verifyIdToken (see mockGoogleIdentity
+// below), so it never talks to Google -- but the route still refuses to even
+// construct an OAuth2Client, and 503s, unless GOOGLE_CLIENT_ID is non-empty (it's
+// not a secret, see auth.js's own comment on this). No environment this suite
+// runs in (local dev, CI) sets that var, so without this every "happy path" test
+// below got a 503 before ever reaching the mock. Set a dummy value up front;
+// the "unconfigured" 503 branch itself is still exercised by the test below that
+// deletes and restores this var around its own request.
+process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-client-id-for-ci';
+
 async function memDb() {
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(':memory:');

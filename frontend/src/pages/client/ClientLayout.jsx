@@ -7,6 +7,7 @@ import { useFetch } from '../../utils.js';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
+import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
@@ -48,7 +49,7 @@ const PROFILE_MENU = [
 ];
 
 export default function ClientLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, isIndependent } = useAuth();
   const loc = useLocation();
   const nav = useNavigate();
   // Infinity, not 0: Dock's distance-from-cursor transform maps
@@ -58,17 +59,31 @@ export default function ClientLayout() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [featurePopup, setFeaturePopup] = useState(null);
+  // Guided first-run tour (see AppTour.jsx): activated only in the session
+  // where OnboardingWizard completes — i.e. genuinely brand-new users.
+  // Returning users' onboarding_completed is already true server-side, so
+  // this state never flips for them (TEST 10: existing users log straight in).
+  const [tourActive, setTourActive] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Show feature popup on first visit to each page
+  // Help page's "Replay app tour" button — same activation path, no URL hacks.
+  useEffect(() => {
+    const startTour = () => setTourActive(true);
+    window.addEventListener('sk-os:start-tour', startTour);
+    return () => window.removeEventListener('sk-os:start-tour', startTour);
+  }, []);
+
+  // Show feature popup on first visit to each page. Suppressed while the
+  // tour drives navigation — otherwise its modal would collide with the
+  // tour spotlight on every step that lands on a FEATURE_MAP route.
   useEffect(() => {
     const featureId = FEATURE_MAP[loc.pathname];
-    if (featureId) {
+    if (featureId && !tourActive) {
       // Small delay to let the page render first
       const timer = setTimeout(() => setFeaturePopup(featureId), 500);
       return () => clearTimeout(timer);
     }
-  }, [loc.pathname]);
+  }, [loc.pathname, tourActive]);
 
   const briefFetch = useFetch(() => api('/intel/coach/brief'));
   const weeklyFetch = useFetch(() => api('/intel/coach/weekly'));
@@ -130,6 +145,7 @@ export default function ClientLayout() {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((v) => !v)}
+              data-tour="header-profile"
               className="flex items-center gap-2 py-1.5 px-2 rounded-xl transition-colors"
               style={{ color: 'var(--ink)' }}
               onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.08)'}
@@ -251,9 +267,25 @@ export default function ClientLayout() {
         <OnboardingWizard
           open={true}
           initialName={user?.name || ''}
-          onComplete={() => { setOnboardingDone(true); homeFetch.reload(); }}
+          onComplete={() => {
+            setOnboardingDone(true);
+            homeFetch.reload();
+            // Setup just finished for a brand-new user → start the guided
+            // app tour automatically (skipped/completed tours are remembered
+            // per-user by AppTour and never auto-start again).
+            if (!isTourDone(user?.id)) setTourActive(true);
+          }}
         />
       )}
+
+      {/* ── GUIDED APP TOUR ── */}
+      <AppTour
+        active={tourActive}
+        userId={user?.id}
+        onDone={() => setTourActive(false)}
+        isClient={!isIndependent}
+        isIndependent={isIndependent}
+      />
 
       {/* ── MAIN CONTENT ── */}
       <div key={loc.pathname} className="anim-fadeUp pt-4">
@@ -273,7 +305,7 @@ export default function ClientLayout() {
         style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--line)' }}
         onMouseMove={(e) => bottomNavMouseX.set(e.clientX)}
         onMouseLeave={() => bottomNavMouseX.set(Infinity)}>
-        <div className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">
+        <div data-tour="bottom-nav" className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">
           {NAV.map((l) => (
             <DockNavItem key={l.to} to={l.to} end={l.end} label={l.label}
               icon={<Icon name={l.icon} size={20} />}

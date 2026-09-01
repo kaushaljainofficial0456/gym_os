@@ -7,7 +7,7 @@
 // present-and-valid JWT DOES attach org/user, and the IP-keyed rate
 // limit actually engages.
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -110,9 +110,18 @@ test('POST /api/client-error is rate-limited by IP', async (t) => {
   resetRateLimits();
   const { call, close } = await startApi();
   t.after(() => close());
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const statuses = [];
-  for (let i = 0; i < 25; i++) {
-    statuses.push((await call({ message: `burst ${i}` })).status);
+  try {
+    for (let i = 0; i < 25; i++) {
+      statuses.push((await call({ message: `burst ${i}` })).status);
+    }
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(statuses.includes(429), `expected at least one 429 in a 25-request burst against a 20/min limit, got: ${statuses.join(',')}`);
   assert.ok(statuses.slice(0, 20).every((s) => s === 204), 'the first 20 requests (at the configured limit) must all succeed');

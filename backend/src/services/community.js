@@ -112,15 +112,24 @@ async function computeStreaks(db, orgId, tz) {
   lookback.setUTCDate(lookback.getUTCDate() - 365);
   const since = dayKey(lookback, tz);
 
-  // Fetch all completed workout dates for community members in this org
+  // Fetch the completed workout DATES for community members in this org.
+  //
+  // DISTINCT is load-bearing, not cosmetic: a streak only cares whether a
+  // member trained on a given day, and the grouping below drops the row into
+  // a Set anyway -- so a member who logs three workouts on the same day was
+  // costing three rows over the wire and three Set writes to produce one
+  // date. On a large gym (1k members x ~150 completed workouts a year) that
+  // is the difference between transferring every workout row in the org and
+  // transferring one row per member per active day. Served by
+  // idx_workouts_client_status_date (client_id, status, scheduled_date).
   const rows = await db.q(
-    `SELECT cm.client_id, w.scheduled_date AS d
+    `SELECT DISTINCT cm.client_id, w.scheduled_date AS d
        FROM community_members cm
        JOIN clients c ON c.id = cm.client_id
        JOIN workouts w ON w.client_id = c.id
      WHERE cm.org_id = ? AND cm.enabled = 1
        AND w.status = 'completed' AND w.scheduled_date >= ?
-     ORDER BY cm.client_id, w.scheduled_date DESC`,
+     ORDER BY cm.client_id, d DESC`,
     [orgId, since]);
 
   // Group by client
@@ -274,9 +283,25 @@ export async function resolveMembers(db, clientIds) {
 export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
   const settings = await getCommunitySettings(db, orgId);
   if (!settings.community_enabled) {
-    return { settings, shares: [] };
+    return { settings, shares: [], hasMore: false, limit, offset };
   }
 
+  // Two things make this page correctly rather than approximately:
+  //
+  // 1. The tiebreaker. created_at is an ISO string written by now(), so two
+  //    shares created in the same millisecond compare EQUAL. "ORDER BY
+  //    created_at DESC" alone leaves their relative order up to the planner,
+  //    which can differ between the page-1 and page-2 queries -- the classic
+  //    offset-pagination failure where one row is returned twice and another
+  //    is never returned at all. Adding id DESC makes the sort total, so a
+  //    row has exactly one position across every page request.
+  //    idx_cws_org_feed (org_id, created_at) still serves the filter+order;
+  //    the id tiebreaker only ever sorts within an identical timestamp, so no
+  //    additional index is warranted.
+  //
+  // 2. hasMore. Ask for one row MORE than the caller wants: if it comes back,
+  //    another page exists. That avoids a second COUNT(*) query per page and
+  //    can't disagree with the rows actually returned.
   const rows = await db.q(
     `SELECT cws.*, u.name AS author_name, u.avatar AS author_avatar
        FROM community_workout_shares cws
@@ -284,13 +309,19 @@ export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
        JOIN users u ON u.id = c.user_id
        JOIN community_members cm ON cm.client_id = cws.client_id AND cm.enabled = 1
      WHERE cws.org_id = ?
-     ORDER BY cws.created_at DESC
+     ORDER BY cws.created_at DESC, cws.id DESC
      LIMIT ? OFFSET ?`,
-    [orgId, limit, offset]);
+    [orgId, limit + 1, offset]);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
 
   return {
     settings,
-    shares: rows.map(r => ({
+    hasMore,
+    limit,
+    offset,
+    shares: page.map(r => ({
       id: r.id,
       clientId: r.client_id,
       authorName: r.author_name,

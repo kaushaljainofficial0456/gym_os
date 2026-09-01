@@ -109,8 +109,16 @@ export default function communityRoutes(db) {
       }
     }
 
-    const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
-    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    // Clamp to [1, 100]. The lower bound is not cosmetic: parseInt('-5') is
+    // -5, which is truthy, so it survived the `|| 30` default and
+    // Math.min(-5, 100) kept it -- sending LIMIT -5 to the database. SQLite
+    // reads a negative LIMIT as "no limit" (the whole org's feed in one
+    // response); PostgreSQL rejects it outright, so in production a client
+    // could turn ?limit=-5 into a 500.
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 30, 100));
+    const rawOffset = parseInt(req.query.offset, 10);
+    const offset = Math.max(0, Number.isFinite(rawOffset) ? rawOffset : 0);
     const result = await feed(db, req.orgId, { limit, offset });
     res.json(result);
   });

@@ -30,7 +30,7 @@ export default function Clients() {
           <h1 className="font-grotesk font-bold text-2xl tracking-tight">Clients</h1>
           <p className="text-mute text-sm">{filtered.length} of {data.clients.length} shown</p>
         </div>
-        <button className="btn-primary" onClick={() => setCreateOpen(true)}>+ New client</button>
+        <button className="btn-primary" onClick={() => setCreateOpen(true)} data-tour="trainer-clients-new">+ New client</button>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
@@ -49,7 +49,7 @@ export default function Clients() {
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden" data-tour="trainer-clients-list">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm min-w-[820px]">
             <thead>

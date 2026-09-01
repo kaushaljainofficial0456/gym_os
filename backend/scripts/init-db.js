@@ -196,6 +196,25 @@ const MIGRATIONS = [
   // NULL means never emailed, or every attempt so far failed. See
   // emailProvider.js.
   ['invoices', 'emailed_at', `emailed_at TEXT`],
+  // ---- Reconciling production-only drift (audited 2026-08-28) ----
+  // Both columns already exist in the production database but were in
+  // neither schema.sql nor this list, so a freshly provisioned environment
+  // did not match production. They are declared here to make that
+  // relationship deliberate rather than accidental.
+  //
+  // NOTE: nothing in this codebase reads or writes either column today.
+  // Google sign-in matches an existing account by EMAIL alone and inserts
+  // without them (see routes/auth.js's /auth/google), so they are believed
+  // to be leftovers from an earlier identity implementation. They are added
+  // rather than dropped because dropping a populated production column is
+  // irreversible and needs its own deliberate, approved migration --
+  // auth_provider is NOT NULL DEFAULT 'local' in production and every one of
+  // this codebase's INSERT INTO users statements relies on that default.
+  ['users', 'auth_provider', `auth_provider TEXT NOT NULL DEFAULT 'local'`],
+  ['users', 'google_id', `google_id TEXT`],
+  // --- Legal consent / Terms & Conditions ---
+  ['users', 'terms_accepted_at', `terms_accepted_at TEXT`],
+  ['users', 'terms_version', `terms_version TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -336,6 +355,7 @@ function applySqliteMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
@@ -382,6 +402,7 @@ async function applyPgMigrations(pool) {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.

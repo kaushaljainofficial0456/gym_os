@@ -266,7 +266,7 @@ test('privacy: disabled member absent from leaderboard', async (t) => {
 test('sharing: member can share a completed workout', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const r = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(r.status, 201);
   assert.ok(r.json.id, 'Share created');
@@ -292,7 +292,7 @@ test('sharing: non-member cannot share', async (t) => {
 test('sharing: member can unshare', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   const r = await call('DELETE', `/api/community/shares/${s.json.id}`);
@@ -304,7 +304,7 @@ test('sharing: member can unshare', async (t) => {
 test('copy: member can copy a shared workout into their planner', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   const tk2 = jwt.sign({ sub: 'u2', role: 'CLIENT', org: 'o1', name: 'Rahul' }, config.jwtSecret, { expiresIn: '1h' });
@@ -321,15 +321,18 @@ test('copy: member can copy a shared workout into their planner', async (t) => {
   assert.equal(exs.length, 1);
   assert.equal(exs[0].name, 'Bench Press');
   assert.equal(exs[0].sets, 4);
-  // Original unchanged
+  // Original unchanged. Compared against the row actually selected above,
+  // not a hardcoded name -- "LIMIT 1" without ORDER BY is planner-dependent,
+  // so hardcoding it made this assertion break the moment an index changed
+  // the scan order rather than when the code under test regressed.
   const origW = await db.q1('SELECT * FROM workouts WHERE id = ?', [w.id]);
-  assert.equal(origW.name, 'Session 1');
+  assert.equal(origW.name, w.name);
 });
 
 test('copy: non-member/cross-org cannot copy', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   const tk4 = jwt.sign({ sub: 'u4', role: 'CLIENT', org: 'o2', name: 'CrossGym' }, config.jwtSecret, { expiresIn: '1h' });
   const r = await call('POST', `/api/community/shares/${s.json.id}/copy`, {}, tk4);
@@ -339,7 +342,7 @@ test('copy: non-member/cross-org cannot copy', async (t) => {
 test('feed: shows shares with author names', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   await call('POST', '/api/community/shares', { workout_id: w.id });
   const feed = await call('GET', '/api/community/feed');
   assert.equal(feed.status, 200);
@@ -352,7 +355,7 @@ test('feed: shows shares with author names', async (t) => {
 test('disabling membership removes shares from feed', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   await call('POST', '/api/community/shares', { workout_id: w.id });
   let feed = await call('GET', '/api/community/feed');
   assert.ok(feed.json.shares.length >= 1);
@@ -454,7 +457,7 @@ test('copy: exercise_id: null accepted (UI flow)', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
   // Share Arjun's workout
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   // Rahul copies with exercise_id: null (matching UI payload)
@@ -474,7 +477,7 @@ test('copy: rest_sec preserved from shared workout', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
   // Share Arjun's workout — payload now includes rest_sec
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   // Rahul copies without overrides — should use snapshot rest_sec
@@ -491,7 +494,7 @@ test('copy: rest_sec preserved from shared workout', async (t) => {
 test('copy: >20 exercises rejected', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   const exercises = Array.from({ length: 21 }, (_, i) => ({ name: `Ex ${i}`, sets: 3, reps: '10', weight: 'BW' }));
   const tk2 = jwt.sign({ sub: 'u2', role: 'CLIENT', org: 'o1', name: 'Rahul' }, config.jwtSecret, { expiresIn: '1h' });
@@ -549,7 +552,7 @@ test('non-member client gets 403 on feed', async (t) => {
 test('share: owner can delete own share', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   const r = await call('DELETE', `/api/community/shares/${s.json.id}`);
@@ -562,7 +565,7 @@ test('share: owner can delete own share', async (t) => {
 test('share: cannot delete another users share', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());
-  const w = await db.q1("SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' LIMIT 1");
+  const w = await db.q1("SELECT id, name FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT 1");
   const s = await call('POST', '/api/community/shares', { workout_id: w.id });
   assert.equal(s.status, 201);
   // Rahul (u2) tries to delete Arjuns (u1) share
@@ -644,4 +647,133 @@ test('platform flag: still respects the gym owner\'s OWN toggle once the platfor
   await db.run(`UPDATE gym_settings SET community_enabled = 0 WHERE org_id = 'o1'`);
   const r = await call('GET', '/api/community/membership');
   assert.equal(r.json.settings.community_enabled, false, 'gym owner turned it off -- platform being 100% enabled must not override that');
+});
+
+// ============================================================
+// FEED PAGINATION
+// The feed exposed limit/offset from the start but nothing sent them, so the
+// contract was never exercised. These cover the parts that actually go wrong
+// with offset paging: an unstable sort silently duplicating/skipping rows
+// across page boundaries, and a negative limit reaching the database.
+// ============================================================
+
+// Shares every completed workout c1 has, so there are enough rows to page.
+async function shareMany(call, db, n) {
+  const ws = await db.q(
+    "SELECT id FROM workouts WHERE client_id = 'c1' AND status = 'completed' ORDER BY id LIMIT ?", [n]);
+  const ids = [];
+  for (const w of ws) {
+    const r = await call('POST', '/api/community/shares', { workout_id: w.id });
+    if (r.status === 201) ids.push(r.json.id);
+  }
+  return ids;
+}
+
+test('feed pagination: pages are disjoint, ordered, and report hasMore', async (t) => {
+  const { call, close, db } = await startApi();
+  t.after(() => close());
+  const created = await shareMany(call, db, 5);
+  assert.ok(created.length >= 4, `need >=4 shares to page, got ${created.length}`);
+
+  const p1 = await call('GET', '/api/community/feed?limit=2&offset=0');
+  assert.equal(p1.status, 200);
+  assert.equal(p1.json.shares.length, 2, 'page 1 honours limit');
+  assert.equal(p1.json.hasMore, true, 'more pages remain');
+  assert.equal(p1.json.limit, 2);
+  assert.equal(p1.json.offset, 0);
+
+  const p2 = await call('GET', '/api/community/feed?limit=2&offset=2');
+  assert.equal(p2.json.shares.length, 2, 'page 2 honours limit');
+
+  const ids1 = p1.json.shares.map(s => s.id);
+  const ids2 = p2.json.shares.map(s => s.id);
+  assert.equal(new Set([...ids1, ...ids2]).size, 4, 'no id appears on both pages');
+
+  // Walk every page and confirm the union is exactly the shares that exist,
+  // with nothing duplicated and nothing skipped.
+  const seen = [];
+  let offset = 0;
+  let guard = 0;
+  for (;;) {
+    const r = await call('GET', `/api/community/feed?limit=2&offset=${offset}`);
+    seen.push(...r.json.shares.map(s => s.id));
+    if (!r.json.hasMore) break;
+    offset += 2;
+    assert.ok(++guard < 50, 'hasMore never went false — pagination would loop forever');
+  }
+  assert.equal(new Set(seen).size, seen.length, 'no duplicates across all pages');
+  assert.equal(new Set(seen).size, created.length, 'every share reachable by paging');
+});
+
+test('feed pagination: last page reports hasMore false, past-the-end is empty', async (t) => {
+  const { call, close, db } = await startApi();
+  t.after(() => close());
+  const created = await shareMany(call, db, 3);
+
+  const all = await call('GET', `/api/community/feed?limit=${created.length}&offset=0`);
+  assert.equal(all.json.shares.length, created.length);
+  assert.equal(all.json.hasMore, false, 'exactly page-size items => no further page');
+
+  const past = await call('GET', `/api/community/feed?limit=10&offset=${created.length + 50}`);
+  assert.equal(past.status, 200);
+  assert.deepEqual(past.json.shares, [], 'offset past the end returns an empty page, not an error');
+  assert.equal(past.json.hasMore, false);
+});
+
+test('feed pagination: ordering is stable when created_at ties', async (t) => {
+  const { call, close, db } = await startApi();
+  t.after(() => close());
+  await shareMany(call, db, 4);
+  // Force every share to the SAME created_at: created_at alone can no longer
+  // decide order, so only the id tiebreaker keeps paging consistent.
+  await db.run("UPDATE community_workout_shares SET created_at = '2026-01-01T00:00:00.000Z'");
+
+  const firstPass = [];
+  for (let off = 0; off < 4; off += 2) {
+    const r = await call('GET', `/api/community/feed?limit=2&offset=${off}`);
+    firstPass.push(...r.json.shares.map(s => s.id));
+  }
+  const secondPass = [];
+  for (let off = 0; off < 4; off += 2) {
+    const r = await call('GET', `/api/community/feed?limit=2&offset=${off}`);
+    secondPass.push(...r.json.shares.map(s => s.id));
+  }
+  assert.deepEqual(secondPass, firstPass, 'identical timestamps still page deterministically');
+  assert.equal(new Set(firstPass).size, firstPass.length, 'no duplicate across tied-timestamp pages');
+});
+
+test('feed pagination: limit is clamped and a negative limit never reaches SQL', async (t) => {
+  const { call, close, db } = await startApi();
+  t.after(() => close());
+  await shareMany(call, db, 3);
+
+  // -5 used to survive `|| 30` (it is truthy) and Math.min(-5,100), sending
+  // LIMIT -5 to the database: "no limit" on SQLite, a hard error on Postgres.
+  const neg = await call('GET', '/api/community/feed?limit=-5');
+  assert.equal(neg.status, 200, 'negative limit must not 500');
+  assert.equal(neg.json.limit, 30, 'negative limit falls back to the default');
+
+  const huge = await call('GET', '/api/community/feed?limit=99999');
+  assert.equal(huge.json.limit, 100, 'limit capped at 100');
+
+  const junk = await call('GET', '/api/community/feed?limit=abc&offset=xyz');
+  assert.equal(junk.status, 200);
+  assert.equal(junk.json.limit, 30, 'unparseable limit falls back to the default');
+  assert.equal(junk.json.offset, 0, 'unparseable offset falls back to 0');
+
+  const negOff = await call('GET', '/api/community/feed?offset=-10');
+  assert.equal(negOff.json.offset, 0, 'negative offset clamped to 0');
+});
+
+test('feed pagination: org isolation holds on every page', async (t) => {
+  const { call, close, db, token } = await startApi();
+  t.after(() => close());
+  await shareMany(call, db, 4);
+  // A member of another org paging the feed sees none of o1's shares.
+  const other = token('u4', 'TRAINER', 'o2');
+  for (let off = 0; off < 4; off += 2) {
+    const r = await call('GET', `/api/community/feed?limit=2&offset=${off}`, null, other);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json.shares, [], `org o2 sees nothing at offset ${off}`);
+  }
 });

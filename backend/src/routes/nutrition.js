@@ -4,7 +4,7 @@ import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey, addDays, daysBetween } from '../utils/time.js';
-import { estimateFood } from '../services/foodEstimator.js';
+import { estimateFood, estimateMeal } from '../services/food/index.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
 
@@ -214,7 +214,13 @@ export default function nutritionRoutes(db) {
   r.post('/clients/:id/meals/ai-estimate', estimateLimit, validate(schemas.aiEstimate), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    res.json(estimateFood(req.body.text));
+    // Default: V1 (frozen baseline), byte-identical to `estimateFood`. Opt in
+    // per-request with `?engine=v2` (plausibility downgrade + quarantine
+    // rescue over V1) or `?engine=v3` (v2 + composite-dish classification/
+    // decomposition, architecture Phase 3) — for QA / shadow checks ahead of
+    // a later gated cutover. Anything else is V1.
+    const engine = ['v2', 'v3'].includes(req.query.engine) ? req.query.engine : undefined;
+    res.json(engine ? estimateMeal(req.body.text, { engine }) : estimateFood(req.body.text));
   });
 
   // ---- daily nutrition summary ----

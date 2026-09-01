@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth.jsx';
+import { useCookieConsent } from '../../components/CookieConsent.jsx';
 import { api } from '../../api.js';
 
 const SETTINGS_SECTIONS = [
@@ -88,7 +89,7 @@ export default function Settings() {
       </div>
 
       {SETTINGS_SECTIONS.map((section) => (
-        <div key={section.id} className="card p-5">
+        <div key={section.id} data-tour={`settings-${section.id}`} className="card p-5">
           <div className="flex items-center gap-2.5 mb-4">
             <span className="text-lg">{section.icon}</span>
             <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</span>
@@ -150,6 +151,34 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      <CookieSettingsCard />
+    </div>
+  );
+}
+
+function CookieSettingsCard() {
+  const { openPreferences, categories } = useCookieConsent();
+  return (
+    <div className="card p-5">
+      <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium mb-3" style={{ color: 'var(--mute)' }}>Privacy &amp; Cookies</div>
+      <div className="space-y-2.5 text-sm mb-4">
+        <div className="flex justify-between items-center">
+          <span style={{ color: 'var(--mute)' }}>Essential cookies</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Always on</span>
+        </div>
+        {['preferences', 'analytics', 'marketing'].map((cat) => (
+          <div key={cat} className="flex justify-between items-center">
+            <span style={{ color: 'var(--mute)' }}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
+            <span className={`text-[10px] font-semibold ${categories[cat] ? 'text-[var(--good)]' : 'text-[var(--faint)]'}`}>
+              {categories[cat] ? 'On' : 'Off'}
+            </span>
+          </div>
+        ))}
+      </div>
+      <button onClick={openPreferences} className="btn w-full text-xs">
+        Manage cookie preferences
+      </button>
     </div>
   );
 }

@@ -13,7 +13,7 @@
 //   * rate limiting -> 429
 //   * duplicate submissions create separate records (by design)
 // ============================================================
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -259,15 +259,24 @@ test('rate limit returns 429 after exceeding threshold', async (t) => {
   t.after(() => { resetRateLimits(); close(); });
 
   // Rate limit is 60/min. Send 65 requests to exceed it.
+  // Freeze time for the burst: the limiter keys its window on
+  // Math.floor(Date.now() / windowMs), so real sequential requests can
+  // straddle an actual clock-minute boundary under load and spuriously
+  // never hit the limit -- a test-timing flake, not a real bug.
+  mock.timers.enable({ apis: ['Date'], now: Date.now() });
   let hitLimit = false;
-  for (let i = 0; i < 65; i++) {
-    const r = await call('POST', '/api/nutrition/clients/c1/meals/log', { name: 'Snack', calories: 50, protein: 2, carbs: 8, fat: 1 });
-    if (r.status === 429) {
-      hitLimit = true;
-      assert.ok(r.json.error.includes('many') || r.json.error.includes('try again'), '429 has rate-limit message');
-      break;
+  try {
+    for (let i = 0; i < 65; i++) {
+      const r = await call('POST', '/api/nutrition/clients/c1/meals/log', { name: 'Snack', calories: 50, protein: 2, carbs: 8, fat: 1 });
+      if (r.status === 429) {
+        hitLimit = true;
+        assert.ok(r.json.error.includes('many') || r.json.error.includes('try again'), '429 has rate-limit message');
+        break;
+      }
+      assert.equal(r.status, 201, `request ${i + 1} succeeded`);
     }
-    assert.equal(r.status, 201, `request ${i + 1} succeeded`);
+  } finally {
+    mock.timers.reset();
   }
   assert.ok(hitLimit, 'rate limit was triggered within 65 requests');
 });

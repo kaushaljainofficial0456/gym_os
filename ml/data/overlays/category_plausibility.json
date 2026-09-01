@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "phase": 2,
+    "purpose": "Engine-side nutritional plausibility bounds, per coarse food class x preparation state, per 100 g of the AS-SERVED food + a per-serving kcal band. Used by backend/src/services/food/plausibility.js to DOWNGRADE confidence on an estimate whose scaled result is nutritionally implausible for the KIND of food that was matched (Atwater-inconsistent, impossible macro density, absurd per-serving energy). It NEVER changes a nutrition value and NEVER unresolves a food.",
+    "independent_of": "backend/src/eval/plausibility.js (the frozen measurement instrument). Different taxonomy (coarse engine class vs benchmark primary category), different structure, authored separately. If benchmark metric 10 (plausibility false positives) rises, THESE ranges are what gets tuned, never the benchmark.",
+    "authored_from": "Typical composition ranges across IFCT 2017, USDA FDR/FNDDS and ICMR 'Nutritive Value of Indian Foods' for each class x prep. Bounds are deliberately WIDE: they bound 'the wrong kind of food / a unit error / an internally inconsistent record', not 'an unusual recipe'.",
+    "not_a_query_aware_check": "Phase 2 judges the MATCHED RECORD scaled to the portion. It cannot tell 'a packaged snack answered a wet-dish query' — that needs the Phase 3 classifier, which plugs the query-intent class into this same function."
+  },
+
+  "atwater": { "min_ratio": 0.50, "max_ratio": 2.00, "near_zero_macros_kcal_ceiling": 60 },
+
+  "action": {
+    "hard_fail_outside_pct": 0.30,
+    "soft_fail_outside_pct": 0.12,
+    "hard_fail_on_atwater": true,
+    "min_grams_to_judge": 5
+  },
+
+  "ranges": {
+    "ingredient": {
+      "raw":    { "kcal_100g": [3, 640],  "protein_100g": [0, 32], "carb_100g": [0, 95], "fat_100g": [0, 62], "serving_kcal": [2, 1000] },
+      "cooked": { "kcal_100g": [12, 470], "protein_100g": [0, 36], "carb_100g": [0, 60], "fat_100g": [0, 42], "serving_kcal": [10, 850] },
+      "fried":  { "kcal_100g": [70, 640], "protein_100g": [0, 36], "carb_100g": [0, 65], "fat_100g": [2, 58], "serving_kcal": [30, 950] },
+      "any":    { "kcal_100g": [3, 640],  "protein_100g": [0, 36], "carb_100g": [0, 95], "fat_100g": [0, 62], "serving_kcal": [2, 1000] }
+    },
+    "dish": {
+      "cooked": { "kcal_100g": [20, 360], "protein_100g": [0, 26], "carb_100g": [0, 55], "fat_100g": [0, 30], "serving_kcal": [30, 1600] },
+      "fried":  { "kcal_100g": [100, 480],"protein_100g": [0, 26], "carb_100g": [0, 62], "fat_100g": [3, 38], "serving_kcal": [40, 1600] },
+      "any":    { "kcal_100g": [20, 480], "protein_100g": [0, 26], "carb_100g": [0, 62], "fat_100g": [0, 38], "serving_kcal": [30, 1600] }
+    },
+    "beverage": {
+      "any":    { "kcal_100g": [0, 170],  "protein_100g": [0, 14], "carb_100g": [0, 32], "fat_100g": [0, 14], "serving_kcal": [0, 1000] }
+    },
+    "condiment": {
+      "any":    { "kcal_100g": [4, 910],  "protein_100g": [0, 32], "carb_100g": [0, 82], "fat_100g": [0, 100],"serving_kcal": [1, 350] }
+    },
+    "branded_product": {
+      "any":    { "kcal_100g": [0, 640],  "protein_100g": [0, 45], "carb_100g": [0, 100],"fat_100g": [0, 65], "serving_kcal": [0, 1200] }
+    }
+  }
+}

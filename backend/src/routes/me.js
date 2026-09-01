@@ -14,13 +14,13 @@ import { id, now } from '../ids.js';
 import { dayKey, getOrgTz } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
-import { foodSearch } from '../services/skos-food/index.js';
 import {
+  foodSearch,
   searchFoods as searchFoodModel,
   modelAvailable as foodModelAvailable,
   resolveFoodQuantity,
   estimateFoodKnn,
-} from '../services/foodEstimator.js';
+} from '../services/food/index.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
@@ -803,12 +803,13 @@ export default function meRoutes(db) {
   });
 
   // NOTE: a second, simpler `GET /foods/search` used to be registered here,
-  // backed by skos-food/index.js's `foodSearch`. Express only ever dispatches
-  // to the FIRST matching route (see /foods/search above, ~line 342), so this
-  // one was dead code from the day both were merged in — never reachable.
-  // Removed rather than left as a trap for the next person who edits it
-  // expecting it to run. `foodSearch` is still imported and used below, in
-  // POST /meals/:id/items, as a fallback lookup — left as-is.
+  // backed by the old `skos-food/index.js` `foodSearch`. Express only ever
+  // dispatches to the FIRST matching route (see /foods/search above, ~line
+  // 342), so this one was dead code from the day both were merged in — never
+  // reachable. Removed rather than left as a trap. `foodSearch` is still
+  // imported and used below, in POST /meals/:id/items, as a fallback lookup —
+  // now sourced from the canonical `services/food/` core (Phase 1), which is
+  // the SAME FoodSearch every other path uses.
 
   // ---------------- my meal templates ----------------
   r.get('/meals', async (req, res) => {
@@ -1448,6 +1449,293 @@ export default function meRoutes(db) {
       clientId: c.id,
     });
     res.json(result);
+  });
+
+  // ============================================================
+  // WORKOUT SHARING — cross-account shareable workout link
+  // Analogous to POST /me/share for nutrition but for workouts.
+  // Creates an immutable snapshot of the sender's workout.
+  // ============================================================
+
+  // POST /me/workout-share: create a shareable link for a workout.
+  // The sender selects a workout (from their personal planner or today's
+  // session) and optionally a subset of exercises. The server builds the
+  // snapshot from the sender's actual data — never trusts client-supplied
+  // exercise details.
+  r.post('/workout-share', workoutWriteLimit, validate(schemas.workoutShareCreate), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { workout_id, exercise_ids } = req.body || {};
+    if (!workout_id) return res.status(400).json({ error: 'workout_id is required' });
+
+    // Try to find the workout in the client's personal planner first,
+    // then in today's assigned/custom workouts.
+    let workout = null;
+    let exercises = [];
+
+    // 1. Check personal planner (client_workouts)
+    const plannerW = await db.q1(
+      'SELECT * FROM client_workouts WHERE id = ? AND client_id = ?',
+      [workout_id, c.id]);
+    if (plannerW) {
+      workout = plannerW;
+      exercises = await db.q(
+        'SELECT * FROM client_workout_exercises WHERE workout_id = ? ORDER BY position',
+        [plannerW.id]);
+    }
+
+    // 2. Check assigned/custom workouts (workouts table)
+    if (!workout) {
+      const assignedW = await db.q1(
+        'SELECT * FROM workouts WHERE id = ? AND client_id = ?',
+        [workout_id, c.id]);
+      if (assignedW) {
+        workout = assignedW;
+        exercises = await db.q(
+          'SELECT * FROM workout_exercises WHERE workout_id = ? ORDER BY position',
+          [assignedW.id]);
+      }
+    }
+
+    if (!workout) return res.status(404).json({ error: 'Workout not found' });
+
+    // Filter exercises if specific IDs were provided
+    let selectedExercises = exercises;
+    if (exercise_ids && exercise_ids.length > 0) {
+      const idSet = new Set(exercise_ids);
+      selectedExercises = exercises.filter((ex) => idSet.has(ex.id));
+      if (selectedExercises.length === 0) {
+        return res.status(400).json({ error: 'No matching exercises found in this workout' });
+      }
+    }
+
+    // Build the immutable snapshot payload
+    const payload = {
+      type: 'workout',
+      name: workout.name || 'Workout',
+      notes: workout.notes || null,
+      exercises: selectedExercises.map((ex, i) => ({
+        exercise_id: ex.exercise_id || null,
+        name: ex.name,
+        sets: ex.sets,
+        reps: ex.reps,
+        weight: ex.weight,
+        rest_sec: ex.rest_sec,
+        tempo: ex.tempo || null,
+        notes: ex.notes || null,
+        position: i,
+      })),
+    };
+
+    const shareId = id('shr');
+    await db.run(
+      `INSERT INTO shared_workouts (id, org_id, client_id, shared_by_name, workout_name, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [shareId, c.org_id, c.id, c.name || null, payload.name, JSON.stringify(payload), now()]);
+    track(db, 'workout_shared', req.user.org, req.user.sub, { client_id: c.id, exercise_count: payload.exercises.length });
+    res.status(201).json({ id: shareId });
+  });
+
+  // POST /me/workout-share/:id/import: import a shared workout into the
+  // authenticated client's planner. The shared snapshot is the source of
+  // truth — never accept arbitrary exercise data from the client.
+  //
+  // Supports three destinations:
+  //   - 'today': creates a workout/session for today
+  //   - 'planner': creates a reusable workout in client_workouts
+  //   - 'planner_day': creates a reusable workout + assigns to a day of the week
+  //
+  // Import is transactional: all writes roll back on failure.
+  r.post('/workout-share/:id/import', workoutWriteLimit, validate(schemas.workoutImport), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { exercise_indexes, destination, day_of_week, workout_name } = req.body || {};
+    const { id: shareId } = req.params;
+
+    // 1. Validate the share exists
+    const share = await db.q1('SELECT * FROM shared_workouts WHERE id = ?', [shareId]);
+    if (!share) return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
+
+    // 2. Parse the snapshot
+    let payload = {};
+    try { payload = JSON.parse(share.payload_json) || {}; } catch { payload = {}; }
+    const allExercises = payload.exercises || [];
+    if (!allExercises.length) return res.status(400).json({ error: 'This shared workout has no exercises' });
+
+    // 3. Filter by selected indexes (or use all)
+    const indexes = (exercise_indexes && exercise_indexes.length > 0)
+      ? exercise_indexes
+      : allExercises.map((_, i) => i);
+    const selectedExercises = indexes
+      .filter((i) => i >= 0 && i < allExercises.length)
+      .map((i) => allExercises[i]);
+    if (!selectedExercises.length) return res.status(400).json({ error: 'No valid exercises selected' });
+
+    // 4. Validate destination
+    const VALID_DEST = ['today', 'planner', 'planner_day'];
+    if (!VALID_DEST.includes(destination)) {
+      return res.status(400).json({ error: 'Invalid destination. Must be: today, planner, or planner_day' });
+    }
+    if (destination === 'planner_day') {
+      if (day_of_week === undefined || day_of_week === null || day_of_week === '') {
+        return res.status(400).json({ error: 'day_of_week is required for planner_day destination' });
+      }
+      const dow = parseInt(day_of_week, 10);
+      if (!Number.isFinite(dow) || dow < 0 || dow > 6) {
+        return res.status(400).json({ error: 'day_of_week must be 0-6 (Monday-Sunday)' });
+      }
+    }
+
+    // 5. Resolve exercise IDs against the recipient's library
+    //    (global or same-org only), fall back to name-based resolution.
+    const resolvedExercises = [];
+    for (const ex of selectedExercises) {
+      let resolvedExerciseId = null;
+      let resolvedName = ex.name || 'Exercise';
+      let resolvedSets = Math.max(1, Math.min(12, parseInt(ex.sets, 10) || 3));
+      let resolvedReps = String(ex.reps ?? 10).slice(0, 12);
+      let resolvedWeight = String(ex.weight ?? 'BW').slice(0, 12);
+      let resolvedRest = Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90));
+      let resolvedTempo = ex.tempo || null;
+      let resolvedNotes = ex.notes || null;
+
+      // Try exact exercise_id match against library (global or same-org)
+      if (ex.exercise_id) {
+        const lib = await db.q1(
+          'SELECT id, name FROM exercise_library WHERE id = ? AND (is_global = 1 OR org_id = ?)',
+          [ex.exercise_id, c.org_id]);
+        if (lib) {
+          resolvedExerciseId = lib.id;
+          resolvedName = lib.name; // use the library's canonical name
+        }
+      }
+
+      // Fallback: try name-based match in the recipient's library
+      if (!resolvedExerciseId) {
+        const lib = await db.q1(
+          'SELECT id, name FROM exercise_library WHERE lower(name) = lower(?) AND (is_global = 1 OR org_id = ?) LIMIT 1',
+          [ex.name, c.org_id]);
+        if (lib) {
+          resolvedExerciseId = lib.id;
+          resolvedName = lib.name;
+        }
+      }
+
+      resolvedExercises.push({
+        exercise_id: resolvedExerciseId,
+        name: resolvedName,
+        sets: resolvedSets,
+        reps: resolvedReps,
+        weight: resolvedWeight,
+        rest_sec: resolvedRest,
+        tempo: resolvedTempo,
+        notes: resolvedNotes,
+      });
+    }
+
+    // 6. Disambiguate workout name if recipient already has one with the same name
+    const rawName = (workout_name || payload.name || 'Shared Workout').trim().slice(0, 80);
+    let finalName = rawName;
+
+    if (destination === 'today') {
+      // For today, check workouts table for existing name
+      const existing = await db.q1(
+        `SELECT id FROM workouts WHERE client_id = ? AND lower(name) = lower(?) AND scheduled_date = ? AND source IN ('client_custom', 'program')`,
+        [c.id, finalName, dayKey(new Date(), req.tz || 'Asia/Kolkata')]);
+      if (existing) finalName = `${rawName} (shared)`;
+    } else {
+      // For planner, check client_workouts for existing name
+      const existing = await db.q1(
+        'SELECT id FROM client_workouts WHERE client_id = ? AND lower(name) = lower(?)',
+        [c.id, finalName]);
+      if (existing) {
+        finalName = `${rawName} (shared)`;
+        // Check for further collision
+        const existing2 = await db.q1(
+          'SELECT id FROM client_workouts WHERE client_id = ? AND lower(name) = lower(?)',
+          [c.id, finalName]);
+        if (existing2) {
+          // Find the next available disambiguator
+          let n = 2;
+          while (n < 100) {
+            const candidate = `${rawName} (shared ${n})`;
+            const exists = await db.q1(
+              'SELECT id FROM client_workouts WHERE client_id = ? AND lower(name) = lower(?)',
+              [c.id, candidate]);
+            if (!exists) { finalName = candidate; break; }
+            n++;
+          }
+        }
+      }
+    }
+
+    // 7. Check planner access if needed
+    if (destination !== 'today') {
+      const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
+      const mode = s?.workout_mode_default || 'hybrid';
+      if (mode === 'prescribed') {
+        return res.status(403).json({ error: 'Workout creation is locked by your gym (prescribed mode)' });
+      }
+    }
+
+    // 8. Execute the import transactionally
+    try {
+      const result = await db.tx(async (tx) => {
+        if (destination === 'today') {
+          // Create a workout for today
+          const tz = req.tz || 'Asia/Kolkata';
+          const d = dayKey(new Date(), tz);
+          const wId = id('wko');
+          await tx.run(
+            `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, source, notes, created_at)
+             VALUES (?,?,?,?,?,?,'assigned', 'client_custom', ?, ?)`,
+            [wId, c.org_id, c.id, finalName, finalName.slice(0, 40), d, payload.notes || null, now()]);
+          for (const [i, ex] of resolvedExercises.entries()) {
+            await tx.run(
+              `INSERT INTO workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+              [id('wxe'), wId, ex.exercise_id, i, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
+          }
+          // Remove any previous un-logged custom workout scheduled for today
+          await tx.run(
+            `DELETE FROM workouts WHERE client_id = ? AND source = 'client_custom' AND status = 'assigned' AND scheduled_date = ? AND id != ?
+               AND NOT EXISTS (SELECT 1 FROM workout_logs wl WHERE wl.workout_id = workouts.id)`,
+            [c.id, d, wId]);
+          return { id: wId, destination: 'today' };
+        }
+
+        // planner or planner_day — create a reusable client_workout
+        const cwId = id('cw');
+        await tx.run(
+          'INSERT INTO client_workouts (id, org_id, client_id, name, notes, created_at) VALUES (?,?,?,?,?,?)',
+          [cwId, c.org_id, c.id, finalName, payload.notes || null, now()]);
+        for (const [i, ex] of resolvedExercises.entries()) {
+          await tx.run(
+            `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [id('cwe'), cwId, ex.exercise_id, i, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
+        }
+
+        // If planner_day, assign to the selected day
+        if (destination === 'planner_day') {
+          const dow = parseInt(day_of_week, 10);
+          await tx.run(
+            'DELETE FROM client_workout_schedule WHERE client_id = ? AND day_of_week = ?',
+            [c.id, dow]);
+          await tx.run(
+            'INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES (?,?,?)',
+            [c.id, dow, cwId]);
+        }
+
+        return { id: cwId, destination, day_of_week: destination === 'planner_day' ? parseInt(day_of_week, 10) : undefined };
+      });
+
+      track(db, 'workout_shared_imported', req.user.org, req.user.sub, {
+        client_id: c.id, share_id: shareId, destination: result.destination,
+      });
+      res.status(201).json({ ok: true, ...result });
+    } catch (e) {
+      // Transaction failure — nothing is half-created
+      res.status(500).json({ error: 'Could not import workout. Please try again.' });
+    }
   });
 
   return r;

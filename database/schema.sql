@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
   phone         TEXT,
   avatar        TEXT,
   active        INTEGER NOT NULL DEFAULT 1,
+  terms_accepted_at TEXT,
+  terms_version     TEXT,
   created_at    TEXT NOT NULL
 );
 
@@ -218,6 +220,11 @@ CREATE TABLE IF NOT EXISTS workouts (
 );
 CREATE INDEX IF NOT EXISTS idx_workouts_client ON workouts(client_id, scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status);
+-- Community leaderboards filter completed workouts by client over a date
+-- range (streaks look back 365 days, completed-workout boards use the
+-- selected period). Neither idx_workouts_client (client_id, scheduled_date)
+-- nor idx_workouts_status (client_id, status) covers all three columns.
+CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date);
 
 CREATE TABLE IF NOT EXISTS workout_exercises (
   id          TEXT PRIMARY KEY,
@@ -850,6 +857,25 @@ CREATE TABLE IF NOT EXISTS community_workout_shares (
 );
 CREATE INDEX IF NOT EXISTS idx_cws_org_feed ON community_workout_shares(org_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_cws_client ON community_workout_shares(client_id);
+
+-- ============================================================
+-- WORKOUT SHARING — cross-account shareable workout link
+-- Analogous to shared_meals: an immutable snapshot of a workout and its
+-- exercises, packaged into one shareable link. The sender's original
+-- workout is never referenced after snapshot creation — edits or
+-- deletions to the source workout never change what a recipient sees.
+-- id doubles as the token in the public /workout-share/:id URL.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS shared_workouts (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id      TEXT REFERENCES clients(id) ON DELETE SET NULL, -- sender; NULL-able so a deleted account doesn't break outstanding links
+  shared_by_name TEXT,                     -- denormalized sender display name at share time
+  workout_name   TEXT NOT NULL,
+  payload_json   TEXT NOT NULL,            -- JSON: { type: 'workout', name, notes, exercises: [{exercise_id, name, sets, reps, weight, rest_sec, tempo, notes, position}] }
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shared_workouts_id ON shared_workouts(id);
 
 -- ============================================================
 -- SK OS ENTERPRISE — gym-owner SaaS billing, QR enrollment, payments

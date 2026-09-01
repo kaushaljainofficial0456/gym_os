@@ -6,6 +6,7 @@
   "scripts": {
     "setup": "npm install && npm install --prefix backend && npm install --prefix frontend --include=dev",
     "db:init": "node backend/scripts/init-db.js",
+    "db:check": "node backend/scripts/db-check.js",
     "db:seed": "node backend/scripts/seed.js",
     "db:reset": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js",
     "db:reset:clean": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js --no-demo",
@@ -14,7 +15,10 @@
     "dev:frontend": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
     "start": "npm run start --prefix backend",
-    "test": "npm test --prefix backend"
+    "test": "npm test --prefix backend",
+    "bench:build": "node ml/data/benchmark/build.mjs",
+    "bench": "node backend/scripts/food-benchmark.js --engine v1",
+    "bench:gate": "node backend/scripts/food-benchmark.js --engine v2 --baseline ml/data/benchmark/baseline.v1.json --gate"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"
