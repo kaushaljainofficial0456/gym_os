@@ -145,6 +145,13 @@ export const schemas = {
     sodium: z.number().finite().nonnegative().optional()
   }),
   foodResolveQuantity: z.object({
+    // A real `foods` row's own id -- when present, resolve() prices
+    // directly from that row's own macros (linear scaling), never by
+    // searching the model catalogue by name. See me.js's own comment on
+    // the bug this closes: a custom food has no source_id, so without
+    // this it was priced by NAME-searching the model instead of using
+    // its own stored values.
+    food_id: z.string().max(60).optional(),
     source_id: z.string().max(100).optional(),
     name: z.string().max(150).optional(),
     portion_key: z.string().max(60).optional(),

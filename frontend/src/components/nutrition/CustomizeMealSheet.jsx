@@ -18,19 +18,24 @@ const makeRowId = () => `row_${Math.random().toString(36).slice(2)}`;
  * food added (needs a name first); if the sheet is closed before that,
  * nothing is left behind in My Diet.
  *
- * MULTI-ROW WORKSPACE (Parts 18, 21-22): several independent food-entry
- * rows can be open at once, each a <MealFoodRow> owning its OWN search /
- * custom-macros / AI-fallback state (including its own Search-Food vs
- * Custom-Macros toggle, Part 19). Rows never share input state with each
- * other -- adding a food in row 2 doesn't touch what's half-typed in row
- * 1. Every row calls back up to the THREE functions below (addFoodItem /
- * addCustomFoodItem / addAIItem), which stay the single place that talks
- * to mealId/items/totals -- exactly one source of truth for the meal
- * being built, no matter how many entry rows are open. A row resets
- * itself to blank after a successful add (Part 21 -- "search, add,
- * search next" with no workspace-wide reset); "+ Add another food"
- * appends a fresh blank row instead of the same row being reused
- * sequentially (Part 18).
+ * ONE-ACTIVE-BLOCK WORKSPACE (follow-up hardening pass, Sections 8-11 --
+ * supersedes the old always-open multi-row design, Parts 18/21-22): at
+ * most ONE <MealFoodRow> is ever mounted as a live search/custom-macros
+ * form (`rowIds` holds 0 or 1 ids). The moment a row successfully adds a
+ * food, it's dropped from `rowIds` (see handleRowAdded) -- its
+ * contribution is already visible as a compact "name · qty · kcal
+ * [Edit][Remove]" card in the `items` list right below, so there is
+ * nothing left for the row itself to show. "+ Add another food" always
+ * REPLACES whatever's in `rowIds` with exactly one fresh id (never
+ * appends), so tapping it while an earlier, not-yet-completed block is
+ * still half-typed discards that half-typed state rather than stacking a
+ * second simultaneously-active search field -- "only one search field
+ * actively focused at a time" is an invariant of `rowIds`'s shape, not
+ * something enforced by extra render logic. Every row calls back up to
+ * the THREE functions below (addFoodItem / addCustomFoodItem /
+ * addAIItem), which stay the single place that talks to
+ * mealId/items/totals -- exactly one source of truth for the meal being
+ * built no matter how many blocks have been completed so far.
  */
 export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }) {
   const [name, setName] = useState('');
@@ -63,8 +68,18 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
 
   if (!open) return null;
 
-  const addRow = () => setRowIds((ids) => [...ids, makeRowId()]);
-  const removeRow = (id) => setRowIds((ids) => (ids.length > 1 ? ids.filter((x) => x !== id) : ids));
+  // Always replaces, never appends -- see the file-header comment on why
+  // at most one row is ever live at once.
+  const addRow = () => setRowIds(() => [makeRowId()]);
+  // Cancel the (only) active, not-yet-completed block -- leaves zero rows
+  // live until "+ Add another food" is tapped again, same end state as a
+  // completed block.
+  const removeRow = (id) => setRowIds((ids) => ids.filter((x) => x !== id));
+  // A block successfully added its one food -- collapse it. Its
+  // contribution is already a compact card in `items` below, so there is
+  // nothing left for the row to render; no separate "collapsed" visual
+  // state needs to exist for it.
+  const handleRowAdded = (id) => setRowIds((ids) => ids.filter((x) => x !== id));
 
   const refreshItems = async (id) => {
     const r = await api(`/me/meals/${id}/items`);
@@ -89,7 +104,14 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   const addFoodItem = async (food) => {
     if (!name.trim()) throw new Error('Name your meal first');
     const id = await ensureMeal();
-    await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: food.source_id || food.id, name: food.name, quantity: 1 }) });
+    // food.id (this row's own real `foods` primary key) FIRST, never
+    // food.source_id -- source_id only means anything to a MODEL lookup,
+    // and preferring it here was the exact mechanism behind a real bug:
+    // a custom/library food's `id` is always the correct, unambiguous
+    // identifier once it's a real row; only a bare, never-yet-materialized
+    // model search result (no `id` at all) has nothing but a name/
+    // source_id for the backend's own materialize-on-add fallback to use.
+    await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: food.id || undefined, name: food.name, quantity: 1 }) });
     await refreshItems(id);
     toast(`+ ${food.name} added`);
   };
@@ -203,24 +225,32 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
           <div className="space-y-2">
             {rowIds.map((id) => (
               <div key={id} className="relative">
-                <MealFoodRow t={t} onAddFood={addFoodItem} onAddCustom={addCustomFoodItem} onAddAI={addAIItem} />
-                {rowIds.length > 1 && (
-                  // Outer button is a real 32x32 tap target (Part 33);
-                  // the visible badge stays a small 20x20 circle inside it
-                  // so the corner-badge look doesn't change.
-                  <button onClick={() => removeRow(id)} aria-label="Remove this food row"
-                          className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full grid place-items-center">
-                    <span className="w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold leading-none"
-                          style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}>✕</span>
-                  </button>
-                )}
+                <MealFoodRow t={t} onAddFood={addFoodItem} onAddCustom={addCustomFoodItem} onAddAI={addAIItem}
+                             onAdded={() => handleRowAdded(id)} />
+                {/* Outer button is a real 32x32 tap target (Part 33); the
+                    visible badge stays a small 20x20 circle inside it so
+                    the corner-badge look doesn't change. Always shown now
+                    (not just when >1 row) -- cancelling the sole active
+                    block is a legitimate action, same end state as
+                    completing it. */}
+                <button onClick={() => removeRow(id)} aria-label="Cancel this food entry"
+                        className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full grid place-items-center">
+                  <span className="w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold leading-none"
+                        style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}>✕</span>
+                </button>
               </div>
             ))}
-            <button onClick={addRow}
-                    className="w-full py-2 rounded-xl font-grotesk text-[11px] font-semibold"
-                    style={{ border: `1px dashed ${t.border}`, color: t.accent }}>
-              + Add another food
-            </button>
+            {/* At most one block is ever live (see file-header comment) --
+                once it's completed or cancelled, "+ Add another food" is
+                the only way back in, and always opens exactly one fresh
+                block. */}
+            {rowIds.length === 0 && (
+              <button onClick={addRow}
+                      className="w-full py-2 rounded-xl font-grotesk text-[11px] font-semibold"
+                      style={{ border: `1px dashed ${t.border}`, color: t.accent }}>
+                + Add another food
+              </button>
+            )}
           </div>
 
           {items.length > 0 && (
@@ -231,6 +261,10 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                 <div key={it.id} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
                   <span className="min-w-0 flex-1 font-grotesk text-[12px] font-semibold" style={{ color: t.ink }}>
                     <span className="flex items-center gap-1.5">
+                      {/* A completed block's own compact card (Sections
+                          8-11) -- this list IS that card format, once a
+                          row's MealFoodRow collapses out of `rowIds`. */}
+                      <span className="shrink-0" style={{ color: 'var(--good)' }} aria-hidden="true">✓</span>
                       <span className="truncate">{it.name}</span>
                       <CustomFoodBadge source={it.source} t={t} />
                     </span>

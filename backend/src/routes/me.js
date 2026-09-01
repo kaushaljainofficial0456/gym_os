@@ -37,6 +37,21 @@ const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+const r1 = (n) => Math.round((n || 0) * 10) / 10;
+
+// A `foods` row's `serving` is a free-text description ("150 g", "1 bowl",
+// "1 slice"); the LEADING number is the base quantity the stored calories/
+// protein/carbs/fat already represent. Absent entirely for most Custom
+// Macros entries (the form never asks for one) -- defaults to 100, the
+// same "treat it as per-100g" convention MyDietCard.jsx's own frontend
+// parseServing() already uses for the exact same field. Kept as ONE
+// definition so a future serving-format change only needs updating here
+// AND in MyDietCard.jsx's mirror, not a third place too.
+function baseServingAmount(serving) {
+  const s = String(serving || '100').trim();
+  const m = s.match(/^([\d.]+)/);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : 100;
+}
 
 export default function meRoutes(db) {
   const r = Router();
@@ -497,8 +512,23 @@ export default function meRoutes(db) {
        shadowed its catalogue twin and arrived with NO portion chips and no
        oil control, which is exactly what made the picker look like the
        feature had not shipped. Enrich them by name so a stored row behaves
-       identically to a fresh catalogue hit. */
+       identically to a fresh catalogue hit.
+       ONLY for `source === 'VERIFIED_DATABASE'` rows -- a materialized
+       catalogue food genuinely IS the same food its twin describes, so
+       borrowing the twin's portions/source_id is correct. A genuinely
+       custom (`USER_ENTERED`) food is NOT the same food as whatever
+       happens to share its name in the model -- attaching a name-matched
+       twin's portions/source_id there was the exact mechanism behind a
+       real, confirmed bug (tapping a custom "Bread" could silently price
+       and log the MODEL's "Bread" instead, because the resolve endpoint
+       only ever knew how to look a food up by source_id/name, never by
+       this row's own id -- see /foods/resolve's food_id branch, the
+       actual fix). `f.id` (this row's own primary key) is ALWAYS present
+       regardless of enrichment -- it's a bare `...row` spread -- so the
+       frontend can and now does identify this exact row unambiguously
+       whether or not a twin was found. */
     const enrich = (row) => {
+      if (row.source !== 'VERIFIED_DATABASE') return { ...row, portions: [], oil_applicable: false };
       const twin = foodModelAvailable() ? searchFoodModel(row.name, { limit: 1 })[0] : null;
       return {
         ...row,
@@ -640,9 +670,51 @@ export default function meRoutes(db) {
    */
   r.post('/foods/resolve', validate(schemas.foodResolveQuantity), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
-    const { source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
+    const { food_id, source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
 
+    // A REAL `foods` table row (the client's own custom food, the gym/
+    // global library, or a previously-materialized catalogue food) --
+    // resolved directly from ITS OWN stored macros via linear scaling,
+    // NEVER by re-searching the model catalogue by name.
+    //
+    // Fixes a real, confirmed bug: this route used to be the ONLY way
+    // any search result got priced, including a client's own custom
+    // food -- which has no `source_id` (it was never derived from the
+    // model), so `searchFoodModel(name, ...)` ran a NAME search against
+    // the model catalogue instead and silently returned THAT food's
+    // macros (or, if `name` happened to loosely match nothing, whatever
+    // ranked first) rather than the custom food's own. A custom "Bread"
+    // with hand-typed macros could resolve to the model's "Bread" --
+    // completely different numbers, logged under the right NAME but the
+    // wrong nutrition. `food_id` (this row's own primary key, always
+    // present for search results built from `mine`/`library` -- see
+    // GET /foods/search) is the stable identifier that makes this
+    // impossible: it looks up the EXACT row, never a name-based guess.
+    // Ownership-scoped exactly like every other /foods/:id route: the
+    // client's OWN food, or a gym/global library row (shared-safe
+    // reads), never another client's private food.
+    if (food_id) {
+      const row = await db.q1(
+        'SELECT * FROM foods WHERE id = ? AND (client_id = ? OR client_id IS NULL)',
+        [food_id, c.id]);
+      if (!row) return res.status(404).json({ error: 'No matching food' });
+      const baseAmount = baseServingAmount(row.serving);
+      const g = Number(grams) > 0 ? Number(grams) : baseAmount;
+      const factor = g / baseAmount;
+      return res.json({
+        totals: {
+          energy_kcal: r1((row.calories || 0) * factor),
+          protein_g: r1((row.protein || 0) * factor),
+          carb_g: r1((row.carbs || 0) * factor),
+          fat_g: r1((row.fat || 0) * factor),
+        },
+        grams: r1(g),
+        quantity_label: `${r1(g)}g`,
+        oil: null,
+      });
+    }
+
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
     const hits = searchFoodModel(name || source_id || '', { limit: 25 });
     const food = (source_id && hits.find((x) => x.source_id === source_id)) || hits[0];
     if (!food) return res.status(404).json({ error: 'No matching food' });

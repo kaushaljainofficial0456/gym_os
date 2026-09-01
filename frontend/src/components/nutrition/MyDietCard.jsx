@@ -221,8 +221,11 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
     );
   };
 
-  const visibleFoods = foodsExpanded ? foods : foods.slice(0, 2);
-  const visibleMeals = mealsExpanded ? meals : meals.slice(0, 2);
+  // Default compact state shows exactly ONE saved food and ONE saved meal
+  // (follow-up hardening pass, Section 1) -- everything else stays
+  // reachable through "See more", never deleted, never hidden data.
+  const visibleFoods = foodsExpanded ? foods : foods.slice(0, 1);
+  const visibleMeals = mealsExpanded ? meals : meals.slice(0, 1);
 
   return (
     <div className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
@@ -259,9 +262,9 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
               <Row key={f.id} kind="food" item={f} label={f.name} sub={f.serving || `${Math.round(f.calories || 0)} kcal`} />
             ))}
           </div>
-          {foods.length > 2 && (
+          {foods.length > 1 && (
             <button onClick={() => setFoodsExpanded(!foodsExpanded)} className="w-full mt-2 py-1.5 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
-              {foodsExpanded ? 'Show less' : `See more (${foods.length - 2} more)`}
+              {foodsExpanded ? 'Show less' : `See more (${foods.length - 1} more)`}
             </button>
           )}
         </div>
@@ -275,9 +278,9 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
               <Row key={m.id} kind="meal" item={m} label={m.name} sub={`${Math.round(m.calories || 0)} kcal · ${m.item_count || 0} items`} />
             ))}
           </div>
-          {meals.length > 2 && (
+          {meals.length > 1 && (
             <button onClick={() => setMealsExpanded(!mealsExpanded)} className="w-full mt-2 py-1.5 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
-              {mealsExpanded ? 'Show less' : `See more (${meals.length - 2} more)`}
+              {mealsExpanded ? 'Show less' : `See more (${meals.length - 1} more)`}
             </button>
           )}
         </div>

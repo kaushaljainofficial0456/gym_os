@@ -20,14 +20,15 @@ const r1 = (n) => Math.round((n || 0) * 10) / 10;
  * `onAddFood(food)`, `onAddCustom({name,calories,protein,carbs,fat})`,
  * `onAddAI(aiPreview, gramsString)`. Each is awaited and expected to
  * throw on failure so this row can show its own inline error without
- * the parent needing to know which row is showing what. On success the
- * row resets itself to blank, ready for the next food in the SAME slot
- * (Part 21 -- "search, add, search next, add", no reset of the whole
- * workspace) -- multiple rows existing side by side (Part 18) is what
- * lets several of these run independently instead of one shared row
- * forcing everything through single file.
+ * the parent needing to know which row is showing what. On success this
+ * row calls `onAdded()` (Sections 8-11) so the PARENT can collapse it --
+ * this component doesn't unmount itself or know its own row id; it just
+ * reports "I'm done" and lets CustomizeMealSheet decide what that means.
+ * `resetToBlank()` still runs first for defensiveness (a parent that
+ * doesn't collapse on `onAdded` still gets a sane, ready-for-next-food
+ * row rather than one stuck showing the just-added result).
  */
-export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
+export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, t }) {
   const [mode, setMode] = useState('search'); // 'search' | 'custom'
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
@@ -48,7 +49,12 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
 
   useEffect(() => {
     let dead = false;
-    api('/me/foods/recent?limit=5').then((r) => { if (!dead) setRecentFoods(r.recent || []); }).catch(() => {});
+    // limit=1 (follow-up hardening pass, Sections 4/8): every row used to
+    // independently fetch its OWN top-5 Recent list -- which, since it's
+    // the SAME client's history every time, meant N blocks showed the
+    // IDENTICAL 5-item panel N times. One compact suggestion per block
+    // instead, matching Section 8's own explicit example.
+    api('/me/foods/recent?limit=1').then((r) => { if (!dead) setRecentFoods(r.recent || []); }).catch(() => {});
     return () => { dead = true; };
   }, []);
   const [customForm, setCustomForm] = useState(EMPTY_CUSTOM);
@@ -87,7 +93,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
 
   const handleAddFood = async (food) => {
     setAdding(true); setAddErr('');
-    try { await onAddFood(food); resetToBlank(); }
+    try { await onAddFood(food); resetToBlank(); onAdded?.(); }
     catch (e) { setAddErr(e.message || 'Could not add that food'); }
     setAdding(false);
   };
@@ -102,6 +108,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
     setAdding(true); setAddErr('');
     try {
       await onAddCustom({ name: r.name, calories: Math.round(r.calories || 0), protein: r.protein || 0, carbs: r.carbs || 0, fat: r.fat || 0 });
+      onAdded?.();
     } catch (e) { setAddErr(e.message || 'Could not add that food'); }
     setAdding(false);
   };
@@ -137,7 +144,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
       } catch { /* lookup failure -- fall through and create normally rather than block on it */ }
     }
     setAdding(true);
-    try { await onAddCustom({ name: foodName, ...nums }); setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); }
+    try { await onAddCustom({ name: foodName, ...nums }); setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); onAdded?.(); }
     catch (e) { setCustomErr(e.message || 'Could not add that food'); }
     setAdding(false);
   };
@@ -153,6 +160,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
       await onAddFood({ id: customDuplicate.id, name: customDuplicate.name });
       setCustomForm(EMPTY_CUSTOM);
       setCustomDuplicate(null);
+      onAdded?.();
     } catch (e) { setCustomErr(e.message || 'Could not add that food'); }
     setAdding(false);
   };
@@ -179,7 +187,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
   const handleAddAI = async () => {
     if (!aiPreview) return;
     setAdding(true);
-    try { await onAddAI(aiPreview, aiGrams); resetToBlank(); }
+    try { await onAddAI(aiPreview, aiGrams); resetToBlank(); onAdded?.(); }
     catch (e) { setAiErr(e.message || 'Could not add that estimate'); }
     setAdding(false);
   };
@@ -285,7 +293,17 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, t }) {
               {results.map((f) => (
                 <button key={f.id || f.source_id} onClick={() => handleAddFood(f)} disabled={adding}
                         className="w-full text-left rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2" style={{ border: `1px solid ${t.border}` }}>
-                  <span className="min-w-0 truncate font-grotesk text-[11px] font-semibold" style={{ color: t.ink }}>{f.name}</span>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="min-w-0 truncate font-grotesk text-[11px] font-semibold" style={{ color: t.ink }}>{f.name}</span>
+                    {/* Same short marker FoodLogSheet.jsx's own search
+                        results use -- gated on client_id, never a gym/
+                        global library row. */}
+                    {f.client_id && (
+                      <span className="shrink-0 text-[7px] uppercase tracking-wider font-semibold px-1 py-0.5 rounded-full" style={{ background: t.accentDim, color: t.accent }}>
+                        Custom
+                      </span>
+                    )}
+                  </span>
                   <span className="shrink-0 font-grotesk text-[9px]" style={{ color: t.mute }}>{f.calories == null ? '—' : Math.round(f.calories)} kcal/100g</span>
                 </button>
               ))}

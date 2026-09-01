@@ -58,7 +58,11 @@ const OPTIONAL_CUSTOM_MACROS = ['fiber', 'sugar', 'sodium'];
 /** Round for display only — never re-used as an input to further math. */
 const r1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
 
-export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, mode, setMode }) {
+export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, mode, setMode, toast }) {
+  // toast is optional (some older call sites may not pass one) -- fall
+  // back to a no-op rather than crash, so a missing prop degrades to
+  // "no toast shown" instead of a hard error on every quick-log.
+  const notify = toast || (() => {});
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -91,6 +95,13 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   const [rowGrams, setRowGrams] = useState({});
   const [rowLogging, setRowLogging] = useState({});
   const [rowErr, setRowErr] = useState({});
+  // "+" -> "✓" confirmation (follow-up hardening pass, Sections 6/20) --
+  // keyed the same stable way as rowLogging, so it can never land on the
+  // wrong row if results reorder mid-flight. Purely a transient visual
+  // confirmation alongside the toast, not a persisted "already logged"
+  // flag -- the same food can be quick-logged again (e.g. a second
+  // helping) without the row getting stuck showing a checkmark forever.
+  const [rowChecked, setRowChecked] = useState({});
   // Recent foods (Part 40) -- reconstructed server-side from the client's
   // own meal_logs history (GET /me/foods/recent), not a new store. Shown
   // ONLY on the true idle screen (nothing typed yet) so it doesn't compete
@@ -100,6 +111,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   // resolve against for a plain manual/AI log).
   const [recentFoods, setRecentFoods] = useState([]);
   const [recentLogging, setRecentLogging] = useState({});
+  const [recentChecked, setRecentChecked] = useState({});
   const [food, setFood] = useState(null);
   // Portion picker (Parts 4-9): the "How many" stepper is gone -- the
   // system works entirely from selectedPortions (one or more portion+qty
@@ -211,7 +223,13 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       if (autoScan) setScanning(true);
       // Best-effort -- a failed fetch just means no Recent section shows,
       // never blocks or errors the rest of the sheet.
-      api('/me/foods/recent?limit=6').then((r) => setRecentFoods(r.recent || [])).catch(() => setRecentFoods([]));
+      // limit=1 (follow-up hardening pass, Section 4): the idle screen
+      // showed up to 6 Recent items, making the search dialog visually
+      // heavy before the user has even typed anything. The underlying
+      // history itself is untouched (meal_logs keeps every log; this only
+      // limits how many rows THIS fetch asks for) -- also a genuine, if
+      // small, network-payload win (Section 12/27).
+      api('/me/foods/recent?limit=1').then((r) => setRecentFoods(r.recent || [])).catch(() => setRecentFoods([]));
     }
     if (!open) {
       setQ(''); setResults([]); setSearchErr(''); setFood(null); setResolved(null);
@@ -284,7 +302,15 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         if (customGrams && Number(customGrams) > 0) {
           r = await api('/me/foods/resolve', {
             method: 'POST',
-            body: JSON.stringify({ source_id: food.source_id, name: food.name, grams: Number(customGrams), oil_level: oil || undefined }),
+            // food_id (this row's own real `foods` primary key, present
+            // for any search result built from the client's own foods or
+            // the gym/global library -- absent for a bare, unmaterialized
+            // model hit) makes resolve() price from THIS food's own
+            // stored macros, never a name-based guess against the model
+            // catalogue. The fix for a real bug: a custom food with no
+            // source_id used to be "resolved" by searching the model for
+            // its NAME instead, silently substituting a different food.
+            body: JSON.stringify({ food_id: food.id || undefined, source_id: food.source_id, name: food.name, grams: Number(customGrams), oil_level: oil || undefined }),
           });
         } else if (selectedPortions.length > 0) {
           const parts = await Promise.all(selectedPortions.map((p) =>
@@ -467,7 +493,8 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     try {
       const resolvedRow = await api('/me/foods/resolve', {
         method: 'POST',
-        body: JSON.stringify({ source_id: f.source_id, name: f.name, grams: g }),
+        // food_id -- see the portion-picker's own resolve call for why.
+        body: JSON.stringify({ food_id: f.id || undefined, source_id: f.source_id, name: f.name, grams: g }),
       });
       const totals = resolvedRow?.totals;
       if (!totals || totals.energy_kcal == null) throw new Error('Could not price that quantity');
@@ -479,8 +506,22 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         fat: totals.fat_g ?? 0,
         quantity: g, unit: 'g',
       }, { keepOpen: true });
+      // "+" -> "✓" (Sections 5-7/20) -- the row's own button flips to a
+      // checkmark as an immediate, local confirmation. The success TOAST
+      // itself is fired by the caller (Nutrition.jsx's onAdd, right after
+      // this same logEntry call resolves) -- not duplicated here, since
+      // that's already the single source of the "Food logged" copy;
+      // search/results/query all stay untouched since nothing here closes
+      // the sheet or reloads anything.
+      setRowChecked((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setRowChecked((prev) => ({ ...prev, [key]: false })), 1400);
     } catch (e) {
+      // Rollback to "+" (rowChecked never set) plus BOTH an inline
+      // per-row reason and the exact toast copy the hardening pass
+      // specifies -- an inline-only error is easy to miss under a long
+      // results list; the toast is what a person glances up and sees.
       setRowErr((prev) => ({ ...prev, [key]: e.message || 'Could not log that food' }));
+      notify("Couldn't log food. Try again.");
     }
     setRowLogging((prev) => ({ ...prev, [key]: false }));
   };
@@ -501,7 +542,17 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         protein: r.protein || 0, carbs: r.carbs || 0, fat: r.fat || 0,
         source: r.source && r.source !== 'plan' ? r.source : 'manual',
       }, { keepOpen: true });
-    } catch { /* onAdd's own caller already surfaces a toast on failure */ }
+      setRecentChecked((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setRecentChecked((prev) => ({ ...prev, [key]: false })), 1400);
+    } catch (e) {
+      // The earlier comment here ("onAdd's own caller already surfaces a
+      // toast on failure") was wrong for this exact path -- onAdd's own
+      // catch block never runs when onAdd itself is what throws; the
+      // exception lands right here instead, same as quickLogRow. Without
+      // this, a failed Recent-replay silently reset the button back to
+      // "+" with zero explanation.
+      notify(e.message && e.message !== 'Failed to fetch' ? e.message : "Couldn't log food. Try again.");
+    }
     setRecentLogging((prev) => ({ ...prev, [key]: false }));
   };
 
@@ -1053,9 +1104,10 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                         </div>
                       </div>
                       <Pressable onClick={() => quickLogRecent(r)} disabled={!!recentLogging[r.name]}
-                                 aria-label={`Log ${r.name} again`}
-                                 className="shrink-0 w-8 h-8 rounded-full grid place-items-center btn-primary !p-0 text-[16px] font-bold">
-                        {recentLogging[r.name] ? '…' : '+'}
+                                 aria-label={recentChecked[r.name] ? `${r.name} logged` : `Log ${r.name} again`}
+                                 className="shrink-0 w-8 h-8 rounded-full grid place-items-center btn-primary !p-0 text-[16px] font-bold"
+                                 style={recentChecked[r.name] ? { background: 'var(--good)' } : undefined}>
+                        {recentLogging[r.name] ? '…' : recentChecked[r.name] ? '✓' : '+'}
                       </Pressable>
                     </div>
                   ))}
@@ -1139,6 +1191,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                 const disabled = f.trustworthy === false;
                 const rowValue = rowGrams[key] ?? String(defaultGramsFor(f));
                 const logging = !!rowLogging[key];
+                const checked = !!rowChecked[key];
                 return (
                   <div key={key} className="rounded-xl px-3 py-2 space-y-1.5" style={{ border: '1px solid var(--line)' }}>
                     <div className="flex items-center gap-2">
@@ -1147,7 +1200,21 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                           Two different intents, two different controls. */}
                       <button onClick={() => pick(f)} disabled={disabled}
                               className="min-w-0 flex-1 text-left disabled:opacity-45">
-                        <span className="block text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{f.name}</span>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="block text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{f.name}</span>
+                          {/* Short, crisp marker (Part 3 of the follow-up
+                              hardening pass) so a client's OWN saved food is
+                              never mistaken for the shared database --
+                              gated on client_id specifically (not just
+                              source === 'USER_ENTERED', which a gym/global
+                              library row can also carry) so this never
+                              implies a gym-shared food is "yours". */}
+                          {f.client_id && (
+                            <span className="shrink-0 text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                              Custom food
+                            </span>
+                          )}
+                        </span>
                         <span className="text-[10px]" style={{ color: 'var(--mute)' }}>
                           {disabled
                             ? (f.data_quality_flag || 'Data quality flagged')
@@ -1158,7 +1225,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       </button>
                       <input
                         type="number" min="1" step="1" value={rowValue}
-                        onChange={(e) => { setRowGrams((prev) => ({ ...prev, [key]: e.target.value })); setRowErr((prev) => ({ ...prev, [key]: '' })); }}
+                        onChange={(e) => { setRowGrams((prev) => ({ ...prev, [key]: e.target.value })); setRowErr((prev) => ({ ...prev, [key]: '' })); setRowChecked((prev) => ({ ...prev, [key]: false })); }}
                         disabled={disabled}
                         aria-label={`${f.name} grams`}
                         className="w-16 text-right text-[12px] rounded-lg px-1.5 py-1.5 tabular-nums shrink-0"
@@ -1166,10 +1233,10 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       />
                       <span className="text-[10px] shrink-0" style={{ color: 'var(--faint)' }}>g</span>
                       <Pressable onClick={() => quickLogRow(f)} disabled={disabled || logging || !(Number(rowValue) > 0)}
-                                 aria-label={`Quick log ${f.name}`}
+                                 aria-label={checked ? `${f.name} logged` : `Quick log ${f.name}`}
                                  className="w-8 h-8 rounded-full grid place-items-center shrink-0 font-bold text-[16px] leading-none transition-transform active:scale-90"
-                                 style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', opacity: (disabled || logging || !(Number(rowValue) > 0)) ? 0.45 : 1 }}>
-                        {logging ? '…' : '+'}
+                                 style={{ background: checked ? 'var(--good)' : 'var(--accent)', color: 'var(--accent-contrast)', opacity: (disabled || logging || !(Number(rowValue) > 0)) ? 0.45 : 1 }}>
+                        {logging ? '…' : checked ? '✓' : '+'}
                       </Pressable>
                     </div>
                     {rowErr[key] && <div className="text-[10px]" style={{ color: 'var(--bad)' }}>{rowErr[key]}</div>}
