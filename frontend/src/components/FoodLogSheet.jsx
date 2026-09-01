@@ -310,13 +310,13 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
             // catalogue. The fix for a real bug: a custom food with no
             // source_id used to be "resolved" by searching the model for
             // its NAME instead, silently substituting a different food.
-            body: JSON.stringify({ food_id: food.id || undefined, source_id: food.source_id, name: food.name, grams: Number(customGrams), oil_level: oil || undefined }),
+            body: JSON.stringify({ food_id: food.id || undefined, source_id: food.source_id || undefined, name: food.name, grams: Number(customGrams), oil_level: oil || undefined }),
           });
         } else if (selectedPortions.length > 0) {
           const parts = await Promise.all(selectedPortions.map((p) =>
             api('/me/foods/resolve', {
               method: 'POST',
-              body: JSON.stringify({ source_id: food.source_id, name: food.name, portion_key: p.key, count: p.qty, oil_level: oil || undefined }),
+              body: JSON.stringify({ source_id: food.source_id || undefined, name: food.name, portion_key: p.key, count: p.qty, oil_level: oil || undefined }),
             })
           ));
           if (dead) return;
@@ -494,7 +494,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       const resolvedRow = await api('/me/foods/resolve', {
         method: 'POST',
         // food_id -- see the portion-picker's own resolve call for why.
-        body: JSON.stringify({ food_id: f.id || undefined, source_id: f.source_id, name: f.name, grams: g }),
+        body: JSON.stringify({ food_id: f.id || undefined, source_id: f.source_id || undefined, name: f.name, grams: g }),
       });
       const totals = resolvedRow?.totals;
       if (!totals || totals.energy_kcal == null) throw new Error('Could not price that quantity');

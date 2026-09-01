@@ -169,7 +169,24 @@ export const schemas = {
     // this it was priced by NAME-searching the model instead of using
     // its own stored values.
     food_id: z.string().max(60).optional(),
-    source_id: z.string().max(100).optional(),
+    // .nullable() alongside .optional() -- a real bug, found live off a
+    // user's own report: every frontend call site builds this request
+    // straight from a search-result object's `source_id` field, which is
+    // a genuine SQL NULL (not merely absent) for any custom or library
+    // food with no materialized model twin -- i.e. the exact case this
+    // whole food_id branch exists for. `JSON.stringify({source_id: null})`
+    // keeps the key with a literal null value (unlike `undefined`, which
+    // JSON.stringify drops), and `.optional()` alone only accepts
+    // `string | undefined`, not `null` -- so quick-logging or opening the
+    // full portion picker on almost any custom food rejected with a bare
+    // "Validation failed" (now: "source_id: Expected string, received
+    // null" -- see api.js's own fix for why that detail is visible at
+    // all). The route body itself already treats a null source_id
+    // exactly like an absent one (`source_id && hits.find(...)`, `name ||
+    // source_id || ''` -- both short-circuit past a null the same as past
+    // undefined), so this schema was the only thing actually rejecting a
+    // request the route was already written to handle correctly.
+    source_id: z.string().max(100).nullable().optional(),
     name: z.string().max(150).optional(),
     portion_key: z.string().max(60).optional(),
     count: z.number().finite().positive().max(1000).optional(),

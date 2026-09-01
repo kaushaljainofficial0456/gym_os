@@ -213,6 +213,24 @@ test('POST /me/foods/resolve: food_id scales linearly with grams, same as the fr
   assert.equal(r200.json.totals.protein_g, r100.json.totals.protein_g * 2);
 });
 
+// Real bug, found live off a user's own report: every frontend call site
+// builds this request straight from a search-result object's own
+// `source_id` field, which for a custom/library food (no materialized
+// model twin) is a genuine SQL NULL, not merely absent -- so
+// JSON.stringify keeps `"source_id": null` in the wire payload (unlike an
+// `undefined` field, which it drops). The schema's `source_id` used to be
+// `.optional()` only, which accepts `string | undefined` but rejects an
+// explicit `null` -- so quick-logging or portion-picking almost any
+// custom food failed with "Validation failed" even though the route body
+// itself already treats a null source_id exactly like an absent one.
+test('POST /me/foods/resolve: an explicit source_id:null (what every real call site actually sends for a custom food) is accepted, not a validation error', async (t) => {
+  const { call, close } = await startApp(); t.after(() => close());
+  const created = await call('POST', '/api/me/foods', { name: 'Null Source Id Test', calories: 90, protein: 10, carbs: 0, fat: 1 });
+  const res = await call('POST', '/api/me/foods/resolve', { food_id: created.json.id, source_id: null, name: 'Null Source Id Test', grams: 100 });
+  assert.equal(res.status, 200, JSON.stringify(res.json));
+  assert.equal(res.json.totals.energy_kcal, 90);
+});
+
 test('POST /me/foods/resolve: an invalid/unknown food_id returns a clean 404, never falls through to a name search', async (t) => {
   const { call, close } = await startApp(); t.after(() => close());
   const res = await call('POST', '/api/me/foods/resolve', { food_id: 'food_doesNotExist', name: 'rice', grams: 100 });
