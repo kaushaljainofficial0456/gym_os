@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
   phone         TEXT,
   avatar        TEXT,
   active        INTEGER NOT NULL DEFAULT 1,
+  terms_accepted_at TEXT,
+  terms_version     TEXT,
   created_at    TEXT NOT NULL
 );
 

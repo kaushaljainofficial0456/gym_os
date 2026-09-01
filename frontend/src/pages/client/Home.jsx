@@ -139,7 +139,7 @@ export default function Home() {
           ambient field bleed to the device edges while the text stays on
           the page's normal gutter — a backdrop that stops short of the
           edge reads as a misaligned card, not as atmosphere. */}
-      <section className="relative -mx-4 -mt-2 px-4 pt-6 pb-5 overflow-hidden">
+      <section data-tour="home-hero" className="relative -mx-4 -mt-2 px-4 pt-6 pb-5 overflow-hidden">
         <AmbientBackdrop intensity={0.42} maxTier="medium" />
         {/* Fades the field into the page before the content below starts,
             so there is no hard horizontal seam where 3D stops. */}
@@ -237,7 +237,7 @@ export default function Home() {
           they actually have, which is how much is left. */}
       <Reveal delay={80}>
         <Tilt max={4}>
-          <div className="card p-5">
+          <div data-tour="home-fuel" className="card p-5">
             <div className="flex items-start justify-between">
               <Label>Fuel today</Label>
               {plan && (

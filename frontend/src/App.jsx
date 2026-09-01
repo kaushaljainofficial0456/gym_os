@@ -51,6 +51,13 @@ const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 // Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
+const LegalConsent = lazy(() => import('./pages/LegalConsent.jsx'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy.jsx'));
+// Dev-only: onboarding wizard preview for testing scroll-wheel selectors.
+// Gated on import.meta.env.DEV so it tree-shakes out of production builds.
+const DevOnboardingPreview = import.meta.env.DEV
+  ? lazy(() => import('./pages/DevOnboardingPreview.jsx'))
+  : null;
 
 const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
 // Small helper so each route below stays a one-liner instead of repeating
@@ -86,9 +93,12 @@ function needsGymJoin(user) {
 }
 
 export default function App() {
-  const { ready, user, isTrainer, isClient } = useAuth();
+  const { ready, user, isTrainer, isClient, termsAccepted } = useAuth();
   const authed = !!user;
   const pendingGym = needsGymJoin(user);
+  // Must accept terms before accessing the app (but /legal itself must not
+  // redirect back to /legal in an infinite loop).
+  const needsTerms = authed && !termsAccepted;
 
   return (
     <ClickSparkLazy>
@@ -113,15 +123,32 @@ export default function App() {
           dashboard, which would otherwise 404/empty-state on every
           org-scoped call it tries to make. */}
       <Route path="/join" element={
-        <Require ready={ready} ok={() => authed && ['CLIENT', 'TRAINER'].includes(user?.role)}>{page(JoinGym)}</Require>
+        <Require ready={ready} ok={() => authed && !needsTerms && ['CLIENT', 'TRAINER'].includes(user?.role)} fallback={authed && needsTerms ? '/legal' : undefined}>{page(JoinGym)}</Require>
       } />
+      {/* Legal consent — authenticated users who haven't accepted the
+          current terms version are redirected here. Must NOT redirect
+          back to itself. Public routes (/login, /signup, /privacy-policy)
+          are exempt. */}
+      <Route path="/legal" element={
+        <Require ready={ready} ok={() => authed}>
+          {page(LegalConsent)}
+        </Require>
+      } />
+      <Route path="/privacy-policy" element={page(PrivacyPolicy)} />
+      {/* Dev-only onboarding preview — gated by Vite's import.meta.env.DEV.
+          Does NOT exist in production builds (tree-shaken away). */}
+      {import.meta.env.DEV && (
+        <Route path="/dev/onboarding" element={DevOnboardingPreview ? page(DevOnboardingPreview) : <Navigate to="/login" replace />} />
+      )}
       <Route path="/app" element={
         <Require ready={ready} ok={() => authed}>
-          {pendingGym ? <Navigate to="/join" replace /> : isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
+          {needsTerms
+            ? <Navigate to="/legal" replace />
+            : pendingGym ? <Navigate to="/join" replace /> : isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
         </Require>
       } />
       <Route path="/app/trainer" element={
-        <Require ready={ready} ok={() => authed && isTrainer && !pendingGym} fallback={authed ? (pendingGym ? '/join' : '/app/client') : '/login'}><TrainerLayout /></Require>
+        <Require ready={ready} ok={() => authed && isTrainer && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/client') : '/login'}><TrainerLayout /></Require>
       }>
         <Route index element={page(Dashboard)} />
         <Route path="clients" element={page(Clients)} />
@@ -142,7 +169,7 @@ export default function App() {
         <Route path="enterprise/billing" element={page(EnterpriseBilling)} />
       </Route>
       <Route path="/app/client" element={
-        <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : '/app/trainer') : '/login'}><ClientLayout /></Require>
+        <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/trainer') : '/login'}><ClientLayout /></Require>
       }>
         <Route index element={page(Home)} />
         <Route path="workout" element={page(Workout)} />
@@ -155,7 +182,7 @@ export default function App() {
         <Route path="community" element={page(Community)} />
         <Route path="help" element={page(Help)} />
       </Route>
-      <Route path="*" element={<Navigate to={authed ? (pendingGym ? '/join' : isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={authed ? (needsTerms ? '/legal' : pendingGym ? '/join' : isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
     </Routes>
     </ClickSparkLazy>
   );

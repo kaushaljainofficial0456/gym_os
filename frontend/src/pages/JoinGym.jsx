@@ -48,6 +48,9 @@ export default function JoinGym() {
         const res = await api('/enrollment/trainer/join', { method: 'POST', body: JSON.stringify({ payload }) });
         await refreshSession(res.token);
         setDone(true);
+        // Signal TrainerLayout to start the guided app tour on next render.
+        // Consumed once by TrainerLayout and cleared immediately.
+        localStorage.setItem('sk-os-start-tour-next', '1');
         setTimeout(() => nav('/app/trainer', { replace: true }), 1200);
       }
     } catch (e) { setErr(e.message); }

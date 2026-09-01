@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
 import LineNavList from '../../components/LineNavList.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
+import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import '../../components/LineNavList.css';
 
 const NAV = [
@@ -45,9 +46,30 @@ function Icon({ name, size = 19 }) {
 }
 
 export default function TrainerLayout() {
-  const { user, logout, isOwner } = useAuth();
+  const { user, logout, isOwner, isTrainer } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
+
+  // ── GUIDED APP TOUR ──
+  // Triggered when JoinGym.jsx (trainer QR join) or EnterpriseOnboarding.jsx
+  // (owner payment) sets localStorage 'sk-os-start-tour-next' before redirecting
+  // here. The flag is consumed once and cleared immediately so the tour never
+  // re-triggers on a plain page refresh.
+  const [tourActive, setTourActive] = useState(false);
+  useEffect(() => {
+    const flag = localStorage.getItem('sk-os-start-tour-next');
+    if (flag) {
+      localStorage.removeItem('sk-os-start-tour-next');
+      if (!isTourDone(user?.id)) setTourActive(true);
+    }
+  }, [user?.id]);
+
+  // Help page's "Replay app tour" button — same activation path.
+  useEffect(() => {
+    const startTour = () => setTourActive(true);
+    window.addEventListener('sk-os:start-tour', startTour);
+    return () => window.removeEventListener('sk-os:start-tour', startTour);
+  }, []);
   const links = isOwner
     ? [...NAV, { to: '/app/trainer/business', label: 'Business', icon: 'business' }, { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' }]
     : NAV;
@@ -84,6 +106,7 @@ export default function TrainerLayout() {
           onClick={() => setNavOpen(true)}
           aria-label="Open menu"
           aria-expanded={navOpen}
+          data-tour="trainer-hamburger"
           className="w-9 h-9 grid place-items-center rounded-xl border transition-colors active:scale-95"
           style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}>
           <motion.span animate={{ rotate: navOpen ? 90 : 0 }} transition={{ duration: 0.25, ease: [0.22, 0.8, 0.3, 1] }} style={{ display: 'inline-flex' }}>
@@ -181,6 +204,15 @@ export default function TrainerLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* ── GUIDED APP TOUR ── */}
+      <AppTour
+        active={tourActive}
+        userId={user?.id}
+        onDone={() => setTourActive(false)}
+        isTrainer={isTrainer && !isOwner}
+        isOwner={isOwner}
+      />
     </div>
   );
 }
