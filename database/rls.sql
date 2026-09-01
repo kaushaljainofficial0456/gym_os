@@ -368,6 +368,29 @@ BEGIN
   );
 END $$;
 
+-- shared_workouts is the exact same shape as shared_meals directly above
+-- (nullable org_id/client_id, a sender-owned immutable snapshot, a public
+-- unauthenticated preview route in workoutShare.js unaffected by RLS
+-- either way) -- same policy, same reasoning, added when the workout-
+-- sharing feature was merged so it never becomes a repeat of the
+-- community_members/community_workout_shares production incident this
+-- guard exists to prevent (see prodreadiness.test.js's own comment).
+ALTER TABLE shared_workouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_workouts FORCE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS tenant_isolation ON shared_workouts;
+  CREATE POLICY tenant_isolation ON shared_workouts USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR org_id IS NULL
+    OR org_id = current_setting('app.org_id', true)
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR org_id IS NULL
+    OR org_id = current_setting('app.org_id', true)
+  );
+END $$;
+
 -- ---- parent-scoped (org derived via a parent row) ----
 ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_transactions FORCE ROW LEVEL SECURITY;
