@@ -61,15 +61,31 @@ export default function workoutRoutes(db) {
          FROM workout_templates wt
         WHERE wt.org_id = ?
         ORDER BY wt.created_at DESC`, [req.orgId]);
-    const withExercises = [];
-    for (const t of rows) {
-      const ex = await db.q(
-        `SELECT we.*, el.animation_key, el.primary_muscle
-           FROM workout_exercises we
-           LEFT JOIN exercise_library el ON el.id = we.exercise_id
-          WHERE we.template_id = ? ORDER BY we.position`, [t.id]);
-      withExercises.push({ ...t, exercises: ex });
+    // Performance pass: this was a genuine N+1 -- one exercises query per
+    // template, sequentially, inside the loop. Batch-fetch every
+    // template's exercises in ONE query and group in JS instead, same
+    // pattern already used for the client-portal week view (see
+    // tracking.js's own GET /me/week -- "Batch-fetch every scheduled
+    // day's template exercises in one query instead of one sequential
+    // await per day-of-week inside the loop"). A trainer with many saved
+    // templates used to cost one round trip per template on every visit
+    // to this list; now it's exactly 2 queries total regardless of how
+    // many templates exist.
+    const templateIds = rows.map((t) => t.id);
+    const allEx = templateIds.length
+      ? await db.q(
+          `SELECT we.*, el.animation_key, el.primary_muscle
+             FROM workout_exercises we
+             LEFT JOIN exercise_library el ON el.id = we.exercise_id
+            WHERE we.template_id IN (${templateIds.map(() => '?').join(',')})
+            ORDER BY we.template_id, we.position`, templateIds)
+      : [];
+    const byTemplate = new Map();
+    for (const ex of allEx) {
+      if (!byTemplate.has(ex.template_id)) byTemplate.set(ex.template_id, []);
+      byTemplate.get(ex.template_id).push(ex);
     }
+    const withExercises = rows.map((t) => ({ ...t, exercises: byTemplate.get(t.id) || [] }));
     res.json({ templates: withExercises });
   });
 

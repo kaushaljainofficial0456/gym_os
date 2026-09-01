@@ -64,10 +64,15 @@ re-done here; spot-checked live in this pass and still correct.
   single client-side page view.
 - **`/tracking/me/home`**: `user` and `client` lookups ran sequentially
   despite having no dependency on each other.
-- **Admin console (`admin/` package) ships as a single, non-code-split
-  bundle** (241 kB / 72.8 kB gzip, `admin/dist/assets/index-*.js`) — the
-  main frontend has 33 lazy-loaded routes; the admin console has none.
-  Identified, not fixed (see §14 — deliberately not touched, below).
+- **`GET /workouts/templates`**: a genuine N+1 — fetched a trainer's
+  templates, then looped over them running one separate exercises query
+  per template, sequentially. Found and fixed (see §3).
+- **Admin console (`admin/` package) shipped as a single, non-code-split
+  bundle** (241.05 kB / 72.83 kB gzip) — the main frontend has 33
+  lazy-loaded routes; the admin console had none. Found and fixed (§3).
+- **`frontend/public/logo.png`**: a 512×512, 434 kB PNG referenced by its
+  actual display size (28–56 px CSS, `w-7`/`w-11`/`w-14`) on 10+ pages
+  (login, signup, layout header, onboarding). Found and fixed (§3).
 - **Duplicate requests observed on Nutrition page load** (`/me/foods`,
   `/me/meals`, `/tracking/clients/:id/supplements`, `/tracking/me/home`,
   etc. each firing twice). Investigated and confirmed this is
@@ -76,13 +81,31 @@ re-done here; spot-checked live in this pass and still correct.
   duplicate-fetch bug in the app's own code, and does not happen in a
   production build. No fix applied (removing StrictMode would reduce the
   app's own bug-catching ability for no real production benefit).
+- **Nutrition search re-render scope** (explicitly named in the master
+  prompt: "a single food-row update should NOT rerender the entire
+  Nutrition page"): confirmed via code structure, not a profiler —
+  `FoodLogSheet.jsx`'s search `q`/`results` state is local to that
+  component, never lifted into `Nutrition.jsx`. React re-render
+  propagation runs downward from wherever state lives, so typing in the
+  search box was already structurally incapable of re-rendering the
+  parent Nutrition page — nothing to fix here. Individual result rows
+  (capped at 8–25 items) re-rendering on each keystroke is normal,
+  sub-millisecond React reconciliation for a list this size; wrapping
+  them in `React.memo` was considered and not done — no evidence of a
+  real cost to offset the added complexity (see §14).
 
 ## 3. Performance optimizations implemented
 
-| Change | File | Effect |
+| Change | File | Effect (measured) |
 |---|---|---|
 | Removed unused `meals` query from `Promise.all` | `backend/src/routes/tracking.js` | One fewer DB round-trip on every load of the app's single highest-traffic endpoint |
 | Parallelized `user`/`client` lookups | `backend/src/routes/tracking.js` | One fewer sequential round-trip on the same endpoint |
+| Batched `workouts.js`'s N+1 template-exercises loop into 1 query + JS grouping | `backend/src/routes/workouts.js` | N+1 round trips → 2 queries total, regardless of template count. Response shape verified identical via 2 new tests |
+| Route-level code-splitting for the admin console (14 pages behind `React.lazy`, mirroring the main app's own 33-route pattern) | `admin/src/App.jsx` | Main bundle **241.05 kB → 179.62 kB** (59.35 kB gzip, was 72.83 kB) — a measured 25.5% reduction; each page now loads its own small chunk (0.3–8.4 kB) only when visited, instead of all 14 shipping on every login |
+| Resized/recompressed the app logo (512×512 → still 256×256, non-palette PNG at quality 90) | `frontend/public/logo.png` | **444.7 kB → 111.7 kB** — a measured 75% reduction, on an asset referenced across 10+ pages, all of which display it at 28–56 px. Verified visually (side-by-side) before replacing, and live in the running app afterward — no visible quality loss at actual display size |
+
+All four are genuinely measured (file sizes, build output, live browser
+verification), not estimated.
 
 Everything else audited (see §13 below) was **already** optimized from
 earlier work on this codebase, and is called out as verified-fine rather
@@ -123,6 +146,7 @@ than re-implemented:
 
 - `backend/src/routes/tracking.js` — `/me/home` query fixes.
 - `backend/src/routes/admin.js` — revenue-trend window fix.
+- `backend/src/routes/workouts.js` — `/workouts/templates` N+1 → batched.
 - `backend/src/validate.js` — `source_id` nullable, `foodCreate`/
   `foodUpdate` upper bounds.
 - `frontend/src/api.js` — surfaces `issues` in thrown error messages.
@@ -130,8 +154,11 @@ than re-implemented:
   at 3 call sites; earlier `+`/`✓`/toast work (prior turn).
 - `frontend/src/pages/client/Home.jsx` — shared `sumEatenTotals()` +
   rounding instead of a duplicated, unrounded inline sum.
+- `frontend/public/logo.png` — resized/recompressed in place.
+- `admin/src/App.jsx` — route-level `React.lazy()` + `Suspense`, 14 pages.
 - `backend/test/meFoodsResolve.test.js` — 1 new test (null `source_id`).
 - `backend/test/businessRevenueTrend.test.js` — new file, 3 tests.
+- `backend/test/workoutTemplatesBatch.test.js` — new file, 2 tests.
 
 ## 5. Database migrations
 
@@ -149,6 +176,11 @@ needed.
   "6 months" (a correctness fix that happens to touch the same query the
   performance audit was inspecting) — no new query added, same query,
   wider `WHERE paid_at >= ?` bound.
+- `/workouts/templates`: N queries (1 + 1-per-template) → 2 queries
+  total, regardless of how many templates a trainer has saved. Same
+  batch-then-group-in-JS pattern already established elsewhere in this
+  codebase (`GET /me/week`'s own day-of-week exercise lookups), reused
+  rather than inventing a new approach.
 
 ## 7. Frontend rendering improvements
 
@@ -165,11 +197,18 @@ bottleneck was gathered in this pass.
 
 ## 8. Bundle / network improvements
 
-No bundle-size change from this pass's edits (confirmed: `Nutrition-*.js`
-chunk is 125.90 kB after vs. 126.21 kB before this pass's edits — the
-~0.3 kB difference is the `|| undefined` guards and comment text added,
-not a structural change). Main frontend bundle-size profile is unchanged
-from the pre-existing, already-code-split baseline (see §9 for numbers).
+- **Main frontend**: no structural bundle-size change from this pass's
+  Nutrition/validation edits (`Nutrition-*.js` chunk: 125.90 kB after vs.
+  126.21 kB before — the ~0.3 kB difference is `|| undefined` guards and
+  comments, not a structural change). Was already comprehensively
+  code-split (33 routes) from earlier work; nothing further done here.
+- **Admin console**: genuinely restructured — see §3's table. Main
+  bundle 241.05 kB → 179.62 kB (25.5% smaller), 14 pages now load their
+  own chunk on demand instead of shipping together on every login.
+- **Logo asset**: 444.7 kB → 111.7 kB (75% smaller), served on 10+ pages.
+- **`/workouts/templates`, `/tracking/me/home`**: fewer round trips per
+  request (see §6) — smaller effective network *time*, not payload size
+  (the JSON response shape itself is unchanged in both cases).
 
 ## 9. Before/after measurements
 
@@ -184,8 +223,9 @@ from the pre-existing, already-code-split baseline (see §9 for numbers).
 - `Nutrition-*.js` chunk: 125.90 kB gzip 30.30 kB (was 126.21 kB / 30.40
   kB before this pass's 3 small guard-clause edits).
 
-**Admin console build** (`admin/`, production): clean, 241.05 kB / 72.83
-kB gzip, single bundle (no code-splitting present — see §2/§14).
+**Admin console build** (`admin/`, production): main bundle **241.05 kB
+→ 179.62 kB** (72.83 → 59.35 kB gzip), plus 14 new small on-demand page
+chunks (0.33–8.40 kB each) that did not exist before this pass — see §3.
 
 **Backend**: 1020/1023 tests passing both before and after this pass's
 changes (the 3 new tests added by this pass, plus everything that already
@@ -213,6 +253,10 @@ as such rather than inventing a millisecond figure I did not measure.
   month even though the underlying query now spans 6 months; a gym with
   zero payments *this* month but real prior history is not shown as "no
   revenue" in the trend.
+- `backend/test/workoutTemplatesBatch.test.js` — new file, 2 tests: two
+  templates' exercises are never cross-contaminated and stay in position
+  order after the N+1→batched rewrite; a template with zero exercises
+  returns `[]`, not `undefined`.
 
 (Nutrition Phase-1 items already had their own regression tests from the
 immediately preceding turn: 10 tests across `meFoodsResolve.test.js` and
@@ -220,7 +264,7 @@ immediately preceding turn: 10 tests across `meFoodsResolve.test.js` and
 
 ## 11. Full test result
 
-`npm test` (backend, Node's built-in test runner): **1020/1023 passing.**
+`npm test` (backend, Node's built-in test runner): **1022/1025 passing.**
 1 failure, 2 skipped — the failure is the same pre-existing
 `community.test.js` leaderboard-aggregation flake seen throughout this
 entire session, unrelated to any change made in this pass.
@@ -228,7 +272,13 @@ entire session, unrelated to any change made in this pass.
 ## 12. Production build result
 
 - `frontend/`: `npm run build` — clean, no errors.
-- `admin/`: `npm run build` — clean, no errors.
+- `admin/`: `npm run build` — clean, no errors, now emits 15 chunks
+  instead of 1 (see §3/§9).
+- Admin console live-verified after the code-splitting change: logged in
+  as the seeded `SUPER_ADMIN`, navigated Dashboard → Gyms →
+  Reconciliation; each page's own chunk (`Gyms.jsx`, etc.) confirmed
+  fetched on demand via the network log, zero console errors, all three
+  pages rendered their real data correctly.
 - Live browser verification (local dev, both servers running):
   - The exact reported "paneer" custom-food quick-log now succeeds
     end-to-end (`resolve → 200` → `meals/log → 201` → background
@@ -252,35 +302,36 @@ Being explicit about what was **not** independently re-measured or fixed
 in this pass, per this prompt's own "if exact timings cannot be measured,
 say so honestly" instruction:
 
-- No systematic N+1 audit was completed for every route in the app —
-  only the highest-traffic client endpoint (`/me/home`) and a sampling of
-  `Promise.all` sites across `console.js`, `admin.js`, `clients.js`,
-  `tracking.js` (all found correct/already-optimal on inspection). A few
-  write-loop patterns were found (see §14) and deliberately left alone.
-- No bundle-size reduction was attempted for the 3 chunks already over
-  500 kB (`three.module`, `charts`, `index`) — real, but pre-existing and
-  outside what a small, low-risk change could safely address.
+- N+1 audit is now reasonably broad but not exhaustive: all 10 files
+  originally flagged by a repo-wide grep for `for (...) { await db.q...`
+  were individually read and classified (2 genuine read-N+1s found —
+  `/me/home`'s wasted query, `/workouts/templates` — both fixed; 2
+  write-loops found and deliberately left, see §14; 1 legitimate
+  cursor-pagination bulk job; the rest clean on inspection). Routes with
+  no loop at all (the majority of the app) were not individually
+  re-audited beyond the `Promise.all` sampling in §3/original pass.
+- No bundle-size reduction was attempted for the main frontend's 3
+  chunks already over 500 kB (`three.module`, `charts`, `index`) — real,
+  but pre-existing and outside what a small, low-risk change could
+  safely address (Three.js and the charting library are large by
+  nature; splitting them further is a real architecture change).
 - No React re-render profiling was run (no Profiler session available in
-  this environment) — §7's finding is a code-reading observation, not a
-  measured bottleneck.
-- The admin console's lack of route-level code-splitting (§2) was
-  identified but not implemented — see §14.
-- Asset optimization (images/icons/animations, Section 12 of the master
-  prompt) was not audited in this pass — no evidence-gathering was done
-  here at all, and this is reported as unexamined rather than "checked,
-  found fine."
+  this environment). §2's Nutrition-search finding is a structural
+  code-reading argument (state locality), not a measured bottleneck —
+  reported as such, not as "profiled and confirmed."
 - Serverless/cold-start specifics (Section 24 — Vercel route module
   weight, expensive module-init work) were not audited in this pass.
 
 ## 14. Optimizations deliberately NOT made
 
-- **Admin console code-splitting**: identified as genuinely missing
-  (single 241 kB bundle, no `React.lazy()` anywhere in that package), but
-  not implemented — doing this safely means reading and restructuring
-  that package's own routing first, and there is no evidence yet that its
-  current load time is actually a problem for anyone; a real architecture
-  touch deserves its own reviewed pass, not a rushed addition at the tail
-  of an already-large one.
+- **Wrapping Nutrition search-result rows in `React.memo`**: considered
+  after re-reading the master prompt's explicit "a single food-row
+  update should NOT rerender the entire page" line, but not done — the
+  list is already capped at 8–25 items, the containing state is already
+  local to `FoodLogSheet.jsx` (not lifted to the page), and there is no
+  Profiler evidence of a real re-render cost to justify the added
+  complexity. Exactly the "blind memoization" this prompt's own Section
+  8 warns against.
 - **Batch-rewriting the alert-reconciliation write loop**
   (`backend/src/services/atRisk.js`, called from the trainer dashboard):
   currently issues one `UPDATE`/`INSERT` per client per fired/resolved
@@ -297,6 +348,13 @@ say so honestly" instruction:
   its existing "silently skip a stale/foreign id" behavior via a batched
   `WHERE id IN (...)` rewrite outweighs the benefit for this call
   frequency.
+- **Batch-rewriting `intelligence.js`'s barcode/multi-entry commit loop**
+  (`entries.forEach`-style, one ownership-check `SELECT` per entry): same
+  reasoning as the share-loop above — bounded by how many items a user
+  selected in one scan/commit action, not a page load, and each
+  iteration's ownership check ("never commit a food the client can't
+  see") is exactly the kind of per-row security logic that shouldn't be
+  restructured without dedicated test coverage for the batched version.
 - **Schema-level `.min(0)` on `foodCreate`/`foodUpdate`'s
   calories/protein/carbs/fat**: deliberately NOT added alongside the
   upper-bound fix. The route already rejects negative/impossible macro
@@ -333,6 +391,11 @@ workout, AI-provider-selection, gym-owner, trainer, or client behavior
 was changed except the two explicit correctness bugs listed in §1 (the
 revenue-trend window and the food-macro overflow cap) — both are bug
 fixes that make already-intended behavior work correctly, not changes to
-what that behavior is supposed to be. Every fix in this pass was
-verified against the existing test suite (1020/1023, same pre-existing
-unrelated flake) before being considered done.
+what that behavior is supposed to be. The workout-templates and admin
+console changes (§3) are pure performance restructuring — same response
+shapes, same rendered pages, verified via new tests and live navigation
+respectively. The logo swap is the same image, recompressed — not a
+design change; verified visually before and after, and live in the
+running app. Every fix in this pass was verified against the existing
+test suite (1022/1025, same pre-existing unrelated flake) before being
+considered done.
