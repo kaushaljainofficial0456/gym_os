@@ -91,7 +91,20 @@ export const schemas = {
     // metadata about which AI produced the number, not a trust upgrade.
     ai_provider: z.string().max(40).optional(),
     ai_model: z.string().max(80).optional(),
-    ai_confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional()
+    ai_confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional(),
+    // The ACTUAL logged quantity/unit (e.g. 245 / 'g' for a resolved
+    // portion, 1 / 'serving' for a Custom Macros entry) -- optional
+    // because not every caller has a meaningful one (a bare Recent
+    // quick-add is a macro snapshot with no re-derivable weight), but
+    // populating it wherever it IS known is what lets
+    // PUT /me/meal-logs/:id later scale quantity proportionally from a
+    // REAL baseline instead of a fabricated "100" (see that route's own
+    // fallback comment -- a previously-undiagnosed bug where "Edit
+    // Quantity" silently scaled from the wrong baseline for any entry
+    // logged without one, found during a live end-to-end verification
+    // pass).
+    quantity: z.number().finite().positive().max(100000).optional(),
+    unit: z.string().max(30).optional()
   }),
   // ---- My Diet: saved foods + saved meal templates + today's log entries ----
   // These routes previously did type coercion inline (Number()/String()
@@ -109,6 +122,12 @@ export const schemas = {
     protein: z.number().finite().optional(),
     carbs: z.number().finite().optional(),
     fat: z.number().finite().optional(),
+    // Optional-detail macros (Part 14's "optional" list) -- the `foods`
+    // table has always had these columns; this is the first route to let
+    // a client actually populate them for a Custom Macros entry.
+    fiber: z.number().finite().nonnegative().optional(),
+    sugar: z.number().finite().nonnegative().optional(),
+    sodium: z.number().finite().nonnegative().optional(),
     category: z.string().max(40).optional()
   }),
   // Partial update -- every field optional, exactly like the route's own
@@ -120,7 +139,10 @@ export const schemas = {
     calories: z.number().finite().optional(),
     protein: z.number().finite().optional(),
     carbs: z.number().finite().optional(),
-    fat: z.number().finite().optional()
+    fat: z.number().finite().optional(),
+    fiber: z.number().finite().nonnegative().optional(),
+    sugar: z.number().finite().nonnegative().optional(),
+    sodium: z.number().finite().nonnegative().optional()
   }),
   foodResolveQuantity: z.object({
     source_id: z.string().max(100).optional(),
@@ -192,7 +214,16 @@ export const schemas = {
   // and pg both happily bind without erroring).
   mealLogEntryUpdate: z.object({
     quantity: z.number().finite().positive().max(100000),
-    unit: z.string().max(30).optional()
+    // .nullable() matters here, not just .optional(): meal_logs.unit is a
+    // nullable column, and any log NOT created from a meal template (quick-
+    // log, portion picker, Custom Macros, AI estimate, Recent quick-add --
+    // i.e. most individual food logs) has a real `null` unit. The edit
+    // modal always resends `{quantity, unit: log.unit}` verbatim, so a
+    // plain `.optional()` here (accepts undefined, REJECTS null) 422'd on
+    // every single one of those -- a real, previously-undiagnosed bug that
+    // broke "edit a logged entry's quantity" for the common case, found
+    // during a live end-to-end verification pass.
+    unit: z.string().max(30).nullable().optional()
   }),
   waterLog: z.object({ date: z.string().optional(), litres: z.number().min(0).max(20) }),
   sleepLog: z.object({

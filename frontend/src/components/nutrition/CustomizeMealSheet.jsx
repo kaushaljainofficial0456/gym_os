@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
 import SavingOverlay from './SavingOverlay.jsx';
+import MealFoodRow from './MealFoodRow.jsx';
+import CustomFoodBadge from './CustomFoodBadge.jsx';
 
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
+const makeRowId = () => `row_${Math.random().toString(36).slice(2)}`;
 
 /**
  * CUSTOMIZE MY MEALS — build a reusable meal from individual foods.
@@ -13,6 +17,20 @@ const r1 = (n) => Math.round((n || 0) * 10) / 10;
  * nutrition engine here). The template is created lazily on the first
  * food added (needs a name first); if the sheet is closed before that,
  * nothing is left behind in My Diet.
+ *
+ * MULTI-ROW WORKSPACE (Parts 18, 21-22): several independent food-entry
+ * rows can be open at once, each a <MealFoodRow> owning its OWN search /
+ * custom-macros / AI-fallback state (including its own Search-Food vs
+ * Custom-Macros toggle, Part 19). Rows never share input state with each
+ * other -- adding a food in row 2 doesn't touch what's half-typed in row
+ * 1. Every row calls back up to the THREE functions below (addFoodItem /
+ * addCustomFoodItem / addAIItem), which stay the single place that talks
+ * to mealId/items/totals -- exactly one source of truth for the meal
+ * being built, no matter how many entry rows are open. A row resets
+ * itself to blank after a successful add (Part 21 -- "search, add,
+ * search next" with no workspace-wide reset); "+ Add another food"
+ * appends a fresh blank row instead of the same row being reused
+ * sequentially (Part 18).
  */
 export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }) {
   const [name, setName] = useState('');
@@ -20,41 +38,33 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   const [items, setItems] = useState([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [servings, setServings] = useState(1);
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [rowIds, setRowIds] = useState(() => [makeRowId()]);
   const [saveStage, setSaveStage] = useState(null); // null | 'saving' | 'success'
   const [saveLabel, setSaveLabel] = useState('');
-  // AI fallback -- same Tier-4 estimator every other food-AI entry point
-  // uses (POST /me/foods/ai-estimate), never a second nutrition engine.
-  const [aiEstimating, setAiEstimating] = useState(false);
-  const [aiPreview, setAiPreview] = useState(null); // the estimate, awaiting "Add to Meal"
-  const [aiGrams, setAiGrams] = useState('100');
-  const [aiErr, setAiErr] = useState('');
+  const nameRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     setName(''); setMealId(null); setItems([]); setTotals({ calories: 0, protein: 0, carbs: 0, fat: 0 });
-    setServings(1); setQ(''); setResults([]); setSaveStage(null);
-    setAiEstimating(false); setAiPreview(null); setAiGrams('100'); setAiErr('');
+    setServings(1); setSaveStage(null); setRowIds([makeRowId()]);
+    setTimeout(() => nameRef.current?.focus(), 120);
   }, [open]);
 
+  // Escape exits the whole sheet -- there's no nested "screen" here to
+  // step back through one level at a time (unlike FoodLogSheet's portion
+  // picker/AI review/barcode confirm); each MealFoodRow's own local state
+  // is transient entry-in-progress, not a navigation level.
   useEffect(() => {
-    const term = q.trim();
-    if (term.length < 2) { setResults([]); setSearching(false); return undefined; }
-    setSearching(true);
-    let dead = false;
-    const h = setTimeout(() => {
-      api(`/me/foods/search?q=${encodeURIComponent(term)}`)
-        .then((r) => { if (!dead) setResults((r.foods || []).slice(0, 8)); })
-        .catch(() => { if (!dead) setResults([]); })
-        .finally(() => { if (!dead) setSearching(false); });
-    }, 220);
-    return () => { dead = true; clearTimeout(h); };
-  }, [q]);
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
+
+  const addRow = () => setRowIds((ids) => [...ids, makeRowId()]);
+  const removeRow = (id) => setRowIds((ids) => (ids.length > 1 ? ids.filter((x) => x !== id) : ids));
 
   const refreshItems = async (id) => {
     const r = await api(`/me/meals/${id}/items`);
@@ -71,70 +81,59 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
     return created.id;
   };
 
-  const addFood = async (food) => {
-    if (!name.trim()) { toast('Name your meal first'); return; }
-    setAdding(true);
-    try {
-      const id = await ensureMeal();
-      await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: food.source_id || food.id, name: food.name, quantity: 1 }) });
-      await refreshItems(id);
-      setQ(''); setResults([]);
-      toast(`+ ${food.name} added`);
-    } catch (e) {
-      toast(e.message || 'Could not add that food');
-    }
-    setAdding(false);
+  // The three callbacks every <MealFoodRow> below calls into. Each is
+  // awaited by the row and expected to THROW on failure (rather than
+  // toast-and-swallow) so the row that triggered it can show its own
+  // inline error -- these stay the single place that talks to
+  // mealId/items/totals no matter how many rows are open at once.
+  const addFoodItem = async (food) => {
+    if (!name.trim()) throw new Error('Name your meal first');
+    const id = await ensureMeal();
+    await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: food.source_id || food.id, name: food.name, quantity: 1 }) });
+    await refreshItems(id);
+    toast(`+ ${food.name} added`);
+  };
+
+  // Custom Macros row: create a private "MY FOODS" row (same route My
+  // Diet's own editor and FoodLogSheet's Custom Macros mode both use),
+  // then add IT to the meal via the ordinary food_id path -- so it lands
+  // as a real, correctly-sourced ('database') item, not something faked
+  // up as an AI estimate just to fit that shape.
+  const addCustomFoodItem = async ({ name: foodName, ...nums }) => {
+    if (!name.trim()) throw new Error('Name your meal first');
+    const created = await api('/me/foods', { method: 'POST', body: JSON.stringify({ name: foodName, ...nums }) });
+    const id = await ensureMeal();
+    await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: created.id, name: foodName, quantity: 1 }) });
+    await refreshItems(id);
+    toast(`+ ${foodName} added`);
   };
 
   // AI fallback for a food the database search couldn't (well enough)
-  // match -- uses the EXACT original query the user typed, never the
-  // highest-scoring result, never a different food.
-  const estimateWithAI = async () => {
-    const query = q.trim();
-    if (!query) return;
-    setAiEstimating(true); setAiErr(''); setAiPreview(null);
-    try {
-      const res = await api('/me/foods/ai-estimate', { method: 'POST', body: JSON.stringify({ query }) });
-      if (!res.ok) { setAiErr(res.reason || 'Could not produce an AI estimate.'); return; }
-      setAiPreview(res);
-      setAiGrams(String(res.serving?.estimated_weight_g || 100));
-    } catch (e) {
-      setAiErr(e.message || 'Could not produce an AI estimate.');
-    }
-    setAiEstimating(false);
-  };
-
-  const addAIEstimateToMeal = async () => {
-    if (!name.trim()) { toast('Name your meal first'); return; }
-    if (!aiPreview) return;
+  // match -- the row passes back its OWN preview + grams; this stays the
+  // only place that turns it into a real meal_items row.
+  const addAIItem = async (aiPreview, aiGrams) => {
+    if (!name.trim()) throw new Error('Name your meal first');
     const grams = Math.max(1, Number(aiGrams) || aiPreview.serving?.estimated_weight_g || 100);
     const baseGrams = aiPreview.serving?.estimated_weight_g || 100;
     const factor = grams / baseGrams;
-    setAdding(true);
-    try {
-      const id = await ensureMeal();
-      await api(`/me/meals/${id}/items`, {
-        method: 'POST',
-        body: JSON.stringify({
-          ai_estimate: {
-            name: aiPreview.food_name, grams,
-            calories: Math.round((aiPreview.totals.calories || 0) * factor),
-            protein_g: r1((aiPreview.totals.protein || 0) * factor),
-            carbs_g: r1((aiPreview.totals.carbs || 0) * factor),
-            fat_g: r1((aiPreview.totals.fat || 0) * factor),
-            confidence: aiPreview.confidence,
-            provider: aiPreview.ai?.provider,
-            model: aiPreview.ai?.model,
-          },
-        }),
-      });
-      await refreshItems(id);
-      toast(`+ ${aiPreview.food_name} added`);
-      setAiPreview(null); setQ(''); setResults([]);
-    } catch (e) {
-      toast(e.message || 'Could not add that estimate');
-    }
-    setAdding(false);
+    const id = await ensureMeal();
+    await api(`/me/meals/${id}/items`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ai_estimate: {
+          name: aiPreview.food_name, grams,
+          calories: Math.round((aiPreview.totals.calories || 0) * factor),
+          protein_g: r1((aiPreview.totals.protein || 0) * factor),
+          carbs_g: r1((aiPreview.totals.carbs || 0) * factor),
+          fat_g: r1((aiPreview.totals.fat || 0) * factor),
+          confidence: aiPreview.confidence,
+          provider: aiPreview.ai?.provider,
+          model: aiPreview.ai?.model,
+        },
+      }),
+    });
+    await refreshItems(id);
+    toast(`+ ${aiPreview.food_name} added`);
   };
 
   const updateItemQty = async (item, quantity) => {
@@ -178,76 +177,50 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
     toast(`${name} saved & logged ✓`);
   });
 
-  return (
+  // Portal straight to <body> -- see FoodLogSheet.jsx's own comment on
+  // why: ClientLayout.jsx's page wrapper carries `.anim-fadeUp` (a
+  // fill-mode 'both' animation whose end-state transform never clears),
+  // which silently makes this sheet's "fixed inset-0" relative to that
+  // ancestor instead of the true viewport. A portal sidesteps the whole
+  // containing-block question without touching the shared animation CSS.
+  return createPortal((
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center anim-fadeIn"
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+         role="dialog" aria-modal="true" aria-label="Create new meal">
       <div className="card w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Create New Meal</div>
-            <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}>✕</button>
+            <button onClick={onClose} aria-label="Close"
+                    className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}>✕</button>
           </div>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Meal name, e.g. Post Workout Bowl"
-                 className="input w-full !py-2.5 text-[14px] font-semibold" />
+          <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder="Meal name, e.g. Post Workout Bowl"
+                 aria-label="Meal name" className="input w-full !py-2.5 text-[14px] font-semibold" />
         </div>
 
         <div className="px-4 pb-4 space-y-3">
-          <div className="relative">
-            <input value={q} onChange={(e) => { setQ(e.target.value); setAiPreview(null); setAiErr(''); }} placeholder="+ Add food…" className="input w-full !py-2.5 text-[13px]" />
-            {(searching || results.length > 0 || (!searching && q.trim().length >= 2)) && !aiPreview && (
-              <div className="mt-1.5 space-y-1">
-                {searching && !results.length && <div className="text-[11px] py-1" style={{ color: t.faint }}>Searching…</div>}
-                {!searching && !results.length && q.trim().length >= 2 && (
-                  <div className="text-[11px] py-1" style={{ color: t.faint }}>No close match found in SK OS for "{q.trim()}".</div>
-                )}
-                {results.map((f) => (
-                  <button key={f.id || f.source_id} onClick={() => addFood(f)} disabled={adding}
-                          className="w-full text-left rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ border: `1px solid ${t.border}` }}>
-                    <span className="min-w-0 truncate font-grotesk text-[12px] font-semibold" style={{ color: t.ink }}>{f.name}</span>
-                    <span className="shrink-0 font-grotesk text-[10px]" style={{ color: t.mute }}>{f.calories == null ? '—' : Math.round(f.calories)} kcal/100g</span>
-                  </button>
-                ))}
-                {/* AI fallback in BOTH branches -- has-matches and zero-matches
-                    -- exact original query, never the top result's name. */}
-                {!searching && q.trim().length >= 2 && (
-                  <button onClick={estimateWithAI} disabled={aiEstimating}
-                          className="w-full text-left rounded-xl px-3 py-2 flex items-center gap-2 font-grotesk text-[11px] font-semibold"
-                          style={{ border: `1px dashed ${t.border}`, color: t.accent }}>
-                    ✨ {aiEstimating ? 'Estimating…' : `Estimate "${q.trim()}" with AI`}
+          <div className="space-y-2">
+            {rowIds.map((id) => (
+              <div key={id} className="relative">
+                <MealFoodRow t={t} onAddFood={addFoodItem} onAddCustom={addCustomFoodItem} onAddAI={addAIItem} />
+                {rowIds.length > 1 && (
+                  // Outer button is a real 32x32 tap target (Part 33);
+                  // the visible badge stays a small 20x20 circle inside it
+                  // so the corner-badge look doesn't change.
+                  <button onClick={() => removeRow(id)} aria-label="Remove this food row"
+                          className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full grid place-items-center">
+                    <span className="w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold leading-none"
+                          style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}>✕</span>
                   </button>
                 )}
-                {aiErr && <div className="text-[11px]" style={{ color: t.danger }}>{aiErr}</div>}
               </div>
-            )}
-
-            {aiPreview && (
-              <div className="mt-1.5 rounded-xl p-3 space-y-2 anim-fadeIn" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 font-grotesk text-[12px] font-bold truncate" style={{ color: t.ink }}>{aiPreview.food_name}</div>
-                  <span className="text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: t.accentDim, color: t.accent }}>
-                    {aiPreview.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ SK OS Estimated' : '✨ AI Estimated'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <input type="number" min="1" value={aiGrams} onChange={(e) => setAiGrams(e.target.value)}
-                           aria-label="Grams" className="w-14 text-[11px] rounded px-1.5 py-1 tabular-nums" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} />
-                    <span className="text-[10px]" style={{ color: t.faint }}>g</span>
-                  </div>
-                  <div className="text-right font-grotesk text-[11px]" style={{ color: t.mute }}>
-                    ~{Math.round((aiPreview.totals.calories || 0) * (Number(aiGrams) || 0) / (aiPreview.serving?.estimated_weight_g || 100))} kcal · confidence: {aiPreview.confidence}
-                  </div>
-                </div>
-                {aiPreview.assumptions?.length > 0 && (
-                  <div className="text-[9px] leading-relaxed" style={{ color: t.faint }}>Estimated assumptions: {aiPreview.assumptions.join(' · ')}</div>
-                )}
-                <div className="flex gap-2">
-                  <button onClick={() => setAiPreview(null)} className="flex-1 py-1.5 rounded-lg font-grotesk text-[10px] font-semibold" style={{ border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
-                  <button onClick={addAIEstimateToMeal} disabled={adding} className="flex-1 py-1.5 rounded-lg font-grotesk text-[10px] font-bold" style={{ background: t.accent, color: 'var(--accent-contrast)' }}>Add to Meal</button>
-                </div>
-              </div>
-            )}
+            ))}
+            <button onClick={addRow}
+                    className="w-full py-2 rounded-xl font-grotesk text-[11px] font-semibold"
+                    style={{ border: `1px dashed ${t.border}`, color: t.accent }}>
+              + Add another food
+            </button>
           </div>
 
           {items.length > 0 && (
@@ -259,9 +232,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                   <span className="min-w-0 flex-1 font-grotesk text-[12px] font-semibold" style={{ color: t.ink }}>
                     <span className="flex items-center gap-1.5">
                       <span className="truncate">{it.name}</span>
-                      <span className="shrink-0 text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full" style={{ background: isAI ? t.accentDim : `${t.fat}18`, color: isAI ? t.accent : t.fat }}>
-                        {isAI ? '✨ AI Estimated' : '✓ Database'}
-                      </span>
+                      <CustomFoodBadge source={it.source} t={t} />
                     </span>
                     {/* AI items store quantity as GRAMS directly (the AI's own
                         natural unit); database items store a SERVINGS
@@ -315,5 +286,5 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
 
       <SavingOverlay open={!!saveStage} stage={saveStage} label={saveStage === 'success' ? 'Meal Saved' : saveLabel} mode="overlay" />
     </div>
-  );
+  ), document.body);
 }

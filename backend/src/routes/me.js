@@ -233,26 +233,53 @@ export default function meRoutes(db) {
     });
   });
 
-  // Confirm and save nutrition targets as a plan
+  // Confirm and save nutrition targets as a plan.
+  //
+  // `calories` is deliberately NEVER trusted from the request -- it's
+  // derived server-side from protein/carbs/fat via the canonical 4/4/9
+  // (Atwater) conversion, the ONE place this route computes it. This is
+  // the single source of truth the target-editing UI's macro inputs feed
+  // into (NutritionTargetSetup.jsx has no calories input at all -- protein/
+  // carbs/fat are the only editable fields, calories is always a derived
+  // display), so a stale or mismatched client-supplied calories figure can
+  // never be persisted, and the saved plan is provably internally
+  // consistent -- previously the four fields were saved as independent,
+  // unrelated numbers with no cross-check at all.
+  const MACRO_BOUNDS = {
+    protein: { min: 20, max: 500, label: 'Protein' },
+    carbs: { min: 20, max: 800, label: 'Carb' },
+    fat: { min: 15, max: 300, label: 'Fat' },
+  };
+  const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
+
   r.post('/nutrition/targets/confirm', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { calories, protein, carbs, fat } = req.body || {};
-    if (!calories || !protein || !carbs || !fat) {
-      return res.status(400).json({ error: 'All macro fields are required' });
+    const body = req.body || {};
+    const values = {};
+    for (const [key, { min, max, label }] of Object.entries(MACRO_BOUNDS)) {
+      const raw = body[key];
+      const n = typeof raw === 'number' ? raw : Number(raw);
+      // Rejects missing, non-numeric strings, NaN, and +/-Infinity in one
+      // check -- Number.isFinite is false for all of them, and unlike a
+      // bare `!raw` check (the previous validation), it does NOT let a
+      // non-empty-but-non-numeric string like "abc" silently become NaN
+      // three lines later and get persisted as a broken plan.
+      if (!Number.isFinite(n)) return res.status(422).json({ error: `${label} target must be a number` });
+      if (n < min || n > max) return res.status(422).json({ error: `${label} target must be between ${min} and ${max}g` });
+      values[key] = Math.round(n);
     }
-    const cal = Math.max(500, Math.min(Number(calories), 10000));
-    const pro = Math.max(20, Math.min(Number(protein), 500));
-    const carb = Math.max(20, Math.min(Number(carbs), 800));
-    const fatV = Math.max(15, Math.min(Number(fat), 300));
+    const cal = Math.round(
+      values.protein * KCAL_PER_G.protein + values.carbs * KCAL_PER_G.carbs + values.fat * KCAL_PER_G.fat
+    );
 
     const id = 'np_' + Math.random().toString(36).slice(2, 10);
     await db.run(
       `INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, pro, carb, fatV, now()]
+      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, values.protein, values.carbs, values.fat, now()]
     );
     track(db, 'nutrition_plan_created', req.user.org, req.user.sub, { client_id: c.id, source: 'client_self' });
-    res.json({ ok: true, plan: { calories: cal, protein: pro, carbs: carb, fat: fatV } });
+    res.json({ ok: true, plan: { calories: cal, protein: values.protein, carbs: values.carbs, fat: values.fat } });
   });
 
   // ---------------- dashboard preferences ----------------
@@ -679,19 +706,23 @@ export default function meRoutes(db) {
 
   r.post('/foods', validate(schemas.foodCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { name, unit, serving, calories, protein, carbs, fat, category } = req.body || {};
+    const { name, unit, serving, calories, protein, carbs, fat, fiber, sugar, sodium, category } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Food name is required' });
     // Reject invalid macro values outright (negative, impossible combos) --
     // never silently clamp or drop them, since the client would see a
     // "saved" food that quietly logs the wrong number every time it's used.
-    const check = validateFoodRecord({ name, energy_kcal: calories, protein_g: protein, carb_g: carbs, fat_g: fat });
+    // fiber/sugar/sodium are optional (Part 14) but still validated when
+    // present -- e.g. fiber folds into the same "can't exceed 100g per
+    // 100g" sanity check as protein/carbs/fat.
+    const check = validateFoodRecord({ name, energy_kcal: calories, protein_g: protein, carb_g: carbs, fat_g: fat, fiber_g: fiber, sugar_g: sugar, sodium_mg: sodium });
     if (!check.valid) return res.status(400).json({ error: 'Invalid food data', details: check.errors });
     const fId = id('food');
     await db.run(
-      `INSERT INTO foods (id, org_id, client_id, name, unit, serving, calories, protein, carbs, fat, category, is_global)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,0)`,
+      `INSERT INTO foods (id, org_id, client_id, name, unit, serving, calories, protein, carbs, fat, fiber, sugar, sodium, category, is_global)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`,
       [fId, c.org_id, c.id, String(name).trim().slice(0, 80), unit ? String(unit).slice(0, 30) : null,
        serving ? String(serving).slice(0, 60) : null, num(calories), num(protein), num(carbs), num(fat),
+       fiber != null ? num(fiber) : null, sugar != null ? num(sugar) : null, sodium != null ? num(sodium) : null,
        category ? String(category).slice(0, 40) : null]);
     track(db, 'custom_food_created', req.user.org, req.user.sub, { client_id: c.id });
     res.json({ id: fId });
@@ -705,7 +736,7 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const food = await db.q1('SELECT * FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!food) return res.status(404).json({ error: 'Food not found' });
-    const { name, serving, unit, calories, protein, carbs, fat } = req.body || {};
+    const { name, serving, unit, calories, protein, carbs, fat, fiber, sugar, sodium } = req.body || {};
     const sets = [], params = [];
     if (name !== undefined) { sets.push('name = ?'); params.push(String(name).trim().slice(0, 80)); }
     if (serving !== undefined) { sets.push('serving = ?'); params.push(String(serving).slice(0, 60)); }
@@ -714,6 +745,9 @@ export default function meRoutes(db) {
     if (protein !== undefined) { sets.push('protein = ?'); params.push(num(protein)); }
     if (carbs !== undefined) { sets.push('carbs = ?'); params.push(num(carbs)); }
     if (fat !== undefined) { sets.push('fat = ?'); params.push(num(fat)); }
+    if (fiber !== undefined) { sets.push('fiber = ?'); params.push(num(fiber)); }
+    if (sugar !== undefined) { sets.push('sugar = ?'); params.push(num(sugar)); }
+    if (sodium !== undefined) { sets.push('sodium = ?'); params.push(num(sodium)); }
     if (sets.length) { params.push(food.id); await db.run(`UPDATE foods SET ${sets.join(', ')} WHERE id = ?`, params); }
     res.json({ ok: true });
   });
@@ -722,6 +756,50 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     await db.run('DELETE FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     res.json({ ok: true });
+  });
+
+  // ---------------- recent foods (Part 40) ----------------
+  // Reuses EXISTING log history (meal_logs) rather than a new table --
+  // "recent" here means "distinct foods you've actually logged before",
+  // reconstructed from their own most-recent snapshot. meal_logs has no
+  // sub-day timestamp column (only a day-granularity `date`), so ordering
+  // is day-level; within the same day there's no reliable cross-database
+  // (SQLite + Postgres) tiebreaker available without a schema migration,
+  // which is out of scope for a read-only convenience feature -- day-level
+  // recency is honest and sufficient for "things you've logged recently".
+  // `source = 'plan'` rows are excluded: those are pre-scheduled meal-plan
+  // entries with their own dedicated UI ("Today's Eaten Meals"), not
+  // things the user found via food search/AI/custom-macros, so they'd be
+  // noise here rather than a genuine "log this again" shortcut.
+  // `meal_template_id IS NOT NULL` rows are ALSO excluded (Part 42): a
+  // saved MEAL logged via "Log Today" writes source='custom', which would
+  // otherwise slip past the 'plan' check and show a whole SAVED MEAL
+  // (e.g. "Morning oats + milk") in what's meant to be a list of
+  // individual FOODS -- confusing at best (Saved Meals already has its
+  // own UI in My Diet) and actively wrong at worst (quick-adding it here
+  // would create a new individual food entry carrying the meal's
+  // aggregate totals, mislabeled as one food). `meal_template_id` is the
+  // structural signal for "this came from a template", checked directly
+  // rather than trusting the `source` string alone to keep meaning this.
+  // `times_logged` is returned alongside so the client can ALSO sort by
+  // frequency (Part 41) from this exact same query -- a second read is
+  // not worth it for what would only reorder the same rows.
+  r.get('/foods/recent', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 8));
+    const rows = await db.q(
+      `SELECT name, source, calories, protein, carbs, fat, date, times_logged FROM (
+         SELECT ml.name, ml.source, ml.calories, ml.protein, ml.carbs, ml.fat, ml.date,
+                COUNT(*) OVER (PARTITION BY LOWER(ml.name)) as times_logged,
+                ROW_NUMBER() OVER (PARTITION BY LOWER(ml.name) ORDER BY ml.date DESC) as rn
+         FROM meal_logs ml
+         WHERE ml.client_id = ? AND ml.eaten = 1 AND ml.source != 'plan' AND ml.meal_template_id IS NULL
+       ) t
+       WHERE rn = 1
+       ORDER BY date DESC, times_logged DESC
+       LIMIT ?`,
+      [c.id, limit]);
+    res.json({ recent: rows });
   });
 
   // NOTE: a second, simpler `GET /foods/search` used to be registered here,
@@ -836,7 +914,10 @@ export default function meRoutes(db) {
     if (!log) return res.status(404).json({ error: 'Log entry not found' });
     if (quantity === undefined || quantity === null) return res.status(400).json({ error: 'quantity is required' });
     const newQty = Math.max(0.1, Number(quantity));
-    const newUnit = unit !== undefined ? String(unit) : log.unit;
+    // `unit === null` is a real, intended value (see validate.js's
+    // mealLogEntryUpdate comment) -- must be preserved as an actual NULL,
+    // not coerced by String(null) into the literal string "null".
+    const newUnit = unit === undefined ? log.unit : unit === null ? null : String(unit);
 
     // Try to recalculate from food database if the log has a reference food
     let newCalories = log.calories;

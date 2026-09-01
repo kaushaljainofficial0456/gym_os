@@ -11,6 +11,7 @@ import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
+import { sumEatenTotals } from '../../nutritionCalc.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -432,7 +433,12 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
           <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
           <div className="w-12 h-12 mx-auto rounded-full grid place-items-center text-xl mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30` }}>🗑️</div>
           <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>Remove from today's intake?</div>
-          <div className="text-[11px]" style={{ color: t.mute }}>{log.name} · {log.quantity || 100}{log.unit || 'g'} · {log.calories} kcal</div>
+          {/* Only show a quantity when one is genuinely known -- a bare
+              `|| 100` fallback here would display a fabricated weight for
+              any entry logged before quantity/unit were tracked (or a
+              Recent-foods snapshot replay, which never has one), stating
+              a number as fact that was never actually captured. */}
+          <div className="text-[11px]" style={{ color: t.mute }}>{log.name}{log.quantity ? ` · ${log.quantity}${log.unit || 'g'}` : ''} · {log.calories} kcal</div>
         </div>
         <div className="px-5 pb-5 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
@@ -469,6 +475,10 @@ export default function Nutrition() {
   const [showAddSupplement, setShowAddSupplement] = useState(false);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
+  // Lifted out of FoodLogSheet's own local state (Custom Macros needs to
+  // survive a remount of the sheet -- see FoodLogSheet.jsx's own comment
+  // on why `mode` is a controlled prop, not local state).
+  const [foodLogMode, setFoodLogMode] = useState('search');
 
   // Today's Eaten Meals edit mode -- [-]/[Edit Quantity] per row, "Save
   // Changes" is a confirming exit flourish (each action already persisted
@@ -493,10 +503,7 @@ export default function Nutrition() {
   const mealState = meals || data?.nutrition?.meals || [];
   const waterState = water ?? (data ? data.water.litres : 0);
 
-  const eaten = mealState.filter((m) => m.eaten).reduce((s, m) => ({
-    calories: s.calories + m.calories, protein: s.protein + m.protein,
-    carbs: s.carbs + m.carbs, fat: s.fat + m.fat
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const eaten = sumEatenTotals(mealState);
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
 
@@ -566,6 +573,16 @@ export default function Nutrition() {
         ai_provider: entry.ai_provider || undefined,
         ai_model: entry.ai_model || undefined,
         ai_confidence: entry.ai_confidence || undefined,
+        // The REAL logged quantity/unit, when the caller knows one (a
+        // resolved gram weight, or "1 serving" for Custom Macros) --
+        // without this, every individually-logged food stored quantity
+        // as NULL, so PUT /me/meal-logs/:id's later proportional-scaling
+        // edit had no real baseline to scale FROM (it silently assumed
+        // "originally 100", which was almost never true). Omitted
+        // entirely (not sent as null) when the caller genuinely has no
+        // meaningful quantity to report (e.g. a bare Recent replay).
+        quantity: entry.quantity || undefined,
+        unit: entry.unit || undefined,
       }),
     });
     home.reload();
@@ -760,7 +777,11 @@ export default function Nutrition() {
       <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
 
       {/* ══════ TOAST ══════ */}
-      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
+      {/* z-[70], above every sheet's z-50 -- a toast fired while, say, the
+          Food Log Sheet stays open after a quick-log (see FoodLogSheet's
+          own onAdd(entry, { keepOpen: true }) path) must still be visible
+          on top of it, not silently painted underneath. */}
+      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
 
       {/* ══════ NUTRITION TARGET SETUP ══════ */}
       <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload(); }} />
@@ -773,12 +794,18 @@ export default function Nutrition() {
       <FoodLogSheet
         open={foodLogSheetOpen}
         autoScan={foodLogAutoScan}
+        mode={foodLogMode}
+        setMode={setFoodLogMode}
         onClose={() => { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }}
-        onAdd={async (entry) => {
+        onAdd={async (entry, opts) => {
           await logEntry(entry);
-          setFoodLogSheetOpen(false);
-          setFoodLogAutoScan(false);
-          setToast('Food logged ✓');
+          // `opts?.keepOpen` -- a quick-log path (currently: Custom Macros)
+          // that wants to stay on the sheet for the next entry rather than
+          // exiting back to the dashboard. Backward compatible: every
+          // existing call site that doesn't pass a second argument keeps
+          // closing exactly as before.
+          if (!opts?.keepOpen) { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }
+          setToast(opts?.keepOpen ? `${entry.name} logged ✓` : 'Food logged ✓');
         }}
       />
 

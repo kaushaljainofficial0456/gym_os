@@ -185,6 +185,38 @@ test('meal log with source=ai and estimate=true is persisted', async (t) => {
   assert.equal(row.estimate, 1);
 });
 
+// Real bug found during a live end-to-end verification pass: this route
+// used to omit quantity/unit from its INSERT entirely, so EVERY
+// individually-logged food (quick-log, portion picker, AI estimate,
+// Custom Macros, Recent quick-add -- everything except a saved-MEAL-
+// template log, which goes through a different route) stored
+// quantity=NULL. PUT /me/meal-logs/:id's later proportional-scaling
+// edit then had no real baseline and silently fell back to a fabricated
+// "100", making "Edit Quantity" scale from the wrong number for the
+// common case. Fixed by accepting and persisting the caller's real
+// quantity/unit when it has one.
+test('quantity/unit are persisted when the caller provides them (fixes "Edit Quantity" scaling from a fabricated baseline)', async (t) => {
+  const { db, call, close } = await startMealLogApi();
+  t.after(() => close());
+  const payload = { name: 'Maggi', calories: 941, protein: 20, carbs: 146, fat: 31, quantity: 245, unit: 'g' };
+  const r = await call('POST', '/api/nutrition/clients/c1/meals/log', payload);
+  assert.equal(r.status, 201);
+  const row = await db.q1('SELECT * FROM meal_logs WHERE client_id = ? ORDER BY rowid DESC LIMIT 1', ['c1']);
+  assert.equal(row.quantity, 245);
+  assert.equal(row.unit, 'g');
+});
+
+test('quantity/unit are stored as NULL, not a fabricated default, when the caller has no real one to report', async (t) => {
+  const { db, call, close } = await startMealLogApi();
+  t.after(() => close());
+  const payload = { name: 'Recent Replay', calories: 300, protein: 10, carbs: 40, fat: 8 };
+  const r = await call('POST', '/api/nutrition/clients/c1/meals/log', payload);
+  assert.equal(r.status, 201);
+  const row = await db.q1('SELECT * FROM meal_logs WHERE client_id = ? ORDER BY rowid DESC LIMIT 1', ['c1']);
+  assert.equal(row.quantity, null);
+  assert.equal(row.unit, null);
+});
+
 test('cross-organization client access is rejected', async (t) => {
   const { call, close } = await startMealLogApi();
   t.after(() => close());

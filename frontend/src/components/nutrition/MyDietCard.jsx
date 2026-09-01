@@ -85,7 +85,7 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
         protein: Math.round((food.protein || 0) * factor * 10) / 10,
         carbs: Math.round((food.carbs || 0) * factor * 10) / 10,
         fat: Math.round((food.fat || 0) * factor * 10) / 10,
-        source: 'manual',
+        source: 'manual', quantity: amount, unit: 'g',
       });
       toast(`+ ${food.name} added`);
     } catch (e) {

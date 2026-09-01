@@ -8,6 +8,24 @@ import { estimateFood } from '../services/foodEstimator.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
 
+// Single source of truth for "sum eaten macros over a set of meal_logs
+// rows" (Part 37) -- nutrition-summary and history below used to each
+// carry their own copy of this exact reduce, with only a comment
+// promising they matched. Both call this now, so they structurally
+// CAN'T drift apart the way two independently-maintained copies could.
+// Only sums `eaten=1` rows; a caller with already-filtered rows (both
+// call sites here) or unfiltered rows (this checks `eaten` itself) both
+// work correctly either way.
+function sumEatenTotals(rows) {
+  return rows.reduce((s, r) => {
+    if (!r.eaten) return s;
+    return {
+      calories: s.calories + r.calories, protein: s.protein + r.protein,
+      carbs: s.carbs + r.carbs, fat: s.fat + r.fat,
+    };
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+}
+
 export default function nutritionRoutes(db) {
   const r = Router();
   // Clients log their own meals; plan management is trainer/owner-only (per-route).
@@ -173,11 +191,12 @@ export default function nutritionRoutes(db) {
     if (!client) return;
     const b = req.body;
     await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id('mlg'), client.id, b.meal_id || null, b.date || dayKey(), b.slot || 'snack', b.name,
        b.calories, b.protein, b.carbs, b.fat, b.eaten ? 1 : 0, b.source, b.estimate ? 1 : 0,
-       b.ai_provider || null, b.ai_model || null, b.ai_confidence || null]);
+       b.ai_provider || null, b.ai_model || null, b.ai_confidence || null,
+       b.quantity ?? null, b.unit ?? null]);
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'meal_logged', data: { clientId: client.id, source: b.source } });
     if (b.source === 'ai_estimated' || b.source === 'ai_estimated_user_adjusted') {
       // Distinct from the generic 'meal_logged' event above so Tier-4
@@ -206,10 +225,7 @@ export default function nutritionRoutes(db) {
     const plan = await db.q1('SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]);
     const logs = await db.q(
       'SELECT * FROM meal_logs WHERE client_id = ? AND date = ? AND eaten = 1', [client.id, d]);
-    const eaten = logs.reduce((s, l) => ({
-      calories: s.calories + l.calories, protein: s.protein + l.protein,
-      carbs: s.carbs + l.carbs, fat: s.fat + l.fat
-    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    const eaten = sumEatenTotals(logs);
     res.json({
       date: d,
       plan: plan ? { calories: plan.calories, protein: plan.protein, carbs: plan.carbs, fat: plan.fat } : null,
@@ -252,17 +268,8 @@ export default function nutritionRoutes(db) {
     for (const row of rows) {
       let day = byDate.get(row.date);
       if (!day) {
-        day = { date: row.date, calories: 0, protein: 0, carbs: 0, fat: 0, logged: true, logs: [] };
+        day = { date: row.date, logged: true, logs: [] };
         byDate.set(row.date, day);
-      }
-      // Totals count only eaten=1 rows -- matches nutrition-summary above
-      // and the Home page's "Fuel today" ring, so the same day never shows
-      // two disagreeing calorie figures depending on which screen it's
-      // viewed from. Un-eaten rows still appear in `logs` (a genuine
-      // historical log either way), just excluded from the day's totals.
-      if (row.eaten) {
-        day.calories += row.calories; day.protein += row.protein;
-        day.carbs += row.carbs; day.fat += row.fat;
       }
       day.logs.push({
         id: row.id, name: row.name, calories: row.calories, protein: row.protein,
@@ -271,6 +278,13 @@ export default function nutritionRoutes(db) {
         eaten: !!row.eaten, source: row.source
       });
     }
+    // Totals count only eaten=1 rows -- matches nutrition-summary above
+    // and the Home page's "Fuel today" ring via the SAME sumEatenTotals()
+    // (Part 37), so the same day can never show two disagreeing calorie
+    // figures depending on which screen it's viewed from. Un-eaten rows
+    // still appear in `logs` (a genuine historical log either way), just
+    // excluded from the day's totals.
+    const days = [...byDate.values()].map((day) => ({ ...day, ...sumEatenTotals(day.logs) }));
     res.json({
       from, to,
       target: plan ? { calories: plan.calories, protein: plan.protein, carbs: plan.carbs, fat: plan.fat } : null,
@@ -279,7 +293,7 @@ export default function nutritionRoutes(db) {
       // requested, so an absent date unambiguously means "nothing logged"
       // rather than the server needing to materialize empty rows for
       // every unlogged day in a 6-month range.
-      days: [...byDate.values()]
+      days
     });
   });
 
