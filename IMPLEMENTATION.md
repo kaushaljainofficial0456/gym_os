@@ -123,6 +123,14 @@ used to remount the page). The unsaved value was still there afterward —
 proof the page never remounted, since an actual remount would have reset
 every input to its default. Test values cleaned up afterward.
 
+The admin console (`admin/`) turned out to have its **own separate copy**
+of `useFetch` (`admin/src/utils.js`, deliberately kept in sync with the
+main one per its own header comment) that predated this fix entirely.
+Brought it back in sync with the same `reload({ silent: true })`
+mechanism, and fixed the one call site using it
+(`FoodIntelligence.jsx`'s review-queue verify/revert action, which was
+flashing an extra skeleton row above already-loaded data on every click).
+
 ## 2. Performance bottlenecks found
 
 - **`/tracking/me/home`**: one wasted query per call (see #6 above) — the

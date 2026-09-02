@@ -1,23 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Mirrors frontend/src/utils.js's own useFetch exactly (kept as its own
 // copy for the same reason api.js is -- see that file's header comment).
+// Performance/bug-fix pass: brought back in sync after that copy gained
+// reload({ silent: true }) -- an opt-in refetch that skips the loading
+// toggle, so a page/section gated on `loading` doesn't flash to a
+// skeleton (or, worse, fully unmount) for every small in-page action.
+// Every existing bare reload() call keeps its old behavior unchanged.
 export function useFetch(fn, deps = []) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
+  const silentNext = useRef(false);
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    const silent = silentNext.current;
+    silentNext.current = false;
+    if (!silent) setLoading(true);
     fn()
       .then((d) => { if (alive) { setData(d); setError(null); } })
       .catch((e) => { if (alive) setError(e); })
-      .finally(() => { if (alive) setLoading(false); });
+      .finally(() => { if (alive && !silent) setLoading(false); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
-  const reload = useCallback(() => setTick((t) => t + 1), []);
+  const reload = useCallback((opts) => {
+    if (opts?.silent) silentNext.current = true;
+    setTick((t) => t + 1);
+  }, []);
   return { data, loading, error, reload };
 }
 
