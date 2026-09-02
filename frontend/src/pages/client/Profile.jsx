@@ -183,7 +183,11 @@ export default function Profile() {
       });
       const res = await api('/me/avatar', { method: 'POST', body: JSON.stringify({ image: b64 }) });
       setLocalAvatar(res.avatar);
-      home.reload();
+      // silent: true -- this page gates its whole render on `home.loading`
+      // (below); a bare reload() would unmount everything for the
+      // duration of the refetch, same class of bug already fixed for
+      // Nutrition.jsx (see useFetch's own comment on why).
+      home.reload({ silent: true });
       setToast('Profile photo updated ✓');
     } catch (err) { setToast(err.message || 'Upload failed'); }
     e.target.value = '';
@@ -193,7 +197,7 @@ export default function Profile() {
     try {
       await api('/me/avatar', { method: 'DELETE' });
       setLocalAvatar(null);
-      home.reload();
+      home.reload({ silent: true });
       setRemoveConfirmOpen(false);
       setToast('Profile photo removed');
     } catch (err) { setToast(err.message || 'Failed to remove photo'); }
@@ -263,7 +267,7 @@ export default function Profile() {
     try {
       await api('/me/metrics', { method: 'POST', body: JSON.stringify({ ...mForm, target: mForm.target === '' ? null : Number(mForm.target) }) });
       setMForm({ name: '', unit: '', frequency: 'weekly', target: '', type: 'number' });
-      metrics.reload();
+      metrics.reload({ silent: true });
       setToast('Metric created');
     } catch (e) { setToast(e.message); }
     setSavingM(false);
@@ -278,7 +282,7 @@ export default function Profile() {
         target: editingM.target === '' ? null : Number(editingM.target), type: editingM.type
       }) });
       setEditingM(null);
-      metrics.reload();
+      metrics.reload({ silent: true });
       setToast('Metric updated');
     } catch (e) { setToast(e.message); }
     setSavingM(false);
@@ -288,7 +292,7 @@ export default function Profile() {
     setSavingM(true);
     try {
       await api(`/me/metrics/${mId}/entries`, { method: 'POST', body: JSON.stringify({ value: val ? 1 : 0 }) });
-      metrics.reload();
+      metrics.reload({ silent: true });
       setToast(val ? 'Done ✓' : 'Logged');
     } catch (e) { setToast(e.message); }
     setSavingM(false);
@@ -297,7 +301,7 @@ export default function Profile() {
   const deleteEntry = async (mId, eId) => {
     try {
       await api(`/me/metrics/${mId}/entries/${eId}`, { method: 'DELETE' });
-      metrics.reload();
+      metrics.reload({ silent: true });
       setToast('Entry removed');
     } catch (e) { setToast(e.message); }
   };
@@ -309,14 +313,14 @@ export default function Profile() {
     try {
       await api(`/me/metrics/${mId}/entries`, { method: 'POST', body: JSON.stringify({ value: v, date: mLog[mId]?.date || undefined }) });
       setMLog((x) => ({ ...x, [mId]: {} }));
-      metrics.reload();
+      metrics.reload({ silent: true });
       setToast('Logged');
     } catch (e) { setToast(e.message); }
     setSavingM(false);
   };
 
   const deleteMetric = async (mId) => {
-    await api(`/me/metrics/${mId}`, { method: 'DELETE' }).then(() => { metrics.reload(); }).catch((e) => setToast(e.message));
+    await api(`/me/metrics/${mId}`, { method: 'DELETE' }).then(() => { metrics.reload({ silent: true }); }).catch((e) => setToast(e.message));
   };
 
   const savePrefs = async () => {
@@ -345,7 +349,7 @@ export default function Profile() {
         goal: gForm.goal, target_weight: Number(gForm.targetWeight) || null,
         goal_date: gForm.goalDate || null, experience: gForm.experience, equipment: gForm.equipment
       }) });
-      home.reload();
+      home.reload({ silent: true });
       setToast('Goal updated');
     } catch (e) { setToast(e.message); }
     setSavingG(false);
@@ -588,7 +592,7 @@ export default function Profile() {
                     .filter(([, v]) => v !== '' && v != null)
                     .map(([key, value]) => ({ key, value }));
                   await api('/intel/coach/memory', { method: 'PUT', body: JSON.stringify({ entries }) });
-                  coachMem.reload();
+                  coachMem.reload({ silent: true });
                   setToast('Coach preferences saved');
                 } catch (e) { setToast(e.message); }
                 setSavingPrefs2(false);

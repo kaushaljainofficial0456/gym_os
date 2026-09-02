@@ -85,10 +85,22 @@ export async function api(path, opts = {}) {
     // sending the real reason (e.g. "calories: Number must be less than
     // or equal to 10000") in `issues`, just never surfaced. One fix here
     // fixes it everywhere, with no per-call-site changes needed.
+    //
+    // `details` is the SAME class of bug on a second, differently-named
+    // field -- found live right after fixing `issues`: POST /me/foods'
+    // own validateFoodRecord() check (negative macros, an impossible
+    // protein+carb+fat+fiber total, etc.) returns { error: 'Invalid food
+    // data', details: [...] }, a 400 with its own array of real reasons
+    // that was equally being discarded down to the bare "Invalid food
+    // data". Same fold, same reasoning, different key name.
     const base = data.error || data.message || 'Request failed';
-    const detail = Array.isArray(data.issues) && data.issues.length ? ` — ${data.issues.join('; ')}` : '';
+    const issueList = Array.isArray(data.issues) && data.issues.length ? data.issues
+      : Array.isArray(data.details) && data.details.length ? data.details
+      : null;
+    const detail = issueList ? ` — ${issueList.join('; ')}` : '';
     const err = new Error(base + detail);
     err.issues = data.issues;
+    err.details = data.details;
     err.status = res.status;
     // Machine-readable failure reason some endpoints attach (e.g. barcode
     // lookup's 'not_found' vs 'network_error' vs 'invalid_barcode') so a

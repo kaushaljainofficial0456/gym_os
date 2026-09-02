@@ -1029,6 +1029,26 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                        placeholder="e.g. Homemade Paneer" autoFocus
                        className="input w-full !py-2 mt-1" aria-label="Food name" />
               </label>
+              {/* Clarifies the numbers below are PER 100 G, not "per this
+                  whole meal/serving" -- a real, live bug report traced back
+                  to exactly this ambiguity: nothing on the form said so,
+                  and the backend's own physical-plausibility check
+                  (protein+carbs+fat+fiber can't exceed 100g per 100g of
+                  food) correctly rejects a serving-sized entry with a
+                  now-readable error (see api.js's own fix), but the
+                  clearer fix is not needing that error in the first
+                  place. Confirmed against this codebase's own established
+                  convention: the manual-barcode product form (below, a
+                  different screen) explicitly converts whatever a person
+                  types against a real serving size into per-100g before
+                  storing it ("entered values are per-serving; store
+                  per-100g like every other source") -- every `foods` row
+                  in this app is per-100g internally, Custom Macros just
+                  never had a serving-size field to convert FROM, so it
+                  quietly required per-100g input without ever saying so. */}
+              <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
+                Enter values <b>per 100&nbsp;g</b> of this food — the same way every other food here is measured.
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 {[['calories', 'Calories *'], ['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (
                   <label key={key} className="block">

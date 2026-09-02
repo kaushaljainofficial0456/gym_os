@@ -25,7 +25,11 @@ export default function Alerts() {
   const action = async (id, act) => {
     try {
       await api(`/alerts/${id}/action`, { method: 'POST', body: JSON.stringify({ action: act }) });
-      alerts.reload();
+      // silent: true -- this page gates its whole render on
+      // `alerts.loading` (above); a bare reload() would unmount
+      // everything for the duration of the refetch, same class of bug
+      // already fixed for Nutrition.jsx.
+      alerts.reload({ silent: true });
     } catch (e) { /* surface via reload */ }
   };
 

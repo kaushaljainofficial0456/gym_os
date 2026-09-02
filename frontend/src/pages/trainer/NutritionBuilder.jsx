@@ -57,7 +57,11 @@ export default function NutritionBuilder() {
     try {
       await api('/nutrition/plans', { method: 'POST', body: JSON.stringify(payload()) });
       setToast('Plan saved');
-      await plans.reload();
+      // silent: true -- this page gates its whole render on
+      // `plans.loading || clients.loading` (above); a bare reload()
+      // would unmount everything for the duration of the refetch, same
+      // class of bug already fixed for Nutrition.jsx.
+      await plans.reload({ silent: true });
       setEditing(null);
     } catch (e) { setToast(e.message); }
     setSaving(false);

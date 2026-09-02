@@ -37,7 +37,11 @@ export default function EnterpriseQR() {
         ? await api('/enrollment/qr/client', { method: 'POST', body: JSON.stringify({ membershipPlanId: planId }) })
         : await api('/enrollment/qr/trainer', { method: 'POST' });
       setIssued(res);
-      list.reload();
+      // silent: true -- this section renders `list.loading ? <Spinner/>
+      // : ...` inline (below); a bare reload() would flash it to a
+      // spinner and back, same class of bug already fixed for
+      // Nutrition.jsx.
+      list.reload({ silent: true });
     } catch (e) { setToast(e.message); }
     finally { setBusy(false); }
   };
@@ -45,7 +49,7 @@ export default function EnterpriseQR() {
   const revoke = async (id) => {
     try {
       await api(`/enrollment/qr/${id}/revoke`, { method: 'POST' });
-      setToast('QR revoked'); list.reload();
+      setToast('QR revoked'); list.reload({ silent: true });
       if (issued?.id === id) setIssued(null);
     } catch (e) { setToast(e.message); }
   };

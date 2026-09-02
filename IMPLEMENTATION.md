@@ -56,6 +56,72 @@ re-done here; spot-checked live in this pass and still correct.
    full-body grep before removing, not assumed). Also parallelized two
    independent lookups (`user`, `client`) that were sequential for no
    reason.
+7. **Custom Macros could fail with a bare "Invalid food data"** — reported
+   live by the user. `POST /me/foods`'s own `validateFoodRecord()` check
+   (protein+carbs+fat+fiber can't exceed 100g per 100g of food — a real,
+   correct physical-plausibility rule, not a bug) returns its reasons in a
+   `details` array, a *second* instance of the exact class of bug just
+   fixed for `issues`: the frontend's `api()` only folded `issues` into
+   the error message, not `details`, so this route's own real reason was
+   equally being discarded. Extended the same fold to cover both keys.
+   Root cause of *why* users hit this rule at all: nothing on the Custom
+   Macros form said the values are per 100g (confirmed against this
+   codebase's own established convention — the manual-barcode form
+   explicitly converts a real serving size to per-100g before storing,
+   "entered values are per-serving; store per-100g like every other
+   source" — Custom Macros just never had a serving field to convert
+   from, so it silently required per-100g input). Added a one-line
+   clarification to both Custom Macros forms (`FoodLogSheet.jsx` and
+   `MealFoodRow.jsx`) rather than weakening the validation rule.
+
+## 1b. App-wide reload/remount fix (the single biggest change in this pass)
+
+The Nutrition "+ reloads the whole page" bug (fixed in the previous turn via
+`useFetch`'s new `reload({ silent: true })`) turned out to be a systemic
+pattern, not a Nutrition-specific one. A repo-wide sweep for the shape
+`X.reload()` paired with `if (X.loading) return <Spinner/>` (or an inline
+`loading ? <Spinner/> : (...)`) found the identical bug, unfixed, across
+nearly every interactive page in the app:
+
+- **`Workout.jsx`** — scheduling today's session, the exercise-toggle
+  failure path, resuming an already-completed workout, and finishing a
+  workout all remounted the page (including, for the last one, an
+  in-progress `execute` session with its own local set/rep state).
+- **`Business.jsx`** (gym owner) — adding a package, subscription, or
+  payment, saving gym settings, and every membership action (suspend/
+  cancel/renew) remounted the whole dashboard.
+- **`Profile.jsx`** (client) — avatar upload/removal, every metric create/
+  edit/log/delete (6 call sites), goal updates, and coach-preference saves.
+- **`Community.jsx`** — joining/leaving the community, sharing a workout,
+  unsharing.
+- **`Membership.jsx`** — the post-payment confirmation reload could flash
+  the page to a spinner right as the "success" screen was trying to show.
+- **`ClientProfile.jsx`** (trainer) — 4 separate sub-tabs (Equipment,
+  Nutrition, AI Coach, Messages), each with its own smaller-scoped version
+  of the same bug (a card flashing to a spinner instead of the whole page).
+- **`WorkoutBuilder.jsx`**, **`NutritionBuilder.jsx`** — saving a template/
+  plan, duplicating a template, adding a library exercise.
+- **`EnterpriseBilling.jsx`**, **`EnterpriseQR.jsx`** — emailing an invoice,
+  upgrading/adding capacity, completing a payment, generating/revoking a QR.
+- **`Alerts.jsx`**, **`Messages.jsx`** (trainer) — resolving an alert,
+  sending a message.
+- **`ClientLayout.jsx`** — the one-time onboarding-complete transition.
+
+Every one of these call sites now uses `reload({ silent: true })`, the same
+opt-in, backward-compatible mechanism built for Nutrition — genuine
+error-retry buttons (`onRetry={x.reload}`) were left bare throughout, since
+a blocking spinner is the correct behavior there. This was a full sweep,
+not a sample: every `.reload()` call in `frontend/src` was individually
+read and classified; the only ones left unchanged are `ErrorBoundary.jsx`'s
+crash-recovery `location.reload()` (a real browser reload, unrelated) and
+genuine Retry buttons.
+
+**Live-verified** on the highest-frequency case (Workout set completion):
+typed a distinctive, unsaved value into one exercise's set-2 reps field,
+then marked a *different* set done (which fires the exact reload path that
+used to remount the page). The unsaved value was still there afterward —
+proof the page never remounted, since an actual remount would have reset
+every input to its default. Test values cleaned up afterward.
 
 ## 2. Performance bottlenecks found
 
@@ -149,13 +215,22 @@ than re-implemented:
 - `backend/src/routes/workouts.js` — `/workouts/templates` N+1 → batched.
 - `backend/src/validate.js` — `source_id` nullable, `foodCreate`/
   `foodUpdate` upper bounds.
-- `frontend/src/api.js` — surfaces `issues` in thrown error messages.
+- `frontend/src/api.js` — surfaces `issues` **and `details`** in thrown
+  error messages.
 - `frontend/src/components/FoodLogSheet.jsx` — `source_id || undefined`
-  at 3 call sites; earlier `+`/`✓`/toast work (prior turn).
+  at 3 call sites; per-100g clarification on the Custom Macros form;
+  earlier `+`/`✓`/toast work (prior turn).
+- `frontend/src/components/nutrition/MealFoodRow.jsx` — same per-100g
+  clarification on its own Custom Macros form.
 - `frontend/src/pages/client/Home.jsx` — shared `sumEatenTotals()` +
   rounding instead of a duplicated, unrounded inline sum.
 - `frontend/public/logo.png` — resized/recompressed in place.
 - `admin/src/App.jsx` — route-level `React.lazy()` + `Suspense`, 14 pages.
+- **App-wide `reload({ silent: true })` rollout** (see §1b) —
+  `frontend/src/pages/client/{ClientLayout,Community,Membership,Profile,
+  Progress,Workout}.jsx`, `frontend/src/pages/trainer/{Alerts,Business,
+  ClientProfile,EnterpriseBilling,EnterpriseQR,Messages,NutritionBuilder,
+  WorkoutBuilder}.jsx` — 14 files, ~30 call sites.
 - `backend/test/meFoodsResolve.test.js` — 1 new test (null `source_id`).
 - `backend/test/businessRevenueTrend.test.js` — new file, 3 tests.
 - `backend/test/workoutTemplatesBatch.test.js` — new file, 2 tests.
@@ -227,10 +302,11 @@ bottleneck was gathered in this pass.
 → 179.62 kB** (72.83 → 59.35 kB gzip), plus 14 new small on-demand page
 chunks (0.33–8.40 kB each) that did not exist before this pass — see §3.
 
-**Backend**: 1020/1023 tests passing both before and after this pass's
-changes (the 3 new tests added by this pass, plus everything that already
-passed). The 1 failure is `community.test.js:226`, a pre-existing flake
-(`1800 !== 9000`) unrelated to anything touched this session — present
+**Backend**: 1022/1025 tests passing (the 5 new tests added across this
+pass — 1 `meFoodsResolve`, 3 `businessRevenueTrend`, 2
+`workoutTemplatesBatch` — plus everything that already passed). The 1
+failure is `community.test.js:226`, a pre-existing flake (`1800 !== 9000`)
+unrelated to anything touched this session — present
 identically before this pass, and present across every prior test run
 this entire multi-phase session.
 
@@ -401,9 +477,12 @@ say so honestly" instruction:
 **Not redesigned.** No color, layout, typography, spacing, icon,
 navigation, modal, animation, or visual-hierarchy change was made
 anywhere in this pass. Every change was either backend query/validation
-logic, or a frontend data-correctness fix (rounding, a `|| undefined`
-guard, reusing an existing shared helper) — none of which alter what
-anything looks like or how it's arranged on screen.
+logic, a frontend data-correctness fix (rounding, a `|| undefined` guard,
+reusing an existing shared helper), or the app-wide `silent: true` reload
+rollout (§1b) — which changes *when a spinner appears*, not what anything
+looks like. The two one-line copy additions ("Enter values per 100 g…")
+use the exact same text style already used for the sentence right below
+them on the same form — a clarification, not a new visual element.
 
 ## 16. No photo recognition confirmation
 

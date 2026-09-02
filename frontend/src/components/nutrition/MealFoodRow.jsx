@@ -209,6 +209,11 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
         <div className="space-y-2">
           <input value={customForm.name} onChange={(e) => setCustomField('name', e.target.value)}
                  placeholder="What's this food called?" className="input w-full !py-2 text-[12px]" />
+          {/* Same clarification as FoodLogSheet.jsx's own Custom Macros
+              form -- see its comment for the real bug this closes. */}
+          <div className="text-[9px]" style={{ color: t.faint }}>
+            Values are <b>per 100 g</b> of this food.
+          </div>
           <div className="grid grid-cols-2 gap-1.5">
             {[['calories', 'Calories'], ['protein', 'Protein (g)'], ['carbs', 'Carbs (g)'], ['fat', 'Fat (g)']].map(([key, label]) => (
               <input key={key} type="number" min="0" step="any" value={customForm[key]}

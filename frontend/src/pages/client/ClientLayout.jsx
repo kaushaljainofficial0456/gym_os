@@ -269,7 +269,10 @@ export default function ClientLayout() {
           initialName={user?.name || ''}
           onComplete={() => {
             setOnboardingDone(true);
-            homeFetch.reload();
+            // silent: true -- avoids a spinner flash on the exact frame
+            // the app tour is about to start, for the same reason as
+            // every other reload() call fixed this pass.
+            homeFetch.reload({ silent: true });
             // Setup just finished for a brand-new user → start the guided
             // app tour automatically (skipped/completed tours are remembered
             // per-user by AppTour and never auto-start again).

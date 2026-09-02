@@ -32,7 +32,11 @@ export default function Progress() {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });
       setToast('Weight logged ✓');
       setWeightInput('');
-      p.reload(); home.reload();
+      // silent: true -- this page gates its whole render on
+      // `p.loading || home.loading` (below); a bare reload() would
+      // unmount everything for the duration of the refetch, same class
+      // of bug already fixed for Nutrition.jsx.
+      p.reload({ silent: true }); home.reload({ silent: true });
     } catch (e) { setToast(e.message); }
     setSaving(false);
   };

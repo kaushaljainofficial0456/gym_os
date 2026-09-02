@@ -88,9 +88,13 @@ export default function Community() {
         method: 'PUT',
         body: JSON.stringify({ enabled: !isMember }),
       });
-      membershipFetch.reload();
-      lbFetch.reload();
-      feedFetch.reload();
+      // silent: true -- this page gates its whole render on
+      // `membershipFetch.loading` (below); a bare reload() would unmount
+      // everything for the duration of the refetch, same class of bug
+      // already fixed for Nutrition.jsx (see useFetch's own comment).
+      membershipFetch.reload({ silent: true });
+      lbFetch.reload({ silent: true });
+      feedFetch.reload({ silent: true });
       showToast(isMember ? 'Left community' : 'Welcome to the community!');
     } catch (e) {
       showToast(e.message || 'Could not update membership');
@@ -105,7 +109,7 @@ export default function Community() {
         body: JSON.stringify({ workout_id: workoutId }),
       });
       showToast('Workout shared with your gym!');
-      feedFetch.reload();
+      feedFetch.reload({ silent: true });
     } catch (e) {
       showToast(e.message || 'Could not share workout');
     }
@@ -116,7 +120,7 @@ export default function Community() {
     try {
       await api(`/community/shares/${shareId}`, { method: 'DELETE' });
       showToast('Share removed');
-      feedFetch.reload();
+      feedFetch.reload({ silent: true });
     } catch (e) {
       showToast(e.message || 'Could not remove share');
     }
