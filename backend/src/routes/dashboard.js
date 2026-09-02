@@ -62,13 +62,13 @@ export default function dashboardRoutes(db) {
     const newClients = clients.filter(c => c.created_at >= daysAgoIso(30)).length;
 
     // business numbers for owners
-    const subs = await db.q(
-      `SELECT * FROM subscriptions WHERE org_id = ? AND status = 'active'`, [orgId]);
-    const renewalsDue = subs.filter(s => s.renewal_date && s.renewal_date <= daysAgoIso(-30)).length;
     const monthStart = todayKey().slice(0, 7) + '-01';
-    const payments = await db.q(
-      `SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE org_id = ? AND paid_at >= ?`,
-      [orgId, monthStart]);
+    const [subs, payments] = await Promise.all([
+      db.q(`SELECT * FROM subscriptions WHERE org_id = ? AND status = 'active'`, [orgId]),
+      db.q(`SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE org_id = ? AND paid_at >= ?`,
+        [orgId, monthStart])
+    ]);
+    const renewalsDue = subs.filter(s => s.renewal_date && s.renewal_date <= daysAgoIso(-30)).length;
 
     res.json({
       kpis: {
@@ -172,7 +172,7 @@ export default function dashboardRoutes(db) {
     }
 
     // 2. Bulk-evaluate adherence + at-risk status (reuses existing services)
-    const { evaluateClients } = await import('../services/atRisk.js');
+    // (evaluateClients is already statically imported at the top of this file)
     const evs = await evaluateClients(db, clients);
     const clientMap = new Map(clients.map(c => [c.id, c]));
 

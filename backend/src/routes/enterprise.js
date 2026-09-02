@@ -73,9 +73,11 @@ export default function enterpriseRoutes(db) {
 
   // ---- status: the one call the owner dashboard needs to know what to show ----
   r.get('/status', async (req, res) => {
-    const snapshot = await getOrgBillingSnapshot(db, req.orgId);
-    const onboarding = await db.q1('SELECT completed_at FROM gym_onboarding WHERE org_id = ?', [req.orgId]);
-    const trainerCount = await getActiveTrainerCount(db, req.orgId);
+    const [snapshot, onboarding, trainerCount] = await Promise.all([
+      getOrgBillingSnapshot(db, req.orgId),
+      db.q1('SELECT completed_at FROM gym_onboarding WHERE org_id = ?', [req.orgId]),
+      getActiveTrainerCount(db, req.orgId)
+    ]);
     res.json({
       billingStatus: snapshot.status,
       onboardingCompleted: !!onboarding?.completed_at,
