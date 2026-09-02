@@ -85,7 +85,40 @@ export function translateSql(sql) {
 
 async function createPg() {
   const pg = await import('pg');
-  const pool = new pg.Pool({ connectionString: config.databaseUrl });
+  // node-postgres's Pool defaults are tuned for a long-lived server process,
+  // not a serverless function:
+  //   - connectionTimeoutMillis defaults to 0 = NO TIMEOUT. If every pooled
+  //     connection is busy (or Neon has hit its own connection cap because
+  //     many concurrent Vercel function instances each opened their own
+  //     Pool), a query silently queues forever instead of failing fast --
+  //     from the user's side that's exactly "the page never stops loading."
+  //     This cannot be reproduced by local/manual testing (SQLite has no
+  //     connection limit, and a solo session never saturates 10 connections)
+  //     which is why it wouldn't show up outside real concurrent production
+  //     traffic. Bounding it means a saturated pool fails in ~8s with a
+  //     clear 5xx instead of hanging indefinitely.
+  //   - max defaults to 10 *per Pool instance*. Each concurrent warm
+  //     serverless instance creates its own Pool (see getDb()'s
+  //     module-level `instance` -- fresh per cold start), so under load
+  //     many instances x 10 connections each can exhaust Neon's connection
+  //     limit. A lower per-instance max leaves headroom across instances
+  //     while still allowing real concurrency within one.
+  //   - idleTimeoutMillis closes unused connections instead of holding them
+  //     open indefinitely, so a warm instance that goes quiet releases its
+  //     connections back to Neon's shared limit for other instances to use.
+  const pool = new pg.Pool({
+    connectionString: config.databaseUrl,
+    max: Number(process.env.PG_POOL_MAX || 5),
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 8_000,
+  });
+  // Without this handler, an error on an IDLE pooled connection (e.g. Neon
+  // dropping it server-side) is an uncaught 'error' event -- which crashes
+  // the whole Node process. pg's own docs call this out explicitly. The
+  // pool recovers the connection on its own; this just keeps the process up.
+  pool.on('error', (err) => {
+    console.error('[sk-os] Postgres pool error on idle client:', err.message);
+  });
   const client = { driver: 'postgres' };
   client.q = async (sql, params = []) => {
     const res = await pool.query(translateSql(sql), params);
