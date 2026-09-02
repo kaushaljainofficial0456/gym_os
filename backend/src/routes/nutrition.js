@@ -24,8 +24,18 @@ export default function nutritionRoutes(db) {
     const rows = await db.q(
       `SELECT * FROM nutrition_plans WHERE org_id = ? AND (is_template = 1 OR client_id IS NULL)
        ORDER BY created_at DESC`, [req.orgId]);
-    const plans = [];
-    for (const p of rows) plans.push(await attachMeals(p));
+    // Batched instead of one meals query per plan (was up to N+1 queries for
+    // this endpoint; same pattern already used by the plan-history route below).
+    const pIds = rows.map((p) => p.id);
+    const allMeals = pIds.length
+      ? await db.q(`SELECT * FROM meals WHERE plan_id IN (${pIds.map(() => '?').join(',')}) ORDER BY plan_id, position`, pIds)
+      : [];
+    const mealsByPlan = new Map();
+    for (const m of allMeals) {
+      if (!mealsByPlan.has(m.plan_id)) mealsByPlan.set(m.plan_id, []);
+      mealsByPlan.get(m.plan_id).push(m);
+    }
+    const plans = rows.map((p) => ({ ...p, meals: mealsByPlan.get(p.id) || [] }));
     res.json({ plans });
   });
 

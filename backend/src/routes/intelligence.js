@@ -110,11 +110,21 @@ export default function intelligenceRoutes(db) {
     if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'entries required' });
     const tz = req.tz || 'Asia/Kolkata';
     const d = dayKey(new Date(), tz);
+    // Batch-resolve all foods in one query instead of one SELECT per entry
+    // (was N+1 — the inserts below still run per entry, but the lookup that
+    // previously blocked each iteration on its own round trip no longer does).
+    const foodIds = [...new Set(entries.map((e) => e.food_id).filter(Boolean))];
+    const foodsById = new Map();
+    if (foodIds.length) {
+      const rows = await db.q(
+        `SELECT * FROM foods WHERE id IN (${foodIds.map(() => '?').join(',')}) AND (is_global = 1 OR org_id = ? OR client_id = ?)`,
+        [...foodIds, c.org_id, c.id]);
+      for (const row of rows) foodsById.set(row.id, row);
+    }
+
     const committed = [];
     for (const e of entries) {
-      const food = await db.q1(
-        'SELECT * FROM foods WHERE id = ? AND (is_global = 1 OR org_id = ? OR client_id = ?)',
-        [e.food_id, c.org_id, c.id]);
+      const food = foodsById.get(e.food_id);
       if (!food) { continue; }  // never commit a food the client can't see
       // Server-side unit re-parse: the client sends { food_id, quantity, unit }
       // (e.g. { qty: 2, unit: 'roti' } or { qty: 250, unit: 'ml' }) and the
@@ -471,11 +481,14 @@ export default function intelligenceRoutes(db) {
     const dims = readImageDims(buf, ext);
     if (dims && (dims.w < 32 || dims.h < 32)) return res.status(400).json({ error: 'Image too small to read' });
     // store privately (never served statically) — tmp namespace, cleaned on save
+    // Async fs calls (not *Sync) so a label-scan upload doesn't block the
+    // Node event loop — and therefore every other in-flight request — while
+    // it writes up to 5 MB to disk.
     const dir = path.join(UPLOAD_DIR, 'tmp', c.id);
-    fs.mkdirSync(dir, { recursive: true });
+    await fs.promises.mkdir(dir, { recursive: true });
     const fileId = id('img').replace(/^img_/, '');
     const rel = `tmp/${c.id}/${fileId}.${ext === 'jpg' ? 'jpg' : ext}`;
-    fs.writeFileSync(path.join(UPLOAD_DIR, rel), buf);
+    await fs.promises.writeFile(path.join(UPLOAD_DIR, rel), buf);
 
     // vision extraction when an AI provider is configured; otherwise editable manual entry
     let ocrFields = null;

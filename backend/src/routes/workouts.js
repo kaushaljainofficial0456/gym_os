@@ -92,15 +92,23 @@ export default function workoutRoutes(db) {
          FROM workout_templates wt
         WHERE wt.org_id = ?
         ORDER BY wt.created_at DESC`, [req.orgId]);
-    const withExercises = [];
-    for (const t of rows) {
-      const ex = await db.q(
+    // Batched instead of one exercises query per template (was up to N+1
+    // queries for this endpoint; same IN(...) pattern used elsewhere, e.g.
+    // /me/workouts in tracking.js).
+    const tIds = rows.map((t) => t.id);
+    const allEx = tIds.length
+      ? await db.q(
         `SELECT we.*, el.animation_key, el.primary_muscle
            FROM workout_exercises we
            LEFT JOIN exercise_library el ON el.id = we.exercise_id
-          WHERE we.template_id = ? ORDER BY we.position`, [t.id]);
-      withExercises.push({ ...t, exercises: ex });
+          WHERE we.template_id IN (${tIds.map(() => '?').join(',')}) ORDER BY we.template_id, we.position`, tIds)
+      : [];
+    const exByTemplate = new Map();
+    for (const ex of allEx) {
+      if (!exByTemplate.has(ex.template_id)) exByTemplate.set(ex.template_id, []);
+      exByTemplate.get(ex.template_id).push(ex);
     }
+    const withExercises = rows.map((t) => ({ ...t, exercises: exByTemplate.get(t.id) || [] }));
     res.json({ templates: withExercises });
   });
 

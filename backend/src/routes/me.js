@@ -1505,50 +1505,57 @@ export default function meRoutes(db) {
 
     // 5. Resolve exercise IDs against the recipient's library
     //    (global or same-org only), fall back to name-based resolution.
-    const resolvedExercises = [];
-    for (const ex of selectedExercises) {
+    // Batched into 2 queries total instead of up to 2 per exercise (was an
+    // unbounded N+1 — the sibling custom-workout-create route already caps
+    // at 20 exercises for the same reason; match that here too).
+    const MAX_IMPORT_EXERCISES = 20;
+    const capped = selectedExercises.slice(0, MAX_IMPORT_EXERCISES);
+
+    const idsToResolve = [...new Set(capped.map((ex) => ex.exercise_id).filter(Boolean))];
+    const byId = new Map();
+    if (idsToResolve.length) {
+      const rows = await db.q(
+        `SELECT id, name FROM exercise_library WHERE id IN (${idsToResolve.map(() => '?').join(',')}) AND (is_global = 1 OR org_id = ?)`,
+        [...idsToResolve, c.org_id]);
+      for (const row of rows) byId.set(row.id, row);
+    }
+
+    const namesToResolve = [...new Set(
+      capped.filter((ex) => !(ex.exercise_id && byId.has(ex.exercise_id)) && ex.name)
+        .map((ex) => ex.name.toLowerCase())
+    )];
+    const byName = new Map();
+    if (namesToResolve.length) {
+      const rows = await db.q(
+        `SELECT id, name FROM exercise_library WHERE lower(name) IN (${namesToResolve.map(() => '?').join(',')}) AND (is_global = 1 OR org_id = ?)`,
+        [...namesToResolve, c.org_id]);
+      for (const row of rows) {
+        const key = row.name.toLowerCase();
+        if (!byName.has(key)) byName.set(key, row); // first match wins, same as the old LIMIT 1
+      }
+    }
+
+    const resolvedExercises = capped.map((ex) => {
       let resolvedExerciseId = null;
       let resolvedName = ex.name || 'Exercise';
-      let resolvedSets = Math.max(1, Math.min(12, parseInt(ex.sets, 10) || 3));
-      let resolvedReps = String(ex.reps ?? 10).slice(0, 12);
-      let resolvedWeight = String(ex.weight ?? 'BW').slice(0, 12);
-      let resolvedRest = Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90));
-      let resolvedTempo = ex.tempo || null;
-      let resolvedNotes = ex.notes || null;
 
-      // Try exact exercise_id match against library (global or same-org)
-      if (ex.exercise_id) {
-        const lib = await db.q1(
-          'SELECT id, name FROM exercise_library WHERE id = ? AND (is_global = 1 OR org_id = ?)',
-          [ex.exercise_id, c.org_id]);
-        if (lib) {
-          resolvedExerciseId = lib.id;
-          resolvedName = lib.name; // use the library's canonical name
-        }
+      const lib = (ex.exercise_id && byId.get(ex.exercise_id)) || (ex.name && byName.get(ex.name.toLowerCase()));
+      if (lib) {
+        resolvedExerciseId = lib.id;
+        resolvedName = lib.name; // use the library's canonical name
       }
 
-      // Fallback: try name-based match in the recipient's library
-      if (!resolvedExerciseId) {
-        const lib = await db.q1(
-          'SELECT id, name FROM exercise_library WHERE lower(name) = lower(?) AND (is_global = 1 OR org_id = ?) LIMIT 1',
-          [ex.name, c.org_id]);
-        if (lib) {
-          resolvedExerciseId = lib.id;
-          resolvedName = lib.name;
-        }
-      }
-
-      resolvedExercises.push({
+      return {
         exercise_id: resolvedExerciseId,
         name: resolvedName,
-        sets: resolvedSets,
-        reps: resolvedReps,
-        weight: resolvedWeight,
-        rest_sec: resolvedRest,
-        tempo: resolvedTempo,
-        notes: resolvedNotes,
-      });
-    }
+        sets: Math.max(1, Math.min(12, parseInt(ex.sets, 10) || 3)),
+        reps: String(ex.reps ?? 10).slice(0, 12),
+        weight: String(ex.weight ?? 'BW').slice(0, 12),
+        rest_sec: Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90)),
+        tempo: ex.tempo || null,
+        notes: ex.notes || null,
+      };
+    });
 
     // 6. Disambiguate workout name if recipient already has one with the same name
     const rawName = (workout_name || payload.name || 'Shared Workout').trim().slice(0, 80);
