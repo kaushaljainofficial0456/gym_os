@@ -93,6 +93,18 @@ function classify(query) {
   return out;
 }
 
+// Body-region -> primary_muscle strings. Mirrors muscles.MUSCLES.region so a
+// single "Legs" / "Back" chip in the picker resolves to the whole muscle group
+// (the coarse `muscle` LIKE match below can't: "legs" matches no stored value).
+const REGION_MUSCLES = {
+  chest: ['chest', 'upper chest', 'lower chest'],
+  back: ['lats', 'upper back', 'lower back', 'traps', 'posterior chain'],
+  shoulders: ['shoulders', 'front delts', 'side delts', 'rear delts'],
+  arms: ['biceps', 'triceps', 'forearms'],
+  legs: ['quads', 'hamstrings', 'glutes', 'calves', 'adductors', 'abductors', 'posterior chain'],
+  core: ['core', 'abs', 'obliques'],
+};
+
 // Build WHERE clauses from classified intent + explicit filters.
 function buildWhere(intent, filters = {}) {
   const conds = [];
@@ -100,7 +112,21 @@ function buildWhere(intent, filters = {}) {
   const muscle = filters.muscle || intent.muscles[0];
   const equipment = filters.equipment || intent.equipment[0];
   const movement = filters.movement || intent.movements[0];
+  const region = filters.region && REGION_MUSCLES[String(filters.region).toLowerCase()]
+    ? String(filters.region).toLowerCase() : null;
 
+  if (region) {
+    // authoritative: exercise_muscles.role='PRIMARY' joined to muscles.region;
+    // OR-ed with the static primary_muscle list so it still works if
+    // exercise_muscles is unsynced for a row.
+    const names = REGION_MUSCLES[region];
+    const ph = names.map(() => '?').join(', ');
+    conds.push(
+      `(id IN (SELECT em.exercise_id FROM exercise_muscles em JOIN muscles m ON m.id = em.muscle_id
+               WHERE LOWER(m.region) = ? AND em.role = 'PRIMARY')
+        OR LOWER(primary_muscle) IN (${ph}))`);
+    params.push(region, ...names);
+  }
   if (muscle) {
     conds.push(`(LOWER(primary_muscle) = ? OR LOWER(secondary_muscles) LIKE ? OR LOWER(primary_muscle) LIKE ?)`);
     params.push(muscle, `%${muscle}%`, `%${muscle}%`);
@@ -134,6 +160,11 @@ export function buildWhereClause(conds, params, orgId) {
 export async function searchExercises(db, orgId, q, filters = {}, { limit = 12 } = {}) {
   const intent = classify(q);
   const { conds, params } = buildWhere(intent, filters);
+  // A query with real words but NO recognised muscle/equipment/movement term
+  // (e.g. "trx", "copenhagen", "toes to bar") must NOT fall through to "return
+  // the whole catalogue" — that silently mis-resolves in parse-workout and
+  // floods the picker. Let the caller's name/alias search handle it instead.
+  if (conds.length === 0 && String(q || '').trim().length >= 2) return [];
   const { where, params: wparams } = buildWhereClause(conds, params, orgId);
   const rows = await db.q(
     `SELECT * FROM exercise_library ${where} ORDER BY name LIMIT ?`,
@@ -147,13 +178,32 @@ export async function searchExercises(db, orgId, q, filters = {}, { limit = 12 }
 }
 
 // Fuzzy-name fallback when intent classification finds nothing.
-export async function searchExercisesByName(db, orgId, q, { limit = 12 } = {}) {
+// `filters` may carry region/equipment/difficulty to narrow a text search.
+export async function searchExercisesByName(db, orgId, q, { limit = 12, filters = {} } = {}) {
   const like = `%${String(q || '').toLowerCase()}%`;
+  const conds = [`(LOWER(name) LIKE ? OR id IN (SELECT exercise_id FROM exercise_aliases WHERE LOWER(alias) LIKE ?))`];
+  const params = [like, like];
+  const region = filters.region && REGION_MUSCLES[String(filters.region).toLowerCase()]
+    ? String(filters.region).toLowerCase() : null;
+  if (region) {
+    const names = REGION_MUSCLES[region];
+    conds.push(
+      `(id IN (SELECT em.exercise_id FROM exercise_muscles em JOIN muscles m ON m.id = em.muscle_id
+               WHERE LOWER(m.region) = ? AND em.role = 'PRIMARY')
+        OR LOWER(primary_muscle) IN (${names.map(() => '?').join(', ')}))`);
+    params.push(region, ...names);
+  }
+  if (filters.equipment && filters.equipment !== 'full_gym') {
+    const eqLike = String(filters.equipment).toLowerCase().replace(/s$/, '');
+    conds.push(`(LOWER(equipment) = ? OR LOWER(equipment) LIKE ?)`);
+    params.push(String(filters.equipment).toLowerCase(), `%${eqLike}%`);
+  }
+  if (filters.difficulty) { conds.push(`LOWER(difficulty) = ?`); params.push(String(filters.difficulty).toLowerCase()); }
+  conds.push(`(is_global = 1 OR org_id = ?)`);
+  params.push(orgId);
   const rows = await db.q(
-    `SELECT * FROM exercise_library
-      WHERE (LOWER(name) LIKE ? OR id IN (SELECT exercise_id FROM exercise_aliases WHERE LOWER(alias) LIKE ?))
-        AND (is_global = 1 OR org_id = ?)
-      ORDER BY name LIMIT ?`, [like, like, orgId, Math.min(limit, 30)]);
+    `SELECT * FROM exercise_library WHERE ${conds.join(' AND ')} ORDER BY name LIMIT ?`,
+    [...params, Math.min(limit, 30)]);
   return rows.map((e) => ({
     id: e.id, name: e.name, primary_muscle: e.primary_muscle,
     secondary_muscles: e.secondary_muscles, equipment: e.equipment,

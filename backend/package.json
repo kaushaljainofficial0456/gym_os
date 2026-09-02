@@ -11,6 +11,7 @@
     "start": "node src/index.js",
     "init": "node scripts/init-db.js",
     "seed": "node scripts/seed.js",
+    "expand-exercises": "node scripts/expand-exercise-library.js",
     "reset": "node scripts/init-db.js --force && node scripts/seed.js",
     "export:training": "node scripts/export-training-data.js",
     "test": "node --test",

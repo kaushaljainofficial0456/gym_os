@@ -1,10 +1,71 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, Kicker, Spinner, ErrorState, Modal, Empty } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
+
+/**
+ * Type-ahead link to the exercise library — replaces a 280+ option <select>.
+ * Alias-aware server search (GET /workouts/exercises, the same endpoint the
+ * client planner uses). Muscle-group browsing stays in the "◎ Pick by muscle"
+ * 3D modal, so this control stays a single uncluttered field.
+ */
+function LibraryCombobox({ value, name, onSelect }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const cache = useRef(new Map());
+
+  useEffect(() => {
+    const term = q.trim();
+    if (!open || term.length < 1) { setRows([]); setLoading(false); return undefined; }
+    if (cache.current.has(term.toLowerCase())) { setRows(cache.current.get(term.toLowerCase())); return undefined; }
+    setLoading(true);
+    const h = setTimeout(async () => {
+      try {
+        const r = await api(`/workouts/exercises?q=${encodeURIComponent(term)}`);
+        const list = (r.exercises || []).slice(0, 25);
+        cache.current.set(term.toLowerCase(), list);
+        setRows(list);
+      } catch { setRows([]); } finally { setLoading(false); }
+    }, 220);
+    return () => clearTimeout(h);
+  }, [q, open]);
+
+  return (
+    <div className="relative flex-1">
+      <input
+        className="input !py-1.5 text-xs w-full"
+        placeholder="🔍 link from library (type to search)"
+        value={open ? q : (value && name ? `${name} ✓` : q)}
+        onFocus={() => { setOpen(true); setQ(''); }}
+        onChange={(e) => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {value && !open && (
+        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-mute hover:text-bad"
+          onMouseDown={(e) => { e.preventDefault(); onSelect(null); }}>clear</button>
+      )}
+      {open && (q.trim() || loading) && (
+        <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-line bg-bg shadow-lg">
+          {loading && <div className="px-3 py-2 text-[10px] text-mute">Searching…</div>}
+          {!loading && !rows.length && <div className="px-3 py-2 text-[10px] text-mute">No matches</div>}
+          {rows.map((x) => (
+            <button key={x.id} type="button"
+              className="w-full text-left px-3 py-2 hover:bg-white/[.05] border-b border-line/40 last:border-0"
+              onMouseDown={(e) => { e.preventDefault(); onSelect(x); setOpen(false); setQ(''); }}>
+              <span className="block text-[12px] font-grotesk font-semibold truncate">{x.name}</span>
+              <span className="text-[9px] text-mute">{x.primary_muscle}{x.equipment ? ` · ${x.equipment}` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---- training program presets (day-of-week: 1=Mon..6=Sat,0=Sun) ----
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -354,15 +415,14 @@ export default function WorkoutBuilder() {
                       </label>
                     </div>
                     <div className="flex gap-2 items-end">
-                      <select className="input !py-1.5 text-xs flex-1" value={ex.exercise_id || ''}
-                        onChange={(e) => {
-                          const libEx = exercises.find((x) => x.id === e.target.value);
-                          patchEx(i, 'exercise_id', e.target.value || null);
-                          if (libEx) patchEx(i, 'name', libEx.name || ex.name);
-                        }}>
-                        <option value="">— link from library (optional) —</option>
-                        {exercises.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.primary_muscle}</option>)}
-                      </select>
+                      <LibraryCombobox
+                        value={ex.exercise_id}
+                        name={ex.name}
+                        onSelect={(x) => {
+                          patchEx(i, 'exercise_id', x?.id || null);
+                          if (x?.name) patchEx(i, 'name', x.name);
+                        }}
+                      />
                       <button className="btn !py-1.5 !px-3 !text-[11px] shrink-0" onClick={() => setAddOpen(true)}>+ New</button>
                     </div>
                   </div>

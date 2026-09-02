@@ -5,6 +5,8 @@
 // authoritative relationship for muscle targeting and volume math.
 // ============================================================
 
+import { NEW_MUSCLES, NEW_MUSCLE_ALIASES } from '../data/exerciseExpansion.js';
+
 // Canonical muscles. target ranges are TRAINING GUIDANCE (sets/week),
 // not medical facts — clearly labelled in the UI.
 export const MUSCLES = [
@@ -26,7 +28,11 @@ export const MUSCLES = [
   { id: 'calves',        name: 'CALVES',         region: 'legs',    view: 'back',  min: 6,  max: 12 },
   { id: 'core',          name: 'CORE',           region: 'core',    view: 'front', min: 6,  max: 12 },
   { id: 'abs',           name: 'ABS',            region: 'core',    view: 'front', min: 6,  max: 12 },
-  { id: 'posterior_chain', name: 'POSTERIOR CHAIN', region: 'legs', view: 'back', min: 6, max: 10 }
+  { id: 'posterior_chain', name: 'POSTERIOR CHAIN', region: 'legs', view: 'back', min: 6, max: 10 },
+  // --- library expansion: adductors / abductors / obliques (region drives the
+  // Workout picker's muscle chips; also maps the "OBLIQUES" string already
+  // present on legacy rows like bicycle_crunch / russian_twist). ---
+  ...NEW_MUSCLES,
 ];
 
 const ALIASES = {
@@ -36,7 +42,8 @@ const ALIASES = {
   'TRAPS': 'traps', 'LATS': 'lats', 'UPPER BACK': 'upper_back',
   'LOWER BACK': 'lower_back', 'GLUTES': 'glutes', 'HAMSTRINGS': 'hamstrings',
   'QUADS': 'quads', 'CALVES': 'calves', 'CORE': 'core', 'ABS': 'abs',
-  'ABDOMINALS': 'core', 'POSTERIOR CHAIN': 'posterior_chain', 'FRONT DELTS': 'shoulders'
+  'ABDOMINALS': 'core', 'POSTERIOR CHAIN': 'posterior_chain', 'FRONT DELTS': 'shoulders',
+  ...NEW_MUSCLE_ALIASES,
 };
 
 export function normalizeMuscle(name) {

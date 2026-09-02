@@ -8,6 +8,7 @@
     "db:init": "node backend/scripts/init-db.js",
     "db:check": "node backend/scripts/db-check.js",
     "db:seed": "node backend/scripts/seed.js",
+    "db:expand-exercises": "node backend/scripts/expand-exercise-library.js",
     "db:reset": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js",
     "db:reset:clean": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js --no-demo",
     "dev": "concurrently -n api,web -c yellow,cyan \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",

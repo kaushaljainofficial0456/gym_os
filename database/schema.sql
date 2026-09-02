@@ -137,10 +137,29 @@ CREATE TABLE IF NOT EXISTS exercise_library (
   mistakes         TEXT,
   alternatives     TEXT,
   animation_key    TEXT,
-  is_global        INTEGER NOT NULL DEFAULT 0
+  is_global        INTEGER NOT NULL DEFAULT 0,
+  -- Expansion metadata (all nullable, additive). ex_type / movement / difficulty
+  -- above are unchanged; these refine them without conflicting.
+  compound_or_isolation TEXT,   -- 'compound' | 'isolation'
+  is_unilateral         INTEGER,-- 0 | 1
+  is_bodyweight         INTEGER,-- 0 | 1
+  tracking_type         TEXT,   -- weight_reps | bodyweight_reps | weighted_bodyweight | time | distance_time
+  default_reps          TEXT    -- '8-12' | '30-45 sec' (read by routes/me.js POST /me/workouts)
 );
 CREATE INDEX IF NOT EXISTS idx_exlib_org ON exercise_library(org_id);
 CREATE INDEX IF NOT EXISTS idx_exlib_name ON exercise_library(name);
+
+-- Curated exercise relationships (substitutions / progressions / regressions).
+-- Stored one direction; the reverse is derived at read time. Optional layer on
+-- top of the computed alternatives in services/equipment.js.
+CREATE TABLE IF NOT EXISTS exercise_relations (
+  id          TEXT PRIMARY KEY,
+  exercise_id TEXT NOT NULL REFERENCES exercise_library(id) ON DELETE CASCADE,
+  related_id  TEXT NOT NULL REFERENCES exercise_library(id) ON DELETE CASCADE,
+  relation    TEXT NOT NULL CHECK (relation IN ('alternative','progression','regression')),
+  UNIQUE (exercise_id, related_id, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_exrel_ex ON exercise_relations(exercise_id, relation);
 
 -- Alias lookup for exercise search ("flat bench" → Bench Press).
 CREATE TABLE IF NOT EXISTS exercise_aliases (
