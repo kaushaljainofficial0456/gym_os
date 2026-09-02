@@ -60,14 +60,14 @@ export default function GymDetail() {
     setBusy(true);
     try {
       await api(`/console/gyms/${id}/suspend`, { method: 'POST', body: JSON.stringify({}) });
-      setSuspendOpen(false); reload(); toast.success('Gym suspended');
-    } catch (e) { toast.error(e.data?.message || e.message || 'Suspend failed'); }
+      setSuspendOpen(false); reload({ silent: true }); toast.success('Gym suspended');
+    } catch (e) { toast.error(e.message || 'Suspend failed'); }
     finally { setBusy(false); }
   };
   const doReactivate = async () => {
     setBusy(true);
-    try { await api(`/console/gyms/${id}/reactivate`, { method: 'POST' }); reload(); toast.success('Gym reactivated'); }
-    catch (e) { toast.error(e.data?.message || e.message || 'Reactivate failed'); }
+    try { await api(`/console/gyms/${id}/reactivate`, { method: 'POST' }); reload({ silent: true }); toast.success('Gym reactivated'); }
+    catch (e) { toast.error(e.message || 'Reactivate failed'); }
     finally { setBusy(false); }
   };
   // Full refund only, by design -- a partial refund (a goodwill/price
@@ -82,9 +82,9 @@ export default function GymDetail() {
     try {
       const result = await api(`/console/gyms/${id}/payments/${subscription.payment_order_id}/refund`, { method: 'POST', body: JSON.stringify({ reason: refundReason || undefined }) });
       setRefundOpen(false); setRefundReason('');
-      reload();
+      reload({ silent: true });
       toast.success(`Refunded ${money(result.refund.amount)}`);
-    } catch (e) { setRefundError(e.data?.message || e.message || 'Refund failed'); }
+    } catch (e) { setRefundError(e.message || 'Refund failed'); }
     finally { setBusy(false); }
   };
 

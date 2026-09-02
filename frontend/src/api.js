@@ -93,7 +93,20 @@ export async function api(path, opts = {}) {
     // data', details: [...] }, a 400 with its own array of real reasons
     // that was equally being discarded down to the bare "Invalid food
     // data". Same fold, same reasoning, different key name.
-    const base = data.error || data.message || 'Request failed';
+    // `message` before `error` -- a THIRD instance of the same bug class,
+    // found live while auditing for more of it: a handful of routes
+    // (console.js's refund guard, enterprise.js's downgrade-block/no-
+    // recipient/email-failure responses) return { error: 'short_code',
+    // message: 'the real human sentence' } -- `error` there is a
+    // machine-readable reason, not display text. Every one of the 4 real
+    // occurrences in this backend follows that exact shape when both
+    // fields are present (confirmed by reading each one, not assumed);
+    // EnterpriseBilling.jsx already had its own one-off `e.data?.message
+    // || e.message` workaround for exactly this, which this fix makes
+    // unnecessary everywhere, not just there. Safe as a global default:
+    // when a route sets `error` alone (the overwhelming majority), this
+    // falls through to it unchanged.
+    const base = data.message || data.error || 'Request failed';
     const issueList = Array.isArray(data.issues) && data.issues.length ? data.issues
       : Array.isArray(data.details) && data.details.length ? data.details
       : null;

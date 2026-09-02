@@ -61,7 +61,10 @@ export default function EnterpriseBilling() {
       setToast(`Invoice sent to ${res.to}`);
       invoices.reload({ silent: true });
     } catch (e) {
-      setToast(e.data?.message || e.message);
+      // api.js's own .message already prefers a response's `message`
+      // over its `error` code (see that file's comment) -- covers this
+      // route's own no_recipient/email_send_failed responses.
+      setToast(e.message);
     } finally {
       setInvoiceBusyId(null);
     }
@@ -87,11 +90,11 @@ export default function EnterpriseBilling() {
         setModal({ quote: q.quote, order: o.order });
       }
     } catch (e) {
-      // The downgrade-blocked response carries its own precise, human-
-      // readable message (spec's own worked example) -- prefer that
-      // over the generic error-code string api.js's own .message falls
-      // back to for this route.
-      setToast(e.data?.message || e.message);
+      // api.js's own .message already prefers this response's `message`
+      // over its `error` code (see that file's comment) -- e.data?.message
+      // was this call site's own one-off workaround for the same gap,
+      // now redundant.
+      setToast(e.message);
     } finally { setBusy(false); }
   };
 

@@ -33,7 +33,7 @@ function MembershipActions({ member, onChanged, onError }) {
     try {
       await api(`/admin/members/${member.id}/membership/${action}`, { method: 'POST', body: JSON.stringify({}) });
       onChanged();
-    } catch (e) { onError(e.data?.message || e.message); }
+    } catch (e) { onError(e.message); }
     finally { setBusy(false); }
   };
   const s = member.lifecycle_status;

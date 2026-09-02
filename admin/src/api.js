@@ -70,7 +70,22 @@ export async function api(path, opts = {}) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || data.message || 'Request failed');
+    // Brought in sync with frontend/src/api.js's own fix (see that
+    // file's comments for the full reasoning) -- this package's backend
+    // routes (console.js) use the same validate() middleware and the
+    // same { error: 'code', message: 'human text' } shape on a few
+    // routes, so this copy had the identical class of bug: every
+    // `catch (e) { toast.error(e.message) }` call site here was equally
+    // showing a bare "Validation failed"/error-code with no real reason,
+    // even though the backend was already sending one.
+    const issueList = Array.isArray(data.issues) && data.issues.length ? data.issues
+      : Array.isArray(data.details) && data.details.length ? data.details
+      : null;
+    const base = data.message || data.error || 'Request failed';
+    const detail = issueList ? ` — ${issueList.join('; ')}` : '';
+    const err = new Error(base + detail);
+    err.issues = data.issues;
+    err.details = data.details;
     err.status = res.status;
     err.data = data;
     throw err;

@@ -24,14 +24,14 @@ export default function Risk() {
     try {
       const summary = await api('/console/risk/scan', { method: 'POST' });
       setLastSummary(summary);
-      reload();
+      reload({ silent: true });
       toast.success(summary.totalRaised ? `${summary.totalRaised} new signal(s) flagged` : 'Scan complete -- nothing new to review');
     } catch (e) { toast.error(e.message || 'Scan failed'); }
     finally { setScanning(false); }
   };
 
   const act = async (id, action, extra) => {
-    try { await api(`/console/risk/${id}/${action}`, { method: 'POST', body: JSON.stringify(extra || {}) }); reload(); toast.success('Updated'); }
+    try { await api(`/console/risk/${id}/${action}`, { method: 'POST', body: JSON.stringify(extra || {}) }); reload({ silent: true }); toast.success('Updated'); }
     catch (e) { toast.error(e.message || 'Could not update'); }
   };
 

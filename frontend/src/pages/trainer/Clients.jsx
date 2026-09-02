@@ -104,7 +104,7 @@ export default function Clients() {
         </div>
       </Card>
 
-      <CreateClient open={createOpen} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); reload(); }} />
+      <CreateClient open={createOpen} onClose={() => setCreateOpen(false)} onDone={() => { setCreateOpen(false); reload({ silent: true }); }} />
     </div>
   );
 }

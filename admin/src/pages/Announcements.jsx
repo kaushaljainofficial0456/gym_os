@@ -60,17 +60,20 @@ export default function Announcements() {
       else await api('/console/announcements', { method: 'POST', body: JSON.stringify(body) });
       const wasEditing = !!editingId;
       cancelEdit();
-      reload();
+      reload({ silent: true });
       toast.success(wasEditing ? 'Announcement updated' : 'Announcement published');
     } catch (err) {
-      setFormError(err.data?.issues?.join('; ') || err.message);
+      // api.js's own .message already folds `issues` in (see that
+      // file's comment) -- err.data?.issues?.join(...) was this call
+      // site's own one-off workaround for the same gap, now redundant.
+      setFormError(err.message);
     } finally { setBusy(false); }
   };
 
   const remove = async () => {
     if (!deleteTarget) return;
     setBusy(true);
-    try { await api(`/console/announcements/${deleteTarget.id}`, { method: 'DELETE' }); setDeleteTarget(null); reload(); toast.success('Announcement deleted'); }
+    try { await api(`/console/announcements/${deleteTarget.id}`, { method: 'DELETE' }); setDeleteTarget(null); reload({ silent: true }); toast.success('Announcement deleted'); }
     catch (e) { toast.error(e.message || 'Could not delete'); }
     finally { setBusy(false); }
   };

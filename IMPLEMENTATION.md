@@ -93,6 +93,26 @@ re-done here; spot-checked live in this pass and still correct.
    then re-resolved at 150g and got exactly half of the original entry
    (`417.5 kcal, 15g, 50g, 17.5g`), proving future quick-logs of this
    food scale correctly too.
+8. **A third instance of the "real error reason gets discarded" bug
+   class** — found by auditing for more of it after fixing `issues` and
+   `details`. A handful of routes (`console.js`'s refund guard,
+   `enterprise.js`'s downgrade-block/no-recipient/email-failure
+   responses) return `{ error: 'short_code', message: 'the real human
+   sentence' }` — `error` there is a machine-readable reason, not display
+   text, but `api()`'s `data.error || data.message` ordering picked the
+   code every time. Confirmed all 4 real occurrences of this shape
+   follow it consistently (checked each one, not assumed) before
+   flipping the priority to `data.message || data.error` — safe as a
+   global default, since every other route sets `error` alone and falls
+   through unchanged. `EnterpriseBilling.jsx` already had its own one-off
+   `e.data?.message || e.message` workaround for exactly this gap;
+   removed it as redundant, along with 6 other identical workarounds
+   found across `Business.jsx` and 3 admin console pages (`GymDetail.jsx`
+   ×3, plus 2 `err.data?.issues?.join(...)` variants in
+   `Announcements.jsx`/`FeatureFlags.jsx` for the `issues` case). The
+   admin console's **own separate `api.js`** (same duplication reasoning
+   as its `utils.js`) had never received any of the three fixes at all —
+   brought fully in sync in one pass rather than piecemeal.
 
 ## 1b. App-wide reload/remount fix (the single biggest change in this pass)
 
@@ -147,9 +167,25 @@ The admin console (`admin/`) turned out to have its **own separate copy**
 of `useFetch` (`admin/src/utils.js`, deliberately kept in sync with the
 main one per its own header comment) that predated this fix entirely.
 Brought it back in sync with the same `reload({ silent: true })`
-mechanism, and fixed the one call site using it
-(`FoodIntelligence.jsx`'s review-queue verify/revert action, which was
-flashing an extra skeleton row above already-loaded data on every click).
+mechanism.
+
+**A follow-up, corrected sweep found the first pass had a real gap.** The
+original grep only matched `X.reload()` (a dotted call through a
+destructured object); it silently missed the equally common
+`const { reload } = useFetch(...)` pattern used bare as `reload()`. A
+corrected sweep (`\breload\(` instead of `\.reload\(`) across both apps
+found **19 more unfixed call sites**: 3 in the main frontend
+(`Clients.jsx`'s create-client flow, and a third `AITab` call site in
+`ClientProfile.jsx` the first pass had missed inside a component already
+otherwise fixed) and 16 in the admin console across 6 pages
+(`GymDetail.jsx` suspend/reactivate/refund, `Announcements.jsx`
+create/delete, `FeatureFlags.jsx` create/toggle/rollout/delete,
+`Reconciliation.jsx` sweep/resolve, `Risk.jsx` scan/act,
+`SupportDetail.jsx` reply/status/priority/assign). All fixed the same
+way. This is called out explicitly rather than left implicit, since the
+first pass's own report claimed a "full sweep" that turned out to be
+incomplete — the corrected, actually-complete sweep is what's reflected
+here.
 
 ## 2. Performance bottlenecks found
 

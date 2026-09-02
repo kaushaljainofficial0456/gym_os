@@ -700,7 +700,7 @@ function AITab({ clientId }) {
                         method: 'POST',
                         body: JSON.stringify({ action: 'modify', summary: document.getElementById(`s${ins.id}`).value, recommendation: document.getElementById(`r${ins.id}`).value })
                       });
-                      setEditing(null); reload();
+                      setEditing(null); reload({ silent: true });
                     }}>Save changes</button>
                     <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
                   </div>
