@@ -116,7 +116,16 @@ app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.d
 app.get(['/ready', '/api/ready'], async (_req, res) => {
   try {
     await db.q1('SELECT 1 AS ok');
-    res.json({ ok: true, db: db.driver, ts: new Date().toISOString() });
+    const body = { ok: true, db: db.driver, ts: new Date().toISOString() };
+    // Opt-in only (EXPOSE_POOL_STATS=1) -- default production behavior is
+    // byte-identical to before. For the connection-pool-starvation
+    // investigation: pool.waitingCount > 0 means requests are queued behind
+    // a full pool RIGHT NOW, observed directly rather than inferred from
+    // slow responses. Load-test harness polls this during a run.
+    if (process.env.EXPOSE_POOL_STATS === '1' && typeof db.poolStats === 'function') {
+      body.pool = db.poolStats();
+    }
+    res.json(body);
   } catch (e) {
     res.status(503).json({ ok: false, error: 'database unreachable' });
   }

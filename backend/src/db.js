@@ -42,6 +42,10 @@ async function createSqlite() {
       return { changes: Number(res.changes), lastId: res.lastInsertRowid };
     },
     exec(sql) { db.exec(sql); },
+    // SQLite has no connection pool -- always "not waiting". Present so
+    // callers (a debug endpoint, the load-test harness) can call
+    // db.poolStats() unconditionally regardless of driver.
+    poolStats() { return { total: 1, idle: 1, waiting: 0 }; },
     // Atomic transaction: BEGIN → fn(txDb) → COMMIT, ROLLBACK on error.
     async tx(fn, opts = {}) {
       db.exec('BEGIN');
@@ -119,9 +123,41 @@ async function createPg() {
   pool.on('error', (err) => {
     console.error('[sk-os] Postgres pool error on idle client:', err.message);
   });
+
+  // Opt-in diagnostic mode (PG_POOL_METRICS=1, staging/local only -- never
+  // enable in production, it adds a connect()/release() round trip to every
+  // query instead of pool.query()'s single call). Exists to answer one
+  // question empirically instead of by inference: is request latency spent
+  // WAITING FOR A POOLED CONNECTION (pool starvation) or RUNNING THE QUERY
+  // (slow SQL / network)? pool.query() alone can't distinguish these -- it
+  // hides the connection checkout inside itself. Logs one line per query
+  // over POOL_METRICS_LOG_MS (default 20ms combined) with both numbers
+  // broken out, plus live pool.totalCount/idleCount/waitingCount so a
+  // saturated pool (waitingCount > 0) is directly observable rather than
+  // inferred from slow responses.
+  const metricsOn = process.env.PG_POOL_METRICS === '1';
+  const logThresholdMs = Number(process.env.PG_POOL_METRICS_LOG_MS || 20);
+  async function runQuery(sql, params) {
+    if (!metricsOn) return pool.query(translateSql(sql), params);
+    const tWaitStart = performance.now();
+    const conn = await pool.connect();
+    const tQueryStart = performance.now();
+    try {
+      const res = await conn.query(translateSql(sql), params);
+      const tEnd = performance.now();
+      const waitMs = tQueryStart - tWaitStart;
+      const queryMs = tEnd - tQueryStart;
+      if (waitMs + queryMs >= logThresholdMs) {
+        console.log(`[pg-metrics] wait=${waitMs.toFixed(1)}ms query=${queryMs.toFixed(1)}ms pool={total:${pool.totalCount},idle:${pool.idleCount},waiting:${pool.waitingCount}} sql=${sql.trim().slice(0, 80)}`);
+      }
+      return res;
+    } finally {
+      conn.release();
+    }
+  }
   const client = { driver: 'postgres' };
   client.q = async (sql, params = []) => {
-    const res = await pool.query(translateSql(sql), params);
+    const res = await runQuery(sql, params);
     return res.rows;
   };
   client.q1 = async (sql, params = []) => {
@@ -129,10 +165,15 @@ async function createPg() {
     return rows[0] || null;
   };
   client.run = async (sql, params = []) => {
-    const res = await pool.query(translateSql(sql), params);
+    const res = await runQuery(sql, params);
     return { changes: res.rowCount ?? 0 };
   };
   client.exec = (sql) => pool.query(sql);
+  // Live pool occupancy -- waitingCount > 0 means requests are queued
+  // behind a full pool RIGHT NOW (pool starvation, directly observed, not
+  // inferred). Cheap (reads pg's own in-memory counters); safe to call from
+  // a debug endpoint or the load-test harness at any time, in any mode.
+  client.poolStats = () => ({ total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount });
   // Multi-statement transaction (rolls back on any failure). When an orgId is
   // provided, RLS (database/rls.sql) is engaged for the whole transaction via
   // SET LOCAL — it is scoped to this connection+tx and reset automatically at

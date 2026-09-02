@@ -17,7 +17,8 @@
     "test": "node --test",
     "pg:validate": "node scripts/pg-validate.js",
     "smoke:food-ai": "node scripts/food-ai-smoke.js",
-    "bench": "node scripts/food-benchmark.js --engine v1"
+    "bench": "node scripts/food-benchmark.js --engine v1",
+    "loadtest": "node scripts/loadtest.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -28,5 +29,8 @@
     "pdfkit": "^0.15.0",
     "pg": "^8.12.0",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0"
   }
 }
