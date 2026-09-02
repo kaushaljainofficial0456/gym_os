@@ -51,7 +51,18 @@ const EMPTY_MANUAL = {
   calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '',
 };
 
-const EMPTY_CUSTOM = { name: '', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// servingGrams defaults to '100' -- typing straight per-100g values (the
+// old behavior) still works with zero extra steps.
+const EMPTY_CUSTOM = { name: '', servingGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// Same convention as MyDietCard.jsx's own parseServing / me.js's
+// baseServingAmount -- the leading number in a "123 g"-style serving
+// string, defaulting to 100 for anything else (blank, "1 serving", a
+// legacy row with no serving at all).
+const baseServingGrams = (serving) => {
+  const s = String(serving || '100').trim();
+  const m = s.match(/^([\d.]+)/);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : 100;
+};
 const REQUIRED_CUSTOM_MACROS = ['calories', 'protein', 'carbs', 'fat'];
 const OPTIONAL_CUSTOM_MACROS = ['fiber', 'sugar', 'sodium'];
 
@@ -615,9 +626,11 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     const cf = customForm;
     const name = cf.name.trim();
     if (!name) { setCustomErr('Name this food first'); return; }
-    const nums = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
+    const servingG = Number(cf.servingGrams);
+    if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
+    const entered = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
     for (const key of REQUIRED_CUSTOM_MACROS) {
-      const v = nums[key];
+      const v = entered[key];
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key === 'calories' ? 'calorie' : key} value`); return; }
     }
     // fiber/sugar/sodium are OPTIONAL -- blank means "not tracked", never
@@ -627,7 +640,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       if (raw === '' || raw == null) continue;
       const v = Number(raw);
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key} value`); return; }
-      nums[key] = v;
+      entered[key] = v;
     }
     if (!skipDuplicateCheck) {
       try {
@@ -638,13 +651,32 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     }
     setCustomSaving(true);
     try {
-      await api('/me/foods', { method: 'POST', body: JSON.stringify({ name, ...nums }) });
-      // quantity:1/unit:'serving' -- a Custom Macros entry has no grams
-      // concept (it's "however much this one serving is"), but "1
-      // serving" IS a real, meaningful baseline for later proportional
-      // editing (2 servings -> exactly 2x these macros), unlike leaving
-      // quantity unset (which silently defaulted to a fabricated "100").
-      await onAdd({ name, calories: Math.round(nums.calories), protein: nums.protein, carbs: nums.carbs, fat: nums.fat, source: 'manual', quantity: 1, unit: 'serving' }, { keepOpen: true });
+      // Real bug, found live: every `foods` row in this app is per-100g
+      // internally (same convention the manual-barcode form already
+      // follows -- "entered values are per-serving; store per-100g like
+      // every other source"), but this form let someone type values for
+      // ANY serving size with no conversion, so a real 300-400g meal's
+      // totals (completely normal for that size) tripped the backend's
+      // physical-plausibility check ("protein+carbs+fat+fiber can't
+      // exceed 100g per 100g of food") -- which is CORRECT for 100g, just
+      // being fed numbers that were never meant to represent 100g.
+      // `nums` below is what actually gets stored; `entered` (the values
+      // exactly as typed) is what gets logged right now, since that's
+      // the real amount being eaten today.
+      // `serving` describes what the STORED numbers represent -- always
+      // "100 g" here, never the user's original serving size. Storing
+      // the original size instead would double-scale every future
+      // resolve: baseServingAmount() would divide by (say) 400 on top of
+      // numbers that are already per-100g, quietly quartering every
+      // later quantity this food is logged at.
+      const factor = 100 / servingG;
+      const nums = Object.fromEntries(Object.entries(entered).map(([k, v]) => [k, v * factor]));
+      await api('/me/foods', { method: 'POST', body: JSON.stringify({ name, serving: '100 g', ...nums }) });
+      // quantity/unit now reflect the REAL entered serving size, not a
+      // fabricated "1 serving" -- lets a later "Edit Quantity" scale
+      // proportionally from an actual baseline (see PUT /me/meal-logs/:id's
+      // own comment on the bug this pattern closes elsewhere).
+      await onAdd({ name, calories: Math.round(entered.calories), protein: entered.protein, carbs: entered.carbs, fat: entered.fat, source: 'manual', quantity: servingG, unit: 'g' }, { keepOpen: true });
       setCustomForm(EMPTY_CUSTOM);
       setCustomDuplicate(null);
       setShowMoreMacros(false);
@@ -656,15 +688,19 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
 
   // "Use existing" -- log the ALREADY-SAVED food with this name instead of
   // creating a duplicate row; its own stored macros are the source, never
-  // the form's (possibly different) values the user just typed.
+  // the form's (possibly different) values the user just typed. Its
+  // macros are per-100g like every other food (see submitCustomFood's own
+  // comment) -- log the REAL base amount (parsed from its own `serving`,
+  // defaulting to 100g for a legacy row), never a fabricated "1 serving".
   const useDuplicateCustomFood = async () => {
     if (!customDuplicate) return;
     setCustomSaving(true);
     try {
+      const baseG = baseServingGrams(customDuplicate.serving);
       await onAdd({
         name: customDuplicate.name, calories: Math.round(customDuplicate.calories || 0),
         protein: customDuplicate.protein || 0, carbs: customDuplicate.carbs || 0, fat: customDuplicate.fat || 0,
-        source: 'manual', quantity: 1, unit: 'serving',
+        source: 'manual', quantity: baseG, unit: 'g',
       }, { keepOpen: true });
       setCustomForm(EMPTY_CUSTOM);
       setCustomDuplicate(null);
@@ -1029,25 +1065,28 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                        placeholder="e.g. Homemade Paneer" autoFocus
                        className="input w-full !py-2 mt-1" aria-label="Food name" />
               </label>
-              {/* Clarifies the numbers below are PER 100 G, not "per this
-                  whole meal/serving" -- a real, live bug report traced back
-                  to exactly this ambiguity: nothing on the form said so,
-                  and the backend's own physical-plausibility check
-                  (protein+carbs+fat+fiber can't exceed 100g per 100g of
-                  food) correctly rejects a serving-sized entry with a
-                  now-readable error (see api.js's own fix), but the
-                  clearer fix is not needing that error in the first
-                  place. Confirmed against this codebase's own established
-                  convention: the manual-barcode product form (below, a
-                  different screen) explicitly converts whatever a person
-                  types against a real serving size into per-100g before
-                  storing it ("entered values are per-serving; store
-                  per-100g like every other source") -- every `foods` row
-                  in this app is per-100g internally, Custom Macros just
-                  never had a serving-size field to convert FROM, so it
-                  quietly required per-100g input without ever saying so. */}
+              {/* Real bug, found live: this form used to have no serving
+                  concept at all -- whatever someone typed was stored
+                  as-is and treated as per-100g internally (the same
+                  convention every other food in this app uses), so a
+                  genuinely normal 300-400g meal's real totals (never
+                  meant to describe 100g) tripped the backend's own
+                  physical-plausibility check ("protein+carbs+fat+fiber
+                  can't exceed 100g per 100g of food") -- a correct
+                  check, just being fed numbers for the wrong amount.
+                  Fixed the actual gap instead of just explaining it:
+                  a real serving-size field, converted to per-100g
+                  before saving (submitCustomFood's own comment), the
+                  same way the manual-barcode form already does. */}
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Serving size (g) *</span>
+                <input type="number" min="1" step="any" value={customForm.servingGrams}
+                       onChange={(e) => setCustomField('servingGrams', e.target.value)}
+                       placeholder="e.g. 250 for one bowl"
+                       className="input w-full !py-2 mt-1 tabular-nums" aria-label="Serving size in grams" />
+              </label>
               <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
-                Enter values <b>per 100&nbsp;g</b> of this food — the same way every other food here is measured.
+                Enter the macros below for <b>that serving</b> — e.g. everything in one full bowl or plate, not per 100&nbsp;g.
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[['calories', 'Calories *'], ['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (

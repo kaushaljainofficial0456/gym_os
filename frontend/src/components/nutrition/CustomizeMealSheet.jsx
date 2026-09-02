@@ -121,11 +121,18 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   // then add IT to the meal via the ordinary food_id path -- so it lands
   // as a real, correctly-sourced ('database') item, not something faked
   // up as an AI estimate just to fit that shape.
-  const addCustomFoodItem = async ({ name: foodName, ...nums }) => {
+  const addCustomFoodItem = async ({ name: foodName, servingGrams, ...nums }) => {
     if (!name.trim()) throw new Error('Name your meal first');
     const created = await api('/me/foods', { method: 'POST', body: JSON.stringify({ name: foodName, ...nums }) });
     const id = await ensureMeal();
-    await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: created.id, name: foodName, quantity: 1 }) });
+    // POST /me/meals/:id/items multiplies quantity directly against the
+    // food's own stored (per-100g) macros -- quantity:1 always flat here
+    // used to mean "100 g regardless of what was actually typed" once
+    // MealFoodRow started converting Custom Macros to per-100g (a real
+    // bug this closes). servingGrams/100 is the multiplier that gets
+    // back to the real entered amount -- e.g. a 250g bowl -> 2.5.
+    const quantity = servingGrams > 0 ? servingGrams / 100 : 1;
+    await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: created.id, name: foodName, quantity }) });
     await refreshItems(id);
     toast(`+ ${foodName} added`);
   };

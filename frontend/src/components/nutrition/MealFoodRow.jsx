@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import AIEstimateCard from './AIEstimateCard.jsx';
 
-const EMPTY_CUSTOM = { name: '', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// servingGrams defaults to '100' -- same convention as FoodLogSheet.jsx's
+// own Custom Macros form (see its EMPTY_CUSTOM comment for the real bug
+// this closes).
+const EMPTY_CUSTOM = { name: '', servingGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
 // Required for a valid submission (Part 14); fiber/sugar/sodium are
 // optional extras, tucked behind a disclosure so the primary 4-field
 // flow stays uncluttered.
@@ -121,9 +124,11 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
     const cf = customForm;
     const foodName = cf.name.trim();
     if (!foodName) { setCustomErr('Name this food first'); return; }
-    const nums = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
+    const servingG = Number(cf.servingGrams);
+    if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
+    const entered = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
     for (const key of REQUIRED_MACROS) {
-      const v = nums[key];
+      const v = entered[key];
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key === 'calories' ? 'calorie' : key} value`); return; }
     }
     // fiber/sugar/sodium are OPTIONAL -- blank means "not tracked", never
@@ -134,7 +139,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
       if (raw === '' || raw == null) continue;
       const v = Number(raw);
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key} value`); return; }
-      nums[key] = v;
+      entered[key] = v;
     }
     if (!skipDuplicateCheck) {
       try {
@@ -144,7 +149,20 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
       } catch { /* lookup failure -- fall through and create normally rather than block on it */ }
     }
     setAdding(true);
-    try { await onAddCustom({ name: foodName, ...nums }); setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); onAdded?.(); }
+    try {
+      // Same real bug/fix as FoodLogSheet.jsx's own Custom Macros form:
+      // every `foods` row is per-100g internally, so convert what was
+      // actually typed (for THIS serving) before saving. `servingGrams`
+      // travels alongside the converted numbers so the parent
+      // (CustomizeMealSheet's addCustomFoodItem) can add this item at
+      // the right quantity (servingGrams/100) against the now-per-100g
+      // food, instead of a flat "1" that would silently mean "100 g"
+      // regardless of what was entered.
+      const factor = 100 / servingG;
+      const nums = Object.fromEntries(Object.entries(entered).map(([k, v]) => [k, v * factor]));
+      await onAddCustom({ name: foodName, serving: '100 g', servingGrams: servingG, ...nums });
+      setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); onAdded?.();
+    }
     catch (e) { setCustomErr(e.message || 'Could not add that food'); }
     setAdding(false);
   };
@@ -209,10 +227,16 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
         <div className="space-y-2">
           <input value={customForm.name} onChange={(e) => setCustomField('name', e.target.value)}
                  placeholder="What's this food called?" className="input w-full !py-2 text-[12px]" />
-          {/* Same clarification as FoodLogSheet.jsx's own Custom Macros
-              form -- see its comment for the real bug this closes. */}
+          {/* Same real serving-size fix as FoodLogSheet.jsx's own Custom
+              Macros form -- see its handleAddCustom comment for the bug
+              this closes (a real serving's totals tripping the
+              per-100g physical-plausibility check). */}
+          <input type="number" min="1" step="any" value={customForm.servingGrams}
+                 onChange={(e) => setCustomField('servingGrams', e.target.value)}
+                 placeholder="Serving size (g)" aria-label="Serving size in grams"
+                 className="input w-full !py-1.5 text-[11px] tabular-nums" />
           <div className="text-[9px]" style={{ color: t.faint }}>
-            Values are <b>per 100 g</b> of this food.
+            Macros below are for <b>that serving</b>, not per 100 g.
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             {[['calories', 'Calories'], ['protein', 'Protein (g)'], ['carbs', 'Carbs (g)'], ['fat', 'Fat (g)']].map(([key, label]) => (

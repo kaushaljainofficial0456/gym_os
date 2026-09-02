@@ -56,23 +56,43 @@ re-done here; spot-checked live in this pass and still correct.
    full-body grep before removing, not assumed). Also parallelized two
    independent lookups (`user`, `client`) that were sequential for no
    reason.
-7. **Custom Macros could fail with a bare "Invalid food data"** — reported
-   live by the user. `POST /me/foods`'s own `validateFoodRecord()` check
-   (protein+carbs+fat+fiber can't exceed 100g per 100g of food — a real,
-   correct physical-plausibility rule, not a bug) returns its reasons in a
+7. **Custom Macros could fail with a bare "Invalid food data" for
+   completely realistic values** — reported live by the user (a
+   300g-plate-sized biryani: 835 kcal, 30g protein, 100g carbs, 35g fat).
+   `POST /me/foods`'s own `validateFoodRecord()` check (protein+carbs+
+   fat+fiber can't exceed 100g per 100g of food — a real, correct
+   physical-plausibility rule, not a bug) returns its reason in a
    `details` array, a *second* instance of the exact class of bug just
-   fixed for `issues`: the frontend's `api()` only folded `issues` into
-   the error message, not `details`, so this route's own real reason was
-   equally being discarded. Extended the same fold to cover both keys.
-   Root cause of *why* users hit this rule at all: nothing on the Custom
-   Macros form said the values are per 100g (confirmed against this
-   codebase's own established convention — the manual-barcode form
-   explicitly converts a real serving size to per-100g before storing,
-   "entered values are per-serving; store per-100g like every other
-   source" — Custom Macros just never had a serving field to convert
-   from, so it silently required per-100g input). Added a one-line
-   clarification to both Custom Macros forms (`FoodLogSheet.jsx` and
-   `MealFoodRow.jsx`) rather than weakening the validation rule.
+   fixed for `issues`: `api()` only folded `issues` into the error
+   message, not `details`. Extended the fold to cover both (first fix).
+   Root cause of *why* the rule rejected genuinely normal data: Custom
+   Macros had no serving-size concept at all — every `foods` row in this
+   app is per-100g internally (confirmed against this codebase's own
+   convention: the manual-barcode form already converts a real serving
+   size to per-100g before storing, "entered values are per-serving;
+   store per-100g like every other source"), so a real ~300g plate's
+   totals (completely normal for that size) were being validated as if
+   they described 100g. **Real fix, not just a clearer error**: added an
+   actual "Serving size (g)" field to both Custom Macros forms
+   (`FoodLogSheet.jsx` and `MealFoodRow.jsx`), converts entered values to
+   per-100g before saving (`factor = 100/servingGrams`), stores
+   `serving: '100 g'` (what the saved numbers actually represent — NOT
+   the original serving size, which would double-scale every future
+   quantity), and logs the *original* entered values immediately with a
+   real `quantity`/`unit` instead of a fabricated "1 serving". The
+   Customize Meal path additionally needed its own fix: `POST
+   /me/meals/:id/items` multiplies `quantity` directly against the
+   food's stored macros, so `MealFoodRow.jsx` now passes `servingGrams`
+   through and `CustomizeMealSheet.jsx`'s `addCustomFoodItem` computes
+   `quantity = servingGrams / 100` instead of a flat `1` (which would
+   have silently meant "log 100g of it" regardless of what was typed).
+   **Live-verified end to end** with the user's exact numbers at a 300g
+   serving: saved cleanly, logged today's totals correctly as
+   `835 kcal / 30g / 100g / 35g` (not scaled wrong), and the stored row
+   confirmed as genuinely per-100g (`278.33 kcal, 10g, 33.33g, 11.67g`) —
+   then re-resolved at 150g and got exactly half of the original entry
+   (`417.5 kcal, 15g, 50g, 17.5g`), proving future quick-logs of this
+   food scale correctly too.
 
 ## 1b. App-wide reload/remount fix (the single biggest change in this pass)
 
