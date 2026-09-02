@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { config } from './config.js';
+import { getDb, runWithOrg } from './db.js';
+import { getOrgTzCached, DEFAULT_TZ } from './utils/time.js';
 
 export const hashPassword = (plain) => bcrypt.hash(plain, 10);
 export const verifyPassword = (plain, hash) => bcrypt.compare(plain, hash);
@@ -44,17 +46,13 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
   try {
-    const { getDb } = await import('./db.js');
     const db = await getDb();
-    const { getOrgTz } = await import('./utils/time.js');
-    req.tz = await getOrgTz(db, req.user.org || null);
+    req.tz = await getOrgTzCached(db, req.user.org || null);
   } catch {
-    const { DEFAULT_TZ } = await import('./utils/time.js').catch(() => ({ DEFAULT_TZ: 'Asia/Kolkata' }));
     req.tz = DEFAULT_TZ;
   }
   // Scope the authenticated org for the rest of this request (db.tx uses it to
   // engage PostgreSQL RLS). Must wrap next() so the ALS context covers downstream.
-  const { runWithOrg } = await import('./db.js');
   runWithOrg(req.user.org || null, () => next());
 }
 

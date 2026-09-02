@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
-import { dayKey, getOrgTz } from '../utils/time.js';
+import { dayKey, getOrgTzCached } from '../utils/time.js';
 import { computeAdherence } from '../services/adherence.js';
 import { generateCoachMessage } from '../services/aiCoach.js';
 import { todaySession, getActiveProgram, getProgramDays } from '../services/trainingProgram.js';
@@ -121,14 +121,15 @@ export default function trackingRoutes(db) {
   // ---- client home bundle (client portal) ----
   r.get('/me/home', async (req, res) => {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
-    const user = await db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]);
-    const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
+    const [user, client] = await Promise.all([
+      db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]),
+      db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub])
+    ]);
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
     const d = dayKey();
 
-    const [plan, meals, logs, water, sleep, adherence, profile] = await Promise.all([
+    const [plan, logs, water, sleep, adherence, profile] = await Promise.all([
       db.q1('SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]),
-      db.q('SELECT * FROM meals WHERE plan_id IN (SELECT id FROM nutrition_plans WHERE client_id = ?) ORDER BY position', [client.id]),
       db.q('SELECT * FROM meal_logs WHERE client_id = ? AND date = ?', [client.id, d]),
       db.q1('SELECT litres FROM water_logs WHERE client_id = ? AND date = ?', [client.id, d]),
       db.q1('SELECT * FROM sleep_logs WHERE client_id = ? AND date = ?', [client.id, d]),
@@ -143,7 +144,7 @@ export default function trackingRoutes(db) {
       carbs: s.carbs + l.carbs, fat: s.fat + l.fat
     }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-    const tz = await getOrgTz(db, client.org_id);
+    const tz = await getOrgTzCached(db, client.org_id);
     const session = await todaySession(db, client.id, tz);
 
     res.json({
@@ -183,7 +184,7 @@ export default function trackingRoutes(db) {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
     const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
-    const tz = await getOrgTz(db, client.org_id);
+    const tz = await getOrgTzCached(db, client.org_id);
     const session = await todaySession(db, client.id, tz);
     res.json(session ? { ...session, clientId: client.id } : { workout: null });
   });
