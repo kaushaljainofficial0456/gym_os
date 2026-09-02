@@ -123,8 +123,18 @@ const SPLIT_PRESETS = {
 
 export default function WorkoutBuilder() {
   const tpl = useFetch(() => api('/workouts/templates'));
-  const lib = useFetch(() => api('/workouts/exercises'));
   const clients = useFetch(() => api('/clients?sort=name'));
+  // The full exercise library (287 rows, ~128KB) is ONLY used by the "pick
+  // by muscle" 3D picker below (pickMatches) — everything else on this page
+  // (the "link from library" combobox) uses the debounced, capped
+  // /workouts/exercises?q= search instead. Loading all 287 rows eagerly on
+  // every page mount used to block the entire page behind a 128KB response
+  // it usually never needs; deferred until the picker is actually opened.
+  const [pickerEverOpened, setPickerEverOpened] = useState(false);
+  const lib = useFetch(
+    () => (pickerEverOpened ? api('/workouts/exercises') : Promise.resolve({ exercises: [] })),
+    [pickerEverOpened]
+  );
 
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(null); // draft {id?, name, type, notes, exercises[]}
@@ -230,7 +240,9 @@ export default function WorkoutBuilder() {
     return () => clearTimeout(h);
   }, [toast]);
 
-  if (tpl.loading || lib.loading || clients.loading) return <Spinner label="Loading workout builder…" />;
+  // lib.loading is intentionally excluded: it only feeds the muscle-picker
+  // modal (opened on demand, see pickerEverOpened above), not the main page.
+  if (tpl.loading || clients.loading) return <Spinner label="Loading workout builder…" />;
   if (tpl.error) return <ErrorState error={tpl.error} onRetry={tpl.reload} />;
 
   const startNew = () => {
@@ -429,7 +441,7 @@ export default function WorkoutBuilder() {
                 ))}
                 <div className="flex gap-2">
                   <button className="btn flex-1 !border-dashed" onClick={addEx}>+ Add exercise</button>
-                  <button className="btn flex-1 !border-dashed" onClick={() => setPickOpen(true)}>◎ Pick by muscle</button>
+                  <button className="btn flex-1 !border-dashed" onClick={() => { setPickerEverOpened(true); setPickOpen(true); }}>◎ Pick by muscle</button>
                 </div>
               </div>
 
@@ -575,9 +587,10 @@ export default function WorkoutBuilder() {
         <div className="grid sm:grid-cols-2 gap-4">
           <MuscleBody3D selectedGroup={pickGroup} onSelect={onPickMuscle} height={380} />
           <div className="min-w-0">
-            <Kicker>{pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
+            <Kicker>{lib.loading ? 'Loading exercise library…' : pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-              {pickMatches.map((ex) => (
+              {lib.loading && <div className="text-center py-8 text-mute text-sm">Loading exercise library…</div>}
+              {!lib.loading && pickMatches.map((ex) => (
                 <button key={ex.id} type="button" onClick={() => addFromPicker(ex)}
                   className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-white/[.02] hover:bg-white/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
                   <span className="min-w-0">
@@ -587,10 +600,10 @@ export default function WorkoutBuilder() {
                   <span className="text-mute shrink-0">+</span>
                 </button>
               ))}
-              {pickGroup && !pickMatches.length && (
+              {!lib.loading && pickGroup && !pickMatches.length && (
                 <div className="text-center py-8 text-mute text-sm">No exercises tagged {pickLabel} yet.</div>
               )}
-              {!pickGroup && (
+              {!lib.loading && !pickGroup && (
                 <div className="text-center py-8 text-mute text-sm">Rotate the model or tap a muscle chip to see matching exercises.</div>
               )}
             </div>
