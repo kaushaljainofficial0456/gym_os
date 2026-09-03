@@ -121,9 +121,14 @@ export default function trackingRoutes(db) {
   // ---- client home bundle (client portal) ----
   r.get('/me/home', async (req, res) => {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
+    // `client` doesn't depend on `user` (both key off req.user.sub, one via
+    // users.id, the other via clients.user_id) -- performance pass, this
+    // route is the single highest-traffic endpoint in the app (every
+    // client page loads it once via ClientLayout's shared fetch), so even
+    // a two-query round-trip saving is worth it here specifically.
     const [user, client] = await Promise.all([
       db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]),
-      db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub])
+      db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]),
     ]);
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
     const d = dayKey();
@@ -136,7 +141,13 @@ export default function trackingRoutes(db) {
       computeAdherence(db, client.id),
       db.q1('SELECT * FROM client_profiles WHERE client_id = ?', [client.id])
     ]);
-
+    // Performance pass: this used to ALSO fetch every meal across every
+    // nutrition plan the client has ever had (`meals`, via a plan_id IN
+    // (...) subquery) inside the Promise.all above -- but nothing in this
+    // route ever read that variable. `latestPlan` below (meals for just
+    // the CURRENT plan) is what the response actually uses. Verified via
+    // a full-body grep before removing, not assumed: a wasted query on
+    // the app's single most-loaded endpoint, now gone.
     const latestPlan = plan ? await db.q('SELECT * FROM meals WHERE plan_id = ? ORDER BY position', [plan.id]) : [];
     const logMap = new Map(logs.map(l => [l.meal_id, l]));
     const eaten = logs.filter(l => l.eaten).reduce((s, l) => ({

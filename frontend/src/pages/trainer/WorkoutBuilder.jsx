@@ -293,7 +293,11 @@ export default function WorkoutBuilder() {
     try {
       await api('/workouts/templates', { method: 'POST', body: JSON.stringify(payload()) });
       setToast('Template saved');
-      await tpl.reload();
+      // silent: true -- this page gates its whole render on
+      // `tpl.loading || lib.loading || clients.loading` (below); a bare
+      // reload() would unmount everything for the duration of the
+      // refetch, same class of bug already fixed for Nutrition.jsx.
+      await tpl.reload({ silent: true });
       setEditing(null);
     } catch (e) { setToast(e.message); }
     setSaving(false);
@@ -302,7 +306,7 @@ export default function WorkoutBuilder() {
   const duplicate = async (id) => {
     await api(`/workouts/templates/${id}/duplicate`, { method: 'POST' });
     setToast('Template duplicated');
-    tpl.reload();
+    tpl.reload({ silent: true });
   };
 
   const assign = async () => {
@@ -337,7 +341,7 @@ export default function WorkoutBuilder() {
       setToast('Exercise added to library');
       setAddOpen(false);
       setAddForm({ name: '', primary_muscle: '', equipment: 'BW', difficulty: 'BEGINNER', instructions: '', cues: '', animation_key: '' });
-      lib.reload();
+      lib.reload({ silent: true });
     } catch (e) { setToast(e.message); }
     setAddSaving(false);
   };
@@ -354,7 +358,7 @@ export default function WorkoutBuilder() {
 
       <div className="grid lg:grid-cols-5 gap-6">
         {/* template list */}
-        <Card className="lg:col-span-2 self-start">
+        <Card className="lg:col-span-2 self-start" data-tour="trainer-workouts-templates">
           <Kicker>Your templates</Kicker>
           <div className="space-y-1.5">
             {templates.map((t) => (
@@ -460,7 +464,7 @@ export default function WorkoutBuilder() {
       </div>
 
       {/* ---- training programs ---- */}
-      <Card>
+      <Card data-tour="trainer-workouts-programs">
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
             <Kicker>Training programs</Kicker>

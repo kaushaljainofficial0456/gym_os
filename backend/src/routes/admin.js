@@ -44,9 +44,23 @@ export default function adminRoutes(db) {
     const clients = await db.q('SELECT * FROM clients WHERE org_id = ?', [orgId]);
     const today = dayKey();
     const monthStart = today.slice(0, 7) + '-01';
+    // First day of the month 5 months back -- e.g. today in 2026-09 -> 2026-04-01.
+    // Widened from `monthStart` alone: a real bug, found live while auditing
+    // this route -- `payments` used to be fetched ONLY from `monthStart`
+    // onward, then the loop below tried to build a "last 6 months" trend by
+    // filtering THAT SAME month-scoped array. Every month except the
+    // current one could only ever match zero rows, so the Business
+    // dashboard's "Revenue · 6 months" chart silently showed 0 for the 5
+    // prior months regardless of actual payment history -- and, worse,
+    // fell into the "No revenue recorded yet" empty state whenever the
+    // CURRENT month happened to have no payments yet, even for a gym with
+    // a real revenue history. Fixing the query window is the actual fix;
+    // `monthlyRevenue` below is now filtered back down to just this month
+    // from the wider set, so it keeps reporting exactly what it did before.
+    const trendStart = (() => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 5); return d.toISOString().slice(0, 10); })();
 
     const [payments, subs, renewalsDue, overdue, attendance, packages, activeSubs] = await Promise.all([
-      db.q('SELECT amount, paid_at FROM payments WHERE org_id = ? AND paid_at >= ?', [orgId, monthStart]),
+      db.q('SELECT amount, paid_at FROM payments WHERE org_id = ? AND paid_at >= ?', [orgId, trendStart]),
       db.q(`SELECT * FROM subscriptions WHERE org_id = ?`, [orgId]),
       db.q(`SELECT COUNT(*) AS n FROM subscriptions WHERE org_id = ? AND renewal_date <= ? AND status = 'active'`,
         [orgId, addDays(new Date(), 30).toISOString().slice(0, 10)]),
@@ -59,7 +73,11 @@ export default function adminRoutes(db) {
             WHERE s.org_id = ? ORDER BY s.end_date DESC LIMIT 50`, [orgId])
     ]);
 
-    const monthlyRevenue = payments.reduce((s, p) => s + Number(p.amount), 0);
+    // `payments` now spans the full 6-month trend window (see trendStart
+    // above) -- monthlyRevenue must filter back down to just the CURRENT
+    // month itself, or it would silently start summing the whole window.
+    const monthlyRevenue = payments.filter(p => (p.paid_at || '').slice(0, 7) === monthStart.slice(0, 7))
+      .reduce((s, p) => s + Number(p.amount), 0);
     // revenue trend: last 6 months by payment month
     const trend = [];
     for (let i = 5; i >= 0; i--) {

@@ -31,12 +31,33 @@ import {
 import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
 import { submitFeedback } from '../services/intelligence/foodFeedback.js';
 import { listActiveAnnouncements } from '../services/platform/announcements.js';
+import {
+  BALANCE_CONFIG, calculateFlexibleCaloriePlan, getBaseTargets, getActivePlan,
+  baseTargetChanged, checkSurplusPrompt, reconcileActivePlan, applyFlexibleCaloriePlan,
+  declineSurplus, cancelActivePlan, recalculatePlanForNewBaseTargets, getPlanHistory, serializePlan,
+  recalculateForEditedDate,
+} from '../services/nutrition/flexibleBalance.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+const r1 = (n) => Math.round((n || 0) * 10) / 10;
+
+// A `foods` row's `serving` is a free-text description ("150 g", "1 bowl",
+// "1 slice"); the LEADING number is the base quantity the stored calories/
+// protein/carbs/fat already represent. Absent entirely for most Custom
+// Macros entries (the form never asks for one) -- defaults to 100, the
+// same "treat it as per-100g" convention MyDietCard.jsx's own frontend
+// parseServing() already uses for the exact same field. Kept as ONE
+// definition so a future serving-format change only needs updating here
+// AND in MyDietCard.jsx's mirror, not a third place too.
+function baseServingAmount(serving) {
+  const s = String(serving || '100').trim();
+  const m = s.match(/^([\d.]+)/);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : 100;
+}
 
 export default function meRoutes(db) {
   const r = Router();
@@ -233,26 +254,53 @@ export default function meRoutes(db) {
     });
   });
 
-  // Confirm and save nutrition targets as a plan
+  // Confirm and save nutrition targets as a plan.
+  //
+  // `calories` is deliberately NEVER trusted from the request -- it's
+  // derived server-side from protein/carbs/fat via the canonical 4/4/9
+  // (Atwater) conversion, the ONE place this route computes it. This is
+  // the single source of truth the target-editing UI's macro inputs feed
+  // into (NutritionTargetSetup.jsx has no calories input at all -- protein/
+  // carbs/fat are the only editable fields, calories is always a derived
+  // display), so a stale or mismatched client-supplied calories figure can
+  // never be persisted, and the saved plan is provably internally
+  // consistent -- previously the four fields were saved as independent,
+  // unrelated numbers with no cross-check at all.
+  const MACRO_BOUNDS = {
+    protein: { min: 20, max: 500, label: 'Protein' },
+    carbs: { min: 20, max: 800, label: 'Carb' },
+    fat: { min: 15, max: 300, label: 'Fat' },
+  };
+  const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
+
   r.post('/nutrition/targets/confirm', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { calories, protein, carbs, fat } = req.body || {};
-    if (!calories || !protein || !carbs || !fat) {
-      return res.status(400).json({ error: 'All macro fields are required' });
+    const body = req.body || {};
+    const values = {};
+    for (const [key, { min, max, label }] of Object.entries(MACRO_BOUNDS)) {
+      const raw = body[key];
+      const n = typeof raw === 'number' ? raw : Number(raw);
+      // Rejects missing, non-numeric strings, NaN, and +/-Infinity in one
+      // check -- Number.isFinite is false for all of them, and unlike a
+      // bare `!raw` check (the previous validation), it does NOT let a
+      // non-empty-but-non-numeric string like "abc" silently become NaN
+      // three lines later and get persisted as a broken plan.
+      if (!Number.isFinite(n)) return res.status(422).json({ error: `${label} target must be a number` });
+      if (n < min || n > max) return res.status(422).json({ error: `${label} target must be between ${min} and ${max}g` });
+      values[key] = Math.round(n);
     }
-    const cal = Math.max(500, Math.min(Number(calories), 10000));
-    const pro = Math.max(20, Math.min(Number(protein), 500));
-    const carb = Math.max(20, Math.min(Number(carbs), 800));
-    const fatV = Math.max(15, Math.min(Number(fat), 300));
+    const cal = Math.round(
+      values.protein * KCAL_PER_G.protein + values.carbs * KCAL_PER_G.carbs + values.fat * KCAL_PER_G.fat
+    );
 
     const id = 'np_' + Math.random().toString(36).slice(2, 10);
     await db.run(
       `INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, pro, carb, fatV, now()]
+      [id, c.org_id, req.user.sub, c.id, 'My Nutrition Plan', cal, values.protein, values.carbs, values.fat, now()]
     );
     track(db, 'nutrition_plan_created', req.user.org, req.user.sub, { client_id: c.id, source: 'client_self' });
-    res.json({ ok: true, plan: { calories: cal, protein: pro, carbs: carb, fat: fatV } });
+    res.json({ ok: true, plan: { calories: cal, protein: values.protein, carbs: values.carbs, fat: values.fat } });
   });
 
   // ---------------- dashboard preferences ----------------
@@ -470,8 +518,23 @@ export default function meRoutes(db) {
        shadowed its catalogue twin and arrived with NO portion chips and no
        oil control, which is exactly what made the picker look like the
        feature had not shipped. Enrich them by name so a stored row behaves
-       identically to a fresh catalogue hit. */
+       identically to a fresh catalogue hit.
+       ONLY for `source === 'VERIFIED_DATABASE'` rows -- a materialized
+       catalogue food genuinely IS the same food its twin describes, so
+       borrowing the twin's portions/source_id is correct. A genuinely
+       custom (`USER_ENTERED`) food is NOT the same food as whatever
+       happens to share its name in the model -- attaching a name-matched
+       twin's portions/source_id there was the exact mechanism behind a
+       real, confirmed bug (tapping a custom "Bread" could silently price
+       and log the MODEL's "Bread" instead, because the resolve endpoint
+       only ever knew how to look a food up by source_id/name, never by
+       this row's own id -- see /foods/resolve's food_id branch, the
+       actual fix). `f.id` (this row's own primary key) is ALWAYS present
+       regardless of enrichment -- it's a bare `...row` spread -- so the
+       frontend can and now does identify this exact row unambiguously
+       whether or not a twin was found. */
     const enrich = (row) => {
+      if (row.source !== 'VERIFIED_DATABASE') return { ...row, portions: [], oil_applicable: false };
       const twin = foodModelAvailable() ? searchFoodModel(row.name, { limit: 1 })[0] : null;
       return {
         ...row,
@@ -613,9 +676,51 @@ export default function meRoutes(db) {
    */
   r.post('/foods/resolve', validate(schemas.foodResolveQuantity), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
-    const { source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
+    const { food_id, source_id, name, portion_key, count = 1, grams, oil_level } = req.body || {};
 
+    // A REAL `foods` table row (the client's own custom food, the gym/
+    // global library, or a previously-materialized catalogue food) --
+    // resolved directly from ITS OWN stored macros via linear scaling,
+    // NEVER by re-searching the model catalogue by name.
+    //
+    // Fixes a real, confirmed bug: this route used to be the ONLY way
+    // any search result got priced, including a client's own custom
+    // food -- which has no `source_id` (it was never derived from the
+    // model), so `searchFoodModel(name, ...)` ran a NAME search against
+    // the model catalogue instead and silently returned THAT food's
+    // macros (or, if `name` happened to loosely match nothing, whatever
+    // ranked first) rather than the custom food's own. A custom "Bread"
+    // with hand-typed macros could resolve to the model's "Bread" --
+    // completely different numbers, logged under the right NAME but the
+    // wrong nutrition. `food_id` (this row's own primary key, always
+    // present for search results built from `mine`/`library` -- see
+    // GET /foods/search) is the stable identifier that makes this
+    // impossible: it looks up the EXACT row, never a name-based guess.
+    // Ownership-scoped exactly like every other /foods/:id route: the
+    // client's OWN food, or a gym/global library row (shared-safe
+    // reads), never another client's private food.
+    if (food_id) {
+      const row = await db.q1(
+        'SELECT * FROM foods WHERE id = ? AND (client_id = ? OR client_id IS NULL)',
+        [food_id, c.id]);
+      if (!row) return res.status(404).json({ error: 'No matching food' });
+      const baseAmount = baseServingAmount(row.serving);
+      const g = Number(grams) > 0 ? Number(grams) : baseAmount;
+      const factor = g / baseAmount;
+      return res.json({
+        totals: {
+          energy_kcal: r1((row.calories || 0) * factor),
+          protein_g: r1((row.protein || 0) * factor),
+          carb_g: r1((row.carbs || 0) * factor),
+          fat_g: r1((row.fat || 0) * factor),
+        },
+        grams: r1(g),
+        quantity_label: `${r1(g)}g`,
+        oil: null,
+      });
+    }
+
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
     const hits = searchFoodModel(name || source_id || '', { limit: 25 });
     const food = (source_id && hits.find((x) => x.source_id === source_id)) || hits[0];
     if (!food) return res.status(404).json({ error: 'No matching food' });
@@ -679,19 +784,23 @@ export default function meRoutes(db) {
 
   r.post('/foods', validate(schemas.foodCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { name, unit, serving, calories, protein, carbs, fat, category } = req.body || {};
+    const { name, unit, serving, calories, protein, carbs, fat, fiber, sugar, sodium, category } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Food name is required' });
     // Reject invalid macro values outright (negative, impossible combos) --
     // never silently clamp or drop them, since the client would see a
     // "saved" food that quietly logs the wrong number every time it's used.
-    const check = validateFoodRecord({ name, energy_kcal: calories, protein_g: protein, carb_g: carbs, fat_g: fat });
+    // fiber/sugar/sodium are optional (Part 14) but still validated when
+    // present -- e.g. fiber folds into the same "can't exceed 100g per
+    // 100g" sanity check as protein/carbs/fat.
+    const check = validateFoodRecord({ name, energy_kcal: calories, protein_g: protein, carb_g: carbs, fat_g: fat, fiber_g: fiber, sugar_g: sugar, sodium_mg: sodium });
     if (!check.valid) return res.status(400).json({ error: 'Invalid food data', details: check.errors });
     const fId = id('food');
     await db.run(
-      `INSERT INTO foods (id, org_id, client_id, name, unit, serving, calories, protein, carbs, fat, category, is_global)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,0)`,
+      `INSERT INTO foods (id, org_id, client_id, name, unit, serving, calories, protein, carbs, fat, fiber, sugar, sodium, category, is_global)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`,
       [fId, c.org_id, c.id, String(name).trim().slice(0, 80), unit ? String(unit).slice(0, 30) : null,
        serving ? String(serving).slice(0, 60) : null, num(calories), num(protein), num(carbs), num(fat),
+       fiber != null ? num(fiber) : null, sugar != null ? num(sugar) : null, sodium != null ? num(sodium) : null,
        category ? String(category).slice(0, 40) : null]);
     track(db, 'custom_food_created', req.user.org, req.user.sub, { client_id: c.id });
     res.json({ id: fId });
@@ -705,7 +814,7 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const food = await db.q1('SELECT * FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!food) return res.status(404).json({ error: 'Food not found' });
-    const { name, serving, unit, calories, protein, carbs, fat } = req.body || {};
+    const { name, serving, unit, calories, protein, carbs, fat, fiber, sugar, sodium } = req.body || {};
     const sets = [], params = [];
     if (name !== undefined) { sets.push('name = ?'); params.push(String(name).trim().slice(0, 80)); }
     if (serving !== undefined) { sets.push('serving = ?'); params.push(String(serving).slice(0, 60)); }
@@ -714,6 +823,9 @@ export default function meRoutes(db) {
     if (protein !== undefined) { sets.push('protein = ?'); params.push(num(protein)); }
     if (carbs !== undefined) { sets.push('carbs = ?'); params.push(num(carbs)); }
     if (fat !== undefined) { sets.push('fat = ?'); params.push(num(fat)); }
+    if (fiber !== undefined) { sets.push('fiber = ?'); params.push(num(fiber)); }
+    if (sugar !== undefined) { sets.push('sugar = ?'); params.push(num(sugar)); }
+    if (sodium !== undefined) { sets.push('sodium = ?'); params.push(num(sodium)); }
     if (sets.length) { params.push(food.id); await db.run(`UPDATE foods SET ${sets.join(', ')} WHERE id = ?`, params); }
     res.json({ ok: true });
   });
@@ -722,6 +834,50 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     await db.run('DELETE FROM foods WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     res.json({ ok: true });
+  });
+
+  // ---------------- recent foods (Part 40) ----------------
+  // Reuses EXISTING log history (meal_logs) rather than a new table --
+  // "recent" here means "distinct foods you've actually logged before",
+  // reconstructed from their own most-recent snapshot. meal_logs has no
+  // sub-day timestamp column (only a day-granularity `date`), so ordering
+  // is day-level; within the same day there's no reliable cross-database
+  // (SQLite + Postgres) tiebreaker available without a schema migration,
+  // which is out of scope for a read-only convenience feature -- day-level
+  // recency is honest and sufficient for "things you've logged recently".
+  // `source = 'plan'` rows are excluded: those are pre-scheduled meal-plan
+  // entries with their own dedicated UI ("Today's Eaten Meals"), not
+  // things the user found via food search/AI/custom-macros, so they'd be
+  // noise here rather than a genuine "log this again" shortcut.
+  // `meal_template_id IS NOT NULL` rows are ALSO excluded (Part 42): a
+  // saved MEAL logged via "Log Today" writes source='custom', which would
+  // otherwise slip past the 'plan' check and show a whole SAVED MEAL
+  // (e.g. "Morning oats + milk") in what's meant to be a list of
+  // individual FOODS -- confusing at best (Saved Meals already has its
+  // own UI in My Diet) and actively wrong at worst (quick-adding it here
+  // would create a new individual food entry carrying the meal's
+  // aggregate totals, mislabeled as one food). `meal_template_id` is the
+  // structural signal for "this came from a template", checked directly
+  // rather than trusting the `source` string alone to keep meaning this.
+  // `times_logged` is returned alongside so the client can ALSO sort by
+  // frequency (Part 41) from this exact same query -- a second read is
+  // not worth it for what would only reorder the same rows.
+  r.get('/foods/recent', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 8));
+    const rows = await db.q(
+      `SELECT name, source, calories, protein, carbs, fat, date, times_logged FROM (
+         SELECT ml.name, ml.source, ml.calories, ml.protein, ml.carbs, ml.fat, ml.date,
+                COUNT(*) OVER (PARTITION BY LOWER(ml.name)) as times_logged,
+                ROW_NUMBER() OVER (PARTITION BY LOWER(ml.name) ORDER BY ml.date DESC) as rn
+         FROM meal_logs ml
+         WHERE ml.client_id = ? AND ml.eaten = 1 AND ml.source != 'plan' AND ml.meal_template_id IS NULL
+       ) t
+       WHERE rn = 1
+       ORDER BY date DESC, times_logged DESC
+       LIMIT ?`,
+      [c.id, limit]);
+    res.json({ recent: rows });
   });
 
   // NOTE: a second, simpler `GET /foods/search` used to be registered here,
@@ -825,6 +981,11 @@ export default function meRoutes(db) {
     if (!log) return res.status(404).json({ error: 'Log entry not found' });
     await db.run('DELETE FROM meal_logs WHERE id = ? AND client_id = ?', [logId, c.id]);
     track(db, 'meal_log_deleted', req.user.org, req.user.sub, { clientId: c.id, logId });
+    // Retroactive Flexible Calorie Balance correction -- a no-op unless
+    // `log.date` was already settled under an ACTIVE plan (see
+    // flexibleBalance.js). Best-effort: must never block a successful
+    // delete the client is waiting on.
+    recalculateForEditedDate(db, c, log.date).catch(() => {});
     res.json({ ok: true });
   });
 
@@ -837,7 +998,10 @@ export default function meRoutes(db) {
     if (!log) return res.status(404).json({ error: 'Log entry not found' });
     if (quantity === undefined || quantity === null) return res.status(400).json({ error: 'quantity is required' });
     const newQty = Math.max(0.1, Number(quantity));
-    const newUnit = unit !== undefined ? String(unit) : log.unit;
+    // `unit === null` is a real, intended value (see validate.js's
+    // mealLogEntryUpdate comment) -- must be preserved as an actual NULL,
+    // not coerced by String(null) into the literal string "null".
+    const newUnit = unit === undefined ? log.unit : unit === null ? null : String(unit);
 
     // Try to recalculate from food database if the log has a reference food
     let newCalories = log.calories;
@@ -858,6 +1022,9 @@ export default function meRoutes(db) {
       [newQty, newUnit, newCalories, newProtein, newCarbs, newFat, logId, c.id]
     );
     track(db, 'meal_log_updated', req.user.org, req.user.sub, { clientId: c.id, logId });
+    // Retroactive Flexible Calorie Balance correction -- see the DELETE
+    // route above for why this is a safe, best-effort, mostly-no-op call.
+    recalculateForEditedDate(db, c, log.date).catch(() => {});
     res.json({ ok: true, log: { id: logId, quantity: newQty, unit: newUnit, calories: newCalories, protein: newProtein, carbs: newCarbs, fat: newFat } });
   });
 
@@ -1714,6 +1881,145 @@ export default function meRoutes(db) {
       // Transaction failure — nothing is half-created
       res.status(500).json({ error: 'Could not import workout. Please try again.' });
     }
+  });
+
+  // ============================================================
+  // FLEXIBLE CALORIE BALANCE — full architecture/design comment lives in
+  // backend/src/services/nutrition/flexibleBalance.js. Every route below
+  // is scoped via getClient() (authenticated identity only — never a
+  // client-supplied id), matching this file's own convention everywhere
+  // else. `strategy` is the only client-supplied input anywhere in this
+  // block; surplus amounts and source dates are always re-derived
+  // server-side from meal_logs vs. the client's own stored base target.
+  // ============================================================
+  const balanceWriteLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
+
+  r.get('/nutrition/balance', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    const { plan: active, justCompleted, justExpired } = await reconcileActivePlan(db, c, tz);
+    const promptEligible = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
+
+    res.json({
+      baseTarget: liveBase,
+      activePlan: active ? { ...serializePlan(active), targetChanged: baseTargetChanged(active, liveBase) } : null,
+      promptEligible,
+      justSettled: justCompleted,
+      // A plan that was simply abandoned (the client stopped opening the
+      // app) rather than one that genuinely paid itself off -- distinct
+      // from justSettled so the frontend can use a neutral, non-punitive
+      // message for it instead of the "balance is settled" one.
+      justExpired,
+      // A base target already at/below the safety floor has zero room to
+      // redistribute at all -- every strategy would report infeasible for
+      // the same underlying reason. Surfaced so the frontend can show one
+      // clear message instead of making the client click through 4
+      // strategies to discover none of them work.
+      baseTargetTooLow: !!(liveBase && liveBase.calories <= BALANCE_CONFIG.MIN_CALORIE_TARGET),
+      strategies: Object.entries(BALANCE_CONFIG.STRATEGIES).map(([key, v]) => ({ key, ...v })),
+      // Bounds for the CUSTOM strategy's own day/protein inputs -- sent so
+      // the frontend never hardcodes a copy of these that could drift out
+      // of sync with the engine's own real floors.
+      customBounds: {
+        minDays: BALANCE_CONFIG.MIN_PLAN_DURATION_DAYS, maxDays: BALANCE_CONFIG.MAX_PLAN_DURATION_DAYS,
+        minProtein: BALANCE_CONFIG.MIN_PROTEIN_TARGET_G, maxProtein: BALANCE_CONFIG.MAX_PROTEIN_TARGET_G,
+      },
+    });
+  });
+
+  r.post('/nutrition/balance/preview', validate(schemas.balanceStrategy), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    if (!liveBase) return res.status(422).json({ error: 'Set your nutrition targets before adjusting a calorie balance.' });
+
+    const { plan: active } = await reconcileActivePlan(db, c, tz);
+    const prompt = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
+    const totalSurplus = active ? active.remaining_surplus_calories : prompt?.surplusCalories;
+    if (!totalSurplus || totalSurplus <= 0) {
+      return res.status(422).json({ error: 'No eligible calorie surplus to adjust right now.' });
+    }
+    const preview = calculateFlexibleCaloriePlan({
+      baseCalorieTarget: liveBase.calories, proteinTarget: liveBase.protein,
+      carbsTarget: liveBase.carbs, fatTarget: liveBase.fat,
+      surplusCalories: totalSurplus, strategy: req.body.strategy,
+      customDays: req.body.customDays, customProteinTarget: req.body.customProteinTarget,
+    });
+    res.json({ preview, baseTarget: liveBase, totalSurplusCalories: totalSurplus });
+  });
+
+  r.post('/nutrition/balance/apply', balanceWriteLimit, validate(schemas.balanceStrategy), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    if (!liveBase) return res.status(422).json({ error: 'Set your nutrition targets before adjusting a calorie balance.' });
+
+    const { plan: active } = await reconcileActivePlan(db, c, tz);
+    const prompt = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
+    const sourceDate = active ? active.source_date : prompt?.sourceDate;
+    // Merging into an existing plan: applyFlexibleCaloriePlan itself adds
+    // the incoming amount to the existing remaining balance, so only the
+    // NEWLY eligible portion is passed here (0 when just switching
+    // strategy on an already-active plan) -- never the full balance again,
+    // which would double-count it.
+    const incomingSurplus = active ? 0 : (prompt?.surplusCalories || 0);
+    if (!active && incomingSurplus <= 0) {
+      return res.status(422).json({ error: 'No eligible calorie surplus to adjust right now.' });
+    }
+
+    const plan = await applyFlexibleCaloriePlan(db, {
+      orgId: c.org_id, clientId: c.id,
+      sourceDate: sourceDate || dayKey(new Date(), tz),
+      surplusCalories: incomingSurplus,
+      strategy: req.body.strategy,
+      baseTargets: liveBase,
+      customDays: req.body.customDays, customProteinTarget: req.body.customProteinTarget,
+    });
+    track(db, 'balance_plan_created', req.user.org, req.user.sub, { client_id: c.id, strategy: req.body.strategy, merged: !!active });
+    res.status(201).json({ ok: true, plan: serializePlan(plan) });
+  });
+
+  r.post('/nutrition/balance/decline', balanceWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    const { plan: active } = await reconcileActivePlan(db, c, tz);
+    if (active) return res.status(409).json({ error: 'A calorie balance plan is already active. Cancel it first.' });
+    const prompt = await checkSurplusPrompt(db, c, tz, liveBase);
+    if (!prompt) return res.json({ ok: true }); // nothing pending -- idempotent no-op
+    await declineSurplus(db, { orgId: c.org_id, clientId: c.id, sourceDate: prompt.sourceDate });
+    track(db, 'balance_plan_declined', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true });
+  });
+
+  r.post('/nutrition/balance/cancel', balanceWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    await cancelActivePlan(db, c.id);
+    track(db, 'balance_plan_cancelled', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true });
+  });
+
+  // "Your daily target changed. Your current balance plan needs to be
+  // recalculated." -> [Recalculate] hits this; [Cancel adjustment] reuses
+  // /cancel above instead.
+  r.post('/nutrition/balance/recalculate', balanceWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const liveBase = await getBaseTargets(db, c.id);
+    if (!liveBase) return res.status(422).json({ error: 'Set your nutrition targets first.' });
+    const plan = await recalculatePlanForNewBaseTargets(db, c.id, liveBase);
+    if (!plan) return res.status(404).json({ error: 'No active calorie balance plan to recalculate.' });
+    track(db, 'balance_plan_recalculated', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true, plan: serializePlan(plan) });
+  });
+
+  r.get('/nutrition/balance/history', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    // getPlanHistory already returns fully-shaped, camelCased items
+    // (Completed/Cancelled/Expired plans merged with Declined events) --
+    // no further serialization needed here.
+    const history = await getPlanHistory(db, c.id, 20);
+    res.json({ history });
   });
 
   return r;

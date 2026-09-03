@@ -33,7 +33,7 @@ function MembershipActions({ member, onChanged, onError }) {
     try {
       await api(`/admin/members/${member.id}/membership/${action}`, { method: 'POST', body: JSON.stringify({}) });
       onChanged();
-    } catch (e) { onError(e.data?.message || e.message); }
+    } catch (e) { onError(e.message); }
     finally { setBusy(false); }
   };
   const s = member.lifecycle_status;
@@ -89,7 +89,13 @@ export default function Business() {
         name: pkgForm.name, amount: Number(pkgForm.amount), period_days: Number(pkgForm.period_days), features: pkgForm.features
       }) });
       setPkgOpen(false); setPkgForm({ name: '', amount: '', period_days: 30, features: '' });
-      setToast('Package added'); ov.reload();
+      // silent: true -- this page gates its ENTIRE render on
+      // `ov.loading || members.loading` (above); a bare reload() would
+      // unmount the whole dashboard (including whatever modal/toast is
+      // currently open) for the duration of the background refetch, same
+      // class of bug already fixed for Nutrition.jsx (see useFetch's own
+      // comment on why).
+      setToast('Package added'); ov.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
@@ -97,7 +103,7 @@ export default function Business() {
     try {
       await api('/admin/subscriptions', { method: 'POST', body: JSON.stringify({ ...subForm, start_date: subForm.start_date || undefined }) });
       setSubOpen(false); setSubForm({ client_id: '', package_id: '', start_date: '' });
-      setToast('Subscription created'); ov.reload(); members.reload();
+      setToast('Subscription created'); ov.reload({ silent: true }); members.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
@@ -105,7 +111,7 @@ export default function Business() {
     try {
       await api('/admin/payments', { method: 'POST', body: JSON.stringify({ client_id: payForm.client_id, amount: Number(payForm.amount), method: payForm.method }) });
       setPayOpen(false); setPayForm({ client_id: '', amount: '', method: 'cash' });
-      setToast('Payment recorded'); ov.reload();
+      setToast('Payment recorded'); ov.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
@@ -126,7 +132,7 @@ export default function Business() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="trainer-business">
       <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
         <div>
           <div className="text-[11px] text-mute uppercase tracking-[.18em] font-grotesk">{todayLabel}</div>
@@ -256,7 +262,7 @@ export default function Business() {
                 setSavingSet(true);
                 try {
                   await api('/admin/settings', { method: 'PUT', body: JSON.stringify({ ...setForm, crowd_capacity: Number(setForm.crowd_capacity) || 150 }) });
-                  setToast('Gym settings saved'); settings.reload(); crowd.reload();
+                  setToast('Gym settings saved'); settings.reload({ silent: true }); crowd.reload({ silent: true });
                 } catch (e) { setToast(e.message); }
                 setSavingSet(false);
               }}>{savingSet ? 'Saving…' : 'Save gym settings'}</button>
@@ -356,7 +362,7 @@ export default function Business() {
                     )}
                   </td>
                   <td className="py-2.5 pr-3">
-                    {m.subscription_id && <MembershipActions member={m} onChanged={() => { members.reload(); setToast('Updated'); }} onError={(msg) => setToast(msg)} />}
+                    {m.subscription_id && <MembershipActions member={m} onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }} onError={(msg) => setToast(msg)} />}
                   </td>
                 </tr>
               ))}

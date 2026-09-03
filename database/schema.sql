@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
   -- F-10: tracked, not enforced -- see scripts/init-db.js's MIGRATIONS
   -- entry for this same column (existing databases) for the full reasoning.
   email_verified INTEGER NOT NULL DEFAULT 0,
+  terms_accepted_at TEXT,
+  terms_version     TEXT,
   created_at    TEXT NOT NULL
 );
 
@@ -362,6 +364,101 @@ CREATE TABLE IF NOT EXISTS meals (
   position INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_meals_plan ON meals(plan_id);
+
+-- FLEXIBLE CALORIE BALANCE — an optional, opt-in redistribution of a day's
+-- calorie surplus across future days. nutrition_plans above stays the
+-- single BASE TARGET store (untouched by this table); this row layer is
+-- purely an additive "adjustment overlay" the client-facing routes read
+-- alongside it. One ACTIVE row per client is enforced in application code
+-- (backend/src/services/nutrition/flexibleBalance.js) via db.tx() +
+-- a check-then-insert inside the same transaction, not a DB constraint --
+-- SQLite's partial-unique-index syntax and Postgres's don't fully agree,
+-- and the existing codebase has no precedent for a cross-engine partial
+-- index (confirmed by grep), so this follows the established
+-- "transaction is the source of truth" pattern used elsewhere in this file
+-- (see payment_orders / subscriptions handling).
+CREATE TABLE IF NOT EXISTS nutrition_balance_adjustments (
+  id                       TEXT PRIMARY KEY,
+  org_id                   TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id                TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  source_date              TEXT NOT NULL,   -- day the surplus was detected (dayKey, org tz); updated to the
+                                             -- latest contributing day when a new surplus merges in (Section 9)
+  original_surplus_calories   REAL NOT NULL, -- cumulative total ever added to this plan (merges included)
+  remaining_surplus_calories  REAL NOT NULL,
+  strategy                 TEXT NOT NULL,   -- EASY | MODERATE | AGGRESSIVE | INTENSE | CUSTOM | NONE (declined)
+  planned_days             INTEGER NOT NULL,
+  remaining_days           INTEGER NOT NULL,
+  daily_adjustment_calories   REAL NOT NULL,
+  -- Only set when strategy = 'CUSTOM': the client's own chosen duration
+  -- and protein floor, re-supplied to calculateFlexibleCaloriePlan() on
+  -- every future recompute (reconcile / recalculate / merge) exactly the
+  -- way a preset strategy's own fixed minDays is re-read fresh each time
+  -- -- NULL for every other strategy.
+  custom_days              INTEGER,
+  custom_protein_target    REAL,
+  -- BASE target snapshot — what this plan was built from. Compared against
+  -- the client's LIVE nutrition_plans row on every read to detect a manual
+  -- target change mid-plan (Section 17: prompt to recalculate, never
+  -- silently drift).
+  base_calorie_target      REAL NOT NULL,
+  base_protein_target      REAL NOT NULL,
+  base_carbs_target        REAL NOT NULL,
+  base_fat_target          REAL NOT NULL,
+  -- ADJUSTED target — today's effective target, protein/fat floor-protected
+  -- (never proportionally scaled down; see flexibleBalance.js).
+  adjusted_calorie_target  REAL NOT NULL,
+  adjusted_protein_target  REAL NOT NULL,
+  adjusted_carbs_target    REAL NOT NULL,
+  adjusted_fat_target      REAL NOT NULL,
+  status                   TEXT NOT NULL DEFAULT 'ACTIVE', -- ACTIVE|COMPLETED|DECLINED|CANCELLED|EXPIRED
+  -- The last calendar day (dayKey, org tz) this plan's balance has already
+  -- accounted for -- reconcileActivePlan() only ever settles the ONE day
+  -- immediately after this (see flexibleBalance.js's header comment for
+  -- why a full multi-day backfill loop was deliberately not built).
+  last_reconciled_date     TEXT NOT NULL,
+  created_at               TEXT NOT NULL,
+  updated_at               TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nba_client_status ON nutrition_balance_adjustments(client_id, status);
+CREATE INDEX IF NOT EXISTS idx_nba_client_source_date ON nutrition_balance_adjustments(client_id, source_date);
+
+-- One row per day a plan has already settled (written by
+-- reconcileActivePlan()). What it's FOR: editing or deleting a food log
+-- entry for a date that's already been settled needs to know "was this
+-- date already counted, and what did we observe for it at the time" so it
+-- can retroactively correct the plan's remaining balance by exactly the
+-- delta -- without this, a food-log edit for a past date would silently
+-- diverge from the balance the client already saw. See
+-- flexibleBalance.js's recalculateForEditedDate().
+CREATE TABLE IF NOT EXISTS nutrition_balance_adjustment_days (
+  id              TEXT PRIMARY KEY,
+  adjustment_id   TEXT NOT NULL REFERENCES nutrition_balance_adjustments(id) ON DELETE CASCADE,
+  date            TEXT NOT NULL,
+  base_target     REAL NOT NULL,   -- the plan's base_calorie_target at the moment this date was settled
+  settled_amount  REAL NOT NULL,   -- how much of remaining_surplus_calories this date paid down
+  day_surplus     REAL NOT NULL,   -- how much NEW surplus this date's own total contributed (0 if none)
+  actual_calories REAL NOT NULL,   -- meal_logs total observed for this date as of the last (re)settle
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nbad_adjustment_date ON nutrition_balance_adjustment_days(adjustment_id, date);
+CREATE INDEX IF NOT EXISTS idx_nbad_date ON nutrition_balance_adjustment_days(date);
+
+-- Declined-surplus memory: prevents "the SAME surplus event" from
+-- re-prompting after a client picks Don't Adjust (spec requirement).
+-- Deliberately tiny/separate from the table above -- a decline never
+-- becomes a plan, so it doesn't belong in nutrition_balance_adjustments'
+-- own status enum (that enum is about a plan's lifecycle, not "did we
+-- already ask"). One row per client+day is all this needs to answer.
+CREATE TABLE IF NOT EXISTS nutrition_balance_prompts (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  source_date TEXT NOT NULL,
+  decision    TEXT NOT NULL,   -- SHOWN | DECLINED
+  created_at  TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nbp_client_date ON nutrition_balance_prompts(client_id, source_date);
 
 CREATE TABLE IF NOT EXISTS foods (
   id       TEXT PRIMARY KEY,

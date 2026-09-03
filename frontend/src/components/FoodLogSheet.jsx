@@ -28,10 +28,12 @@
  * a barcode's `source_id` shape and would silently mis-resolve it.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import { Pressable } from '../design/index.js';
 import Icon from './Icon.jsx';
 import BarcodeScanner from './BarcodeScanner.jsx';
+import PortionWheel from './PortionWheel.jsx';
 
 const OIL_LEVELS = [
   ['none', 'None'],
@@ -49,13 +51,38 @@ const EMPTY_MANUAL = {
   calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '',
 };
 
+// servingGrams defaults to '100' -- typing straight per-100g values (the
+// old behavior) still works with zero extra steps.
+const EMPTY_CUSTOM = { name: '', servingGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// Same convention as MyDietCard.jsx's own parseServing / me.js's
+// baseServingAmount -- the leading number in a "123 g"-style serving
+// string, defaulting to 100 for anything else (blank, "1 serving", a
+// legacy row with no serving at all).
+const baseServingGrams = (serving) => {
+  const s = String(serving || '100').trim();
+  const m = s.match(/^([\d.]+)/);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : 100;
+};
+const REQUIRED_CUSTOM_MACROS = ['calories', 'protein', 'carbs', 'fat'];
+const OPTIONAL_CUSTOM_MACROS = ['fiber', 'sugar', 'sodium'];
+
 /** Round for display only — never re-used as an input to further math. */
 const r1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
 
-export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false }) {
+export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, mode, setMode, toast }) {
+  // toast is optional (some older call sites may not pass one) -- fall
+  // back to a no-op rather than crash, so a missing prop degrades to
+  // "no toast shown" instead of a hard error on every quick-log.
+  const notify = toast || (() => {});
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  // Distinct from "zero results" (Part 46: no silent failures) -- a
+  // network/server error while searching used to look IDENTICAL to a
+  // genuine no-match, with no way to tell "nothing found" from "the
+  // request never even completed". Cleared on every new keystroke/query.
+  const [searchErr, setSearchErr] = useState('');
+  const [searchRetryNonce, setSearchRetryNonce] = useState(0);
   // Tier 3 (kNN similarity fallback) -- GET /foods/search already includes
   // this alongside an empty `foods` array (see foodEstimator.js's
   // estimateFoodKnn); it's free, local and instant (no AI call), so it's
@@ -67,16 +94,85 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   const [knnEstimate, setKnnEstimate] = useState(null);
   const [knnGrams, setKnnGrams] = useState('100');
   const [knnLogging, setKnnLogging] = useState(false);
+  // Quick-log rows -- each search RESULT gets its own inline grams input +
+  // a "+" button, so a food can be logged straight from the list without
+  // opening the full portion picker (that screen is still reached by
+  // tapping the row's NAME/info instead of "+" -- see `pick()`). Keyed by
+  // the same id every other lookup here uses (`f.id || f.source_id`).
+  // Grams, not a portion+count, to match the row's own compact layout --
+  // still resolved server-side via the SAME /me/foods/resolve endpoint
+  // and the SAME free-grams path the full picker's "Weigh it (g)" field
+  // already uses, never re-derived client-side.
+  const [rowGrams, setRowGrams] = useState({});
+  const [rowLogging, setRowLogging] = useState({});
+  const [rowErr, setRowErr] = useState({});
+  // "+" -> "✓" confirmation (follow-up hardening pass, Sections 6/20) --
+  // keyed the same stable way as rowLogging, so it can never land on the
+  // wrong row if results reorder mid-flight. Purely a transient visual
+  // confirmation alongside the toast, not a persisted "already logged"
+  // flag -- the same food can be quick-logged again (e.g. a second
+  // helping) without the row getting stuck showing a checkmark forever.
+  const [rowChecked, setRowChecked] = useState({});
+  // Recent foods (Part 40) -- reconstructed server-side from the client's
+  // own meal_logs history (GET /me/foods/recent), not a new store. Shown
+  // ONLY on the true idle screen (nothing typed yet) so it doesn't compete
+  // with live search results. Logging one re-uses the exact same quick-log
+  // path a search result's "+" uses, just seeded with the food's last-
+  // known macros instead of a fresh /resolve call (there's no source_id to
+  // resolve against for a plain manual/AI log).
+  const [recentFoods, setRecentFoods] = useState([]);
+  const [recentLogging, setRecentLogging] = useState({});
+  const [recentChecked, setRecentChecked] = useState({});
   const [food, setFood] = useState(null);
-  const [portionKey, setPortionKey] = useState(null);
-  const [count, setCount] = useState(1);
-  const [grams, setGrams] = useState('');
+  // Portion picker (Parts 4-9): the "How many" stepper is gone -- the
+  // system works entirely from selectedPortions (one or more portion+qty
+  // combinations, e.g. 1 small bowl + half a plate) OR an explicit custom
+  // weight, never both at once (picking a portion clears customGrams and
+  // vice versa -- one canonical effective weight, see the resolve effect
+  // below). Each selected portion's own quantity is chosen via the
+  // PortionWheel picker (wheelOpen/wheelPortion), not typed inline.
+  const [selectedPortions, setSelectedPortions] = useState([]); // [{key,label,group,unitGrams,qty}]
+  const [customGrams, setCustomGrams] = useState('');
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const [wheelPortion, setWheelPortion] = useState(null); // the raw portion object the wheel is open for
   const [oil, setOil] = useState(null);
   const [resolved, setResolved] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [listening, setListening] = useState(false);
+  // Custom Macros -- a second entry mode alongside search, reusing the
+  // EXISTING private-food infrastructure (POST /me/foods, already
+  // client_id-scoped + ownership-enforced -- see me.js's PUT/DELETE
+  // /foods/:id -- and already searchable back via the "mine" branch of
+  // GET /me/foods/search). This mode does not invent a second food store;
+  // it's a form in front of the food store that already exists. Saving
+  // both creates the reusable private food AND logs it for today in one
+  // action, then stays open (onAdd(..., { keepOpen: true })) so the next
+  // food can be searched or entered without re-opening the sheet.
+  //
+  // `mode`/`setMode` are CONTROLLED PROPS, not local state -- Nutrition.jsx
+  // owns them (alongside its own `foodLogSheetOpen`). This sheet gets
+  // remounted by its parent route whenever the underlying home data
+  // reloads (a pre-existing behavior of ClientLayout's routed-Outlet
+  // wrapper, unrelated to this feature -- confirmed via a per-mount
+  // instance id: it remounts even during ordinary page settling). Any
+  // state that's LOCAL to this component (q, results, food, aiResult...)
+  // is fine to lose across that remount, since every one of those flows
+  // already calls onClose() on success. Custom Macros is the first flow
+  // that needs to survive a remount while staying open, so it can't live
+  // in local state -- lifting it to the parent (which does NOT remount;
+  // its own `open` state has been verified to persist) is what actually
+  // fixes it, rather than fighting the remount itself.
+  const [customForm, setCustomForm] = useState(EMPTY_CUSTOM);
+  const [customErr, setCustomErr] = useState('');
+  const [customSaving, setCustomSaving] = useState(false);
+  const [showMoreMacros, setShowMoreMacros] = useState(false);
+  // Duplicate-name handling (Part 39) -- the existing "MY FOODS" row with
+  // this exact (case-insensitive) name, when one is found, pending the
+  // user's own choice between reusing it or creating a genuine second one
+  // (e.g. two different homemade dishes both fairly called "Curry").
+  const [customDuplicate, setCustomDuplicate] = useState(null);
   // Tier 4 (food-AI) -- reached only when the user explicitly asks for it
   // after a name search comes back empty, never automatically. See
   // backend/src/services/intelligence/foodAI.js for why: cost, latency and
@@ -136,15 +232,27 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 120);
       if (autoScan) setScanning(true);
+      // Best-effort -- a failed fetch just means no Recent section shows,
+      // never blocks or errors the rest of the sheet.
+      // limit=1 (follow-up hardening pass, Section 4): the idle screen
+      // showed up to 6 Recent items, making the search dialog visually
+      // heavy before the user has even typed anything. The underlying
+      // history itself is untouched (meal_logs keeps every log; this only
+      // limits how many rows THIS fetch asks for) -- also a genuine, if
+      // small, network-payload win (Section 12/27).
+      api('/me/foods/recent?limit=1').then((r) => setRecentFoods(r.recent || [])).catch(() => setRecentFoods([]));
     }
     if (!open) {
-      setQ(''); setResults([]); setFood(null); setResolved(null);
-      setPortionKey(null); setCount(1); setGrams(''); setOil(null); setErr('');
+      setQ(''); setResults([]); setSearchErr(''); setFood(null); setResolved(null);
+      setSelectedPortions([]); setCustomGrams(''); setWheelOpen(false); setWheelPortion(null); setOil(null); setErr('');
       setBarcodeItem(null); setBarcodeGrams(''); setBarcodeResolved(null); setBarcodeErr('');
       setManualAdd(false); setManualBarcode(''); setManualForm(EMPTY_MANUAL); setManualErr('');
       setLabelScanning(false); setLabelNote('');
       setAiResult(null); setAiErr(''); setAiEstimating(false);
       setKnnEstimate(null); setKnnGrams('100'); setKnnLogging(false);
+      setMode('search'); setCustomForm(EMPTY_CUSTOM); setCustomErr(''); setCustomSaving(false); setCustomDuplicate(null); setShowMoreMacros(false);
+      setRowGrams({}); setRowLogging({}); setRowErr({});
+      setRecentFoods([]); setRecentLogging({});
     }
   }, [open, autoScan]);
 
@@ -152,7 +260,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
   useEffect(() => {
     const term = q.trim();
     if (food || term.length < 2) { setResults([]); setKnnEstimate(null); setSearching(false); return undefined; }
-    setSearching(true);
+    setSearching(true); setSearchErr('');
     let dead = false;
     const h = setTimeout(() => {
       api(`/me/foods/search?q=${encodeURIComponent(term)}`)
@@ -162,32 +270,84 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
           setKnnEstimate(r.knn_estimate || null);
           setKnnGrams('100');
         })
-        .catch(() => { if (!dead) { setResults([]); setKnnEstimate(null); } })
+        .catch((e) => { if (!dead) { setResults([]); setKnnEstimate(null); setSearchErr(e.message || 'Could not search right now — check your connection and try again.'); } })
         .finally(() => { if (!dead) setSearching(false); });
     }, 200);
     return () => { dead = true; clearTimeout(h); };
-  }, [q, food]);
+  }, [q, food, searchRetryNonce]);
+
+  // Seed each new result row's quick-log grams with its own sensible
+  // default (same precedence as pick()'s initial portion) -- never
+  // clobbers a value already sitting in a row still on screen.
+  useEffect(() => {
+    if (!results.length) return;
+    setRowGrams((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const f of results) {
+        const key = f.id || f.source_id;
+        if (next[key] === undefined) { next[key] = String(defaultGramsFor(f)); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
 
   // Ask the server for grams + macros whenever the quantity changes.
+  // Two mutually exclusive sources, never combined into one call:
+  //   - customGrams set -> ONE resolve at that exact weight (free-grams
+  //     path, same as before).
+  //   - selectedPortions non-empty -> ONE resolve PER portion (each still
+  //     server-priced individually, portion->grams stays authoritative),
+  //     then the ALREADY-RESOLVED totals are summed here -- summing real
+  //     numbers the server already computed is not re-deriving them, the
+  //     same principle `eaten` totals elsewhere in this app already rely
+  //     on. This is what lets "1 small bowl + half a plate" combine into
+  //     one priced total without a backend change.
   useEffect(() => {
     if (!food) { setResolved(null); return undefined; }
     let dead = false;
-    const h = setTimeout(() => {
-      api('/me/foods/resolve', {
-        method: 'POST',
-        body: JSON.stringify({
-          source_id: food.source_id, name: food.name,
-          portion_key: portionKey || undefined,
-          count: Number(count) || 1,
-          grams: grams ? Number(grams) : undefined,
-          oil_level: oil || undefined,
-        }),
-      })
-        .then((r) => { if (!dead) { setResolved(r); setErr(''); } })
-        .catch((e) => { if (!dead) { setResolved(null); setErr(e.message || 'Could not price that quantity'); } });
-    }, 120);
+    const h = setTimeout(async () => {
+      try {
+        let r = null;
+        if (customGrams && Number(customGrams) > 0) {
+          r = await api('/me/foods/resolve', {
+            method: 'POST',
+            // food_id (this row's own real `foods` primary key, present
+            // for any search result built from the client's own foods or
+            // the gym/global library -- absent for a bare, unmaterialized
+            // model hit) makes resolve() price from THIS food's own
+            // stored macros, never a name-based guess against the model
+            // catalogue. The fix for a real bug: a custom food with no
+            // source_id used to be "resolved" by searching the model for
+            // its NAME instead, silently substituting a different food.
+            body: JSON.stringify({ food_id: food.id || undefined, source_id: food.source_id || undefined, name: food.name, grams: Number(customGrams), oil_level: oil || undefined }),
+          });
+        } else if (selectedPortions.length > 0) {
+          const parts = await Promise.all(selectedPortions.map((p) =>
+            api('/me/foods/resolve', {
+              method: 'POST',
+              body: JSON.stringify({ source_id: food.source_id || undefined, name: food.name, portion_key: p.key, count: p.qty, oil_level: oil || undefined }),
+            })
+          ));
+          if (dead) return;
+          const sum = (field) => parts.reduce((acc, part) => acc + (Number(part.totals?.[field]) || 0), 0);
+          const gramsSum = parts.reduce((acc, part) => acc + (Number(part.grams) || 0), 0);
+          const oilSum = parts.reduce((acc, part) => acc + (Number(part.oil?.delta_kcal) || 0), 0);
+          r = {
+            totals: { energy_kcal: sum('energy_kcal'), protein_g: sum('protein_g'), carb_g: sum('carb_g'), fat_g: sum('fat_g') },
+            grams: Math.round(gramsSum * 10) / 10,
+            quantity_label: selectedPortions.map((p) => `${p.qty}× ${p.label}`).join(' + '),
+            oil: food.oil_applicable ? { delta_kcal: oilSum } : null,
+          };
+        }
+        if (!dead) { setResolved(r); setErr(''); }
+      } catch (e) {
+        if (!dead) { setResolved(null); setErr(e.message || 'Could not price that quantity'); }
+      }
+    }, 150);
     return () => { dead = true; clearTimeout(h); };
-  }, [food, portionKey, count, grams, oil]);
+  }, [food, selectedPortions, customGrams, oil]);
 
   // Re-scale a scanned/saved barcode product as its quantity (in grams)
   // changes. Hits the SAME lookup endpoint with a `servings` multiplier
@@ -230,23 +390,181 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
     }, 0);
   }, [aiResult, aiAdjusted, aiEdits]);
 
+  // ONE derived value for "which top-level screen is showing" (Part 24:
+  // "a clean state/navigation model, not random boolean states"). The
+  // underlying data-bearing state (food/aiResult/barcodeItem/manualAdd/
+  // mode) stays exactly as it was -- each screen still owns its own
+  // content the same way -- this just names which one is CURRENTLY
+  // ACTIVE in one place, computed once, instead of the same
+  // `!food && !barcodeItem && !manualAdd && !aiResult` conjunction being
+  // re-typed at every render gate throughout this file (previously 5
+  // separate copies, one now-fixed source of drift/typo risk). Priority
+  // order matches how these screens can actually nest: manual-add and
+  // AI-result are reached FROM search and never coexist with a picked
+  // food; a picked food (portion picker) and a scanned barcode (confirm
+  // screen) share one shape via backToSearch() already clearing both.
+  const screen = manualAdd ? 'manual' : aiResult ? 'ai' : (food || barcodeItem) ? 'portion' : mode === 'custom' ? 'custom' : 'search';
+
+  // Escape closes the TOPMOST layer only, one step at a time -- whichever
+  // nested screen is active (mirrors goBack()'s own precedence, defined
+  // further below -- referenced only inside this effect's callback, which
+  // isn't invoked until a later keypress, well after that const exists),
+  // and only the whole sheet if nothing else is open. Never requires a
+  // selection first, matching Close's own "exit from anywhere" behavior
+  // (Part 24). Deliberately does NOTHING while the wheel is open --
+  // PortionWheel is a self-contained, independently-reusable component
+  // and owns its own Escape-to-cancel; duplicating that logic here would
+  // mean two independent listeners both reacting to the same keypress.
+  // MUST stay above the `if (!open) return null;` below -- every hook in
+  // this component must run on every render regardless of `open`, or
+  // React throws "Rendered more hooks than during the previous render."
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || wheelOpen) return;
+      if (screen === 'manual') { setManualAdd(false); setManualErr(''); return; }
+      if (screen === 'ai') { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); return; }
+      if (screen === 'portion') { backToSearch(); return; }
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, wheelOpen, screen]);
+
   if (!open) return null;
+
+  // Same "food's own serving, else the bowl group, else its first portion"
+  // precedence `pick()` below uses for the full picker's initial
+  // selection -- reused here so a quick-log row's default grams matches
+  // exactly what the portion picker would have defaulted to.
+  const defaultGramsFor = (f) => {
+    const first = (f.portions || []).find((p) => p.basis === 'serving')
+      || (f.portions || []).find((p) => p.group === 'bowl')
+      || (f.portions || [])[0];
+    return first ? Math.round(first.grams) : 100;
+  };
 
   const pick = (f) => {
     setFood(f);
     setResults([]);
     setKnnEstimate(null);
-    // Default to the food's own serving when it has one, else grams entry.
+    // Default to the food's own serving when it has one (pre-selected at
+    // qty 1, same as a fresh "1 small bowl"), else fall through to a
+    // plain 100g custom weight -- same precedence defaultGramsFor() uses
+    // for quick-log rows, so a food's default quantity is consistent
+    // everywhere it appears.
     const first = (f.portions || []).find((p) => p.basis === 'serving')
       || (f.portions || []).find((p) => p.group === 'bowl')
       || (f.portions || [])[0];
-    setPortionKey(first?.key || null);
-    if (!first) setGrams('100');
+    if (first) {
+      setSelectedPortions([{ key: first.key, label: first.label, group: first.group, unitGrams: first.grams, qty: 1 }]);
+      setCustomGrams('');
+    } else {
+      setSelectedPortions([]);
+      setCustomGrams('100');
+    }
   };
 
   const backToSearch = () => {
     setFood(null); setResolved(null);
     setBarcodeItem(null); setBarcodeResolved(null); setBarcodeErr('');
+    setSelectedPortions([]); setCustomGrams(''); setWheelOpen(false); setWheelPortion(null);
+  };
+
+  // Add/update a portion selection from the wheel picker's "Done". Picking
+  // a NEW/changed portion always wins over a stale custom weight (Part 8:
+  // "one explicit effective-weight calculation" -- never both at once).
+  const applyWheelPortion = (qty) => {
+    if (!wheelPortion) return;
+    setCustomGrams('');
+    setSelectedPortions((prev) => {
+      const idx = prev.findIndex((sp) => sp.key === wheelPortion.key);
+      const entry = { key: wheelPortion.key, label: wheelPortion.label, group: wheelPortion.group, unitGrams: wheelPortion.grams, qty };
+      if (idx === -1) return [...prev, entry];
+      const next = [...prev]; next[idx] = entry; return next;
+    });
+    setWheelOpen(false);
+  };
+
+  const removeSelectedPortion = (key) => setSelectedPortions((prev) => prev.filter((sp) => sp.key !== key));
+
+  // Quick-log a result row at its own inline grams -- resolves through the
+  // SAME server-authoritative /me/foods/resolve endpoint the full picker
+  // uses (free-grams path), then logs and STAYS in the search screen
+  // (keepOpen: true) so the next food can be searched immediately. Never
+  // navigates to the portion picker -- that's reached by tapping the row
+  // itself, not "+" (see the row's onClick vs this handler).
+  const quickLogRow = async (f) => {
+    const key = f.id || f.source_id;
+    const g = Number(rowGrams[key]);
+    setRowErr((prev) => ({ ...prev, [key]: '' }));
+    if (!(g > 0)) { setRowErr((prev) => ({ ...prev, [key]: 'Enter a valid amount in grams' })); return; }
+    setRowLogging((prev) => ({ ...prev, [key]: true }));
+    try {
+      const resolvedRow = await api('/me/foods/resolve', {
+        method: 'POST',
+        // food_id -- see the portion-picker's own resolve call for why.
+        body: JSON.stringify({ food_id: f.id || undefined, source_id: f.source_id || undefined, name: f.name, grams: g }),
+      });
+      const totals = resolvedRow?.totals;
+      if (!totals || totals.energy_kcal == null) throw new Error('Could not price that quantity');
+      await onAdd({
+        name: f.name,
+        calories: Math.round(totals.energy_kcal ?? 0),
+        protein: totals.protein_g ?? 0,
+        carbs: totals.carb_g ?? 0,
+        fat: totals.fat_g ?? 0,
+        quantity: g, unit: 'g',
+      }, { keepOpen: true });
+      // "+" -> "✓" (Sections 5-7/20) -- the row's own button flips to a
+      // checkmark as an immediate, local confirmation. The success TOAST
+      // itself is fired by the caller (Nutrition.jsx's onAdd, right after
+      // this same logEntry call resolves) -- not duplicated here, since
+      // that's already the single source of the "Food logged" copy;
+      // search/results/query all stay untouched since nothing here closes
+      // the sheet or reloads anything.
+      setRowChecked((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setRowChecked((prev) => ({ ...prev, [key]: false })), 1400);
+    } catch (e) {
+      // Rollback to "+" (rowChecked never set) plus BOTH an inline
+      // per-row reason and the exact toast copy the hardening pass
+      // specifies -- an inline-only error is easy to miss under a long
+      // results list; the toast is what a person glances up and sees.
+      setRowErr((prev) => ({ ...prev, [key]: e.message || 'Could not log that food' }));
+      notify("Couldn't log food. Try again.");
+    }
+    setRowLogging((prev) => ({ ...prev, [key]: false }));
+  };
+
+  // Quick-log a Recent entry at its own last-known macros -- there's no
+  // source_id to re-resolve against (a Recent row is a reconstructed log
+  // SNAPSHOT, not a food catalogue match), so this replays those exact
+  // values as a brand-new log entry today, same as if the user had
+  // searched and gotten the same result again. Preserves the original
+  // `source` tag (falls back to 'manual') so a re-logged database/AI
+  // result stays correctly labeled, not silently reclassified.
+  const quickLogRecent = async (r) => {
+    const key = r.name;
+    setRecentLogging((prev) => ({ ...prev, [key]: true }));
+    try {
+      await onAdd({
+        name: r.name, calories: Math.round(r.calories || 0),
+        protein: r.protein || 0, carbs: r.carbs || 0, fat: r.fat || 0,
+        source: r.source && r.source !== 'plan' ? r.source : 'manual',
+      }, { keepOpen: true });
+      setRecentChecked((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setRecentChecked((prev) => ({ ...prev, [key]: false })), 1400);
+    } catch (e) {
+      // The earlier comment here ("onAdd's own caller already surfaces a
+      // toast on failure") was wrong for this exact path -- onAdd's own
+      // catch block never runs when onAdd itself is what throws; the
+      // exception lands right here instead, same as quickLogRow. Without
+      // this, a failed Recent-replay silently reset the button back to
+      // "+" with zero explanation.
+      notify(e.message && e.message !== 'Failed to fetch' ? e.message : "Couldn't log food. Try again.");
+    }
+    setRecentLogging((prev) => ({ ...prev, [key]: false }));
   };
 
   const commit = async () => {
@@ -268,18 +586,128 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
     }
     setBusy(true);
     try {
+      // Stays open, returns to search (never all the way out to the
+      // dashboard) -- Flow B: search -> food detail -> choose portion ->
+      // log -> back to search, ready for the next food.
+      const grams = isBarcode ? Number(barcodeGrams) : resolved?.grams;
       await onAdd({
         name,
         calories: Math.round(totals.energy_kcal ?? 0),
         protein: totals.protein_g ?? 0,
         carbs: totals.carb_g ?? 0,
         fat: totals.fat_g ?? 0,
-      });
-      onClose();
+        quantity: grams > 0 ? grams : undefined,
+        unit: grams > 0 ? 'g' : undefined,
+      }, { keepOpen: true });
+      backToSearch();
     } catch (e) {
       setErr(e.message || 'Could not add that food');
     }
     setBusy(false);
+  };
+
+  // Editing the form after a duplicate notice was shown (e.g. renaming it)
+  // dismisses that notice -- it was a judgment about the PREVIOUS name/
+  // values, not a permanent lock on the form.
+  const setCustomField = (key, value) => { setCustomForm((f) => ({ ...f, [key]: value })); setCustomDuplicate(null); };
+
+  // Custom Macros: create a private "MY FOODS" row (POST /me/foods --
+  // client_id-scoped, never global, same route My Diet's saved-foods
+  // editor already uses) AND log it for today, in one action. Stays open
+  // afterward (onAdd(..., { keepOpen: true })) and resets the form so the
+  // next food can be entered immediately, matching the same
+  // stay-in-the-sheet behavior a quick database log will eventually have.
+  //
+  // `skipDuplicateCheck` -- true only when called from "Create another"
+  // below, after the user has already been shown and dismissed the
+  // duplicate-name notice for THIS name; every other call re-checks.
+  const submitCustomFood = async (skipDuplicateCheck = false) => {
+    setCustomErr('');
+    const cf = customForm;
+    const name = cf.name.trim();
+    if (!name) { setCustomErr('Name this food first'); return; }
+    const servingG = Number(cf.servingGrams);
+    if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
+    const entered = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
+    for (const key of REQUIRED_CUSTOM_MACROS) {
+      const v = entered[key];
+      if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key === 'calories' ? 'calorie' : key} value`); return; }
+    }
+    // fiber/sugar/sodium are OPTIONAL -- blank means "not tracked", never
+    // coerced to 0; only sent if the user actually typed something.
+    for (const key of OPTIONAL_CUSTOM_MACROS) {
+      const raw = cf[key];
+      if (raw === '' || raw == null) continue;
+      const v = Number(raw);
+      if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key} value`); return; }
+      entered[key] = v;
+    }
+    if (!skipDuplicateCheck) {
+      try {
+        const { mine } = await api('/me/foods');
+        const dup = (mine || []).find((f) => f.name.trim().toLowerCase() === name.toLowerCase());
+        if (dup) { setCustomDuplicate(dup); return; }
+      } catch { /* lookup failure -- fall through and create normally rather than block on it */ }
+    }
+    setCustomSaving(true);
+    try {
+      // Real bug, found live: every `foods` row in this app is per-100g
+      // internally (same convention the manual-barcode form already
+      // follows -- "entered values are per-serving; store per-100g like
+      // every other source"), but this form let someone type values for
+      // ANY serving size with no conversion, so a real 300-400g meal's
+      // totals (completely normal for that size) tripped the backend's
+      // physical-plausibility check ("protein+carbs+fat+fiber can't
+      // exceed 100g per 100g of food") -- which is CORRECT for 100g, just
+      // being fed numbers that were never meant to represent 100g.
+      // `nums` below is what actually gets stored; `entered` (the values
+      // exactly as typed) is what gets logged right now, since that's
+      // the real amount being eaten today.
+      // `serving` describes what the STORED numbers represent -- always
+      // "100 g" here, never the user's original serving size. Storing
+      // the original size instead would double-scale every future
+      // resolve: baseServingAmount() would divide by (say) 400 on top of
+      // numbers that are already per-100g, quietly quartering every
+      // later quantity this food is logged at.
+      const factor = 100 / servingG;
+      const nums = Object.fromEntries(Object.entries(entered).map(([k, v]) => [k, v * factor]));
+      await api('/me/foods', { method: 'POST', body: JSON.stringify({ name, serving: '100 g', ...nums }) });
+      // quantity/unit now reflect the REAL entered serving size, not a
+      // fabricated "1 serving" -- lets a later "Edit Quantity" scale
+      // proportionally from an actual baseline (see PUT /me/meal-logs/:id's
+      // own comment on the bug this pattern closes elsewhere).
+      await onAdd({ name, calories: Math.round(entered.calories), protein: entered.protein, carbs: entered.carbs, fat: entered.fat, source: 'manual', quantity: servingG, unit: 'g' }, { keepOpen: true });
+      setCustomForm(EMPTY_CUSTOM);
+      setCustomDuplicate(null);
+      setShowMoreMacros(false);
+    } catch (e) {
+      setCustomErr(e.message || 'Could not save that food');
+    }
+    setCustomSaving(false);
+  };
+
+  // "Use existing" -- log the ALREADY-SAVED food with this name instead of
+  // creating a duplicate row; its own stored macros are the source, never
+  // the form's (possibly different) values the user just typed. Its
+  // macros are per-100g like every other food (see submitCustomFood's own
+  // comment) -- log the REAL base amount (parsed from its own `serving`,
+  // defaulting to 100g for a legacy row), never a fabricated "1 serving".
+  const useDuplicateCustomFood = async () => {
+    if (!customDuplicate) return;
+    setCustomSaving(true);
+    try {
+      const baseG = baseServingGrams(customDuplicate.serving);
+      await onAdd({
+        name: customDuplicate.name, calories: Math.round(customDuplicate.calories || 0),
+        protein: customDuplicate.protein || 0, carbs: customDuplicate.carbs || 0, fat: customDuplicate.fat || 0,
+        source: 'manual', quantity: baseG, unit: 'g',
+      }, { keepOpen: true });
+      setCustomForm(EMPTY_CUSTOM);
+      setCustomDuplicate(null);
+    } catch (e) {
+      setCustomErr(e.message || 'Could not log that food');
+    }
+    setCustomSaving(false);
   };
 
   // Tier 3: log the kNN estimate at the user's chosen grams. Purely local
@@ -299,9 +727,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
         protein: Math.round((knnEstimate.protein_g || 0) * factor * 10) / 10,
         carbs: Math.round((knnEstimate.carb_g || 0) * factor * 10) / 10,
         fat: Math.round((knnEstimate.fat_g || 0) * factor * 10) / 10,
-        source: 'knn_estimated',
-      });
-      onClose();
+        source: 'knn_estimated', quantity: g, unit: 'g',
+      }, { keepOpen: true });
+      setKnnEstimate(null); setKnnGrams('100'); setQ('');
     } catch (e) {
       setErr(e.message || 'Could not add that food');
     }
@@ -378,6 +806,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
     const totals = adjusted ? aiAdjusted.totals : aiResult.totals;
     setAiLogging(true);
     try {
+      // AI estimate -> log -> back to the search screen (Part 12) --
+      // never forced out to the dashboard, and the search bar stays
+      // usable for the next food immediately.
       await onAdd({
         name: aiResult.food_name,
         calories: Math.round(totals.calories ?? 0),
@@ -394,7 +825,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
         ai_provider: aiResult.ai?.provider || null,
         ai_model: aiResult.ai?.model || null,
         ai_confidence: adjusted ? aiAdjusted.confidence : aiResult.confidence,
-      });
+        quantity: aiTotalGrams > 0 ? aiTotalGrams : undefined,
+        unit: aiTotalGrams > 0 ? 'g' : undefined,
+      }, { keepOpen: true });
       // A user who edited the AI's numbers is telling us something --
       // record it as ONE feedback observation toward the shared cache,
       // never an immediate overwrite (see backend/.../foodFeedback.js).
@@ -425,7 +858,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
           }),
         }).catch(() => {}); // feedback collection must never surface as a user-facing error
       }
-      onClose();
+      setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); setQ('');
     } catch (e) {
       setAiErr(e.message || 'Could not add that food');
     }
@@ -524,22 +957,84 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
 
   const bc = barcodeResolved || barcodeItem;
 
-  return (
+  // BACK vs CLOSE (Part 23): Back goes exactly one level backward (food
+  // detail / AI review / barcode confirm / manual-add -> search); Close
+  // always exits the whole flow, from any level, without requiring a
+  // selection first. Only shown when there's actually somewhere to go
+  // back TO -- at the top-level search/custom-macros screen there is no
+  // previous step within this sheet, so only Close appears there.
+  const showBack = screen === 'manual' || screen === 'ai' || screen === 'portion';
+  const goBack = () => {
+    if (screen === 'manual') { setManualAdd(false); setManualErr(''); return; }
+    if (screen === 'ai') { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); return; }
+    // food and barcodeItem (confirm screen) both return to search the
+    // same way -- backToSearch() already clears both.
+    backToSearch();
+  };
+
+  // barcodeItem vs food both map to `screen === 'portion'` but show
+  // different titles -- the one place `screen` alone isn't quite enough
+  // detail, so this checks the underlying data directly rather than
+  // inventing a 5th screen value for what's really the same navigational
+  // level.
+  const dialogLabel = screen === 'manual' ? 'Add product manually' : screen === 'ai' ? 'AI estimate' : screen === 'portion' ? (barcodeItem ? 'Confirm product' : 'How much?') : screen === 'custom' ? 'Custom Macros' : 'Log Food';
+
+  // Rendered via a portal straight to <body> rather than in place --
+  // ClientLayout.jsx's page-transition wrapper carries `.anim-fadeUp`
+  // (animation ... both, ending on a transform keyframe), and a fill-
+  // mode 'both' animation keeps its end-state transform applied FOREVER
+  // after it finishes. Per the CSS spec, any ancestor with a non-`none`
+  // transform becomes the containing block for `position: fixed`
+  // descendants -- so without this portal, this sheet's "fixed inset-0"
+  // is fixed relative to that ancestor, not the true viewport. Confirmed
+  // via a live repro: at an unusually short viewport, the app's sticky
+  // header painted ABOVE this sheet despite its higher z-index, because
+  // the sheet's real containing block wasn't the viewport at all. A
+  // portal is the standard, fully general fix -- it sidesteps the
+  // containing-block question entirely, for any future ancestor
+  // transform too, without touching the shared animation CSS (which
+  // many other pages also use) at all.
+  return createPortal((
     <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={onClose}>
+         onClick={onClose} role="dialog" aria-modal="true" aria-label={dialogLabel}>
       <div className="card w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-b-none sm:rounded-2xl"
            onClick={(e) => e.stopPropagation()}>
 
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>
-              {barcodeItem ? 'Confirm product' : manualAdd ? 'Add product manually' : food ? 'How much?' : aiResult ? 'AI estimate' : 'Add food'}
+            <div className="flex items-center gap-2 min-w-0">
+              {showBack && (
+                // 44x44 tap target (Part 33) even though the visible glyph
+                // stays small -- -ml-2.5 pulls the extra padding back so the
+                // header's own alignment doesn't visually shift.
+                <button onClick={goBack} aria-label="Back" className="shrink-0 -ml-2.5 w-11 h-11 rounded-full grid place-items-center" style={{ color: 'var(--ink)' }}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+                </button>
+              )}
+              <div className="text-[11px] uppercase tracking-[.18em] truncate" style={{ color: 'var(--faint)' }}>
+                {dialogLabel}
+              </div>
             </div>
-            <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}>✕</button>
+            <button onClick={onClose} aria-label="Close" className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}>✕</button>
           </div>
 
-          {!food && !barcodeItem && !manualAdd && !aiResult && (
+          {(screen === 'search' || screen === 'custom') && (
+            <div className="mt-2 flex gap-1.5 rounded-xl p-1" style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}>
+              {[['search', 'Search Food'], ['custom', 'Custom Macros']].map(([key, label]) => (
+                <button key={key} onClick={() => { setMode(key); setCustomErr(''); setShowMoreMacros(false); }}
+                        aria-pressed={mode === key}
+                        className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
+                        style={mode === key
+                          ? { background: 'var(--accent)', color: 'var(--accent-contrast)' }
+                          : { color: 'var(--mute)' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {screen === 'search' && (
             <>
             <div className="mt-2 flex gap-2">
               <input
@@ -561,13 +1056,134 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
         </div>
 
         <div className="px-4 pb-4">
+          {/* ── custom macros ── */}
+          {screen === 'custom' && (
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>What would you like to call this food? *</span>
+                <input value={customForm.name} onChange={(e) => setCustomField('name', e.target.value)}
+                       placeholder="e.g. Homemade Paneer" autoFocus
+                       className="input w-full !py-2 mt-1" aria-label="Food name" />
+              </label>
+              {/* Real bug, found live: this form used to have no serving
+                  concept at all -- whatever someone typed was stored
+                  as-is and treated as per-100g internally (the same
+                  convention every other food in this app uses), so a
+                  genuinely normal 300-400g meal's real totals (never
+                  meant to describe 100g) tripped the backend's own
+                  physical-plausibility check ("protein+carbs+fat+fiber
+                  can't exceed 100g per 100g of food") -- a correct
+                  check, just being fed numbers for the wrong amount.
+                  Fixed the actual gap instead of just explaining it:
+                  a real serving-size field, converted to per-100g
+                  before saving (submitCustomFood's own comment), the
+                  same way the manual-barcode form already does. */}
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Serving size (g) *</span>
+                <input type="number" min="1" step="any" value={customForm.servingGrams}
+                       onChange={(e) => setCustomField('servingGrams', e.target.value)}
+                       placeholder="e.g. 250 for one bowl"
+                       className="input w-full !py-2 mt-1 tabular-nums" aria-label="Serving size in grams" />
+              </label>
+              <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
+                Enter the macros below for <b>that serving</b> — e.g. everything in one full bowl or plate, not per 100&nbsp;g.
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[['calories', 'Calories *'], ['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (
+                  <label key={key} className="block">
+                    <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>{label}</span>
+                    <input type="number" min="0" step="any" value={customForm[key]}
+                           onChange={(e) => setCustomField(key, e.target.value)}
+                           className="input w-full !py-2 mt-1 tabular-nums" aria-label={label} />
+                  </label>
+                ))}
+              </div>
+              {showMoreMacros ? (
+                <div className="grid grid-cols-3 gap-3">
+                  {[['fiber', 'Fiber (g)'], ['sugar', 'Sugar (g)'], ['sodium', 'Sodium (mg)']].map(([key, label]) => (
+                    <label key={key} className="block">
+                      <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>{label}</span>
+                      <input type="number" min="0" step="any" value={customForm[key]}
+                             onChange={(e) => setCustomField(key, e.target.value)}
+                             className="input w-full !py-2 mt-1 tabular-nums" aria-label={label} />
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <button type="button" onClick={() => setShowMoreMacros(true)}
+                        className="text-[11px] font-semibold underline-offset-2 hover:underline" style={{ color: 'var(--mute)' }}>
+                  + Fiber, sugar, sodium (optional)
+                </button>
+              )}
+              <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                Private to you — saved as one of your own foods, never added to the shared SK OS database. It'll show up first the next time you search for it.
+              </div>
+              {customErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{customErr}</div>}
+
+              {customDuplicate ? (
+                <div className="rounded-xl p-3 space-y-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)' }}>
+                  <div className="text-[12px]" style={{ color: 'var(--ink)' }}>
+                    You already have a custom food named "{customDuplicate.name}".
+                  </div>
+                  <div className="flex gap-2">
+                    <Pressable onClick={useDuplicateCustomFood} disabled={customSaving}
+                               className="flex-1 !py-2.5 rounded-xl text-[12px] font-bold" style={{ border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)' }}>
+                      Use existing
+                    </Pressable>
+                    <Pressable onClick={() => submitCustomFood(true)} disabled={customSaving}
+                               className="flex-1 btn-primary !py-2.5 text-[12px] font-bold">
+                      {customSaving ? 'Saving…' : 'Create another'}
+                    </Pressable>
+                  </div>
+                </div>
+              ) : (
+                <Pressable onClick={() => submitCustomFood(false)} disabled={customSaving || !customForm.name.trim()}
+                           className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                  {customSaving ? 'Saving…' : 'Save Custom Food & Log'}
+                </Pressable>
+              )}
+            </div>
+          )}
+
           {/* ── search results ── */}
-          {!food && !barcodeItem && !manualAdd && !aiResult && (
+          {screen === 'search' && (
             <div className="space-y-1">
+              {/* Recent (Part 40) -- only on the true idle screen, before the
+                  user has typed anything, so it never competes with live
+                  search results. */}
+              {q.trim().length === 0 && recentFoods.length > 0 && (
+                <div className="pb-2 space-y-1.5">
+                  <div className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Recent</div>
+                  {recentFoods.map((r) => (
+                    <div key={r.name} className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ border: '1px solid var(--line)' }}>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{r.name}</div>
+                        <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                          {Math.round(r.calories)} kcal{r.times_logged > 1 ? ` · logged ${r.times_logged}×` : ''}
+                        </div>
+                      </div>
+                      <Pressable onClick={() => quickLogRecent(r)} disabled={!!recentLogging[r.name]}
+                                 aria-label={recentChecked[r.name] ? `${r.name} logged` : `Log ${r.name} again`}
+                                 className="shrink-0 w-8 h-8 rounded-full grid place-items-center btn-primary !p-0 text-[16px] font-bold"
+                                 style={recentChecked[r.name] ? { background: 'var(--good)' } : undefined}>
+                        {recentLogging[r.name] ? '…' : recentChecked[r.name] ? '✓' : '+'}
+                      </Pressable>
+                    </div>
+                  ))}
+                </div>
+              )}
               {searching && !results.length && (
                 <div className="text-[11px] py-3" style={{ color: 'var(--faint)' }}>Searching…</div>
               )}
-              {!searching && q.trim().length >= 2 && !results.length && (
+              {!searching && searchErr && (
+                <div className="py-3 space-y-2">
+                  <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{searchErr}</div>
+                  <Pressable onClick={() => setSearchRetryNonce((n) => n + 1)} className="btn !py-2 !px-3 text-[11px] font-semibold">
+                    Try again
+                  </Pressable>
+                </div>
+              )}
+              {!searching && !searchErr && q.trim().length >= 2 && !results.length && (
                 <div className="py-3 space-y-2">
                   <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
                     No close match found in SK OS for “{q.trim()}”.
@@ -629,27 +1245,63 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                   {aiErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
                 </div>
               )}
-              {results.map((f) => (
-                <button key={f.id || f.source_id} onClick={() => pick(f)}
-                        disabled={f.trustworthy === false}
-                        className="w-full text-left rounded-xl px-3 py-2 flex items-center justify-between gap-2 disabled:opacity-45"
-                        style={{ border: '1px solid var(--line)' }}>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{f.name}</span>
-                    <span className="text-[10px]" style={{ color: 'var(--mute)' }}>
-                      {f.trustworthy === false
-                        ? (f.data_quality_flag || 'Data quality flagged')
-                        : `${f.calories == null ? '—' : Math.round(f.calories)} kcal / 100 g`}
-                      {f.brand ? ` · ${f.brand}` : ''}
-                    </span>
-                  </span>
-                  {f.confidence && f.confidence !== 'high' && (
-                    <span className="text-[8px] uppercase tracking-wider shrink-0" style={{ color: 'var(--faint)' }}>
-                      {f.confidence}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {results.map((f) => {
+                const key = f.id || f.source_id;
+                const disabled = f.trustworthy === false;
+                const rowValue = rowGrams[key] ?? String(defaultGramsFor(f));
+                const logging = !!rowLogging[key];
+                const checked = !!rowChecked[key];
+                return (
+                  <div key={key} className="rounded-xl px-3 py-2 space-y-1.5" style={{ border: '1px solid var(--line)' }}>
+                    <div className="flex items-center gap-2">
+                      {/* Tapping the food itself (name/info) opens the full
+                          portion picker -- "+" below is the quick-log path.
+                          Two different intents, two different controls. */}
+                      <button onClick={() => pick(f)} disabled={disabled}
+                              className="min-w-0 flex-1 text-left disabled:opacity-45">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="block text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{f.name}</span>
+                          {/* Short, crisp marker (Part 3 of the follow-up
+                              hardening pass) so a client's OWN saved food is
+                              never mistaken for the shared database --
+                              gated on client_id specifically (not just
+                              source === 'USER_ENTERED', which a gym/global
+                              library row can also carry) so this never
+                              implies a gym-shared food is "yours". */}
+                          {f.client_id && (
+                            <span className="shrink-0 text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                              Custom food
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[10px]" style={{ color: 'var(--mute)' }}>
+                          {disabled
+                            ? (f.data_quality_flag || 'Data quality flagged')
+                            : `${f.calories == null ? '—' : Math.round(f.calories)} kcal / 100 g`}
+                          {f.brand ? ` · ${f.brand}` : ''}
+                          {f.confidence && f.confidence !== 'high' ? ` · ${f.confidence}` : ''}
+                        </span>
+                      </button>
+                      <input
+                        type="number" min="1" step="1" value={rowValue}
+                        onChange={(e) => { setRowGrams((prev) => ({ ...prev, [key]: e.target.value })); setRowErr((prev) => ({ ...prev, [key]: '' })); setRowChecked((prev) => ({ ...prev, [key]: false })); }}
+                        disabled={disabled}
+                        aria-label={`${f.name} grams`}
+                        className="w-16 text-right text-[12px] rounded-lg px-1.5 py-1.5 tabular-nums shrink-0"
+                        style={{ background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                      />
+                      <span className="text-[10px] shrink-0" style={{ color: 'var(--faint)' }}>g</span>
+                      <Pressable onClick={() => quickLogRow(f)} disabled={disabled || logging || !(Number(rowValue) > 0)}
+                                 aria-label={checked ? `${f.name} logged` : `Quick log ${f.name}`}
+                                 className="w-8 h-8 rounded-full grid place-items-center shrink-0 font-bold text-[16px] leading-none transition-transform active:scale-90"
+                                 style={{ background: checked ? 'var(--good)' : 'var(--accent)', color: 'var(--accent-contrast)', opacity: (disabled || logging || !(Number(rowValue) > 0)) ? 0.45 : 1 }}>
+                        {logging ? '…' : checked ? '✓' : '+'}
+                      </Pressable>
+                    </div>
+                    {rowErr[key] && <div className="text-[10px]" style={{ color: 'var(--bad)' }}>{rowErr[key]}</div>}
+                  </div>
+                );
+              })}
 
               {/* AI fallback ALONGSIDE existing matches -- the user picks a
                   database match above, OR estimates the EXACT food they
@@ -960,12 +1612,22 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
           {/* ── quantity (name-search picker) ── */}
           {food && (
             <div className="space-y-4">
-              <div>
-                <div className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>{food.name}</div>
-                <button onClick={backToSearch}
-                        className="text-[10px] underline mt-0.5" style={{ color: 'var(--mute)' }}>
-                  change food
-                </button>
+              <div className="flex items-start gap-3">
+                {/* No image data exists for a name-matched food (only a
+                    scanned barcode product carries a real image_url --
+                    see the barcode-confirm screen below, which already
+                    shows it) -- a clean placeholder here, never a
+                    fabricated URL, per Part 10. Never blocks logging. */}
+                <div className="w-12 h-12 rounded-xl grid place-items-center shrink-0" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                  <Icon name="food" size={22} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[15px] font-bold truncate" style={{ color: 'var(--ink)' }}>{food.name}</div>
+                  <button onClick={backToSearch}
+                          className="text-[10px] underline mt-0.5" style={{ color: 'var(--mute)' }}>
+                    change food
+                  </button>
+                </div>
               </div>
 
               {groups.map(([group, ps]) => (
@@ -975,12 +1637,17 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {ps.map((p) => {
-                      const on = portionKey === p.key && !grams;
+                      // "Selected" = this portion is part of the combined
+                      // total below, at whatever qty the wheel last set --
+                      // tapping the chip ALWAYS (re)opens the wheel, even
+                      // for an already-selected portion, so its quantity
+                      // can be adjusted rather than just toggled off.
+                      const selected = selectedPortions.some((sp) => sp.key === p.key);
                       return (
                         <button key={p.key}
-                                onClick={() => { setPortionKey(p.key); setGrams(''); }}
+                                onClick={() => { setWheelPortion(p); setWheelOpen(true); }}
                                 className="rounded-full px-2.5 py-1 text-[11px] transition-colors"
-                                style={on
+                                style={selected
                                   ? { background: 'var(--accent)', color: 'var(--accent-contrast)', border: '1px solid var(--accent)' }
                                   : { border: '1px solid var(--line)', color: 'var(--mute)' }}>
                           {p.label}
@@ -995,21 +1662,41 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
                 </div>
               ))}
 
-              <div className="flex items-end gap-3">
-                <label className="flex-1">
-                  <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>How many</span>
-                  <input type="number" min="0.25" step="0.25" value={count}
-                         onChange={(e) => setCount(e.target.value)}
-                         className="input w-full !py-2 mt-1 tabular-nums" aria-label="Portion count" />
-                </label>
-                <span className="pb-2.5 text-[10px]" style={{ color: 'var(--faint)' }}>or</span>
-                <label className="flex-1">
-                  <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Weigh it (g)</span>
-                  <input type="number" min="1" step="1" value={grams} placeholder="—"
-                         onChange={(e) => { setGrams(e.target.value); if (e.target.value) setPortionKey(null); }}
-                         className="input w-full !py-2 mt-1 tabular-nums" aria-label="Grams" />
-                </label>
-              </div>
+              {/* Combined portions (Part 7) -- each selection shown with its
+                  own remove control; the running total is what actually
+                  prices below, never a hidden guess. */}
+              {selectedPortions.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Selected</div>
+                  {selectedPortions.map((sp) => (
+                    <div key={sp.key} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5" style={{ background: 'var(--accent-soft)' }}>
+                      <span className="text-[12px]" style={{ color: 'var(--ink)' }}>
+                        ✓ {sp.qty} × {sp.label} <span style={{ color: 'var(--mute)' }}>· {Math.round(sp.unitGrams * sp.qty)}g</span>
+                      </span>
+                      {/* p-2 -m-2 grows the actual tap target well past the
+                          visible glyph without changing this row's compact
+                          height (Part 33). */}
+                      <button onClick={() => removeSelectedPortion(sp.key)} aria-label={`Remove ${sp.label}`}
+                              className="shrink-0 opacity-60 hover:opacity-100 text-[13px] p-2 -m-2" style={{ color: 'var(--bad)' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Custom weight (Part 8) -- always available, always the
+                  SAME single effective-weight source once typed: entering
+                  a value here overrides any portion selection above
+                  (cleared automatically, never summed together). Shows the
+                  combined portion total as a placeholder when portions are
+                  selected, so the number this is about to override is
+                  visible before overriding it. */}
+              <label className="block">
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Custom weight (g)</span>
+                <input type="number" min="1" step="1" value={customGrams}
+                       placeholder={selectedPortions.length ? String(Math.round(selectedPortions.reduce((s, sp) => s + sp.unitGrams * sp.qty, 0))) : '—'}
+                       onChange={(e) => { const v = e.target.value; setCustomGrams(v); if (v) setSelectedPortions([]); }}
+                       className="input w-full !py-2 mt-1 tabular-nums" aria-label="Custom weight in grams" />
+              </label>
 
               {/* Oil only for things that are cooked — offering it on an
                   apple is noise. */}
@@ -1075,7 +1762,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
             </div>
           )}
 
-          {err && !food && !barcodeItem && !manualAdd && !aiResult && <div className="text-[11px] mt-2" style={{ color: 'var(--bad)' }}>{err}</div>}
+          {err && (screen === 'search' || screen === 'custom') && <div className="text-[11px] mt-2" style={{ color: 'var(--bad)' }}>{err}</div>}
         </div>
       </div>
 
@@ -1097,6 +1784,14 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false })
           }
         }}
       />
+
+      <PortionWheel
+        open={wheelOpen}
+        portion={wheelPortion}
+        initialQty={wheelPortion ? (selectedPortions.find((sp) => sp.key === wheelPortion.key)?.qty ?? 1) : 1}
+        onCancel={() => setWheelOpen(false)}
+        onDone={applyWheelPortion}
+      />
     </div>
-  );
+  ), document.body);
 }

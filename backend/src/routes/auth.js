@@ -666,6 +666,7 @@ export default function authRoutes(db) {
   r.get('/me', requireAuth, async (req, res) => {
     const user = await db.q1(
       `SELECT u.id, u.name, u.email, u.role, u.org_id, u.avatar,
+              u.terms_accepted_at, u.terms_version,
               o.name AS org_name, o.slug AS org_slug
          FROM users u LEFT JOIN organizations o ON o.id = u.org_id
         WHERE u.id = ?`, [req.user.sub]);
@@ -789,6 +790,39 @@ export default function authRoutes(db) {
     // this called out explicitly as a residual risk, not an oversight.
     clearAuthCookie(res);
     res.json({ ok: true });
+  });
+
+  // ---- Legal consent / Terms & Conditions ----
+  // Current required terms version. Bump this value when terms are
+  // materially updated — every user who accepted an older version
+  // (or has never accepted) will be prompted again.
+  const REQUIRED_TERMS_VERSION = '1.0';
+
+  // Returns the user's terms acceptance status.
+  r.get('/terms/status', requireAuth, async (req, res) => {
+    const user = await db.q1(
+      'SELECT terms_accepted_at, terms_version FROM users WHERE id = ?',
+      [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const accepted = !!user.terms_accepted_at && user.terms_version === REQUIRED_TERMS_VERSION;
+    res.json({
+      accepted,
+      requiredVersion: REQUIRED_TERMS_VERSION,
+      acceptedVersion: user.terms_version || null,
+      acceptedAt: user.terms_accepted_at || null,
+    });
+  });
+
+  // Record the user's acceptance of the current terms version.
+  r.post('/terms/accept', requireAuth, async (req, res) => {
+    const { version } = req.body || {};
+    if (version !== REQUIRED_TERMS_VERSION) {
+      return res.status(400).json({ error: 'Invalid terms version' });
+    }
+    await db.run(
+      'UPDATE users SET terms_accepted_at = ?, terms_version = ? WHERE id = ?',
+      [now(), version, req.user.sub]);
+    res.json({ ok: true, acceptedAt: now(), version });
   });
 
   return r;

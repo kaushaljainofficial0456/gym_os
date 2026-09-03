@@ -23,20 +23,20 @@ export default function SupportDetail() {
     setBusy(true);
     try {
       await api(`/console/support/${id}/messages`, { method: 'POST', body: JSON.stringify({ body: reply, internal }) });
-      setReply(''); setInternal(false); reload();
+      setReply(''); setInternal(false); reload({ silent: true });
       toast.success(internal ? 'Internal note added' : 'Reply sent');
     } catch (e) { toast.error(e.message || 'Could not send'); }
     finally { setBusy(false); }
   };
 
   const setStatus = async (status) => {
-    try { await api(`/console/support/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }); reload(); toast.success(`Status set to ${status}`); }
+    try { await api(`/console/support/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }); reload({ silent: true }); toast.success(`Status set to ${status}`); }
     catch (e) { toast.error(e.message || 'Could not update status'); }
   };
 
   const setPriority = async (priority) => {
     setPriorityBusy(true);
-    try { await api(`/console/support/${id}/priority`, { method: 'POST', body: JSON.stringify({ priority }) }); reload(); toast.success(`Priority set to ${priority}`); }
+    try { await api(`/console/support/${id}/priority`, { method: 'POST', body: JSON.stringify({ priority }) }); reload({ silent: true }); toast.success(`Priority set to ${priority}`); }
     catch (e) { toast.error(e.message || 'Could not update priority'); }
     finally { setPriorityBusy(false); }
   };
@@ -45,7 +45,7 @@ export default function SupportDetail() {
     setAssignBusy(true);
     try {
       await api(`/console/support/${id}/assign`, { method: 'POST', body: JSON.stringify({ adminId: adminId || null }) });
-      reload();
+      reload({ silent: true });
       toast.success(adminId ? 'Ticket assigned' : 'Ticket unassigned');
     } catch (e) { toast.error(e.message || 'Could not update assignment'); }
     finally { setAssignBusy(false); }

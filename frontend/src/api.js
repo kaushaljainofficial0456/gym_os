@@ -88,8 +88,44 @@ export async function api(path, opts = {}) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || data.message || 'Request failed');
+    // Fold validate.js's per-field detail into the message itself (not
+    // just err.issues below) -- a real bug, found live: every one of this
+    // app's many `catch (e) { toast(e.message) }` call sites only ever
+    // read `.message`, so a 422 always showed the bare, useless
+    // "Validation failed" with zero indication of what was actually
+    // wrong or how to fix it -- even though the backend was already
+    // sending the real reason (e.g. "calories: Number must be less than
+    // or equal to 10000") in `issues`, just never surfaced. One fix here
+    // fixes it everywhere, with no per-call-site changes needed.
+    //
+    // `details` is the SAME class of bug on a second, differently-named
+    // field -- found live right after fixing `issues`: POST /me/foods'
+    // own validateFoodRecord() check (negative macros, an impossible
+    // protein+carb+fat+fiber total, etc.) returns { error: 'Invalid food
+    // data', details: [...] }, a 400 with its own array of real reasons
+    // that was equally being discarded down to the bare "Invalid food
+    // data". Same fold, same reasoning, different key name.
+    // `message` before `error` -- a THIRD instance of the same bug class,
+    // found live while auditing for more of it: a handful of routes
+    // (console.js's refund guard, enterprise.js's downgrade-block/no-
+    // recipient/email-failure responses) return { error: 'short_code',
+    // message: 'the real human sentence' } -- `error` there is a
+    // machine-readable reason, not display text. Every one of the 4 real
+    // occurrences in this backend follows that exact shape when both
+    // fields are present (confirmed by reading each one, not assumed);
+    // EnterpriseBilling.jsx already had its own one-off `e.data?.message
+    // || e.message` workaround for exactly this, which this fix makes
+    // unnecessary everywhere, not just there. Safe as a global default:
+    // when a route sets `error` alone (the overwhelming majority), this
+    // falls through to it unchanged.
+    const base = data.message || data.error || 'Request failed';
+    const issueList = Array.isArray(data.issues) && data.issues.length ? data.issues
+      : Array.isArray(data.details) && data.details.length ? data.details
+      : null;
+    const detail = issueList ? ` — ${issueList.join('; ')}` : '';
+    const err = new Error(base + detail);
     err.issues = data.issues;
+    err.details = data.details;
     err.status = res.status;
     // Machine-readable failure reason some endpoints attach (e.g. barcode
     // lookup's 'not_found' vs 'network_error' vs 'invalid_barcode') so a

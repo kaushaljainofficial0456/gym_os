@@ -7,6 +7,25 @@ import { dayKey, addDays, daysBetween } from '../utils/time.js';
 import { estimateFood, estimateMeal } from '../services/food/index.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
+import { recalculateForEditedDate } from '../services/nutrition/flexibleBalance.js';
+
+// Single source of truth for "sum eaten macros over a set of meal_logs
+// rows" (Part 37) -- nutrition-summary and history below used to each
+// carry their own copy of this exact reduce, with only a comment
+// promising they matched. Both call this now, so they structurally
+// CAN'T drift apart the way two independently-maintained copies could.
+// Only sums `eaten=1` rows; a caller with already-filtered rows (both
+// call sites here) or unfiltered rows (this checks `eaten` itself) both
+// work correctly either way.
+function sumEatenTotals(rows) {
+  return rows.reduce((s, r) => {
+    if (!r.eaten) return s;
+    return {
+      calories: s.calories + r.calories, protein: s.protein + r.protein,
+      carbs: s.carbs + r.carbs, fat: s.fat + r.fat,
+    };
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+}
 
 export default function nutritionRoutes(db) {
   const r = Router();
@@ -148,10 +167,14 @@ export default function nutritionRoutes(db) {
 
     // Custom / AI-logged meals have IDs prefixed with 'mlg_' and live directly in meal_logs.
     if (mealId.startsWith('mlg_')) {
-      const log = await db.q1('SELECT id, client_id FROM meal_logs WHERE id = ?', [mealId]);
+      const log = await db.q1('SELECT id, client_id, date FROM meal_logs WHERE id = ?', [mealId]);
       if (!log || log.client_id !== client.id) return res.status(404).json({ error: 'Meal log not found' });
       await db.run('UPDATE meal_logs SET eaten = ? WHERE id = ?', [eaten ? 1 : 0, mealId]);
       await track(db, { orgId: client.org_id, userId: req.user.sub, type: eaten ? 'meal_logged' : 'meal_unlogged', data: { clientId: client.id, mealId } });
+      // A toggle changes that date's eaten total just like an edit/delete
+      // does -- retroactive Flexible Calorie Balance correction, no-op
+      // unless log.date was already settled under an ACTIVE plan.
+      recalculateForEditedDate(db, client, log.date).catch(() => {});
       return res.json({ ok: true });
     }
 
@@ -170,6 +193,10 @@ export default function nutritionRoutes(db) {
         [id('mlg'), client.id, meal.id, d, meal.slot, meal.name, meal.calories, meal.protein, meal.carbs, meal.fat, eaten ? 1 : 0]);
     }
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: eaten ? 'meal_logged' : 'meal_unlogged', data: { clientId: client.id, mealId: meal.id } });
+    // `d` is always TODAY here (dayKey() with no args) -- never a settled
+    // past date, so this call is always a fast no-op in practice, kept
+    // only for consistency with every other mutation site in this file.
+    recalculateForEditedDate(db, client, d).catch(() => {});
     res.json({ ok: true });
   });
 
@@ -182,13 +209,19 @@ export default function nutritionRoutes(db) {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const b = req.body;
+    const logDate = b.date || dayKey();
     await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id('mlg'), client.id, b.meal_id || null, b.date || dayKey(), b.slot || 'snack', b.name,
+      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id('mlg'), client.id, b.meal_id || null, logDate, b.slot || 'snack', b.name,
        b.calories, b.protein, b.carbs, b.fat, b.eaten ? 1 : 0, b.source, b.estimate ? 1 : 0,
-       b.ai_provider || null, b.ai_model || null, b.ai_confidence || null]);
+       b.ai_provider || null, b.ai_model || null, b.ai_confidence || null,
+       b.quantity ?? null, b.unit ?? null]);
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'meal_logged', data: { clientId: client.id, source: b.source } });
+    // A caller may supply an explicit past `date` here -- retroactive
+    // Flexible Calorie Balance correction, no-op unless that date was
+    // already settled under an ACTIVE plan.
+    recalculateForEditedDate(db, client, logDate).catch(() => {});
     if (b.source === 'ai_estimated' || b.source === 'ai_estimated_user_adjusted') {
       // Distinct from the generic 'meal_logged' event above so Tier-4
       // confirmation/adjustment rates (spec: user_confirmed_ai_estimates,
@@ -222,10 +255,7 @@ export default function nutritionRoutes(db) {
     const plan = await db.q1('SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]);
     const logs = await db.q(
       'SELECT * FROM meal_logs WHERE client_id = ? AND date = ? AND eaten = 1', [client.id, d]);
-    const eaten = logs.reduce((s, l) => ({
-      calories: s.calories + l.calories, protein: s.protein + l.protein,
-      carbs: s.carbs + l.carbs, fat: s.fat + l.fat
-    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    const eaten = sumEatenTotals(logs);
     res.json({
       date: d,
       plan: plan ? { calories: plan.calories, protein: plan.protein, carbs: plan.carbs, fat: plan.fat } : null,
@@ -268,17 +298,8 @@ export default function nutritionRoutes(db) {
     for (const row of rows) {
       let day = byDate.get(row.date);
       if (!day) {
-        day = { date: row.date, calories: 0, protein: 0, carbs: 0, fat: 0, logged: true, logs: [] };
+        day = { date: row.date, logged: true, logs: [] };
         byDate.set(row.date, day);
-      }
-      // Totals count only eaten=1 rows -- matches nutrition-summary above
-      // and the Home page's "Fuel today" ring, so the same day never shows
-      // two disagreeing calorie figures depending on which screen it's
-      // viewed from. Un-eaten rows still appear in `logs` (a genuine
-      // historical log either way), just excluded from the day's totals.
-      if (row.eaten) {
-        day.calories += row.calories; day.protein += row.protein;
-        day.carbs += row.carbs; day.fat += row.fat;
       }
       day.logs.push({
         id: row.id, name: row.name, calories: row.calories, protein: row.protein,
@@ -287,6 +308,13 @@ export default function nutritionRoutes(db) {
         eaten: !!row.eaten, source: row.source
       });
     }
+    // Totals count only eaten=1 rows -- matches nutrition-summary above
+    // and the Home page's "Fuel today" ring via the SAME sumEatenTotals()
+    // (Part 37), so the same day can never show two disagreeing calorie
+    // figures depending on which screen it's viewed from. Un-eaten rows
+    // still appear in `logs` (a genuine historical log either way), just
+    // excluded from the day's totals.
+    const days = [...byDate.values()].map((day) => ({ ...day, ...sumEatenTotals(day.logs) }));
     res.json({
       from, to,
       target: plan ? { calories: plan.calories, protein: plan.protein, carbs: plan.carbs, fat: plan.fat } : null,
@@ -295,7 +323,7 @@ export default function nutritionRoutes(db) {
       // requested, so an absent date unambiguously means "nothing logged"
       // rather than the server needing to materialize empty rows for
       // every unlogged day in a 6-month range.
-      days: [...byDate.values()]
+      days
     });
   });
 

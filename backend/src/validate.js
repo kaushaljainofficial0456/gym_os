@@ -91,7 +91,20 @@ export const schemas = {
     // metadata about which AI produced the number, not a trust upgrade.
     ai_provider: z.string().max(40).optional(),
     ai_model: z.string().max(80).optional(),
-    ai_confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional()
+    ai_confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional(),
+    // The ACTUAL logged quantity/unit (e.g. 245 / 'g' for a resolved
+    // portion, 1 / 'serving' for a Custom Macros entry) -- optional
+    // because not every caller has a meaningful one (a bare Recent
+    // quick-add is a macro snapshot with no re-derivable weight), but
+    // populating it wherever it IS known is what lets
+    // PUT /me/meal-logs/:id later scale quantity proportionally from a
+    // REAL baseline instead of a fabricated "100" (see that route's own
+    // fallback comment -- a previously-undiagnosed bug where "Edit
+    // Quantity" silently scaled from the wrong baseline for any entry
+    // logged without one, found during a live end-to-end verification
+    // pass).
+    quantity: z.number().finite().positive().max(100000).optional(),
+    unit: z.string().max(30).optional()
   }),
   // ---- My Diet: saved foods + saved meal templates + today's log entries ----
   // These routes previously did type coercion inline (Number()/String()
@@ -101,29 +114,96 @@ export const schemas = {
   // reject the WRONG TYPE outright (e.g. a non-numeric quantity, which
   // used to silently become NaN and get written to a log entry) rather
   // than to change what a well-formed request is allowed to look like.
+  // Upper bounds here MUST stay >= mealLog's own calories/protein/carbs/fat
+  // caps below (10000 / 1000 / 1000 / 1000) -- a real bug, found live: a
+  // custom food could be CREATED with no upper bound at all, then every
+  // attempt to LOG it (mealLog's own schema, which DOES cap) rejected with
+  // a bare "Validation failed" and no indication the food itself was the
+  // problem. A food this app tracks is a single serving/item, and nothing
+  // realistic exceeds these numbers in one serving -- capping creation to
+  // match what can actually be logged closes the trap at the source
+  // rather than only improving the error message for it (see api.js).
+  // Deliberately NOT adding a lower bound (.min(0)) here: the route itself
+  // already rejects negative/impossible values via validateFoodRecord(),
+  // with a 400 + a per-field `details` array richer than this schema
+  // layer's own generic 422 -- a schema-level .min(0) would intercept
+  // first and downgrade that into the same bare 422 this whole change is
+  // trying to get away from, for a case that already worked correctly.
   foodCreate: z.object({
     name: z.string().min(1).max(80),
     unit: z.string().max(30).optional(),
     serving: z.string().max(60).optional(),
-    calories: z.number().finite().optional(),
-    protein: z.number().finite().optional(),
-    carbs: z.number().finite().optional(),
-    fat: z.number().finite().optional(),
+    calories: z.number().finite().max(10000).optional(),
+    protein: z.number().finite().max(1000).optional(),
+    carbs: z.number().finite().max(1000).optional(),
+    fat: z.number().finite().max(1000).optional(),
+    // Optional-detail macros (Part 14's "optional" list) -- the `foods`
+    // table has always had these columns; this is the first route to let
+    // a client actually populate them for a Custom Macros entry.
+    fiber: z.number().finite().nonnegative().optional(),
+    sugar: z.number().finite().nonnegative().optional(),
+    sodium: z.number().finite().nonnegative().optional(),
     category: z.string().max(40).optional()
   }),
   // Partial update -- every field optional, exactly like the route's own
-  // existing "only touch what's present" behavior.
+  // existing "only touch what's present" behavior. Same bounds as
+  // foodCreate, for the same reason (an edit shouldn't be able to push a
+  // food back over the loggable ceiling either).
   foodUpdate: z.object({
     name: z.string().min(1).max(80).optional(),
     serving: z.string().max(60).optional(),
     unit: z.string().max(30).optional(),
-    calories: z.number().finite().optional(),
-    protein: z.number().finite().optional(),
-    carbs: z.number().finite().optional(),
-    fat: z.number().finite().optional()
+    calories: z.number().finite().max(10000).optional(),
+    protein: z.number().finite().max(1000).optional(),
+    carbs: z.number().finite().max(1000).optional(),
+    fat: z.number().finite().max(1000).optional(),
+    fiber: z.number().finite().nonnegative().optional(),
+    sugar: z.number().finite().nonnegative().optional(),
+    sodium: z.number().finite().nonnegative().optional()
   }),
+  // Flexible Calorie Balance — strategy (+ customDays/customProteinTarget
+  // for CUSTOM) are the ONLY client-supplied inputs. sourceDate/
+  // surplusCalories are always server-derived (from meal_logs vs the
+  // client's own stored base target), never accepted from the client,
+  // matching this file's existing pattern for /nutrition/targets/confirm
+  // (calories is derived server-side there too, never trusted from the
+  // body). The bounds here are a first line of defense; the pure
+  // calculation engine (flexibleBalance.js's BALANCE_CONFIG) re-clamps
+  // both independently and is the real source of truth for the floors.
+  balanceStrategy: z.object({
+    strategy: z.enum(['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE', 'CUSTOM']),
+    customDays: z.number().int().min(2).max(14).optional(),
+    customProteinTarget: z.number().min(20).max(500).optional(),
+  }).refine(
+    (v) => v.strategy !== 'CUSTOM' || (v.customDays != null && v.customProteinTarget != null),
+    { message: 'customDays and customProteinTarget are required when strategy is CUSTOM' },
+  ),
   foodResolveQuantity: z.object({
-    source_id: z.string().max(100).optional(),
+    // A real `foods` row's own id -- when present, resolve() prices
+    // directly from that row's own macros (linear scaling), never by
+    // searching the model catalogue by name. See me.js's own comment on
+    // the bug this closes: a custom food has no source_id, so without
+    // this it was priced by NAME-searching the model instead of using
+    // its own stored values.
+    food_id: z.string().max(60).optional(),
+    // .nullable() alongside .optional() -- a real bug, found live off a
+    // user's own report: every frontend call site builds this request
+    // straight from a search-result object's `source_id` field, which is
+    // a genuine SQL NULL (not merely absent) for any custom or library
+    // food with no materialized model twin -- i.e. the exact case this
+    // whole food_id branch exists for. `JSON.stringify({source_id: null})`
+    // keeps the key with a literal null value (unlike `undefined`, which
+    // JSON.stringify drops), and `.optional()` alone only accepts
+    // `string | undefined`, not `null` -- so quick-logging or opening the
+    // full portion picker on almost any custom food rejected with a bare
+    // "Validation failed" (now: "source_id: Expected string, received
+    // null" -- see api.js's own fix for why that detail is visible at
+    // all). The route body itself already treats a null source_id
+    // exactly like an absent one (`source_id && hits.find(...)`, `name ||
+    // source_id || ''` -- both short-circuit past a null the same as past
+    // undefined), so this schema was the only thing actually rejecting a
+    // request the route was already written to handle correctly.
+    source_id: z.string().max(100).nullable().optional(),
     name: z.string().max(150).optional(),
     portion_key: z.string().max(60).optional(),
     count: z.number().finite().positive().max(1000).optional(),
@@ -192,7 +272,16 @@ export const schemas = {
   // and pg both happily bind without erroring).
   mealLogEntryUpdate: z.object({
     quantity: z.number().finite().positive().max(100000),
-    unit: z.string().max(30).optional()
+    // .nullable() matters here, not just .optional(): meal_logs.unit is a
+    // nullable column, and any log NOT created from a meal template (quick-
+    // log, portion picker, Custom Macros, AI estimate, Recent quick-add --
+    // i.e. most individual food logs) has a real `null` unit. The edit
+    // modal always resends `{quantity, unit: log.unit}` verbatim, so a
+    // plain `.optional()` here (accepts undefined, REJECTS null) 422'd on
+    // every single one of those -- a real, previously-undiagnosed bug that
+    // broke "edit a logged entry's quantity" for the common case, found
+    // during a live end-to-end verification pass.
+    unit: z.string().max(30).nullable().optional()
   }),
   waterLog: z.object({ date: z.string().optional(), litres: z.number().min(0).max(20) }),
   sleepLog: z.object({

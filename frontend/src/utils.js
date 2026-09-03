@@ -49,19 +49,45 @@ export function useFetch(fn, deps = []) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
+  // A silent reload (see reload() below) skips the loading-flag toggle for
+  // ONE upcoming fetch -- read once per effect run, then reset, so it never
+  // silently "leaks" into a later non-silent reload.
+  const silentNext = useRef(false);
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    const silent = silentNext.current;
+    silentNext.current = false;
+    if (!silent) setLoading(true);
     fn()
       .then((d) => { if (alive) { setData(d); setError(null); } })
       .catch((e) => { if (alive) setError(e); })
-      .finally(() => { if (alive) setLoading(false); });
+      .finally(() => { if (alive && !silent) setLoading(false); });
     return () => { alive = false; };
   }, [...deps, tick]);
   // Stable identity (was a fresh arrow fn every render) so consumers that
   // pass the whole { data, loading, error, reload } object down — e.g. via
   // Outlet context — don't get a new object on every unrelated re-render.
-  const reload = useCallback(() => setTick(t => t + 1), []);
+  //
+  // reload({ silent: true }): refetches WITHOUT toggling `loading` --
+  // `data` stays exactly as it was (still rendered) until the fresh
+  // response arrives, then swaps in place. Fixes a real bug (follow-up
+  // hardening pass, Sections 5/15): every consumer that called a bare
+  // reload() after a small action (logging one food, toggling a meal,
+  // editing a quantity) BRIEFLY set `loading: true` on this shared
+  // Outlet-context value -- and any page gating its whole render on
+  // `home.loading` (Nutrition.jsx's own `if (home.loading) return
+  // <Spinner/>`) would unmount ITS ENTIRE TREE, including any open
+  // modal/sheet, then remount fresh once the refetch finished. That's
+  // the actual mechanism behind "the page reloads" after tapping +,
+  // not a real navigation/window reload -- confirmed by reading this
+  // hook's own state machine, not assumed. Every EXISTING bare reload()
+  // call keeps its exact old behavior (opt-in only, zero risk to
+  // whichever callers genuinely want a full blocking refresh, e.g. a
+  // real page-level retry after an error).
+  const reload = useCallback((opts) => {
+    if (opts?.silent) silentNext.current = true;
+    setTick((t) => t + 1);
+  }, []);
   return { data, loading, error, reload };
 }
 

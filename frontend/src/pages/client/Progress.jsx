@@ -32,7 +32,11 @@ export default function Progress() {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });
       setToast('Weight logged ✓');
       setWeightInput('');
-      p.reload(); home.reload();
+      // silent: true -- this page gates its whole render on
+      // `p.loading || home.loading` (below); a bare reload() would
+      // unmount everything for the duration of the refetch, same class
+      // of bug already fixed for Nutrition.jsx.
+      p.reload({ silent: true }); home.reload({ silent: true });
     } catch (e) { setToast(e.message); }
     setSaving(false);
   };
@@ -51,7 +55,7 @@ export default function Progress() {
       </div>
 
       {/* quick weight entry */}
-      <div className="card p-4 flex gap-2">
+      <div data-tour="progress-weight" className="card p-4 flex gap-2">
         <input className="input flex-1" type="number" step="0.1" placeholder="Today's weight (kg)" value={weightInput} onChange={(e) => setWeightInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && logWeight()} />
         <button className="btn-primary shrink-0" onClick={logWeight} disabled={saving}>{saving ? '…' : 'Log'}</button>
       </div>
@@ -105,7 +109,7 @@ export default function Progress() {
       )}
 
       {/* photos */}
-      <div className="card p-4">
+      <div data-tour="progress-photos" className="card p-4">
         <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">Transformation photos</div>
         <div className="grid grid-cols-3 gap-2">
           {['front', 'side', 'back'].map((v) => {
