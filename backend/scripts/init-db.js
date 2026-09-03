@@ -215,6 +215,11 @@ const MIGRATIONS = [
   // --- Legal consent / Terms & Conditions ---
   ['users', 'terms_accepted_at', `terms_accepted_at TEXT`],
   ['users', 'terms_version', `terms_version TEXT`],
+  // --- Flexible Calorie Balance: CUSTOM strategy (user-chosen duration +
+  // protein target) -- table already exists in production from the
+  // feature's first migration, these two columns are additive to it ---
+  ['nutrition_balance_adjustments', 'custom_days', `custom_days INTEGER`],
+  ['nutrition_balance_adjustments', 'custom_protein_target', `custom_protein_target REAL`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

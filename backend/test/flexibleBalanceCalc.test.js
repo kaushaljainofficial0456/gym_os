@@ -149,3 +149,63 @@ test('a base target just above MIN_CALORIE_TARGET is NOT flagged baseTargetTooLo
   });
   assert.equal(r.baseTargetTooLow, undefined);
 });
+
+// ---- CUSTOM strategy: user-chosen duration + protein target ----
+
+test('CUSTOM respects the requested day count when it is safely feasible', () => {
+  const r = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2200, proteinTarget: 160, carbsTarget: 220, fatTarget: 70,
+    surplusCalories: 600, strategy: 'CUSTOM', customDays: 6, customProteinTarget: 160,
+  });
+  assert.equal(r.feasible, true);
+  assert.equal(r.plannedDays, 6);
+  assert.equal(r.extended, false);
+});
+
+test('CUSTOM auto-extends past the requested day count when it would otherwise violate the safety ceiling -- a custom choice is still just a preference, never a bypass', () => {
+  const r = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2000, proteinTarget: 150, carbsTarget: 200, fatTarget: 65,
+    surplusCalories: 2000, strategy: 'CUSTOM', customDays: 2, customProteinTarget: 150,
+  });
+  assert.equal(r.feasible, true);
+  assert.ok(r.plannedDays > 2, `expected extension past the requested 2 days, got ${r.plannedDays}`);
+  assert.equal(r.extended, true);
+  assert.ok(r.adjustedCalorieTarget >= BALANCE_CONFIG.MIN_CALORIE_TARGET);
+});
+
+test('CUSTOM protects exactly the user-chosen protein target, not the client\'s existing one', () => {
+  const r = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2200, proteinTarget: 130, carbsTarget: 220, fatTarget: 70,
+    surplusCalories: 500, strategy: 'CUSTOM', customDays: 5, customProteinTarget: 200,
+  });
+  assert.equal(r.feasible, true);
+  assert.equal(r.macros.protein, 200, 'must use the CUSTOM value, not the passed-in proteinTarget of 130');
+});
+
+test('CUSTOM protein target is clamped to the same floor/ceiling the app already enforces on manual target edits', () => {
+  const tooLow = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2200, proteinTarget: 130, carbsTarget: 220, fatTarget: 70,
+    surplusCalories: 400, strategy: 'CUSTOM', customDays: 5, customProteinTarget: 1, // absurdly low
+  });
+  assert.equal(tooLow.macros.protein, BALANCE_CONFIG.MIN_PROTEIN_TARGET_G, 'clamped up to the floor, not accepted as-is');
+
+  const tooHigh = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2200, proteinTarget: 130, carbsTarget: 220, fatTarget: 70,
+    surplusCalories: 400, strategy: 'CUSTOM', customDays: 5, customProteinTarget: 9999,
+  });
+  assert.equal(tooHigh.macros.protein, BALANCE_CONFIG.MAX_PROTEIN_TARGET_G, 'clamped down to the ceiling, not accepted as-is');
+});
+
+test('CUSTOM day count is clamped within MIN/MAX_PLAN_DURATION_DAYS even when requested outside that range', () => {
+  const tooFew = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2200, proteinTarget: 130, carbsTarget: 220, fatTarget: 70,
+    surplusCalories: 300, strategy: 'CUSTOM', customDays: 0, customProteinTarget: 130,
+  });
+  assert.ok(tooFew.plannedDays >= BALANCE_CONFIG.MIN_PLAN_DURATION_DAYS);
+
+  const tooMany = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: 2200, proteinTarget: 130, carbsTarget: 220, fatTarget: 70,
+    surplusCalories: 300, strategy: 'CUSTOM', customDays: 100, customProteinTarget: 130,
+  });
+  assert.ok(tooMany.plannedDays <= BALANCE_CONFIG.MAX_PLAN_DURATION_DAYS);
+});

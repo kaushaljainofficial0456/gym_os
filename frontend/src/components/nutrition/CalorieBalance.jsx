@@ -61,9 +61,15 @@ function Row({ label, value, t, strong }) {
 
 export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
   const [pickerStrategy, setPickerStrategy] = useState(null); // key while previewing
+  // Extra body fields to carry alongside `strategy` through preview AND
+  // apply -- only ever populated for CUSTOM (customDays/customProteinTarget).
+  const [pickerExtra, setPickerExtra] = useState({});
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
+  const [customFormOpen, setCustomFormOpen] = useState(false);
+  const [customDaysInput, setCustomDaysInput] = useState('');
+  const [customProteinInput, setCustomProteinInput] = useState('');
   const [viewPlanOpen, setViewPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState(null);
@@ -102,13 +108,14 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
 
   if (balance.loading || !data) return null;
 
-  const openPicker = async (strategy) => {
+  const openPicker = async (strategy, extra = {}) => {
     setPickerStrategy(strategy);
+    setPickerExtra(extra);
     setPreview(null);
     setPreviewError(null);
     setPreviewLoading(true);
     try {
-      const res = await api('/me/nutrition/balance/preview', { method: 'POST', body: JSON.stringify({ strategy }) });
+      const res = await api('/me/nutrition/balance/preview', { method: 'POST', body: JSON.stringify({ strategy, ...extra }) });
       setPreview(res);
     } catch (e) {
       setPreviewError(e.message || 'Could not build a preview');
@@ -116,12 +123,30 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
     setPreviewLoading(false);
   };
 
-  const closePicker = () => { setPickerStrategy(null); setPreview(null); setPreviewError(null); };
+  const closePicker = () => { setPickerStrategy(null); setPickerExtra({}); setPreview(null); setPreviewError(null); };
+
+  // Bounds for the Custom form's inputs -- server-supplied so this file
+  // never hardcodes a copy of BALANCE_CONFIG's own floors.
+  const customBounds = data?.customBounds || { minDays: 2, maxDays: 14, minProtein: 20, maxProtein: 500 };
+
+  const openCustomForm = () => {
+    const defaultProtein = Math.round(baseTarget?.protein || customBounds.minProtein);
+    setCustomDaysInput(String(Math.min(customBounds.maxDays, Math.max(customBounds.minDays, 5))));
+    setCustomProteinInput(String(Math.min(customBounds.maxProtein, Math.max(customBounds.minProtein, defaultProtein))));
+    setCustomFormOpen(true);
+  };
+
+  const submitCustomForm = () => {
+    const days = Math.min(customBounds.maxDays, Math.max(customBounds.minDays, Math.round(Number(customDaysInput)) || customBounds.minDays));
+    const proteinTarget = Math.min(customBounds.maxProtein, Math.max(customBounds.minProtein, Math.round(Number(customProteinInput)) || customBounds.minProtein));
+    setCustomFormOpen(false);
+    openPicker('CUSTOM', { customDays: days, customProteinTarget: proteinTarget });
+  };
 
   const applyPlan = async () => {
     setBusy(true);
     try {
-      await api('/me/nutrition/balance/apply', { method: 'POST', body: JSON.stringify({ strategy: pickerStrategy }) });
+      await api('/me/nutrition/balance/apply', { method: 'POST', body: JSON.stringify({ strategy: pickerStrategy, ...pickerExtra }) });
       closePicker();
       onToast?.('Flexible adjustment applied ✓');
       balance.reload({ silent: true });
@@ -236,6 +261,11 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
                 {s.charAt(0) + s.slice(1).toLowerCase()}
               </button>
             ))}
+            {!data.baseTargetTooLow && (
+              <button disabled={busy} onClick={openCustomForm} className="px-3 py-2 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={btnGhost}>
+                Custom
+              </button>
+            )}
             <button disabled={busy} onClick={decline} className="px-3 py-2 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-[.97]" style={{ color: t.mute }}>Don't adjust</button>
           </div>
         </div>
@@ -257,6 +287,38 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
         </div>
       )}
 
+      {/* ══ CUSTOM DAYS/PROTEIN FORM ══ */}
+      {customFormOpen && (
+        <ModalShell kicker="Flexible Calorie Balance" title="Custom plan" t={t} onClose={() => setCustomFormOpen(false)}>
+          <div className="text-xs mb-3" style={{ color: t.mute }}>
+            Choose your own number of days and protein target — we'll work out the safest daily adjustment and the rest of your macros.
+          </div>
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>
+                Number of days ({customBounds.minDays}–{customBounds.maxDays})
+              </label>
+              <input type="number" min={customBounds.minDays} max={customBounds.maxDays} className="w-full px-4 py-3 rounded-xl font-grotesk text-sm font-bold outline-none"
+                style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}
+                value={customDaysInput} onChange={(e) => setCustomDaysInput(e.target.value)} autoFocus />
+            </div>
+            <div>
+              <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>
+                Protein target, g ({customBounds.minProtein}–{customBounds.maxProtein})
+              </label>
+              <input type="number" min={customBounds.minProtein} max={customBounds.maxProtein} className="w-full px-4 py-3 rounded-xl font-grotesk text-sm font-bold outline-none"
+                style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}
+                value={customProteinInput} onChange={(e) => setCustomProteinInput(e.target.value)} />
+              <div className="text-[11px] mt-1" style={{ color: t.mute }}>Protected — never reduced below this while your plan is active.</div>
+            </div>
+          </div>
+          <div className="text-[11px] mb-3" style={{ color: t.mute }}>
+            If your chosen days would need too big a daily cut, we'll safely extend the plan rather than go past a safe daily limit.
+          </div>
+          <button disabled={busy || !customDaysInput || !customProteinInput} onClick={submitCustomForm} className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={btnPrimary}>Preview</button>
+        </ModalShell>
+      )}
+
       {/* ══ STRATEGY PREVIEW MODAL ══ */}
       {pickerStrategy && (
         <ModalShell kicker="Flexible Calorie Balance" title={`${pickerStrategy.charAt(0) + pickerStrategy.slice(1).toLowerCase()} plan`} t={t} onClose={closePicker}>
@@ -264,7 +326,9 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
           {previewError && <div className="text-xs font-grotesk px-3 py-2 rounded-xl mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}25`, color: t.danger }}>{previewError}</div>}
           {preview && !previewLoading && (
             <>
-              <div className="text-xs mb-2" style={{ color: t.mute }}>{STRATEGY_HINT[pickerStrategy]}</div>
+              <div className="text-xs mb-2" style={{ color: t.mute }}>
+                {pickerStrategy === 'CUSTOM' ? `Your own choice — ${pickerExtra.customDays} days, ${pickerExtra.customProteinTarget}g protein` : STRATEGY_HINT[pickerStrategy]}
+              </div>
               {preview.preview.feasible ? (
                 <div className="rounded-xl p-3 mb-3" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
                   <Row t={t} label="Today's balance" value={`${preview.totalSurplusCalories} kcal over`} />
@@ -304,7 +368,8 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
             <Row t={t} label="Days remaining" value={active.remainingDays} />
             <Row t={t} label="Protein (protected)" value={`${active.adjustedProteinTarget}g`} />
             <Row t={t} label="Carbs / Fat today" value={`${active.adjustedCarbsTarget}g / ${active.adjustedFatTarget}g`} />
-            <Row t={t} label="Strategy" value={active.strategy.charAt(0) + active.strategy.slice(1).toLowerCase()} />
+            <Row t={t} label="Strategy"
+              value={active.strategy === 'CUSTOM' ? `Custom — ${active.customDays}d, ${active.customProteinTarget}g protein` : active.strategy.charAt(0) + active.strategy.slice(1).toLowerCase()} />
           </div>
           <button disabled={busy} onClick={cancelPlan} className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: `${t.danger}12`, color: t.danger, border: `1px solid ${t.danger}30` }}>Cancel adjustment</button>
           <button onClick={openHistory} className="w-full mt-2 py-2 rounded-xl font-grotesk text-xs font-semibold" style={{ color: t.mute }}>Plan history</button>
@@ -323,7 +388,8 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
                   <div className="flex items-center justify-between">
                     {/* A Declined entry has no strategy -- nothing was ever redistributed. */}
                     <span className="font-grotesk text-xs font-bold" style={{ color: t.ink }}>
-                      {h.strategy ? h.strategy.charAt(0) + h.strategy.slice(1).toLowerCase() : 'Not adjusted'}
+                      {h.strategy === 'CUSTOM' ? `Custom (${h.customDays}d, ${h.customProteinTarget}g)`
+                        : h.strategy ? h.strategy.charAt(0) + h.strategy.slice(1).toLowerCase() : 'Not adjusted'}
                     </span>
                     <span className="font-grotesk text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: t.accentDim, color: t.accent }}>{h.status}</span>
                   </div>

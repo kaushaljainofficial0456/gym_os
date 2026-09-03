@@ -161,14 +161,23 @@ export const schemas = {
     sugar: z.number().finite().nonnegative().optional(),
     sodium: z.number().finite().nonnegative().optional()
   }),
-  // Flexible Calorie Balance — strategy is the ONLY client-supplied input.
-  // sourceDate/surplusCalories are always server-derived (from meal_logs vs
-  // the client's own stored base target), never accepted from the client,
+  // Flexible Calorie Balance — strategy (+ customDays/customProteinTarget
+  // for CUSTOM) are the ONLY client-supplied inputs. sourceDate/
+  // surplusCalories are always server-derived (from meal_logs vs the
+  // client's own stored base target), never accepted from the client,
   // matching this file's existing pattern for /nutrition/targets/confirm
-  // (calories is derived server-side there too, never trusted from the body).
+  // (calories is derived server-side there too, never trusted from the
+  // body). The bounds here are a first line of defense; the pure
+  // calculation engine (flexibleBalance.js's BALANCE_CONFIG) re-clamps
+  // both independently and is the real source of truth for the floors.
   balanceStrategy: z.object({
-    strategy: z.enum(['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE']),
-  }),
+    strategy: z.enum(['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE', 'CUSTOM']),
+    customDays: z.number().int().min(2).max(14).optional(),
+    customProteinTarget: z.number().min(20).max(500).optional(),
+  }).refine(
+    (v) => v.strategy !== 'CUSTOM' || (v.customDays != null && v.customProteinTarget != null),
+    { message: 'customDays and customProteinTarget are required when strategy is CUSTOM' },
+  ),
   foodResolveQuantity: z.object({
     // A real `foods` row's own id -- when present, resolve() prices
     // directly from that row's own macros (linear scaling), never by

@@ -363,10 +363,17 @@ CREATE TABLE IF NOT EXISTS nutrition_balance_adjustments (
                                              -- latest contributing day when a new surplus merges in (Section 9)
   original_surplus_calories   REAL NOT NULL, -- cumulative total ever added to this plan (merges included)
   remaining_surplus_calories  REAL NOT NULL,
-  strategy                 TEXT NOT NULL,   -- EASY | MODERATE | AGGRESSIVE | INTENSE | NONE (declined)
+  strategy                 TEXT NOT NULL,   -- EASY | MODERATE | AGGRESSIVE | INTENSE | CUSTOM | NONE (declined)
   planned_days             INTEGER NOT NULL,
   remaining_days           INTEGER NOT NULL,
   daily_adjustment_calories   REAL NOT NULL,
+  -- Only set when strategy = 'CUSTOM': the client's own chosen duration
+  -- and protein floor, re-supplied to calculateFlexibleCaloriePlan() on
+  -- every future recompute (reconcile / recalculate / merge) exactly the
+  -- way a preset strategy's own fixed minDays is re-read fresh each time
+  -- -- NULL for every other strategy.
+  custom_days              INTEGER,
+  custom_protein_target    REAL,
   -- BASE target snapshot — what this plan was built from. Compared against
   -- the client's LIVE nutrition_plans row on every read to detect a manual
   -- target change mid-plan (Section 17: prompt to recalculate, never

@@ -66,6 +66,15 @@ export const BALANCE_CONFIG = Object.freeze({
   // (me.js's MACRO_BOUNDS.fat.min / .carbs.min).
   FAT_FLOOR_G: 15,
   CARBS_FLOOR_G: 20,
+  // Bounds for CUSTOM's user-chosen protein target -- the same
+  // protein floor/ceiling POST /nutrition/targets/confirm already
+  // enforces on a manual target edit (me.js's MACRO_BOUNDS.protein).
+  // A custom option is still not a way to bypass protein protection --
+  // it lets the user pick a HIGHER bar, or a lower one down to the same
+  // floor every other target edit in this app already respects, never
+  // an unbounded one.
+  MIN_PROTEIN_TARGET_G: 20,
+  MAX_PROTEIN_TARGET_G: 500,
   ROUND_TO: 10, // nearest 10 kcal for a displayed daily adjustment
   STRATEGIES: {
     EASY: { label: 'Easy', minDays: 5, maxDays: 7 },
@@ -76,6 +85,10 @@ export const BALANCE_CONFIG = Object.freeze({
 });
 
 export const STRATEGY_KEYS = Object.keys(BALANCE_CONFIG.STRATEGIES);
+// CUSTOM is a real, selectable strategy value but deliberately kept out of
+// STRATEGIES above (it has no fixed day range) -- callers check for it
+// explicitly (`strategy === 'CUSTOM'`) rather than finding it there.
+export const ALL_STRATEGY_KEYS = [...STRATEGY_KEYS, 'CUSTOM'];
 
 // ---- PURE calculation — no db access, no mutation. ----
 // Given a base target + a total surplus + a starting strategy preference,
@@ -83,17 +96,33 @@ export const STRATEGY_KEYS = Object.keys(BALANCE_CONFIG.STRATEGIES);
 // past the strategy's own preferred range (and even past MAX_PLAN_DURATION
 // if that's still not enough) whenever needed to respect the safety
 // floors. Never lets a strategy choice bypass the floors.
+//
+// strategy: 'CUSTOM' is a starting preference exactly like the 4 presets,
+// just with a user-chosen duration (customDays) and, per this feature's
+// own explicit request, a user-chosen protein floor (customProteinTarget)
+// instead of the client's existing protein target. Both are still
+// bounded (customDays within MIN/MAX_PLAN_DURATION_DAYS, customProteinTarget
+// within MIN/MAX_PROTEIN_TARGET_G) and still subject to the SAME
+// auto-extend-past-what-was-requested logic every other strategy gets --
+// a custom choice is a preference, never a way to bypass the floors.
 export function calculateFlexibleCaloriePlan({
   baseCalorieTarget, proteinTarget, carbsTarget, fatTarget, surplusCalories, strategy,
+  customDays, customProteinTarget,
 }) {
   const cfg = BALANCE_CONFIG;
-  if (!cfg.STRATEGIES[strategy]) throw new Error(`Unknown strategy: ${strategy}`);
+  const isCustom = strategy === 'CUSTOM';
+  if (!isCustom && !cfg.STRATEGIES[strategy]) throw new Error(`Unknown strategy: ${strategy}`);
+
+  const effectiveProteinTarget = isCustom && customProteinTarget != null
+    ? clampNum(Number(customProteinTarget), cfg.MIN_PROTEIN_TARGET_G, cfg.MAX_PROTEIN_TARGET_G)
+    : proteinTarget;
+
   const surplus = Math.max(0, round1(surplusCalories));
   if (surplus <= 0) {
     return {
       feasible: true, strategy, plannedDays: 0, dailyAdjustmentCalories: 0,
       adjustedCalorieTarget: baseCalorieTarget,
-      macros: { protein: round1(proteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
+      macros: { protein: round1(effectiveProteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
       extended: false,
     };
   }
@@ -111,7 +140,7 @@ export function calculateFlexibleCaloriePlan({
     return {
       feasible: false, strategy, plannedDays: 0, dailyAdjustmentCalories: 0,
       adjustedCalorieTarget: baseCalorieTarget,
-      macros: { protein: round1(proteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
+      macros: { protein: round1(effectiveProteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
       extended: false, baseTargetTooLow: true,
       message: "Your daily target is already at or below a safe minimum, so there's no room to reduce it further. Review your target before using flexible adjustment.",
     };
@@ -124,7 +153,9 @@ export function calculateFlexibleCaloriePlan({
     baseCalorieTarget - cfg.MIN_CALORIE_TARGET,
   ));
 
-  let plannedDays = cfg.STRATEGIES[strategy].minDays;
+  let plannedDays = isCustom
+    ? clampNum(Math.round(Number(customDays) || cfg.MIN_PLAN_DURATION_DAYS), cfg.MIN_PLAN_DURATION_DAYS, cfg.MAX_PLAN_DURATION_DAYS)
+    : cfg.STRATEGIES[strategy].minDays;
   let extended = false;
   while (plannedDays < cfg.MAX_PLAN_DURATION_DAYS && Math.ceil(surplus / plannedDays) > safeDailyCutCeiling) {
     plannedDays += 1;
@@ -143,23 +174,24 @@ export function calculateFlexibleCaloriePlan({
     return {
       feasible: false, strategy, plannedDays: 0, dailyAdjustmentCalories: 0,
       adjustedCalorieTarget: baseCalorieTarget,
-      macros: { protein: round1(proteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
+      macros: { protein: round1(effectiveProteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
       extended: false,
       message: 'Your balance is larger than we can safely redistribute through daily targets. Your normal target will continue while the balance is recorded.',
     };
   }
 
   let adjustedCalorieTarget = Math.max(cfg.MIN_CALORIE_TARGET, baseCalorieTarget - dailyAdjustment);
-  let macros = redistributeMacros({ proteinG: proteinTarget, carbsG: carbsTarget, fatG: fatTarget, adjustedCalories: adjustedCalorieTarget, cfg });
+  let macros = redistributeMacros({ proteinG: effectiveProteinTarget, carbsG: carbsTarget, fatG: fatTarget, adjustedCalories: adjustedCalorieTarget, cfg });
   // Protein protection can outrank the target arithmetic itself in a rare
   // extreme case (a protein target whose own calories, plus both floors,
   // exceed the computed adjusted target) — never reduce protein to make
   // the numbers fit; widen the adjusted target to whatever protein +
-  // floors actually require instead.
-  const minFeasibleCalories = proteinTarget * KCAL_PER_G.protein + cfg.FAT_FLOOR_G * KCAL_PER_G.fat + cfg.CARBS_FLOOR_G * KCAL_PER_G.carbs;
+  // floors actually require instead. Applies just as much to a custom
+  // protein choice as to the client's own existing target.
+  const minFeasibleCalories = effectiveProteinTarget * KCAL_PER_G.protein + cfg.FAT_FLOOR_G * KCAL_PER_G.fat + cfg.CARBS_FLOOR_G * KCAL_PER_G.carbs;
   if (adjustedCalorieTarget < minFeasibleCalories) {
     adjustedCalorieTarget = round1(minFeasibleCalories);
-    macros = { protein: round1(proteinTarget), carbs: cfg.CARBS_FLOOR_G, fat: cfg.FAT_FLOOR_G };
+    macros = { protein: round1(effectiveProteinTarget), carbs: cfg.CARBS_FLOOR_G, fat: cfg.FAT_FLOOR_G };
     dailyAdjustment = Math.max(0, round1(baseCalorieTarget - adjustedCalorieTarget));
   }
 
@@ -305,6 +337,11 @@ export async function reconcileActivePlan(db, client, tz) {
     baseCalorieTarget: active.base_calorie_target, proteinTarget: active.base_protein_target,
     carbsTarget: active.base_carbs_target, fatTarget: active.base_fat_target,
     surplusCalories: remaining, strategy: active.strategy,
+    // A CUSTOM plan's own chosen duration/protein floor must be
+    // re-supplied on every recompute -- re-read fresh here exactly the
+    // way a preset strategy's fixed minDays is looked up fresh each time
+    // (see calculateFlexibleCaloriePlan's own header comment).
+    customDays: active.custom_days, customProteinTarget: active.custom_protein_target,
   });
   await db.run(
     `UPDATE nutrition_balance_adjustments SET
@@ -351,7 +388,8 @@ async function recordSettledDay(db, adjustmentId, date, baseTarget, settledAmoun
 export async function recalculateForEditedDate(db, client, date) {
   const dayRow = await db.q1(
     `SELECT d.*, a.id as plan_id, a.remaining_surplus_calories, a.original_surplus_calories,
-            a.base_calorie_target, a.base_protein_target, a.base_carbs_target, a.base_fat_target, a.strategy
+            a.base_calorie_target, a.base_protein_target, a.base_carbs_target, a.base_fat_target, a.strategy,
+            a.custom_days, a.custom_protein_target
        FROM nutrition_balance_adjustment_days d
        JOIN nutrition_balance_adjustments a ON a.id = d.adjustment_id
       WHERE d.date = ? AND a.client_id = ? AND a.status = 'ACTIVE'
@@ -390,6 +428,7 @@ export async function recalculateForEditedDate(db, client, date) {
     baseCalorieTarget: dayRow.base_calorie_target, proteinTarget: dayRow.base_protein_target,
     carbsTarget: dayRow.base_carbs_target, fatTarget: dayRow.base_fat_target,
     surplusCalories: remaining, strategy: dayRow.strategy,
+    customDays: dayRow.custom_days, customProteinTarget: dayRow.custom_protein_target,
   });
   await db.run(
     `UPDATE nutrition_balance_adjustments SET
@@ -407,26 +446,36 @@ export async function recalculateForEditedDate(db, client, date) {
 // inside one transaction so two concurrent apply calls can't both create a
 // row. This is the ONLY function in this module that mutates
 // nutrition_balance_adjustments outside of reconcileActivePlan.
-export async function applyFlexibleCaloriePlan(db, { orgId, clientId, sourceDate, surplusCalories, strategy, baseTargets }) {
+export async function applyFlexibleCaloriePlan(db, { orgId, clientId, sourceDate, surplusCalories, strategy, baseTargets, customDays, customProteinTarget }) {
   return db.tx(async (tx) => {
     const existing = await tx.q1(`SELECT * FROM nutrition_balance_adjustments WHERE client_id = ? AND status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1`, [clientId]);
     const totalSurplus = round1((existing ? existing.remaining_surplus_calories : 0) + surplusCalories);
     const calc = calculateFlexibleCaloriePlan({
       baseCalorieTarget: baseTargets.calories, proteinTarget: baseTargets.protein,
       carbsTarget: baseTargets.carbs, fatTarget: baseTargets.fat,
-      surplusCalories: totalSurplus, strategy,
+      surplusCalories: totalSurplus, strategy, customDays, customProteinTarget,
     });
+    // Persisted CUSTOM inputs — the clamped/validated values the calc
+    // actually used, not the raw request, so a later recompute
+    // (reconcile/recalculate) re-reads exactly what was applied. NULL for
+    // every non-CUSTOM strategy.
+    const persistedCustomDays = strategy === 'CUSTOM' ? calc.plannedDays : null;
+    const persistedCustomProtein = strategy === 'CUSTOM' && customProteinTarget != null
+      ? clampNum(Number(customProteinTarget), BALANCE_CONFIG.MIN_PROTEIN_TARGET_G, BALANCE_CONFIG.MAX_PROTEIN_TARGET_G)
+      : null;
     const ts = now();
     if (existing) {
       await tx.run(
         `UPDATE nutrition_balance_adjustments SET
            original_surplus_calories = original_surplus_calories + ?, remaining_surplus_calories = ?,
            strategy = ?, planned_days = ?, remaining_days = ?, daily_adjustment_calories = ?,
+           custom_days = ?, custom_protein_target = ?,
            base_calorie_target = ?, base_protein_target = ?, base_carbs_target = ?, base_fat_target = ?,
            adjusted_calorie_target = ?, adjusted_protein_target = ?, adjusted_carbs_target = ?, adjusted_fat_target = ?,
            source_date = ?, updated_at = ?
          WHERE id = ?`,
         [surplusCalories, totalSurplus, strategy, calc.plannedDays, calc.plannedDays, calc.dailyAdjustmentCalories,
+          persistedCustomDays, persistedCustomProtein,
           baseTargets.calories, baseTargets.protein, baseTargets.carbs, baseTargets.fat,
           calc.adjustedCalorieTarget, calc.macros.protein, calc.macros.carbs, calc.macros.fat,
           sourceDate, ts, existing.id],
@@ -437,13 +486,13 @@ export async function applyFlexibleCaloriePlan(db, { orgId, clientId, sourceDate
     await tx.run(
       `INSERT INTO nutrition_balance_adjustments (
          id, org_id, client_id, source_date, original_surplus_calories, remaining_surplus_calories,
-         strategy, planned_days, remaining_days, daily_adjustment_calories,
+         strategy, planned_days, remaining_days, daily_adjustment_calories, custom_days, custom_protein_target,
          base_calorie_target, base_protein_target, base_carbs_target, base_fat_target,
          adjusted_calorie_target, adjusted_protein_target, adjusted_carbs_target, adjusted_fat_target,
          status, last_reconciled_date, created_at, updated_at
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [rowId, orgId, clientId, sourceDate, totalSurplus, totalSurplus,
-        strategy, calc.plannedDays, calc.plannedDays, calc.dailyAdjustmentCalories,
+        strategy, calc.plannedDays, calc.plannedDays, calc.dailyAdjustmentCalories, persistedCustomDays, persistedCustomProtein,
         baseTargets.calories, baseTargets.protein, baseTargets.carbs, baseTargets.fat,
         calc.adjustedCalorieTarget, calc.macros.protein, calc.macros.carbs, calc.macros.fat,
         'ACTIVE', sourceDate, ts, ts],
@@ -481,6 +530,7 @@ export async function recalculatePlanForNewBaseTargets(db, clientId, liveBase) {
     baseCalorieTarget: liveBase.calories, proteinTarget: liveBase.protein,
     carbsTarget: liveBase.carbs, fatTarget: liveBase.fat,
     surplusCalories: active.remaining_surplus_calories, strategy: active.strategy,
+    customDays: active.custom_days, customProteinTarget: active.custom_protein_target,
   });
   await db.run(
     `UPDATE nutrition_balance_adjustments SET
@@ -516,6 +566,7 @@ export async function getPlanHistory(db, clientId, limit = 20) {
       id: d.id, type: 'declined', status: 'DECLINED', sourceDate: d.source_date,
       strategy: null, originalSurplusCalories: null, remainingSurplusCalories: null,
       plannedDays: null, remainingDays: null, dailyAdjustmentCalories: null,
+      customDays: null, customProteinTarget: null,
       baseCalorieTarget: null, baseProteinTarget: null, baseCarbsTarget: null, baseFatTarget: null,
       adjustedCalorieTarget: null, adjustedProteinTarget: null, adjustedCarbsTarget: null, adjustedFatTarget: null,
       createdAt: d.created_at, updatedAt: d.created_at,
@@ -538,6 +589,8 @@ export function serializePlan(row) {
     plannedDays: row.planned_days,
     remainingDays: row.remaining_days,
     dailyAdjustmentCalories: row.daily_adjustment_calories,
+    customDays: row.custom_days ?? null,
+    customProteinTarget: row.custom_protein_target ?? null,
     baseCalorieTarget: row.base_calorie_target,
     baseProteinTarget: row.base_protein_target,
     baseCarbsTarget: row.base_carbs_target,

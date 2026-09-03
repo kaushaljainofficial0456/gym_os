@@ -570,3 +570,47 @@ test('GET /me/nutrition/balance flags baseTargetTooLow when the base target is a
   assert.equal(preview.json.preview.baseTargetTooLow, true);
   assert.match(preview.json.preview.message, /already at or below a safe minimum/);
 });
+
+// ---- CUSTOM strategy: user-chosen duration + protein target ----
+
+test('CUSTOM strategy requires customDays and customProteinTarget -- rejected without them', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  await logMeal(db, 'c1', yesterday(), 2350);
+  const res = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'CUSTOM' });
+  assert.equal(res.status, 422);
+});
+
+test('CUSTOM strategy applies with the user-chosen days and protein target, and both survive a later reconcile', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  const day1 = yesterday();
+  await logMeal(db, 'c1', day1, 2350); // +350 over the 2000 base target
+  const applied = await call('POST', '/api/me/nutrition/balance/apply', {
+    strategy: 'CUSTOM', customDays: 7, customProteinTarget: 180,
+  });
+  assert.equal(applied.status, 201, JSON.stringify(applied.json));
+  assert.equal(applied.json.plan.strategy, 'CUSTOM');
+  assert.equal(applied.json.plan.plannedDays, 7);
+  assert.equal(applied.json.plan.customDays, 7);
+  assert.equal(applied.json.plan.customProteinTarget, 180);
+  assert.equal(applied.json.plan.adjustedProteinTarget, 180, 'protects the CUSTOM value, not the base target\'s own 150g');
+
+  const planId = applied.json.plan.id;
+  // Advance one clean day (no food logged on it) so reconcile recomputes
+  // the schedule -- must still use the SAME custom inputs, not silently
+  // fall back to some default.
+  const twoBefore = dayKey(addDays(day1 + 'T00:00:00Z', -2), TZ);
+  await db.run('UPDATE nutrition_balance_adjustments SET last_reconciled_date = ? WHERE id = ?', [twoBefore, planId]);
+
+  const after = await call('GET', '/api/me/nutrition/balance');
+  assert.ok(after.json.activePlan);
+  assert.equal(after.json.activePlan.customDays, 7);
+  assert.equal(after.json.activePlan.customProteinTarget, 180);
+  assert.equal(after.json.activePlan.adjustedProteinTarget, 180);
+});
+
+test('GET /me/nutrition/balance exposes customBounds so the frontend never hardcodes its own copy of the floors', async (t) => {
+  const { call, close } = await startApp(); t.after(() => close());
+  const res = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.json.customBounds, { minDays: 2, maxDays: 14, minProtein: 20, maxProtein: 500 });
+});

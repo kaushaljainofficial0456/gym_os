@@ -1859,6 +1859,13 @@ export default function meRoutes(db) {
       // strategies to discover none of them work.
       baseTargetTooLow: !!(liveBase && liveBase.calories <= BALANCE_CONFIG.MIN_CALORIE_TARGET),
       strategies: Object.entries(BALANCE_CONFIG.STRATEGIES).map(([key, v]) => ({ key, ...v })),
+      // Bounds for the CUSTOM strategy's own day/protein inputs -- sent so
+      // the frontend never hardcodes a copy of these that could drift out
+      // of sync with the engine's own real floors.
+      customBounds: {
+        minDays: BALANCE_CONFIG.MIN_PLAN_DURATION_DAYS, maxDays: BALANCE_CONFIG.MAX_PLAN_DURATION_DAYS,
+        minProtein: BALANCE_CONFIG.MIN_PROTEIN_TARGET_G, maxProtein: BALANCE_CONFIG.MAX_PROTEIN_TARGET_G,
+      },
     });
   });
 
@@ -1878,6 +1885,7 @@ export default function meRoutes(db) {
       baseCalorieTarget: liveBase.calories, proteinTarget: liveBase.protein,
       carbsTarget: liveBase.carbs, fatTarget: liveBase.fat,
       surplusCalories: totalSurplus, strategy: req.body.strategy,
+      customDays: req.body.customDays, customProteinTarget: req.body.customProteinTarget,
     });
     res.json({ preview, baseTarget: liveBase, totalSurplusCalories: totalSurplus });
   });
@@ -1907,6 +1915,7 @@ export default function meRoutes(db) {
       surplusCalories: incomingSurplus,
       strategy: req.body.strategy,
       baseTargets: liveBase,
+      customDays: req.body.customDays, customProteinTarget: req.body.customProteinTarget,
     });
     track(db, 'balance_plan_created', req.user.org, req.user.sub, { client_id: c.id, strategy: req.body.strategy, merged: !!active });
     res.status(201).json({ ok: true, plan: serializePlan(plan) });
