@@ -938,6 +938,22 @@ Disclosed, not silently glossed over:
   forward from `source_date`) — which produced a wrong number that traced
   back to the test's own setup, not the app; rewritten to construct the
   plan directly at a realistic offset instead.
+- ~~A plan the client never returns to has no way to ever resolve, and
+  Section 11 explicitly requires "must not leave abandoned plans
+  indefinitely active"~~ — **closed.** `reconcileActivePlan()` now checks,
+  before its normal one-day advance, whether a plan has gone untouched
+  longer than `MAX_PLAN_DURATION_DAYS`; if so it's marked `EXPIRED`
+  outright (a new `justExpired` flag distinguishes this from a plan that
+  genuinely paid itself off, so the frontend shows a distinct, neutral
+  toast rather than the "settled" one). Without this, a plan settling
+  exactly one day per app-open meant a client who stopped opening the app
+  for a month would need roughly a month of future visits before their
+  plan ever resolved on its own.
+- ~~`GET /nutrition/balance/history` never surfaced Declined events, even
+  though the spec explicitly asks for "Completed/Declined/Active
+  plans"~~ — **closed.** `getPlanHistory()` now merges real plan rows
+  with `nutrition_balance_prompts` decline records, sorted together by
+  date. 2 new tests (27 total in the balance suite) cover both of these.
 - **No frontend automated test suite** — this project has none
   configured; verification is build + live browser, consistent with the
   rest of this session's frontend work.
@@ -953,3 +969,34 @@ Disclosed, not silently glossed over:
   left out as genuinely optional per the spec's own "only if it fits
   naturally" framing, to avoid adding telemetry surface not asked for
   with confidence.
+
+## P. Production deployment note (2026-09-03)
+
+The first deploy of this feature (commit `8dd9578`) failed its
+`db:check` preflight gate, exactly as intended — the 3 new tables hadn't
+been migrated to the production database yet. Vercel correctly kept the
+previous, working deployment live rather than shipping a broken one, so
+production was never actually down; it was just running stale code
+(this feature not yet included) until the migration ran.
+
+Separately, and unrelated to this feature or any code in this session:
+the project's **Preview** deployments (branch-specific `-git-<branch>-`
+URLs) were found to crash on every single API request with Vercel's
+`FUNCTION_INVOCATION_FAILED` — reproduced against `/api/ready`,
+`/api/auth/me`, and `/api/auth/login` alike, 100% consistent across
+retries. `config.js` (untouched by any commit this session — confirmed
+via `git diff`) hard-exits when required environment variables like
+`DATABASE_URL` aren't present in a production-like environment; the
+evidence points to Vercel's **Preview** environment for this project not
+having those variables configured, unlike **Production**. This is a
+Vercel project-settings gap, not something fixable from the codebase —
+flagged to the user, who confirmed Production is what matters and Preview
+does not need fixing right now.
+
+After running `npm run db:init` against production (admin connection)
+and triggering a redeploy, production was confirmed healthy end-to-end:
+`GET /api/ready` returns `{"ok":true,"db":"postgres"}`, `GET
+/api/me/nutrition/balance` returns `401` (route exists, correctly
+requires auth) rather than `404`, and `POST /api/auth/login` with the
+demo client's real credentials returns a valid token — verified live
+against `gym-os-nikhaar-fashions-connect.vercel.app`, not assumed.
