@@ -59,9 +59,12 @@ export default function EnterpriseBilling() {
     try {
       const res = await api(`/enterprise/invoices/${inv.id}/email`, { method: 'POST', body: JSON.stringify({}) });
       setToast(`Invoice sent to ${res.to}`);
-      invoices.reload();
+      invoices.reload({ silent: true });
     } catch (e) {
-      setToast(e.data?.message || e.message);
+      // api.js's own .message already prefers a response's `message`
+      // over its `error` code (see that file's comment) -- covers this
+      // route's own no_recipient/email_send_failed responses.
+      setToast(e.message);
     } finally {
       setInvoiceBusyId(null);
     }
@@ -76,17 +79,22 @@ export default function EnterpriseBilling() {
       if (q.quote.total <= 0) {
         await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
         setModal({ quote: q.quote, freeChange: true });
-        status.reload();
+        // silent: true -- this page gates its whole render on
+        // `status.loading` (below); a bare reload() would unmount
+        // everything (including the just-opened modal) for the
+        // duration of the refetch, same class of bug already fixed for
+        // Nutrition.jsx.
+        status.reload({ silent: true });
       } else {
         const o = await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
         setModal({ quote: q.quote, order: o.order });
       }
     } catch (e) {
-      // The downgrade-blocked response carries its own precise, human-
-      // readable message (spec's own worked example) -- prefer that
-      // over the generic error-code string api.js's own .message falls
-      // back to for this route.
-      setToast(e.data?.message || e.message);
+      // api.js's own .message already prefers this response's `message`
+      // over its `error` code (see that file's comment) -- e.data?.message
+      // was this call site's own one-off workaround for the same gap,
+      // now redundant.
+      setToast(e.message);
     } finally { setBusy(false); }
   };
 
@@ -106,7 +114,7 @@ export default function EnterpriseBilling() {
       await api('/enterprise/payment/verify', { method: 'POST', body: JSON.stringify({ orderId: modal.order.id, providerPaymentId: paymentId, signature }) });
       setToast('Payment complete');
       setModal(null);
-      status.reload(); invoices.reload();
+      status.reload({ silent: true }); invoices.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
@@ -185,7 +193,7 @@ export default function EnterpriseBilling() {
       </div>
 
       <QuoteFlow open={!!modal} onClose={() => setModal(null)} quote={modal?.quote} order={modal?.order} freeChange={modal?.freeChange}
-        onPay={onPay} onDone={() => { setModal(null); status.reload(); }} />
+        onPay={onPay} onDone={() => { setModal(null); status.reload({ silent: true }); }} />
     </div>
   );
 }

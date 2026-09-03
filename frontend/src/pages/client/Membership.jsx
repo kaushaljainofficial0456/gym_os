@@ -34,7 +34,11 @@ export default function Membership() {
     try {
       await api('/enrollment/client/payment/verify', { method: 'POST', body: JSON.stringify({ orderId: order.id, providerPaymentId: paymentId, signature }) });
       setOrder(null); setDone(true);
-      membership.reload();
+      // silent: true -- a bare reload() here would flip membership.loading
+      // back to true and this page's own gate (below) would swap the
+      // whole page to a spinner right as `done` is trying to show a
+      // success screen. Same class of bug already fixed for Nutrition.jsx.
+      membership.reload({ silent: true });
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   };

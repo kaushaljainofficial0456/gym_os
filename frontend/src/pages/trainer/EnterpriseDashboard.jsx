@@ -51,7 +51,7 @@ export default function EnterpriseDashboard() {
   if (account.data && account.data.account?.status !== 'ACTIVE') alerts.push('Your payment account needs attention before you can receive settlements.');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="trainer-enterprise">
       <PageHeader title="Enterprise" sub="Your SK OS subscription, capacity, and QR onboarding." />
 
       <div className="grid sm:grid-cols-3 gap-4">

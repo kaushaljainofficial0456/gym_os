@@ -34,9 +34,15 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
+import { sumEatenTotals } from '../../nutritionCalc.js';
 import {
   AmbientBackdrop, Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
 } from '../../design/index.js';
+
+// Same rounding convention used everywhere else this app shows a macro
+// total (MyDietCard.jsx, Nutrition.jsx, CustomizeMealSheet.jsx all define
+// this identically).
+const r1 = (n) => Math.round((n || 0) * 10) / 10;
 
 /**
  * Crowd levels. The old version mapped LOW and MODERATE to the SAME hex
@@ -103,13 +109,15 @@ export default function Home() {
 
   const data = home.data;
   const meals = data?.nutrition?.meals || [];
-  const eaten = meals.filter((m) => m.eaten).reduce(
-    (s, m) => ({
-      calories: s.calories + m.calories, protein: s.protein + m.protein,
-      carbs: s.carbs + m.carbs, fat: s.fat + m.fat,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 },
-  );
+  // Shared with Nutrition.jsx (nutritionCalc.js's own comment explains why
+  // this isn't a second inline reduce) -- was previously duplicated here
+  // with no rounding at all, which is what produced values like
+  // "252.29999999999998 / 800 g" on screen: plain IEEE754 float addition
+  // across several meals' carbs, interpolated straight into a template
+  // string with nothing rounding it first. r1() below is applied at
+  // display time, matching every other macro total in this app.
+  const eatenRaw = sumEatenTotals(meals);
+  const eaten = { calories: Math.round(eatenRaw.calories), protein: r1(eatenRaw.protein), carbs: r1(eatenRaw.carbs), fat: r1(eatenRaw.fat) };
 
   if (home.loading) return <Spinner label="Loading your day…" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
@@ -139,7 +147,7 @@ export default function Home() {
           ambient field bleed to the device edges while the text stays on
           the page's normal gutter — a backdrop that stops short of the
           edge reads as a misaligned card, not as atmosphere. */}
-      <section className="relative -mx-4 -mt-2 px-4 pt-6 pb-5 overflow-hidden">
+      <section data-tour="home-hero" className="relative -mx-4 -mt-2 px-4 pt-6 pb-5 overflow-hidden">
         <AmbientBackdrop intensity={0.42} maxTier="medium" />
         {/* Fades the field into the page before the content below starts,
             so there is no hard horizontal seam where 3D stops. */}
@@ -237,7 +245,7 @@ export default function Home() {
           they actually have, which is how much is left. */}
       <Reveal delay={80}>
         <Tilt max={4}>
-          <div className="card p-5">
+          <div data-tour="home-fuel" className="card p-5">
             <div className="flex items-start justify-between">
               <Label>Fuel today</Label>
               {plan && (

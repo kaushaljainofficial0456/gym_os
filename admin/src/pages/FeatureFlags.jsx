@@ -25,15 +25,16 @@ export default function FeatureFlags() {
     try {
       await api('/console/features', { method: 'POST', body: JSON.stringify(form) });
       setForm(emptyForm);
-      reload();
+      reload({ silent: true });
       toast.success(`Flag "${form.key}" created`);
     } catch (err) {
-      setFormError(err.data?.issues?.join('; ') || err.message);
+      // api.js's own .message already folds `issues` in -- redundant workaround removed.
+      setFormError(err.message);
     } finally { setCreating(false); }
   };
 
   const toggle = async (flag) => {
-    try { await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ enabled: !flag.enabled }) }); reload(); }
+    try { await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ enabled: !flag.enabled }) }); reload({ silent: true }); }
     catch (e) { toast.error(e.message || 'Could not update flag'); }
   };
 
@@ -43,7 +44,7 @@ export default function FeatureFlags() {
     try {
       await api(`/console/features/${flag.id}`, { method: 'POST', body: JSON.stringify({ rolloutPercentage: Number(draft) }) });
       setRolloutDrafts((d) => { const next = { ...d }; delete next[flag.id]; return next; });
-      reload();
+      reload({ silent: true });
       toast.success('Rollout updated');
     } catch (e) { toast.error(e.message || 'Could not update rollout'); }
   };
@@ -51,7 +52,7 @@ export default function FeatureFlags() {
   const remove = async () => {
     if (!deleteTarget) return;
     setBusy(true);
-    try { await api(`/console/features/${deleteTarget.id}`, { method: 'DELETE' }); setDeleteTarget(null); reload(); toast.success('Flag deleted'); }
+    try { await api(`/console/features/${deleteTarget.id}`, { method: 'DELETE' }); setDeleteTarget(null); reload({ silent: true }); toast.success('Flag deleted'); }
     catch (e) { toast.error(e.message || 'Could not delete flag'); }
     finally { setBusy(false); }
   };

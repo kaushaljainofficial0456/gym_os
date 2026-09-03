@@ -20,7 +20,7 @@ export default function FoodIntelligence() {
   const act = async (canonicalKey, action) => {
     try {
       await api(`/console/intelligence/food/review-queue/${encodeURIComponent(canonicalKey)}/${action}`, { method: 'POST' });
-      reviewQueue.reload();
+      reviewQueue.reload({ silent: true });
       toast.success(action === 'verify' ? 'Marked as human-reviewed' : 'Reverted to AI estimate');
     } catch (e) { toast.error(e.message || 'Could not update'); }
   };

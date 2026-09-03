@@ -135,11 +135,21 @@ export default function Help() {
           <div className="w-10 h-10 rounded-xl grid place-items-center border" style={{ background: 'linear-gradient(135deg, rgba(10,138,133,.2), rgba(20,196,188,.1))', borderColor: 'var(--line)' }}>
 
           </div>
-          <div>
+          <div className="flex-1">
             <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Welcome to SK OS</div>
             <div className="text-[11px]" style={{ color: 'var(--mute)' }}>Tap any section below to learn more</div>
           </div>
         </div>
+        {/* Replay of the guided first-run tour (AppTour). Dispatches an event
+            that ClientLayout listens for — same activation path as the
+            automatic post-onboarding start, so behaviour stays identical. */}
+        <button
+          onClick={() => window.dispatchEvent(new Event('sk-os:start-tour'))}
+          className="w-full py-2.5 rounded-xl font-grotesk text-[12px] font-bold transition-all active:scale-[.97]"
+          style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent)' }}
+        >
+          Replay app tour
+        </button>
       </div>
 
       {HELP_SECTIONS.map((section) => (

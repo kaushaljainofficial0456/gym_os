@@ -70,6 +70,12 @@ ALTER TABLE workouts           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workouts           FORCE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_plans    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_plans    FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustments FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_prompts     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_prompts     FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustment_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustment_days FORCE ROW LEVEL SECURITY;
 ALTER TABLE intelligence_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE intelligence_events FORCE ROW LEVEL SECURITY;
 ALTER TABLE gym_settings       ENABLE ROW LEVEL SECURITY;
@@ -186,7 +192,8 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'users','trainers','clients','workout_templates','training_programs','workouts',
-    'nutrition_plans','intelligence_events','gym_settings','custom_metrics','metric_entries',
+    'nutrition_plans','nutrition_balance_adjustments','nutrition_balance_prompts',
+    'intelligence_events','gym_settings','custom_metrics','metric_entries',
     'client_meal_templates','client_workouts','attendance_events','alerts','coach_insights',
     'packages','subscriptions','payments','attendance','messages','notifications','events',
     'ai_memory','ai_feedback',
@@ -280,6 +287,17 @@ BEGIN
   ) WITH CHECK (
     NULLIF(current_setting('app.org_id', true), '') IS NULL
     OR meal_template_id IN (SELECT id FROM client_meal_templates WHERE org_id = current_setting('app.org_id', true))
+  );
+
+  -- nutrition_balance_adjustment_days has no org_id column -- derived via
+  -- its parent row: adjustment_id -> nutrition_balance_adjustments.org_id.
+  DROP POLICY IF EXISTS tenant_isolation ON nutrition_balance_adjustment_days;
+  CREATE POLICY tenant_isolation ON nutrition_balance_adjustment_days USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR adjustment_id IN (SELECT id FROM nutrition_balance_adjustments WHERE org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR adjustment_id IN (SELECT id FROM nutrition_balance_adjustments WHERE org_id = current_setting('app.org_id', true))
   );
 
   -- client_workout_exercises has NO client_id column — its client/org is
@@ -399,6 +417,29 @@ DO $$
 BEGIN
   DROP POLICY IF EXISTS tenant_isolation ON shared_meals;
   CREATE POLICY tenant_isolation ON shared_meals USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR org_id IS NULL
+    OR org_id = current_setting('app.org_id', true)
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR org_id IS NULL
+    OR org_id = current_setting('app.org_id', true)
+  );
+END $$;
+
+-- shared_workouts is the exact same shape as shared_meals directly above
+-- (nullable org_id/client_id, a sender-owned immutable snapshot, a public
+-- unauthenticated preview route in workoutShare.js unaffected by RLS
+-- either way) -- same policy, same reasoning, added when the workout-
+-- sharing feature was merged so it never becomes a repeat of the
+-- community_members/community_workout_shares production incident this
+-- guard exists to prevent (see prodreadiness.test.js's own comment).
+ALTER TABLE shared_workouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_workouts FORCE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS tenant_isolation ON shared_workouts;
+  CREATE POLICY tenant_isolation ON shared_workouts USING (
     NULLIF(current_setting('app.org_id', true), '') IS NULL
     OR org_id IS NULL
     OR org_id = current_setting('app.org_id', true)

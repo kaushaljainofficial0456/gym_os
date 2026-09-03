@@ -18,14 +18,14 @@ export default function Reconciliation() {
     try {
       const summary = await api('/console/reconciliation/run', { method: 'POST' });
       setLastSummary(summary);
-      reload();
+      reload({ silent: true });
       toast.success(`Sweep complete: ${summary.flagged} flagged, ${summary.recovered} recovered`);
     } catch (e) { toast.error(e.message || 'Sweep failed'); }
     finally { setRunning(false); }
   };
 
   const resolveIssue = async (id, dismiss) => {
-    try { await api(`/console/reconciliation/${id}/resolve`, { method: 'POST', body: JSON.stringify({ dismiss }) }); reload(); toast.success(dismiss ? 'Issue dismissed' : 'Issue resolved'); }
+    try { await api(`/console/reconciliation/${id}/resolve`, { method: 'POST', body: JSON.stringify({ dismiss }) }); reload({ silent: true }); toast.success(dismiss ? 'Issue dismissed' : 'Issue resolved'); }
     catch (e) { toast.error(e.message || 'Could not update issue'); }
   };
 

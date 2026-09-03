@@ -113,6 +113,9 @@ export default function EnterpriseOnboarding() {
     try {
       await api('/enterprise/payment/verify', { method: 'POST', body: JSON.stringify({ orderId: order.id, providerPaymentId: paymentId, signature }) });
       setStep('done');
+      // Signal TrainerLayout to start the guided app tour on next render.
+      // Consumed once by TrainerLayout and cleared immediately.
+      localStorage.setItem('sk-os-start-tour-next', '1');
       setTimeout(() => nav('/app/trainer/enterprise', { replace: true }), 1400);
     } catch (ex) { setErr(ex.message); }
     finally { setSaving(false); }

@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
+import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
 
 const T = {
   dark: {
@@ -44,11 +45,17 @@ export default function NutritionTargetSetup({ open, onComplete }) {
   const [confirmed, setConfirmed] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  // Editable values
-  const [calories, setCalories] = useState(0);
+  // Editable values -- calories is intentionally NOT its own state. It's
+  // a LIVE-DERIVED value (protein×4 + carbs×4 + fat×9, the canonical 4/4/9
+  // rule -- see nutritionCalc.js) so it can never drift out of sync with
+  // whatever the user actually typed into the macro fields below, which
+  // is exactly the bug this used to have: calories was a fourth
+  // independent number that silently stopped updating the moment any
+  // macro changed, right up until it was saved as-is.
   const [protein, setProtein] = useState(0);
   const [carbs, setCarbs] = useState(0);
   const [fat, setFat] = useState(0);
+  const calories = useMemo(() => calculateCaloriesFromMacros({ protein, carbs, fat }), [protein, carbs, fat]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +70,6 @@ export default function NutritionTargetSetup({ open, onComplete }) {
           return;
         }
         setTargets(res.targets);
-        setCalories(res.targets.calories);
         setProtein(res.targets.protein);
         setCarbs(res.targets.carbs);
         setFat(res.targets.fat);
@@ -76,9 +82,13 @@ export default function NutritionTargetSetup({ open, onComplete }) {
     setSaving(true);
     setSaveError(null);
     try {
+      // `calories` is never sent -- the backend derives it itself from
+      // these same three numbers via the identical 4/4/9 formula, the
+      // one canonical place that calculation happens server-side. Sending
+      // it here would just be a value the server ignores.
       await api('/me/nutrition/targets/confirm', {
         method: 'POST',
-        body: JSON.stringify({ calories, protein, carbs, fat }),
+        body: JSON.stringify({ protein, carbs, fat }),
       });
       setConfirmed(true);
       setTimeout(() => onComplete(), 1200);

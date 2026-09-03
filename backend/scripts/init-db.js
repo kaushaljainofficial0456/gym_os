@@ -221,6 +221,9 @@ const MIGRATIONS = [
   // this codebase's INSERT INTO users statements relies on that default.
   ['users', 'auth_provider', `auth_provider TEXT NOT NULL DEFAULT 'local'`],
   ['users', 'google_id', `google_id TEXT`],
+  // --- Legal consent / Terms & Conditions ---
+  ['users', 'terms_accepted_at', `terms_accepted_at TEXT`],
+  ['users', 'terms_version', `terms_version TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

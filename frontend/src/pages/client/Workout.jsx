@@ -317,7 +317,14 @@ export default function Workout() {
       }) });
       setPlannerOpen(false);
       setToast(`${w.name} is today's session`);
-      today.reload(); hist.reload();
+      // silent: true -- same fix as Nutrition.jsx's own reload() calls
+      // (see utils.js's useFetch): a bare reload() flips `loading` back
+      // to true and this page's own `if (today.loading || ...) return
+      // <Spinner/>` (below) would swap the ENTIRE returned tree to just
+      // that spinner, unmounting everything under it -- including an
+      // in-progress execute-mode session with its own local set/rep
+      // state -- for the duration of the background refetch.
+      today.reload({ silent: true }); hist.reload({ silent: true });
     } catch (e) { setToast(e.message || 'Could not schedule today'); }
   };
 
@@ -338,7 +345,7 @@ export default function Workout() {
   const toggleEx = async (ex) => {
     const next = !ex.done;
     setExState(state.map((x) => (x.id === ex.id ? { ...x, done: next } : x)));
-    try { await api(`/workouts/${workout.id}/exercises/${ex.id}`, { method: 'PATCH' }); } catch { today.reload(); }
+    try { await api(`/workouts/${workout.id}/exercises/${ex.id}`, { method: 'PATCH' }); } catch { today.reload({ silent: true }); }
   };
 
   // ---- execution ----
@@ -356,7 +363,7 @@ export default function Workout() {
       // If workout was already completed, do not enter execute mode
       if (res.already_completed) {
         setStarting(false);
-        today.reload();
+        today.reload({ silent: true });
         return;
       }
     } catch (e) {
@@ -468,7 +475,7 @@ export default function Workout() {
       });
       setBurn(null);
       setIntensity(null);
-      today.reload(); hist.reload();
+      today.reload({ silent: true }); hist.reload({ silent: true });
     } catch (e) {
       setToast(e.message || 'Could not log workout');
       setMode('browse');
@@ -824,7 +831,7 @@ export default function Workout() {
                       await api('/me/workouts', { method: 'POST', body: JSON.stringify({ name: builderName, exercises: builderExs.map((b) => ({ exercise_id: b.exercise_id, sets: b.sets, reps: b.reps, weight: b.weight })) }) });
                       setBuilderOpen(false); setBuilderName(''); setBuilderExs([]); setSelectedLibEx(null); setJustAdded(null);
                       setToast('Your workout is scheduled for today');
-                      today.reload(); hist.reload();
+                      today.reload({ silent: true }); hist.reload({ silent: true });
                     } catch (e) { setToast(e.message); }
                     setSavingBuilder(false);
                   }}>

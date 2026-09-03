@@ -173,7 +173,11 @@ function TrainingTab({ clientId }) {
       await api(`/clients/${clientId}/equipment`, { method: 'PATCH', body: JSON.stringify({ equipment: equipEdit }) });
       setToast('Equipment profile updated');
       setEquipEdit(null);
-      equip.reload();
+      // silent: true -- this page gates its whole render on
+      // `prog.loading || volume.loading || equip.loading` (above); a bare
+      // reload() would unmount everything for the duration of the
+      // refetch, same class of bug already fixed for Nutrition.jsx.
+      equip.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
@@ -482,7 +486,11 @@ function NutritionTab({ clientId, profile }) {
     await api(`/nutrition/clients/${clientId}/meals/toggle`, {
       method: 'POST', body: JSON.stringify({ meal_id: meal.id, eaten: !meal.eaten })
     });
-    reload();
+    // silent: true -- this card renders `loading ? <Spinner/> : (...)`
+    // inline (below); a bare reload() would flash the whole card to a
+    // spinner and back for every toggle, same class of bug already
+    // fixed for Nutrition.jsx.
+    reload({ silent: true });
   };
 
   return (
@@ -539,7 +547,7 @@ function NutritionTab({ clientId, profile }) {
               <button key={p.id} className="w-full flex items-center justify-between p-3 rounded-2xl border border-line bg-white/[.02] hover:bg-white/[.05]"
                 onClick={async () => {
                   await api(`/nutrition/clients/${clientId}/plan/assign`, { method: 'POST', body: JSON.stringify({ plan_id: p.id }) });
-                  setPlanOpen(false); plans.reload(); reload();
+                  setPlanOpen(false); plans.reload({ silent: true }); reload({ silent: true });
                 }}>
                 <span className="font-grotesk font-semibold">{p.name}</span>
                 <span className="text-xs text-mute font-grotesk">{p.calories} kcal · {p.meals.length} meals</span>
@@ -634,13 +642,16 @@ function AITab({ clientId }) {
   const analyze = async () => {
     setBusy(true);
     setErr('');
-    try { await api(`/insights/clients/${clientId}/analyze`, { method: 'POST', body: '{}' }); reload(); }
+    // silent: true -- this card renders `loading ? <Spinner/> : (...)`
+    // inline (below); a bare reload() would flash the whole card to a
+    // spinner and back, same class of bug already fixed for Nutrition.jsx.
+    try { await api(`/insights/clients/${clientId}/analyze`, { method: 'POST', body: '{}' }); reload({ silent: true }); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
   const action = async (id, action) => {
     await api(`/insights/${id}/action`, { method: 'POST', body: JSON.stringify({ action }) });
-    reload();
+    reload({ silent: true });
   };
 
   return (
@@ -689,7 +700,7 @@ function AITab({ clientId }) {
                         method: 'POST',
                         body: JSON.stringify({ action: 'modify', summary: document.getElementById(`s${ins.id}`).value, recommendation: document.getElementById(`r${ins.id}`).value })
                       });
-                      setEditing(null); reload();
+                      setEditing(null); reload({ silent: true });
                     }}>Save changes</button>
                     <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
                   </div>
@@ -721,7 +732,11 @@ function MessagesTab({ clientId }) {
     e.preventDefault();
     if (!body.trim()) return;
     await api('/messages', { method: 'POST', body: JSON.stringify({ client_id: clientId, type: 'message', body }) });
-    setBody(''); reload();
+    // silent: true -- the thread renders `loading ? <Spinner/> : (...)`
+    // inline (below); a bare reload() would flash the whole conversation
+    // to a spinner and back on every message sent, same class of bug
+    // already fixed for Nutrition.jsx.
+    setBody(''); reload({ silent: true });
   };
 
   return (

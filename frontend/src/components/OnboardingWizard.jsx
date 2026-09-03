@@ -12,6 +12,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
+import ScrollWheel from './ScrollWheel.jsx';
+import HeightSelector from './HeightSelector.jsx';
+import WeightSelector from './WeightSelector.jsx';
 
 // Stepper's directional slide+fade, adapted from its stepVariants --
 // entering forward comes from the right, back comes from the left, so
@@ -127,57 +130,60 @@ function StepSex({ form, setForm, t }) {
   );
 }
 
-function StepBody({ form, setForm, t }) {
-  const errors = {};
-  if (form.height && (Number(form.height) < 100 || Number(form.height) > 250)) errors.height = 'Height must be 100-250 cm';
-  if (form.weight && (Number(form.weight) < 20 || Number(form.weight) > 400)) errors.weight = 'Weight must be 20-400 kg';
-
+function StepHeight({ form, setForm, t }) {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col items-center text-center space-y-5">
       <div>
-        <div className="font-grotesk text-lg font-bold mb-1" style={{ color: t.ink }}>Your measurements</div>
-        <div className="text-[11px]" style={{ color: t.mute }}>Used to calculate your daily nutrition targets.</div>
+        <div className="font-grotesk text-lg font-bold mb-1" style={{ color: t.ink }}>HEIGHT</div>
+        <div className="text-[13px]" style={{ color: t.mute }}>How tall are you?</div>
       </div>
+      <HeightSelector
+        value={form.height}
+        onChange={(v) => setForm({ ...form, height: v })}
+        t={t}
+      />
+    </div>
+  );
+}
 
-      {/* Height */}
+function StepWeight({ form, setForm, t }) {
+  return (
+    <div className="flex flex-col items-center text-center space-y-5">
       <div>
-        <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Height (cm)</label>
-        <input
-          className="w-full px-4 py-3 rounded-xl font-grotesk text-sm outline-none transition-colors"
-          type="number"
-          placeholder="e.g. 175"
-          value={form.height}
-          onChange={(e) => setForm({ ...form, height: e.target.value })}
-          style={{ background: t.glass, border: `1px solid ${errors.height ? t.danger + '50' : t.border}`, color: t.ink }}
-        />
-        {errors.height && <div className="text-[10px] mt-1" style={{ color: t.danger }}>{errors.height}</div>}
+        <div className="font-grotesk text-lg font-bold mb-1" style={{ color: t.ink }}>WEIGHT</div>
+        <div className="text-[13px]" style={{ color: t.mute }}>What's your weight?</div>
       </div>
+      <WeightSelector
+        value={form.weight}
+        onChange={(v) => setForm({ ...form, weight: v })}
+        t={t}
+      />
+    </div>
+  );
+}
 
-      {/* Weight */}
+function StepAge({ form, setForm, t }) {
+  return (
+    <div className="flex flex-col items-center text-center space-y-5">
       <div>
-        <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Weight (kg)</label>
-        <input
-          className="w-full px-4 py-3 rounded-xl font-grotesk text-sm outline-none transition-colors"
-          type="number"
-          placeholder="e.g. 75"
-          value={form.weight}
-          onChange={(e) => setForm({ ...form, weight: e.target.value })}
-          style={{ background: t.glass, border: `1px solid ${errors.weight ? t.danger + '50' : t.border}`, color: t.ink }}
-        />
-        {errors.weight && <div className="text-[10px] mt-1" style={{ color: t.danger }}>{errors.weight}</div>}
+        <div className="font-grotesk text-lg font-bold mb-1" style={{ color: t.ink }}>AGE</div>
+        <div className="text-[13px]" style={{ color: t.mute }}>How old are you?</div>
       </div>
-
-      {/* Age */}
-      <div>
-        <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Age</label>
-        <input
-          className="w-full px-4 py-3 rounded-xl font-grotesk text-sm outline-none transition-colors"
-          type="number"
-          placeholder="e.g. 25"
-          value={form.age}
-          onChange={(e) => setForm({ ...form, age: e.target.value })}
-          style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}
+      <div className="flex flex-col items-center">
+        <ScrollWheel
+          value={Number(form.age) || 25}
+          onChange={(v) => setForm({ ...form, age: v })}
+          min={10}
+          max={120}
+          formatItem={(v) => `${v}`}
+          style={{ background: 'transparent' }}
         />
+        <div
+          className="font-grotesk text-[9px] uppercase tracking-[.14em] mt-1"
+          style={{ color: t.faint }}
+        >
+          years
+        </div>
       </div>
     </div>
   );
@@ -242,7 +248,7 @@ function StepActivity({ form, setForm, t }) {
    MAIN WIZARD
    ════════════════════════════════════════════════════════════════ */
 
-const STEPS = ['Name', 'Sex', 'Body', 'Goal', 'Experience'];
+const STEPS = ['Name', 'Sex', 'Height', 'Weight', 'Age', 'Goal', 'Experience'];
 
 export default function OnboardingWizard({ open, onComplete, initialName = '' }) {
   const { theme } = useTheme();
@@ -252,9 +258,9 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
   const [form, setForm] = useState({
     name: initialName || '',
     sex: '',
-    height: '',
-    weight: '',
-    age: '',
+    height: 170,
+    weight: 70,
+    age: 25,
     goal: '',
     experience: 'INTERMEDIATE',
   });
@@ -264,9 +270,11 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
   const canNext = useMemo(() => {
     if (step === 0) return form.name.trim().length >= 2;
     if (step === 1) return !!form.sex;
-    if (step === 2) return Number(form.height) >= 100 && Number(form.height) <= 250 && Number(form.weight) >= 20 && Number(form.weight) <= 400 && Number(form.age) >= 10 && Number(form.age) <= 120;
-    if (step === 3) return !!form.goal;
-    if (step === 4) return !!form.experience;
+    if (step === 2) return Number(form.height) >= 100 && Number(form.height) <= 250;
+    if (step === 3) return Number(form.weight) >= 20 && Number(form.weight) <= 400;
+    if (step === 4) return Number(form.age) >= 10 && Number(form.age) <= 120;
+    if (step === 5) return !!form.goal;
+    if (step === 6) return !!form.experience;
     return false;
   }, [step, form]);
 
@@ -323,16 +331,18 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
 
         {/* Step content — Stepper's directional slide+fade (see
             stepVariants above), not the instant swap this had before. */}
-        <div className="px-6 pb-6 min-h-[280px] overflow-hidden relative">
+        <div className="px-6 pb-6 min-h-[280px] overflow-visible relative">
           <AnimatePresence mode="wait" custom={direction.current} initial={false}>
             <motion.div key={step} custom={direction.current} variants={stepVariants}
               initial="enter" animate="center" exit="exit"
               transition={{ duration: 0.28, ease: [0.22, 0.8, 0.3, 1] }}>
               {step === 0 && <StepName form={form} setForm={setForm} t={t} />}
               {step === 1 && <StepSex form={form} setForm={setForm} t={t} />}
-              {step === 2 && <StepBody form={form} setForm={setForm} t={t} />}
-              {step === 3 && <StepGoal form={form} setForm={setForm} t={t} />}
-              {step === 4 && <StepActivity form={form} setForm={setForm} t={t} />}
+              {step === 2 && <StepHeight form={form} setForm={setForm} t={t} />}
+              {step === 3 && <StepWeight form={form} setForm={setForm} t={t} />}
+              {step === 4 && <StepAge form={form} setForm={setForm} t={t} />}
+              {step === 5 && <StepGoal form={form} setForm={setForm} t={t} />}
+              {step === 6 && <StepActivity form={form} setForm={setForm} t={t} />}
             </motion.div>
           </AnimatePresence>
         </div>

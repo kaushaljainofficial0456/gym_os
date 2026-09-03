@@ -32,7 +32,7 @@ export default function Messages() {
     try {
       await api('/messages', { method: 'POST', body: JSON.stringify({ client_id: clientId, type, body }) });
       setBody('');
-      thread.reload();
+      thread.reload({ silent: true });
     } catch (e) { /* keep body */ }
     setSending(false);
   };
