@@ -247,9 +247,6 @@ app.use('/api/console', consoleRoutes(db)); // Admin Console (Phase 3): platform
 // data/uploads/tmp/<client_id>/ and cleaned up on save.
 app.use('/uploads', requireAuth, async (req, res) => {
   const rel = req.path.replace(/^\//, '');
-  const abs = path.resolve(__dirname, '..', 'data', 'uploads', rel);
-  const uploadsRoot = path.resolve(__dirname, '..', 'data', 'uploads') + path.sep;
-  if (!abs.startsWith(uploadsRoot)) return res.status(403).json({ error: 'Forbidden' });
   // the requesting user must be authorized for this image
   // paths: tmp/<client_id>/... (label scans) | photos/<client_id>/... (progress photos)
   const seg = rel.split('/');
@@ -261,6 +258,25 @@ app.use('/uploads', requireAuth, async (req, res) => {
     ((req.user.role === 'GYM_OWNER' || req.user.role === 'SUPER_ADMIN') && (client.org_id === req.user.org || req.user.role === 'SUPER_ADMIN')) ||
     (req.user.role === 'TRAINER' && client.org_id === req.user.org && client.trainer_id === req.user.sub);
   if (!canView) return res.status(403).json({ error: 'Forbidden' });
+
+  // F-12i: the s3 driver serves via a backend-mediated proxy stream, NOT
+  // a redirect/presigned URL -- ownership is re-checked on every single
+  // access above, exactly like the local driver's res.sendFile below.
+  // A presigned URL would be a bearer credential of its own (shareable,
+  // cacheable, valid regardless of who holds it until it expires) and
+  // would weaken that "checked on every access" property.
+  const { STORAGE_DRIVER, getObjectStream } = await import('./storage.js');
+  if (STORAGE_DRIVER === 's3') {
+    const obj = await getObjectStream(rel);
+    if (!obj) return res.status(404).json({ error: 'Not found' });
+    res.setHeader('Content-Type', obj.contentType);
+    obj.body.pipe(res);
+    return;
+  }
+
+  const abs = path.resolve(__dirname, '..', 'data', 'uploads', rel);
+  const uploadsRoot = path.resolve(__dirname, '..', 'data', 'uploads') + path.sep;
+  if (!abs.startsWith(uploadsRoot)) return res.status(403).json({ error: 'Forbidden' });
   res.sendFile(abs, (err) => { if (err) res.status(404).json({ error: 'Not found' }); });
 });
 
