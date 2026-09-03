@@ -188,26 +188,36 @@ test('POST /nutrition/balance/cancel ends an active plan; base target is what re
   assert.equal(history.json.history[0].status, 'CANCELLED');
 });
 
-test('a new surplus while a plan is ACTIVE merges into the SAME plan (never a second one)', async (t) => {
+test('a new surplus on a LATER, distinct day merges into the SAME active plan with the exact combined balance (never a second plan, never double-counted)', async (t) => {
   const { db, call, close } = await startApp(); t.after(() => close());
-  const day1 = yesterday();
-  await logMeal(db, 'c1', day1, 2350); // +350
+  const day1 = yesterday(); // the day the plan was created from: +350 (2350 - 2000)
+  await logMeal(db, 'c1', day1, 2350);
   const applied = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
   const planId = applied.json.plan.id;
+  assert.equal(applied.json.plan.remainingSurplusCalories, 350);
+  assert.equal(applied.json.plan.dailyAdjustmentCalories, 70);
 
-  // Simulate a day passing: back-date the plan's own bookkeeping by one
-  // day (rather than sleeping in real time) and log a second day's
-  // surplus on the newly "elapsed" date, exactly like reconcileActivePlan
-  // expects to find on its next call.
-  const row = await db.q1('SELECT * FROM nutrition_balance_adjustments WHERE id = ?', [planId]);
-  const day0 = dayKey(addDays(day1 + 'T00:00:00Z', -1), TZ);
-  await db.run('UPDATE nutrition_balance_adjustments SET last_reconciled_date = ? WHERE id = ?', [day0, planId]);
-  await logMeal(db, 'c1', day1, 300); // additional food logged for day1 itself -- pushes it further over
+  // Simulate real time passing -- rather than re-touching day1 (which was
+  // already fully accounted for at apply time; re-examining it would
+  // double-count that same food, a real gap caught while writing this
+  // test, not assumed), back-date last_reconciled_date to TWO days before
+  // day1 so reconcile's next completed day is a distinct, clean day
+  // (day1 - 1) with its own separate surplus logged on it.
+  const dayBefore = dayKey(addDays(day1 + 'T00:00:00Z', -1), TZ);
+  const twoBefore = dayKey(addDays(day1 + 'T00:00:00Z', -2), TZ);
+  await db.run('UPDATE nutrition_balance_adjustments SET last_reconciled_date = ? WHERE id = ?', [twoBefore, planId]);
+  await logMeal(db, 'c1', dayBefore, 2500); // a SEPARATE day's surplus: +500 (2500 - 2000)
 
   const after = await call('GET', '/api/me/nutrition/balance');
   assert.ok(after.json.activePlan, 'the merge must keep the SAME plan active, not clear it');
   assert.equal(after.json.activePlan.id, planId, 'must be the same plan row, not a second one');
-  assert.ok(after.json.activePlan.remainingSurplusCalories > 350, 'the new surplus must have been folded in');
+  // Hand-computed: settle day1-1's own planned paydown (70) off the
+  // original 350 -> 280, then fold in that day's own new surplus (500)
+  // -> 780 total. Anything else here (e.g. re-adding the ORIGINAL 350 a
+  // second time) would show up as a wrong number, not just "some number
+  // bigger than 350" -- the bug this exact scenario caught earlier.
+  assert.equal(after.json.activePlan.remainingSurplusCalories, 780);
+  assert.equal(after.json.activePlan.originalSurplusCalories, 850, '350 original + 500 newly merged');
 
   const rows = await db.q(`SELECT id FROM nutrition_balance_adjustments WHERE client_id = 'c1' AND status = 'ACTIVE'`);
   assert.equal(rows.length, 1, 'exactly one active plan must exist after a merge');
@@ -242,4 +252,94 @@ test('a bad strategy value is rejected by validation, not silently accepted', as
   await logMeal(db, 'c1', yesterday(), 2350);
   const res = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'ULTRA_MEGA' });
   assert.equal(res.status, 422);
+});
+
+test('a plan settles to COMPLETED with no negative drift once its remaining balance reaches zero (final-day rounding)', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  await logMeal(db, 'c1', yesterday(), 2350); // +350
+  const applied = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+  const planId = applied.json.plan.id;
+
+  // Fast-forward to "the plan's last day": directly set a small remaining
+  // balance (smaller than one day's own adjustment, exactly the real
+  // final-day situation a multi-day plan eventually reaches) and back-date
+  // last_reconciled_date so the next GET settles a day two days before the
+  // surplus-source day -- deliberately a day with NO food logged at all,
+  // so reconcile's own "did THIS day generate a new surplus" check finds
+  // nothing to merge and the small manually-set balance settles cleanly
+  // to zero (using sourceDate - 1 instead would re-detect the very meal
+  // that created the plan and merge it right back in -- caught live while
+  // writing this test, not assumed).
+  const row = await db.q1('SELECT * FROM nutrition_balance_adjustments WHERE id = ?', [planId]);
+  const cleanPrevDay = dayKey(addDays(row.source_date + 'T00:00:00Z', -2), TZ);
+  await db.run(
+    'UPDATE nutrition_balance_adjustments SET remaining_surplus_calories = ?, last_reconciled_date = ? WHERE id = ?',
+    [5, cleanPrevDay, planId], // 5 kcal left -- smaller than daily_adjustment_calories (70)
+  );
+
+  const after = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(after.status, 200);
+  assert.equal(after.json.activePlan, null, 'the plan must close out, not linger with a near-zero balance');
+  assert.equal(after.json.justSettled, true, 'the ONE call that closes it out must say so, for the "balance is settled" toast');
+
+  const closedRow = await db.q1('SELECT * FROM nutrition_balance_adjustments WHERE id = ?', [planId]);
+  assert.equal(closedRow.status, 'COMPLETED');
+  assert.equal(closedRow.remaining_surplus_calories, 0, 'must never go negative -- clamped exactly to zero');
+
+  // A second GET right after must NOT re-announce settlement (justSettled
+  // is a one-time edge, not a persisted flag on an already-closed plan).
+  const again = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(again.json.justSettled, false);
+});
+
+test('a manual base-target change is detected and the recalculate endpoint rebuilds against it', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  await logMeal(db, 'c1', yesterday(), 2350);
+  await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+
+  // Simulate editing the base target the same way
+  // POST /me/nutrition/targets/confirm does -- a fresh nutrition_plans row,
+  // "latest wins".
+  await db.run(
+    'INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at) VALUES (?,?,?,?,?,?,?,?,?,0,?)',
+    ['np1_new', 'o1', 'u1', 'c1', 'My Nutrition Plan', 1900, 140, 190, 60, '2026-02-01T00:00:00Z'],
+  );
+
+  const drifted = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(drifted.json.activePlan.targetChanged, true, 'a live base-target change must be surfaced, never silently ignored');
+  assert.equal(drifted.json.activePlan.baseCalorieTarget, 2000, 'the plan keeps its OLD snapshot until an explicit recalculate');
+
+  const recalced = await call('POST', '/api/me/nutrition/balance/recalculate');
+  assert.equal(recalced.status, 200, JSON.stringify(recalced.json));
+  assert.equal(recalced.json.plan.baseCalorieTarget, 1900);
+  assert.equal(recalced.json.plan.baseProteinTarget, 140);
+  assert.equal(recalced.json.plan.adjustedProteinTarget, 140, 'protein stays protected across a recalculation too');
+
+  const after = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(after.json.activePlan.targetChanged, false, 'recalculating against the new target must clear the drift flag');
+});
+
+test('cross-user rejection: client 2 cannot see, cancel, decline, or recalculate client 1\'s plan through any mutation route', async (t) => {
+  const { db, call, token2, close } = await startApp(); t.after(() => close());
+  await logMeal(db, 'c1', yesterday(), 2350);
+  const applied = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+  const planId = applied.json.plan.id;
+
+  // None of these routes accept a plan/client id from the request -- every
+  // one resolves the acting client from the authenticated token only. So
+  // client 2's calls can only ever act on client 2's OWN (empty) state --
+  // there is no id-based surface to even attempt cross-tenant access on.
+  const cancel2 = await call('POST', '/api/me/nutrition/balance/cancel', undefined, token2);
+  const decline2 = await call('POST', '/api/me/nutrition/balance/decline', undefined, token2);
+  const recalc2 = await call('POST', '/api/me/nutrition/balance/recalculate', undefined, token2);
+  assert.equal(cancel2.status, 200); // no-op on client 2's own (nonexistent) plan
+  assert.equal(decline2.status, 200); // no-op, nothing eligible for client 2
+  assert.equal(recalc2.status, 404); // client 2 has no active plan to recalculate
+
+  // Client 1's plan must be completely untouched by any of the above.
+  const row = await db.q1('SELECT status FROM nutrition_balance_adjustments WHERE id = ?', [planId]);
+  assert.equal(row.status, 'ACTIVE');
+  const stillThere = await call('GET', '/api/me/nutrition/balance');
+  assert.ok(stillThere.json.activePlan);
+  assert.equal(stillThere.json.activePlan.id, planId);
 });

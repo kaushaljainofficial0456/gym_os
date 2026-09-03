@@ -231,8 +231,16 @@ export async function reconcileActivePlan(db, client, tz) {
   let remaining = Math.max(0, round1(active.remaining_surplus_calories - settle));
   const newSurplus = round1(dayTotal - active.base_calorie_target);
   let sourceDate = active.source_date;
+  // originalSurplusCalories tracks the CUMULATIVE total this plan has ever
+  // absorbed (merges included) -- must grow here too, not just in
+  // applyFlexibleCaloriePlan's own merge branch, or a plan that
+  // auto-absorbs a second day's surplus via reconcile (Section 9's
+  // "merge automatically, no re-prompt" path) would silently under-report
+  // its own history/total.
+  let originalTotal = active.original_surplus_calories;
   if (newSurplus > BALANCE_CONFIG.SURPLUS_PROMPT_THRESHOLD) {
     remaining = round1(remaining + newSurplus);
+    originalTotal = round1(originalTotal + newSurplus);
     sourceDate = nextDay;
   }
 
@@ -251,11 +259,11 @@ export async function reconcileActivePlan(db, client, tz) {
   });
   await db.run(
     `UPDATE nutrition_balance_adjustments SET
-       remaining_surplus_calories = ?, planned_days = ?, remaining_days = ?, daily_adjustment_calories = ?,
+       original_surplus_calories = ?, remaining_surplus_calories = ?, planned_days = ?, remaining_days = ?, daily_adjustment_calories = ?,
        adjusted_calorie_target = ?, adjusted_protein_target = ?, adjusted_carbs_target = ?, adjusted_fat_target = ?,
        source_date = ?, last_reconciled_date = ?, updated_at = ?
      WHERE id = ?`,
-    [remaining, recalced.plannedDays, recalced.plannedDays, recalced.dailyAdjustmentCalories,
+    [originalTotal, remaining, recalced.plannedDays, recalced.plannedDays, recalced.dailyAdjustmentCalories,
       recalced.adjustedCalorieTarget, recalced.macros.protein, recalced.macros.carbs, recalced.macros.fat,
       sourceDate, nextDay, now(), active.id],
   );
