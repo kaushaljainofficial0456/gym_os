@@ -30,14 +30,16 @@ export class ErrorBoundary extends Component {
     // best-effort, fire-and-forget. Never lets a reporting failure become
     // a SECOND unhandled error on top of the one already being displayed.
     try {
-      let token = null;
-      try { token = localStorage.getItem('pos_token'); } catch { /* storage unavailable */ }
+      // F-05: no token to read from localStorage anymore -- the httpOnly
+      // sk_token cookie (if a session exists) rides along automatically
+      // via credentials: 'include', and the backend route now checks
+      // that cookie too (see clientError.js's tryDecodeUser), so this
+      // still enriches the report with org/user context exactly as
+      // before, without ever touching localStorage.
       fetch('/api/client-error', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: String(error?.message || error).slice(0, 1000),
           path: typeof location !== 'undefined' ? location.pathname : undefined,

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { api, getStoredUser, setSession, setToken, setStoredUser, clearSession } from './api.js';
+import { api, getStoredUser, setSession, setStoredUser, clearSession } from './api.js';
 
 const AuthCtx = createContext(null);
 
@@ -85,11 +85,15 @@ export function AuthProvider({ children }) {
   // handed back a FRESH token (org membership just changed mid-session,
   // so the old token's stale claims are no longer good enough -- see
   // enrollment.js's own comment on why each of those routes re-signs).
-  // Re-fetches /auth/me under the new token rather than trusting a
-  // caller-assembled user object, so this can never drift from what the
-  // server actually thinks is true.
-  const refreshSession = async (newToken) => {
-    if (newToken) setToken(newToken);
+  // F-05: the `newToken` param is accepted (existing callers still pass
+  // it) but no longer stored anywhere client-side -- the SAME response
+  // that returned it already re-set the httpOnly sk_token cookie
+  // server-side (every enrollment.js/auth.js route that hands back a
+  // token also calls setAuthCookie), so /auth/me below picks up the new
+  // claims automatically via the cookie. Re-fetching rather than trusting
+  // a caller-assembled user object means this can never drift from what
+  // the server actually thinks is true.
+  const refreshSession = async (_newToken) => {
     const { user: u } = await api('/auth/me');
     setStoredUser(u);
     setUser(u);

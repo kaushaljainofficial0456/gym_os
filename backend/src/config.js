@@ -174,5 +174,12 @@ export const config = {
   foodDatabaseApiKey: process.env.FOOD_DATABASE_API_KEY || null,
   // CORS: explicit allow-list. Empty in dev = localhost origins only.
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
-    .split(',').map((s) => s.trim()).filter(Boolean)
+    .split(',').map((s) => s.trim()).filter(Boolean),
+  // F-10: base URL the frontend is actually served from, used ONLY to
+  // build the verify-email/reset-password LINKS embedded in outgoing
+  // emails (e.g. `${frontendUrl}/reset-password?token=...`) -- the API
+  // itself never redirects here or trusts this for anything security-
+  // relevant. Falls back to the same localhost dev origin api.js/vite
+  // already assume elsewhere in this codebase.
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
 };

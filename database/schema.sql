@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS users (
   phone         TEXT,
   avatar        TEXT,
   active        INTEGER NOT NULL DEFAULT 1,
+  -- F-10: tracked, not enforced -- see scripts/init-db.js's MIGRATIONS
+  -- entry for this same column (existing databases) for the full reasoning.
+  email_verified INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL
 );
 
@@ -800,13 +803,20 @@ CREATE INDEX IF NOT EXISTS idx_ai_food_estimates_key ON ai_food_estimates(canoni
 -- saving (never a stale join at view time). id doubles as the token in
 -- the public /share/:id URL -- same high-entropy id() generator every
 -- other table's PK uses, no separate token column needed.
+-- F-12a hardening: expires_at is NULL-able so pre-existing rows (created
+-- before this column existed) keep working exactly as before -- an old
+-- link doesn't retroactively die the moment this migration runs. Every
+-- NEW share created by routes/me.js's POST /share sets a concrete TTL
+-- (see SHARE_LINK_TTL_MS there); NULL is legacy-only, never written by
+-- current code.
 CREATE TABLE IF NOT EXISTS shared_meals (
   id             TEXT PRIMARY KEY,
   org_id         TEXT REFERENCES organizations(id) ON DELETE CASCADE,
   client_id      TEXT REFERENCES clients(id) ON DELETE SET NULL, -- sender; kept NULL-able so a deleted account doesn't break outstanding links
   shared_by_name TEXT,                     -- denormalized sender display name at share time
   items_json     TEXT NOT NULL,            -- JSON array: [{type:'food'|'meal', name, quantity, unit, calories, protein, carbs, fat, components:[{name,quantity,unit,calories,protein,carbs,fat}]|null}]
-  created_at     TEXT NOT NULL
+  created_at     TEXT NOT NULL,
+  expires_at     TEXT
 );
 
 -- Community feedback on a shared AI food estimate (ai_food_estimates).
@@ -883,6 +893,8 @@ CREATE INDEX IF NOT EXISTS idx_cws_client ON community_workout_shares(client_id)
 -- deletions to the source workout never change what a recipient sees.
 -- id doubles as the token in the public /workout-share/:id URL.
 -- ============================================================
+-- F-12a hardening: same expires_at convention as shared_meals above --
+-- NULL-able for legacy rows, always set by current code.
 CREATE TABLE IF NOT EXISTS shared_workouts (
   id             TEXT PRIMARY KEY,
   org_id         TEXT REFERENCES organizations(id) ON DELETE CASCADE,
@@ -890,7 +902,8 @@ CREATE TABLE IF NOT EXISTS shared_workouts (
   shared_by_name TEXT,                     -- denormalized sender display name at share time
   workout_name   TEXT NOT NULL,
   payload_json   TEXT NOT NULL,            -- JSON: { type: 'workout', name, notes, exercises: [{exercise_id, name, sets, reps, weight, rest_sec, tempo, notes, position}] }
-  created_at     TEXT NOT NULL
+  created_at     TEXT NOT NULL,
+  expires_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_shared_workouts_id ON shared_workouts(id);
 
@@ -1084,6 +1097,26 @@ CREATE TABLE IF NOT EXISTS enrollment_tokens (
   created_at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_enrollment_tokens_org ON enrollment_tokens(org_id, purpose, status);
+
+-- F-10: email verification + password reset. Same bearer-secret shape as
+-- enrollment_tokens above (opaque random secret, only its SHA-256 hash
+-- stored, single-use via an atomic conditional UPDATE, expiring) -- see
+-- services/accountTokens.js for the shared issue/verify/consume logic
+-- both features run through. user_id-scoped, not org_id-scoped: this is
+-- an account-security artifact, not tenant data, so it deliberately sits
+-- outside rls.sql's org-isolation policies the same way organizations
+-- itself does.
+CREATE TABLE IF NOT EXISTS account_tokens (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose     TEXT NOT NULL CHECK (purpose IN ('EMAIL_VERIFY','PASSWORD_RESET')),
+  token_hash  TEXT NOT NULL UNIQUE,
+  status      TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK (status IN ('AVAILABLE','CONSUMED','EXPIRED')),
+  expires_at  TEXT NOT NULL,
+  consumed_at TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_account_tokens_user ON account_tokens(user_id, purpose, status);
 
 -- Generic payment engine -- shared by gym-package purchases (SK OS
 -- billing the org) and client-membership purchases (member billing the

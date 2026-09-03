@@ -221,6 +221,25 @@ const MIGRATIONS = [
   // this codebase's INSERT INTO users statements relies on that default.
   ['users', 'auth_provider', `auth_provider TEXT NOT NULL DEFAULT 'local'`],
   ['users', 'google_id', `google_id TEXT`],
+
+  // ---- F-10: email verification ----
+  // Deliberately TRACKED, not ENFORCED -- login/every other route is
+  // unaffected by this flag today. Gating access on it is a real product
+  // decision (existing seeded/demo accounts, the exact UX for "resend",
+  // whether trainers/owners need it too) that belongs to whoever owns
+  // that call, not something to silently impose as a side effect of
+  // adding the underlying mechanism. The mechanism itself (issue token,
+  // verify route, resend route -- see routes/auth.js) is fully
+  // functional; flipping it from tracked to enforced is a small,
+  // separate, deliberate follow-up once that product decision is made.
+  ['users', 'email_verified', `email_verified INTEGER NOT NULL DEFAULT 0`],
+  // F-12a: share-link expiry. NULL-able and NULL-defaulted deliberately --
+  // an existing row (created before this migration ran) keeps working
+  // exactly as it did before, instead of every outstanding share link
+  // silently dying the moment this migration is applied. Every share
+  // created by current code (routes/me.js) always sets a concrete value.
+  ['shared_meals', 'expires_at', `expires_at TEXT`],
+  ['shared_workouts', 'expires_at', `expires_at TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

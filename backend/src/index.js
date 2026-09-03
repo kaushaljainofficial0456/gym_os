@@ -6,6 +6,8 @@ import cors from 'cors';
 import { getDb } from './db.js';
 import { config } from './config.js';
 import { requireAuth } from './auth.js';
+import { setRateLimitStore } from './rateLimit.js';
+import { upstashStoreFromEnv } from './upstashRateLimitStore.js';
 
 let server = null;
 let dbInstance = null;
@@ -74,6 +76,18 @@ export function parseCookieHeader(header) {
 // can close it -- serverless invocations never trigger that path, so it's
 // a harmless no-op there.
 export async function buildApp() {
+  // F-08: a shared rate-limit store (Vercel KV / Upstash Redis) if this
+  // deployment has one configured -- see rateLimit.js's own header and
+  // upstashRateLimitStore.js for exactly what this changes and why it's
+  // opt-in. Unconfigured deployments (no UPSTASH_REDIS_REST_URL/_TOKEN)
+  // get byte-identical behavior to before this existed: rateLimit.js's
+  // module-level default (an in-memory MemoryStore) stays untouched.
+  const upstash = upstashStoreFromEnv();
+  if (upstash) {
+    setRateLimitStore(upstash);
+    console.log('[sk-os] Rate limiting: using Upstash Redis (shared across instances)');
+  }
+
   dbInstance = await getDb();
   const db = dbInstance;
   const app = express();
@@ -84,18 +98,54 @@ export async function buildApp() {
     next();
   });
 
+  // Framework fingerprint -- no reason to advertise "this is Express" to
+  // every response. Must run before any response is sent; harmless no-op
+  // if a future Express major ever removes the setting entirely.
+  app.disable('x-powered-by');
+
   // ---- Security headers (lightweight, no external dependency) ----
+  // These apply to /api/* and /uploads/* -- the STATIC frontend (the
+  // actual HTML/JS the browser renders and executes) is served directly
+  // by Vercel, never through this Express app, so it needs its OWN
+  // headers -- see vercel.json's/admin/vercel.json's `headers` blocks.
+  // This API-side CSP is deliberately near-total lockdown (`default-src
+  // 'none'`) rather than a copy of the frontend's: every response here is
+  // `application/json` (or a served upload, or a PDF) -- nothing on this
+  // origin is ever meant to execute as a script/style/frame, so there is
+  // no legitimate directive to relax the way the frontend genuinely needs
+  // script-src/style-src exceptions for Razorpay, Google Sign-In, and its
+  // own inline styles.
   app.use((_req, res, next) => {
     // Prevent MIME sniffing
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    // Clickjacking protection
+    // Clickjacking protection (legacy header; frame-ancestors below is
+    // the modern equivalent CSP already covers in supporting browsers --
+    // kept together, not either/or, for older-browser fallback).
     res.setHeader('X-Frame-Options', 'DENY');
     // XSS filter (legacy browsers)
     res.setHeader('X-XSS-Protection', '0'); // modern best practice: disable in favor of CSP
     // Referrer policy — strip origin from cross-origin navigations
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // Permissions policy — disable unused browser features
+    // Permissions policy — this origin never needs the camera (that's the
+    // frontend's QR/barcode scanner, a different origin's header) or any
+    // of the rest, so disabling all four here is correct and unlike the
+    // frontend's own policy, needs no camera exception.
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    // Nothing on this origin renders as a page -- lock it down completely.
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+    // HSTS: Vercel always serves this app over HTTPS (no plain-HTTP option
+    // on the platform), so this is safe to send unconditionally once
+    // deployed -- gated to production/staging so a local `npm run dev`
+    // over plain HTTP is never told to force HTTPS on localhost.
+    // includeSubDomains/preload are NOT set: this project has no
+    // confirmed custom domain today, and both are effectively
+    // irreversible commitments (preload especially -- removal from
+    // browsers' preload lists takes months) that must never be added
+    // speculatively for a domain whose other subdomains' HTTPS-readiness
+    // hasn't been confirmed.
+    if (config.nodeEnv === 'production' || config.nodeEnv === 'staging') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    }
     next();
   });
 

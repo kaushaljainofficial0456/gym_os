@@ -2,46 +2,107 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
-import { hashPassword, verifyPassword, signToken, setAuthCookie, requireAuth } from '../auth.js';
-import { rateLimit } from '../rateLimit.js';
+import { hashPassword, verifyPassword, needsRehash, signToken, setAuthCookie, clearAuthCookie, requireAuth } from '../auth.js';
+import { rateLimit, getRateLimitStore } from '../rateLimit.js';
 import { validate } from '../validate.js';
 import { id, now } from '../ids.js';
 import { track } from '../services/events.js';
 import { syncPrimaryMembership, listUserMemberships, getActiveMembership } from '../services/enterprise/gymMemberships.js';
+import { issueAccountToken, consumeAccountToken } from '../services/accountTokens.js';
+import { sendEmail } from '../services/notifications/emailProvider.js';
+import { config } from '../config.js';
 
-// Simple in-memory login rate limit (dev-safe, no external deps).
-// 5 failed attempts per email+IP in 60s -> 429. Production should use a
-// shared store (Redis) and/or an API gateway.
-const loginAttempts = new Map();
+// Login failed-attempt counter -- 5 failed attempts per email+IP in 60s
+// -> 429, reset immediately on a successful login. Deliberately its own
+// bespoke counter, NOT the generic rateLimit() middleware below (which
+// is also applied to this route, as a broader per-IP ceiling): this one
+// counts only FAILURES and resets on success, so a legitimate user who
+// mistypes their password twice then gets it right is never penalized
+// the way a blanket "every request counts" limiter would.
+//
+// F-08: goes through the SAME pluggable store rateLimit()'s own
+// middleware uses (getRateLimitStore() -- Upstash when configured,
+// in-memory otherwise, see rateLimit.js/upstashRateLimitStore.js) rather
+// than a separate always-in-memory Map, so this specific brute-force
+// guard actually survives across serverless instances too, not just the
+// general per-IP limiter. Async now (the store's get/set are), and
+// fails OPEN on a store error -- same posture as the general rateLimit()
+// middleware and for the same reason: a transient store outage taking
+// down login entirely for every user is worse than a narrow brute-force
+// window during that outage.
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 5;
-function rateLimited(email, ip) {
-  const key = (email || '') + '|' + (ip || '');
-  const nowMs = Date.now();
-  const rec = loginAttempts.get(key);
-  if (!rec || nowMs - rec.start > RATE_WINDOW_MS) {
-    loginAttempts.set(key, { start: nowMs, count: 1 });
+const loginAttemptKey = (email, ip) => `login-attempts:${email || ''}|${ip || ''}`;
+// Pure read-only check -- NEVER writes anything. It must not, because
+// recordFailure() below is the one and only place that increments; if
+// this function also wrote a fresh {count:1} (an earlier version of
+// this fix did) or speculatively added 1 before comparing, a single
+// failed login would touch the counter through BOTH functions and
+// double-count, tripping the limiter after ~2-3 real failures instead
+// of the documented 5 (caught by loginAttemptStore.test.js's own
+// "first 5 wrong-password attempts are ordinary 401s" case, which
+// failed with a 429 on attempt 5 before this was a plain read).
+async function rateLimited(email, ip) {
+  try {
+    const store = getRateLimitStore();
+    const key = loginAttemptKey(email, ip);
+    const nowMs = Date.now();
+    const rec = await store.get(key);
+    if (!rec || nowMs - rec.start > RATE_WINDOW_MS) return false;
+    return rec.count >= RATE_MAX;
+  } catch (e) {
+    console.error('[auth] login rate-limit store error, failing open:', e?.message || e);
     return false;
   }
-  rec.count += 1;
-  if (rec.count > RATE_MAX) return true;
-  return false;
 }
-function recordFailure(email, ip) {
-  const key = (email || '') + '|' + (ip || '');
-  const nowMs = Date.now();
-  const rec = loginAttempts.get(key);
-  if (!rec || nowMs - rec.start > RATE_WINDOW_MS) {
-    loginAttempts.set(key, { start: nowMs, count: 1 });
-  } else {
-    rec.count += 1;
-  }
-  // Prevent unbounded growth: evict entries older than 2× the window.
-  if (loginAttempts.size > 500) {
-    for (const [k, v] of loginAttempts) {
-      if (nowMs - v.start > RATE_WINDOW_MS * 2) loginAttempts.delete(k);
+async function recordFailure(email, ip) {
+  try {
+    const store = getRateLimitStore();
+    const key = loginAttemptKey(email, ip);
+    const nowMs = Date.now();
+    const rec = await store.get(key);
+    if (!rec || nowMs - rec.start > RATE_WINDOW_MS) {
+      await store.set(key, { start: nowMs, count: 1 }, RATE_WINDOW_MS);
+    } else {
+      await store.set(key, { start: rec.start, count: rec.count + 1 }, RATE_WINDOW_MS - (nowMs - rec.start));
     }
+  } catch (e) {
+    console.error('[auth] login rate-limit store error (recording failure), failing open:', e?.message || e);
   }
+}
+async function clearLoginAttempts(email, ip) {
+  try { await getRateLimitStore().delete(loginAttemptKey(email, ip)); }
+  catch (e) { console.error('[auth] login rate-limit store error (clearing), non-fatal:', e?.message || e); }
+}
+
+// ---- F-10: email verification + password reset ----
+
+// Best-effort, fire-and-forget from every registration route's own
+// success path -- a failure here (mock provider is always "ok", but a
+// real Resend outage/misconfiguration is possible) must never fail the
+// registration itself, same posture as track()'s own .catch(() => {})
+// calls throughout this codebase.
+async function sendVerificationEmail(db, { userId, email, name }) {
+  try {
+    const { payload } = await issueAccountToken(db, { userId, purpose: 'EMAIL_VERIFY' });
+    const link = `${config.frontendUrl}/verify-email?token=${encodeURIComponent(payload)}`;
+    await sendEmail({
+      to: email,
+      subject: 'Verify your SK OS email',
+      html: `<p>Hi ${escapeHtml(name || '')},</p><p>Confirm your email address to finish setting up your SK OS account:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`,
+      text: `Hi ${name || ''},\n\nConfirm your email address to finish setting up your SK OS account:\n${link}\n\nThis link expires in 24 hours.`,
+    });
+  } catch (e) {
+    console.error('[auth] verification email failed (non-fatal):', e?.message || e);
+  }
+}
+
+// Minimal HTML-escaping for the one user-supplied string (name) that
+// gets interpolated into an email's HTML body -- never trust a name
+// field to be script/markup-free. Not a general sanitizer; sufficient
+// for the handful of characters that matter inside a plain <p> tag.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 export default function authRoutes(db) {
@@ -54,16 +115,26 @@ export default function authRoutes(db) {
     })), async (req, res) => {
     const email = req.body.email.toLowerCase().trim();
     const ip = req.ip || req.socket?.remoteAddress;
-    if (rateLimited(email, ip)) {
+    if (await rateLimited(email, ip)) {
       return res.status(429).json({ error: 'Too many login attempts. Try again in a minute.' });
     }
     const user = await db.q1('SELECT * FROM users WHERE email = ?', [email]);
     if (!user || !(await verifyPassword(req.body.password, user.password_hash))) {
-      recordFailure(email, ip);
+      await recordFailure(email, ip);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    loginAttempts.delete(email + '|' + ip);
+    await clearLoginAttempts(email, ip);
     if (!user.active) return res.status(403).json({ error: 'Account disabled' });
+    // F-12h: transparent bcrypt-cost upgrade. The password just verified
+    // successfully against the OLD hash -- this is the one moment the
+    // plaintext is available to re-hash at the current (higher) cost.
+    // Best-effort: a failure here must never block a legitimate login
+    // that already succeeded.
+    if (needsRehash(user.password_hash)) {
+      await hashPassword(req.body.password)
+        .then((rehashed) => db.run('UPDATE users SET password_hash = ? WHERE id = ?', [rehashed, user.id]))
+        .catch((e) => console.error('[auth] password rehash-on-login failed (non-fatal):', e?.message || e));
+    }
     const org = user.org_id ? await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [user.org_id]) : null;
     const token = signToken(user);
     setAuthCookie(res, token);
@@ -117,6 +188,7 @@ export default function authRoutes(db) {
            VALUES (?, NULL, ?, ?, 'CLIENT', ?, 1, ?)`,
           [userId, email, passwordHash, req.body.name, now()]);
         await track(db, { userId, type: 'client_self_registered_pending_gym', data: {} });
+        sendVerificationEmail(db, { userId, email, name: req.body.name }).catch(() => {});
         const user = { id: userId, org_id: null, role: 'CLIENT', name: req.body.name, email };
         const token = signToken(user);
         setAuthCookie(res, token);
@@ -155,6 +227,7 @@ export default function authRoutes(db) {
           [clientId]);
       });
       await track(db, { orgId: org.id, userId, type: 'client_self_registered', data: {} });
+      sendVerificationEmail(db, { userId, email, name: req.body.name }).catch(() => {});
       const user = { id: userId, org_id: org.id, role: 'CLIENT', name: req.body.name, email };
       const token = signToken(user);
       setAuthCookie(res, token);
@@ -188,6 +261,7 @@ export default function authRoutes(db) {
          VALUES (?, NULL, ?, ?, 'TRAINER', ?, 1, ?)`,
         [userId, email, passwordHash, req.body.name, now()]);
       await track(db, { userId, type: 'trainer_self_registered_pending_gym', data: {} });
+      sendVerificationEmail(db, { userId, email, name: req.body.name }).catch(() => {});
       const user = { id: userId, org_id: null, role: 'TRAINER', name: req.body.name, email };
       const token = signToken(user);
       setAuthCookie(res, token);
@@ -290,8 +364,12 @@ export default function authRoutes(db) {
       const passwordHash = await hashPassword(crypto.randomUUID() + crypto.randomUUID());
       await db.tx(async (tx) => {
         await tx.run(
-          `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, created_at)
-           VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1, ?)`,
+          // F-10: email_verified = 1 -- Google's own OAuth flow already
+          // proved this account controls the address (that's what the
+          // verified ID token itself attests), so issuing this app's own
+          // separate verification email would be redundant, not safer.
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, email_verified, created_at)
+           VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1, 1, ?)`,
           [userId, orgId, email, passwordHash, name, payload.picture || null, now()]);
         await tx.run(
           `INSERT INTO clients (id, user_id, org_id, status, goal, created_at)
@@ -405,8 +483,10 @@ export default function authRoutes(db) {
       await db.tx(async (tx) => {
         await tx.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)', [orgId, orgName, slug, 'gym', now()]);
         await tx.run(
-          `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, created_at)
-           VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, ?, 1, ?)`,
+          // F-10: email_verified = 1 -- see the /auth/google route's own
+          // identical comment; the same reasoning applies here.
+          `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, email_verified, created_at)
+           VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, ?, 1, 1, ?)`,
           [userId, orgId, email, passwordHash, name, payload.picture || null, now()]);
         // Enterprise (gym) signups start in SETUP, exactly like
         // /setup-org's own gym-type branch.
@@ -518,6 +598,7 @@ export default function authRoutes(db) {
         }
       });
       await track(db, { orgId, userId, type: 'org_created', data: { orgName } });
+      sendVerificationEmail(db, { userId, email: email.toLowerCase().trim(), name: ownerName }).catch(() => {});
       // Phase 2: mirrors the primary org_id/role relationship just
       // created into gym_memberships too, so multi-gym features (switch-
       // gym, permission checks scoped per-membership) see this owner's
@@ -545,6 +626,15 @@ export default function authRoutes(db) {
     }
     await db.run('UPDATE users SET password_hash = ? WHERE id = ?',
       [await hashPassword(req.body.new_password), user.id]);
+    // F-10: does NOT clear this session's own cookie (unlike
+    // /reset-password, which does) -- the caller just proved BOTH the
+    // old and new password from an already-authenticated session, so
+    // forcing an immediate re-login here would be a pure UX regression
+    // with no real security benefit for THIS device. Cross-device
+    // session revocation has the same residual-risk limitation noted on
+    // /reset-password above (stateless JWTs, no token-epoch mechanism
+    // yet) -- an attacker who already has a valid token for this
+    // account from another device keeps it until natural expiry.
     res.json({ ok: true });
   });
 
@@ -581,6 +671,124 @@ export default function authRoutes(db) {
         WHERE u.id = ?`, [req.user.sub]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
+  });
+
+  // ---- logout (F-05) ----
+  // The httpOnly sk_token cookie is, by design, unreadable and
+  // unremovable by client-side JS (that's the whole point of httpOnly --
+  // an XSS payload can't steal it, but it also can't clear it via
+  // document.cookie the way a plain cookie could be). Clearing it is
+  // therefore ONLY possible through a server response with a matching
+  // Set-Cookie that expires it -- see clearAuthCookie in auth.js -- so
+  // this route is what makes browser "log out" genuinely end the
+  // session server-side, not just forget local UI state.
+  //
+  // Deliberately NOT gated behind requireAuth: a caller with an already-
+  // expired/invalid/missing token still needs logout to succeed (it's
+  // idempotent -- clearing a cookie that's already gone, or was never
+  // valid, is harmless) rather than 401ing on the one request whose job
+  // is to clean up after exactly that situation. No request body, no
+  // DB read or write -- nothing here needs a verified identity.
+  const logoutLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.ip || 'anon' });
+  r.post('/logout', logoutLimit, (req, res) => {
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  });
+
+  // ---- email verification ----
+  r.post('/verify-email', rateLimit({ windowMs: 60_000, max: 20 }),
+    validate(z.object({ token: z.string().min(1) })), async (req, res) => {
+    const result = await consumeAccountToken(db, req.body.token, { purpose: 'EMAIL_VERIFY' });
+    if (!result.ok) {
+      const messages = {
+        malformed_token: 'This verification link is invalid.',
+        not_found: 'This verification link is invalid or has expired.',
+        invalid_secret: 'This verification link is invalid.',
+        wrong_purpose: 'This verification link is invalid.',
+        already_consumed: 'This verification link has already been used.',
+        expired: 'This verification link has expired. Request a new one.',
+      };
+      return res.status(422).json({ error: messages[result.reason] || 'This verification link is invalid.', reason: result.reason });
+    }
+    await db.run('UPDATE users SET email_verified = 1 WHERE id = ?', [result.userId]);
+    res.json({ ok: true });
+  });
+
+  // Requires auth (unlike forgot-password below): this re-issues a
+  // verification link for the CALLER's own account, never for an email
+  // address supplied in the body -- there is no account-enumeration
+  // concern to guard against here the way forgot-password has to.
+  const resendVerifyLimit = rateLimit({ windowMs: 60_000, max: 3, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/resend-verification', requireAuth, resendVerifyLimit, async (req, res) => {
+    const user = await db.q1('SELECT id, email, name, email_verified FROM users WHERE id = ?', [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.email_verified) return res.json({ ok: true, alreadyVerified: true });
+    await sendVerificationEmail(db, { userId: user.id, email: user.email, name: user.name });
+    res.json({ ok: true });
+  });
+
+  // ---- password reset ----
+  // ALWAYS a generic response, whether or not the email belongs to a
+  // real account -- an attacker must never be able to tell the
+  // difference (spec: "generic response that doesn't reveal whether an
+  // email exists"). The real work (issuing a token, sending the email)
+  // only happens when the account genuinely exists; either way this
+  // route answers identically and in roughly the same shape either way.
+  const forgotPasswordLimit = rateLimit({ windowMs: 60_000, max: 5, keyFn: (req) => req.ip || 'anon' });
+  r.post('/forgot-password', forgotPasswordLimit,
+    validate(z.object({ email: z.string().email() })), async (req, res) => {
+    const email = req.body.email.toLowerCase().trim();
+    const GENERIC = { ok: true, message: 'If an account exists for that email, a password reset link has been sent.' };
+    const user = await db.q1('SELECT id, name FROM users WHERE email = ?', [email]);
+    if (!user) return res.json(GENERIC);
+    try {
+      const { payload } = await issueAccountToken(db, { userId: user.id, purpose: 'PASSWORD_RESET' });
+      const link = `${config.frontendUrl}/reset-password?token=${encodeURIComponent(payload)}`;
+      await sendEmail({
+        to: email,
+        subject: 'Reset your SK OS password',
+        html: `<p>Hi ${escapeHtml(user.name || '')},</p><p>Someone requested a password reset for this account. If this was you, set a new password here:</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email -- your password has not been changed.</p>`,
+        text: `Hi ${user.name || ''},\n\nSomeone requested a password reset for this account. If this was you, set a new password here:\n${link}\n\nThis link expires in 1 hour. If you didn't request this, you can safely ignore this email -- your password has not been changed.`,
+      });
+    } catch (e) {
+      // Still answer generically -- an email-provider hiccup must never
+      // leak "this address exists" via a differently-shaped error, and
+      // must never surface provider/infra details to the caller either.
+      console.error('[auth] forgot-password email failed (non-fatal):', e?.message || e);
+    }
+    res.json(GENERIC);
+  });
+
+  const resetPasswordLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.ip || 'anon' });
+  r.post('/reset-password', resetPasswordLimit,
+    validate(z.object({ token: z.string().min(1), newPassword: z.string().min(6) })), async (req, res) => {
+    const result = await consumeAccountToken(db, req.body.token, { purpose: 'PASSWORD_RESET' });
+    if (!result.ok) {
+      const messages = {
+        malformed_token: 'This reset link is invalid.',
+        not_found: 'This reset link is invalid or has expired.',
+        invalid_secret: 'This reset link is invalid.',
+        wrong_purpose: 'This reset link is invalid.',
+        already_consumed: 'This reset link has already been used. Request a new one.',
+        expired: 'This reset link has expired. Request a new one.',
+      };
+      return res.status(422).json({ error: messages[result.reason] || 'This reset link is invalid.', reason: result.reason });
+    }
+    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(req.body.newPassword), result.userId]);
+    // Clears THIS browser's own session cookie, if the reset happened to
+    // be performed from an already-logged-in tab -- forces a fresh
+    // login with the new password on this device. Does NOT invalidate
+    // any OTHER device's still-live session/cookie: this app's JWTs are
+    // stateless with no server-side session store to revoke against, so
+    // true cross-device revocation on password change would need a
+    // per-user token-epoch check added to requireAuth's own hot path
+    // (which runs on nearly every request across the whole app) -- a
+    // real, load-tested performance-sensitive change in its own right,
+    // deliberately scoped OUT of this pass rather than bolted on
+    // untested. See the security verification report's F-10 section for
+    // this called out explicitly as a residual risk, not an oversight.
+    clearAuthCookie(res);
+    res.json({ ok: true });
   });
 
   return r;
