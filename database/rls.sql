@@ -43,6 +43,8 @@ ALTER TABLE nutrition_balance_adjustments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_balance_adjustments FORCE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_balance_prompts     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_balance_prompts     FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustment_days ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustment_days FORCE ROW LEVEL SECURITY;
 ALTER TABLE intelligence_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE intelligence_events FORCE ROW LEVEL SECURITY;
 ALTER TABLE gym_settings       ENABLE ROW LEVEL SECURITY;
@@ -244,6 +246,17 @@ BEGIN
   ) WITH CHECK (
     NULLIF(current_setting('app.org_id', true), '') IS NULL
     OR meal_template_id IN (SELECT id FROM client_meal_templates WHERE org_id = current_setting('app.org_id', true))
+  );
+
+  -- nutrition_balance_adjustment_days has no org_id column -- derived via
+  -- its parent row: adjustment_id -> nutrition_balance_adjustments.org_id.
+  DROP POLICY IF EXISTS tenant_isolation ON nutrition_balance_adjustment_days;
+  CREATE POLICY tenant_isolation ON nutrition_balance_adjustment_days USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR adjustment_id IN (SELECT id FROM nutrition_balance_adjustments WHERE org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR adjustment_id IN (SELECT id FROM nutrition_balance_adjustments WHERE org_id = current_setting('app.org_id', true))
   );
 
   -- client_workout_exercises has NO client_id column — its client/org is

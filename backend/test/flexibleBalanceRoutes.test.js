@@ -343,3 +343,125 @@ test('cross-user rejection: client 2 cannot see, cancel, decline, or recalculate
   assert.ok(stillThere.json.activePlan);
   assert.equal(stillThere.json.activePlan.id, planId);
 });
+
+// ---- retroactive correction: editing/deleting a food log for a date a
+// plan has already settled must correct the plan's balance by exactly
+// the delta, never silently drift or double-apply. ----
+
+test('editing a food log on an ALREADY-SETTLED past date retroactively increases the plan\'s remaining balance by the new surplus', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+
+  // Construct the plan directly (rather than via /apply + back-dating
+  // BEFORE source_date, which isn't a state reconcile can ever reach in
+  // real production -- last_reconciled_date only ever walks FORWARD from
+  // source_date, never behind it; caught live while writing this test,
+  // not assumed) so that exactly one real, due day -- yesterday -- is
+  // left to settle, and nothing beyond it: source_date = 2 days ago,
+  // last_reconciled_date = 2 days ago too, so the next (and only) due day
+  // is yesterday itself, landing last_reconciled_date there with no
+  // further day due before "today".
+  const today = dayKey(new Date(), TZ);
+  const twoAgo = dayKey(addDays(today + 'T00:00:00Z', -2), TZ);
+  const oneAgo = dayKey(addDays(today + 'T00:00:00Z', -1), TZ);
+  const planId = 'nba_edittest';
+  await db.run(
+    `INSERT INTO nutrition_balance_adjustments (
+       id, org_id, client_id, source_date, original_surplus_calories, remaining_surplus_calories,
+       strategy, planned_days, remaining_days, daily_adjustment_calories,
+       base_calorie_target, base_protein_target, base_carbs_target, base_fat_target,
+       adjusted_calorie_target, adjusted_protein_target, adjusted_carbs_target, adjusted_fat_target,
+       status, last_reconciled_date, created_at, updated_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [planId, 'o1', 'c1', twoAgo, 350, 350, 'EASY', 5, 5, 70, 2000, 150, 200, 65, 1930, 150, 186.3, 65, 'ACTIVE', twoAgo, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'],
+  );
+  const logId = 'ml_editme';
+  await db.run(
+    `INSERT INTO meal_logs (id, client_id, date, name, calories, protein, carbs, fat, eaten, source, quantity, unit) VALUES (?,?,?,?,?,?,?,?,1,'manual',?,?)`,
+    [logId, 'c1', oneAgo, 'Editable meal', 500, 30, 50, 15, 100, 'g'],
+  );
+
+  const settled = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(settled.json.activePlan.remainingSurplusCalories, 280, '350 - 70 (one day\'s planned paydown), no new surplus (500 kcal < 2000 target)');
+  const dayRow = await db.q1('SELECT * FROM nutrition_balance_adjustment_days WHERE adjustment_id = ? AND date = ?', [planId, oneAgo]);
+  assert.ok(dayRow, 'the settled day must be recorded for later retroactive correction');
+  assert.equal(dayRow.actual_calories, 500);
+  assert.equal(dayRow.day_surplus, 0);
+
+  // Now the client goes back and edits that day's entry up to 2400 kcal
+  // (500 * 4.8) -- a genuine new surplus (2400 - 2000 = 400 > threshold)
+  // on a day that was already settled. No further day is due to settle
+  // between here and "today", so the next GET's own reconcile pass is a
+  // clean no-op and the balance it reports is exactly this correction.
+  const edited = await call('PUT', `/api/me/meal-logs/${logId}`, { quantity: 480, unit: 'g' });
+  assert.equal(edited.status, 200, JSON.stringify(edited.json));
+  assert.equal(edited.json.log.calories, 2400);
+
+  const after = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(after.json.activePlan.remainingSurplusCalories, 680, '280 + 400 newly-discovered surplus on the already-settled day');
+  // Hand-computed via the same safety math used throughout: safe ceiling
+  // = min(300, 800) = 300; ceil(680/5) = 136 <= 300, no extension needed.
+  assert.equal(after.json.activePlan.dailyAdjustmentCalories, 140);
+  assert.equal(after.json.activePlan.adjustedCalorieTarget, 1860);
+
+  // Deleting that same edit must reverse the correction exactly, back to
+  // the pre-edit balance -- not to zero, not double-subtracted.
+  const deleted = await call('DELETE', `/api/me/meal-logs/${logId}`);
+  assert.equal(deleted.status, 200);
+  const afterDelete = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(afterDelete.json.activePlan.remainingSurplusCalories, 280);
+});
+
+test('editing/deleting a food log for TODAY (never settled) does not touch any plan', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  await logMeal(db, 'c1', yesterday(), 2350);
+  const applied = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+  const planId = applied.json.plan.id;
+
+  const today = dayKey(new Date(), TZ);
+  const logId = 'ml_today';
+  await db.run(
+    `INSERT INTO meal_logs (id, client_id, date, name, calories, protein, carbs, fat, eaten, source, quantity, unit) VALUES (?,?,?,?,?,?,?,?,1,'manual',?,?)`,
+    [logId, 'c1', today, 'Today meal', 400, 20, 40, 10, 100, 'g'],
+  );
+
+  await call('PUT', `/api/me/meal-logs/${logId}`, { quantity: 900, unit: 'g' }); // huge increase, still today
+  const afterEdit = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(afterEdit.json.activePlan.remainingSurplusCalories, 350, 'editing an UNSETTLED day (today) must never move the balance');
+  assert.equal(afterEdit.json.activePlan.id, planId);
+
+  await call('DELETE', `/api/me/meal-logs/${logId}`);
+  const afterDelete = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(afterDelete.json.activePlan.remainingSurplusCalories, 350);
+});
+
+test('a retroactive deletion that fully removes an already-settled day\'s surplus can bring the plan to COMPLETED', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  const day1 = yesterday();
+  await logMeal(db, 'c1', day1, 2350); // +350
+  const applied = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+  const planId = applied.json.plan.id;
+
+  // Manually shrink the plan to a small remaining balance smaller than the
+  // surplus about to be deleted, then attach that surplus to an
+  // already-settled day so deleting it can fully zero the plan out.
+  await db.run('UPDATE nutrition_balance_adjustments SET remaining_surplus_calories = ? WHERE id = ?', [50, planId]);
+  const dayBefore = dayKey(addDays(day1 + 'T00:00:00Z', -1), TZ);
+  await db.run(
+    `INSERT INTO nutrition_balance_adjustment_days (id, adjustment_id, date, base_target, settled_amount, day_surplus, actual_calories, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    ['nbad_seed', planId, dayBefore, 2000, 0, 200, 2200, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'],
+  );
+  const logId = 'ml_deleteme';
+  await db.run(
+    `INSERT INTO meal_logs (id, client_id, date, name, calories, protein, carbs, fat, eaten, source) VALUES (?,?,?,?,?,?,?,?,1,'manual')`,
+    [logId, 'c1', dayBefore, 'Big meal to delete', 2200, 100, 200, 80],
+  );
+
+  const deleted = await call('DELETE', `/api/me/meal-logs/${logId}`);
+  assert.equal(deleted.status, 200);
+  const after = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(after.json.activePlan, null, 'removing the day\'s entire surplus must settle the plan, never leave it lingering');
+  const closedRow = await db.q1('SELECT status, remaining_surplus_calories FROM nutrition_balance_adjustments WHERE id = ?', [planId]);
+  assert.equal(closedRow.status, 'COMPLETED');
+  assert.equal(closedRow.remaining_surplus_calories, 0);
+});

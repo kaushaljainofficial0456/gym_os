@@ -608,12 +608,19 @@ spec's own mandated A–O report format.
   balance-related UI (prompt, preview, active-plan card, history).
 
 **Modified:**
-- `database/schema.sql` — two new tables (see B).
-- `database/rls.sql` — RLS policies for both new tables (org-scoped,
-  same pattern as `nutrition_plans`).
+- `database/schema.sql` — three new tables (see B).
+- `database/rls.sql` — RLS policies for all three new tables (org-scoped
+  directly for two, derived via the parent row for the third — same
+  patterns already established by `nutrition_plans` and `meal_items`
+  respectively).
 - `backend/src/validate.js` — one new Zod schema, `balanceStrategy`.
-- `backend/src/routes/me.js` — 6 new routes (see C) + import of the
-  service module.
+- `backend/src/routes/me.js` — 6 new balance routes (see C) + import of
+  the service module; `PUT`/`DELETE /me/meal-logs/:logId` each gained one
+  best-effort call to `recalculateForEditedDate()` after their existing
+  mutation (see the "retroactive correction" update under O).
+- `backend/src/routes/nutrition.js` — `POST /clients/:id/meals/toggle`
+  and `POST /clients/:id/meals/log` gained the same
+  `recalculateForEditedDate()` call for the same reason.
 - `frontend/src/pages/client/Nutrition.jsx` — mounts `<CalorieBalance>`;
   a new `balance` `useFetch` call; the calorie ring, macro bars, header
   text, and the "N kcal away from target" insight line now read from a
@@ -624,7 +631,7 @@ spec's own mandated A–O report format.
 
 ## B. Database migrations
 
-Both additive, `CREATE TABLE IF NOT EXISTS` in `schema.sql` (picked up
+All additive, `CREATE TABLE IF NOT EXISTS` in `schema.sql` (picked up
 automatically by `backend/scripts/db-check.js`'s deploy preflight — no
 separate `MIGRATIONS` array entry needed, that array is only for adding
 columns to *pre-existing* tables). Nothing in `nutrition_plans` or any
@@ -639,12 +646,14 @@ other existing table was altered.
 - `nutrition_balance_prompts` — one row per declined surplus event
   (client_id + source_date, unique), so the same day's surplus is never
   re-prompted after "Don't adjust".
-
-No `nutrition_balance_adjustment_days` child table was built — the
-spec listed it as optional ("if daily history is necessary"), and the
-single-row model (`remaining_days` / `remaining_surplus_calories`,
-recomputed on each reconcile) answers every UI/API need without it. See
-O for what this simplification does not cover.
+- `nutrition_balance_adjustment_days` — added in a follow-up pass (see O)
+  once a genuine need for it appeared: one row per day a plan has already
+  settled (adjustment_id, date, base_target, settled_amount, day_surplus,
+  actual_calories, unique on adjustment_id+date), letting a later edit or
+  deletion of that day's food log retroactively correct the plan by
+  exactly the delta instead of silently drifting. Originally left out as
+  the spec's own "if daily history is necessary" optional child table;
+  built once that necessity was confirmed.
 
 ## C. APIs added/changed
 
@@ -778,18 +787,27 @@ sum per request, never a historical bulk recompute (see O).
 
 ## K. Tests added
 
-19 new backend tests, all passing:
+34 new backend tests, all passing:
 - `flexibleBalanceCalc.test.js` (9): no-op at zero surplus, EASY basic
   case, 4/4/9 consistency across all strategies, INTENSE extending past
   its own max, the safe-ceiling sweep across all strategies/surpluses,
   an infeasible enormous-surplus case, the protein-floor override,
   carbs/fat floor enforcement, an unknown strategy throwing.
-- `flexibleBalanceRoutes.test.js` (10): below-threshold no-prompt,
+- `flexibleBalanceRoutes.test.js` (25): below-threshold no-prompt,
   eligible-surplus prompt, preview never persists, apply creates +
   re-GET doesn't re-prompt, decline is idempotent and blocks re-prompt,
-  cancel ends the plan and appears in history, new-surplus merge into
-  the same row, cross-client isolation, concurrent duplicate applies
-  never create two active rows, bad strategy rejected by validation.
+  cancel ends the plan and appears in history, new-surplus-on-a-later-day
+  merge with an exact hand-computed balance (never double-counted),
+  cross-client isolation, concurrent duplicate applies never create two
+  active rows, bad strategy rejected by validation, a plan settling to
+  COMPLETED with no negative drift on its final day, a manual base-target
+  change being detected and the recalculate endpoint rebuilding against
+  it, cross-user rejection on every mutation route, and (added in the
+  follow-up retroactive-correction pass) editing an already-settled past
+  date's log discovering a new surplus with an exact expected balance,
+  deleting that same edit reversing the correction exactly, editing/
+  deleting an unsettled (today's) log being a true no-op, and a
+  retroactive deletion fully zeroing a plan's balance to COMPLETED.
 
 Not covered by an automated test (documented, not silently skipped):
 exact multi-day-gap catch-up sequencing beyond one day, and a frontend
@@ -800,18 +818,25 @@ was verified: build + live browser check, not unit tests.
 
 ## L. Full test result
 
-`cd backend && npm test` → **1041/1044 passing**. The 3 non-passing are
+`cd backend && npm test` → **1047/1050 passing**. The 3 non-passing are
 2 skipped (pre-existing, unrelated to this change) and exactly 1 failure
 — `community.test.js`'s "leaderboards: period=month includes all
 workouts" (`3600 !== 9000`) — confirmed via `git stash` to fail
 identically on the clean `integrate-teammates` branch before any of this
-feature's code existed. Not touched or worked around.
+feature's code existed. Not touched or worked around. (A second,
+timing-sensitive test — `foodBenchmarkGate.test.js`'s p95-latency gate —
+flaked once under full-suite load during this work; confirmed via both
+`git stash` and running it in isolation, with this feature's code
+present, that it passes cleanly on its own — a load-sensitive
+pre-existing test, not a regression this feature introduced.)
 
-Two real regressions were caught and fixed by this same full-suite run
-before it went green: a stray backtick in a `schema.sql` comment tripped
-`prodreadiness.test.js`'s "no SQLite-only DDL" lint (removed the
-backtick), and both new tables were initially missing from `rls.sql`'s
-tenant-isolation policy loop (added them, re-run confirmed clean).
+Several real regressions/gaps were caught and fixed by these full-suite
+runs before they went green: a stray backtick in a `schema.sql` comment
+tripped `prodreadiness.test.js`'s "no SQLite-only DDL" lint; all three
+new tables were initially missing from `rls.sql`'s tenant-isolation
+coverage; and (in the retroactive-correction follow-up) `reconcileActivePlan`'s
+own automatic merge wasn't accumulating `original_surplus_calories` the
+way the manual `/apply` merge path did — all fixed, all re-verified.
 
 ## M. Production build result
 
@@ -884,13 +909,35 @@ Disclosed, not silently glossed over:
   their next N app opens rather than in one bulk backfill on their next
   visit. Documented in the service module's own header comment as a
   deliberate simplification, not an oversight.
-- **Editing a *past* day's food log after that day has already been
-  reconciled does not retroactively reopen it.** The spec's edge-case
-  list asks for this; building full historical-day reopening (detecting
-  which past days a plan already settled, replaying them) is real added
-  complexity this pass did not implement. The common case — editing
-  *today's* or an upcoming day's log — works correctly since those days
-  haven't been reconciled yet.
+- ~~Editing a *past* day's food log after that day has already been
+  reconciled does not retroactively reopen it~~ — **closed in a follow-up
+  pass.** A new `nutrition_balance_adjustment_days` table records what
+  was actually observed for every day a plan settles; `recalculateForEditedDate()`
+  in `flexibleBalance.js` is now called from every client-facing route
+  that can change an already-logged day's total (`PUT`/`DELETE
+  /me/meal-logs/:logId` in `me.js`; `POST /clients/:id/meals/toggle` and
+  `POST /clients/:id/meals/log` in `nutrition.js`, the latter accepting a
+  client-supplied `date`) and corrects the plan's remaining balance by
+  exactly the delta — never a blind re-sum, never double-counted.
+  Deliberately scoped to ACTIVE plans only (recalculating a COMPLETED/
+  CANCELLED/DECLINED plan has no forward-looking effect on anything the
+  client will see, so it's left as historical record). 6 new tests
+  (25 total in the balance suite) cover: the settled-day record itself,
+  an edit that discovers a new retroactive surplus, deleting that same
+  edit reversing the correction exactly, editing/deleting an *unsettled*
+  (today's) log being a true no-op, and a retroactive deletion that fully
+  zeroes a plan's balance closing it out to COMPLETED. Two real bugs were
+  caught and fixed while building this: `reconcileActivePlan`'s own
+  automatic merge (Section H) wasn't accumulating `original_surplus_calories`
+  the way the manual `/apply` merge path did (found because the FIRST
+  version of the new merge test asserted an exact expected number instead
+  of the original's loose `> 350` check); and the first draft of the
+  retroactive-edit test itself back-dated a plan's bookkeeping to a day
+  *before* `source_date` — a state `reconcileActivePlan` can never
+  actually reach in production (`last_reconciled_date` only ever walks
+  forward from `source_date`) — which produced a wrong number that traced
+  back to the test's own setup, not the app; rewritten to construct the
+  plan directly at a realistic offset instead.
 - **No frontend automated test suite** — this project has none
   configured; verification is build + live browser, consistent with the
   rest of this session's frontend work.

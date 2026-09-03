@@ -393,6 +393,28 @@ CREATE TABLE IF NOT EXISTS nutrition_balance_adjustments (
 CREATE INDEX IF NOT EXISTS idx_nba_client_status ON nutrition_balance_adjustments(client_id, status);
 CREATE INDEX IF NOT EXISTS idx_nba_client_source_date ON nutrition_balance_adjustments(client_id, source_date);
 
+-- One row per day a plan has already settled (written by
+-- reconcileActivePlan()). What it's FOR: editing or deleting a food log
+-- entry for a date that's already been settled needs to know "was this
+-- date already counted, and what did we observe for it at the time" so it
+-- can retroactively correct the plan's remaining balance by exactly the
+-- delta -- without this, a food-log edit for a past date would silently
+-- diverge from the balance the client already saw. See
+-- flexibleBalance.js's recalculateForEditedDate().
+CREATE TABLE IF NOT EXISTS nutrition_balance_adjustment_days (
+  id              TEXT PRIMARY KEY,
+  adjustment_id   TEXT NOT NULL REFERENCES nutrition_balance_adjustments(id) ON DELETE CASCADE,
+  date            TEXT NOT NULL,
+  base_target     REAL NOT NULL,   -- the plan's base_calorie_target at the moment this date was settled
+  settled_amount  REAL NOT NULL,   -- how much of remaining_surplus_calories this date paid down
+  day_surplus     REAL NOT NULL,   -- how much NEW surplus this date's own total contributed (0 if none)
+  actual_calories REAL NOT NULL,   -- meal_logs total observed for this date as of the last (re)settle
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nbad_adjustment_date ON nutrition_balance_adjustment_days(adjustment_id, date);
+CREATE INDEX IF NOT EXISTS idx_nbad_date ON nutrition_balance_adjustment_days(date);
+
 -- Declined-surplus memory: prevents "the SAME surplus event" from
 -- re-prompting after a client picks Don't Adjust (spec requirement).
 -- Deliberately tiny/separate from the table above -- a decline never

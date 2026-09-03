@@ -35,6 +35,7 @@ import {
   BALANCE_CONFIG, calculateFlexibleCaloriePlan, getBaseTargets, getActivePlan,
   baseTargetChanged, checkSurplusPrompt, reconcileActivePlan, applyFlexibleCaloriePlan,
   declineSurplus, cancelActivePlan, recalculatePlanForNewBaseTargets, getPlanHistory, serializePlan,
+  recalculateForEditedDate,
 } from '../services/nutrition/flexibleBalance.js';
 
 const num = (v) => {
@@ -980,6 +981,11 @@ export default function meRoutes(db) {
     if (!log) return res.status(404).json({ error: 'Log entry not found' });
     await db.run('DELETE FROM meal_logs WHERE id = ? AND client_id = ?', [logId, c.id]);
     track(db, 'meal_log_deleted', req.user.org, req.user.sub, { clientId: c.id, logId });
+    // Retroactive Flexible Calorie Balance correction -- a no-op unless
+    // `log.date` was already settled under an ACTIVE plan (see
+    // flexibleBalance.js). Best-effort: must never block a successful
+    // delete the client is waiting on.
+    recalculateForEditedDate(db, c, log.date).catch(() => {});
     res.json({ ok: true });
   });
 
@@ -1016,6 +1022,9 @@ export default function meRoutes(db) {
       [newQty, newUnit, newCalories, newProtein, newCarbs, newFat, logId, c.id]
     );
     track(db, 'meal_log_updated', req.user.org, req.user.sub, { clientId: c.id, logId });
+    // Retroactive Flexible Calorie Balance correction -- see the DELETE
+    // route above for why this is a safe, best-effort, mostly-no-op call.
+    recalculateForEditedDate(db, c, log.date).catch(() => {});
     res.json({ ok: true, log: { id: logId, quantity: newQty, unit: newUnit, calories: newCalories, protein: newProtein, carbs: newCarbs, fat: newFat } });
   });
 

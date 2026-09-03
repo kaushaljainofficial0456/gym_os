@@ -7,6 +7,7 @@ import { dayKey, addDays, daysBetween } from '../utils/time.js';
 import { estimateFood, estimateMeal } from '../services/food/index.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
+import { recalculateForEditedDate } from '../services/nutrition/flexibleBalance.js';
 
 // Single source of truth for "sum eaten macros over a set of meal_logs
 // rows" (Part 37) -- nutrition-summary and history below used to each
@@ -156,10 +157,14 @@ export default function nutritionRoutes(db) {
 
     // Custom / AI-logged meals have IDs prefixed with 'mlg_' and live directly in meal_logs.
     if (mealId.startsWith('mlg_')) {
-      const log = await db.q1('SELECT id, client_id FROM meal_logs WHERE id = ?', [mealId]);
+      const log = await db.q1('SELECT id, client_id, date FROM meal_logs WHERE id = ?', [mealId]);
       if (!log || log.client_id !== client.id) return res.status(404).json({ error: 'Meal log not found' });
       await db.run('UPDATE meal_logs SET eaten = ? WHERE id = ?', [eaten ? 1 : 0, mealId]);
       await track(db, { orgId: client.org_id, userId: req.user.sub, type: eaten ? 'meal_logged' : 'meal_unlogged', data: { clientId: client.id, mealId } });
+      // A toggle changes that date's eaten total just like an edit/delete
+      // does -- retroactive Flexible Calorie Balance correction, no-op
+      // unless log.date was already settled under an ACTIVE plan.
+      recalculateForEditedDate(db, client, log.date).catch(() => {});
       return res.json({ ok: true });
     }
 
@@ -178,6 +183,10 @@ export default function nutritionRoutes(db) {
         [id('mlg'), client.id, meal.id, d, meal.slot, meal.name, meal.calories, meal.protein, meal.carbs, meal.fat, eaten ? 1 : 0]);
     }
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: eaten ? 'meal_logged' : 'meal_unlogged', data: { clientId: client.id, mealId: meal.id } });
+    // `d` is always TODAY here (dayKey() with no args) -- never a settled
+    // past date, so this call is always a fast no-op in practice, kept
+    // only for consistency with every other mutation site in this file.
+    recalculateForEditedDate(db, client, d).catch(() => {});
     res.json({ ok: true });
   });
 
@@ -190,14 +199,19 @@ export default function nutritionRoutes(db) {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const b = req.body;
+    const logDate = b.date || dayKey();
     await db.run(
       `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id('mlg'), client.id, b.meal_id || null, b.date || dayKey(), b.slot || 'snack', b.name,
+      [id('mlg'), client.id, b.meal_id || null, logDate, b.slot || 'snack', b.name,
        b.calories, b.protein, b.carbs, b.fat, b.eaten ? 1 : 0, b.source, b.estimate ? 1 : 0,
        b.ai_provider || null, b.ai_model || null, b.ai_confidence || null,
        b.quantity ?? null, b.unit ?? null]);
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'meal_logged', data: { clientId: client.id, source: b.source } });
+    // A caller may supply an explicit past `date` here -- retroactive
+    // Flexible Calorie Balance correction, no-op unless that date was
+    // already settled under an ACTIVE plan.
+    recalculateForEditedDate(db, client, logDate).catch(() => {});
     if (b.source === 'ai_estimated' || b.source === 'ai_estimated_user_adjusted') {
       // Distinct from the generic 'meal_logged' event above so Tier-4
       // confirmation/adjustment rates (spec: user_confirmed_ai_estimates,

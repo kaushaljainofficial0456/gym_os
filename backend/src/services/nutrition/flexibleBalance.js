@@ -244,6 +244,12 @@ export async function reconcileActivePlan(db, client, tz) {
     sourceDate = nextDay;
   }
 
+  // Record what was actually observed for nextDay -- this is what lets a
+  // LATER edit/delete of a food log on this exact date retroactively
+  // correct the plan (recalculateForEditedDate below), instead of the
+  // balance silently drifting from what the client already saw.
+  await recordSettledDay(db, active.id, nextDay, active.base_calorie_target, settle, newSurplus > BALANCE_CONFIG.SURPLUS_PROMPT_THRESHOLD ? newSurplus : 0, dayTotal);
+
   if (remaining <= 0) {
     await db.run(
       `UPDATE nutrition_balance_adjustments SET status = 'COMPLETED', remaining_surplus_calories = 0, remaining_days = 0, last_reconciled_date = ?, updated_at = ? WHERE id = ?`,
@@ -269,6 +275,88 @@ export async function reconcileActivePlan(db, client, tz) {
   );
   const plan = await db.q1('SELECT * FROM nutrition_balance_adjustments WHERE id = ?', [active.id]);
   return { plan, justCompleted: false };
+}
+
+async function recordSettledDay(db, adjustmentId, date, baseTarget, settledAmount, daySurplus, actualCalories) {
+  const ts = now();
+  await db.run(
+    `INSERT INTO nutrition_balance_adjustment_days (id, adjustment_id, date, base_target, settled_amount, day_surplus, actual_calories, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(adjustment_id, date) DO UPDATE SET
+       settled_amount = excluded.settled_amount, day_surplus = excluded.day_surplus,
+       actual_calories = excluded.actual_calories, updated_at = excluded.updated_at`,
+    [id('nbad'), adjustmentId, date, baseTarget, settledAmount, daySurplus, actualCalories, ts, ts],
+  );
+}
+
+// Retroactive correction: called after a food-log entry is created,
+// edited, or deleted for `date`. If `date` was already settled under an
+// ACTIVE plan (a row exists in nutrition_balance_adjustment_days), the
+// plan's remaining balance is corrected by exactly the delta between what
+// was observed then and what's true now, then a fresh schedule is
+// computed for the corrected balance -- the same pure calculation used
+// everywhere else in this module, never a bespoke one-off adjustment.
+//
+// Deliberately scoped to ACTIVE plans only: a COMPLETED/CANCELLED/
+// DECLINED plan has no forward-looking effect on anything the client will
+// see next, so "recalculating" one would just rewrite history with no
+// observable consequence -- not worth the risk of quietly resurrecting a
+// plan a client already moved past. A safe, near-zero-cost no-op for the
+// overwhelmingly common case (editing today's own log, which was never
+// "settled" in the first place, since only PAST completed days get a
+// nutrition_balance_adjustment_days row).
+export async function recalculateForEditedDate(db, client, date) {
+  const dayRow = await db.q1(
+    `SELECT d.*, a.id as plan_id, a.remaining_surplus_calories, a.original_surplus_calories,
+            a.base_calorie_target, a.base_protein_target, a.base_carbs_target, a.base_fat_target, a.strategy
+       FROM nutrition_balance_adjustment_days d
+       JOIN nutrition_balance_adjustments a ON a.id = d.adjustment_id
+      WHERE d.date = ? AND a.client_id = ? AND a.status = 'ACTIVE'
+      ORDER BY d.created_at DESC LIMIT 1`,
+    [date, client.id],
+  );
+  if (!dayRow) return null;
+
+  const newActual = await sumEatenForDate(db, client.id, date);
+  if (newActual === dayRow.actual_calories) return null;
+
+  const newDaySurplus = round1(newActual - dayRow.base_target) > BALANCE_CONFIG.SURPLUS_PROMPT_THRESHOLD
+    ? round1(newActual - dayRow.base_target) : 0;
+  const delta = round1(newDaySurplus - dayRow.day_surplus);
+  if (delta === 0) {
+    await db.run('UPDATE nutrition_balance_adjustment_days SET actual_calories = ?, updated_at = ? WHERE id = ?', [newActual, now(), dayRow.id]);
+    return null;
+  }
+
+  const remaining = Math.max(0, round1(dayRow.remaining_surplus_calories + delta));
+  // A downward correction (food removed/reduced) isn't "less surplus was
+  // ever absorbed" -- it's "this day's contribution was overstated" --
+  // so original_surplus_calories (a historical high-water mark) only
+  // grows on a genuine increase, never shrinks on a deletion.
+  const originalTotal = delta > 0 ? round1(dayRow.original_surplus_calories + delta) : dayRow.original_surplus_calories;
+
+  await db.run('UPDATE nutrition_balance_adjustment_days SET day_surplus = ?, actual_calories = ?, updated_at = ? WHERE id = ?',
+    [newDaySurplus, newActual, now(), dayRow.id]);
+
+  if (remaining <= 0) {
+    await db.run(`UPDATE nutrition_balance_adjustments SET status = 'COMPLETED', remaining_surplus_calories = 0, remaining_days = 0, updated_at = ? WHERE id = ?`, [now(), dayRow.plan_id]);
+    return { planId: dayRow.plan_id, closed: true };
+  }
+
+  const recalced = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: dayRow.base_calorie_target, proteinTarget: dayRow.base_protein_target,
+    carbsTarget: dayRow.base_carbs_target, fatTarget: dayRow.base_fat_target,
+    surplusCalories: remaining, strategy: dayRow.strategy,
+  });
+  await db.run(
+    `UPDATE nutrition_balance_adjustments SET
+       original_surplus_calories = ?, remaining_surplus_calories = ?, planned_days = ?, remaining_days = ?, daily_adjustment_calories = ?,
+       adjusted_calorie_target = ?, adjusted_protein_target = ?, adjusted_carbs_target = ?, adjusted_fat_target = ?, updated_at = ?
+     WHERE id = ?`,
+    [originalTotal, remaining, recalced.plannedDays, recalced.plannedDays, recalced.dailyAdjustmentCalories,
+      recalced.adjustedCalorieTarget, recalced.macros.protein, recalced.macros.carbs, recalced.macros.fat, now(), dayRow.plan_id],
+  );
+  return { planId: dayRow.plan_id, closed: false };
 }
 
 // Persist a confirmed plan. Merges into an existing ACTIVE plan instead of
