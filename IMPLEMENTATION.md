@@ -233,8 +233,9 @@ here.
 | Batched `workouts.js`'s N+1 template-exercises loop into 1 query + JS grouping | `backend/src/routes/workouts.js` | N+1 round trips → 2 queries total, regardless of template count. Response shape verified identical via 2 new tests |
 | Route-level code-splitting for the admin console (14 pages behind `React.lazy`, mirroring the main app's own 33-route pattern) | `admin/src/App.jsx` | Main bundle **241.05 kB → 179.62 kB** (59.35 kB gzip, was 72.83 kB) — a measured 25.5% reduction; each page now loads its own small chunk (0.3–8.4 kB) only when visited, instead of all 14 shipping on every login |
 | Resized/recompressed the app logo (512×512 → still 256×256, non-palette PNG at quality 90) | `frontend/public/logo.png` | **444.7 kB → 111.7 kB** — a measured 75% reduction, on an asset referenced across 10+ pages, all of which display it at 28–56 px. Verified visually (side-by-side) before replacing, and live in the running app afterward — no visible quality loss at actual display size |
+| Split React/ReactDOM/React Router into their own `vendor-react` chunk | `frontend/vite.config.js` (`manualChunks`) | Main `index` chunk (the one bundle loaded on *every* page view): **394.20 kB → 230.87 kB** (125.70 → 73.11 kB gzip); `vendor-react` is a new, separate 164.04 kB (53.50 kB gzip) chunk. A caching win (vendor code no longer invalidates on every app-code deploy), not a total-byte reduction — reported as exactly that. Verified against the real production build (`vite preview`, not the dev server) — both chunks load with zero console errors, real content renders on first paint |
 
-All four are genuinely measured (file sizes, build output, live browser
+All five are genuinely measured (file sizes, build output, live browser
 verification), not estimated.
 
 Everything else audited (see §13 below) was **already** optimized from
@@ -476,11 +477,28 @@ say so honestly" instruction:
   cursor-pagination bulk job; the rest clean on inspection). Routes with
   no loop at all (the majority of the app) were not individually
   re-audited beyond the `Promise.all` sampling in §3/original pass.
-- No bundle-size reduction was attempted for the main frontend's 3
-  chunks already over 500 kB (`three.module`, `charts`, `index`) — real,
-  but pre-existing and outside what a small, low-risk change could
-  safely address (Three.js and the charting library are large by
-  nature; splitting them further is a real architecture change).
+- `three.module` (734 kB) and `charts` (387 kB) were left alone —
+  confirmed both are already correctly isolated behind this app's own
+  lazy-route loading (neither downloads until a page that actually needs
+  3D visuals or a chart is visited), so splitting them further is a real
+  architecture change for a first-load benefit that doesn't apply to
+  most visits. The one chunk that loads on *every* page view, `index`
+  (394.20 kB / 125.70 kB gzip), got a safe, standard fix instead: React,
+  ReactDOM, and React Router pulled into their own `vendor-react` chunk
+  via `vite.config.js`'s `manualChunks` — `index` → **230.87 kB**
+  (73.11 kB gzip), `vendor-react` → 164.04 kB (53.50 kB gzip) as a
+  separate file. Combined bytes are unchanged (this is a caching win —
+  vendor code stops invalidating on every app-code deploy — not a
+  total-size reduction, and reported as exactly that, not oversold).
+  Verified safe: built, served the real production output (`vite
+  preview`, not the dev server, which doesn't apply this chunking at
+  all), and confirmed at the network level that both new chunks load
+  with zero console errors and the app renders its real content on
+  first paint — the level a router-initialization failure from a bad
+  chunk split would have shown up at, even though click-interaction
+  testing on that tab hit this session's own recurring browser-tool
+  flakiness (not a re-render/error signal) rather than completing
+  cleanly.
 - No React re-render profiling was run (no Profiler session available in
   this environment). §2's Nutrition-search finding is a structural
   code-reading argument (state locality), not a measured bottleneck —
