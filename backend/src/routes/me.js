@@ -1839,7 +1839,7 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const tz = await getOrgTz(db, c.org_id);
     const liveBase = await getBaseTargets(db, c.id);
-    const { plan: active, justCompleted } = await reconcileActivePlan(db, c, tz);
+    const { plan: active, justCompleted, justExpired } = await reconcileActivePlan(db, c, tz);
     const promptEligible = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
 
     res.json({
@@ -1847,6 +1847,11 @@ export default function meRoutes(db) {
       activePlan: active ? { ...serializePlan(active), targetChanged: baseTargetChanged(active, liveBase) } : null,
       promptEligible,
       justSettled: justCompleted,
+      // A plan that was simply abandoned (the client stopped opening the
+      // app) rather than one that genuinely paid itself off -- distinct
+      // from justSettled so the frontend can use a neutral, non-punitive
+      // message for it instead of the "balance is settled" one.
+      justExpired,
       strategies: Object.entries(BALANCE_CONFIG.STRATEGIES).map(([key, v]) => ({ key, ...v })),
     });
   });
@@ -1936,8 +1941,11 @@ export default function meRoutes(db) {
 
   r.get('/nutrition/balance/history', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const rows = await getPlanHistory(db, c.id, 20);
-    res.json({ history: rows.map(serializePlan) });
+    // getPlanHistory already returns fully-shaped, camelCased items
+    // (Completed/Cancelled/Expired plans merged with Declined events) --
+    // no further serialization needed here.
+    const history = await getPlanHistory(db, c.id, 20);
+    res.json({ history });
   });
 
   return r;

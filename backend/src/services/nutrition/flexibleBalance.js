@@ -28,11 +28,14 @@
 // completed calendar day per call, anchored on `last_reconciled_date`. A
 // client who opens the app roughly daily never notices; a client who is
 // away for N days catches up progressively over their next N app opens
-// rather than in one bulk backfill loop. This is a deliberate, disclosed
-// simplification — see IMPLEMENTATION.md's "remaining limitations" section
-// for what it does and doesn't cover (in particular: editing a PAST day's
-// food log after that day has already been reconciled does not
-// retroactively reopen it).
+// rather than in one bulk backfill loop — EXCEPT that a plan gone stale
+// for longer than MAX_PLAN_DURATION_DAYS is marked EXPIRED outright on
+// the next touch instead of trying to catch up through ancient history
+// (Section 11: "must not leave abandoned plans indefinitely active" —
+// without this, a client who stopped opening the app would need dozens
+// of future visits, one day settled per visit, before their plan ever
+// resolved). Editing/deleting a food-log entry for an already-settled
+// past date IS retroactively reflected — see recalculateForEditedDate.
 // ============================================================
 import { id, now } from '../../ids.js';
 import { dayKey, addDays, daysBetween } from '../../utils/time.js';
@@ -217,14 +220,25 @@ export async function checkSurplusPrompt(db, client, tz, liveBase) {
 // due). Settles that day's planned paydown, folds in any NEW surplus that
 // day itself generated (Section 9's dynamic rebalancing), and recomputes
 // a fresh schedule for whatever balance remains via the same pure
-// calculation used at plan-creation time. Returns { plan, justCompleted }.
+// calculation used at plan-creation time. Returns
+// { plan, justCompleted, justExpired }.
 export async function reconcileActivePlan(db, client, tz) {
   const active = await getActivePlan(db, client.id);
-  if (!active) return { plan: null, justCompleted: false };
+  if (!active) return { plan: null, justCompleted: false, justExpired: false };
 
   const today = dayKey(new Date(), tz);
+
+  // Safety valve: a plan untouched for longer than the longest any plan
+  // is ever allowed to run has been abandoned (see this module's header
+  // comment). Expire it outright rather than trying to catch it up one
+  // day at a time, or leaving it ACTIVE forever.
+  if (daysBetween(active.last_reconciled_date, today) > BALANCE_CONFIG.MAX_PLAN_DURATION_DAYS) {
+    await db.run(`UPDATE nutrition_balance_adjustments SET status = 'EXPIRED', updated_at = ? WHERE id = ?`, [now(), active.id]);
+    return { plan: null, justCompleted: false, justExpired: true };
+  }
+
   const nextDay = dayKey(addDays(active.last_reconciled_date + 'T00:00:00Z', 1), tz);
-  if (nextDay >= today) return { plan: active, justCompleted: false };
+  if (nextDay >= today) return { plan: active, justCompleted: false, justExpired: false };
 
   const dayTotal = await sumEatenForDate(db, client.id, nextDay);
   const settle = Math.min(active.remaining_surplus_calories, active.daily_adjustment_calories);
@@ -255,7 +269,7 @@ export async function reconcileActivePlan(db, client, tz) {
       `UPDATE nutrition_balance_adjustments SET status = 'COMPLETED', remaining_surplus_calories = 0, remaining_days = 0, last_reconciled_date = ?, updated_at = ? WHERE id = ?`,
       [nextDay, now(), active.id],
     );
-    return { plan: null, justCompleted: true };
+    return { plan: null, justCompleted: true, justExpired: false };
   }
 
   const recalced = calculateFlexibleCaloriePlan({
@@ -274,7 +288,7 @@ export async function reconcileActivePlan(db, client, tz) {
       sourceDate, nextDay, now(), active.id],
   );
   const plan = await db.q1('SELECT * FROM nutrition_balance_adjustments WHERE id = ?', [active.id]);
-  return { plan, justCompleted: false };
+  return { plan, justCompleted: false, justExpired: false };
 }
 
 async function recordSettledDay(db, adjustmentId, date, baseTarget, settledAmount, daySurplus, actualCalories) {
@@ -454,8 +468,32 @@ export async function recalculatePlanForNewBaseTargets(db, clientId, liveBase) {
   return db.q1('SELECT * FROM nutrition_balance_adjustments WHERE id = ?', [active.id]);
 }
 
+// "A simple view listing Completed/Declined/Active plans" -- Active is
+// handled separately by GET /me/nutrition/balance's own `activePlan`;
+// this covers Completed/Cancelled/Expired (real rows in
+// nutrition_balance_adjustments) AND Declined, which deliberately never
+// becomes a row in that table (see schema.sql's own comment on why
+// nutrition_balance_prompts is kept separate) -- so a client's full
+// history needs both sources merged, not just the first.
 export async function getPlanHistory(db, clientId, limit = 20) {
-  return db.q(`SELECT * FROM nutrition_balance_adjustments WHERE client_id = ? AND status != 'ACTIVE' ORDER BY updated_at DESC LIMIT ?`, [clientId, Math.max(1, Math.min(100, limit))]);
+  const cap = Math.max(1, Math.min(100, limit));
+  const [plans, declines] = await Promise.all([
+    db.q(`SELECT * FROM nutrition_balance_adjustments WHERE client_id = ? AND status != 'ACTIVE' ORDER BY updated_at DESC LIMIT ?`, [clientId, cap]),
+    db.q(`SELECT * FROM nutrition_balance_prompts WHERE client_id = ? AND decision = 'DECLINED' ORDER BY created_at DESC LIMIT ?`, [clientId, cap]),
+  ]);
+  const items = [
+    ...plans.map((p) => ({ ...serializePlan(p), type: 'plan' })),
+    ...declines.map((d) => ({
+      id: d.id, type: 'declined', status: 'DECLINED', sourceDate: d.source_date,
+      strategy: null, originalSurplusCalories: null, remainingSurplusCalories: null,
+      plannedDays: null, remainingDays: null, dailyAdjustmentCalories: null,
+      baseCalorieTarget: null, baseProteinTarget: null, baseCarbsTarget: null, baseFatTarget: null,
+      adjustedCalorieTarget: null, adjustedProteinTarget: null, adjustedCarbsTarget: null, adjustedFatTarget: null,
+      createdAt: d.created_at, updatedAt: d.created_at,
+    })),
+  ];
+  items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  return items.slice(0, cap);
 }
 
 // Shape a raw db row for API responses (snake_case columns -> camelCase).

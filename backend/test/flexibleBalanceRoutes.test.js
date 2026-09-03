@@ -465,3 +465,66 @@ test('a retroactive deletion that fully removes an already-settled day\'s surplu
   assert.equal(closedRow.status, 'COMPLETED');
   assert.equal(closedRow.remaining_surplus_calories, 0);
 });
+
+// ---- abandonment safety valve + full plan-history coverage ----
+
+test('a plan abandoned for longer than MAX_PLAN_DURATION_DAYS expires outright instead of lingering ACTIVE forever', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  const today = dayKey(new Date(), TZ);
+  // last_reconciled_date far enough in the past that no amount of
+  // one-day-at-a-time catch-up (this module's normal model) would ever
+  // be a reasonable UX -- simulates a client who applied a plan and then
+  // never opened the app again.
+  const staleDate = dayKey(addDays(today + 'T00:00:00Z', -30), TZ);
+  const planId = 'nba_stale';
+  await db.run(
+    `INSERT INTO nutrition_balance_adjustments (
+       id, org_id, client_id, source_date, original_surplus_calories, remaining_surplus_calories,
+       strategy, planned_days, remaining_days, daily_adjustment_calories,
+       base_calorie_target, base_protein_target, base_carbs_target, base_fat_target,
+       adjusted_calorie_target, adjusted_protein_target, adjusted_carbs_target, adjusted_fat_target,
+       status, last_reconciled_date, created_at, updated_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [planId, 'o1', 'c1', staleDate, 350, 350, 'EASY', 5, 5, 70, 2000, 150, 200, 65, 1930, 150, 186.3, 65, 'ACTIVE', staleDate, staleDate + 'T00:00:00Z', staleDate + 'T00:00:00Z'],
+  );
+
+  const res = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(res.status, 200);
+  assert.equal(res.json.activePlan, null, 'an abandoned plan must not stay reported as active');
+  assert.equal(res.json.justExpired, true);
+  assert.equal(res.json.justSettled, false, 'expiry and settlement are distinct outcomes, never conflated');
+
+  const row = await db.q1('SELECT status FROM nutrition_balance_adjustments WHERE id = ?', [planId]);
+  assert.equal(row.status, 'EXPIRED');
+
+  // A second GET must not re-announce the expiry (one-time edge, not a
+  // persisted flag on an already-expired plan) -- matches justSettled's
+  // own established behavior.
+  const again = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(again.json.justExpired, false);
+});
+
+test('GET /nutrition/balance/history merges Completed/Cancelled/Expired plans with Declined events, newest first', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+
+  // A cancelled plan.
+  await logMeal(db, 'c1', yesterday(), 2350);
+  await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+  await call('POST', '/api/me/nutrition/balance/cancel');
+
+  // A declined prompt on an EARLIER, distinct day (so it isn't read as
+  // the same still-pending surplus event as the one just cancelled).
+  const earlier = dayKey(addDays(yesterday() + 'T00:00:00Z', -5), TZ);
+  await db.run(
+    `INSERT INTO nutrition_balance_prompts (id, org_id, client_id, source_date, decision, created_at) VALUES (?,?,?,?,?,?)`,
+    ['nbp_hist', 'o1', 'c1', earlier, 'DECLINED', '2026-01-01T00:00:00Z'],
+  );
+
+  const res = await call('GET', '/api/me/nutrition/balance/history');
+  assert.equal(res.status, 200);
+  const statuses = res.json.history.map((h) => h.status).sort();
+  assert.deepEqual(statuses, ['CANCELLED', 'DECLINED']);
+  const declined = res.json.history.find((h) => h.status === 'DECLINED');
+  assert.equal(declined.sourceDate, earlier);
+  assert.equal(declined.strategy, null, 'a decline never redistributed anything -- no strategy to report');
+});
