@@ -161,6 +161,14 @@ export const schemas = {
     sugar: z.number().finite().nonnegative().optional(),
     sodium: z.number().finite().nonnegative().optional()
   }),
+  // Flexible Calorie Balance — strategy is the ONLY client-supplied input.
+  // sourceDate/surplusCalories are always server-derived (from meal_logs vs
+  // the client's own stored base target), never accepted from the client,
+  // matching this file's existing pattern for /nutrition/targets/confirm
+  // (calories is derived server-side there too, never trusted from the body).
+  balanceStrategy: z.object({
+    strategy: z.enum(['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE']),
+  }),
   foodResolveQuantity: z.object({
     // A real `foods` row's own id -- when present, resolve() prices
     // directly from that row's own macros (linear scaling), never by

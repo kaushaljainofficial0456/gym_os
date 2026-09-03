@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
-import { useCountUp } from '../../utils.js';
+import { useCountUp, useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
@@ -11,6 +11,7 @@ import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
+import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
 import { sumEatenTotals } from '../../nutritionCalc.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
@@ -495,6 +496,14 @@ export default function Nutrition() {
   const data = home.data;
   const clientId = data?.client?.id;
 
+  // Flexible Calorie Balance -- own targeted endpoint (Section 26: no
+  // reason to bloat /me/home's payload for every client on every page).
+  // Fetched unconditionally alongside `home` regardless of loading state,
+  // same as every other independent useFetch on this page (see supList
+  // above) -- the route itself resolves the client from the auth token.
+  const balance = useFetch(() => api('/me/nutrition/balance'), []);
+  const activePlan = balance.data?.activePlan;
+
   useEffect(() => { if (clientId) api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {}); }, [clientId]);
 
   const plan = data?.nutrition?.plan;
@@ -609,6 +618,16 @@ export default function Nutrition() {
 
   const eatenTodayList = mealState.filter((m) => m.eaten);
 
+  // Today's EFFECTIVE target -- the adjusted target while a Flexible
+  // Calorie Balance plan is active, otherwise the base plan unchanged.
+  // One shared object so the ring, macro bars, and the insight line below
+  // can never drift out of sync with each other (a real gap caught live:
+  // the insight text initially still read off the base `plan` after the
+  // ring/bars below were already switched over).
+  const effectivePlan = activePlan
+    ? { calories: activePlan.adjustedCalorieTarget, protein: activePlan.adjustedProteinTarget, carbs: activePlan.adjustedCarbsTarget, fat: activePlan.adjustedFatTarget }
+    : plan;
+
   return (
     <div className="space-y-5 pb-24">
 
@@ -618,7 +637,11 @@ export default function Nutrition() {
           <h1 className="font-grotesk font-black text-2xl leading-tight" style={{ color: t.ink }}>Today's Fuel</h1>
           <div className="flex items-center gap-1.5 mt-1">
             <span className="text-[13px] font-medium" style={{ color: t.mute }}>
-              {plan ? `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g` : 'No plan assigned'}
+              {plan
+                ? (activePlan
+                  ? `${activePlan.adjustedCalorieTarget} kcal today (base ${plan.calories}) · P${activePlan.adjustedProteinTarget}g · C${activePlan.adjustedCarbsTarget}g · F${activePlan.adjustedFatTarget}g`
+                  : `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g`)
+                : 'No plan assigned'}
             </span>
             <button onClick={() => setTargetSetupOpen(true)} aria-label="Edit calorie target" className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-colors" style={{ color: t.mute, background: t.glass }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
@@ -643,18 +666,21 @@ export default function Nutrition() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: t.heroGlow }} />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="shrink-0"><CalorieRing value={eaten.calories} max={plan?.calories || 0} t={t} /></div>
+            <div className="shrink-0"><CalorieRing value={eaten.calories} max={effectivePlan?.calories || 0} t={t} /></div>
             <div className="flex-1 w-full space-y-4">
-              <MacroBar label="Protein" value={eaten.protein} max={plan?.protein || 0} color={t.protein} t={t} />
-              <MacroBar label="Carbs" value={eaten.carbs} max={plan?.carbs || 0} color={t.carbs} t={t} />
-              <MacroBar label="Fat" value={eaten.fat} max={plan?.fat || 0} color={t.fat} t={t} />
+              <MacroBar label="Protein" value={eaten.protein} max={effectivePlan?.protein || 0} color={t.protein} t={t} />
+              <MacroBar label="Carbs" value={eaten.carbs} max={effectivePlan?.carbs || 0} color={t.carbs} t={t} />
+              <MacroBar label="Fat" value={eaten.fat} max={effectivePlan?.fat || 0} color={t.fat} t={t} />
             </div>
           </div>
         </div>
       </div>
 
       {/* ══════ INSIGHT ══════ */}
-      <NutritionInsight plan={plan} eaten={eaten} t={t} />
+      <NutritionInsight plan={effectivePlan} eaten={eaten} t={t} />
+
+      {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
+      {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
 
       {/* ══════ TODAY'S EATEN MEALS ══════ */}
       <div data-tour="nutrition-meals" className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>

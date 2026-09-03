@@ -39,6 +39,10 @@ ALTER TABLE workouts           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workouts           FORCE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_plans    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nutrition_plans    FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_adjustments FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_prompts     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_balance_prompts     FORCE ROW LEVEL SECURITY;
 ALTER TABLE intelligence_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE intelligence_events FORCE ROW LEVEL SECURITY;
 ALTER TABLE gym_settings       ENABLE ROW LEVEL SECURITY;
@@ -145,7 +149,8 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'users','trainers','clients','workout_templates','training_programs','workouts',
-    'nutrition_plans','intelligence_events','gym_settings','custom_metrics','metric_entries',
+    'nutrition_plans','nutrition_balance_adjustments','nutrition_balance_prompts',
+    'intelligence_events','gym_settings','custom_metrics','metric_entries',
     'client_meal_templates','client_workouts','attendance_events','alerts','coach_insights',
     'packages','subscriptions','payments','attendance','messages','notifications','events',
     'ai_memory','ai_feedback',

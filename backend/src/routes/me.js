@@ -31,6 +31,11 @@ import {
 import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
 import { submitFeedback } from '../services/intelligence/foodFeedback.js';
 import { listActiveAnnouncements } from '../services/platform/announcements.js';
+import {
+  BALANCE_CONFIG, calculateFlexibleCaloriePlan, getBaseTargets, getActivePlan,
+  baseTargetChanged, checkSurplusPrompt, reconcileActivePlan, applyFlexibleCaloriePlan,
+  declineSurplus, cancelActivePlan, recalculatePlanForNewBaseTargets, getPlanHistory, serializePlan,
+} from '../services/nutrition/flexibleBalance.js';
 
 const num = (v) => {
   if (v === '' || v === null || v === undefined) return null;
@@ -1808,6 +1813,122 @@ export default function meRoutes(db) {
       // Transaction failure — nothing is half-created
       res.status(500).json({ error: 'Could not import workout. Please try again.' });
     }
+  });
+
+  // ============================================================
+  // FLEXIBLE CALORIE BALANCE — full architecture/design comment lives in
+  // backend/src/services/nutrition/flexibleBalance.js. Every route below
+  // is scoped via getClient() (authenticated identity only — never a
+  // client-supplied id), matching this file's own convention everywhere
+  // else. `strategy` is the only client-supplied input anywhere in this
+  // block; surplus amounts and source dates are always re-derived
+  // server-side from meal_logs vs. the client's own stored base target.
+  // ============================================================
+  const balanceWriteLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
+
+  r.get('/nutrition/balance', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    const { plan: active, justCompleted } = await reconcileActivePlan(db, c, tz);
+    const promptEligible = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
+
+    res.json({
+      baseTarget: liveBase,
+      activePlan: active ? { ...serializePlan(active), targetChanged: baseTargetChanged(active, liveBase) } : null,
+      promptEligible,
+      justSettled: justCompleted,
+      strategies: Object.entries(BALANCE_CONFIG.STRATEGIES).map(([key, v]) => ({ key, ...v })),
+    });
+  });
+
+  r.post('/nutrition/balance/preview', validate(schemas.balanceStrategy), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    if (!liveBase) return res.status(422).json({ error: 'Set your nutrition targets before adjusting a calorie balance.' });
+
+    const { plan: active } = await reconcileActivePlan(db, c, tz);
+    const prompt = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
+    const totalSurplus = active ? active.remaining_surplus_calories : prompt?.surplusCalories;
+    if (!totalSurplus || totalSurplus <= 0) {
+      return res.status(422).json({ error: 'No eligible calorie surplus to adjust right now.' });
+    }
+    const preview = calculateFlexibleCaloriePlan({
+      baseCalorieTarget: liveBase.calories, proteinTarget: liveBase.protein,
+      carbsTarget: liveBase.carbs, fatTarget: liveBase.fat,
+      surplusCalories: totalSurplus, strategy: req.body.strategy,
+    });
+    res.json({ preview, baseTarget: liveBase, totalSurplusCalories: totalSurplus });
+  });
+
+  r.post('/nutrition/balance/apply', balanceWriteLimit, validate(schemas.balanceStrategy), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    if (!liveBase) return res.status(422).json({ error: 'Set your nutrition targets before adjusting a calorie balance.' });
+
+    const { plan: active } = await reconcileActivePlan(db, c, tz);
+    const prompt = active ? null : await checkSurplusPrompt(db, c, tz, liveBase);
+    const sourceDate = active ? active.source_date : prompt?.sourceDate;
+    // Merging into an existing plan: applyFlexibleCaloriePlan itself adds
+    // the incoming amount to the existing remaining balance, so only the
+    // NEWLY eligible portion is passed here (0 when just switching
+    // strategy on an already-active plan) -- never the full balance again,
+    // which would double-count it.
+    const incomingSurplus = active ? 0 : (prompt?.surplusCalories || 0);
+    if (!active && incomingSurplus <= 0) {
+      return res.status(422).json({ error: 'No eligible calorie surplus to adjust right now.' });
+    }
+
+    const plan = await applyFlexibleCaloriePlan(db, {
+      orgId: c.org_id, clientId: c.id,
+      sourceDate: sourceDate || dayKey(new Date(), tz),
+      surplusCalories: incomingSurplus,
+      strategy: req.body.strategy,
+      baseTargets: liveBase,
+    });
+    track(db, 'balance_plan_created', req.user.org, req.user.sub, { client_id: c.id, strategy: req.body.strategy, merged: !!active });
+    res.status(201).json({ ok: true, plan: serializePlan(plan) });
+  });
+
+  r.post('/nutrition/balance/decline', balanceWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = await getOrgTz(db, c.org_id);
+    const liveBase = await getBaseTargets(db, c.id);
+    const { plan: active } = await reconcileActivePlan(db, c, tz);
+    if (active) return res.status(409).json({ error: 'A calorie balance plan is already active. Cancel it first.' });
+    const prompt = await checkSurplusPrompt(db, c, tz, liveBase);
+    if (!prompt) return res.json({ ok: true }); // nothing pending -- idempotent no-op
+    await declineSurplus(db, { orgId: c.org_id, clientId: c.id, sourceDate: prompt.sourceDate });
+    track(db, 'balance_plan_declined', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true });
+  });
+
+  r.post('/nutrition/balance/cancel', balanceWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    await cancelActivePlan(db, c.id);
+    track(db, 'balance_plan_cancelled', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true });
+  });
+
+  // "Your daily target changed. Your current balance plan needs to be
+  // recalculated." -> [Recalculate] hits this; [Cancel adjustment] reuses
+  // /cancel above instead.
+  r.post('/nutrition/balance/recalculate', balanceWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const liveBase = await getBaseTargets(db, c.id);
+    if (!liveBase) return res.status(422).json({ error: 'Set your nutrition targets first.' });
+    const plan = await recalculatePlanForNewBaseTargets(db, c.id, liveBase);
+    if (!plan) return res.status(404).json({ error: 'No active calorie balance plan to recalculate.' });
+    track(db, 'balance_plan_recalculated', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true, plan: serializePlan(plan) });
+  });
+
+  r.get('/nutrition/balance/history', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const rows = await getPlanHistory(db, c.id, 20);
+    res.json({ history: rows.map(serializePlan) });
   });
 
   return r;
