@@ -35,8 +35,13 @@ function parseServing(serving) {
 export default function MyDietCard({ clientId, onLogged, t, toast }) {
   const [foods, setFoods] = useState(null);
   const [meals, setMeals] = useState(null);
-  const [foodsExpanded, setFoodsExpanded] = useState(false);
-  const [mealsExpanded, setMealsExpanded] = useState(false);
+  // ONE combined expand toggle, not one per kind -- Saved Foods and Saved
+  // Meals used to be two independent always-visible subsections (each with
+  // its own "See more"), which meant the default state could show a food
+  // AND a meal AND both their headers simultaneously. Now there's one
+  // unified list (see `combined` below) and one item shows by default,
+  // full stop.
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [qty, setQty] = useState({}); // id -> string, the one-time log amount
   const [logging, setLogging] = useState({}); // id -> true while a quick-log animation is running
@@ -188,7 +193,14 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <div className="font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{label}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{label}</span>
+            {/* Compact kind badge -- the ONLY thing distinguishing a food
+                row from a meal row now that they share one list. */}
+            <span className="font-grotesk text-[8px] font-bold uppercase tracking-[.08em] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: t.accentDim, color: t.accent }}>
+              {kind === 'food' ? 'Food' : 'Meal'}
+            </span>
+          </div>
           {editing && kind === 'food' ? (
             <div className="font-grotesk text-[10px] mt-0.5" style={{ color: t.faint }}>Default quantity</div>
           ) : (
@@ -221,21 +233,28 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
     );
   };
 
-  // Default compact state shows exactly ONE saved food and ONE saved meal
-  // (follow-up hardening pass, Section 1) -- everything else stays
-  // reachable through "See more", never deleted, never hidden data.
-  const visibleFoods = foodsExpanded ? foods : foods.slice(0, 1);
-  const visibleMeals = mealsExpanded ? meals : meals.slice(0, 1);
+  // Unified list -- foods and meals interleaved into ONE array instead of
+  // two independent always-both-visible subsections. Order is stable
+  // (every food, then every meal) rather than re-sorted by recency, since
+  // neither GET /me/foods nor GET /me/meals carries a reliable shared
+  // timestamp to interleave by, and a stable order matters more here than
+  // a "which was saved most recently" ordering neither list actually
+  // guarantees today.
+  const combined = [
+    ...foods.map((f) => ({ kind: 'food', item: f })),
+    ...meals.map((m) => ({ kind: 'meal', item: m })),
+  ];
+  // Default compact state shows exactly ONE saved item total, food or
+  // meal -- not one of each. "See more" reveals the rest of the SAME
+  // unified list.
+  const visible = expanded ? combined : combined.slice(0, 1);
 
   return (
     <div className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
       <div className="flex items-end justify-between mb-4">
         <div>
-          <div className="font-grotesk text-[11px] font-semibold uppercase tracking-[.16em] flex items-center gap-2" style={{ color: t.mute }}>
-            <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />
-            My Diet
-          </div>
-          <div className="font-grotesk text-[10px] mt-0.5" style={{ color: t.faint }}>{foods.length} saved foods · {meals.length} saved meals</div>
+          <div className="font-grotesk text-base font-bold" style={{ color: t.ink }}>Saved Foods & Meals</div>
+          <div className="font-grotesk text-[10px] mt-0.5" style={{ color: t.faint }}>{foods.length} foods · {meals.length} meals</div>
         </div>
         <button
           onClick={() => (editing ? finishEditing() : setEditing(true))}
@@ -247,43 +266,26 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
         </button>
       </div>
 
-      {foods.length === 0 && meals.length === 0 && (
+      {combined.length === 0 ? (
         <div className="text-center py-6">
           <div className="font-grotesk text-[12px]" style={{ color: t.mute }}>Nothing saved yet</div>
           <div className="font-grotesk text-[10px] mt-1" style={{ color: t.faint }}>Log a food or build a meal to see it here</div>
         </div>
-      )}
-
-      {foods.length > 0 && (
-        <div className="mb-4">
-          <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.mute }}>Saved Foods</div>
+      ) : (
+        <>
           <div className="space-y-1.5">
-            {visibleFoods.map((f) => (
-              <Row key={f.id} kind="food" item={f} label={f.name} sub={f.serving || `${Math.round(f.calories || 0)} kcal`} />
+            {visible.map(({ kind, item }) => (
+              <Row key={`${kind}_${item.id}`} kind={kind} item={item}
+                   label={item.name}
+                   sub={kind === 'food' ? (item.serving || `${Math.round(item.calories || 0)} kcal`) : `${Math.round(item.calories || 0)} kcal · ${item.item_count || 0} items`} />
             ))}
           </div>
-          {foods.length > 1 && (
-            <button onClick={() => setFoodsExpanded(!foodsExpanded)} className="w-full mt-2 py-1.5 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
-              {foodsExpanded ? 'Show less' : `See more (${foods.length - 1} more)`}
+          {combined.length > 1 && (
+            <button onClick={() => setExpanded(!expanded)} className="w-full mt-2 py-1.5 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
+              {expanded ? 'Show less' : `See more (${combined.length - 1})`}
             </button>
           )}
-        </div>
-      )}
-
-      {meals.length > 0 && (
-        <div>
-          <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.mute }}>Saved Meals</div>
-          <div className="space-y-1.5">
-            {visibleMeals.map((m) => (
-              <Row key={m.id} kind="meal" item={m} label={m.name} sub={`${Math.round(m.calories || 0)} kcal · ${m.item_count || 0} items`} />
-            ))}
-          </div>
-          {meals.length > 1 && (
-            <button onClick={() => setMealsExpanded(!mealsExpanded)} className="w-full mt-2 py-1.5 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
-              {mealsExpanded ? 'Show less' : `See more (${meals.length - 1} more)`}
-            </button>
-          )}
-        </div>
+        </>
       )}
 
       <SavingOverlay open={savingEdit} stage={saveStage} label={saveStage === 'success' ? 'Saved' : 'Saving changes'} mode="overlay" size="sm" />

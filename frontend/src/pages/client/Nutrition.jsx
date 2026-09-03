@@ -682,6 +682,37 @@ export default function Nutrition() {
       {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
       {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
 
+      {/* ══════ FOOD & MEAL TOOLS ══════
+          Moved above Today's Eaten Meals / Saved Foods & Meals -- the
+          primary task on this page is "log what I ate", so the primary
+          actions come right after the summary, not buried below it. */}
+      <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+        <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
+        <div className="grid grid-cols-3 gap-1.5 p-1">
+          {[
+            // Log / Estimate Food is the most frequent action by far --
+            // accent-filled and full-weight vs. the other two's glass
+            // treatment, so it reads as the strongest option at a glance
+            // without introducing a new visual style.
+            { label: 'Log / Estimate Food', icon: '🍽️', onClick: () => setFoodLogSheetOpen(true), primary: true },
+            { label: 'Customize My Meals', icon: '🧩', onClick: () => setCustomizeOpen(true) },
+            { label: 'Meal Information', icon: '📊', onClick: () => setInfoOpen(true) },
+          ].map((tool) => (
+            <button key={tool.label} onClick={tool.onClick}
+                    className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
+                    style={tool.primary
+                      ? { background: t.accent, border: `1px solid ${t.accent}` }
+                      : { background: t.glass, border: `1px solid ${t.border}` }}>
+              <span className="text-lg">{tool.icon}</span>
+              <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: tool.primary ? 'var(--accent-contrast)' : t.ink }}>{tool.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ══════ SAVED FOODS & MEALS ══════ */}
+      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
+
       {/* ══════ TODAY'S EATEN MEALS ══════ */}
       <div data-tour="nutrition-meals" className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <SectionHeader
@@ -718,28 +749,6 @@ export default function Nutrition() {
           </button>
         )}
         <SavingOverlay open={savingTodaysEdit} stage={todaysSaveStage} label={todaysSaveStage === 'success' ? 'Changes Saved' : 'Saving changes'} mode="overlay" size="sm" />
-      </div>
-
-      {/* ══════ MY DIET (Saved Foods + Saved Meals) ══════ */}
-      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
-
-      {/* ══════ FOOD & MEAL TOOLS ══════ */}
-      <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
-        <div className="grid grid-cols-3 gap-1.5 p-1">
-          {[
-            { label: 'Log / Estimate Food', icon: '🍽️', onClick: () => setFoodLogSheetOpen(true) },
-            { label: 'Customize My Meals', icon: '🧩', onClick: () => setCustomizeOpen(true) },
-            { label: 'Meal Information', icon: '📊', onClick: () => setInfoOpen(true) },
-          ].map((tool) => (
-            <button key={tool.label} onClick={tool.onClick}
-                    className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
-                    style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-              <span className="text-lg">{tool.icon}</span>
-              <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: t.ink }}>{tool.label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ══════ SUPPLEMENTS ══════ */}

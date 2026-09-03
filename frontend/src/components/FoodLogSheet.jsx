@@ -34,6 +34,7 @@ import { Pressable } from '../design/index.js';
 import Icon from './Icon.jsx';
 import BarcodeScanner from './BarcodeScanner.jsx';
 import PortionWheel from './PortionWheel.jsx';
+import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
 
 const OIL_LEVELS = [
   ['none', 'None'],
@@ -45,6 +46,12 @@ const OIL_LEVELS = [
 
 /** Portion groups, in the order a person actually reaches for them. */
 const GROUP_ORDER = ['count', 'bowl', 'plate', 'glass', 'spoon', 'misc'];
+// Master prompt's own taxonomy (Bowl/Plate/Glass/Spoon/Misc) omits
+// piece-counted foods (roti, idli, samosa, banana, egg, ...) entirely --
+// dropping that category would remove real portion options ("do not
+// remove the serving options"), so it's kept as its own tab, labeled for
+// what it actually is rather than force-fit into "Misc".
+const GROUP_LABEL = { count: 'Piece', bowl: 'Bowl', plate: 'Plate', glass: 'Glass', spoon: 'Spoon', misc: 'Misc' };
 
 const EMPTY_MANUAL = {
   name: '', brand: '', servingGrams: '', servingLabel: '',
@@ -63,7 +70,11 @@ const baseServingGrams = (serving) => {
   const m = s.match(/^([\d.]+)/);
   return m && Number(m[1]) > 0 ? Number(m[1]) : 100;
 };
-const REQUIRED_CUSTOM_MACROS = ['calories', 'protein', 'carbs', 'fat'];
+// Calories is deliberately NOT in this list -- it's calculated from
+// protein/carbs/fat via the canonical 4/4/9 rule (nutritionCalc.js),
+// never a required typed value. See submitCustomFood and the render
+// below for the read-only display + optional override.
+const REQUIRED_CUSTOM_MACROS = ['protein', 'carbs', 'fat'];
 const OPTIONAL_CUSTOM_MACROS = ['fiber', 'sugar', 'sodium'];
 
 /** Round for display only — never re-used as an input to further math. */
@@ -132,6 +143,15 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   // below). Each selected portion's own quantity is chosen via the
   // PortionWheel picker (wheelOpen/wheelPortion), not typed inline.
   const [selectedPortions, setSelectedPortions] = useState([]); // [{key,label,group,unitGrams,qty}]
+  // Which portion CATEGORY (bowl/plate/glass/spoon/misc/count) is currently
+  // expanded -- only that one group's options render below the tab strip.
+  // Previously every non-empty group rendered stacked at once (a food with
+  // bowl+plate+glass+spoon+misc portions all defined showed 5 separate
+  // lists simultaneously), which is what made the sheet tall/crowded.
+  // Reset to the food's own first available group whenever `food` changes
+  // (see the effect near `groups` below) -- never carries a stale category
+  // from the previous food into a new one.
+  const [activeGroup, setActiveGroup] = useState(null);
   const [customGrams, setCustomGrams] = useState('');
   const [wheelOpen, setWheelOpen] = useState(false);
   const [wheelPortion, setWheelPortion] = useState(null); // the raw portion object the wheel is open for
@@ -168,6 +188,18 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   const [customErr, setCustomErr] = useState('');
   const [customSaving, setCustomSaving] = useState(false);
   const [showMoreMacros, setShowMoreMacros] = useState(false);
+  // Calories is calculated (protein×4 + carbs×4 + fat×9) by default, never
+  // required as typed input. This only reveals the manual field for the
+  // rare case someone genuinely needs to override it (e.g. a packaged
+  // product's own printed label) -- calculated stays the default source
+  // of truth.
+  const [customCalorieOverride, setCustomCalorieOverride] = useState(false);
+  // "Discard changes?" guard (Part 23): X/Escape/backdrop must not silently
+  // throw away a Custom Macros entry someone is mid-way through typing --
+  // but must also never FORCE a save just to let them leave. Only the
+  // Custom Macros screen tracks this; every other screen here is either
+  // read-only (search results) or already its own committed action.
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   // Duplicate-name handling (Part 39) -- the existing "MY FOODS" row with
   // this exact (case-insensitive) name, when one is found, pending the
   // user's own choice between reusing it or creating a genuine second one
@@ -250,7 +282,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       setLabelScanning(false); setLabelNote('');
       setAiResult(null); setAiErr(''); setAiEstimating(false);
       setKnnEstimate(null); setKnnGrams('100'); setKnnLogging(false);
-      setMode('search'); setCustomForm(EMPTY_CUSTOM); setCustomErr(''); setCustomSaving(false); setCustomDuplicate(null); setShowMoreMacros(false);
+      setMode('search'); setCustomForm(EMPTY_CUSTOM); setCustomErr(''); setCustomSaving(false); setCustomDuplicate(null); setShowMoreMacros(false); setCustomCalorieOverride(false);
       setRowGrams({}); setRowLogging({}); setRowErr({});
       setRecentFoods([]); setRecentLogging({});
     }
@@ -324,6 +356,21 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
             body: JSON.stringify({ food_id: food.id || undefined, source_id: food.source_id || undefined, name: food.name, grams: Number(customGrams), oil_level: oil || undefined }),
           });
         } else if (selectedPortions.length > 0) {
+          // NOT food_id-first here, unlike the customGrams branch above --
+          // deliberately checked against the actual backend route
+          // (me.js's POST /foods/resolve) before "fixing" this: the
+          // food_id branch there only understands a raw `grams` field, not
+          // `portion_key`/`count` -- passing food_id alongside a portion
+          // would silently ignore the portion and default to the food's
+          // own base serving size instead, a worse bug than the one this
+          // would have been "fixing". Portions are only ever populated for
+          // a materialized/VERIFIED_DATABASE food; a client's own custom
+          // food never reaches this branch at all (it has no portions),
+          // so the practical gap here is narrow: picking a portion chip
+          // for a catalogue food the client has separately edited via
+          // PUT /me/foods/:id re-prices from the model's original numbers,
+          // not the edit. Left as a disclosed limitation rather than a
+          // frontend-only "fix" that would make the backend behave worse.
           const parts = await Promise.all(selectedPortions.map((p) =>
             api('/me/foods/resolve', {
               method: 'POST',
@@ -376,6 +423,14 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     return GROUP_ORDER.filter((g) => by[g]?.length).map((g) => [g, by[g]]);
   }, [food]);
 
+  // A new food's own available categories may not include whatever was
+  // active for the PREVIOUS food (e.g. dal has bowl/katori, a barcode-free
+  // packaged snack might only have count/piece) -- default to the first
+  // one this food actually has, every time `food` changes.
+  useEffect(() => {
+    setActiveGroup(groups.length ? groups[0][0] : null);
+  }, [food]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Total logged weight for the AI estimate -- sums CURRENT (post-edit,
   // server-recomputed) component grams, the same values already driving
   // each row's own grams input, so this always matches what "Log it" will
@@ -422,15 +477,24 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     if (!open) return;
     const onKey = (e) => {
       if (e.key !== 'Escape' || wheelOpen) return;
+      if (confirmDiscardOpen) { setConfirmDiscardOpen(false); return; }
       if (screen === 'manual') { setManualAdd(false); setManualErr(''); return; }
       if (screen === 'ai') { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); return; }
       if (screen === 'portion') { backToSearch(); return; }
+      // 'search' and 'custom' both have no Back level -- Escape here is the
+      // same "close" gesture the X button is, so it goes through the same
+      // unsaved-input guard rather than a silent-discard shortcut Escape
+      // shouldn't get that X doesn't.
+      if (screen === 'custom' && (customForm.name.trim() || customForm.protein || customForm.carbs || customForm.fat)) {
+        setConfirmDiscardOpen(true);
+        return;
+      }
       onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, wheelOpen, screen]);
+  }, [open, wheelOpen, screen, confirmDiscardOpen, customForm.name, customForm.protein, customForm.carbs, customForm.fat]);
 
   if (!open) return null;
 
@@ -628,7 +692,15 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     if (!name) { setCustomErr('Name this food first'); return; }
     const servingG = Number(cf.servingGrams);
     if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
-    const entered = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
+    // Calories = protein×4 + carbs×4 + fat×9 (nutritionCalc.js's single
+    // canonical formula) by default -- never required as typed input.
+    // The manual override field (revealed only when the user explicitly
+    // asks for it) still goes through the same validation below.
+    const calculatedCalories = calculateCaloriesFromMacros({ protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) });
+    const entered = {
+      calories: customCalorieOverride && cf.calories !== '' ? Number(cf.calories) : calculatedCalories,
+      protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat),
+    };
     for (const key of REQUIRED_CUSTOM_MACROS) {
       const v = entered[key];
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key === 'calories' ? 'calorie' : key} value`); return; }
@@ -680,6 +752,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       setCustomForm(EMPTY_CUSTOM);
       setCustomDuplicate(null);
       setShowMoreMacros(false);
+      setCustomCalorieOverride(false);
     } catch (e) {
       setCustomErr(e.message || 'Could not save that food');
     }
@@ -957,6 +1030,26 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
 
   const bc = barcodeResolved || barcodeItem;
 
+  // The X/backdrop path for "close the whole sheet" -- distinct from the
+  // Escape handler above only in that this one always runs with the
+  // CURRENT render's closure (a plain JSX handler), so no extra deps to
+  // maintain. Never forces a save just to let someone leave (Part 23) --
+  // closing with an empty or already-saved form is always immediate.
+  const requestClose = () => {
+    if (screen === 'custom' && (customForm.name.trim() || customForm.protein || customForm.carbs || customForm.fat)) {
+      setConfirmDiscardOpen(true);
+      return;
+    }
+    onClose();
+  };
+  const discardAndClose = () => {
+    setConfirmDiscardOpen(false);
+    setCustomForm(EMPTY_CUSTOM);
+    setCustomErr('');
+    setCustomCalorieOverride(false);
+    onClose();
+  };
+
   // BACK vs CLOSE (Part 23): Back goes exactly one level backward (food
   // detail / AI review / barcode confirm / manual-add -> search); Close
   // always exits the whole flow, from any level, without requiring a
@@ -997,7 +1090,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   return createPortal((
     <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={onClose} role="dialog" aria-modal="true" aria-label={dialogLabel}>
+         onClick={requestClose} role="dialog" aria-modal="true" aria-label={dialogLabel}>
       <div className="card w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-b-none sm:rounded-2xl"
            onClick={(e) => e.stopPropagation()}>
 
@@ -1016,7 +1109,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                 {dialogLabel}
               </div>
             </div>
-            <button onClick={onClose} aria-label="Close" className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}>✕</button>
+            <button onClick={requestClose} aria-label="Close" className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}>✕</button>
           </div>
 
           {(screen === 'search' || screen === 'custom') && (
@@ -1089,7 +1182,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                 Enter the macros below for <b>that serving</b> — e.g. everything in one full bowl or plate, not per 100&nbsp;g.
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {[['calories', 'Calories *'], ['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (
+                {[['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (
                   <label key={key} className="block">
                     <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>{label}</span>
                     <input type="number" min="0" step="any" value={customForm[key]}
@@ -1097,6 +1190,32 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                            className="input w-full !py-2 mt-1 tabular-nums" aria-label={label} />
                   </label>
                 ))}
+                {/* Calories = protein×4 + carbs×4 + fat×9 -- calculated,
+                    not typed, per macros already entered above. Read-only
+                    unless the user explicitly asks to override it (e.g. a
+                    packaged product's own printed label). */}
+                <label className="block">
+                  <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Calories</span>
+                  {customCalorieOverride ? (
+                    <input type="number" min="0" step="any" value={customForm.calories}
+                           onChange={(e) => setCustomField('calories', e.target.value)}
+                           placeholder={String(calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) }))}
+                           className="input w-full !py-2 mt-1 tabular-nums" aria-label="Calories (manual override)" />
+                  ) : (
+                    <div className="input w-full !py-2 mt-1 tabular-nums flex items-center justify-between" style={{ color: 'var(--ink)', cursor: 'default' }}>
+                      <span>{calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) })} kcal</span>
+                    </div>
+                  )}
+                </label>
+              </div>
+              <div className="flex items-center justify-between -mt-1">
+                <span className="text-[10px]" style={{ color: 'var(--faint)' }}>
+                  {customCalorieOverride ? 'Optional calorie override — leave blank to use the calculated value.' : 'Calculated from protein/carbs/fat.'}
+                </span>
+                <button type="button" onClick={() => { setCustomCalorieOverride((v) => !v); if (customCalorieOverride) setCustomField('calories', ''); }}
+                        className="text-[10px] font-semibold underline-offset-2 hover:underline shrink-0 ml-2" style={{ color: 'var(--mute)' }}>
+                  {customCalorieOverride ? 'Use calculated' : 'Override'}
+                </button>
               </div>
               {showMoreMacros ? (
                 <div className="grid grid-cols-3 gap-3">
@@ -1630,37 +1749,59 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                 </div>
               </div>
 
-              {groups.map(([group, ps]) => (
-                <div key={group}>
+              {groups.length > 0 && (
+                <div>
+                  {/* CATEGORY — only the tapped category's own options render
+                      below; every other category collapses out of view
+                      entirely, rather than every non-empty group stacking
+                      on screen at once. */}
                   <div className="text-[9px] uppercase tracking-[.16em] mb-1.5" style={{ color: 'var(--faint)' }}>
-                    {group}
+                    Category
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ps.map((p) => {
-                      // "Selected" = this portion is part of the combined
-                      // total below, at whatever qty the wheel last set --
-                      // tapping the chip ALWAYS (re)opens the wheel, even
-                      // for an already-selected portion, so its quantity
-                      // can be adjusted rather than just toggled off.
-                      const selected = selectedPortions.some((sp) => sp.key === p.key);
+                  <div className="flex flex-wrap gap-1.5 mb-3" role="tablist" aria-label="Serving category">
+                    {groups.map(([group]) => {
+                      const isActive = group === activeGroup;
                       return (
-                        <button key={p.key}
-                                onClick={() => { setWheelPortion(p); setWheelOpen(true); }}
-                                className="rounded-full px-2.5 py-1 text-[11px] transition-colors"
-                                style={selected
+                        <button key={group} role="tab" aria-selected={isActive}
+                                onClick={() => setActiveGroup(group)}
+                                className="rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors"
+                                style={isActive
                                   ? { background: 'var(--accent)', color: 'var(--accent-contrast)', border: '1px solid var(--accent)' }
                                   : { border: '1px solid var(--line)', color: 'var(--mute)' }}>
-                          {p.label}
-                          {/* Sub-gram portions keep a decimal. A pinch is ~0.4 g, and
-                              Math.round turned that into a chip reading "Pinch · 0g" --
-                              a control that appears to log nothing. */}
-                          <span className="opacity-60"> · {p.grams < 1 ? p.grams.toFixed(1) : Math.round(p.grams)}g</span>
+                          {GROUP_LABEL[group] || group}
                         </button>
                       );
                     })}
                   </div>
+
+                  {groups.filter(([group]) => group === activeGroup).map(([group, ps]) => (
+                    <div key={group} role="tabpanel" className="flex flex-wrap gap-1.5">
+                      {ps.map((p) => {
+                        // "Selected" = this portion is part of the combined
+                        // total below, at whatever qty the wheel last set --
+                        // tapping the chip ALWAYS (re)opens the wheel, even
+                        // for an already-selected portion, so its quantity
+                        // can be adjusted rather than just toggled off.
+                        const selected = selectedPortions.some((sp) => sp.key === p.key);
+                        return (
+                          <button key={p.key}
+                                  onClick={() => { setWheelPortion(p); setWheelOpen(true); }}
+                                  className="rounded-full px-2.5 py-1 text-[11px] transition-colors"
+                                  style={selected
+                                    ? { background: 'var(--accent)', color: 'var(--accent-contrast)', border: '1px solid var(--accent)' }
+                                    : { border: '1px solid var(--line)', color: 'var(--mute)' }}>
+                            {p.label}
+                            {/* Sub-gram portions keep a decimal. A pinch is ~0.4 g, and
+                                Math.round turned that into a chip reading "Pinch · 0g" --
+                                a control that appears to log nothing. */}
+                            <span className="opacity-60"> · {p.grams < 1 ? p.grams.toFixed(1) : Math.round(p.grams)}g</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
 
               {/* Combined portions (Part 7) -- each selection shown with its
                   own remove control; the running total is what actually
@@ -1792,6 +1933,28 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         onCancel={() => setWheelOpen(false)}
         onDone={applyWheelPortion}
       />
+
+      {/* "Discard changes?" (Part 23) -- X/Escape/backdrop while Custom
+          Macros has real typed input lands here instead of silently
+          closing. Never forces a save: "Continue editing" just dismisses
+          this and leaves the form exactly as it was. */}
+      {confirmDiscardOpen && (
+        <div className="fixed inset-0 z-[85] grid place-items-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
+             onClick={() => setConfirmDiscardOpen(false)} role="alertdialog" aria-modal="true" aria-label="Discard changes?">
+          <div className="card w-full max-w-xs rounded-2xl p-4 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[13px] font-bold" style={{ color: 'var(--ink)' }}>Discard changes?</div>
+            <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>This custom food hasn't been saved yet.</div>
+            <div className="flex gap-2 mt-3.5">
+              <button onClick={() => setConfirmDiscardOpen(false)} className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold" style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}>
+                Continue editing
+              </button>
+              <button onClick={discardAndClose} className="flex-1 py-2.5 rounded-xl text-[12px] font-bold" style={{ background: 'var(--bad)', color: 'var(--accent-contrast)' }}>
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   ), document.body);
 }

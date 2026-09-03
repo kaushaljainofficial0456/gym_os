@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import AIEstimateCard from './AIEstimateCard.jsx';
+import { calculateCaloriesFromMacros } from '../../nutritionCalc.js';
 
 // servingGrams defaults to '100' -- same convention as FoodLogSheet.jsx's
 // own Custom Macros form (see its EMPTY_CUSTOM comment for the real bug
@@ -8,8 +9,10 @@ import AIEstimateCard from './AIEstimateCard.jsx';
 const EMPTY_CUSTOM = { name: '', servingGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
 // Required for a valid submission (Part 14); fiber/sugar/sodium are
 // optional extras, tucked behind a disclosure so the primary 4-field
-// flow stays uncluttered.
-const REQUIRED_MACROS = ['calories', 'protein', 'carbs', 'fat'];
+// flow stays uncluttered. calories is NOT required input -- it's
+// calculated from protein/carbs/fat (4/4/9, nutritionCalc.js), same as
+// FoodLogSheet.jsx's own Custom Macros form.
+const REQUIRED_MACROS = ['protein', 'carbs', 'fat'];
 const OPTIONAL_MACROS = ['fiber', 'sugar', 'sodium'];
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
 
@@ -63,6 +66,10 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
   const [customForm, setCustomForm] = useState(EMPTY_CUSTOM);
   const [customErr, setCustomErr] = useState('');
   const [showMoreMacros, setShowMoreMacros] = useState(false);
+  // Calculated by default (protein×4 + carbs×4 + fat×9); only reveals a
+  // manual field when the user explicitly opts in -- same as
+  // FoodLogSheet.jsx's own Custom Macros form.
+  const [customCalorieOverride, setCustomCalorieOverride] = useState(false);
   // Duplicate-name handling (Part 39, ported from FoodLogSheet.jsx's own
   // Custom Macros mode): holds the client's OWN already-saved food when
   // the typed name exactly (case-insensitively) matches one, pending the
@@ -126,7 +133,11 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
     if (!foodName) { setCustomErr('Name this food first'); return; }
     const servingG = Number(cf.servingGrams);
     if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
-    const entered = { calories: Number(cf.calories), protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) };
+    const calculatedCalories = calculateCaloriesFromMacros({ protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) });
+    const entered = {
+      calories: customCalorieOverride && cf.calories !== '' ? Number(cf.calories) : calculatedCalories,
+      protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat),
+    };
     for (const key of REQUIRED_MACROS) {
       const v = entered[key];
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key === 'calories' ? 'calorie' : key} value`); return; }
@@ -161,7 +172,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
       const factor = 100 / servingG;
       const nums = Object.fromEntries(Object.entries(entered).map(([k, v]) => [k, v * factor]));
       await onAddCustom({ name: foodName, serving: '100 g', servingGrams: servingG, ...nums });
-      setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); onAdded?.();
+      setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); setCustomCalorieOverride(false); onAdded?.();
     }
     catch (e) { setCustomErr(e.message || 'Could not add that food'); }
     setAdding(false);
@@ -178,6 +189,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
       await onAddFood({ id: customDuplicate.id, name: customDuplicate.name });
       setCustomForm(EMPTY_CUSTOM);
       setCustomDuplicate(null);
+      setCustomCalorieOverride(false);
       onAdded?.();
     } catch (e) { setCustomErr(e.message || 'Could not add that food'); }
     setAdding(false);
@@ -239,12 +251,34 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
             Macros below are for <b>that serving</b>, not per 100 g.
           </div>
           <div className="grid grid-cols-2 gap-1.5">
-            {[['calories', 'Calories'], ['protein', 'Protein (g)'], ['carbs', 'Carbs (g)'], ['fat', 'Fat (g)']].map(([key, label]) => (
+            {[['protein', 'Protein (g)'], ['carbs', 'Carbs (g)'], ['fat', 'Fat (g)']].map(([key, label]) => (
               <input key={key} type="number" min="0" step="any" value={customForm[key]}
                      onChange={(e) => setCustomField(key, e.target.value)}
                      placeholder={label} aria-label={label}
                      className="input w-full !py-1.5 text-[11px] tabular-nums" />
             ))}
+            {/* Calculated (protein×4 + carbs×4 + fat×9), not typed -- same
+                as FoodLogSheet.jsx's own Custom Macros form. */}
+            {customCalorieOverride ? (
+              <input type="number" min="0" step="any" value={customForm.calories}
+                     onChange={(e) => setCustomField('calories', e.target.value)}
+                     placeholder={String(calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) }))}
+                     aria-label="Calories (manual override)"
+                     className="input w-full !py-1.5 text-[11px] tabular-nums" />
+            ) : (
+              <div className="input w-full !py-1.5 text-[11px] tabular-nums flex items-center" style={{ color: t.ink }}>
+                {calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) })} kcal
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between -mt-0.5">
+            <span className="text-[9px]" style={{ color: t.faint }}>
+              {customCalorieOverride ? 'Blank = calculated' : 'Calories calculated from macros'}
+            </span>
+            <button type="button" onClick={() => { setCustomCalorieOverride((v) => !v); if (customCalorieOverride) setCustomField('calories', ''); }}
+                    className="text-[9px] font-semibold underline-offset-2 hover:underline" style={{ color: t.faint }}>
+              {customCalorieOverride ? 'Use calculated' : 'Override'}
+            </button>
           </div>
           {showMoreMacros ? (
             <div className="grid grid-cols-3 gap-1.5">
