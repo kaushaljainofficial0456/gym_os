@@ -21,7 +21,10 @@ export default function workoutShareRoutes(db) {
 
   r.get('/:id', limit, async (req, res) => {
     const row = await db.q1('SELECT * FROM shared_workouts WHERE id = ?', [req.params.id]);
-    if (!row) return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
+    // Same expires_at convention as share.js -- NULL is legacy-only.
+    if (!row || (row.expires_at && Date.parse(row.expires_at) <= Date.now())) {
+      return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
+    }
     let workout = {};
     try { workout = JSON.parse(row.payload_json) || {}; } catch { workout = {}; }
     // Explicit whitelist — never return org_id, client_id, or internal data

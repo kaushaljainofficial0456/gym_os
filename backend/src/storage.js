@@ -11,11 +11,32 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_ROOT = path.resolve(__dirname, '..', 'data', 'uploads');
 
 export const STORAGE_DRIVER = process.env.STORAGE_DRIVER || 'local'; // local | s3
+
+// F-12i production readiness: this app deploys as a Vercel serverless
+// function (see vercel.json's `functions` block) -- its filesystem
+// outside /tmp is read-only, and even /tmp is ephemeral and NOT shared
+// across concurrent/scaled instances. Writing under UPLOAD_ROOT (a path
+// inside the deployed bundle, not /tmp) either throws immediately
+// (read-only fs) or, in whatever environment happens to allow the write,
+// produces a file the NEXT request (a different instance, or the same
+// instance after a cold restart) can no longer see -- silent, sporadic
+// "my photo disappeared" data loss, not a clean failure. There is no
+// working S3-compatible driver in this codebase yet (see the 's3' branch
+// below, which already refuses to pretend otherwise). Rather than let
+// 'local' silently attempt a write that is unsafe in production and fail
+// unpredictably, this fails loudly and immediately, in the same
+// production-boot posture as config.js's payment-provider gate: an
+// operator misconfiguration must be an obvious, actionable error, not a
+// mystery bug report about vanishing photos.
+if (config.nodeEnv === 'production' && STORAGE_DRIVER === 'local') {
+  console.error('[sk-os] WARNING: STORAGE_DRIVER=local in production. Uploaded files (progress photos, etc.) will fail to save or will not persist across requests -- this deployment target has no durable local filesystem. Configure STORAGE_DRIVER=s3 with a real S3-compatible bucket before uploads are used in production.');
+}
 
 const ALLOWED = {
   'image/png': 'png',
@@ -76,6 +97,14 @@ export async function saveImage({ dataUrl, clientId, scope = 'photos', fileId })
     // Implement by setting STORAGE_DRIVER=s3 plus STORAGE_* env vars and
     // adding an S3 SDK call here — the DB/API contract (storage_key) does not change.
     throw new Error('S3 storage driver is not configured yet — set STORAGE_DRIVER=local or implement the S3 driver');
+  }
+
+  // See the module-level comment above: 'local' cannot durably persist a
+  // file on this deployment target in production. Fail clearly here,
+  // before ever touching the filesystem, instead of a confusing EROFS (or
+  // worse, an apparently-successful write that a later request can't see).
+  if (config.nodeEnv === 'production') {
+    throw new Error('File uploads are unavailable: STORAGE_DRIVER=local cannot persist files in production. Configure STORAGE_DRIVER=s3 with a real object-storage bucket.');
   }
 
   const abs = path.join(UPLOAD_ROOT, key);

@@ -1243,6 +1243,18 @@ export default function meRoutes(db) {
   });
 
   // ---------------- share meals ----------------
+  // F-12a: share links are cross-account and unauthenticated to VIEW by
+  // design (see share.js's own header comment) -- a long-lived,
+  // unrevocable link is the actual residual risk from that design, not
+  // the id's entropy (10 random chars via crypto.getRandomValues, ~59.5
+  // bits -- not practically guessable, see share.js/workoutShare.js's
+  // own rate-limit comments). 30 days balances "long enough a recipient
+  // who doesn't open the link right away can still use it" against
+  // "doesn't outlive its usefulness forever". The sender can also revoke
+  // a link early -- see DELETE /share/:id and DELETE /workout-share/:id
+  // below.
+  const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60_000;
+
   // POST /me/share: bundle one or more of the CLIENT'S OWN saved foods/
   // meals into one shareable snapshot (see database/schema.sql's
   // shared_meals comment for why it's a snapshot, never a live reference).
@@ -1296,12 +1308,25 @@ export default function meRoutes(db) {
     if (!items.length) return res.status(404).json({ error: 'None of the selected items could be found' });
 
     const shareId = id('shr');
+    const expiresAt = new Date(Date.now() + SHARE_LINK_TTL_MS).toISOString();
     await db.run(
-      `INSERT INTO shared_meals (id, org_id, client_id, shared_by_name, items_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [shareId, c.org_id, c.id, c.name || null, JSON.stringify(items), now()]);
+      `INSERT INTO shared_meals (id, org_id, client_id, shared_by_name, items_json, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [shareId, c.org_id, c.id, c.name || null, JSON.stringify(items), now(), expiresAt]);
     track(db, 'meals_shared', req.user.org, req.user.sub, { client_id: c.id, item_count: items.length });
-    res.status(201).json({ id: shareId });
+    res.status(201).json({ id: shareId, expires_at: expiresAt });
+  });
+
+  // DELETE /me/share/:id: revoke a share link early, before its natural
+  // expiry. Scoped to client_id = c.id -- only the sender can revoke
+  // their own link, same ownership check every other row lookup in this
+  // file uses; a stranger who merely knows/guessed the id gets a 404,
+  // identical to what they'd see for an id that never existed.
+  r.delete('/share/:id', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const result = await db.run('DELETE FROM shared_meals WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!result.changes) return res.status(404).json({ error: 'Shared link not found' });
+    res.json({ ok: true });
   });
 
   // POST /me/share/:id/save: save ONE item from a (possibly someone else's)
@@ -1317,7 +1342,9 @@ export default function meRoutes(db) {
   r.post('/share/:id/save', validate(schemas.shareSave), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const share = await db.q1('SELECT * FROM shared_meals WHERE id = ?', [req.params.id]);
-    if (!share) return res.status(404).json({ error: 'This shared link is invalid or has expired' });
+    if (!share || (share.expires_at && Date.parse(share.expires_at) <= Date.now())) {
+      return res.status(404).json({ error: 'This shared link is invalid or has expired' });
+    }
     let items = [];
     try { items = JSON.parse(share.items_json) || []; } catch { items = []; }
     const item = items[req.body.item_index];
@@ -1458,12 +1485,22 @@ export default function meRoutes(db) {
     };
 
     const shareId = id('shr');
+    const expiresAt = new Date(Date.now() + SHARE_LINK_TTL_MS).toISOString();
     await db.run(
-      `INSERT INTO shared_workouts (id, org_id, client_id, shared_by_name, workout_name, payload_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [shareId, c.org_id, c.id, c.name || null, payload.name, JSON.stringify(payload), now()]);
+      `INSERT INTO shared_workouts (id, org_id, client_id, shared_by_name, workout_name, payload_json, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [shareId, c.org_id, c.id, c.name || null, payload.name, JSON.stringify(payload), now(), expiresAt]);
     track(db, 'workout_shared', req.user.org, req.user.sub, { client_id: c.id, exercise_count: payload.exercises.length });
-    res.status(201).json({ id: shareId });
+    res.status(201).json({ id: shareId, expires_at: expiresAt });
+  });
+
+  // DELETE /me/workout-share/:id: revoke a shared workout link early.
+  // Same ownership scoping as DELETE /share/:id above.
+  r.delete('/workout-share/:id', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const result = await db.run('DELETE FROM shared_workouts WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!result.changes) return res.status(404).json({ error: 'Shared link not found' });
+    res.json({ ok: true });
   });
 
   // POST /me/workout-share/:id/import: import a shared workout into the
@@ -1481,9 +1518,12 @@ export default function meRoutes(db) {
     const { exercise_indexes, destination, day_of_week, workout_name } = req.body || {};
     const { id: shareId } = req.params;
 
-    // 1. Validate the share exists
+    // 1. Validate the share exists (and hasn't expired -- see share.js's
+    //    own comment on the expires_at convention)
     const share = await db.q1('SELECT * FROM shared_workouts WHERE id = ?', [shareId]);
-    if (!share) return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
+    if (!share || (share.expires_at && Date.parse(share.expires_at) <= Date.now())) {
+      return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
+    }
 
     // 2. Parse the snapshot
     let payload = {};

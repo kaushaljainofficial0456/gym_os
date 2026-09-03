@@ -4,14 +4,50 @@ import { config } from './config.js';
 import { getDb, runWithOrg } from './db.js';
 import { getOrgTzCached, DEFAULT_TZ } from './utils/time.js';
 
-export const hashPassword = (plain) => bcrypt.hash(plain, 10);
+// F-12h hardening: bumped from 10 -> 12, OWASP's current recommended
+// bcrypt minimum. Benchmarked on this deployment's target hardware shape
+// before choosing it (see commit message): cost 10 ~75ms, 12 ~263ms,
+// 13 ~532ms per hash -- 12 stays comfortably under any reasonable login-
+// latency budget at this app's documented ~2,500-client scale (this
+// runs once per login/signup/password-change, never per-request).
+//
+// bcrypt hashes are self-describing -- the cost factor is embedded in the
+// hash string itself ($2a$10$... vs $2a$12$...) -- so verifyPassword()
+// below needs NO change at all to keep validating every password hashed
+// at the old cost 10. BCRYPT_COST/needsRehash() exist so a successful
+// login can transparently re-hash a still-cost-10 password at the new
+// cost (see routes/auth.js's /login) -- existing users are migrated
+// gradually, on their own next login, never all at once and never by a
+// migration script touching every row.
+const BCRYPT_COST = 12;
+export const hashPassword = (plain) => bcrypt.hash(plain, BCRYPT_COST);
 export const verifyPassword = (plain, hash) => bcrypt.compare(plain, hash);
+/** True when a stored hash was created at a lower cost than BCRYPT_COST
+ *  -- bcrypt hash format is $<algo>$<cost>$<22-char-salt><31-char-hash>,
+ *  so the cost is the second '$'-delimited field, parsed directly rather
+ *  than re-hashing to compare (which would defeat the purpose). */
+export function needsRehash(hash) {
+  const parts = String(hash || '').split('$');
+  const cost = Number(parts[2]);
+  return !Number.isFinite(cost) || cost < BCRYPT_COST;
+}
+
+// F-12b hardening: explicitly pin HS256 on both sign and verify, rather
+// than relying on jsonwebtoken's own default behavior (which -- given a
+// plain string secret to jwt.verify -- already only accepts the HS*
+// family, so an `alg: none` or RS256-confusion forgery already fails
+// today; verified live: forged alg:none, wrong-secret, and tampered-
+// payload tokens are all rejected). Pinning here removes the dependency
+// on that library-default behavior remaining what it is, and makes the
+// accepted algorithm an explicit, auditable line in this file rather
+// than an assumption about jsonwebtoken's internals.
+export const JWT_ALGORITHM = 'HS256';
 
 export function signToken(user) {
   return jwt.sign(
     { sub: user.id, role: user.role, org: user.org_id, name: user.name, email: user.email },
     config.jwtSecret,
-    { expiresIn: config.jwtExpiresIn }
+    { expiresIn: config.jwtExpiresIn, algorithm: JWT_ALGORITHM }
   );
 }
 
@@ -41,7 +77,7 @@ export async function requireAuth(req, res, next) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : (req.cookies?.sk_token || null);
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
-    req.user = jwt.verify(token, config.jwtSecret);
+    req.user = jwt.verify(token, config.jwtSecret, { algorithms: [JWT_ALGORITHM] });
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }

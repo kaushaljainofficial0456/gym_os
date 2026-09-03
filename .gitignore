@@ -23,7 +23,8 @@ ml/data/benchmark/report.*.txt
 
 .vscode/
 .DS_Store
-Thumbs.db.freebuff/
+Thumbs.db
+.freebuff/
 
 # Claude Code local-only state -- launch.json (dev server configs) is
 # shared/committed; personal permissions and worktree checkouts are not.

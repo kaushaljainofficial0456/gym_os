@@ -289,6 +289,26 @@ export default function enterpriseRoutes(db) {
   // ORG_PACKAGE/ORG_CAPACITY_ADDON invoice has no client (the gym paid
   // SK OS itself), so it falls back to the requesting owner's own
   // account email -- always overridable explicitly in the body.
+  //
+  // F-12e authorization review: this whole router is already gated to
+  // GYM_OWNER/SUPER_ADMIN (line ~69) AND org-scoped via `orgScope`
+  // (resolveInvoiceRecipient below is called with req.orgId, so a caller
+  // can only ever email an invoice belonging to THEIR OWN org -- see the
+  // cross-org 404 test in invoiceEmail.test.js). The `to` override does
+  // NOT broaden data access: the requester already owns and can freely
+  // view/download this exact invoice via GET /invoices/:id/pdf with no
+  // `to` involved at all, so redirecting where the SAME document is
+  // emailed isn't a new authorization boundary -- it's the same
+  // legitimate "forward this document" action any invoicing tool
+  // supports. What IS real: an already-privileged (or compromised)
+  // owner account could use the override to relay unsolicited email to
+  // arbitrary third parties from SK OS's sending domain/reputation. Two
+  // things mitigate that: the existing per-user rate limit below, and
+  // the audit trail this route now writes (track() call after a
+  // successful send) recording orgId, the acting user, the invoice, and
+  // the actual recipient used -- so an abuse pattern is reviewable after
+  // the fact even though it isn't blocked outright (blocking legitimate
+  // "email my accountant" use outright would be a worse trade-off here).
   const emailLimit = rateLimit({ windowMs: 60_000, max: 5, keyFn: (req) => req.user?.sub || 'anon' });
   r.post('/invoices/:id/email', emailLimit, validate(z.object({
     to: z.string().email().optional(),
@@ -309,6 +329,9 @@ export default function enterpriseRoutes(db) {
     });
     if (!result.ok) return res.status(502).json({ error: 'email_send_failed', message: result.error, provider: result.provider });
     await db.run('UPDATE invoices SET emailed_at = ? WHERE id = ?', [now(), invoice.id]);
+    track(db, 'invoice_emailed', req.orgId, req.user.sub, {
+      invoice_id: invoice.id, to, recipient_overridden: !!req.body.to,
+    });
     res.json({ ok: true, to, provider: result.provider });
   });
 

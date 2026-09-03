@@ -183,9 +183,18 @@ async function createPg() {
     try {
       await c.query('BEGIN');
       const orgId = opts.orgId || currentOrg();
-      // PG does not accept parameter placeholders ($1) in SET — inline the
-      // literal (org ids are app-generated tokens; escaped defensively).
-      if (orgId) await c.query(`SET LOCAL app.org_id = '${String(orgId).replace(/'/g, "''")}'`);
+      // F-12c hardening: set_config() is a real function call, not the SET
+      // statement -- unlike `SET LOCAL app.org_id = '...'` (PG's own SET
+      // syntax genuinely does not accept a $1 placeholder there), this
+      // DOES take a normal bound parameter for the value. The previous
+      // string-escaped inline literal was never actually exploitable --
+      // orgId is always an app-generated id() token, quotes escaped
+      // defensively -- but a real parameter removes that whole class of
+      // risk outright instead of relying on the escaping being correct.
+      // The third argument (true) is what makes this LOCAL -- scoped to
+      // the transaction and auto-reset at COMMIT/ROLLBACK, identical to
+      // SET LOCAL's own semantics.
+      if (orgId) await c.query(`SELECT set_config('app.org_id', $1, true)`, [String(orgId)]);
       const txDb = {
         driver: 'postgres',
         async q(sql, params = []) { const r = await c.query(translateSql(sql), params); return r.rows; },
