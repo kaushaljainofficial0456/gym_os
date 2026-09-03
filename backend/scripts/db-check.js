@@ -143,6 +143,26 @@ async function main() {
     return 0;
   }
 
+  // WHICH database did we just verify? A passing check that doesn't say this
+  // is how a preview deployment silently validated itself against the
+  // PRODUCTION database for days: DATABASE_URL was a single Vercel variable
+  // scoped to both environments, and nothing in the build output made that
+  // visible. neon.timeline_id is unique per Neon branch, so printing it turns
+  // "verified against the live database" into "verified against WHICH one".
+  // These are identifiers, never credentials -- no host, user, or password.
+  let ident = null;
+  try {
+    const res = await pool.query(
+      `SELECT current_user, current_database() AS db,
+              current_setting('neon.timeline_id', true) AS timeline,
+              (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public') AS tables`);
+    ident = res.rows[0];
+  } catch { /* identity is diagnostic only -- never block a deploy on it */ }
+
+  const identLine = ident
+    ? `user=${ident.current_user} db=${ident.db} neon.timeline_id=${ident.timeline ?? 'n/a'} tables=${ident.tables}`
+    : 'identity unavailable';
+
   const actual = new Map();
   for (const r of rows) {
     if (!actual.has(r.table_name)) actual.set(r.table_name, new Set());
@@ -161,6 +181,7 @@ async function main() {
 
   if (!missingTables.length && !missingColumns.length) {
     console.log(`[db:check] OK — ${tableNames.length} tables verified against the live database.`);
+    console.log(`[db:check] target: ${identLine}`);
     return 0;
   }
 
