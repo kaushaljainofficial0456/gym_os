@@ -171,6 +171,33 @@ async function main() {
   console.error('  Deploying now would repeat the community_members outage: application');
   console.error('  code live against a database that cannot satisfy its queries.');
   console.error('  Run the migration against this database first:  npm run db:init');
+
+  // Diagnostic only -- no secrets. When the objects genuinely seem to be
+  // missing but a migration was just run, the three usual causes are: this
+  // role's search_path doesn't reach the schema they were created in, this
+  // role is different from the one the migration ran as (so information_
+  // schema's own privilege filtering hides them), or DATABASE_URL resolves
+  // to a different database/branch entirely than whatever a human just
+  // migrated by hand. to_regclass is privilege-independent (unlike
+  // information_schema), so comparing the two pinpoints which one it is.
+  try {
+    const diagPool = new pg.Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 10_000 });
+    const diag = await diagPool.query(
+      `SELECT current_user, current_database(), current_schema(), current_setting('search_path') AS search_path,
+              to_regclass('public.${missingTables[0] || tableNames[0]}') AS via_to_regclass,
+              (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS visible_table_count`);
+    const d = diag.rows[0];
+    console.error('');
+    console.error('  [db:check] diagnostic (no secrets):');
+    console.error(`    current_user=${d.current_user} current_database=${d.current_database} current_schema=${d.current_schema}`);
+    console.error(`    search_path=${d.search_path}`);
+    console.error(`    to_regclass('public.${missingTables[0] || tableNames[0]}')=${d.via_to_regclass === null ? 'NULL (genuinely absent, or not visible to this role)' : d.via_to_regclass}`);
+    console.error(`    information_schema.tables sees ${d.visible_table_count} tables in schema 'public' for this role`);
+    await diagPool.end().catch(() => {});
+  } catch (diagErr) {
+    console.error(`  [db:check] diagnostic query itself failed: ${diagErr.code || diagErr.message}`);
+  }
+
   return 1;
 }
 
