@@ -69,6 +69,11 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
   const [history, setHistory] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // A DECLINED surplus is never a dead end (Section 20: "the user can
+  // manually start a plan later via an explicit entry point") -- this
+  // toggles the quiet "you chose not to adjust… Reconsider" row open into
+  // the full strategy picker, for exactly that entry point.
+  const [reconsidering, setReconsidering] = useState(false);
   const announcedSettle = useRef(false);
   const announcedExpiry = useRef(false);
 
@@ -93,7 +98,7 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
     }
   }, [data?.justExpired]);
 
-  useEffect(() => { setDismissed(false); }, [prompt?.sourceDate]);
+  useEffect(() => { setDismissed(false); setReconsidering(false); }, [prompt?.sourceDate]);
 
   if (balance.loading || !data) return null;
 
@@ -132,6 +137,7 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
       await api('/me/nutrition/balance/decline', { method: 'POST', body: JSON.stringify({}) });
       closePicker();
       setDismissed(true);
+      setReconsidering(false); // collapse back to the quiet "Reconsider" row, not the full picker
       balance.reload({ silent: true });
     } catch (e) {
       onToast?.(e.message || "Couldn't save that — try again");
@@ -191,19 +197,41 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
         </div>
       )}
 
+      {/* ══ DECLINED SURPLUS — quiet, persistent entry point to change your mind ══
+          Never a dead end (Section 20): declining only turns off the
+          automatic prompt, it doesn't erase the option. */}
+      {!active && prompt?.declined && !reconsidering && (
+        <div className="rounded-2xl p-3 flex items-center justify-between gap-3" style={card}>
+          <div className="text-xs min-w-0" style={{ color: t.mute }}>
+            You chose not to adjust for {prompt.surplusCalories} kcal on {fmtDate(prompt.sourceDate)}.
+          </div>
+          <button disabled={busy} onClick={() => setReconsidering(true)} className="shrink-0 px-3 py-2 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={btnGhost}>
+            Reconsider
+          </button>
+        </div>
+      )}
+
       {/* ══ SURPLUS PROMPT (no active plan yet) ══ */}
-      {!active && prompt && !dismissed && (
+      {!active && prompt && (reconsidering || (!prompt.declined && !dismissed)) && (
         <div className="rounded-2xl p-4" style={card}>
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Flexible Calorie Balance</div>
               <div className="text-sm font-semibold mt-1" style={{ color: t.ink }}>{prompt.surplusCalories} kcal above target on {fmtDate(prompt.sourceDate)}</div>
-              <div className="text-xs mt-0.5" style={{ color: t.mute }}>Totally optional — spread it across the next few days, or leave your target exactly as it is.</div>
+              <div className="text-xs mt-0.5" style={{ color: t.mute }}>
+                {data.baseTargetTooLow
+                  ? "Your daily target is already at or below a safe minimum, so flexible adjustment isn't available right now. Consider reviewing your target."
+                  : 'Totally optional — spread it across the next few days, or leave your target exactly as it is.'}
+              </div>
             </div>
-            <button onClick={() => setDismissed(true)} aria-label="Dismiss" className="w-6 h-6 rounded-md grid place-items-center text-[10px] shrink-0" style={{ color: t.mute, background: t.glass }}>✕</button>
+            <button onClick={() => { setDismissed(true); setReconsidering(false); }} aria-label="Dismiss" className="w-6 h-6 rounded-md grid place-items-center text-[10px] shrink-0" style={{ color: t.mute, background: t.glass }}>✕</button>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {STRATEGY_ORDER.map((s) => (
+            {/* Every strategy would report infeasible for the same reason
+                when the base target itself is already too low -- skip the
+                dead-end buttons entirely rather than making the client
+                click through all 4 to discover none work. */}
+            {!data.baseTargetTooLow && STRATEGY_ORDER.map((s) => (
               <button key={s} disabled={busy} onClick={() => openPicker(s)} className="px-3 py-2 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={btnGhost}>
                 {s.charAt(0) + s.slice(1).toLowerCase()}
               </button>

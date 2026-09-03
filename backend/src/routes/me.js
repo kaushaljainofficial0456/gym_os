@@ -1852,6 +1852,12 @@ export default function meRoutes(db) {
       // from justSettled so the frontend can use a neutral, non-punitive
       // message for it instead of the "balance is settled" one.
       justExpired,
+      // A base target already at/below the safety floor has zero room to
+      // redistribute at all -- every strategy would report infeasible for
+      // the same underlying reason. Surfaced so the frontend can show one
+      // clear message instead of making the client click through 4
+      // strategies to discover none of them work.
+      baseTargetTooLow: !!(liveBase && liveBase.calories <= BALANCE_CONFIG.MIN_CALORIE_TARGET),
       strategies: Object.entries(BALANCE_CONFIG.STRATEGIES).map(([key, v]) => ({ key, ...v })),
     });
   });

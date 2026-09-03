@@ -159,7 +159,7 @@ test('POST /nutrition/balance/apply creates an ACTIVE plan; a repeat GET keeps s
   assert.equal(after.json.promptEligible, null);
 });
 
-test('POST /nutrition/balance/decline is idempotent and prevents re-prompting for the same day', async (t) => {
+test('POST /nutrition/balance/decline is idempotent, marks the surplus declined, but never erases it entirely', async (t) => {
   const { db, call, close } = await startApp(); t.after(() => close());
   await logMeal(db, 'c1', yesterday(), 2350);
   const d1 = await call('POST', '/api/me/nutrition/balance/decline');
@@ -168,8 +168,27 @@ test('POST /nutrition/balance/decline is idempotent and prevents re-prompting fo
   assert.equal(d2.status, 200);
 
   const after = await call('GET', '/api/me/nutrition/balance');
-  assert.equal(after.json.promptEligible, null, 'the same declined surplus event must not re-prompt');
+  // The surplus itself must still be reported (declined:true) -- Section
+  // 20 explicitly requires a manual way back in, which is impossible if
+  // the surplus disappears from the response entirely on decline.
+  assert.ok(after.json.promptEligible, 'a declined surplus must still be retrievable for a manual "reconsider" entry point');
+  assert.equal(after.json.promptEligible.declined, true);
   assert.equal(after.json.activePlan, null, 'decline must never create a plan');
+});
+
+test('a client can change their mind after declining: preview and apply both still work for the same surplus', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  await logMeal(db, 'c1', yesterday(), 2350);
+  await call('POST', '/api/me/nutrition/balance/decline');
+
+  const preview = await call('POST', '/api/me/nutrition/balance/preview', { strategy: 'EASY' });
+  assert.equal(preview.status, 200, JSON.stringify(preview.json));
+  assert.equal(preview.json.preview.feasible, true);
+
+  const applied = await call('POST', '/api/me/nutrition/balance/apply', { strategy: 'EASY' });
+  assert.equal(applied.status, 201, JSON.stringify(applied.json));
+  assert.equal(applied.json.plan.status, 'ACTIVE');
+  assert.equal(applied.json.plan.remainingSurplusCalories, 350);
 });
 
 test('POST /nutrition/balance/cancel ends an active plan; base target is what remains in effect', async (t) => {
@@ -527,4 +546,27 @@ test('GET /nutrition/balance/history merges Completed/Cancelled/Expired plans wi
   const declined = res.json.history.find((h) => h.status === 'DECLINED');
   assert.equal(declined.sourceDate, earlier);
   assert.equal(declined.strategy, null, 'a decline never redistributed anything -- no strategy to report');
+});
+
+test('GET /me/nutrition/balance flags baseTargetTooLow when the base target is already at/below the safety floor, and preview reflects the same reason', async (t) => {
+  const { db, call, close } = await startApp(); t.after(() => close());
+  // A client-edited target at the exact per-macro minimums this app's own
+  // POST /nutrition/targets/confirm allows (P20/C45/F15 = 395 kcal) --
+  // reproduces the real case caught live, not a synthetic number.
+  await db.run(
+    'INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at) VALUES (?,?,?,?,?,?,?,?,?,0,?)',
+    ['np1_low', 'o1', 'u1', 'c1', 'My Nutrition Plan', 395, 20, 45, 15, '2026-02-01T00:00:00Z'],
+  );
+  await logMeal(db, 'c1', yesterday(), 900); // an ordinary-looking meal total, only "huge" relative to 395
+
+  const res = await call('GET', '/api/me/nutrition/balance');
+  assert.equal(res.status, 200);
+  assert.equal(res.json.baseTargetTooLow, true);
+  assert.ok(res.json.promptEligible, 'the surplus itself is still real and worth surfacing');
+
+  const preview = await call('POST', '/api/me/nutrition/balance/preview', { strategy: 'EASY' });
+  assert.equal(preview.status, 200);
+  assert.equal(preview.json.preview.feasible, false);
+  assert.equal(preview.json.preview.baseTargetTooLow, true);
+  assert.match(preview.json.preview.message, /already at or below a safe minimum/);
 });

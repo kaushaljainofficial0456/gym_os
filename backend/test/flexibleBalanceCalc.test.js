@@ -114,3 +114,38 @@ test('an unknown strategy throws rather than silently defaulting', () => {
     surplusCalories: 300, strategy: 'YOLO',
   }));
 });
+
+// A base target already at/below MIN_CALORIE_TARGET (e.g. a client-edited
+// target of P20/C45/F15 = 395 kcal, well under the 1200 floor) has zero
+// room to redistribute at all -- distinct from "the surplus is too big"
+// (caught live: every strategy reported the generic "balance is larger
+// than we can safely redistribute" message with no way to tell the two
+// cases apart, for a surplus that was actually a completely normal size).
+test('a base target already at or below MIN_CALORIE_TARGET is reported with its own distinct reason, for every strategy', () => {
+  for (const strategy of Object.keys(BALANCE_CONFIG.STRATEGIES)) {
+    const r = calculateFlexibleCaloriePlan({
+      baseCalorieTarget: 395, proteinTarget: 20, carbsTarget: 45, fatTarget: 15,
+      surplusCalories: 500, strategy,
+    });
+    assert.equal(r.feasible, false, strategy);
+    assert.equal(r.baseTargetTooLow, true, strategy);
+    assert.equal(r.adjustedCalorieTarget, 395); // base target left completely untouched
+    assert.match(r.message, /already at or below a safe minimum/);
+  }
+});
+
+test('a base target exactly at MIN_CALORIE_TARGET also reports baseTargetTooLow (boundary is inclusive)', () => {
+  const r = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: BALANCE_CONFIG.MIN_CALORIE_TARGET, proteinTarget: 100, carbsTarget: 150, fatTarget: 40,
+    surplusCalories: 300, strategy: 'EASY',
+  });
+  assert.equal(r.baseTargetTooLow, true);
+});
+
+test('a base target just above MIN_CALORIE_TARGET is NOT flagged baseTargetTooLow', () => {
+  const r = calculateFlexibleCaloriePlan({
+    baseCalorieTarget: BALANCE_CONFIG.MIN_CALORIE_TARGET + 50, proteinTarget: 100, carbsTarget: 150, fatTarget: 40,
+    surplusCalories: 200, strategy: 'EASY',
+  });
+  assert.equal(r.baseTargetTooLow, undefined);
+});

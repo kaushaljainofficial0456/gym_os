@@ -98,6 +98,25 @@ export function calculateFlexibleCaloriePlan({
     };
   }
 
+  // Edge case (Section 30's own list: "very low base target"): a base
+  // target already at or below the safety floor has zero room to cut
+  // from at all -- distinct from "the surplus is too large" (the
+  // feasible=false path further down). Checked BEFORE computing
+  // safeDailyCutCeiling, which would otherwise divide/compare against a
+  // negative "distance to the floor" and clamp to a meaningless 1 kcal
+  // ceiling -- every strategy would then report infeasible for the same
+  // underlying reason with no way for the caller to tell "this surplus
+  // is huge" apart from "your target itself needs attention first".
+  if (baseCalorieTarget <= cfg.MIN_CALORIE_TARGET) {
+    return {
+      feasible: false, strategy, plannedDays: 0, dailyAdjustmentCalories: 0,
+      adjustedCalorieTarget: baseCalorieTarget,
+      macros: { protein: round1(proteinTarget), carbs: round1(carbsTarget), fat: round1(fatTarget) },
+      extended: false, baseTargetTooLow: true,
+      message: "Your daily target is already at or below a safe minimum, so there's no room to reduce it further. Review your target before using flexible adjustment.",
+    };
+  }
+
   // Safe ceiling for a single day's cut: the tighter of "% of base target"
   // and "distance down to the absolute floor".
   const safeDailyCutCeiling = Math.max(1, Math.min(
@@ -200,20 +219,30 @@ export async function isDeclined(db, clientId, sourceDate) {
   return !!row;
 }
 
-// Is there an eligible-but-undecided surplus for the most recently
-// COMPLETED day (yesterday, in the org's timezone)? Only meaningful when
-// no active plan exists — an active plan absorbs new surplus automatically
-// via reconcileActivePlan instead of re-prompting.
+// Is there an eligible surplus for the most recently COMPLETED day
+// (yesterday, in the org's timezone)? Only meaningful when no active plan
+// exists — an active plan absorbs new surplus automatically via
+// reconcileActivePlan instead of re-prompting.
+//
+// A DECLINED day still comes back here (with `declined: true`) rather
+// than as a flat null — declining only turns off the AUTOMATIC prompt
+// (Section 20: "the same surplus event must not re-prompt repeatedly"),
+// it is never a dead end. The spec explicitly requires "the user can
+// manually start a plan later via an explicit entry point" — a caller
+// that returned null on decline would have no way to satisfy that: once
+// the surplus is gone from the response, there is nothing left for a
+// manual entry point to act on. The frontend uses `declined` to choose
+// between the auto-shown prompt card and a quiet manual "reconsider" row.
 export async function checkSurplusPrompt(db, client, tz, liveBase) {
   if (!liveBase) return null;
   const today = dayKey(new Date(), tz);
   const yesterday = dayKey(addDays(new Date(), -1), tz);
   if (yesterday >= today) return null; // defensive; addDays(-1) always precedes today
-  if (await isDeclined(db, client.id, yesterday)) return null;
   const actual = await sumEatenForDate(db, client.id, yesterday);
   const surplus = round1(actual - liveBase.calories);
   if (surplus <= BALANCE_CONFIG.SURPLUS_PROMPT_THRESHOLD) return null;
-  return { sourceDate: yesterday, surplusCalories: surplus };
+  const declined = await isDeclined(db, client.id, yesterday);
+  return { sourceDate: yesterday, surplusCalories: surplus, declined };
 }
 
 // Advance an ACTIVE plan by exactly one completed calendar day (if one is
