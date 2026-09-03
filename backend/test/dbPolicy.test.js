@@ -25,9 +25,20 @@ const cfgPath = path.resolve(__dirname, '..', 'src', 'config.js').replace(/\\/g,
 // Passes the production JWT gate so ONLY the database guard is under test.
 const STRONG_SECRET = 'x'.repeat(32);
 const PG_URL = 'postgresql://skos_app:testpass@example.invalid/neondb?sslmode=verify-full';
+// Also passes config.js's production payment-provider gate -- these tests
+// are about the DATABASE guard specifically, not payments, so a
+// 'production' scenario here needs a fully-configured payment provider
+// just to get PAST that unrelated gate (which runs before the database
+// checks) and reach the database assertion actually under test. Harmless
+// to include for the staging/development scenarios too, since that gate
+// is production-only and ignores it either way.
+const RAZORPAY_EXTRA = {
+  PAYMENT_PROVIDER: 'razorpay', RAZORPAY_KEY_ID: 'rzp_test_fakekeyfortest',
+  RAZORPAY_KEY_SECRET: 'fake-key-secret-for-test-only', RAZORPAY_WEBHOOK_SECRET: 'fake-webhook-secret-for-test-only',
+};
 
 function loadConfig({ nodeEnv, databaseUrl }) {
-  const env = { PATH: process.env.PATH, NODE_ENV: nodeEnv, JWT_SECRET: STRONG_SECRET };
+  const env = { PATH: process.env.PATH, NODE_ENV: nodeEnv, JWT_SECRET: STRONG_SECRET, ...RAZORPAY_EXTRA };
   if (databaseUrl !== undefined) env.DATABASE_URL = databaseUrl;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     const { config } = await import('file://${cfgPath}');

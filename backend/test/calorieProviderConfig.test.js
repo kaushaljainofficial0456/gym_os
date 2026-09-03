@@ -26,7 +26,17 @@ import { runWithProvider, MODULES } from './helpers/providerRunner.js';
 
 const STRONG_SECRET = 'x'.repeat(32);
 const PG_URL = 'postgresql://skos_app:testpass@example.invalid/neondb?sslmode=verify-full';
-const PROD_EXTRA = { JWT_SECRET: STRONG_SECRET, DATABASE_URL: PG_URL };
+// Satisfies config.js's production payment-provider gate too (added
+// alongside the JWT/DATABASE_URL requirements this constant already
+// satisfied) -- these tests are about the CALORIE provider, not payments,
+// so every "production" scenario here needs a fully-configured payment
+// provider just to get PAST that unrelated gate and reach the assertion
+// actually under test, exactly like JWT_SECRET/DATABASE_URL already do.
+const PROD_EXTRA = {
+  JWT_SECRET: STRONG_SECRET, DATABASE_URL: PG_URL,
+  PAYMENT_PROVIDER: 'razorpay', RAZORPAY_KEY_ID: 'rzp_test_fakekeyfortest',
+  RAZORPAY_KEY_SECRET: 'fake-key-secret-for-test-only', RAZORPAY_WEBHOOK_SECRET: 'fake-webhook-secret-for-test-only',
+};
 
 // ---------------- parseCalorieProvider unit tests (pure) ----------------
 

@@ -36,6 +36,33 @@ const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || '';
 const REQUESTED_PROVIDER = (process.env.PAYMENT_PROVIDER || 'mock').toLowerCase();
 
+// ---- Mock-mode signing secrets -- SECURITY-CRITICAL, read this before
+// touching either of these two lines. ----
+//
+// verifyCheckoutSignature/verifyWebhookSignature used to fall back to the
+// LITERAL strings 'mock-secret' / 'mock-webhook-secret' whenever no real
+// Razorpay secret was configured. That is a predictable value printed in
+// this very source file -- anyone who has ever read it (or a security
+// review, or a leaked copy of this repo) can compute a HMAC against it.
+// A deployment that ended up running the mock provider in production
+// (see config.js's own boot-time gate, which is the PRIMARY defense
+// against that ever happening) would accept a forged checkout-return or
+// webhook signed with that public literal as if it were a real payment --
+// confirmed exploitable against a running instance before this fix.
+//
+// These two constants replace that literal with 32 bytes of real entropy,
+// generated ONCE per process at module load, never logged, never derivable
+// from anything public, and never the same value twice across restarts.
+// The mock provider's own same-process sign+verify pair (mockSign here /
+// verifyCheckoutSignature's mock branch, mockBuildWebhookEvent here /
+// verifyWebhookSignature's mock branch) both read the SAME in-memory
+// constant, so the mock flow keeps working end to end with zero
+// configuration for local dev and the test suite -- there is simply no
+// longer a value an external caller (who is not this same running process)
+// could ever know or guess to forge a signature against.
+const MOCK_CHECKOUT_SECRET = crypto.randomBytes(32).toString('hex');
+const MOCK_WEBHOOK_SECRET = crypto.randomBytes(32).toString('hex');
+
 export function providerName() {
   if (REQUESTED_PROVIDER === 'razorpay' && RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) return 'razorpay';
   return 'mock';
@@ -73,8 +100,12 @@ function mockPaymentId() {
 function mockSign(orderId, paymentId) {
   // Mirrors Razorpay's own signature formula so verifyCheckoutSignature
   // below is IDENTICAL code for both providers -- only the secret and
-  // the two id namespaces differ.
-  return crypto.createHmac('sha256', RAZORPAY_KEY_SECRET || 'mock-secret').update(`${orderId}|${paymentId}`).digest('hex');
+  // the two id namespaces differ. Always signs with MOCK_CHECKOUT_SECRET
+  // -- never a real Razorpay key, even if one happens to be present in
+  // the environment (e.g. PAYMENT_PROVIDER not yet set to 'razorpay'
+  // while real-looking keys already exist) -- so a mock signature can
+  // never accidentally double as a genuine one.
+  return crypto.createHmac('sha256', MOCK_CHECKOUT_SECRET).update(`${orderId}|${paymentId}`).digest('hex');
 }
 
 async function mockCreateOrder({ amount, currency, receipt }) {
@@ -127,7 +158,7 @@ export function mockBuildWebhookEvent(providerOrderId, { eventType = 'payment.ca
       order: { entity: { id: providerOrderId, amount: order.amount, currency: order.currency } },
     },
   });
-  const signature = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET || 'mock-webhook-secret').update(body).digest('hex');
+  const signature = crypto.createHmac('sha256', MOCK_WEBHOOK_SECRET).update(body).digest('hex');
   return { providerEventId, body, signature };
 }
 
@@ -246,14 +277,20 @@ export async function createProviderOrder({ amount, currency, receipt, notes }) 
 
 /** Verifies a checkout-return signature (order_id + payment_id + signature
  *  the frontend hands back after a successful checkout). Same formula
- *  for both providers -- only the secret differs, and mock's default
- *  secret is used automatically when no real one is configured. NEVER
- *  treat a checkout return alone as proof of payment on its own --
- *  see paymentVerification.js, which requires this AND the webhook to
- *  agree before activating anything (spec: "NEVER activate the package
- *  based solely on frontend success"). */
+ *  for both providers -- only the secret differs. FAILS CLOSED: in
+ *  razorpay mode, a missing/empty RAZORPAY_KEY_SECRET is never treated as
+ *  "fall back to a default" -- it is a broken configuration, and no
+ *  signature verifies against it (secret is truthy-checked below, exactly
+ *  like verifyWebhookSignature; see that function's comment for the full
+ *  reasoning, and MOCK_CHECKOUT_SECRET's own comment above for what mock
+ *  mode uses instead of the old 'mock-secret' literal). NEVER treat a
+ *  checkout return alone as proof of payment on its own -- see
+ *  paymentVerification.js, which requires this AND the webhook to agree
+ *  before activating anything (spec: "NEVER activate the package based
+ *  solely on frontend success"). */
 export function verifyCheckoutSignature({ providerOrderId, providerPaymentId, signature }) {
-  const secret = providerName() === 'razorpay' ? RAZORPAY_KEY_SECRET : (RAZORPAY_KEY_SECRET || 'mock-secret');
+  const secret = providerName() === 'razorpay' ? RAZORPAY_KEY_SECRET : MOCK_CHECKOUT_SECRET;
+  if (!secret) return false; // fail closed -- never verify against an empty/missing key
   const expected = crypto.createHmac('sha256', secret).update(`${providerOrderId}|${providerPaymentId}`).digest('hex');
   if (expected.length !== String(signature || '').length) return false;
   try { return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(String(signature), 'hex')); }
@@ -262,13 +299,40 @@ export function verifyCheckoutSignature({ providerOrderId, providerPaymentId, si
 
 /** Verifies a webhook's signature against the RAW request body (never
  *  the parsed/re-serialized JSON -- re-serialization can change byte
- *  layout and break the signature even for a genuine webhook). */
+ *  layout and break the signature even for a genuine webhook). FAILS
+ *  CLOSED: a missing OR empty RAZORPAY_WEBHOOK_SECRET in razorpay mode is
+ *  never treated as "fall back to a default" -- this is the fix for a
+ *  real, confirmed-exploitable gap where a live deployment that forgot to
+ *  set this one env var (providerName() only requires PAYMENT_PROVIDER +
+ *  the two API keys to report 'razorpay' -- the webhook secret was never
+ *  part of that check) silently accepted ANY webhook signed with the
+ *  hardcoded 'mock-webhook-secret' literal from this file, with no
+ *  authentication of any kind. There is no default to fall back to
+ *  anymore: `secret` is only ever the real configured
+ *  RAZORPAY_WEBHOOK_SECRET (razorpay mode) or the process-random
+ *  MOCK_WEBHOOK_SECRET (mock mode, see its own comment above) -- an empty
+ *  string from either source refuses to verify, full stop. */
 export function verifyWebhookSignature(rawBody, signature) {
-  const secret = providerName() === 'razorpay' ? RAZORPAY_WEBHOOK_SECRET : (RAZORPAY_WEBHOOK_SECRET || 'mock-webhook-secret');
+  const secret = providerName() === 'razorpay' ? RAZORPAY_WEBHOOK_SECRET : MOCK_WEBHOOK_SECRET;
+  if (!secret) return false; // fail closed -- missing/empty RAZORPAY_WEBHOOK_SECRET must never fall back to a guessable default
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   if (expected.length !== String(signature || '').length) return false;
   try { return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(String(signature), 'hex')); }
   catch { return false; }
+}
+
+/** TEST-ONLY: signs an arbitrary raw body with whichever webhook secret
+ *  verifyWebhookSignature would currently check against (the real
+ *  RAZORPAY_WEBHOOK_SECRET in razorpay mode, MOCK_WEBHOOK_SECRET in mock
+ *  mode). Exists so a test that needs a validly-signed but otherwise
+ *  arbitrary body (e.g. deliberately malformed JSON, to test that path
+ *  specifically rather than signature verification) never has to
+ *  duplicate the secret-selection formula itself -- see
+ *  verifyWebhookSignature's own comment on why that secret is no longer a
+ *  predictable literal a test (or anyone else) could just hardcode. */
+export function _signRawBodyForTests(rawBody) {
+  const secret = providerName() === 'razorpay' ? RAZORPAY_WEBHOOK_SECRET : MOCK_WEBHOOK_SECRET;
+  return crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 }
 
 /** Normalizes a provider's webhook body into SK OS's own shape --

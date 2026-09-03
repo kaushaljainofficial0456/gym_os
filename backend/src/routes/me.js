@@ -1071,10 +1071,22 @@ export default function meRoutes(db) {
 
   r.delete('/planner/workouts/:id', workoutWriteLimit, async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
+    // Ownership MUST be resolved before any DELETE runs -- the child-table
+    // deletes below key only on workout_id, with no client_id of their own
+    // to check against. Deleting by req.params.id directly (the previous
+    // shape) let any client blow away another client's exercises/schedule
+    // rows just by knowing their workout id: the schedule/exercises deletes
+    // had no ownership check at all, and only the final client_workouts
+    // delete's `AND client_id = ?` silently no-opped -- so the response was
+    // still `{ ok: true }` even though nothing the attacker owned was
+    // touched. Resolving first (same pattern as PUT/duplicate above) means
+    // a workout that isn't this client's own never reaches any DELETE.
+    const w = await db.q1('SELECT id FROM client_workouts WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
     await db.tx(async (tx) => {
-      await tx.run('DELETE FROM client_workout_schedule WHERE workout_id = ?', [req.params.id]);
-      await tx.run('DELETE FROM client_workout_exercises WHERE workout_id = ?', [req.params.id]);
-      await tx.run('DELETE FROM client_workouts WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+      await tx.run('DELETE FROM client_workout_schedule WHERE workout_id = ?', [w.id]);
+      await tx.run('DELETE FROM client_workout_exercises WHERE workout_id = ?', [w.id]);
+      await tx.run('DELETE FROM client_workouts WHERE id = ?', [w.id]);
     });
     res.json({ ok: true });
   });

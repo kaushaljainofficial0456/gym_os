@@ -37,6 +37,35 @@ import communityRoutes from './routes/community.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
 
+// ---- Minimal cookie parser (no dependency needed) ----
+// Exported as a standalone pure function (rather than inlined in the
+// middleware below) so it's directly unit-testable without needing an
+// Express app or a database -- see test/cookieParser.test.js. buildApp()'s
+// middleware is a thin wrapper around this; the two are never allowed to
+// drift into testing a copy instead of the real thing.
+export function parseCookieHeader(header) {
+  const cookies = {};
+  const raw = header || '';
+  for (const part of raw.split(';')) {
+    const [k, ...rest] = part.split('=');
+    if (!k) continue;
+    const value = rest.join('=');
+    // decodeURIComponent throws URIError on a malformed percent-escape
+    // (e.g. a bare trailing '%'). This parser runs in middleware mounted
+    // before the request-id/error-logging middleware below, so an
+    // unguarded throw here escaped straight to the global error handler
+    // as an unhandled 500 on EVERY request carrying that cookie, for as
+    // long as the browser kept sending it back. A malformed cookie value
+    // is just an unusable one, never a reason to fail the whole request --
+    // requireAuth already treats an absent/invalid sk_token as
+    // unauthenticated, so falling back to the raw (still-encoded) string
+    // here is safe: it simply won't verify as a valid JWT.
+    try { cookies[k.trim()] = decodeURIComponent(value); }
+    catch { cookies[k.trim()] = value; }
+  }
+  return cookies;
+}
+
 // Builds the Express app without starting a listener, so it can be reused
 // both by the traditional long-running server below (for local dev or a
 // persistent host like Railway/Render) and by a serverless entry point
@@ -51,14 +80,7 @@ export async function buildApp() {
 
   // ---- Minimal cookie parser (no dependency needed) ----
   app.use((_req, _res, next) => {
-    if (!_req.cookies) {
-      _req.cookies = {};
-      const raw = _req.headers.cookie || '';
-      for (const part of raw.split(';')) {
-        const [k, ...rest] = part.split('=');
-        if (k) _req.cookies[k.trim()] = decodeURIComponent(rest.join('='));
-      }
-    }
+    if (!_req.cookies) _req.cookies = parseCookieHeader(_req.headers.cookie);
     next();
   });
 
@@ -154,7 +176,20 @@ app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBo
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
-app.use('/api/payments', paymentsDevRoutes()); // browser-callable mock-checkout bridge (inert once a real gateway is configured) -- see paymentsDev.js
+// Browser-callable mock-checkout bridge -- NEVER mounted in production.
+// The route's own internal guard (`if (providerName() !== 'mock') return
+// 409`) already makes this inert once a real gateway is configured, and
+// config.js's own boot-time gate now guarantees providerName() can never
+// report 'mock' in a production process at all (a production boot with
+// incomplete Razorpay config refuses to start) -- so in a correctly
+// running production instance this guard is provably redundant. It stays
+// anyway as a second, independent layer: not mounting the route at all
+// means a future change to either of those two other guards can never by
+// itself re-expose a payment-forging endpoint in production -- see
+// paymentsDev.js's own header for why this route is otherwise safe.
+if (config.nodeEnv !== 'production') {
+  app.use('/api/payments', paymentsDevRoutes());
+}
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 app.use('/api/console', consoleRoutes(db)); // Admin Console (Phase 3): platform-operator API, SUPER_ADMIN only -- see console.js. Deliberately NOT /api/admin (already owned by adminRoutes)
 // Private uploads: served only to the authenticated client who owns them,

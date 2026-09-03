@@ -2,9 +2,40 @@
 -- SK OS — PostgreSQL ROW LEVEL SECURITY (defense-in-depth)
 --
 -- Applied ONLY on PostgreSQL (see scripts/init-db.js). Application-level
--- authorization remains the primary control; RLS is an additional layer
--- that makes cross-tenant access impossible even if a query forgets its
--- org filter (e.g. SQL injection or a future miswritten query).
+-- authorization (orgScope/resolveClient/getClient + every route's own
+-- WHERE org_id = ? clauses) is the PRIMARY and, for most of the codebase,
+-- the ONLY control -- read the scope note below before assuming otherwise.
+--
+-- SCOPE (read this before relying on RLS for anything): app.org_id is set
+-- via SET LOCAL ONLY inside db.tx(..., { orgId }) -- see db.js's client.tx.
+-- SET LOCAL requires an explicit transaction on a checked-out connection,
+-- which is exactly what db.tx() does and what db.q()/db.q1()/db.run() do
+-- NOT do (they call pool.query() directly -- a single pooled round trip,
+-- no explicit BEGIN, no connection held long enough to scope a session
+-- variable to it). db.q()/db.q1()/db.run() are what the large majority of
+-- this codebase's reads and single-row writes use; db.tx() is reserved
+-- for genuinely multi-statement atomic writes. So in practice RLS
+-- narrows cross-tenant exposure for that multi-row-write minority of
+-- call sites, plus PostgreSQL-native protection against a future
+-- miswritten query INSIDE one of those transactions -- it does NOT
+-- backstop the ordinary db.q()/db.run() path, where app.org_id is never
+-- set and the "unset -> all rows visible" branch below always applies.
+-- That is intentional, not a bug: community.js, the admin console and
+-- reconciliation all depend on cross-org visibility on a shared DB role
+-- for exactly this reason, and financialRls.test.js /
+-- communityPg.test.js assert it explicitly ("unset app.org_id keeps the
+-- application working") so a future policy tightening can't silently
+-- break it. A real, safe fix would mean every db.q()/db.q1()/db.run()
+-- call checking out its own connection to SET LOCAL app.org_id before
+-- each query and resetting it before release (pool.query()'s single
+-- round trip can't do this: two separate pool.query() calls are not
+-- guaranteed the same underlying connection) -- a change to this
+-- adapter's entire connection-handling model, not a local one, and
+-- risks a WORSE bug than today's gap (a stale app.org_id leaking onto a
+-- later, unrelated tenant's query on a reused pooled connection) if the
+-- reset-before-release step is ever missed on an error path. Left
+-- alone deliberately rather than attempted speculatively; see
+-- docs/RLS-BOUNDARY.md for the concrete remediation plan.
 --
 -- Design:
 --   * The app sets the session variable app.org_id inside transactions
@@ -81,6 +112,16 @@ ALTER TABLE community_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_members FORCE ROW LEVEL SECURITY;
 ALTER TABLE community_workout_shares ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_workout_shares FORCE ROW LEVEL SECURITY;
+-- Share-link snapshots (routes/workoutShare.js, me.js's workout-share
+-- endpoints). org_id is always populated from the sharing client's own
+-- org at INSERT (me.js passes c.org_id), so the plain direct-org_id
+-- policy below applies with no NULL branch needed. Every read path is a
+-- primary-key lookup through db.q1(), which never sets app.org_id, so
+-- the "unset -> visible" branch keeps public share links working exactly
+-- as before -- this closes the tenant gap for any future query that runs
+-- inside db.tx() without changing the feature's behaviour.
+ALTER TABLE shared_workouts     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_workouts     FORCE ROW LEVEL SECURITY;
 
 -- ---- tables with a direct org_id column that ALSO carry global rows ----
 -- (exercise/food libraries: org_id NULL = GLOBAL, visible to everyone)
@@ -149,7 +190,7 @@ BEGIN
     'client_meal_templates','client_workouts','attendance_events','alerts','coach_insights',
     'packages','subscriptions','payments','attendance','messages','notifications','events',
     'ai_memory','ai_feedback',
-    'community_members','community_workout_shares'
+    'community_members','community_workout_shares','shared_workouts'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (

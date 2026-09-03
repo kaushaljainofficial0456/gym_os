@@ -223,13 +223,34 @@ test('leaderboards: period=day shows only today', async (t) => {
   assert.equal(volumes.length, 0, 'No workouts today in seed data');
 });
 
-test('leaderboards: period=month includes all workouts', async (t) => {
+test('leaderboards: period=month includes exactly the seeded workouts inside the current calendar month', async (t) => {
   const { call, close } = await startApi();
   t.after(() => close());
   const r = await call('GET', '/api/community/leaderboards?period=month');
   const volumes = r.json.leaderboards.volume;
   const arjun = volumes.find(e => e.name === 'Arjun');
-  assert.equal(arjun.value, 9000);
+  // seedFull() completes one Arjun workout per day for days -5..-1
+  // relative to today in the org timezone, each 3 sets x 10 reps x 60kg
+  // = 1800 volume. period=month is a CALENDAR month, not a rolling 30
+  // days (services/community.js builds start as `${today.slice(0,7)}-01`),
+  // so on the 1st-5th of any month some of those seeded days genuinely
+  // belong to the PREVIOUS month and must be excluded.
+  //
+  // This previously hardcoded 9000 (all five days), which silently
+  // assumed the suite only ever runs from the 6th onward -- it failed
+  // every month from the 1st to the 5th. Deriving the expectation from
+  // the same dates the seed uses keeps this asserting real month-boundary
+  // behaviour on every possible run date rather than relaxing it.
+  const orgTz = 'Asia/Kolkata';
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: orgTz });
+  const todayMs = new Date(todayStr + 'T12:00:00Z').getTime();
+  const thisMonth = todayStr.slice(0, 7);
+  let expected = 0;
+  for (let i = 5; i >= 1; i--) {
+    const day = new Date(todayMs - i * 86400000).toISOString().slice(0, 10);
+    if (day.slice(0, 7) === thisMonth) expected += 1800;
+  }
+  assert.equal(arjun ? arjun.value : 0, expected);
 });
 
 test('multi-tenancy: gym B clients never appear in gym A leaderboard', async (t) => {
