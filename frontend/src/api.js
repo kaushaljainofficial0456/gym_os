@@ -1,4 +1,15 @@
-const TOKEN_KEY = 'pos_token';
+// F-05 hardening: the JWT itself is NEVER persisted client-side anymore --
+// the backend's httpOnly sk_token cookie (set on every login/register/
+// google/setup-org/switch-gym/enrollment response -- see auth.js's
+// setAuthCookie, called by every one of those routes) is the sole
+// authentication mechanism from here on. api()/downloadFile() below rely
+// entirely on `credentials: 'include'` sending that cookie; neither reads
+// nor sends an Authorization header anymore. USER_KEY still persists the
+// non-sensitive profile object (name/role/org -- never a bearer
+// credential) purely so the UI can render an optimistic "logged in"
+// state on first paint before /auth/me's cookie-authenticated response
+// comes back; even a full XSS reading it gains only display data, not a
+// way to authenticate as this user anywhere.
 const USER_KEY = 'pos_user';
 const RETURN_TO_KEY = 'pos_return_to';
 
@@ -19,34 +30,37 @@ export const consumeReturnTo = () => {
   } catch { return null; }
 };
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const getStoredUser = () => {
   try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch { return null; }
 };
-export const setSession = ({ token, user }) => {
-  localStorage.setItem(TOKEN_KEY, token);
+// `token` is intentionally accepted-and-ignored (not destructured out) --
+// every caller still passes the login/register/etc. response object
+// wholesale, and that response DOES still carry a `token` field (the
+// backend hands it back for any non-browser caller of these same routes);
+// this app just no longer does anything with it, the cookie already set
+// alongside it is what matters now.
+export const setSession = ({ user }) => {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
-// Enterprise/enrollment routes that change a user's org membership mid-
-// session (QR join/verify, trainer join) return a FRESH token but not a
-// full user object in the shape /auth/me returns -- see auth.jsx's
-// refreshSession(), which pairs this with a re-fetch of /auth/me so the
-// stored user object never drifts out of sync with the stored token.
-export const setToken = (token) => { localStorage.setItem(TOKEN_KEY, token); };
 export const setStoredUser = (user) => { localStorage.setItem(USER_KEY, JSON.stringify(user)); };
+// Best-effort: clears the httpOnly cookie server-side (see routes/auth.js's
+// POST /auth/logout -- client-side JS cannot read OR delete an httpOnly
+// cookie itself, that's the point of httpOnly, so a real network call is
+// the only way "log out" can actually end the session rather than just
+// forgetting local UI state). Never blocks or throws on failure -- a
+// logout must always clear what THIS browser can control (the stored
+// user, immediately below) even if the network call itself fails.
 export const clearSession = () => {
-  localStorage.removeItem(TOKEN_KEY);
+  fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
   localStorage.removeItem(USER_KEY);
 };
 
-// Downloads a binary response (e.g. an invoice PDF) with the auth header
-// a plain <a href> download can't carry -- same pattern as admin/'s own
-// downloadCsv() helper. api()'s JSON-only parsing can't be reused here.
+// Downloads a binary response (e.g. an invoice PDF) -- same pattern as
+// admin/'s own downloadCsv() helper. api()'s JSON-only parsing can't be
+// reused here. Auth is the httpOnly cookie via credentials: 'include',
+// same as api() below -- no Authorization header needed or sent.
 export async function downloadFile(path, filename) {
-  const headers = {};
-  const token = getToken();
-  if (token) headers.Authorization = 'Bearer ' + token;
-  const res = await fetch('/api' + path, { headers, credentials: 'include' });
+  const res = await fetch('/api' + path, { credentials: 'include' });
   if (res.status === 401) {
     clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
@@ -66,8 +80,6 @@ export async function downloadFile(path, filename) {
 
 export async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  const token = getToken();
-  if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch('/api' + path, { ...opts, headers, credentials: 'include' });
   if (res.status === 401) {
     clearSession();

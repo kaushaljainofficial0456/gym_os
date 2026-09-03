@@ -11,14 +11,17 @@
     "start": "node src/index.js",
     "init": "node scripts/init-db.js",
     "seed": "node scripts/seed.js",
+    "expand-exercises": "node scripts/expand-exercise-library.js",
     "reset": "node scripts/init-db.js --force && node scripts/seed.js",
     "export:training": "node scripts/export-training-data.js",
     "test": "node --test",
     "pg:validate": "node scripts/pg-validate.js",
     "smoke:food-ai": "node scripts/food-ai-smoke.js",
-    "bench": "node scripts/food-benchmark.js --engine v1"
+    "bench": "node scripts/food-benchmark.js --engine v1",
+    "loadtest": "node scripts/loadtest.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1125.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",
@@ -27,5 +30,8 @@
     "pdfkit": "^0.15.0",
     "pg": "^8.12.0",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0"
   }
 }

@@ -5,7 +5,33 @@ try {
   /* .env is optional — defaults below apply */
 }
 
-const nodeEnv = process.env.NODE_ENV || 'development';
+// Vercel sets NODE_ENV=production for EVERY built deployment, Preview
+// ones included -- so NODE_ENV alone cannot tell a real production
+// deployment apart from a preview. VERCEL_ENV can: it is 'production'
+// only for the production deployment and 'preview' for every preview
+// build, so where it exists it is the authoritative signal and NODE_ENV
+// is not consulted at all.
+//
+// A Vercel Preview maps onto this codebase's 'staging' tier, which is
+// exactly the intended posture: the DATABASE_URL requirement and the
+// NOBYPASSRLS-role check below both cover staging and stay fully active,
+// while the production-only live-payment gate above does not fire -- a
+// preview must never need real Razorpay credentials merely to boot for
+// validation.
+//
+// This also closes a live footgun. Preview deployments were previously
+// surviving that payment gate only because a gitignored local .env
+// carrying NODE_ENV=development leaked into the CLI-uploaded bundle and
+// was picked up by process.loadEnvFile() above. That was silently
+// downgrading previews to 'development', which ALSO switched off the
+// DATABASE_URL and BYPASSRLS-role guards -- a preview could have run
+// against a misconfigured database with RLS disabled and nothing would
+// have caught it. Reading VERCEL_ENV first makes that leak unable to
+// influence the tier in either direction.
+const vercelEnv = (process.env.VERCEL_ENV || '').toLowerCase();
+const nodeEnv = vercelEnv === 'production' ? 'production'
+  : vercelEnv === 'preview' ? 'staging'
+  : (process.env.NODE_ENV || 'development');
 
 // ---- calorie model provider: validated backend configuration ----
 // Centralized here so routes/services never re-implement provider string
@@ -45,6 +71,51 @@ const jwtSecret = process.env.JWT_SECRET || '';
 if (nodeEnv === 'production') {
   if (!jwtSecret || jwtSecret.length < 16 || jwtSecret === 'dev-secret-change-me') {
     console.error('[sk-os] FATAL: JWT_SECRET must be set to a strong secret (16+ chars) in production.');
+    process.exit(1);
+  }
+}
+
+// Production payment safety: a production boot must never silently run on
+// the mock payment provider (see services/payments/paymentProvider.js).
+// Unlike the AI zero-cost gate this mirrors, an unconfigured payment
+// provider isn't a merely-inconvenient default -- providerName() falling
+// back to 'mock' in production means the app is deployed and answering
+// real traffic while every "payment" is really an in-process fake that
+// never moves money and can be triggered by anyone with an account (see
+// routes/paymentsDev.js's POST /mock/complete, also hard-disabled in
+// production separately in index.js -- this is the belt to that
+// suspenders: even if that route were ever re-enabled by mistake,
+// providerName() itself must never be able to report 'mock' here). "Boots
+// fine, quietly does the safe thing" -- this codebase's usual posture for
+// a missing zero-cost-gated config -- is the WRONG failure mode when the
+// safe thing is silently pretending to take payment. Fail loud at boot
+// instead, the same way a missing JWT_SECRET or DATABASE_URL already
+// does above. Requires the exact same "go live" condition
+// providerName() itself checks (PAYMENT_PROVIDER=razorpay + both API
+// keys) PLUS RAZORPAY_WEBHOOK_SECRET, which providerName() does NOT
+// check but verifyWebhookSignature's own fail-closed guard absolutely
+// requires -- without it, a production boot would pass providerName()'s
+// own check (report 'razorpay', create real orders) while being
+// permanently unable to activate anything, because no webhook could ever
+// verify. Better to catch that missing var here, at boot, than have a
+// paying customer's subscription silently never activate.
+//
+// Scoped to production only (not staging, unlike the DATABASE_URL/JWT
+// checks above) -- deliberately narrower: nothing in this codebase's
+// existing docs or tests establishes that every staging deployment
+// already has real Razorpay credentials, and requiring them there
+// without being asked risks breaking a legitimate staging workflow this
+// change has no visibility into. Revisit if staging is ever meant to
+// take real payments too.
+if (nodeEnv === 'production') {
+  const paymentProviderEnv = (process.env.PAYMENT_PROVIDER || 'mock').toLowerCase();
+  const missingPayment = [];
+  if (paymentProviderEnv !== 'razorpay') missingPayment.push('PAYMENT_PROVIDER=razorpay');
+  if (!process.env.RAZORPAY_KEY_ID) missingPayment.push('RAZORPAY_KEY_ID');
+  if (!process.env.RAZORPAY_KEY_SECRET) missingPayment.push('RAZORPAY_KEY_SECRET');
+  if (!process.env.RAZORPAY_WEBHOOK_SECRET) missingPayment.push('RAZORPAY_WEBHOOK_SECRET');
+  if (missingPayment.length) {
+    console.error(`[sk-os] FATAL: production requires a fully configured live payment provider — missing: ${missingPayment.join(', ')}. The mock payment provider must never run in production.`);
     process.exit(1);
   }
 }
@@ -103,5 +174,12 @@ export const config = {
   foodDatabaseApiKey: process.env.FOOD_DATABASE_API_KEY || null,
   // CORS: explicit allow-list. Empty in dev = localhost origins only.
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
-    .split(',').map((s) => s.trim()).filter(Boolean)
+    .split(',').map((s) => s.trim()).filter(Boolean),
+  // F-10: base URL the frontend is actually served from, used ONLY to
+  // build the verify-email/reset-password LINKS embedded in outgoing
+  // emails (e.g. `${frontendUrl}/reset-password?token=...`) -- the API
+  // itself never redirects here or trusts this for anything security-
+  // relevant. Falls back to the same localhost dev origin api.js/vite
+  // already assume elsewhere in this codebase.
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
 };

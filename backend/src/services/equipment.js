@@ -21,7 +21,11 @@ const LIB_TO_ITEM = {
   BARBELL: ['barbell'], DUMBBELL: ['dumbbells'], DUMBBELLS: ['dumbbells'],
   CABLE: ['cable'], MACHINE: ['machine'], BENCH: ['bench'],
   PULLUP: ['pull_up_bar'], 'PULL-UP': ['pull_up_bar'], BANDS: ['bands'], BAND: ['bands'],
-  BODYWEIGHT: ['bodyweight'], BW: ['bodyweight'], NONE: []
+  BODYWEIGHT: ['bodyweight'], BW: ['bodyweight'], NONE: [],
+  // --- library expansion: new equipment types only (no existing rows use these,
+  // so nothing about the current equipment check changes for existing exercises) ---
+  TRX: ['trx'], RINGS: ['rings'], TRAP_BAR: ['trap_bar'], SANDBAG: ['sandbag'],
+  SLED: ['sled'], MEDICINE_BALL: ['medicine_ball'], PLYO_BOX: ['plyo_box']
 };
 
 export function requiredItems(libraryEquipment) {

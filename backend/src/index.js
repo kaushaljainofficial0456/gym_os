@@ -6,6 +6,8 @@ import cors from 'cors';
 import { getDb } from './db.js';
 import { config } from './config.js';
 import { requireAuth } from './auth.js';
+import { setRateLimitStore } from './rateLimit.js';
+import { upstashStoreFromEnv } from './upstashRateLimitStore.js';
 
 let server = null;
 let dbInstance = null;
@@ -37,6 +39,35 @@ import communityRoutes from './routes/community.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
 
+// ---- Minimal cookie parser (no dependency needed) ----
+// Exported as a standalone pure function (rather than inlined in the
+// middleware below) so it's directly unit-testable without needing an
+// Express app or a database -- see test/cookieParser.test.js. buildApp()'s
+// middleware is a thin wrapper around this; the two are never allowed to
+// drift into testing a copy instead of the real thing.
+export function parseCookieHeader(header) {
+  const cookies = {};
+  const raw = header || '';
+  for (const part of raw.split(';')) {
+    const [k, ...rest] = part.split('=');
+    if (!k) continue;
+    const value = rest.join('=');
+    // decodeURIComponent throws URIError on a malformed percent-escape
+    // (e.g. a bare trailing '%'). This parser runs in middleware mounted
+    // before the request-id/error-logging middleware below, so an
+    // unguarded throw here escaped straight to the global error handler
+    // as an unhandled 500 on EVERY request carrying that cookie, for as
+    // long as the browser kept sending it back. A malformed cookie value
+    // is just an unusable one, never a reason to fail the whole request --
+    // requireAuth already treats an absent/invalid sk_token as
+    // unauthenticated, so falling back to the raw (still-encoded) string
+    // here is safe: it simply won't verify as a valid JWT.
+    try { cookies[k.trim()] = decodeURIComponent(value); }
+    catch { cookies[k.trim()] = value; }
+  }
+  return cookies;
+}
+
 // Builds the Express app without starting a listener, so it can be reused
 // both by the traditional long-running server below (for local dev or a
 // persistent host like Railway/Render) and by a serverless entry point
@@ -45,35 +76,76 @@ import consoleRoutes from './routes/console.js';
 // can close it -- serverless invocations never trigger that path, so it's
 // a harmless no-op there.
 export async function buildApp() {
+  // F-08: a shared rate-limit store (Vercel KV / Upstash Redis) if this
+  // deployment has one configured -- see rateLimit.js's own header and
+  // upstashRateLimitStore.js for exactly what this changes and why it's
+  // opt-in. Unconfigured deployments (no UPSTASH_REDIS_REST_URL/_TOKEN)
+  // get byte-identical behavior to before this existed: rateLimit.js's
+  // module-level default (an in-memory MemoryStore) stays untouched.
+  const upstash = upstashStoreFromEnv();
+  if (upstash) {
+    setRateLimitStore(upstash);
+    console.log('[sk-os] Rate limiting: using Upstash Redis (shared across instances)');
+  }
+
   dbInstance = await getDb();
   const db = dbInstance;
   const app = express();
 
   // ---- Minimal cookie parser (no dependency needed) ----
   app.use((_req, _res, next) => {
-    if (!_req.cookies) {
-      _req.cookies = {};
-      const raw = _req.headers.cookie || '';
-      for (const part of raw.split(';')) {
-        const [k, ...rest] = part.split('=');
-        if (k) _req.cookies[k.trim()] = decodeURIComponent(rest.join('='));
-      }
-    }
+    if (!_req.cookies) _req.cookies = parseCookieHeader(_req.headers.cookie);
     next();
   });
 
+  // Framework fingerprint -- no reason to advertise "this is Express" to
+  // every response. Must run before any response is sent; harmless no-op
+  // if a future Express major ever removes the setting entirely.
+  app.disable('x-powered-by');
+
   // ---- Security headers (lightweight, no external dependency) ----
+  // These apply to /api/* and /uploads/* -- the STATIC frontend (the
+  // actual HTML/JS the browser renders and executes) is served directly
+  // by Vercel, never through this Express app, so it needs its OWN
+  // headers -- see vercel.json's/admin/vercel.json's `headers` blocks.
+  // This API-side CSP is deliberately near-total lockdown (`default-src
+  // 'none'`) rather than a copy of the frontend's: every response here is
+  // `application/json` (or a served upload, or a PDF) -- nothing on this
+  // origin is ever meant to execute as a script/style/frame, so there is
+  // no legitimate directive to relax the way the frontend genuinely needs
+  // script-src/style-src exceptions for Razorpay, Google Sign-In, and its
+  // own inline styles.
   app.use((_req, res, next) => {
     // Prevent MIME sniffing
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    // Clickjacking protection
+    // Clickjacking protection (legacy header; frame-ancestors below is
+    // the modern equivalent CSP already covers in supporting browsers --
+    // kept together, not either/or, for older-browser fallback).
     res.setHeader('X-Frame-Options', 'DENY');
     // XSS filter (legacy browsers)
     res.setHeader('X-XSS-Protection', '0'); // modern best practice: disable in favor of CSP
     // Referrer policy — strip origin from cross-origin navigations
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // Permissions policy — disable unused browser features
+    // Permissions policy — this origin never needs the camera (that's the
+    // frontend's QR/barcode scanner, a different origin's header) or any
+    // of the rest, so disabling all four here is correct and unlike the
+    // frontend's own policy, needs no camera exception.
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    // Nothing on this origin renders as a page -- lock it down completely.
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+    // HSTS: Vercel always serves this app over HTTPS (no plain-HTTP option
+    // on the platform), so this is safe to send unconditionally once
+    // deployed -- gated to production/staging so a local `npm run dev`
+    // over plain HTTP is never told to force HTTPS on localhost.
+    // includeSubDomains/preload are NOT set: this project has no
+    // confirmed custom domain today, and both are effectively
+    // irreversible commitments (preload especially -- removal from
+    // browsers' preload lists takes months) that must never be added
+    // speculatively for a domain whose other subdomains' HTTPS-readiness
+    // hasn't been confirmed.
+    if (config.nodeEnv === 'production' || config.nodeEnv === 'staging') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    }
     next();
   });
 
@@ -116,7 +188,16 @@ app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.d
 app.get(['/ready', '/api/ready'], async (_req, res) => {
   try {
     await db.q1('SELECT 1 AS ok');
-    res.json({ ok: true, db: db.driver, ts: new Date().toISOString() });
+    const body = { ok: true, db: db.driver, ts: new Date().toISOString() };
+    // Opt-in only (EXPOSE_POOL_STATS=1) -- default production behavior is
+    // byte-identical to before. For the connection-pool-starvation
+    // investigation: pool.waitingCount > 0 means requests are queued behind
+    // a full pool RIGHT NOW, observed directly rather than inferred from
+    // slow responses. Load-test harness polls this during a run.
+    if (process.env.EXPOSE_POOL_STATS === '1' && typeof db.poolStats === 'function') {
+      body.pool = db.poolStats();
+    }
+    res.json(body);
   } catch (e) {
     res.status(503).json({ ok: false, error: 'database unreachable' });
   }
@@ -145,7 +226,20 @@ app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBo
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
-app.use('/api/payments', paymentsDevRoutes()); // browser-callable mock-checkout bridge (inert once a real gateway is configured) -- see paymentsDev.js
+// Browser-callable mock-checkout bridge -- NEVER mounted in production.
+// The route's own internal guard (`if (providerName() !== 'mock') return
+// 409`) already makes this inert once a real gateway is configured, and
+// config.js's own boot-time gate now guarantees providerName() can never
+// report 'mock' in a production process at all (a production boot with
+// incomplete Razorpay config refuses to start) -- so in a correctly
+// running production instance this guard is provably redundant. It stays
+// anyway as a second, independent layer: not mounting the route at all
+// means a future change to either of those two other guards can never by
+// itself re-expose a payment-forging endpoint in production -- see
+// paymentsDev.js's own header for why this route is otherwise safe.
+if (config.nodeEnv !== 'production') {
+  app.use('/api/payments', paymentsDevRoutes());
+}
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 app.use('/api/console', consoleRoutes(db)); // Admin Console (Phase 3): platform-operator API, SUPER_ADMIN only -- see console.js. Deliberately NOT /api/admin (already owned by adminRoutes)
 // Private uploads: served only to the authenticated client who owns them,
@@ -153,9 +247,6 @@ app.use('/api/console', consoleRoutes(db)); // Admin Console (Phase 3): platform
 // data/uploads/tmp/<client_id>/ and cleaned up on save.
 app.use('/uploads', requireAuth, async (req, res) => {
   const rel = req.path.replace(/^\//, '');
-  const abs = path.resolve(__dirname, '..', 'data', 'uploads', rel);
-  const uploadsRoot = path.resolve(__dirname, '..', 'data', 'uploads') + path.sep;
-  if (!abs.startsWith(uploadsRoot)) return res.status(403).json({ error: 'Forbidden' });
   // the requesting user must be authorized for this image
   // paths: tmp/<client_id>/... (label scans) | photos/<client_id>/... (progress photos)
   const seg = rel.split('/');
@@ -167,6 +258,25 @@ app.use('/uploads', requireAuth, async (req, res) => {
     ((req.user.role === 'GYM_OWNER' || req.user.role === 'SUPER_ADMIN') && (client.org_id === req.user.org || req.user.role === 'SUPER_ADMIN')) ||
     (req.user.role === 'TRAINER' && client.org_id === req.user.org && client.trainer_id === req.user.sub);
   if (!canView) return res.status(403).json({ error: 'Forbidden' });
+
+  // F-12i: the s3 driver serves via a backend-mediated proxy stream, NOT
+  // a redirect/presigned URL -- ownership is re-checked on every single
+  // access above, exactly like the local driver's res.sendFile below.
+  // A presigned URL would be a bearer credential of its own (shareable,
+  // cacheable, valid regardless of who holds it until it expires) and
+  // would weaken that "checked on every access" property.
+  const { STORAGE_DRIVER, getObjectStream } = await import('./storage.js');
+  if (STORAGE_DRIVER === 's3') {
+    const obj = await getObjectStream(rel);
+    if (!obj) return res.status(404).json({ error: 'Not found' });
+    res.setHeader('Content-Type', obj.contentType);
+    obj.body.pipe(res);
+    return;
+  }
+
+  const abs = path.resolve(__dirname, '..', 'data', 'uploads', rel);
+  const uploadsRoot = path.resolve(__dirname, '..', 'data', 'uploads') + path.sep;
+  if (!abs.startsWith(uploadsRoot)) return res.status(403).json({ error: 'Forbidden' });
   res.sendFile(abs, (err) => { if (err) res.status(404).json({ error: 'Not found' }); });
 });
 

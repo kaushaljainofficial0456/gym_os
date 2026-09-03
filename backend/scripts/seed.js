@@ -17,6 +17,7 @@ import { id, now } from '../src/ids.js';
 import { dayKey, daysAgo, addDays, weekDay } from '../src/utils/time.js';
 import { snapshotAdherence, computeAdherence } from '../src/services/adherence.js';
 import { seedMuscles, syncExerciseMuscles } from '../src/services/muscles.js';
+import { expandExerciseLibrary } from './expand-exercise-library.js';
 import { evaluateOrg } from '../src/services/atRisk.js';
 import { analyzeClientProgress } from '../src/services/aiCoach.js';
 
@@ -621,6 +622,8 @@ async function main() {
           [id('exa'), lib.id, alias]);
       }
     }
+    // ---- library expansion: 80 new exercises + aliases + relations + metadata ----
+    await expandExerciseLibrary(db);
     // ---- normalized muscle model ----
     await seedMuscles(db);
     await syncExerciseMuscles(db);
@@ -685,6 +688,8 @@ async function main() {
     exByName.set(row.name, row);
   }
 
+  // ---- library expansion: 80 new exercises + aliases + relations + metadata ----
+  await expandExerciseLibrary(db);
   // ---- normalized muscle model ----
   await seedMuscles(db);
   await syncExerciseMuscles(db);

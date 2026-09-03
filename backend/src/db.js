@@ -42,6 +42,10 @@ async function createSqlite() {
       return { changes: Number(res.changes), lastId: res.lastInsertRowid };
     },
     exec(sql) { db.exec(sql); },
+    // SQLite has no connection pool -- always "not waiting". Present so
+    // callers (a debug endpoint, the load-test harness) can call
+    // db.poolStats() unconditionally regardless of driver.
+    poolStats() { return { total: 1, idle: 1, waiting: 0 }; },
     // Atomic transaction: BEGIN → fn(txDb) → COMMIT, ROLLBACK on error.
     async tx(fn, opts = {}) {
       db.exec('BEGIN');
@@ -85,10 +89,75 @@ export function translateSql(sql) {
 
 async function createPg() {
   const pg = await import('pg');
-  const pool = new pg.Pool({ connectionString: config.databaseUrl });
+  // node-postgres's Pool defaults are tuned for a long-lived server process,
+  // not a serverless function:
+  //   - connectionTimeoutMillis defaults to 0 = NO TIMEOUT. If every pooled
+  //     connection is busy (or Neon has hit its own connection cap because
+  //     many concurrent Vercel function instances each opened their own
+  //     Pool), a query silently queues forever instead of failing fast --
+  //     from the user's side that's exactly "the page never stops loading."
+  //     This cannot be reproduced by local/manual testing (SQLite has no
+  //     connection limit, and a solo session never saturates 10 connections)
+  //     which is why it wouldn't show up outside real concurrent production
+  //     traffic. Bounding it means a saturated pool fails in ~8s with a
+  //     clear 5xx instead of hanging indefinitely.
+  //   - max defaults to 10 *per Pool instance*. Each concurrent warm
+  //     serverless instance creates its own Pool (see getDb()'s
+  //     module-level `instance` -- fresh per cold start), so under load
+  //     many instances x 10 connections each can exhaust Neon's connection
+  //     limit. A lower per-instance max leaves headroom across instances
+  //     while still allowing real concurrency within one.
+  //   - idleTimeoutMillis closes unused connections instead of holding them
+  //     open indefinitely, so a warm instance that goes quiet releases its
+  //     connections back to Neon's shared limit for other instances to use.
+  const pool = new pg.Pool({
+    connectionString: config.databaseUrl,
+    max: Number(process.env.PG_POOL_MAX || 5),
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 8_000,
+  });
+  // Without this handler, an error on an IDLE pooled connection (e.g. Neon
+  // dropping it server-side) is an uncaught 'error' event -- which crashes
+  // the whole Node process. pg's own docs call this out explicitly. The
+  // pool recovers the connection on its own; this just keeps the process up.
+  pool.on('error', (err) => {
+    console.error('[sk-os] Postgres pool error on idle client:', err.message);
+  });
+
+  // Opt-in diagnostic mode (PG_POOL_METRICS=1, staging/local only -- never
+  // enable in production, it adds a connect()/release() round trip to every
+  // query instead of pool.query()'s single call). Exists to answer one
+  // question empirically instead of by inference: is request latency spent
+  // WAITING FOR A POOLED CONNECTION (pool starvation) or RUNNING THE QUERY
+  // (slow SQL / network)? pool.query() alone can't distinguish these -- it
+  // hides the connection checkout inside itself. Logs one line per query
+  // over POOL_METRICS_LOG_MS (default 20ms combined) with both numbers
+  // broken out, plus live pool.totalCount/idleCount/waitingCount so a
+  // saturated pool (waitingCount > 0) is directly observable rather than
+  // inferred from slow responses.
+  const metricsOn = process.env.PG_POOL_METRICS === '1';
+  const logThresholdMs = Number(process.env.PG_POOL_METRICS_LOG_MS || 20);
+  async function runQuery(sql, params) {
+    if (!metricsOn) return pool.query(translateSql(sql), params);
+    const tWaitStart = performance.now();
+    const conn = await pool.connect();
+    const tQueryStart = performance.now();
+    try {
+      const res = await conn.query(translateSql(sql), params);
+      const tEnd = performance.now();
+      const waitMs = tQueryStart - tWaitStart;
+      const queryMs = tEnd - tQueryStart;
+      if (waitMs + queryMs >= logThresholdMs) {
+        console.log(`[pg-metrics] wait=${waitMs.toFixed(1)}ms query=${queryMs.toFixed(1)}ms pool={total:${pool.totalCount},idle:${pool.idleCount},waiting:${pool.waitingCount}} sql=${sql.trim().slice(0, 80)}`);
+      }
+      return res;
+    } finally {
+      conn.release();
+    }
+  }
   const client = { driver: 'postgres' };
   client.q = async (sql, params = []) => {
-    const res = await pool.query(translateSql(sql), params);
+    const res = await runQuery(sql, params);
     return res.rows;
   };
   client.q1 = async (sql, params = []) => {
@@ -96,10 +165,15 @@ async function createPg() {
     return rows[0] || null;
   };
   client.run = async (sql, params = []) => {
-    const res = await pool.query(translateSql(sql), params);
+    const res = await runQuery(sql, params);
     return { changes: res.rowCount ?? 0 };
   };
   client.exec = (sql) => pool.query(sql);
+  // Live pool occupancy -- waitingCount > 0 means requests are queued
+  // behind a full pool RIGHT NOW (pool starvation, directly observed, not
+  // inferred). Cheap (reads pg's own in-memory counters); safe to call from
+  // a debug endpoint or the load-test harness at any time, in any mode.
+  client.poolStats = () => ({ total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount });
   // Multi-statement transaction (rolls back on any failure). When an orgId is
   // provided, RLS (database/rls.sql) is engaged for the whole transaction via
   // SET LOCAL — it is scoped to this connection+tx and reset automatically at
@@ -109,9 +183,18 @@ async function createPg() {
     try {
       await c.query('BEGIN');
       const orgId = opts.orgId || currentOrg();
-      // PG does not accept parameter placeholders ($1) in SET — inline the
-      // literal (org ids are app-generated tokens; escaped defensively).
-      if (orgId) await c.query(`SET LOCAL app.org_id = '${String(orgId).replace(/'/g, "''")}'`);
+      // F-12c hardening: set_config() is a real function call, not the SET
+      // statement -- unlike `SET LOCAL app.org_id = '...'` (PG's own SET
+      // syntax genuinely does not accept a $1 placeholder there), this
+      // DOES take a normal bound parameter for the value. The previous
+      // string-escaped inline literal was never actually exploitable --
+      // orgId is always an app-generated id() token, quotes escaped
+      // defensively -- but a real parameter removes that whole class of
+      // risk outright instead of relying on the escaping being correct.
+      // The third argument (true) is what makes this LOCAL -- scoped to
+      // the transaction and auto-reset at COMMIT/ROLLBACK, identical to
+      // SET LOCAL's own semantics.
+      if (orgId) await c.query(`SELECT set_config('app.org_id', $1, true)`, [String(orgId)]);
       const txDb = {
         driver: 'postgres',
         async q(sql, params = []) { const r = await c.query(translateSql(sql), params); return r.rows; },

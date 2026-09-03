@@ -740,3 +740,122 @@ test('custom workout name can be provided on import', async (t) => {
   const imported = await db.q1('SELECT * FROM client_workouts WHERE id = ?', [importRes.json.id]);
   assert.equal(imported.name, 'My Custom Push');
 });
+
+// ============================================================
+// F-12a: SHARE-LINK EXPIRY + REVOCATION
+// ============================================================
+
+test('a newly created workout share link carries a concrete expires_at (not open-ended forever)', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const { orgId, clientId, userId } = await seedOrgClient(db, 'exp1');
+  const exId = await seedExerciseLibrary(db, orgId);
+  const workoutId = await createPlannerWorkout(db, clientId, orgId, exId);
+  const { authedCall, close } = await startApi(db); t.after(() => close());
+
+  const shareRes = await authedCall(userId, '/api/me/workout-share', {
+    method: 'POST', body: JSON.stringify({ workout_id: workoutId }),
+  });
+  assert.equal(shareRes.status, 201);
+  assert.ok(shareRes.json.expires_at, 'creation response includes an expiry timestamp');
+  const row = await db.q1('SELECT expires_at FROM shared_workouts WHERE id = ?', [shareRes.json.id]);
+  assert.ok(row.expires_at, 'expires_at is persisted, not just returned');
+  const daysAhead = (Date.parse(row.expires_at) - Date.now()) / (24 * 60 * 60_000);
+  assert.ok(daysAhead > 29 && daysAhead < 31, `expected roughly a 30-day TTL, got ${daysAhead.toFixed(1)} days`);
+});
+
+test('an expired workout share link is unreachable via the public preview, the import route, AND still 404s consistently (not distinguishable from a nonexistent id)', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const { orgId, clientId, userId } = await seedOrgClient(db, 'exp2');
+  const exId = await seedExerciseLibrary(db, orgId);
+  const workoutId = await createPlannerWorkout(db, clientId, orgId, exId);
+  const { authedCall, publicCall, close } = await startApi(db); t.after(() => close());
+
+  const shareRes = await authedCall(userId, '/api/me/workout-share', {
+    method: 'POST', body: JSON.stringify({ workout_id: workoutId }),
+  });
+  const shareId = shareRes.json.id;
+  // Force it into the past directly -- simulates the TTL having elapsed
+  // without waiting 30 real days.
+  await db.run('UPDATE shared_workouts SET expires_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', shareId]);
+
+  const preview = await publicCall(`/api/workout-share/${shareId}`);
+  assert.equal(preview.status, 404);
+  assert.equal(preview.json.error, 'This shared workout link is invalid or has expired');
+
+  const { userId: importerId } = await seedOrgClient(db, 'exp2importer');
+  const importRes = await authedCall(importerId, `/api/me/workout-share/${shareId}/import`, {
+    method: 'POST', body: JSON.stringify({ destination: 'planner' }),
+  });
+  assert.equal(importRes.status, 404);
+  assert.equal(importRes.json.error, 'This shared workout link is invalid or has expired');
+});
+
+test('a legacy row with expires_at = NULL (created before F-12a) still works -- NULL means "never expires", not "already expired"', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const { orgId, clientId } = await seedOrgClient(db, 'exp3');
+  const shareId = id('shr');
+  await db.run(
+    `INSERT INTO shared_workouts (id, org_id, client_id, shared_by_name, workout_name, payload_json, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [shareId, orgId, clientId, 'Legacy Sender', 'Legacy Workout', JSON.stringify({ type: 'workout', name: 'Legacy Workout', exercises: [] }), now()]);
+  const { publicCall, close } = await startApi(db); t.after(() => close());
+
+  const preview = await publicCall(`/api/workout-share/${shareId}`);
+  assert.equal(preview.status, 200, 'a legacy NULL-expiry row must not be treated as expired');
+});
+
+test('the sender can revoke their own workout share link early, making it immediately unreachable', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const { orgId, clientId, userId } = await seedOrgClient(db, 'rev1');
+  const exId = await seedExerciseLibrary(db, orgId);
+  const workoutId = await createPlannerWorkout(db, clientId, orgId, exId);
+  const { authedCall, publicCall, close } = await startApi(db); t.after(() => close());
+
+  const shareRes = await authedCall(userId, '/api/me/workout-share', {
+    method: 'POST', body: JSON.stringify({ workout_id: workoutId }),
+  });
+  const shareId = shareRes.json.id;
+  assert.equal((await publicCall(`/api/workout-share/${shareId}`)).status, 200, 'sanity: link works before revocation');
+
+  const revoke = await authedCall(userId, `/api/me/workout-share/${shareId}`, { method: 'DELETE' });
+  assert.equal(revoke.status, 200);
+  assert.deepEqual(revoke.json, { ok: true });
+
+  const afterRevoke = await publicCall(`/api/workout-share/${shareId}`);
+  assert.equal(afterRevoke.status, 404, 'the link must be gone immediately, not merely marked');
+});
+
+test('revoking a workout share link is scoped to the sender -- a different client cannot revoke someone else\'s link', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const { orgId, clientId, userId } = await seedOrgClient(db, 'rev2owner');
+  const { userId: attackerId } = await seedOrgClient(db, 'rev2attacker');
+  const exId = await seedExerciseLibrary(db, orgId);
+  const workoutId = await createPlannerWorkout(db, clientId, orgId, exId);
+  const { authedCall, publicCall, close } = await startApi(db); t.after(() => close());
+
+  const shareRes = await authedCall(userId, '/api/me/workout-share', {
+    method: 'POST', body: JSON.stringify({ workout_id: workoutId }),
+  });
+  const shareId = shareRes.json.id;
+
+  const attackerRevoke = await authedCall(attackerId, `/api/me/workout-share/${shareId}`, { method: 'DELETE' });
+  assert.equal(attackerRevoke.status, 404, 'a non-owner\'s revoke attempt must not succeed');
+
+  const stillWorks = await publicCall(`/api/workout-share/${shareId}`);
+  assert.equal(stillWorks.status, 200, 'the real owner\'s link must survive an unauthorized revoke attempt untouched');
+});
+
+test('DELETE on a nonexistent workout share id returns a clean 404, never a 500', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const { userId } = await seedOrgClient(db, 'rev3');
+  const { authedCall, close } = await startApi(db); t.after(() => close());
+
+  const r = await authedCall(userId, '/api/me/workout-share/shr_doesnotexist', { method: 'DELETE' });
+  assert.equal(r.status, 404);
+});

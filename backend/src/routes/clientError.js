@@ -19,6 +19,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
+import { JWT_ALGORITHM } from '../auth.js';
 import { rateLimit } from '../rateLimit.js';
 import { validate, schemas } from '../validate.js';
 import { track } from '../services/events.js';
@@ -26,13 +27,19 @@ import { track } from '../services/events.js';
 // Best-effort JWT decode -- never throws, never requires a valid/present
 // token. Purely for attaching org/user context to a report when we
 // happen to have it; a missing or invalid token just means less context,
-// never a rejected report.
+// never a rejected report. Checks the Bearer header first (F-05: the
+// frontend no longer sends one, since the raw token isn't persisted
+// client-side anymore, but this stays for any other caller of this
+// public route that still does), then falls back to the httpOnly
+// sk_token cookie -- same two-source precedence as requireAuth itself,
+// so ErrorBoundary.jsx's credentials:'include' fetch keeps enriching
+// crash reports with org/user context exactly as before.
 function tryDecodeUser(req) {
   try {
     const auth = req.headers.authorization || '';
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.cookies?.sk_token || null);
     if (!token) return { org: null, sub: null };
-    const payload = jwt.verify(token, config.jwtSecret);
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: [JWT_ALGORITHM] });
     return { org: payload.org || null, sub: payload.sub || null };
   } catch {
     return { org: null, sub: null };

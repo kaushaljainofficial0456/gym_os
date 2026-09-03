@@ -1,27 +1,46 @@
 // Minimal fixed-window rate limiter with a pluggable store.
 //
-// Default: in-memory Map — ideal for a single Node process at the
-// 10-gym / ~2,500-client target. On Vercel/serverless, concurrent
-// requests CAN land on separate function instances, each with its own
-// independent MemoryStore -- so the effective ceiling under genuine
-// concurrency is max × concurrent-instance-count, not max. Accepted
-// tradeoff at the current scale; revisit if either traffic grows past
-// the target above, or a specific endpoint's abuse risk (e.g. login
-// brute-forcing via deliberately concurrent requests) justifies it
-// sooner -- that's a product/infra call (which provider, whose budget),
-// not a code change to make unilaterally.
+// F-08 hardening: this now HAS a working shared-store implementation --
+// see upstashRateLimitStore.js -- auto-wired at startup (index.js) when
+// UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are configured (the
+// exact two env vars Vercel's own KV integration sets when a project is
+// connected to Upstash-backed Vercel KV, so "add Vercel KV to this
+// project" is the entire ops lift, no new vendor to sign up for
+// separately). Falls back to the in-memory MemoryStore below when those
+// aren't set -- unchanged default behavior, so a deployment that hasn't
+// configured KV yet sees no regression, just the same documented
+// per-instance ceiling as before.
+//
+// Default (no shared store configured): in-memory Map — ideal for a
+// single Node process at the 10-gym / ~2,500-client target. On Vercel/
+// serverless, concurrent requests CAN land on separate function
+// instances, each with its own independent MemoryStore -- so the
+// effective ceiling under genuine concurrency is max × concurrent-
+// instance-count, not max. Accepted tradeoff at the current scale
+// WITHOUT Upstash configured; revisit (i.e. actually configure Vercel
+// KV) if either traffic grows past the target above, or a specific
+// endpoint's abuse risk (e.g. login brute-forcing via deliberately
+// concurrent requests) justifies it sooner -- that's a product/infra
+// call (whose budget), which is exactly why this stays OPT-IN via env
+// var rather than a hard new required dependency.
 //
 // The store interface -- { get(key), set(key, value, ttlMs), delete(key) },
 // all async -- exists so a REAL multi-instance store (Redis, Vercel KV,
 // etc.) can be dropped in via setRateLimitStore() without touching the
-// middleware below. Nothing reads a RATE_LIMIT_STORE/REDIS_URL env var
-// today, and no such store is implemented anywhere in this codebase --
-// this is a prepared extension point, not a working feature flag. Also
-// note for whoever wires one up: an earlier version of the code below
-// only actually persisted state for a MemoryStore (any other store type
-// got a fresh {count:0} on every call and never had it written back --
-// a silent, complete rate-limit bypass). Fixed here so every store type
-// goes through the same get/set path and actually works.
+// middleware below. A store MAY additionally implement an atomic
+// `increment(key, ttlMs) -> { count, resetAt }` method -- when present,
+// the middleware uses THAT instead of get-then-set, because get-then-set
+// is NOT atomic for a real external store (two concurrent requests on
+// the same key can both read count:0 before either writes back,
+// undercounting -- exactly the race a shared store exists to close, not
+// reopen). increment() is the ONLY safe way to correctly rate-limit
+// under real concurrent load against a store the middleware doesn't
+// control the internals of. Also note for whoever else wires a
+// DIFFERENT store in: an earlier version of the code below only
+// actually persisted state for a MemoryStore (any other store type got
+// a fresh {count:0} on every call and never had it written back -- a
+// silent, complete rate-limit bypass). Fixed here so every store type
+// goes through a real get/set (or increment) path and actually works.
 
 // ---- Pluggable store interface ----
 
@@ -44,6 +63,18 @@ let store = new MemoryStore();
 // Allow overriding the store at startup (e.g. Redis for multi-instance)
 export function setRateLimitStore(externalStore) {
   store = externalStore;
+}
+
+// F-08: exposes whichever store is CURRENTLY active so a bespoke
+// counter with different semantics than this file's own fixed-window
+// limiter -- e.g. routes/auth.js's failed-login counter, which counts
+// only FAILURES and resets on success, not "every request" -- can share
+// the same shared-store configuration (Upstash when wired in, in-memory
+// otherwise) instead of keeping a second, separate, always-in-memory-
+// only Map that Upstash's whole point (surviving across serverless
+// instances) would never reach.
+export function getRateLimitStore() {
+  return store;
 }
 
 // Test hook: undo setRateLimitStore(), back to a fresh in-memory store.
@@ -96,15 +127,22 @@ export function rateLimit({ windowMs = 60_000, max = 100, keyFn = (req) => req.i
     }
 
     // External store: genuinely async. Atomicity under concurrent
-    // requests for the SAME key is the ADAPTER's own responsibility
-    // (e.g. a Redis adapter should use INCR or a Lua script, never naive
-    // get-then-set) -- this generic path can't provide it for a store it
-    // knows nothing about.
+    // requests for the SAME key is the ADAPTER's own responsibility --
+    // prefer its atomic increment() when it has one (e.g. a Redis
+    // adapter using INCR, never naive get-then-set); only a store with
+    // no such method falls back to get-then-set, which is NOT safe
+    // under real concurrency and exists purely so a trivial/test store
+    // implementing only {get,set,delete} still technically works.
     Promise.resolve()
       .then(async () => {
-        const bucket = (await store.get(key)) || { count: 0, resetAt: now };
-        bucket.count += 1;
-        await store.set(key, bucket, windowMs);
+        const bucket = typeof store.increment === 'function'
+          ? await store.increment(key, windowMs)
+          : await (async () => {
+            const b = (await store.get(key)) || { count: 0, resetAt: now };
+            b.count += 1;
+            await store.set(key, b, windowMs);
+            return b;
+          })();
         respond(res, next, bucket, now);
       })
       .catch((e) => {

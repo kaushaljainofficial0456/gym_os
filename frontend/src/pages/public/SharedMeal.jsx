@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
-import { api, getToken, setReturnTo } from '../../api.js';
+import { api, getStoredUser, setReturnTo } from '../../api.js';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
 
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
@@ -28,7 +28,10 @@ export default function SharedMeal() {
     api(`/share/${id}`).then(setData).catch((e) => setError(e.message || 'This shared link is invalid or has expired'));
   }, [id]);
 
-  const authed = !!getToken();
+  // F-05: the raw token is no longer readable client-side (httpOnly
+  // cookie only) -- the stored USER object is the "am I logged in" signal
+  // now; it's non-sensitive profile data, never a bearer credential.
+  const authed = !!getStoredUser();
 
   const save = async (index) => {
     setSaveState((s) => ({ ...s, [index]: 'saving' }));

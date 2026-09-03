@@ -62,3 +62,29 @@ export async function getOrgTz(db, orgId) {
     return org?.timezone || DEFAULT_TZ;
   } catch { return DEFAULT_TZ; }
 }
+
+// requireAuth() calls getOrgTz() on EVERY authenticated request (it needs req.tz
+// before the route handler runs), which previously meant an extra DB round trip
+// ahead of every single request's own queries. Org timezone changes essentially
+// never (no route in this codebase currently writes organizations.timezone), so
+// it's safe to cache per-org with a short TTL — this removes that round trip
+// from the hot path while still picking up changes within a few minutes.
+const ORG_TZ_TTL_MS = 5 * 60 * 1000;
+const orgTzCache = new Map(); // orgId -> { tz, at }
+
+export async function getOrgTzCached(db, orgId) {
+  if (!orgId) return DEFAULT_TZ;
+  const hit = orgTzCache.get(orgId);
+  const now = Date.now();
+  if (hit && (now - hit.at) < ORG_TZ_TTL_MS) return hit.tz;
+  const tz = await getOrgTz(db, orgId);
+  orgTzCache.set(orgId, { tz, at: now });
+  return tz;
+}
+
+// Call after any write to organizations.timezone so the change is picked up
+// immediately instead of waiting out the TTL.
+export function invalidateOrgTzCache(orgId) {
+  if (orgId) orgTzCache.delete(orgId);
+  else orgTzCache.clear();
+}
