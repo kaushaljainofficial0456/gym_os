@@ -185,14 +185,26 @@ async function main() {
     const diag = await diagPool.query(
       `SELECT current_user, current_database(), current_schema(), current_setting('search_path') AS search_path,
               to_regclass('public.${missingTables[0] || tableNames[0]}') AS via_to_regclass,
-              (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS visible_table_count`);
+              (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS visible_table_count,
+              current_setting('neon.timeline_id', true) AS neon_timeline_id,
+              current_setting('neon.tenant_id', true)   AS neon_tenant_id,
+              (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public') AS unfiltered_table_count,
+              (SELECT count(*) FROM pg_catalog.pg_default_acl) AS default_acl_rules`);
     const d = diag.rows[0];
     console.error('');
-    console.error('  [db:check] diagnostic (no secrets):');
+    console.error('  [db:check] diagnostic (identifiers only -- no connection string, password or token):');
     console.error(`    current_user=${d.current_user} current_database=${d.current_database} current_schema=${d.current_schema}`);
     console.error(`    search_path=${d.search_path}`);
     console.error(`    to_regclass('public.${missingTables[0] || tableNames[0]}')=${d.via_to_regclass === null ? 'NULL (genuinely absent, or not visible to this role)' : d.via_to_regclass}`);
     console.error(`    information_schema.tables sees ${d.visible_table_count} tables in schema 'public' for this role`);
+    // pg_tables is NOT privilege-filtered, unlike information_schema: comparing
+    // the two separates "role can't see it" from "it isn't there". neon.timeline_id
+    // is unique per Neon BRANCH, so it identifies which branch this URL resolves
+    // to without revealing any part of the credential. pg_default_acl is non-zero
+    // only where an ALTER DEFAULT PRIVILEGES was actually run.
+    console.error(`    pg_tables (unfiltered) sees ${d.unfiltered_table_count} tables in schema 'public'`);
+    console.error(`    neon.timeline_id=${d.neon_timeline_id ?? 'unavailable'}  neon.tenant_id=${d.neon_tenant_id ?? 'unavailable'}`);
+    console.error(`    pg_default_acl rules present: ${d.default_acl_rules}`);
     await diagPool.end().catch(() => {});
   } catch (diagErr) {
     console.error(`  [db:check] diagnostic query itself failed: ${diagErr.code || diagErr.message}`);
