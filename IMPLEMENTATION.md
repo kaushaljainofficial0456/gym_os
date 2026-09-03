@@ -586,3 +586,323 @@ design change; verified visually before and after, and live in the
 running app. Every fix in this pass was verified against the existing
 test suite (1022/1025, same pre-existing unrelated flake) before being
 considered done.
+
+---
+
+# MASTER PROMPT — Flexible Calorie Balance / Surplus Adjustment System
+
+Report for the "MASTER PROMPT — FLEXIBLE CALORIE BALANCE / SURPLUS
+ADJUSTMENT SYSTEM" spec. An implementation task, additive only — no
+existing Nutrition functionality was removed or redesigned. Follows the
+spec's own mandated A–O report format.
+
+## A. Files changed
+
+**New:**
+- `backend/src/services/nutrition/flexibleBalance.js` — the engine (pure
+  calculation + persistence, kept separate; see D).
+- `backend/test/flexibleBalanceCalc.test.js` — 9 pure-function tests.
+- `backend/test/flexibleBalanceRoutes.test.js` — 10 endpoint/integration
+  tests.
+- `frontend/src/components/nutrition/CalorieBalance.jsx` — all
+  balance-related UI (prompt, preview, active-plan card, history).
+
+**Modified:**
+- `database/schema.sql` — two new tables (see B).
+- `database/rls.sql` — RLS policies for both new tables (org-scoped,
+  same pattern as `nutrition_plans`).
+- `backend/src/validate.js` — one new Zod schema, `balanceStrategy`.
+- `backend/src/routes/me.js` — 6 new routes (see C) + import of the
+  service module.
+- `frontend/src/pages/client/Nutrition.jsx` — mounts `<CalorieBalance>`;
+  a new `balance` `useFetch` call; the calorie ring, macro bars, header
+  text, and the "N kcal away from target" insight line now read from a
+  single `effectivePlan` (adjusted target while a plan is active, base
+  target otherwise) instead of the raw base `plan`. No other line in this
+  file changed — food logging, search, saved foods/meals, custom macros,
+  supplements, water, and every other section are untouched.
+
+## B. Database migrations
+
+Both additive, `CREATE TABLE IF NOT EXISTS` in `schema.sql` (picked up
+automatically by `backend/scripts/db-check.js`'s deploy preflight — no
+separate `MIGRATIONS` array entry needed, that array is only for adding
+columns to *pre-existing* tables). Nothing in `nutrition_plans` or any
+other existing table was altered.
+
+- `nutrition_balance_adjustments` — one row per client's current/past
+  plan (id, org_id, client_id, source_date, original/remaining surplus,
+  strategy, planned/remaining days, daily adjustment, base target
+  snapshot ×4, adjusted target ×4, status, last_reconciled_date,
+  timestamps). Indexed on `(client_id, status)` and
+  `(client_id, source_date)`.
+- `nutrition_balance_prompts` — one row per declined surplus event
+  (client_id + source_date, unique), so the same day's surplus is never
+  re-prompted after "Don't adjust".
+
+No `nutrition_balance_adjustment_days` child table was built — the
+spec listed it as optional ("if daily history is necessary"), and the
+single-row model (`remaining_days` / `remaining_surplus_calories`,
+recomputed on each reconcile) answers every UI/API need without it. See
+O for what this simplification does not cover.
+
+## C. APIs added/changed
+
+All 6 new, all under the existing `/me` router (`getClient()` +
+`requireAuth`/`orgScope`, matching every other client-facing route in
+that file). No existing endpoint changed.
+
+- `GET /me/nutrition/balance` — base target, active plan (if any, with a
+  `targetChanged` flag), prompt-eligible surplus (if any), `justSettled`,
+  the 4 strategy definitions.
+- `POST /me/nutrition/balance/preview` `{strategy}` — pure preview, never
+  writes.
+- `POST /me/nutrition/balance/apply` `{strategy}` — creates or merges
+  into the active plan.
+- `POST /me/nutrition/balance/decline` — records "Don't adjust" for the
+  current eligible day (idempotent).
+- `POST /me/nutrition/balance/cancel` — ends the active plan.
+- `POST /me/nutrition/balance/recalculate` — rebuilds the active plan
+  against the client's current live base target.
+- `GET /me/nutrition/balance/history` — past (non-active) plans.
+
+`strategy` is the *only* client-supplied input anywhere in this surface;
+surplus amounts and source dates are always re-derived server-side from
+`meal_logs` vs. the client's own stored `nutrition_plans` target — never
+trusted from the request body, matching this file's existing
+`/nutrition/targets/confirm` pattern of never trusting a client-supplied
+`calories` value. Mutating routes share a `rateLimit({windowMs:60_000,
+max:20})` limiter, sized the same way `foodFeedbackLimit`/
+`workoutWriteLimit` are elsewhere in this file.
+
+## D. Algorithms implemented
+
+`calculateFlexibleCaloriePlan()` (pure, no DB) in `flexibleBalance.js`:
+
+1. Compute a safe daily-cut ceiling = min(15% of base target, distance
+   down to the 1200 kcal floor).
+2. Start at the chosen strategy's own minimum days; extend one day at a
+   time — past the strategy's own preferred range if needed, up to a
+   14-day hard cap — until the required daily cut fits under the ceiling.
+3. Round the daily adjustment to the nearest 10 kcal.
+4. Redistribute macros: protein is copied through unchanged; the cut
+   comes out of carbs first, then fat down to its own floor if carbs
+   would otherwise go below its floor — never a proportional scale-down.
+5. A final floor-consistency check: if the protein target's own calories
+   plus both macro floors exceed the computed adjusted target, protein
+   protection wins outright — the adjusted target widens to whatever
+   protein + floors require, rather than ever touching protein.
+6. If even the 14-day cap can't bring the daily cut under the safe
+   ceiling, the plan is reported infeasible with the spec's own neutral
+   copy ("larger than we can safely redistribute…") — the base target is
+   left untouched, not force-compensated.
+
+Persistence layer (same file): `applyFlexibleCaloriePlan` (transactional
+check-then-write, merges into an existing ACTIVE row instead of creating
+a second one), `reconcileActivePlan` (advances a plan by exactly one
+completed calendar day per call — see O), `declineSurplus`,
+`cancelActivePlan`, `recalculatePlanForNewBaseTargets`, `getPlanHistory`.
+
+## E. Safety constraints
+
+Centralized in one `BALANCE_CONFIG` object (`flexibleBalance.js`), not
+scattered: `SURPLUS_PROMPT_THRESHOLD` (150 kcal), `MIN_CALORIE_TARGET`
+(1200 — the *same* floor `GET /me/nutrition/targets` already clamps its
+own TDEE suggestion to, reused rather than reinvented),
+`MAX_DAILY_ADJUSTMENT_FRACTION` (0.15), `MIN_PLAN_DURATION_DAYS` (2),
+`MAX_PLAN_DURATION_DAYS` (14), `FAT_FLOOR_G`/`CARBS_FLOOR_G` (15/20 —
+the same values `me.js`'s own `MACRO_BOUNDS` already enforces on manual
+target edits), `ROUND_TO` (10), and the 4 strategies' day ranges. Every
+one of these is read from this single object everywhere it's used —
+confirmed via grep, no duplicated magic numbers.
+
+## F. Protein protection
+
+Verified three ways: (1) unit test asserting `macros.protein` is exactly
+the input value across every strategy at multiple surplus sizes; (2) the
+floor-override unit test (protein=285g against a 1400 kcal base)
+confirming the adjusted target widens rather than protein shrinking; (3)
+live: applied a plan against a 135g protein target, the active-plan card
+and the API response both showed `adjustedProteinTarget: 135` unchanged
+before and after a target-change recalculation.
+
+## G. 4/4/9 preservation
+
+`redistributeMacros()` always derives the returned macros so that
+`protein*4 + carbs*4 + fat*9` reconstructs the adjusted calorie target
+(asserted directly in the "every strategy stays internally consistent"
+unit test, tolerance ≤1 kcal for display rounding). No new independent
+calorie number is ever stored — `adjusted_calorie_target` is written
+alongside the macros it was derived from in the same write, never
+computed or edited separately. Live-verified: recalculating against a
+new base target (2025 kcal / P140 / C220 / F65) produced macros whose
+4/4/9 total exactly matched the "kcal away from target" insight line.
+
+## H. Additional-surplus handling (dynamic rebalancing)
+
+`applyFlexibleCaloriePlan` checks for an existing ACTIVE row first,
+inside the same transaction, and *adds* the incoming surplus to its
+`remaining_surplus_calories` rather than inserting a second row.
+`reconcileActivePlan` does the equivalent automatically (no re-prompt)
+when a new day's surplus is discovered while a plan is already active.
+Both paths recompute a fresh schedule from the combined remaining
+balance via the same pure `calculateFlexibleCaloriePlan()`. Covered by
+an integration test that back-dates a plan's bookkeeping to simulate a
+day passing, logs a second surplus, and asserts exactly one ACTIVE row
+survives with the merged balance.
+
+## I. Cancellation/decline handling
+
+- **Decline** ("Don't adjust"): writes one `nutrition_balance_prompts`
+  row for that `(client_id, source_date)`; idempotent (a repeat decline
+  is a no-op, verified by a test and live by clicking twice/checking the
+  DB); never creates a plan; the base target is never touched.
+- **Cancel**: sets the active row's `status = CANCELLED`; the base
+  target resumes immediately (verified live — the ring, macro bars, and
+  insight line all reverted to the base target the moment cancel
+  completed). Cancelling does *not* retroactively decline the underlying
+  surplus event, so if it's still within the eligible window the prompt
+  can reappear — a deliberate choice: cancelling a redistribution and
+  deciding "no adjustment ever" are different user intents, and the spec
+  gives "Don't adjust" its own explicit action for the latter.
+
+## J. Performance impact
+
+One new targeted endpoint (`GET /me/nutrition/balance`) — not folded
+into `/me/home`, so clients who never touch this feature pay nothing
+extra on their highest-traffic page load. Every query in the module is a
+single indexed lookup (`(client_id, status)` or `(client_id, date)`,
+both pre-existing or newly added indexes) — no N+1, no unbounded scan.
+`reconcileActivePlan` touches at most one additional day's `meal_logs`
+sum per request, never a historical bulk recompute (see O).
+
+## K. Tests added
+
+19 new backend tests, all passing:
+- `flexibleBalanceCalc.test.js` (9): no-op at zero surplus, EASY basic
+  case, 4/4/9 consistency across all strategies, INTENSE extending past
+  its own max, the safe-ceiling sweep across all strategies/surpluses,
+  an infeasible enormous-surplus case, the protein-floor override,
+  carbs/fat floor enforcement, an unknown strategy throwing.
+- `flexibleBalanceRoutes.test.js` (10): below-threshold no-prompt,
+  eligible-surplus prompt, preview never persists, apply creates +
+  re-GET doesn't re-prompt, decline is idempotent and blocks re-prompt,
+  cancel ends the plan and appears in history, new-surplus merge into
+  the same row, cross-client isolation, concurrent duplicate applies
+  never create two active rows, bad strategy rejected by validation.
+
+Not covered by an automated test (documented, not silently skipped):
+exact multi-day-gap catch-up sequencing beyond one day, and a frontend
+test suite — this project has no frontend test runner configured
+(confirmed earlier this session, `frontend/package.json` has no test
+script), consistent with how every other frontend change this session
+was verified: build + live browser check, not unit tests.
+
+## L. Full test result
+
+`cd backend && npm test` → **1041/1044 passing**. The 3 non-passing are
+2 skipped (pre-existing, unrelated to this change) and exactly 1 failure
+— `community.test.js`'s "leaderboards: period=month includes all
+workouts" (`3600 !== 9000`) — confirmed via `git stash` to fail
+identically on the clean `integrate-teammates` branch before any of this
+feature's code existed. Not touched or worked around.
+
+Two real regressions were caught and fixed by this same full-suite run
+before it went green: a stray backtick in a `schema.sql` comment tripped
+`prodreadiness.test.js`'s "no SQLite-only DDL" lint (removed the
+backtick), and both new tables were initially missing from `rls.sql`'s
+tenant-isolation policy loop (added them, re-run confirmed clean).
+
+## M. Production build result
+
+`cd frontend && npm run build` → clean, 0 errors, 0 new warnings (the
+existing >500kB chunk warnings for `three.module`/`charts` are
+pre-existing and unrelated — see the Vite config's own comment on why
+those are already correctly lazy-loaded). `Nutrition-*.js` grew to
+139.45 kB (33.31 kB gzip) to include `CalorieBalance.jsx` — the only
+chunk this feature touches.
+
+## N. Live verification result
+
+Actually run against the local dev app (backend on :4000/SQLite,
+frontend on :5173), authenticated as a real seeded client
+(`client1@ironforge.in`), with a controlled surplus seeded directly into
+that client's `meal_logs` for a real calendar "yesterday" and cleaned up
+afterward. Confirmed — screenshots + `get_page_text` + direct API calls,
+zero console errors throughout:
+
+1. A surplus below `SURPLUS_PROMPT_THRESHOLD` does not prompt (unit +
+   integration tested; not separately re-driven live).
+2. An eligible surplus shows the prompt card with the spec's own
+   preferred neutral copy ("2353 kcal above target on Sep 2… Totally
+   optional…") and Easy/Moderate/Aggressive/Intense/Don't adjust.
+3. Clicking a strategy opens a live preview (today's balance, daily
+   adjustment, duration, future target, protein minimum, return date)
+   fetched from `/preview` — confirmed it does **not** persist a plan
+   until Apply is clicked.
+4. The exact "We've extended the plan to N days to keep your daily
+   target within your safe range" copy from the spec rendered live when
+   the surplus forced an extension past the strategy's own range.
+5. Apply → toast "Flexible adjustment applied ✓" → the calorie ring,
+   macro bars, header ("2233 kcal today (base 2623)…"), and the "N kcal
+   away from target" insight line all switched to the adjusted target in
+   the same render — this last one was initially still reading the base
+   target (a real bug caught live, not assumed), fixed by routing all
+   four through one shared `effectivePlan` value, then re-verified.
+6. The compact active-plan card ("2353 kcal remaining · today −390
+   kcal… 6 days left · protein protected at 135g") and its "View plan"
+   detail modal (base/adjusted target, remaining balance, days
+   remaining, protein/carbs/fat, strategy) both matched the API response
+   exactly.
+7. Cancel adjustment → toast, plan disappears from the active card, base
+   target (2623 kcal, unadjusted) resumes immediately in the ring/header/
+   insight line.
+8. Don't adjust → prompt disappears; confirmed via a direct API call
+   that `promptEligible` is now `null` (server-persisted, not just a
+   local dismiss) and reload does not resurface it.
+9. Manually changing the base target while a plan was active (via
+   `/me/nutrition/targets/confirm`) produced exactly the spec's "Your
+   daily target changed. Your current balance plan needs to be
+   recalculated." banner with [Recalculate]/[Cancel adjustment].
+   Recalculate rebuilt the plan against the new target (2025 kcal / P140
+   / C220 / F65 → 8 days, −290/day, matching a hand-computed check of
+   the same safety-ceiling math) and the insight line/macro bars updated
+   to match in the same render.
+
+Not separately re-driven through the browser (already covered by the
+automated integration suite in K, and re-deriving the exact multi-day
+timing live would need manipulating real wall-clock time): merge-on-new-
+surplus, concurrent-duplicate-apply safety, cross-client isolation.
+
+## O. Remaining limitations
+
+Disclosed, not silently glossed over:
+
+- **Reconciliation catches up one day per request**, anchored on
+  `last_reconciled_date`. A client who opens the app roughly daily never
+  notices; a client absent for N days catches up progressively over
+  their next N app opens rather than in one bulk backfill on their next
+  visit. Documented in the service module's own header comment as a
+  deliberate simplification, not an oversight.
+- **Editing a *past* day's food log after that day has already been
+  reconciled does not retroactively reopen it.** The spec's edge-case
+  list asks for this; building full historical-day reopening (detecting
+  which past days a plan already settled, replaying them) is real added
+  complexity this pass did not implement. The common case — editing
+  *today's* or an upcoming day's log — works correctly since those days
+  haven't been reconciled yet.
+- **No frontend automated test suite** — this project has none
+  configured; verification is build + live browser, consistent with the
+  rest of this session's frontend work.
+- **Plan history has no pagination UI** — `GET /history` caps at 20 rows
+  server-side; the frontend renders whatever comes back with no "load
+  more." Not expected to matter at the scale a single client would
+  realistically accumulate plans.
+- **No dedicated analytics events were added beyond four** — this
+  codebase's `track()` helper exists and is used for
+  `balance_plan_created`, `balance_plan_declined`, `balance_plan_
+  cancelled`, and `balance_plan_recalculated`. The spec's fuller
+  suggested catalogue (e.g. a "shown" event on every prompt render) was
+  left out as genuinely optional per the spec's own "only if it fits
+  naturally" framing, to avoid adding telemetry surface not asked for
+  with confidence.
