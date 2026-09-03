@@ -70,6 +70,7 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
   const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const announcedSettle = useRef(false);
+  const announcedExpiry = useRef(false);
 
   const data = balance.data;
   const active = data?.activePlan;
@@ -81,6 +82,16 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
       onToast?.('Your calorie balance is settled.');
     }
   }, [data?.justSettled]);
+
+  useEffect(() => {
+    // A plan that went untouched too long (the client stopped opening the
+    // app) rather than one that genuinely paid itself off -- neutral,
+    // non-punitive phrasing, matching the settled-balance toast's tone.
+    if (data?.justExpired && !announcedExpiry.current) {
+      announcedExpiry.current = true;
+      onToast?.('Your calorie balance adjustment period ended. Back to your normal target.');
+    }
+  }, [data?.justExpired]);
 
   useEffect(() => { setDismissed(false); }, [prompt?.sourceDate]);
 
@@ -282,11 +293,14 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
               {history.map((h) => (
                 <div key={h.id} className="rounded-xl p-3" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
                   <div className="flex items-center justify-between">
-                    <span className="font-grotesk text-xs font-bold" style={{ color: t.ink }}>{h.strategy.charAt(0) + h.strategy.slice(1).toLowerCase()}</span>
+                    {/* A Declined entry has no strategy -- nothing was ever redistributed. */}
+                    <span className="font-grotesk text-xs font-bold" style={{ color: t.ink }}>
+                      {h.strategy ? h.strategy.charAt(0) + h.strategy.slice(1).toLowerCase() : 'Not adjusted'}
+                    </span>
                     <span className="font-grotesk text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: t.accentDim, color: t.accent }}>{h.status}</span>
                   </div>
                   <div className="text-[11px] mt-1" style={{ color: t.mute }}>
-                    {fmtDate(h.sourceDate)} · {h.originalSurplusCalories} kcal original balance
+                    {fmtDate(h.sourceDate)}{h.originalSurplusCalories != null ? ` · ${h.originalSurplusCalories} kcal original balance` : ''}
                   </div>
                 </div>
               ))}
