@@ -286,6 +286,16 @@ app.use('/uploads', requireAuth, async (req, res) => {
   app.use((err, req, res, _next) => {
     const code = err.type === 'entity.too.large' ? 413 : (err.status || 500);
     if (code === 413) return res.status(413).json({ error: 'Request body too large' });
+    // Payments not configured on this deployment (paymentProvider.js's
+    // PaymentsNotConfiguredError). A controlled, explicit 503 -- NOT a
+    // generic 500 -- so a caller can tell "this feature is switched off
+    // here" apart from "the server broke". Handled centrally because
+    // every payment entry point (enrollment, enterprise checkout,
+    // refunds, webhook replay) funnels its provider call through the same
+    // error, so one branch covers them all and no route can forget it.
+    if (err?.code === 'payments_not_configured') {
+      return res.status(503).json({ error: 'payments_not_configured', message: 'Payments are not configured on this deployment.' });
+    }
     // log diagnostics server-side only — never expose SQL/stack/secrets to clients
     console.error(`[error] req=${req.id || '-'}`, err?.message || err);
     // Also persist to the events table (best-effort, never blocks the

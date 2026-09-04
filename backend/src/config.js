@@ -75,30 +75,37 @@ if (nodeEnv === 'production') {
   }
 }
 
-// Production payment safety: a production boot must never silently run on
-// the mock payment provider (see services/payments/paymentProvider.js).
-// Unlike the AI zero-cost gate this mirrors, an unconfigured payment
-// provider isn't a merely-inconvenient default -- providerName() falling
-// back to 'mock' in production means the app is deployed and answering
-// real traffic while every "payment" is really an in-process fake that
-// never moves money and can be triggered by anyone with an account (see
-// routes/paymentsDev.js's POST /mock/complete, also hard-disabled in
-// production separately in index.js -- this is the belt to that
-// suspenders: even if that route were ever re-enabled by mistake,
-// providerName() itself must never be able to report 'mock' here). "Boots
-// fine, quietly does the safe thing" -- this codebase's usual posture for
-// a missing zero-cost-gated config -- is the WRONG failure mode when the
-// safe thing is silently pretending to take payment. Fail loud at boot
-// instead, the same way a missing JWT_SECRET or DATABASE_URL already
-// does above. Requires the exact same "go live" condition
-// providerName() itself checks (PAYMENT_PROVIDER=razorpay + both API
-// keys) PLUS RAZORPAY_WEBHOOK_SECRET, which providerName() does NOT
-// check but verifyWebhookSignature's own fail-closed guard absolutely
-// requires -- without it, a production boot would pass providerName()'s
-// own check (report 'razorpay', create real orders) while being
-// permanently unable to activate anything, because no webhook could ever
-// verify. Better to catch that missing var here, at boot, than have a
-// paying customer's subscription silently never activate.
+// Production payment safety. The hazard this guards against is the MOCK
+// payment provider answering real production traffic: it mints its own
+// valid-looking signatures in-process, so POST /api/payments/mock/complete
+// (routes/paymentsDev.js) would let anyone with an account forge a payment
+// and flip a subscription to ACTIVE without money moving. That must never
+// be reachable in production.
+//
+// The fix for that is NOT "refuse to boot without Razorpay credentials".
+// Payments are one optional feature; the rest of the app -- workouts,
+// nutrition, clients, tracking -- has no dependency on them, and an
+// operator who has not signed up with a gateway yet should still be able
+// to run the product. Refusing to boot turns a disabled feature into a
+// total outage.
+//
+// So there are three states, enforced together with providerName():
+//   razorpay  PAYMENT_PROVIDER=razorpay + both API keys  -> live payments
+//   none      production, no provider requested          -> payments DISABLED
+//   mock      development/staging only                   -> unchanged
+//
+// 'none' is what makes booting safe: providerName() returns 'none' rather
+// than falling back to 'mock', every provider operation throws
+// PaymentsNotConfiguredError (surfaced as a controlled 503), and both
+// signature verifiers fail closed. Nothing can be created, activated,
+// refunded or forged while payments are off.
+//
+// The one case that still refuses to boot is a HALF-configured Razorpay:
+// PAYMENT_PROVIDER=razorpay set but a key or the webhook secret missing.
+// That state is genuinely dangerous rather than merely disabled -- it can
+// create real gateway orders it is then permanently unable to verify or
+// activate, so a paying customer's subscription would silently never
+// activate. Fail loud there, exactly as a missing JWT_SECRET does.
 //
 // Scoped to production only (not staging, unlike the DATABASE_URL/JWT
 // checks above) -- deliberately narrower: nothing in this codebase's
@@ -108,15 +115,43 @@ if (nodeEnv === 'production') {
 // change has no visibility into. Revisit if staging is ever meant to
 // take real payments too.
 if (nodeEnv === 'production') {
-  const paymentProviderEnv = (process.env.PAYMENT_PROVIDER || 'mock').toLowerCase();
+  const paymentProviderEnv = (process.env.PAYMENT_PROVIDER || '').toLowerCase();
+  const razorpayRequested = paymentProviderEnv === 'razorpay';
   const missingPayment = [];
-  if (paymentProviderEnv !== 'razorpay') missingPayment.push('PAYMENT_PROVIDER=razorpay');
   if (!process.env.RAZORPAY_KEY_ID) missingPayment.push('RAZORPAY_KEY_ID');
   if (!process.env.RAZORPAY_KEY_SECRET) missingPayment.push('RAZORPAY_KEY_SECRET');
   if (!process.env.RAZORPAY_WEBHOOK_SECRET) missingPayment.push('RAZORPAY_WEBHOOK_SECRET');
-  if (missingPayment.length) {
-    console.error(`[sk-os] FATAL: production requires a fully configured live payment provider — missing: ${missingPayment.join(', ')}. The mock payment provider must never run in production.`);
+
+  if (razorpayRequested && missingPayment.length) {
+    // Razorpay was explicitly ASKED FOR but is only half-configured. This
+    // is the genuinely dangerous state and still refuses to boot: a
+    // deployment that reports 'razorpay' while missing a key would create
+    // real orders it can never verify or activate (see paymentProvider.js
+    // -- providerName() ignores PAYMENT_PROVIDER without both API keys,
+    // and verifyWebhookSignature fails closed without the webhook secret),
+    // so a paying customer's subscription would silently never activate.
+    console.error(`[sk-os] FATAL: PAYMENT_PROVIDER=razorpay is set but the integration is incomplete — missing: ${missingPayment.join(', ')}. Set the missing variables, or unset PAYMENT_PROVIDER to run with payments disabled.`);
     process.exit(1);
+  }
+
+  if (!razorpayRequested) {
+    // No payment provider configured at all. This is a SUPPORTED state,
+    // not an error: the rest of the application has no dependency on
+    // payments, so refusing to boot here would take down an entire
+    // deployment over a feature the operator has not enabled yet.
+    //
+    // Critically this does NOT fall back to the mock provider -- that was
+    // the original hazard this gate existed to prevent, since the mock
+    // gateway mints its own valid-looking signatures and would let anyone
+    // with an account forge a payment. paymentProvider.js's providerName()
+    // returns 'none' in production instead: every provider operation
+    // throws PaymentsNotConfiguredError (a controlled 503) and both
+    // signature verifiers fail closed, so no payment can be created,
+    // activated, refunded or forged while unconfigured.
+    //
+    // Setting PAYMENT_PROVIDER=razorpay + the three Razorpay variables
+    // switches the existing, untouched integration on with no code change.
+    console.warn('[sk-os] WARN: no payment provider configured — payments are DISABLED in this production deployment. Payment endpoints return 503 payments_not_configured. Set PAYMENT_PROVIDER=razorpay plus RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET to enable Razorpay.');
   }
 }
 

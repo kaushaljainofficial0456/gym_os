@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cfgPath = path.resolve(__dirname, '..', 'src', 'config.js').replace(/\\/g, '/');
+const provPath = path.resolve(__dirname, '..', 'src', 'services', 'payments', 'paymentProvider.js').replace(/\\/g, '/');
 
 // Passes the production JWT + DATABASE_URL gates so ONLY the payment
 // gate is under test -- same isolation technique as dbPolicy.test.js's
@@ -56,33 +57,60 @@ function loadConfig(extraEnv) {
   return { status: child.status, stdout: child.stdout || '', stderr: child.stderr || '' };
 }
 
-test('.env.prod\'s ACTUAL shape (empty Razorpay keys) -- production refuses to boot', () => {
-  // This is not a synthetic worst case -- these are the literal values
-  // committed in .env.prod today (ALLOW_PAID_AI="" style empty strings).
-  const r = loadConfig({ PAYMENT_PROVIDER: undefined, RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '' });
-  assert.notEqual(r.status, 0, 'production with .env.prod\'s actual (empty) Razorpay config must refuse to start');
-  assert.match(r.stderr, /FATAL/);
-  assert.match(r.stderr, /payment provider/i);
+// Boots config.js AND paymentProvider.js together, reporting the provider
+// actually resolved. The security-critical assertion in the
+// payments-disabled cases is not merely "it booted" but that the provider
+// is 'none' and NEVER 'mock' -- mock in production is the forgeable-payment
+// hazard this whole gate exists for.
+function loadProvider(extraEnv) {
+  const env = { PATH: process.env.PATH, NODE_ENV: 'production', JWT_SECRET: STRONG_SECRET, DATABASE_URL: PG_URL, ...extraEnv };
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    const { providerName, paymentsDisabled } = await import('file://${provPath}');
+    console.log('PROVIDER:' + providerName() + ':' + paymentsDisabled());
+  `], { env, encoding: 'utf8', timeout: 10000 });
+  return { status: child.status, stdout: child.stdout || '', stderr: child.stderr || '' };
+}
+
+test('.env.prod actual shape (empty Razorpay keys) -> boots with payments DISABLED, never mock', () => {
+  // These are the literal values committed in .env.prod today (empty
+  // strings). This previously refused to boot outright. It now boots with
+  // payments disabled: an operator without a payment gateway must still be
+  // able to run the rest of the product. The security property is upheld by
+  // the provider resolving to 'none' rather than falling back to 'mock'.
+  const envv = { PAYMENT_PROVIDER: undefined, RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '' };
+  const r = loadConfig(envv);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /BOOTED:production/);
+  assert.match(r.stderr, /payments are DISABLED/i);
+
+  const p = loadProvider(envv);
+  assert.match(p.stdout, /PROVIDER:none:true/, 'production without a live provider must resolve to none');
+  assert.doesNotMatch(p.stdout, /mock/, 'the mock gateway must never be reachable in production');
 });
 
-test('production + no payment env at all -> refuses to start', () => {
+test('production + no payment env at all -> boots with payments DISABLED, never mock', () => {
   const r = loadConfig({});
-  assert.notEqual(r.status, 0, 'production with zero payment configuration must refuse to start');
-  assert.match(r.stderr, /FATAL/);
-  assert.match(r.stderr, /PAYMENT_PROVIDER=razorpay/);
-  assert.match(r.stderr, /RAZORPAY_KEY_ID/);
-  assert.match(r.stderr, /RAZORPAY_KEY_SECRET/);
-  assert.match(r.stderr, /RAZORPAY_WEBHOOK_SECRET/);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /BOOTED:production/);
+  assert.match(r.stderr, /payments are DISABLED/i);
+  assert.match(r.stderr, /PAYMENT_PROVIDER=razorpay/, 'the warning must state exactly how to enable Razorpay later');
+
+  const p = loadProvider({});
+  assert.match(p.stdout, /PROVIDER:none:true/);
+  assert.doesNotMatch(p.stdout, /mock/);
 });
 
-test('production + PAYMENT_PROVIDER unset (real-shaped keys present but flag missing) -> refuses to start', () => {
-  // Mirrors paymentZeroCostSafety.test.js's own "real keys present but
-  // PAYMENT_PROVIDER not set -> stays mock" case -- providerName() would
-  // silently stay mock here too; production must not tolerate that at all.
-  const r = loadConfig({ RAZORPAY_KEY_ID: 'rzp_test_fakekeyfortest', RAZORPAY_KEY_SECRET: 'fake-key-secret-for-test-only', RAZORPAY_WEBHOOK_SECRET: 'fake-webhook-secret-for-test-only' });
-  assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /FATAL/);
-  assert.match(r.stderr, /PAYMENT_PROVIDER=razorpay/);
+test('production + PAYMENT_PROVIDER unset (real-shaped keys present but flag missing) -> boots DISABLED', () => {
+  // Keys present but the flag never set means Razorpay was not actually
+  // requested, so this is the disabled state, not a misconfiguration --
+  // providerName() already ignores the keys without the flag.
+  const r = loadConfig({
+    RAZORPAY_KEY_ID: 'rzp_test_fakekeyfortest',
+    RAZORPAY_KEY_SECRET: 'fake-key-secret-for-test-only',
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /BOOTED:production/);
+  assert.match(r.stderr, /payments are DISABLED/i);
 });
 
 test('production + PAYMENT_PROVIDER=razorpay + both API keys but NO webhook secret -> refuses to start', () => {
