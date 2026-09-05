@@ -244,6 +244,70 @@ test('client cannot inject another gym\'s exercise id into a workout', async (t)
   await api.close();
 });
 
+// Regression coverage for the DELETE /me/planner/workouts/:id IDOR: the
+// route used to delete client_workout_schedule and client_workout_exercises
+// rows keyed ONLY on workout_id, with no ownership check of its own -- only
+// the final client_workouts delete was scoped by client_id, and that delete
+// silently no-op'ing (0 rows affected) was never distinguished from success,
+// so the response was `{ ok: true }` either way. Any client who knew (or
+// guessed/enumerated) another client's workout id could wipe that workout's
+// exercises and weekly-schedule slot while leaving the parent row behind,
+// now empty and unscheduled.
+test('client cannot delete another client\'s planner workout (IDOR)', async (t) => {
+  const db = await twoOrgFixture();
+  await db.run(`INSERT INTO gym_settings (org_id, workout_mode_default) VALUES ('o2', 'custom')`);
+  // victim: client c2 (org o2, user u2) owns this workout, its exercises, and a schedule slot.
+  await db.run(`INSERT INTO exercise_library (id, name, primary_muscle, equipment, is_global) VALUES ('exG', 'Push-up', 'CHEST', 'BODYWEIGHT', 1)`);
+  await db.run(`INSERT INTO client_workouts (id, org_id, client_id, name, created_at) VALUES ('cwV', 'o2', 'c2', 'Victim Leg Day', '2026-01-01T00:00:00Z')`);
+  await db.run(`INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec) VALUES ('cweV', 'cwV', 'exG', 0, 'Push-up', 3, '10', 'BW', 90)`);
+  await db.run(`INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES ('c2', 0, 'cwV')`);
+
+  // attacker: client c1 (org o1, user u1) -- a completely different account.
+  const api = await startMeApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
+  t.after(() => api.close());
+
+  const attack = await api.call('DELETE', '/me/planner/workouts/cwV');
+  assert.equal(attack.status, 404, 'deleting a workout you do not own is rejected, not silently accepted');
+
+  // Nothing belonging to the victim was touched -- parent row, its
+  // exercises, AND its schedule slot must all survive untouched.
+  const workout = await db.q1(`SELECT * FROM client_workouts WHERE id = 'cwV'`);
+  assert.ok(workout, 'victim\'s workout row still exists');
+  assert.equal(workout.name, 'Victim Leg Day', 'victim\'s workout is unmodified');
+  const exs = await db.q(`SELECT * FROM client_workout_exercises WHERE workout_id = 'cwV'`);
+  assert.equal(exs.length, 1, 'victim\'s exercise row was NOT deleted by the attacker');
+  const sched = await db.q(`SELECT * FROM client_workout_schedule WHERE workout_id = 'cwV'`);
+  assert.equal(sched.length, 1, 'victim\'s schedule slot was NOT deleted by the attacker');
+  await api.close();
+});
+
+test('client CAN delete their own planner workout (no regression)', async (t) => {
+  const db = await twoOrgFixture();
+  await db.run(`INSERT INTO gym_settings (org_id, workout_mode_default) VALUES ('o1', 'custom')`);
+  await db.run(`INSERT INTO exercise_library (id, name, primary_muscle, equipment, is_global) VALUES ('exG', 'Push-up', 'CHEST', 'BODYWEIGHT', 1)`);
+  await db.run(`INSERT INTO client_workouts (id, org_id, client_id, name, created_at) VALUES ('cwO', 'o1', 'c1', 'My Own Workout', '2026-01-01T00:00:00Z')`);
+  await db.run(`INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec) VALUES ('cweO', 'cwO', 'exG', 0, 'Push-up', 3, '10', 'BW', 90)`);
+  await db.run(`INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES ('c1', 2, 'cwO')`);
+
+  const api = await startMeApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
+  t.after(() => api.close());
+
+  const del = await api.call('DELETE', '/me/planner/workouts/cwO');
+  assert.equal(del.status, 200, 'the legitimate owner can still delete their own workout');
+  assert.equal(del.json.ok, true);
+
+  assert.equal(await db.q1(`SELECT * FROM client_workouts WHERE id = 'cwO'`), null, 'workout row removed');
+  const exs = await db.q(`SELECT * FROM client_workout_exercises WHERE workout_id = 'cwO'`);
+  assert.equal(exs.length, 0, 'its exercises were removed too');
+  const sched = await db.q(`SELECT * FROM client_workout_schedule WHERE workout_id = 'cwO'`);
+  assert.equal(sched.length, 0, 'its schedule slot was removed too');
+
+  // deleting a workout id that no longer exists (or never did) -> 404, not a false "ok: true"
+  const again = await api.call('DELETE', '/me/planner/workouts/cwO');
+  assert.equal(again.status, 404, 'deleting an already-deleted/unknown workout id is a clean 404');
+  await api.close();
+});
+
 test('client cannot add another gym\'s food to their meal', async (t) => {
   const db = await twoOrgFixture();
   const secret = 'test-secret';

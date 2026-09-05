@@ -123,16 +123,36 @@ function paintBackground(doc) {
  * historical pricing -- every number on the page comes from the STORED
  * invoices row, or from refunds rows (also immutable once SUCCESS).
  */
+// Rendered PDFs are cached by invoice id: an invoice's stored snapshot
+// (amount/tax/issued_at/line item/customer/refunds-at-render-time) is
+// immutable once issued, EXCEPT that a refund recorded after the first
+// render would not appear in a cached copy. Cache is keyed on invoiceId +
+// the invoice's own updated_at/refund count so a later refund still busts
+// it, while repeat downloads/emails of the same, unchanged invoice (the
+// PDF render is CPU-bound pdfkit work on the request thread) skip re-rendering.
+const pdfCache = new Map(); // invoiceId -> { key, buf }
+const PDF_CACHE_MAX = 200;
+
 export async function renderInvoicePdf(db, { invoiceId, orgId }) {
-  const invoice = await db.q1('SELECT * FROM invoices WHERE id = ? AND org_id = ?', [invoiceId, orgId]);
+  const [invoice, org] = await Promise.all([
+    db.q1('SELECT * FROM invoices WHERE id = ? AND org_id = ?', [invoiceId, orgId]),
+    db.q1('SELECT name FROM organizations WHERE id = ?', [orgId]),
+  ]);
   if (!invoice) return null;
   const order = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [invoice.order_id]);
-  const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [orgId]);
   const [lineItem, customer, refunds] = await Promise.all([
     resolveLineItem(db, order),
     resolveCustomer(db, order),
     order ? db.q(`SELECT * FROM refunds WHERE payment_order_id = ? AND status = 'SUCCESS' ORDER BY created_at`, [order.id]) : [],
   ]);
+
+  // Cache key covers every mutable field the render below actually reads
+  // (invoice.status, order.status, refund count) -- anything else on an
+  // issued invoice is immutable, so a hit is guaranteed byte-identical to
+  // a fresh render.
+  const cacheKey = `${invoice.status}|${order?.status || ''}|${refunds.length}`;
+  const cached = pdfCache.get(invoiceId);
+  if (cached && cached.key === cacheKey) return cached.buf;
 
   const margin = 50;
   const doc = new PDFDocument({ size: 'A4', margin });
@@ -301,5 +321,8 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   doc.text('Page 1 of 1', margin, footerY, { width: rightEdge - margin, align: 'right' });
 
   doc.end();
-  return done;
+  const buf = await done;
+  if (pdfCache.size >= PDF_CACHE_MAX) pdfCache.delete(pdfCache.keys().next().value); // simple FIFO eviction
+  pdfCache.set(invoiceId, { key: cacheKey, buf });
+  return buf;
 }

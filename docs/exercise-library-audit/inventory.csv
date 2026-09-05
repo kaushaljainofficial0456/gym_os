@@ -1,0 +1,208 @@
+id,scope,name,primary_muscle,secondary_muscles,equipment,movement,ex_type,difficulty,animation_key,aliases,muscle_rows,workout_exercise_refs,client_workout_refs,workout_log_rows,set_log_rows,pr_rows,has_instructions,has_cues,has_mistakes,has_alternatives
+exl_51BLHgFPLk,GLOBAL,Ab Wheel Rollout,ABS,"CORE, LATS",BODYWEIGHT,core,bodyweight,ADVANCED,ab_wheel,,3,0,0,0,0,0,0,0,0,0
+exl_pjlTJfid8Q,GLOBAL,Bicycle Crunch,ABS,"OBLIQUES, CORE",BODYWEIGHT,core,bodyweight,BEGINNER,bicycle_crunch,,2,0,0,0,0,0,0,0,0,0
+exl_nwJHryk7zD,GLOBAL,Cable Crunch,ABS,CORE,CABLE,core,cable,BEGINNER,cable_crunch,,2,202,1,169,507,0,0,0,0,0
+exl_AWDLmS7syX,GLOBAL,Hanging Leg Raise,ABS,CORE,BODYWEIGHT,core,bodyweight,INTERMEDIATE,hanging_leg_raise,,2,101,1,88,264,0,0,0,0,0
+exl_0FvMzPKeB3,GLOBAL,Reverse Crunch,ABS,CORE,BODYWEIGHT,core,bodyweight,BEGINNER,reverse_crunch,,2,0,0,0,0,0,0,0,0,0
+exl_kIE1ergiWf,GLOBAL,Russian Twist,ABS,"OBLIQUES, CORE",BODYWEIGHT,core,bodyweight,BEGINNER,russian_twist,,2,101,1,88,264,0,0,0,0,0
+exl_gAGgkfrdjO,GLOBAL,V-Up,ABS,"CORE, HIP FLEXORS",BODYWEIGHT,core,bodyweight,INTERMEDIATE,v_up,,2,0,0,0,0,0,0,0,0,0
+exl_u6q9eIJam7,GLOBAL,Windshield Wiper,ABS,"OBLIQUES, CORE",BODYWEIGHT,core,bodyweight,ADVANCED,windshield_wiper,,2,0,0,0,0,0,0,0,0,0
+exl_POe2mwkxmE,GLOBAL,Band Bicep Curl,BICEPS,FOREARMS,BANDS,isolation,bodyweight,BEGINNER,band_curl,,2,0,0,0,0,0,0,0,0,0
+exl_3biU4u0LDR,GLOBAL,Barbell Curl,BICEPS,FOREARMS,BARBELL,isolation,free_weight,BEGINNER,barbell_curl,,2,0,0,0,0,0,0,0,0,0
+exl_AQVL4ZsUtT,GLOBAL,Bayesian Cable Curl,BICEPS,FOREARMS,CABLE,isolation,cable,INTERMEDIATE,bayesian_curl,,2,0,0,0,0,0,0,0,0,0
+exl_Rolt3Vd3fD,GLOBAL,Bicep Curl,BICEPS,FOREARMS,DUMBBELL,isolation,free_weight,BEGINNER,bicep_curl,curl | barbell curl,2,102,1,80,240,0,0,0,0,0
+exl_NKr6oLwyiW,GLOBAL,Cable Curl,BICEPS,FOREARMS,CABLE,isolation,cable,BEGINNER,cable_curl,,2,0,0,0,0,0,0,0,0,0
+exl_nM8M3WD5Pt,GLOBAL,Concentration Curl,BICEPS,FOREARMS,DUMBBELL,isolation,free_weight,BEGINNER,concentration_curl,,2,0,0,0,0,0,0,0,0,0
+exl_pEjSS5UxrH,GLOBAL,Drag Curl,BICEPS,FOREARMS,BARBELL,isolation,free_weight,INTERMEDIATE,drag_curl,,2,0,0,0,0,0,0,0,0,0
+exl_zhZwcb1dGL,GLOBAL,EZ-Bar Curl,BICEPS,FOREARMS,BARBELL,isolation,free_weight,BEGINNER,ez_bar_curl,,2,0,0,0,0,0,0,0,0,0
+exl_Mml1I1Qqog,GLOBAL,Hammer Curl,BICEPS,"FOREARMS, BRACHIALIS",DUMBBELL,isolation,free_weight,BEGINNER,hammer_curl,hammer curls | db hammer curl,2,0,0,0,0,0,0,0,0,0
+exl_kPTOLzefV8,GLOBAL,Incline Dumbbell Curl,BICEPS,FOREARMS,DUMBBELL,isolation,free_weight,INTERMEDIATE,incline_curl,,2,0,0,0,0,0,0,0,0,0
+exl_8YLb0jf9hh,GLOBAL,Preacher Curl,BICEPS,FOREARMS,BARBELL,isolation,free_weight,INTERMEDIATE,preacher_curl,,2,0,0,0,0,0,0,0,0,0
+exl_Rj80nr42Ki,GLOBAL,Spider Curl,BICEPS,FOREARMS,BARBELL,isolation,free_weight,INTERMEDIATE,spider_curl,,2,0,0,0,0,0,0,0,0,0
+exl_fVZ71TX3bb,GLOBAL,Calf Press on Leg Press,CALVES,—,LEG_PRESS,isolation,machine,BEGINNER,calf_press_leg_press,,1,0,0,0,0,0,0,0,0,0
+exl_uMyqICelD7,GLOBAL,Donkey Calf Raise,CALVES,—,MACHINE,isolation,machine,BEGINNER,donkey_calf_raise,,1,0,0,0,0,0,0,0,0,0
+exl_Xs4YmnFVns,GLOBAL,Seated Calf Raise,CALVES,—,MACHINE,isolation,machine,BEGINNER,seated_calf_raise,,1,0,0,0,0,0,0,0,0,0
+exl_TtXOyytW1U,GLOBAL,Single-Leg Calf Raise,CALVES,—,BODYWEIGHT,isolation,bodyweight,BEGINNER,single_leg_calf_raise,,1,0,0,0,0,0,0,0,0,0
+exl_3UmT49H2Y1,GLOBAL,Standing Calf Raise,CALVES,—,MACHINE,isolation,machine,BEGINNER,standing_calf_raise,,1,101,1,84,252,0,0,0,0,0
+exl_Mzznkck355,GLOBAL,Tibialis Raise,CALVES,—,BODYWEIGHT,isolation,bodyweight,BEGINNER,tibialis_raise,,1,0,0,0,0,0,0,0,0,0
+exl_18ILsdnEnF,GLOBAL,Assault Bike,CARDIO,"QUADS, CORE",BIKE,carry,cardio,INTERMEDIATE,assault_bike,air bike,2,0,0,0,0,0,0,0,0,0
+exl_qDlwNas257,GLOBAL,Battle Ropes,CARDIO,"SHOULDERS, ARMS, CORE",BODYWEIGHT,carry,bodyweight,INTERMEDIATE,battle_ropes,battling ropes | ropes,3,0,0,0,0,0,0,0,0,0
+exl_2Gq2KY8JLQ,GLOBAL,Elliptical,CARDIO,"QUADS, GLUTES, CORE",MACHINE,carry,machine,BEGINNER,elliptical,cross trainer,3,0,0,0,0,0,0,0,0,0
+exl_4GoqhVf2BW,GLOBAL,Incline Treadmill Walk,CARDIO,"GLUTES, CALVES",TREADMILL,carry,cardio,BEGINNER,incline_walk,,2,0,0,0,0,0,0,0,0,0
+exl_McDjJfcvs1,GLOBAL,Jump Rope,CARDIO,"CALVES, CORE, FOREARMS",BODYWEIGHT,carry,bodyweight,BEGINNER,jump_rope,skipping rope | skip rope,3,0,0,0,0,0,0,0,0,0
+exl_a5tA2naZDl,GLOBAL,Rowing Machine,CARDIO,"UPPER BACK, LATS, QUADS",ROWING,carry,cardio,BEGINNER,rowing_machine,erg | rower,3,0,0,0,0,0,0,0,0,0
+exl_jkA0RoeDn0,GLOBAL,Ski Erg,CARDIO,"LATS, SHOULDERS, CORE",MACHINE,carry,machine,INTERMEDIATE,ski_erg,,3,0,0,0,0,0,0,0,0,0
+exl_Xtg7v8KDRc,GLOBAL,Sprint Intervals,CARDIO,"QUADS, GLUTES, CALVES",TREADMILL,carry,cardio,ADVANCED,sprint_intervals,,3,0,0,0,0,0,0,0,0,0
+exl_V53H2m24dK,GLOBAL,Stair Climber,CARDIO,"QUADS, GLUTES, CALVES",MACHINE,carry,machine,BEGINNER,stair_climber,stairs | stairmaster,3,0,0,0,0,0,0,0,0,0
+exl_pyrhhussgU,GLOBAL,Stationary Cycling,CARDIO,"QUADS, CALVES",BIKE,carry,cardio,BEGINNER,cycling,,2,0,0,0,0,0,0,0,0,0
+exl_ChNH07l61g,GLOBAL,Treadmill Run,CARDIO,"CALVES, QUADS",TREADMILL,carry,cardio,BEGINNER,treadmill_run,,2,0,0,0,0,0,0,0,0,0
+exl_DCeMdgFUth,GLOBAL,Band Chest Press,CHEST,TRICEPS,BANDS,horizontal_push,bodyweight,BEGINNER,band_chest_press,,2,0,0,0,0,0,0,0,0,0
+exl_l79Gnp7aj5,GLOBAL,Bench Press,CHEST,"CHEST, TRICEPS, FRONT DELTS",BARBELL,horizontal_push,free_weight,INTERMEDIATE,bench_press,flat bench | barbell bench | bench | bench press,4,198,1,161,644,0,0,0,0,0
+exl_eeZRvVcmdK,GLOBAL,Cable Fly,CHEST,FRONT DELTS,CABLE,isolation,cable,BEGINNER,cable_fly,cable flies | chest fly,2,0,0,0,0,0,0,0,0,0
+exl_4ZA2AoGx7v,GLOBAL,Chest Dip,CHEST,"TRICEPS, FRONT DELTS",BODYWEIGHT,horizontal_push,bodyweight,INTERMEDIATE,chest_dip,,3,0,0,0,0,0,0,0,0,0
+exl_Dr5EeZ2tTd,GLOBAL,Dumbbell Bench Press,CHEST,"TRICEPS, FRONT DELTS",DUMBBELL,horizontal_push,free_weight,BEGINNER,dumbbell_bench_press,db bench | dumbbell press,3,0,0,0,0,0,0,0,0,0
+exl_H4WI9owBpJ,GLOBAL,Dumbbell Fly,CHEST,FRONT DELTS,DUMBBELL,isolation,free_weight,BEGINNER,dumbbell_fly,,2,0,0,0,0,0,0,0,0,0
+exl_EiUKY7k6AB,GLOBAL,Dumbbell Pullover,CHEST,"LATS, TRICEPS",DUMBBELL,vertical_pull,free_weight,INTERMEDIATE,db_pullover,,3,0,0,0,0,0,0,0,0,0
+exl_cSf6H3ysrV,GLOBAL,Floor Press,CHEST,TRICEPS,BARBELL,horizontal_push,free_weight,INTERMEDIATE,floor_press,,2,0,0,0,0,0,0,0,0,0
+exl_Fa2Gi0vCQ5,GLOBAL,Incline Push-up,CHEST,"TRICEPS, CORE",BODYWEIGHT,horizontal_push,bodyweight,BEGINNER,incline_push_up,,3,0,0,0,0,0,0,0,0,0
+exl_SEq248iaD4,GLOBAL,Landmine Press,CHEST,"SHOULDERS, TRICEPS, CORE",BARBELL,vertical_push,free_weight,INTERMEDIATE,landmine_press,,4,0,0,0,0,0,0,0,0,0
+exl_LvofD1XL6O,GLOBAL,Machine Chest Press,CHEST,"TRICEPS, FRONT DELTS",MACHINE,horizontal_push,machine,BEGINNER,machine_chest_press,chest press machine | machine press,3,0,0,0,0,0,0,0,0,0
+exl_5oGlJFzTzT,GLOBAL,Machine Fly,CHEST,FRONT DELTS,MACHINE,isolation,machine,BEGINNER,machine_fly,,2,0,0,0,0,0,0,0,0,0
+exl_jtE9TstBHi,GLOBAL,Pec Deck Fly,CHEST,FRONT DELTS,MACHINE,isolation,machine,BEGINNER,pec_deck,,2,0,0,0,0,0,0,0,0,0
+exl_JVMyPP3twH,GLOBAL,Push-up,CHEST,"TRICEPS, CORE",BODYWEIGHT,horizontal_push,bodyweight,BEGINNER,push_up,pushup | press up,3,101,0,81,243,0,0,0,0,0
+exl_oIMtiaZWJh,GLOBAL,Svend Press,CHEST,TRICEPS,DUMBBELL,horizontal_push,free_weight,BEGINNER,svend_press,,2,0,0,0,0,0,0,0,0,0
+exl_N9iAkyTvcf,GLOBAL,Weighted Dip,CHEST,"TRICEPS, FRONT DELTS",BODYWEIGHT,horizontal_push,bodyweight,ADVANCED,weighted_dip,,3,0,0,0,0,0,0,0,0,0
+exl_wkDLkabVxU,GLOBAL,Band Pallof Press,CORE,OBLIQUES,BANDS,core,bodyweight,INTERMEDIATE,band_pallof,,1,0,0,0,0,0,0,0,0,0
+exl_vAlPBzN2pN,GLOBAL,Bird Dog,CORE,"GLUTES, LOWER BACK",BODYWEIGHT,core,bodyweight,BEGINNER,bird_dog,bird dogs,3,0,0,0,0,0,0,0,0,0
+exl_gROOTS2xTp,GLOBAL,Dead Bug,CORE,ABS,BODYWEIGHT,core,bodyweight,BEGINNER,dead_bug,dead bugs,2,101,1,88,264,0,0,0,0,0
+exl_jv9FSTvJIX,GLOBAL,Dragon Flag,CORE,"ABS, HIP FLEXORS",BODYWEIGHT,core,bodyweight,ADVANCED,dragon_flag,,2,0,0,0,0,0,0,0,0,0
+exl_FfUeG63YKV,GLOBAL,Farmer's Carry,CORE,"FOREARMS, TRAPS, GLUTES",DUMBBELL,carry,free_weight,BEGINNER,farmers_carry,,4,0,0,0,0,0,0,0,0,0
+exl_uC5Ht7fi2p,GLOBAL,Hollow Body Hold,CORE,"ABS, HIP FLEXORS",BODYWEIGHT,core,bodyweight,INTERMEDIATE,hollow_body_hold,,2,0,0,0,0,0,0,0,0,0
+exl_piyoDHnboF,GLOBAL,Medicine Ball Slam,CORE,"LATS, SHOULDERS",BODYWEIGHT,carry,bodyweight,BEGINNER,med_ball_slam,,3,0,0,0,0,0,0,0,0,0
+exl_ckSrlCA7wr,GLOBAL,Mountain Climbers,CORE,"QUADS, SHOULDERS",BODYWEIGHT,core,bodyweight,BEGINNER,mountain_climbers,,3,0,0,0,0,0,0,0,0,0
+exl_F5ojikEopZ,GLOBAL,Pallof Press,CORE,OBLIQUES,CABLE,core,cable,INTERMEDIATE,pallof_press,pallof,1,0,0,0,0,0,0,0,0,0
+exl_43Q5XYrME0,GLOBAL,Plank,CORE,"ABS, GLUTES",BODYWEIGHT,core,bodyweight,BEGINNER,plank,front plank,3,203,1,172,516,0,0,0,0,0
+exl_3IFv6JwS7i,GLOBAL,Side Plank,CORE,"OBLIQUES, GLUTES",BODYWEIGHT,core,bodyweight,BEGINNER,side_plank,side planks,2,0,0,0,0,0,0,0,0,0
+exl_MWzdmMXXz5,GLOBAL,Suitcase Carry,CORE,"OBLIQUES, FOREARMS, TRAPS",DUMBBELL,carry,free_weight,BEGINNER,suitcase_carry,,3,0,0,0,0,0,0,0,0,0
+exl_m2DZymyn1E,GLOBAL,Waiter Carry,CORE,"SHOULDERS, FOREARMS",DUMBBELL,carry,free_weight,INTERMEDIATE,waiter_carry,,3,0,0,0,0,0,0,0,0,0
+exl_SQ9ZJMtDUq,GLOBAL,Dead Hang,FOREARMS,"LATS, TRAPS",PULL_UP_BAR,vertical_pull,bodyweight,BEGINNER,dead_hang,hang | passive hang,3,101,1,80,240,0,0,0,0,0
+exl_0hxM9Z68Sh,GLOBAL,Plate Pinch,FOREARMS,—,BARBELL,carry,free_weight,BEGINNER,plate_pinch,,1,0,0,0,0,0,0,0,0,0
+exl_9YbXNeu9LP,GLOBAL,Reverse Curl,FOREARMS,"BICEPS, BRACHIALIS",BARBELL,isolation,free_weight,BEGINNER,reverse_curl,,2,0,0,0,0,0,0,0,0,0
+exl_iCnkFTPq4b,GLOBAL,Wrist Curl,FOREARMS,—,BARBELL,isolation,free_weight,BEGINNER,wrist_curl,,1,0,0,0,0,0,0,0,0,0
+exl_QL5b8RErNX,GLOBAL,Front Raise,FRONT DELTS,SIDE DELTS,DUMBBELL,isolation,free_weight,BEGINNER,front_raise,,2,0,0,0,0,0,0,0,0,0
+exl_vWhJ7Qlfp6,GLOBAL,Plate Front Raise,FRONT DELTS,SIDE DELTS,BARBELL,isolation,free_weight,BEGINNER,plate_raise,,2,0,0,0,0,0,0,0,0,0
+exl_7wTxi7ro2X,GLOBAL,Barbell Snatch,FULL BODY,"QUADS, GLUTES, SHOULDERS, CORE",BARBELL,hinge,free_weight,ADVANCED,snatch,,4,0,0,0,0,0,0,0,0,0
+exl_uMosBqdb2y,GLOBAL,Burpee,FULL BODY,"CORE, CHEST, QUADS",BODYWEIGHT,carry,bodyweight,INTERMEDIATE,burpee,,3,0,0,0,0,0,0,0,0,0
+exl_3v3iZLaPeA,GLOBAL,Clean and Jerk,FULL BODY,"QUADS, GLUTES, SHOULDERS, CORE",BARBELL,hinge,free_weight,ADVANCED,clean_jerk,,4,0,0,0,0,0,0,0,0,0
+exl_79TuZ58q2x,GLOBAL,Devil Press,FULL BODY,"SHOULDERS, CORE, QUADS",DUMBBELL,carry,free_weight,ADVANCED,devil_press,,3,0,0,0,0,0,0,0,0,0
+exl_FZ5Qo9cWEo,GLOBAL,Power Clean,FULL BODY,"QUADS, GLUTES, TRAPS, CORE",BARBELL,hinge,free_weight,ADVANCED,power_clean,,4,0,0,0,0,0,0,0,0,0
+exl_G6MPf0mdX9,GLOBAL,Sled Pull,FULL BODY,"LATS, TRAPS, CORE",BODYWEIGHT,carry,bodyweight,INTERMEDIATE,sled_pull,,3,0,0,0,0,0,0,0,0,0
+exl_RHTU3vUGGT,GLOBAL,Sled Push,FULL BODY,"QUADS, GLUTES, CALVES",BODYWEIGHT,carry,bodyweight,INTERMEDIATE,sled_push,sled,3,0,0,0,0,0,0,0,0,0
+exl_3xb74GAeHq,GLOBAL,Turkish Get-Up,FULL BODY,"CORE, SHOULDERS, GLUTES",KETTLEBELL,carry,free_weight,ADVANCED,turkish_getup,tgu | turkish get up,3,0,0,0,0,0,0,0,0,0
+exl_A6X3CpmtfB,GLOBAL,Banded Hip Thrust,GLUTES,"HAMSTRINGS, CORE",BANDS,hinge,bodyweight,BEGINNER,banded_hip_thrust,,3,0,0,0,0,0,0,0,0,0
+exl_QvZexaTzIs,GLOBAL,Cable Glute Kickback,GLUTES,HAMSTRINGS,CABLE,isolation,cable,BEGINNER,cable_kickback,,2,0,0,0,0,0,0,0,0,0
+exl_4T3a7RZn9g,GLOBAL,Cable Pull-Through,GLUTES,HAMSTRINGS,CABLE,hinge,cable,INTERMEDIATE,cable_pull_through,pull through | pullthrough,2,0,0,0,0,0,0,0,0,0
+exl_Dy7bFVhYmg,GLOBAL,Curtsy Lunge,GLUTES,"QUADS, ADDUCTORS",DUMBBELL,lunge,free_weight,BEGINNER,curtsy_lunge,,2,0,0,0,0,0,0,0,0,0
+exl_aES6BsvgiD,GLOBAL,Dumbbell Hip Thrust,GLUTES,"HAMSTRINGS, CORE",DUMBBELL,hinge,free_weight,BEGINNER,dumbbell_hip_thrust,,3,0,0,0,0,0,0,0,0,0
+exl_62Mltj9Pso,GLOBAL,Dumbbell Swing,GLUTES,"HAMSTRINGS, LOWER BACK, CORE",DUMBBELL,hinge,free_weight,INTERMEDIATE,db_swing,,4,0,0,0,0,0,0,0,0,0
+exl_Jw3cCnT1mM,GLOBAL,Frog Pump,GLUTES,HAMSTRINGS,BODYWEIGHT,hinge,bodyweight,BEGINNER,frog_pump,,2,0,0,0,0,0,0,0,0,0
+exl_J5f7y3nN8H,GLOBAL,Glute Bridge,GLUTES,"HAMSTRINGS, CORE",BODYWEIGHT,hinge,bodyweight,BEGINNER,glute_bridge,hip bridge | glute bridges,3,0,0,0,0,0,0,0,0,0
+exl_8fEYI11QOe,GLOBAL,Hip Abduction Machine,GLUTES,—,MACHINE,isolation,machine,BEGINNER,hip_abduction_machine,,1,0,0,0,0,0,0,0,0,0
+exl_l0iwFz68vk,GLOBAL,Hip Thrust,GLUTES,HAMSTRINGS,BARBELL,hinge,free_weight,BEGINNER,hip_thrust,glute thrust | hip thrusts,2,101,1,81,243,0,0,0,0,0
+exl_cHBxtZ1YWC,GLOBAL,Kettlebell Swing,GLUTES,"HAMSTRINGS, LOWER BACK, CORE",KETTLEBELL,hinge,free_weight,INTERMEDIATE,kettlebell_swing,kb swing | russian swing,4,0,0,0,0,0,0,0,0,0
+exl_6C135S6R7M,GLOBAL,Lateral Band Walks,GLUTES,—,BANDS,isolation,bodyweight,BEGINNER,band_walks,,1,0,0,0,0,0,0,0,0,0
+exl_B987L3glPs,GLOBAL,Single-Leg Glute Bridge,GLUTES,"HAMSTRINGS, CORE",BODYWEIGHT,hinge,bodyweight,BEGINNER,single_leg_glute_bridge,,3,0,0,0,0,0,0,0,0,0
+exl_By8OqAoepc,GLOBAL,Sumo Deadlift,GLUTES,"QUADS, HAMSTRINGS, CORE",BARBELL,hinge,free_weight,ADVANCED,sumo_deadlift,sumo deads,4,0,0,0,0,0,0,0,0,0
+exl_5IzjO74Qao,GLOBAL,Glute-Ham Raise,HAMSTRINGS,"GLUTES, LOWER BACK",MACHINE,hinge,machine,ADVANCED,glute_ham_raise,,3,0,0,0,0,0,0,0,0,0
+exl_rR5K3qnU0L,GLOBAL,Good Morning,HAMSTRINGS,"LOWER BACK, GLUTES",BARBELL,hinge,free_weight,ADVANCED,good_morning,,3,0,0,0,0,0,0,0,0,0
+exl_yv3jOurA7H,GLOBAL,Leg Curl,HAMSTRINGS,—,MACHINE,isolation,machine,BEGINNER,leg_curl,hamstring curl | leg curls,1,101,1,84,252,0,0,0,0,0
+exl_p3fF8OKj5C,GLOBAL,Lying Leg Curl,HAMSTRINGS,—,MACHINE,isolation,machine,BEGINNER,lying_leg_curl,,1,0,0,0,0,0,0,0,0,0
+exl_Ozl658FJj5,GLOBAL,Nordic Curl,HAMSTRINGS,"GLUTES, CORE",BODYWEIGHT,hinge,bodyweight,ADVANCED,nordic_curl,nordic hamstring curl,3,0,0,0,0,0,0,0,0,0
+exl_5AzzVIWSwe,GLOBAL,Romanian Deadlift,HAMSTRINGS,"GLUTES, LOWER BACK",BARBELL,hinge,free_weight,INTERMEDIATE,romanian_deadlift,rdl | romanian deadlifts,3,102,1,84,252,0,0,0,0,0
+exl_2yAfoxlEbG,GLOBAL,Seated Leg Curl,HAMSTRINGS,—,MACHINE,isolation,machine,BEGINNER,seated_leg_curl,,1,0,0,0,0,0,0,0,0,0
+exl_NbrXGVagJO,GLOBAL,Single-Leg Romanian Deadlift,HAMSTRINGS,"GLUTES, CORE",DUMBBELL,hinge,free_weight,INTERMEDIATE,single_leg_rdl,single leg rdl | one leg rdl,3,0,0,0,0,0,0,0,0,0
+exl_Hr2OJJv87U,GLOBAL,Straight-Leg Deadlift,HAMSTRINGS,"GLUTES, LOWER BACK",BARBELL,hinge,free_weight,INTERMEDIATE,straight_leg_deadlift,,3,0,0,0,0,0,0,0,0,0
+exl_whk8J7xwBd,GLOBAL,Band Lat Pulldown,LATS,BICEPS,BANDS,vertical_pull,bodyweight,BEGINNER,band_lat_pulldown,,2,0,0,0,0,0,0,0,0,0
+exl_0btTRMYlOK,GLOBAL,Chin-up,LATS,"BICEPS, UPPER BACK",PULL_UP_BAR,vertical_pull,bodyweight,INTERMEDIATE,chin_up,chinup | chin ups,3,0,0,0,0,0,0,0,0,0
+exl_oAf7w7xri6,GLOBAL,Close-Grip Pulldown,LATS,BICEPS,CABLE,vertical_pull,cable,BEGINNER,close_grip_pulldown,,2,0,0,0,0,0,0,0,0,0
+exl_moAGzBnt3N,GLOBAL,Dumbbell Row,LATS,"UPPER BACK, BICEPS",DUMBBELL,horizontal_pull,free_weight,BEGINNER,dumbbell_row,db row | one arm row,3,102,1,80,240,0,0,0,0,0
+exl_f0Xvtpt00I,GLOBAL,Lat Pulldown,LATS,"BICEPS, REAR DELTS",CABLE,vertical_pull,cable,BEGINNER,lat_pulldown,lat pull down | pulldown | pull down,3,304,2,241,883,0,0,0,0,0
+exl_GJk4VQsNZN,GLOBAL,Meadows Row,LATS,"UPPER BACK, BICEPS",BARBELL,horizontal_pull,free_weight,ADVANCED,meadows_row,,3,0,0,0,0,0,0,0,0,0
+exl_QcTR5GIKpP,GLOBAL,Muscle-Up,LATS,"TRICEPS, CHEST, CORE",PULL_UP_BAR,vertical_pull,bodyweight,ADVANCED,muscle_up,,4,0,0,0,0,0,0,0,0,0
+exl_U3cUW72li1,GLOBAL,Pull-up,LATS,"BICEPS, UPPER BACK",PULL_UP_BAR,vertical_pull,bodyweight,INTERMEDIATE,pull_up,pullup | pull ups,3,0,0,0,0,0,0,0,0,0
+exl_QbWXdNHLnL,GLOBAL,Reverse-Grip Pulldown,LATS,BICEPS,CABLE,vertical_pull,cable,INTERMEDIATE,reverse_grip_pulldown,,2,0,0,0,0,0,0,0,0,0
+exl_hedDilTc9c,GLOBAL,Rope Climb,LATS,"FOREARMS, BICEPS, CORE",BODYWEIGHT,vertical_pull,bodyweight,ADVANCED,rope_climb,,4,0,0,0,0,0,0,0,0,0
+exl_E4RYGNIPhQ,GLOBAL,Single-Arm Cable Row,LATS,"UPPER BACK, BICEPS",CABLE,horizontal_pull,cable,BEGINNER,single_arm_cable_row,,3,0,0,0,0,0,0,0,0,0
+exl_DxkyLLj8iI,GLOBAL,Single-Arm Pulldown,LATS,BICEPS,CABLE,vertical_pull,cable,BEGINNER,single_arm_pulldown,,2,0,0,0,0,0,0,0,0,0
+exl_QZWhK8Mrsu,GLOBAL,Straight-Arm Pulldown,LATS,"TRICEPS, CORE",CABLE,vertical_pull,cable,BEGINNER,straight_arm_pulldown,,3,0,0,0,0,0,0,0,0,0
+exl_7QRgNEtckx,GLOBAL,Wide-Grip Lat Pulldown,LATS,"REAR DELTS, BICEPS",CABLE,vertical_pull,cable,BEGINNER,wide_grip_pulldown,,3,0,0,0,0,0,0,0,0,0
+exl_WMw4TJF9Ny,GLOBAL,Yates Row,LATS,"UPPER BACK, BICEPS",BARBELL,horizontal_pull,free_weight,INTERMEDIATE,yates_row,,3,0,0,0,0,0,0,0,0,0
+exl_Ha519Nk6y2,GLOBAL,Back Extension,LOWER BACK,"GLUTES, HAMSTRINGS",BODYWEIGHT,hinge,bodyweight,BEGINNER,back_extension,,3,0,0,0,0,0,0,0,0,0
+exl_Pl5gKM22eZ,GLOBAL,Reverse Hyperextension,LOWER BACK,"GLUTES, HAMSTRINGS",MACHINE,hinge,machine,INTERMEDIATE,reverse_hyper,,3,0,0,0,0,0,0,0,0,0
+exl_VqKosn40O2,GLOBAL,Decline Barbell Press,LOWER CHEST,"TRICEPS, FRONT DELTS",BARBELL,horizontal_push,free_weight,INTERMEDIATE,decline_barbell_press,decline bench press | decline press,3,0,0,0,0,0,0,0,0,0
+exl_EVTTOKiVNw,GLOBAL,Decline Dumbbell Press,LOWER CHEST,"TRICEPS, FRONT DELTS",DUMBBELL,horizontal_push,free_weight,INTERMEDIATE,decline_db_press,,3,0,0,0,0,0,0,0,0,0
+exl_K28Q4xrElJ,GLOBAL,High Cable Fly,LOWER CHEST,FRONT DELTS,CABLE,isolation,cable,BEGINNER,high_cable_fly,,2,0,0,0,0,0,0,0,0,0
+exl_rjq4gtc6AK,GLOBAL,Ankle Rocker,MOBILITY,"CALVES, ANKLES",BODYWEIGHT,mobility,bodyweight,BEGINNER,ankle_rocker,,1,0,0,0,0,0,0,0,0,0
+exl_Xhtjy0Rwwr,GLOBAL,Band Shoulder Dislocate,MOBILITY,"SHOULDERS, CHEST",BANDS,mobility,bodyweight,BEGINNER,shoulder_dislocate,dislocates | band dislocates,2,0,0,0,0,0,0,0,0,0
+exl_lm2I2iw4q6,GLOBAL,Cat-Cow,MOBILITY,"SPINE, CORE",BODYWEIGHT,mobility,bodyweight,BEGINNER,cat_cow,,1,0,0,0,0,0,0,0,0,0
+exl_JAYqLWZknl,GLOBAL,Couch Stretch,MOBILITY,"HIP FLEXORS, QUADS",BODYWEIGHT,mobility,bodyweight,BEGINNER,couch_stretch,hip flexor stretch,1,0,0,0,0,0,0,0,0,0
+exl_lH8xO4wPJu,GLOBAL,Deep Squat Hold,MOBILITY,"QUADS, HIPS, CALVES",BODYWEIGHT,mobility,bodyweight,BEGINNER,deep_squat_hold,squat hold,2,0,0,0,0,0,0,0,0,0
+exl_wvh5VOsnej,GLOBAL,Pigeon Pose,MOBILITY,"GLUTES, HIPS",BODYWEIGHT,mobility,bodyweight,BEGINNER,pigeon_pose,pigeon,1,0,0,0,0,0,0,0,0,0
+exl_GhtK300FxV,GLOBAL,Thoracic Rotation,MOBILITY,"SPINE, SHOULDERS",BODYWEIGHT,mobility,bodyweight,BEGINNER,thoracic_rotation,,1,0,0,0,0,0,0,0,0,0
+exl_qZX5FVhFos,GLOBAL,Wall Slide,MOBILITY,"SHOULDERS, UPPER BACK",BODYWEIGHT,mobility,bodyweight,BEGINNER,wall_slide,,2,0,0,0,0,0,0,0,0,0
+exl_aNNqSo66au,GLOBAL,World Greatest Stretch,MOBILITY,"HIPS, HAMSTRINGS, SPINE",BODYWEIGHT,mobility,bodyweight,BEGINNER,worlds_greatest_stretch,wgs | worlds greatest,1,0,0,0,0,0,0,0,0,0
+exl_aQmgByyKEt,GLOBAL,Deadlift,POSTERIOR CHAIN,"LATS, CORE, TRAPS",BARBELL,hinge,free_weight,ADVANCED,deadlift,conventional deadlift | barbell deadlift,4,101,0,81,243,0,0,0,0,0
+exl_w3Nxox012v,GLOBAL,Deficit Deadlift,POSTERIOR CHAIN,"LATS, CORE, TRAPS",BARBELL,hinge,free_weight,ADVANCED,deficit_deadlift,,4,0,0,0,0,0,0,0,0,0
+exl_trYz3BbueS,GLOBAL,Back Squat,QUADS,"GLUTES, CORE",BARBELL,squat,free_weight,INTERMEDIATE,squat,barbell squat | back squat | squats,3,102,1,84,336,0,0,0,0,0
+exl_N3ZD91ox5u,GLOBAL,Banded Squat,QUADS,"GLUTES, CORE",BANDS,squat,bodyweight,BEGINNER,banded_squat,band squats,3,0,0,0,0,0,0,0,0,0
+exl_182ez20Cxb,GLOBAL,Box Jump,QUADS,"GLUTES, CALVES",BODYWEIGHT,squat,bodyweight,INTERMEDIATE,box_jump,box jumps,3,0,0,0,0,0,0,0,0,0
+exl_C4f1hW7uTL,GLOBAL,Box Squat,QUADS,"GLUTES, HAMSTRINGS",BARBELL,squat,free_weight,INTERMEDIATE,box_squat,,3,0,0,0,0,0,0,0,0,0
+exl_Aqp7nWZPBJ,GLOBAL,Bulgarian Split Squat,QUADS,"GLUTES, HAMSTRINGS",DUMBBELL,lunge,free_weight,INTERMEDIATE,bulgarian_split_squat,bss | split squat,3,0,0,0,0,0,0,0,0,0
+exl_ggWyeksLiH,GLOBAL,Dumbbell Thruster,QUADS,"SHOULDERS, GLUTES, CORE",DUMBBELL,squat,free_weight,INTERMEDIATE,thruster,thrusters | db thruster,4,0,0,0,0,0,0,0,0,0
+exl_eUof30qtJ4,GLOBAL,Front Squat,QUADS,"CORE, GLUTES",BARBELL,squat,free_weight,ADVANCED,front_squat,front squats,3,101,1,84,252,0,0,0,0,0
+exl_zP2Y3sBLWU,GLOBAL,Goblet Squat,QUADS,"GLUTES, CORE",DUMBBELL,squat,free_weight,BEGINNER,goblet_squat,goblet squats,3,0,0,0,0,0,0,0,0,0
+exl_dsly2PLzmQ,GLOBAL,Hack Squat,QUADS,GLUTES,MACHINE,squat,machine,INTERMEDIATE,hack_squat,hack squats,2,0,0,0,0,0,0,0,0,0
+exl_DPkbFyN4Q7,GLOBAL,Jump Squat,QUADS,"GLUTES, CALVES",BODYWEIGHT,squat,bodyweight,INTERMEDIATE,jump_squat,,3,0,0,0,0,0,0,0,0,0
+exl_y9u67D0adE,GLOBAL,Lateral Box Step-Up,QUADS,"GLUTES, CORE",BODYWEIGHT,lunge,bodyweight,BEGINNER,lateral_box_step,,3,0,0,0,0,0,0,0,0,0
+exl_q2sHQKrgTs,GLOBAL,Lateral Lunge,QUADS,"GLUTES, ADDUCTORS",DUMBBELL,lunge,free_weight,BEGINNER,lateral_lunge,,2,0,0,0,0,0,0,0,0,0
+exl_aGYEJ6pMfL,GLOBAL,Leg Extension,QUADS,—,MACHINE,isolation,machine,BEGINNER,leg_extension,leg extensions | quads extension,1,0,0,0,0,0,0,0,0,0
+exl_ezjMRCCa3i,GLOBAL,Leg Press,QUADS,"GLUTES, HAMSTRINGS",MACHINE,squat,machine,BEGINNER,leg_press,,3,203,2,168,588,0,0,0,0,0
+exl_Sae5wBvsoY,GLOBAL,Narrow-Stance Leg Press,QUADS,GLUTES,LEG_PRESS,squat,machine,BEGINNER,narrow_stance_leg_press,,2,0,0,0,0,0,0,0,0,0
+exl_duFxNaMX1q,GLOBAL,Pistol Squat,QUADS,"GLUTES, CORE",BODYWEIGHT,squat,bodyweight,ADVANCED,pistol_squat,,3,0,0,0,0,0,0,0,0,0
+exl_2R3y6kAMbD,GLOBAL,Reverse Lunge,QUADS,"GLUTES, CORE",DUMBBELL,lunge,free_weight,BEGINNER,reverse_lunge,,3,0,0,0,0,0,0,0,0,0
+exl_MZppQU6sFX,GLOBAL,Sissy Squat,QUADS,CORE,BODYWEIGHT,squat,bodyweight,INTERMEDIATE,sissy_squat,,2,0,0,0,0,0,0,0,0,0
+exl_9gz5GXXzP0,GLOBAL,Smith Machine Squat,QUADS,"GLUTES, CORE",SMITH,squat,machine,BEGINNER,smith_squat,,3,0,0,0,0,0,0,0,0,0
+exl_U40XvCG7l1,GLOBAL,Split Squat,QUADS,GLUTES,BODYWEIGHT,lunge,bodyweight,BEGINNER,split_squat,,2,0,0,0,0,0,0,0,0,0
+exl_l87pPcZDXJ,GLOBAL,Squat to Bench,QUADS,"GLUTES, CORE",BODYWEIGHT,squat,bodyweight,BEGINNER,squat_to_bench,,3,0,0,0,0,0,0,0,0,0
+exl_Vlsy1hs1Sk,GLOBAL,Step-Up,QUADS,GLUTES,DUMBBELL,lunge,free_weight,BEGINNER,step_up,,2,0,0,0,0,0,0,0,0,0
+exl_OsLoPsGdnk,GLOBAL,Walking Lunges,QUADS,"GLUTES, CORE",DUMBBELL,lunge,free_weight,BEGINNER,lunges,lunge | walking lunge,3,102,0,84,252,0,0,0,0,0
+exl_FIYCAmKNNo,GLOBAL,Wall Sit,QUADS,CORE,BODYWEIGHT,isolation,bodyweight,BEGINNER,wall_sit,wall sits,2,0,0,0,0,0,0,0,0,0
+exl_lSBHuOuF8g,GLOBAL,Band Pull-Apart,REAR DELTS,"TRAPS, ROTATOR CUFF",BANDS,horizontal_pull,bodyweight,BEGINNER,band_pull_apart,,2,0,0,0,0,0,0,0,0,0
+exl_Ynco7ZHM34,GLOBAL,Dumbbell Rear Delt Row,REAR DELTS,"TRAPS, BICEPS",DUMBBELL,horizontal_pull,free_weight,BEGINNER,db_rear_delt_row,,3,0,0,0,0,0,0,0,0,0
+exl_AK9ggeUwoY,GLOBAL,Face Pull,REAR DELTS,"TRAPS, ROTATOR CUFF",CABLE,horizontal_pull,cable,BEGINNER,face_pull,face pulls,2,101,1,80,240,0,0,0,0,0
+exl_PiT0VOzspe,GLOBAL,Rear Delt Fly,REAR DELTS,TRAPS,CABLE,isolation,cable,BEGINNER,rear_delt_fly,,2,0,0,0,0,0,0,0,0,0
+exl_L2kXNqzsL7,GLOBAL,Reverse Pec Deck,REAR DELTS,TRAPS,MACHINE,isolation,machine,BEGINNER,reverse_pec_deck,rear delt machine | reverse fly machine,2,0,0,0,0,0,0,0,0,0
+exl_O5G3wpy7wH,GLOBAL,Arnold Press,SHOULDERS,"TRICEPS, UPPER CHEST",DUMBBELL,vertical_push,free_weight,INTERMEDIATE,arnold_press,arnold presses,3,0,0,0,0,0,0,0,0,0
+exl_wKSMg2WkDg,GLOBAL,Dumbbell Clean and Press,SHOULDERS,"QUADS, GLUTES, TRICEPS",DUMBBELL,vertical_push,free_weight,ADVANCED,dumbbell_clean_press,,4,0,0,0,0,0,0,0,0,0
+exl_SBoqGiSWpJ,GLOBAL,Dumbbell Snatch,SHOULDERS,"QUADS, CORE",DUMBBELL,vertical_push,free_weight,ADVANCED,dumbbell_snatch,,3,0,0,0,0,0,0,0,0,0
+exl_K0dnHqd2Qz,GLOBAL,Handstand Push-up,SHOULDERS,TRICEPS,BODYWEIGHT,vertical_push,bodyweight,ADVANCED,handstand_push_up,,2,0,0,0,0,0,0,0,0,0
+exl_h2wolmsKFI,GLOBAL,Machine Shoulder Press,SHOULDERS,TRICEPS,MACHINE,vertical_push,machine,BEGINNER,machine_shoulder_press,,2,0,0,0,0,0,0,0,0,0
+exl_GKQv1qOFNz,GLOBAL,Overhead Press,SHOULDERS,"TRICEPS, UPPER CHEST",DUMBBELL,vertical_push,free_weight,INTERMEDIATE,shoulder_press,overhead press | ohp | military press | db press,3,198,1,161,644,0,0,0,0,0
+exl_LueJZtEBuU,GLOBAL,Pike Push-up,SHOULDERS,"TRICEPS, CHEST",BODYWEIGHT,vertical_push,bodyweight,INTERMEDIATE,pike_push_up,,3,0,0,0,0,0,0,0,0,0
+exl_WdlRhtUBMa,GLOBAL,Push Press,SHOULDERS,"QUADS, TRICEPS, CORE",BARBELL,vertical_push,free_weight,INTERMEDIATE,push_press,push presses,4,0,0,0,0,0,0,0,0,0
+exl_7lpyc9jaqY,GLOBAL,Seated Dumbbell Shoulder Press,SHOULDERS,TRICEPS,DUMBBELL,vertical_push,free_weight,BEGINNER,db_shoulder_press,,2,0,0,0,0,0,0,0,0,0
+exl_L2Pz1j3XQc,GLOBAL,Smith Machine Overhead Press,SHOULDERS,TRICEPS,SMITH,vertical_push,machine,INTERMEDIATE,smith_ohp,,2,0,0,0,0,0,0,0,0,0
+exl_QGdLa8ShNL,GLOBAL,Z Press,SHOULDERS,"CORE, TRICEPS",BARBELL,vertical_push,free_weight,ADVANCED,z_press,,3,0,0,0,0,0,0,0,0,0
+exl_UHGzlU0kyW,GLOBAL,Band Lateral Raise,SIDE DELTS,TRAPS,BANDS,isolation,bodyweight,BEGINNER,band_lateral_raise,,2,0,0,0,0,0,0,0,0,0
+exl_ft5xEjRwX7,GLOBAL,Cable Lateral Raise,SIDE DELTS,TRAPS,CABLE,isolation,cable,BEGINNER,cable_lateral_raise,,2,0,0,0,0,0,0,0,0,0
+exl_Y21pUqeXFp,GLOBAL,Lateral Raise,SIDE DELTS,TRAPS,DUMBBELL,isolation,free_weight,BEGINNER,lateral_raise,,2,198,1,161,483,0,0,0,0,0
+exl_lhNKXPM1DJ,GLOBAL,Machine Lateral Raise,SIDE DELTS,TRAPS,MACHINE,isolation,machine,BEGINNER,machine_lateral_raise,,2,0,0,0,0,0,0,0,0,0
+exl_xMpGyFeaXB,GLOBAL,Single-Arm Lateral Raise,SIDE DELTS,TRAPS,DUMBBELL,isolation,free_weight,BEGINNER,single_arm_lateral_raise,,2,0,0,0,0,0,0,0,0,0
+exl_kMLXAt34u5,GLOBAL,Upright Row,SIDE DELTS,TRAPS,BARBELL,vertical_pull,free_weight,INTERMEDIATE,upright_row,,2,0,0,0,0,0,0,0,0,0
+exl_7a8nG6i7Ln,GLOBAL,Barbell Shrug,TRAPS,FOREARMS,BARBELL,isolation,free_weight,BEGINNER,barbell_shrug,shrugs | barbell shrugs,2,0,0,0,0,0,0,0,0,0
+exl_rBqppDVAy3,GLOBAL,Dumbbell Shrug,TRAPS,FOREARMS,DUMBBELL,isolation,free_weight,BEGINNER,dumbbell_shrug,db shrugs,2,0,0,0,0,0,0,0,0,0
+exl_YrP6Y0g7Ls,GLOBAL,Band Triceps Pushdown,TRICEPS,—,BANDS,isolation,bodyweight,BEGINNER,band_pushdown,,1,0,0,0,0,0,0,0,0,0
+exl_2zFNm6gOC7,GLOBAL,Bench Dip,TRICEPS,"CHEST, FRONT DELTS",BODYWEIGHT,isolation,bodyweight,BEGINNER,bench_dip,,3,0,0,0,0,0,0,0,0,0
+exl_xLapQnSJev,GLOBAL,Cable Overhead Extension,TRICEPS,—,CABLE,isolation,cable,BEGINNER,cable_overhead_extension,,1,0,0,0,0,0,0,0,0,0
+exl_W9sZSPcsSs,GLOBAL,Close-Grip Bench Press,TRICEPS,"CHEST, FRONT DELTS",BARBELL,horizontal_push,free_weight,INTERMEDIATE,close_grip_bench,close grip bench press,3,0,0,0,0,0,0,0,0,0
+exl_DJ70pkdEuO,GLOBAL,Diamond Push-up,TRICEPS,"CHEST, CORE",BODYWEIGHT,horizontal_push,bodyweight,INTERMEDIATE,diamond_push_up,,3,0,0,0,0,0,0,0,0,0
+exl_1YrXYCJp9V,GLOBAL,Dumbbell Kickback,TRICEPS,—,DUMBBELL,isolation,free_weight,BEGINNER,db_kickback,,1,0,0,0,0,0,0,0,0,0
+exl_4sWYoRgffC,GLOBAL,JM Press,TRICEPS,CHEST,BARBELL,horizontal_push,free_weight,ADVANCED,jm_press,,2,0,0,0,0,0,0,0,0,0
+exl_yQroyjSVKt,GLOBAL,Overhead Triceps Extension,TRICEPS,—,DUMBBELL,isolation,free_weight,BEGINNER,overhead_extension,overhead triceps extension,1,0,0,0,0,0,0,0,0,0
+exl_KF3SN1qOSM,GLOBAL,Rope Pushdown,TRICEPS,—,CABLE,isolation,cable,BEGINNER,rope_pushdown,,1,0,0,0,0,0,0,0,0,0
+exl_MzZQxemQ65,GLOBAL,Single-Arm Pushdown,TRICEPS,—,CABLE,isolation,cable,BEGINNER,single_arm_pushdown,,1,0,0,0,0,0,0,0,0,0
+exl_sI6NlBwp2A,GLOBAL,Skull Crusher,TRICEPS,—,BARBELL,isolation,free_weight,INTERMEDIATE,skull_crusher,skullcrushers | lying triceps extension,1,0,0,0,0,0,0,0,0,0
+exl_UTJnNfkyh4,GLOBAL,Triceps Pushdown,TRICEPS,—,CABLE,isolation,cable,BEGINNER,triceps_pushdown,pushdown | cable pushdown,1,198,1,161,483,0,0,0,0,0
+exl_N1B7Dei5Ul,GLOBAL,V-Bar Pushdown,TRICEPS,—,CABLE,isolation,cable,BEGINNER,vbar_pushdown,,1,0,0,0,0,0,0,0,0,0
+exl_sDirM81YI6,GLOBAL,Band Row,UPPER BACK,"LATS, BICEPS",BANDS,horizontal_pull,bodyweight,BEGINNER,band_row,,3,0,0,0,0,0,0,0,0,0
+exl_MYSxAJyYok,GLOBAL,Barbell Row,UPPER BACK,"LATS, BICEPS, REAR DELTS",BARBELL,horizontal_pull,free_weight,INTERMEDIATE,barbell_row,bent over row | bent-over row,4,101,1,80,320,0,0,0,0,0
+exl_wAEqISTYRa,GLOBAL,Chest-Supported Row,UPPER BACK,"LATS, BICEPS, REAR DELTS",MACHINE,horizontal_pull,machine,BEGINNER,chest_supported_row,chest supported rows,4,0,0,0,0,0,0,0,0,0
+exl_lOXPea831i,GLOBAL,Inverted Row,UPPER BACK,"LATS, BICEPS",BODYWEIGHT,horizontal_pull,bodyweight,BEGINNER,inverted_row,bodyweight row | horizontal row,3,0,0,0,0,0,0,0,0,0
+exl_i0lcmpRUiS,GLOBAL,Pendlay Row,UPPER BACK,"LATS, BICEPS, REAR DELTS",BARBELL,horizontal_pull,free_weight,ADVANCED,pendlay_row,pendlay rows,4,0,0,0,0,0,0,0,0,0
+exl_2OWpPvwQES,GLOBAL,Rack Pull,UPPER BACK,"TRAPS, GLUTES, HAMSTRINGS",BARBELL,hinge,free_weight,INTERMEDIATE,rack_pull,rack pulls,4,0,0,0,0,0,0,0,0,0
+exl_k8vMswAfio,GLOBAL,Seated Cable Row,UPPER BACK,"LATS, BICEPS",CABLE,horizontal_pull,cable,BEGINNER,seated_row,cable row | seated cable row,3,203,2,160,480,0,0,0,0,0
+exl_bQ5xoVIMBL,GLOBAL,T-Bar Row,UPPER BACK,"LATS, BICEPS",BARBELL,horizontal_pull,free_weight,INTERMEDIATE,t_bar_row,,3,0,0,0,0,0,0,0,0,0
+exl_ETPJCe2xTe,GLOBAL,Decline Push-up,UPPER CHEST,"TRICEPS, CORE",BODYWEIGHT,horizontal_push,bodyweight,INTERMEDIATE,decline_push_up,,3,0,0,0,0,0,0,0,0,0
+exl_FCVzFB77Wa,GLOBAL,Incline Barbell Press,UPPER CHEST,"FRONT DELTS, TRICEPS",BARBELL,horizontal_push,free_weight,INTERMEDIATE,incline_barbell_press,incline bench press | incline press | incline bench,3,0,0,0,0,0,0,0,0,0
+exl_1OtMUrnesp,GLOBAL,Incline Dumbbell Press,UPPER CHEST,"FRONT DELTS, TRICEPS",DUMBBELL,horizontal_push,free_weight,INTERMEDIATE,incline_db_press,incline db press | incline dumbbell,3,198,0,161,483,0,0,0,0,0
+exl_z9Xupq5lUa,GLOBAL,Low Cable Fly,UPPER CHEST,FRONT DELTS,CABLE,isolation,cable,BEGINNER,low_cable_fly,,2,0,0,0,0,0,0,0,0,0

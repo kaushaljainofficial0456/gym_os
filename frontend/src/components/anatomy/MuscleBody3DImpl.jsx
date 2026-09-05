@@ -18,6 +18,19 @@ import Stage from '../../design/three/Stage.jsx';
 
 const GLB_URL = '/assets/anatomy/skos-muscular-body.glb';
 
+// The .glb is Draco-compressed (6.85MB -> 1.21MB), so it cannot be decoded
+// without the Draco decoder. drei's useGLTF defaults that decoder to
+// Google's CDN (https://www.gstatic.com/draco/versioned/decoders/...),
+// which this app's Content-Security-Policy does not allow in connect-src --
+// the .glb then downloads with a 200 and silently fails to decode, leaving
+// the muscle picker with no model and a stream of "Failed to fetch" errors
+// from three's loader. Serving the decoder from our own origin fixes that
+// without punching a hole in the CSP for a third-party host, and removes
+// the runtime dependency on an external CDN being reachable at all.
+// Files are copied from three/examples/jsm/libs/draco/gltf/ into
+// frontend/public/draco/ and must stay in sync with the installed three.
+useGLTF.setDecoderPath('/draco/');
+
 const stripSide = (name) => name.replace(/\.[lr]$/i, '');
 
 function readCssColor(varName, fallbackHex) {

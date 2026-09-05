@@ -279,9 +279,17 @@ export default function ClientLayout() {
       />
 
       {/* ── MAIN CONTENT ── */}
-      <div key={loc.pathname} className="anim-fadeUp pt-4">
+      {/* AnnouncementBanner lives OUTSIDE the pathname-keyed div: that key
+          exists purely to replay the fade-up animation on the routed page
+          content on every navigation (by forcing React to tear down and
+          recreate the div) -- it must not also tear down the banner, or
+          every navigation refetches /me/announcements for no reason (same
+          fix TrainerLayout already has; this file just didn't match it). */}
+      <div className="pt-4">
         <AnnouncementBanner />
-        <Outlet context={homeCtx} />
+        <div key={loc.pathname} className="anim-fadeUp">
+          <Outlet context={homeCtx} />
+        </div>
       </div>
 
       {/* ── FEATURE POPUP ── */}

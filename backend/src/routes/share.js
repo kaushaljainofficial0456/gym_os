@@ -30,7 +30,14 @@ export default function shareRoutes(db) {
 
   r.get('/:id', limit, async (req, res) => {
     const row = await db.q1('SELECT * FROM shared_meals WHERE id = ?', [req.params.id]);
-    if (!row) return res.status(404).json({ error: 'This shared link is invalid or has expired' });
+    // expires_at is NULL for links created before F-12a (legacy, never
+    // expires) and a concrete ISO timestamp for every link created since
+    // -- see routes/me.js's SHARE_LINK_TTL_MS. Deliberately the exact
+    // same 404 message as "doesn't exist" -- an expired link and a
+    // never-existed id must be indistinguishable to a caller.
+    if (!row || (row.expires_at && Date.parse(row.expires_at) <= Date.now())) {
+      return res.status(404).json({ error: 'This shared link is invalid or has expired' });
+    }
     let items = [];
     try { items = JSON.parse(row.items_json) || []; } catch { items = []; }
     res.json({

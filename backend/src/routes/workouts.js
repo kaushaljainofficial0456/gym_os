@@ -9,6 +9,7 @@ import { suggestNextTarget } from '../services/progressiveOverload.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { track } from '../services/events.js';
 import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
+import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 
 export default function workoutRoutes(db) {
   const r = Router();
@@ -23,11 +24,41 @@ export default function workoutRoutes(db) {
   r.use(rateLimit({ windowMs: 60_000, max: 120, keyFn: (req) => req.user?.sub || 'anon' }));
 
   // ---- exercise library ----
+  // No query params  -> the full library (unchanged contract; the picker caches it).
+  // ?q= / ?region= / ?equipment= / ?muscle= / ?movement= / ?difficulty=
+  //                 -> alias-aware, filtered search via the shared exerciseSearch
+  //                    service (same engine as GET /intel/exercises), so the
+  //                    client planner AND trainer WorkoutBuilder pickers share
+  //                    one endpoint + one canonical result set.
   r.get('/exercises', requireRole('GYM_OWNER', 'TRAINER', 'CLIENT', 'SUPER_ADMIN'), async (req, res) => {
-    const rows = await db.q(
-      `SELECT * FROM exercise_library WHERE is_global = 1 OR org_id = ?
-       ORDER BY primary_muscle, name`, [req.orgId]);
-    res.json({ exercises: rows });
+    const { q, region, equipment, muscle, movement, difficulty } = req.query;
+    const hasFilter = [q, region, equipment, muscle, movement, difficulty].some((v) => v != null && String(v).trim() !== '');
+    if (!hasFilter) {
+      const rows = await db.q(
+        `SELECT * FROM exercise_library WHERE is_global = 1 OR org_id = ?
+         ORDER BY primary_muscle, name`, [req.orgId]);
+      return res.json({ exercises: rows });
+    }
+    const filters = { region, equipment, muscle, movement, difficulty };
+    const term = String(q || '').trim();
+    let results;
+    if (term) {
+      // Name/alias matches first (precise: "db curl" -> Dumbbell Curl). Only
+      // when that is thin do we append intent matches (broad: "chest" -> every
+      // chest exercise) so a precise query stays clean.
+      const byName = await searchExercisesByName(db, req.orgId, term, { limit: 50, filters });
+      if (byName.length >= 6) {
+        results = byName;
+      } else {
+        const byIntent = await searchExercises(db, req.orgId, term, filters, { limit: 50 });
+        const seen = new Set(byName.map((r) => r.id));
+        results = [...byName, ...byIntent.filter((r) => !seen.has(r.id))].slice(0, 50);
+      }
+    } else {
+      // filters only (region / equipment chips, no text)
+      results = await searchExercises(db, req.orgId, '', filters, { limit: 50 });
+    }
+    res.json({ exercises: results });
   });
 
   r.post('/exercises', requireRole('GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'), validate(z.object({

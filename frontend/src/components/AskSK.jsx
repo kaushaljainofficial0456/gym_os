@@ -207,11 +207,14 @@ export default function AskSK({ onLogged }) {
 
   const setF = (k, v) => setScan((s) => ({ ...s, fields: { ...s.fields, [k]: v } }));
 
-  // Authenticated image preview: /uploads/* now requires the JWT, and an
-  // <img src> can't send headers — fetch with auth and show a blob URL.
+  // Authenticated image preview: /uploads/* requires a session (checked
+  // via the httpOnly cookie, sent by credentials: 'include' below -- F-05
+  // removed the localStorage-readable token this used to send as a
+  // Bearer header), and an <img src> can't send credentials for a
+  // cross-origin-shaped path anyway -- fetch with auth and show a blob URL.
   const authedImage = async (pathname) => {
     try {
-      const res = await fetch('/api' + pathname, { headers: { Authorization: 'Bearer ' + localStorage.getItem('pos_token') }, credentials: 'include' });
+      const res = await fetch('/api' + pathname, { credentials: 'include' });
       if (!res.ok) throw new Error('image fetch failed');
       const blob = await res.blob();
       return URL.createObjectURL(blob);

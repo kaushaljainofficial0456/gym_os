@@ -24,6 +24,22 @@
       "port": 5174,
       "autoPort": true,
       "cwd": "admin"
+    },
+    {
+      "name": "frontend-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview"],
+      "port": 5173,
+      "autoPort": true,
+      "cwd": "frontend"
+    },
+    {
+      "name": "backend-throwaway-db",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev-throwaway-db.mjs"],
+      "port": 4000,
+      "autoPort": true,
+      "cwd": "backend"
     }
   ]
 }

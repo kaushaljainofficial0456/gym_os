@@ -143,6 +143,26 @@ async function main() {
     return 0;
   }
 
+  // WHICH database did we just verify? A passing check that doesn't say this
+  // is how a preview deployment silently validated itself against the
+  // PRODUCTION database for days: DATABASE_URL was a single Vercel variable
+  // scoped to both environments, and nothing in the build output made that
+  // visible. neon.timeline_id is unique per Neon branch, so printing it turns
+  // "verified against the live database" into "verified against WHICH one".
+  // These are identifiers, never credentials -- no host, user, or password.
+  let ident = null;
+  try {
+    const res = await pool.query(
+      `SELECT current_user, current_database() AS db,
+              current_setting('neon.timeline_id', true) AS timeline,
+              (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public') AS tables`);
+    ident = res.rows[0];
+  } catch { /* identity is diagnostic only -- never block a deploy on it */ }
+
+  const identLine = ident
+    ? `user=${ident.current_user} db=${ident.db} neon.timeline_id=${ident.timeline ?? 'n/a'} tables=${ident.tables}`
+    : 'identity unavailable';
+
   const actual = new Map();
   for (const r of rows) {
     if (!actual.has(r.table_name)) actual.set(r.table_name, new Set());
@@ -161,6 +181,7 @@ async function main() {
 
   if (!missingTables.length && !missingColumns.length) {
     console.log(`[db:check] OK — ${tableNames.length} tables verified against the live database.`);
+    console.log(`[db:check] target: ${identLine}`);
     return 0;
   }
 
@@ -171,6 +192,45 @@ async function main() {
   console.error('  Deploying now would repeat the community_members outage: application');
   console.error('  code live against a database that cannot satisfy its queries.');
   console.error('  Run the migration against this database first:  npm run db:init');
+
+  // Diagnostic only -- no secrets. When the objects genuinely seem to be
+  // missing but a migration was just run, the three usual causes are: this
+  // role's search_path doesn't reach the schema they were created in, this
+  // role is different from the one the migration ran as (so information_
+  // schema's own privilege filtering hides them), or DATABASE_URL resolves
+  // to a different database/branch entirely than whatever a human just
+  // migrated by hand. to_regclass is privilege-independent (unlike
+  // information_schema), so comparing the two pinpoints which one it is.
+  try {
+    const diagPool = new pg.Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 10_000 });
+    const diag = await diagPool.query(
+      `SELECT current_user, current_database(), current_schema(), current_setting('search_path') AS search_path,
+              to_regclass('public.${missingTables[0] || tableNames[0]}') AS via_to_regclass,
+              (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS visible_table_count,
+              current_setting('neon.timeline_id', true) AS neon_timeline_id,
+              current_setting('neon.tenant_id', true)   AS neon_tenant_id,
+              (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public') AS unfiltered_table_count,
+              (SELECT count(*) FROM pg_catalog.pg_default_acl) AS default_acl_rules`);
+    const d = diag.rows[0];
+    console.error('');
+    console.error('  [db:check] diagnostic (identifiers only -- no connection string, password or token):');
+    console.error(`    current_user=${d.current_user} current_database=${d.current_database} current_schema=${d.current_schema}`);
+    console.error(`    search_path=${d.search_path}`);
+    console.error(`    to_regclass('public.${missingTables[0] || tableNames[0]}')=${d.via_to_regclass === null ? 'NULL (genuinely absent, or not visible to this role)' : d.via_to_regclass}`);
+    console.error(`    information_schema.tables sees ${d.visible_table_count} tables in schema 'public' for this role`);
+    // pg_tables is NOT privilege-filtered, unlike information_schema: comparing
+    // the two separates "role can't see it" from "it isn't there". neon.timeline_id
+    // is unique per Neon BRANCH, so it identifies which branch this URL resolves
+    // to without revealing any part of the credential. pg_default_acl is non-zero
+    // only where an ALTER DEFAULT PRIVILEGES was actually run.
+    console.error(`    pg_tables (unfiltered) sees ${d.unfiltered_table_count} tables in schema 'public'`);
+    console.error(`    neon.timeline_id=${d.neon_timeline_id ?? 'unavailable'}  neon.tenant_id=${d.neon_tenant_id ?? 'unavailable'}`);
+    console.error(`    pg_default_acl rules present: ${d.default_acl_rules}`);
+    await diagPool.end().catch(() => {});
+  } catch (diagErr) {
+    console.error(`  [db:check] diagnostic query itself failed: ${diagErr.code || diagErr.message}`);
+  }
+
   return 1;
 }
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
@@ -32,6 +32,87 @@ function buildSets(list) {
   ]));
 }
 
+// Progressive-discovery filters for the exercise picker. Region maps to the
+// backend muscles.region model; equipment is a compact subset of the library's
+// equipment vocabulary (functional kit like TRX/rings stays searchable by name).
+const PICKER_REGIONS = [['', 'All'], ['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['arms', 'Arms'], ['legs', 'Legs'], ['core', 'Core']];
+const PICKER_EQUIP = [['', 'All'], ['barbell', 'Barbell'], ['dumbbell', 'Dumbbell'], ['machine', 'Machine'], ['cable', 'Cable'], ['bodyweight', 'Bodyweight'], ['kettlebell', 'Kettlebell'], ['bands', 'Bands']];
+
+function ChipRow({ options, value, onChange, label }) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5" aria-label={label}>
+      {options.map(([v, text]) => (
+        <button key={v} type="button" onClick={() => onChange(v === value ? '' : v)}
+          className={`chip shrink-0 !text-[10px] !px-2 !py-0.5 border transition-colors ${value === v ? 'border-gold/50 text-gold bg-gold/10' : 'border-line text-mute hover:text-ink'}`}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The one exercise picker — search + region/equipment chips + result list.
+ * Used by BOTH the "Build my workout" modal and the personal planner form so
+ * they share the exact same alias-aware search (GET /workouts/exercises).
+ * No text/filters => shows `fallback` (the cached full library).
+ */
+function ExerciseSearchList({ fallback, addedIds, onPick, dense }) {
+  const [q, setQ] = useState('');
+  const [region, setRegion] = useState('');
+  const [equip, setEquip] = useState('');
+  const [results, setResults] = useState(null); // null => show fallback
+  const [loading, setLoading] = useState(false);
+  const cache = useRef(new Map());
+
+  useEffect(() => {
+    const active = q.trim() || region || equip;
+    if (!active) { setResults(null); setLoading(false); return undefined; }
+    const key = `${q.trim().toLowerCase()}|${region}|${equip}`;
+    if (cache.current.has(key)) { setResults(cache.current.get(key)); return undefined; }
+    setLoading(true);
+    const h = setTimeout(async () => {
+      try {
+        const p = new URLSearchParams();
+        if (q.trim()) p.set('q', q.trim());
+        if (region) p.set('region', region);
+        if (equip) p.set('equipment', equip);
+        const r = await api(`/workouts/exercises?${p.toString()}`);
+        const list = r.exercises || [];
+        cache.current.set(key, list);
+        setResults(list);
+      } catch { setResults([]); } finally { setLoading(false); }
+    }, 250);
+    return () => clearTimeout(h);
+  }, [q, region, equip]);
+
+  const list = results ?? (fallback || []);
+  return (
+    <div className="space-y-2">
+      <input className="input" placeholder="Search exercises… (e.g. DB curl, incline)" value={q} onChange={(e) => setQ(e.target.value)} />
+      <ChipRow options={PICKER_REGIONS} value={region} onChange={setRegion} label="Filter by muscle group" />
+      <ChipRow options={PICKER_EQUIP} value={equip} onChange={setEquip} label="Filter by equipment" />
+      <div className={`space-y-1.5 ${dense ? 'max-h-40 overflow-y-auto pr-1' : ''}`}>
+        {loading && <div className="text-[10px] text-mute px-1 py-1">Searching…</div>}
+        {!loading && !list.length && <div className="text-[11px] text-mute px-1 py-3 text-center">No exercises match — try fewer filters.</div>}
+        {list.slice(0, 40).map((x) => {
+          const added = addedIds?.has(x.id);
+          return (
+            <button key={x.id} type="button" disabled={added} onClick={() => onPick(x)}
+              className={`w-full flex items-center justify-between gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
+                <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
+              </span>
+              {added && <span className="text-[10px] text-good shrink-0"><CheckIcon /></span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Workout() {
   const nav = useNavigate();
   const today = useFetch(() => api('/tracking/me/today'));
@@ -47,7 +128,6 @@ export default function Workout() {
   const [builderName, setBuilderName] = useState('');
   const [builderExs, setBuilderExs] = useState([]); // {exercise_id, name, muscle, sets, reps, weight}
   const [libList, setLibList] = useState(null);
-  const [libSearch, setLibSearch] = useState('');
   const [savingBuilder, setSavingBuilder] = useState(false);
   const [selectedLibEx, setSelectedLibEx] = useState(null); // exercise selected in Build Today detail view
   const [justAdded, setJustAdded] = useState(null); // exercise ID just added — triggers confirmation animation
@@ -780,27 +860,16 @@ export default function Workout() {
                     </div>
                   </div>
                 ) : (
-                  /* ── search + exercise library list ── */
-                  <div className="space-y-2.5">
-                    <input className="input" placeholder="Search exercises by name or muscle…" value={libSearch} onChange={(e) => setLibSearch(e.target.value)} />
-                    <div className="space-y-1.5">
-                    {(libList || []).filter((x) => !libSearch || (x.name + ' ' + (x.primary_muscle || '')).toLowerCase().includes(libSearch.toLowerCase())).slice(0, 30).map((x, i) => {
-                      const added = builderExs.some((b) => b.exercise_id === x.id);
-                      return (
-                        <button key={x.id}
-                          className={`w-full flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] anim-fadeUp ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}
-                          style={{ animationDelay: `${40 + i * 25}ms` }}
-                          onClick={() => setSelectedLibEx(x)}>
-                          <span className="flex-1 min-w-0">
-                            <span className="block text-[13px] font-grotesk font-semibold truncate">{x.name}</span>
-                            <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-                          </span>
-                          {added && <span className="text-[10px] text-good shrink-0 anim-checkBounce"><CheckIcon /></span>}
-                        </button>
-                      );
-                    })}
-                    </div>
-                  </div>
+                  /* ── search + region/equipment chips + exercise library list ──
+                     origin/main added this component (real alias-aware
+                     server search + muscle/equipment chip filters) to
+                     replace the plain client-side filter this branch had
+                     here; kept as the strictly better implementation. */
+                  <ExerciseSearchList
+                    fallback={libList}
+                    addedIds={new Set(builderExs.map((b) => b.exercise_id))}
+                    onPick={(x) => setSelectedLibEx(x)}
+                  />
                 )}
                 </div>
 
@@ -887,22 +956,12 @@ export default function Workout() {
                       <button className="section-head-action" style={{ color: 'var(--mute)' }} onClick={() => setPlanForm(null)}>Back</button>
                     </div>
                     <input className="input" placeholder="Workout name (e.g. Push A, Legs, My Upper Day)" value={planForm.name || ''} onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))} />
-                    <input className="input" placeholder="Search exercises…" value={planForm.search || ''} onChange={(e) => setPlanForm((f) => ({ ...f, search: e.target.value }))} />
-                    <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                      {(libList || []).filter((x) => !planForm.search || (x.name + ' ' + (x.primary_muscle || '')).toLowerCase().includes(planForm.search.toLowerCase())).slice(0, 20).map((x) => {
-                        const added = (planForm.exercises || []).some((b) => b.exercise_id === x.id);
-                        return (
-                          <button key={x.id} disabled={added} onClick={() => setPlanForm((f) => ({ ...f, exercises: [...(f.exercises || []), { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW', rest_sec: 90 }] }))}
-                            className={`w-full flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left ${added ? 'border-line opacity-40' : 'border-line bg-tint/[.02]'}`}>
-                            <span className="min-w-0">
-                              <span className="block text-[12px] font-grotesk font-semibold truncate">{x.name}</span>
-                              <span className="text-[9px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-                            </span>
-                            <span className="text-[10px] text-gold shrink-0">{added ? 'Added' : 'Add'}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <ExerciseSearchList
+                      dense
+                      fallback={libList}
+                      addedIds={new Set((planForm.exercises || []).map((b) => b.exercise_id))}
+                      onPick={(x) => setPlanForm((f) => ({ ...f, exercises: [...(f.exercises || []), { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW', rest_sec: 90 }] }))}
+                    />
                     {(planForm.exercises || []).map((b, i) => (
                       <div key={b.exercise_id} className="rounded-lg border border-line bg-bg/50 p-2.5">
                         <div className="flex items-center justify-between mb-1.5">

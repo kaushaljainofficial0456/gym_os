@@ -1,10 +1,80 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, ErrorState, Modal, Empty, ChevronRightIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, Empty, ChevronRightIcon, XIcon, PageSkeleton, CheckIcon } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
+
+/**
+ * Type-ahead link to the exercise library — replaces a 280+ option <select>.
+ * Alias-aware server search (GET /workouts/exercises, the same endpoint the
+ * client planner uses). Muscle-group browsing stays in the "◎ Pick by muscle"
+ * 3D modal, so this control stays a single uncluttered field.
+ */
+function LibraryCombobox({ value, name, onSelect }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const cache = useRef(new Map());
+
+  useEffect(() => {
+    const term = q.trim();
+    if (!open || term.length < 1) { setRows([]); setLoading(false); return undefined; }
+    if (cache.current.has(term.toLowerCase())) { setRows(cache.current.get(term.toLowerCase())); return undefined; }
+    setLoading(true);
+    const h = setTimeout(async () => {
+      try {
+        const r = await api(`/workouts/exercises?q=${encodeURIComponent(term)}`);
+        const list = (r.exercises || []).slice(0, 25);
+        cache.current.set(term.toLowerCase(), list);
+        setRows(list);
+      } catch { setRows([]); } finally { setLoading(false); }
+    }, 220);
+    return () => clearTimeout(h);
+  }, [q, open]);
+
+  return (
+    <div className="relative flex-1">
+      <input
+        className="input !py-1.5 text-xs w-full"
+        placeholder="Link from library (type to search)"
+        value={open ? q : (value && name ? name : q)}
+        onFocus={() => { setOpen(true); setQ(''); }}
+        onChange={(e) => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {/* The check now lives here, as a real icon next to the value
+          rather than concatenated INTO the text -- a glyph baked into a
+          string can't be positioned, sized, or coloured independently of
+          the name it's stuck to. */}
+      {value && !open && name && (
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'rgb(var(--good-rgb))' }}>
+          <CheckIcon />
+        </span>
+      )}
+      {value && !open && (
+        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-mute hover:text-bad"
+          onMouseDown={(e) => { e.preventDefault(); onSelect(null); }}>clear</button>
+      )}
+      {open && (q.trim() || loading) && (
+        <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-line bg-bg shadow-lg">
+          {loading && <div className="px-3 py-2 text-[10px] text-mute">Searching…</div>}
+          {!loading && !rows.length && <div className="px-3 py-2 text-[10px] text-mute">No matches</div>}
+          {rows.map((x) => (
+            <button key={x.id} type="button"
+              className="w-full text-left px-3 py-2 hover:bg-tint/[.08] border-b border-line/40 last:border-0"
+              onMouseDown={(e) => { e.preventDefault(); onSelect(x); setOpen(false); setQ(''); }}>
+              <span className="block text-[12px] font-grotesk font-semibold truncate">{x.name}</span>
+              <span className="text-[9px] text-mute">{x.primary_muscle}{x.equipment ? ` · ${x.equipment}` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---- training program presets (day-of-week: 1=Mon..6=Sat,0=Sun) ----
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -62,8 +132,18 @@ const SPLIT_PRESETS = {
 
 export default function WorkoutBuilder() {
   const tpl = useFetch(() => api('/workouts/templates'));
-  const lib = useFetch(() => api('/workouts/exercises'));
   const clients = useFetch(() => api('/clients?sort=name'));
+  // The full exercise library (287 rows, ~128KB) is ONLY used by the "pick
+  // by muscle" 3D picker below (pickMatches) — everything else on this page
+  // (the "link from library" combobox) uses the debounced, capped
+  // /workouts/exercises?q= search instead. Loading all 287 rows eagerly on
+  // every page mount used to block the entire page behind a 128KB response
+  // it usually never needs; deferred until the picker is actually opened.
+  const [pickerEverOpened, setPickerEverOpened] = useState(false);
+  const lib = useFetch(
+    () => (pickerEverOpened ? api('/workouts/exercises') : Promise.resolve({ exercises: [] })),
+    [pickerEverOpened]
+  );
 
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(null); // draft {id?, name, type, notes, exercises[]}
@@ -169,7 +249,11 @@ export default function WorkoutBuilder() {
     return () => clearTimeout(h);
   }, [toast]);
 
-  if (tpl.loading || lib.loading || clients.loading) return <PageSkeleton variant="split" label="Loading workout builder" />;
+  // lib.loading is intentionally excluded: it only feeds the muscle-picker
+  // modal (opened on demand, see pickerEverOpened above), not the main page
+  // -- including it here would reintroduce exactly the eager-load cost that
+  // gating the fetch on pickerEverOpened was meant to remove.
+  if (tpl.loading || clients.loading) return <PageSkeleton variant="split" label="Loading workout builder" />;
   if (tpl.error) return <ErrorState error={tpl.error} onRetry={tpl.reload} />;
 
   const startNew = () => {
@@ -358,22 +442,27 @@ export default function WorkoutBuilder() {
                       </label>
                     </div>
                     <div className="flex gap-2 items-end">
-                      <select className="input !py-1.5 text-xs flex-1" value={ex.exercise_id || ''}
-                        onChange={(e) => {
-                          const libEx = exercises.find((x) => x.id === e.target.value);
-                          patchEx(i, 'exercise_id', e.target.value || null);
-                          if (libEx) patchEx(i, 'name', libEx.name || ex.name);
-                        }}>
-                        <option value="">— link from library (optional) —</option>
-                        {exercises.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.primary_muscle}</option>)}
-                      </select>
+                      {/* origin/main replaced the plain <select> (287
+                          exercises in one flat dropdown) with a real
+                          searchable combobox -- kept as the strictly
+                          better implementation; the button-size override
+                          is collapsed onto .btn-sm to match this pass's
+                          button sweep. */}
+                      <LibraryCombobox
+                        value={ex.exercise_id}
+                        name={ex.name}
+                        onSelect={(x) => {
+                          patchEx(i, 'exercise_id', x?.id || null);
+                          if (x?.name) patchEx(i, 'name', x.name);
+                        }}
+                      />
                       <button className="btn btn-sm shrink-0" onClick={() => setAddOpen(true)}>+ New</button>
                     </div>
                   </div>
                 ))}
                 <div className="flex gap-2">
                   <button className="btn flex-1 !border-dashed" onClick={addEx}>+ Add exercise</button>
-                  <button className="btn flex-1 !border-dashed" onClick={() => setPickOpen(true)}>◎ Pick by muscle</button>
+                  <button className="btn flex-1 !border-dashed" onClick={() => { setPickerEverOpened(true); setPickOpen(true); }}>◎ Pick by muscle</button>
                 </div>
               </div>
 
@@ -519,9 +608,10 @@ export default function WorkoutBuilder() {
         <div className="grid sm:grid-cols-2 gap-4">
           <MuscleBody3D selectedGroup={pickGroup} onSelect={onPickMuscle} height={380} />
           <div className="min-w-0">
-            <Kicker>{pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
+            <Kicker>{lib.loading ? 'Loading exercise library…' : pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-              {pickMatches.map((ex) => (
+              {lib.loading && <div className="text-center py-8 text-mute text-sm">Loading exercise library…</div>}
+              {!lib.loading && pickMatches.map((ex) => (
                 <button key={ex.id} type="button" onClick={() => addFromPicker(ex)}
                   className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-tint/[.02] hover:bg-tint/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
                   <span className="min-w-0">
@@ -531,10 +621,10 @@ export default function WorkoutBuilder() {
                   <span className="text-mute shrink-0">+</span>
                 </button>
               ))}
-              {pickGroup && !pickMatches.length && (
+              {!lib.loading && pickGroup && !pickMatches.length && (
                 <div className="text-center py-8 text-mute text-sm">No exercises tagged {pickLabel} yet.</div>
               )}
-              {!pickGroup && (
+              {!lib.loading && !pickGroup && (
                 <div className="text-center py-8 text-mute text-sm">Rotate the model or tap a muscle chip to see matching exercises.</div>
               )}
             </div>

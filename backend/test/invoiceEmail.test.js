@@ -95,6 +95,11 @@ test('POST /invoices/:id/email: ORG_PACKAGE invoice (no client) falls back to th
     orgName: 'Iron Forge Test Gym', ownerName: 'Owner Test', email: 'owner@ironforgetest.in', password: 'ownerpass1',
   });
   const ownerToken = signup.json.token;
+  // F-10: setup-org now also fires a (fire-and-forget) verification
+  // email through this same mock provider -- flush it and reset the
+  // outbox before asserting on the INVOICE email specifically, below.
+  await new Promise((r) => setImmediate(r));
+  _resetMockEmailStateForTests();
 
   const quote = await api.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_PACKAGE', capacity: 75 }, ownerToken);
   const order = await api.call('POST', '/api/enterprise/payment/order', { quoteId: quote.json.quote.id }, ownerToken);
@@ -142,6 +147,12 @@ test('POST /invoices/:id/email: CLIENT_MEMBERSHIP invoice defaults to the actual
 
   const clientSignup = await api.call('POST', '/api/auth/register', { name: 'Rahul Client', email: 'rahul@test.in', password: 'clientpass1' });
   const clientToken = clientSignup.json.token;
+  // F-10: same flush as the ORG_PACKAGE test above -- two signups (owner
+  // + client) in this test each fire their own verification email
+  // through the same mock provider; reset before the invoice-email
+  // assertions below, which count entries in that same outbox.
+  await new Promise((r) => setImmediate(r));
+  _resetMockEmailStateForTests();
   const join = await api.call('POST', '/api/enrollment/client/join', { payload: clientQr.json.payload }, clientToken);
   const clientCheckout = mockSimulateCheckout(join.json.order.provider_order_id);
   await api.call('POST', '/api/enrollment/client/payment/verify', {
@@ -162,6 +173,20 @@ test('POST /invoices/:id/email: CLIENT_MEMBERSHIP invoice defaults to the actual
 
   const outbox = _mockOutbox();
   assert.equal(outbox.length, 2);
+
+  // F-12e: a recipient-override send is audit-logged (org, acting user,
+  // invoice, actual recipient, and that it WAS an override) so an abuse
+  // pattern is reviewable after the fact even though the send itself is
+  // allowed -- see enterprise.js's own comment on this route.
+  const events = await db.q(
+    `SELECT * FROM events WHERE type = 'invoice_emailed' AND org_id = ? ORDER BY created_at`, [orgId]);
+  assert.equal(events.length, 2, 'one audit event per email send');
+  const defaultSend = JSON.parse(events[0].data_json);
+  assert.equal(defaultSend.to, 'rahul@test.in');
+  assert.equal(defaultSend.recipient_overridden, false);
+  const overrideSend = JSON.parse(events[1].data_json);
+  assert.equal(overrideSend.to, 'accounting@ironforgetest.in');
+  assert.equal(overrideSend.recipient_overridden, true);
 });
 
 test('POST /invoices/:id/email: an invoice belonging to a different org 404s, never leaks another gym\'s invoice or sends anything', async (t) => {
@@ -179,6 +204,10 @@ test('POST /invoices/:id/email: an invoice belonging to a different org 404s, ne
   const invoiceIdA = invoicesA.json.invoices[0].id;
 
   const signupB = await api.call('POST', '/api/auth/setup-org', { orgName: 'Gym B', ownerName: 'Owner B', email: 'ownerB@test.in', password: 'ownerpass1' });
+  // F-10: flush both signups' own verification emails before asserting
+  // "nothing was sent" for the invoice-email action specifically.
+  await new Promise((r) => setImmediate(r));
+  _resetMockEmailStateForTests();
 
   const res = await api.call('POST', `/api/enterprise/invoices/${invoiceIdA}/email`, {}, signupB.json.token);
   assert.equal(res.status, 404);
@@ -198,6 +227,10 @@ test('POST /invoices/:id/email: rejects an invalid `to` in the body before ever 
   const checkout = mockSimulateCheckout(order.json.order.provider_order_id);
   await api.call('POST', '/api/enterprise/payment/verify', { orderId: order.json.order.id, providerPaymentId: checkout.paymentId, signature: checkout.signature }, ownerToken);
   const invoices = await api.call('GET', '/api/enterprise/invoices', undefined, ownerToken);
+  // F-10: flush the signup's own verification email before asserting
+  // "nothing was sent" for the (rejected) invoice-email action.
+  await new Promise((r) => setImmediate(r));
+  _resetMockEmailStateForTests();
 
   const res = await api.call('POST', `/api/enterprise/invoices/${invoices.json.invoices[0].id}/email`, { to: 'not-an-email' }, ownerToken);
   assert.equal(res.status, 422);

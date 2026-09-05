@@ -10,7 +10,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { requireAuth, orgScope } from '../auth.js';
+import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { rateLimit } from '../rateLimit.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
@@ -110,11 +110,21 @@ export default function intelligenceRoutes(db) {
     if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'entries required' });
     const tz = req.tz || 'Asia/Kolkata';
     const d = dayKey(new Date(), tz);
+    // Batch-resolve all foods in one query instead of one SELECT per entry
+    // (was N+1 — the inserts below still run per entry, but the lookup that
+    // previously blocked each iteration on its own round trip no longer does).
+    const foodIds = [...new Set(entries.map((e) => e.food_id).filter(Boolean))];
+    const foodsById = new Map();
+    if (foodIds.length) {
+      const rows = await db.q(
+        `SELECT * FROM foods WHERE id IN (${foodIds.map(() => '?').join(',')}) AND (is_global = 1 OR org_id = ? OR client_id = ?)`,
+        [...foodIds, c.org_id, c.id]);
+      for (const row of rows) foodsById.set(row.id, row);
+    }
+
     const committed = [];
     for (const e of entries) {
-      const food = await db.q1(
-        'SELECT * FROM foods WHERE id = ? AND (is_global = 1 OR org_id = ? OR client_id = ?)',
-        [e.food_id, c.org_id, c.id]);
+      const food = foodsById.get(e.food_id);
       if (!food) { continue; }  // never commit a food the client can't see
       // Server-side unit re-parse: the client sends { food_id, quantity, unit }
       // (e.g. { qty: 2, unit: 'roti' } or { qty: 250, unit: 'ml' }) and the
@@ -471,11 +481,14 @@ export default function intelligenceRoutes(db) {
     const dims = readImageDims(buf, ext);
     if (dims && (dims.w < 32 || dims.h < 32)) return res.status(400).json({ error: 'Image too small to read' });
     // store privately (never served statically) — tmp namespace, cleaned on save
+    // Async fs calls (not *Sync) so a label-scan upload doesn't block the
+    // Node event loop — and therefore every other in-flight request — while
+    // it writes up to 5 MB to disk.
     const dir = path.join(UPLOAD_DIR, 'tmp', c.id);
-    fs.mkdirSync(dir, { recursive: true });
+    await fs.promises.mkdir(dir, { recursive: true });
     const fileId = id('img').replace(/^img_/, '');
     const rel = `tmp/${c.id}/${fileId}.${ext === 'jpg' ? 'jpg' : ext}`;
-    fs.writeFileSync(path.join(UPLOAD_DIR, rel), buf);
+    await fs.promises.writeFile(path.join(UPLOAD_DIR, rel), buf);
 
     // vision extraction when an AI provider is configured; otherwise editable manual entry
     let ocrFields = null;
@@ -677,19 +690,44 @@ export default function intelligenceRoutes(db) {
 
   // ================= LOCAL AI COACH (Ollama / optional providers) =================
 
-  // Provider status — lets the UI show "AI Coach unavailable" instead of breaking.
-  r.get('/coach/status', async (_req, res) => {
+  // Provider status — lets the UI show "AI Coach unavailable" instead of
+  // breaking. F-11 hardening: no frontend consumer of this route was
+  // found anywhere in the codebase at the time of this fix (grepped
+  // frontend/ and admin/ -- zero matches), but the response shape is kept
+  // backward-compatible for whatever future UI reads it, split by role.
+  // Every authenticated caller gets the one boolean a client-facing "AI
+  // Coach unavailable" banner would ever need. `configSummary()`
+  // (provider name, ollama base URL -- an internal service address --
+  // model, hasKey) and the live ollama ping detail are infrastructure
+  // diagnostics with no legitimate CLIENT use case; only GYM_OWNER/
+  // SUPER_ADMIN (who can also read this deployment's own env config)
+  // get them.
+  r.get('/coach/status', async (req, res) => {
     const p = await aiPing();
-    res.json({ ok: true, ...configSummary(), available: p.available, ollama: p });
+    const isPrivileged = req.user.role === 'GYM_OWNER' || req.user.role === 'SUPER_ADMIN';
+    res.json({
+      ok: true,
+      available: p.available,
+      ...(isPrivileged ? { ...configSummary(), ollama: p } : {}),
+    });
   });
 
-  // Food-AI (Tier 4) provider chain status -- same "diagnostics only, no
-  // secrets" shape as /coach/status above (foodAIConfigSummary() returns
-  // provider NAMES, booleans and counts -- never a key value), added
-  // specifically so a deployment's env var config (ALLOW_PAID_AI,
-  // GROQ_API_KEY, etc.) can be verified live without reading server logs.
-  r.get('/food-ai/status', async (_req, res) => {
-    res.json({ ok: true, ...(await foodAIConfigSummary(db)), diagnostics: paidProviderDiagnostics() });
+  // Food-AI (Tier 4) provider chain status -- same posture as /coach/status
+  // above. foodAIConfigSummary()/paidProviderDiagnostics() never return a
+  // key VALUE, but they do return which vendors are configured, per-
+  // provider availability/cooldown state, and daily usage counts --
+  // reconnaissance a gym member has no reason to hold, even though no
+  // secret leaks. Same role split: CLIENT gets one boolean, GYM_OWNER/
+  // SUPER_ADMIN keep the full diagnostic payload this route existed for.
+  r.get('/food-ai/status', async (req, res) => {
+    const summary = await foodAIConfigSummary(db);
+    const isPrivileged = req.user.role === 'GYM_OWNER' || req.user.role === 'SUPER_ADMIN';
+    const available = !!(summary.primaryAvailable || Object.values(summary.chainAvailability || {}).some(Boolean));
+    res.json({
+      ok: true,
+      available,
+      ...(isPrivileged ? { ...summary, diagnostics: paidProviderDiagnostics() } : {}),
+    });
   });
 
   // Daily Coach Brief — 3-5 data-driven insights + today's priority.

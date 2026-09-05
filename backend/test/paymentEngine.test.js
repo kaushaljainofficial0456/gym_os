@@ -10,7 +10,6 @@
 // ============================================================
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +18,7 @@ import {
   registerActivationHandler, recordCheckoutVerification, recordWebhookEvent,
 } from '../src/services/payments/paymentActivation.js';
 import {
-  mockSimulateCheckout, mockBuildWebhookEvent, _resetMockProviderStateForTests,
+  mockSimulateCheckout, mockBuildWebhookEvent, _resetMockProviderStateForTests, _signRawBodyForTests,
 } from '../src/services/payments/paymentProvider.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -249,8 +248,11 @@ test('recordWebhookEvent: a malformed (non-JSON) body is reported, never thrown,
   const db = await memDb();
   await seedOrg(db);
   const rawBody = 'not-json-at-all';
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'mock-webhook-secret';
-  const signature = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  // _signRawBodyForTests always signs with whatever secret
+  // verifyWebhookSignature would currently check against -- see its own
+  // comment in paymentProvider.js on why this test can no longer just
+  // hardcode the (now-removed) 'mock-webhook-secret' literal itself.
+  const signature = _signRawBodyForTests(rawBody);
   const result = await recordWebhookEvent(db, { rawBody, signature });
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'malformed_webhook_payload');
