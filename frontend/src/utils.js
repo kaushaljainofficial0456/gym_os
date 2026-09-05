@@ -16,6 +16,27 @@ export const daysAgoLabel = (iso) => {
 };
 export const cls = (...xs) => xs.filter(Boolean).join(' ');
 
+/**
+ * Turn a machine-shaped name into something a person reads.
+ *
+ * Exercise names arrive from the library as identifiers — `leg_press`,
+ * `barbell_row`, `squat` — and several screens rendered them raw, so a
+ * client's session read "leg_press · 3 sets · 12 reps". Purely a display
+ * concern: the stored value is untouched, which matters because it's the
+ * key the logging routes and the PR tracker match on.
+ *
+ * A name that already contains a space is assumed to be human-authored
+ * ("Bulgarian Split Squat" typed by a coach) and is returned unchanged —
+ * re-casing it would fight the coach's own capitalisation.
+ */
+export const exerciseLabel = (name) => {
+  if (typeof name !== 'string' || !name) return '';
+  if (name.includes(' ')) return name;
+  return name
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\p{Ll}/gu, (c) => c.toUpperCase());
+};
+
 export const STATUS_META = {
   ON_TRACK: { label: 'ON TRACK', cls: 'text-good border-good/40 bg-good/10' },
   NEEDS_ATTENTION: { label: 'NEEDS ATTENTION', cls: 'text-warn border-warn/40 bg-warn/10' },

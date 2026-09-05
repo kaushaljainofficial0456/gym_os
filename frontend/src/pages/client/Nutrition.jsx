@@ -3,7 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
 import { useCountUp, useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
+import { Spinner, ErrorState, Ring, Bar, CheckIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
+import Icon from '../../components/Icon.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
@@ -184,7 +185,7 @@ function HydrationCard({ waterState, target, onAdd, t }) {
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm" style={{ background: t.waterDim, color: t.water }}>💧</div>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: t.waterDim, color: t.water }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2.7 6.3 9.9a7.5 7.5 0 1 0 11.4 0Z"/></svg></div>
             <div>
               <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2" style={{ color: t.mute }}>
                 <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />Water
@@ -209,7 +210,7 @@ function HydrationCard({ waterState, target, onAdd, t }) {
                 className="aspect-square rounded-lg grid place-items-center text-[10px] transition-all duration-300 active:scale-90"
                 style={{ background: filled ? `${t.water}25` : t.glass, border: `1px solid ${filled ? t.water + '50' : t.border}`, color: filled ? t.water : t.faint, boxShadow: filled ? `0 0 8px ${t.water}20` : 'none' }}
                 aria-label={`Water glass ${i + 1}`}>
-                {filled ? '💧' : ''}
+                {filled ? <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.7 6.3 9.9a7.5 7.5 0 1 0 11.4 0Z"/></svg> : null}
               </button>
             );
           })}
@@ -232,7 +233,7 @@ function TodaysEatenList({ meals, editing, onToggle, onEditQty, onDelete, t }) {
   if (!meals || meals.length === 0) {
     return (
       <div className="text-center py-10 px-6">
-        <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center text-2xl mb-3" style={{ background: t.surface, border: `1px solid ${t.border}` }}>🍽️</div>
+        <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center mb-3" style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 2v7a3 3 0 0 0 3 3v10M6 2v7M9 2v7M18 2c-1.7 0-3 2.2-3 5s1.3 4 3 4v11"/></svg></div>
         <div className="font-grotesk text-sm font-semibold" style={{ color: t.ink }}>No foods logged today</div>
         <div className="text-xs mt-1 max-w-xs mx-auto" style={{ color: t.mute }}>Your nutrition day is waiting to be filled.</div>
       </div>
@@ -392,7 +393,7 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
             <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Edit Entry</div>
             <div className="font-grotesk text-base font-bold mt-1" style={{ color: t.ink }}>{log.name}</div>
           </div>
-          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
+          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}><XIcon /></button>
         </div>
         <div className="px-5 pb-4">
           <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Quantity ({log.unit || 'g'})</label>
@@ -431,8 +432,8 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
     <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
       <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
         <div className="px-5 pt-5 pb-4 text-center relative">
-          <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
-          <div className="w-12 h-12 mx-auto rounded-full grid place-items-center text-xl mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30` }}>🗑️</div>
+          <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}><XIcon /></button>
+          <div className="w-12 h-12 mx-auto rounded-full grid place-items-center mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30`, color: t.danger }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></div>
           <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>Remove from today's intake?</div>
           {/* Only show a quantity when one is genuinely known -- a bare
               `|| 100` fallback here would display a fabricated weight for
@@ -516,7 +517,7 @@ export default function Nutrition() {
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
 
-  if (home.loading) return <Spinner label="Loading your fuel plan…" />;
+  if (home.loading) return <PageSkeleton variant="dashboard" label="Loading your fuel plan" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
 
   const toggleMeal = async (m) => {
@@ -694,16 +695,16 @@ export default function Nutrition() {
             // accent-filled and full-weight vs. the other two's glass
             // treatment, so it reads as the strongest option at a glance
             // without introducing a new visual style.
-            { label: 'Log / Estimate Food', icon: '🍽️', onClick: () => setFoodLogSheetOpen(true), primary: true },
-            { label: 'Customize My Meals', icon: '🧩', onClick: () => setCustomizeOpen(true) },
-            { label: 'Meal Information', icon: '📊', onClick: () => setInfoOpen(true) },
+            { label: 'Log / Estimate Food', icon: 'plate', onClick: () => setFoodLogSheetOpen(true), primary: true },
+            { label: 'Customize My Meals', icon: 'note', onClick: () => setCustomizeOpen(true) },
+            { label: 'Meal Information', icon: 'chart', onClick: () => setInfoOpen(true) },
           ].map((tool) => (
             <button key={tool.label} onClick={tool.onClick}
                     className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
                     style={tool.primary
                       ? { background: t.accent, border: `1px solid ${t.accent}` }
                       : { background: t.glass, border: `1px solid ${t.border}` }}>
-              <span className="text-lg">{tool.icon}</span>
+              <span className="shrink-0" style={{ color: tool.primary ? 'var(--accent-contrast)' : 'var(--accent)' }}><Icon name={tool.icon} size={18} /></span>
               <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: tool.primary ? 'var(--accent-contrast)' : t.ink }}>{tool.label}</span>
             </button>
           ))}
@@ -777,7 +778,7 @@ export default function Nutrition() {
                   </div>
                 </div>
                 <button onClick={() => setShowAddSupplement(!showAddSupplement)} className="px-3 py-1.5 rounded-xl font-grotesk text-[10px] font-bold transition-all active:scale-95" style={{ background: showAddSupplement ? t.danger + '15' : t.accentDim, color: showAddSupplement ? t.danger : t.accent, border: `1px solid ${showAddSupplement ? t.danger + '30' : t.accent + '30'}` }}>
-                  {showAddSupplement ? '✕ Close' : '+ Add'}
+                  {showAddSupplement ? 'Close' : '+ Add'}
                 </button>
               </div>
               {visible.length > 0 && (
@@ -786,7 +787,7 @@ export default function Nutrition() {
                     const taken = !!supTaken[s.id];
                     return (
                       <div key={s.id} role="button" tabIndex={0} onClick={() => setSupTaken((x) => ({ ...x, [s.id]: !taken }))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSupTaken((x) => ({ ...x, [s.id]: !taken })); } }} className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all cursor-pointer" style={{ background: taken ? `${t.accent}10` : t.glass, border: `1px solid ${taken ? t.accent + '30' : t.border}` }}>
-                        <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] shrink-0" style={{ background: taken ? t.accent : 'transparent', color: taken ? 'var(--accent-contrast)' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}>✓</span>
+                        <span className="w-5 h-5 rounded-md grid place-items-center text-[10px] shrink-0" style={{ background: taken ? t.accent : 'transparent', color: taken ? 'var(--accent-contrast)' : 'transparent', border: `1px solid ${taken ? t.accent : t.border}` }}><CheckIcon /></span>
                         <span className="flex-1 min-w-0">
                           <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{s.name}</span>
                           <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: t.ringTrack }}>
@@ -794,7 +795,7 @@ export default function Nutrition() {
                           </div>
                         </span>
                         <span className="font-grotesk text-[10px] shrink-0" style={{ color: t.mute }}>{s.dose || ''}</span>
-                        <button className="w-6 h-6 rounded-md grid place-items-center text-[9px] shrink-0 transition-colors" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${s.name}"?`)) return; try { await api(`/tracking/clients/${clientId}/supplements/${s.id}`, { method: 'DELETE' }); const r = await api(`/tracking/clients/${clientId}/supplements`); setSupList(r.supplements || []); setToast(`${s.name} removed`); } catch (err) { setToast(err.message || 'Failed to delete supplement'); } }} style={{ color: t.danger + 'AA' }} aria-label={`Delete ${s.name}`}>✕</button>
+                        <button className="w-6 h-6 rounded-md grid place-items-center text-[9px] shrink-0 transition-colors" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${s.name}"?`)) return; try { await api(`/tracking/clients/${clientId}/supplements/${s.id}`, { method: 'DELETE' }); const r = await api(`/tracking/clients/${clientId}/supplements`); setSupList(r.supplements || []); setToast(`${s.name} removed`); } catch (err) { setToast(err.message || 'Failed to delete supplement'); } }} style={{ color: t.danger + 'AA' }} aria-label={`Delete ${s.name}`}><XIcon /></button>
                       </div>
                     );
                   })}
@@ -812,7 +813,7 @@ export default function Nutrition() {
                 <div className="rounded-xl p-3.5 space-y-2.5" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
                   <div className="flex items-center justify-between">
                     <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Add supplement</div>
-                    <button onClick={() => { setShowAddSupplement(false); setSupForm({ name: '', dose: '' }); }} className="w-6 h-6 rounded-md grid place-items-center text-[10px]" style={{ color: t.mute }} aria-label="Close add form">✕</button>
+                    <button onClick={() => { setShowAddSupplement(false); setSupForm({ name: '', dose: '' }); }} className="w-6 h-6 rounded-md grid place-items-center text-[10px]" style={{ color: t.mute }} aria-label="Close add form"><XIcon /></button>
                   </div>
                   <input className="w-full px-3 py-2.5 rounded-xl font-grotesk text-sm outline-none" placeholder="e.g. Omega 3" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.name} onChange={(e) => setSupForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
                   <input className="w-full px-3 py-2.5 rounded-xl font-grotesk text-xs outline-none" placeholder="Dose (e.g. 1000 mg, 1 scoop, 1000 IU)" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} value={supForm.dose} onChange={(e) => setSupForm((f) => ({ ...f, dose: e.target.value }))} />

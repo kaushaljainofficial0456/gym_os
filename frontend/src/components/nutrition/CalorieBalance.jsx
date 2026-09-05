@@ -13,6 +13,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api.js';
+import { XIcon } from './../UI.jsx';
 
 const STRATEGY_ORDER = ['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE'];
 const STRATEGY_HINT = {
@@ -42,7 +43,7 @@ function ModalShell({ onClose, kicker, title, t, children, wide }) {
             <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>{kicker}</div>
             <div className="font-grotesk text-base font-bold mt-1" style={{ color: t.ink }}>{title}</div>
           </div>
-          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
+          <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}><XIcon /></button>
         </div>
         <div className="px-5 pb-5 overflow-y-auto">{children}</div>
       </div>
@@ -249,7 +250,7 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
                   : 'Totally optional — spread it across the next few days, or leave your target exactly as it is.'}
               </div>
             </div>
-            <button onClick={() => { setDismissed(true); setReconsidering(false); }} aria-label="Dismiss" className="w-6 h-6 rounded-md grid place-items-center text-[10px] shrink-0" style={{ color: t.mute, background: t.glass }}>✕</button>
+            <button onClick={() => { setDismissed(true); setReconsidering(false); }} aria-label="Dismiss" className="w-6 h-6 rounded-md grid place-items-center text-[10px] shrink-0" style={{ color: t.mute, background: t.glass }}><XIcon /></button>
           </div>
           <div className="flex gap-2 flex-wrap">
             {/* Every strategy would report infeasible for the same reason

@@ -38,11 +38,11 @@ export default function LegalConsent() {
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--accent-deep)] to-[var(--accent)] flex items-center justify-center text-[var(--accent-contrast)] text-sm font-bold">G</div>
-            <h1 className="text-xl font-bold text-[var(--ink)]" style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}>
+            <h1 className="text-xl font-bold text-[var(--ink)]">
               Terms &amp; Conditions
             </h1>
           </div>
-          <p className="text-sm text-[var(--mute)]" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
+          <p className="text-sm text-[var(--mute)]">
             Please review these terms before continuing to Gym&nbsp;OS.
           </p>
         </div>
@@ -54,7 +54,7 @@ export default function LegalConsent() {
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 sm:px-8 pb-4"
       >
-        <div className="max-w-2xl mx-auto space-y-7 text-sm leading-relaxed text-[var(--mute)]" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
+        <div className="max-w-2xl mx-auto space-y-7 text-sm leading-relaxed text-[var(--mute)]">
 
           {/* 1 ─ Acceptance of Terms */}
           <Section num={1} title="Acceptance of Terms">
@@ -75,7 +75,7 @@ export default function LegalConsent() {
           {/* 3 ─ Fitness & Exercise Disclaimer */}
           <Section num={3} title="Fitness &amp; Exercise Disclaimer">
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg2)] px-4 py-3 mb-2">
-              <p className="font-semibold text-[var(--ink)]" style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}>Gym&nbsp;OS is a fitness information tool — it is not a medical professional.</p>
+              <p className="font-semibold text-[var(--ink)]">Gym&nbsp;OS is a fitness information tool — it is not a medical professional.</p>
             </div>
             <p>Workouts, exercises, programs, and training information provided through Gym&nbsp;OS are for general informational and educational purposes. This information is <strong>not</strong> a substitute for advice from:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -90,7 +90,7 @@ export default function LegalConsent() {
           {/* 4 ─ Nutrition, Calories & Other Estimates */}
           <Section num={4} title="Nutrition, Calories &amp; Other Estimates">
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg2)] px-4 py-3 mb-2">
-              <p className="font-semibold text-[var(--ink)]" style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}>Many values in Gym&nbsp;OS are estimates, not exact measurements.</p>
+              <p className="font-semibold text-[var(--ink)]">Many values in Gym&nbsp;OS are estimates, not exact measurements.</p>
             </div>
             <p>Nutrition information, calorie estimates, macronutrient breakdowns, food recognition, portion estimates, AI-generated food data, workout recommendations, progress calculations, measurements, targets, and similar outputs may be approximate and may contain errors.</p>
             <p className="mt-2">Actual values can vary based on brand, recipe, preparation method, serving size, ingredient variation, database source, regional differences, and incomplete user input. Never treat Gym&nbsp;OS calculations as medically precise or guaranteed.</p>
@@ -193,7 +193,7 @@ export default function LegalConsent() {
               className="mt-0.5 h-4 w-4 rounded border-[var(--line)] bg-[var(--bg2)] text-[var(--accent)] focus:ring-[var(--accent)] focus:ring-offset-0 cursor-pointer"
               aria-label="I have read and agree to the Terms &amp; Conditions"
             />
-            <span className="text-sm text-[var(--ink)] leading-snug" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
+            <span className="text-sm text-[var(--ink)] leading-snug">
               I have read and agree to the Terms &amp; Conditions and acknowledge the Privacy Policy.
             </span>
           </label>
@@ -203,13 +203,6 @@ export default function LegalConsent() {
             onClick={handleAccept}
             disabled={!agreed || submitting}
             className="w-full py-3 rounded-full font-semibold text-sm tracking-wide transition-all duration-200"
-            style={{
-              fontFamily: 'Satoshi, system-ui, sans-serif',
-              background: agreed ? 'var(--accent-grad)' : 'rgb(var(--tint-rgb) / .06)',
-              color: agreed ? 'var(--accent-contrast)' : 'var(--faint)',
-              boxShadow: agreed ? 'var(--accent-grad-shadow)' : 'none',
-              cursor: agreed ? 'pointer' : 'not-allowed',
-            }}
           >
             {submitting ? 'Accepting…' : 'I Agree & Continue'}
           </button>
@@ -224,7 +217,6 @@ function Section({ num, title, children }) {
     <div className="space-y-2">
       <h2
         className="text-sm font-bold text-[var(--ink)] uppercase tracking-wider"
-        style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}
       >
         {num}. {title}
       </h2>

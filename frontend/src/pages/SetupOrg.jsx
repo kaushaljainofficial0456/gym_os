@@ -6,6 +6,7 @@ import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import { loadGoogleIdentity } from '../googleIdentity.js';
 import './../components/BorderGlow.css';
+import { PasswordInput } from '../components/UI.jsx';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -129,27 +130,27 @@ export default function SetupOrg() {
 
             <form onSubmit={submit} className="space-y-3">
               <div>
-                <label htmlFor="orgName" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Gym / studio name</label>
-                <input id="orgName" className="input mt-1" type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)}
+                <label htmlFor="orgName" className="field-label">Gym / studio name</label>
+                <input id="orgName" className="input mt-1.5" type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)}
                   placeholder="Ironforge Fitness" required autoFocus />
               </div>
               <div>
-                <label htmlFor="ownerName" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Your name</label>
-                <input id="ownerName" className="input mt-1" type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)}
+                <label htmlFor="ownerName" className="field-label">Your name</label>
+                <input id="ownerName" className="input mt-1.5" type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)}
                   placeholder="Maya Kapoor" required />
               </div>
               <div>
-                <label htmlFor="setup-email" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
-                <input id="setup-email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                <label htmlFor="setup-email" className="field-label">Email</label>
+                <input id="setup-email" className="input mt-1.5" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com" required />
               </div>
               <div>
-                <label htmlFor="setup-password" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
-                <input id="setup-password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                <label htmlFor="setup-password" className="field-label">Password</label>
+                <PasswordInput id="setup-password" className="mt-1.5" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters" required minLength={6} />
               </div>
               <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
-                <button className="btn-primary w-full !py-3" disabled={busy}>
+                <button className="btn-primary btn-lg btn-block" disabled={busy}>
                   {busy ? 'Setting up…' : 'Create my gym'}
                 </button>
               </BorderGlow>
@@ -169,7 +170,7 @@ export default function SetupOrg() {
               </div>
             )}
 
-            {err && <div className="mt-4 text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
+            {err && <div role="alert" className="field-error mt-4 anim-fadeIn">{err}</div>}
 
             <div className="mt-6 text-center text-sm" style={{ color: 'var(--mute)' }}>
               Already have an account?{' '}

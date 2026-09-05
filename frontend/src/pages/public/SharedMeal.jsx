@@ -52,7 +52,7 @@ export default function SharedMeal() {
     return (
       <div className="min-h-screen grid place-items-center px-6" style={{ background: bg }}>
         <div className="text-center max-w-sm">
-          <div className="text-3xl mb-3">🔗</div>
+          <div className="text-3xl mb-3"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block' }}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg></div>
           <div className="font-bold text-lg mb-1" style={{ color: ink }}>Link not found</div>
           <div className="text-sm" style={{ color: mute }}>{error}</div>
         </div>

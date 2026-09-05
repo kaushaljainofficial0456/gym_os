@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import Icon from './Icon.jsx';
+import { XIcon } from './UI.jsx';
 
 // Web Speech API — speech recognition when the browser supports it.
 // (Chrome/Edge/Safari ship it; Firefox needs a flag.) Everything else
@@ -240,7 +241,7 @@ export default function AskSK({ onLogged }) {
       {/* Ask SK OS bar */}
       <button onClick={() => setOpen(true)}
         className="card w-full !p-3.5 flex items-center gap-3 text-left transition-all hover:border-gold/40 group">
-        <span className="w-9 h-9 rounded-xl grid place-items-center text-base bg-gradient-to-br from-ember/30 to-gold/20 border border-ember/30 group-hover:shadow-glow transition-shadow">⚡</span>
+        <span className="w-9 h-9 rounded-xl grid place-items-center text-base border transition-shadow group-hover:shadow-glow" style={{ background: 'rgb(var(--accent-rgb) / .16)', borderColor: 'rgb(var(--accent-rgb) / .3)', color: 'var(--accent)' }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg></span>
         <span className="flex-1 min-w-0">
           <span className="block font-grotesk text-sm font-semibold">Ask SK OS</span>
           <span className="text-[11px] text-mute truncate">Type food, workouts or questions — “220g paneer” · “Bench press 60x8” · “4 day hypertrophy”</span>
@@ -254,12 +255,12 @@ export default function AskSK({ onLogged }) {
             {/* header */}
             <div className="p-4 border-b border-line/60 flex items-center justify-between">
               <div>
-                <div className="font-grotesk font-bold flex items-center gap-2"><span>⚡ Ask SK OS</span>
+                <div className="font-grotesk font-bold flex items-center gap-2"><span className="inline-flex items-center gap-1.5"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg> Ask SK OS</span>
                   <span className="chip border-line !px-1.5 !py-0 text-[8px] text-mute">intelligence</span>
                 </div>
                 <div className="text-[10px] text-mute mt-0.5">Type it, or scan a nutrition label — nothing is saved without your confirmation.</div>
               </div>
-              <button className="text-mute hover:text-ink text-lg" onClick={() => { stopVoice(); setOpen(false); setView(null); setText(''); }} aria-label="Close">✕</button>
+              <button className="text-mute hover:text-ink text-lg" onClick={() => { stopVoice(); setOpen(false); setView(null); setText(''); }} aria-label="Close"><XIcon /></button>
             </div>
 
             {/* tabs */}
@@ -299,7 +300,7 @@ export default function AskSK({ onLogged }) {
                     ))}
                   </div>
                   <button className="btn-primary w-full" onClick={understand} disabled={busy || !text.trim()}>
-                    {busy ? 'Understanding…' : '⚡ Understand'}
+                    {busy ? 'Understanding…' : 'Understand'}
                   </button>
 
                   {/* food review */}
@@ -330,7 +331,7 @@ export default function AskSK({ onLogged }) {
                         </div>
                       )}
                       {view.data.needsConfirmation && <div className="text-[10px] text-faint">Some values are estimated or approximate — check before adding.</div>}
-                      <button className="btn-primary w-full !py-2.5 !text-xs" onClick={addFoods}>+ ADD TO TODAY</button>
+                      <button className="btn-primary btn-sm btn-block" onClick={addFoods}>+ ADD TO TODAY</button>
                     </div>
                   )}
 
@@ -375,7 +376,7 @@ export default function AskSK({ onLogged }) {
                       {!!view.data.candidates?.length && !view.data.resolved && (
                         <div className="text-[11px] text-warn">Did you mean: {view.data.candidates.slice(0, 4).map((c) => c.name).join(', ')}?</div>
                       )}
-                      <button className="btn-primary w-full !py-2.5 !text-xs" onClick={logWorkout}>✓ LOG {view.data.totalSets} SET{view.data.totalSets > 1 ? 'S' : ''}</button>
+                      <button className="btn-primary btn-sm btn-block" onClick={logWorkout}>✓ LOG {view.data.totalSets} SET{view.data.totalSets > 1 ? 'S' : ''}</button>
                     </div>
                   )}
 
@@ -508,7 +509,7 @@ export default function AskSK({ onLogged }) {
                         <input className="input" type="number" placeholder="Sugar (g)" value={scan.fields.sugar} onChange={(e) => setF('sugar', e.target.value)} />
                         <input className="input" type="number" placeholder="Sodium (mg)" value={scan.fields.sodium} onChange={(e) => setF('sodium', e.target.value)} />
                       </div>
-                      <button className="btn-primary w-full !py-2.5 !text-xs" onClick={saveLabel}>SAVE TO MY FOODS</button>
+                      <button className="btn-primary btn-sm btn-block" onClick={saveLabel}>SAVE TO MY FOODS</button>
                       <div className="text-[9px] text-faint">Stored with source LABEL_SCANNED · quantity logging scales by your serving size (e.g. “I ate 75g”).</div>
                     </div>
                   )}
@@ -518,7 +519,7 @@ export default function AskSK({ onLogged }) {
           </div>
         </div>
       )}
-      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {toast && <div className="toast anim-toast">{toast}</div>}
     </>
   );
 }

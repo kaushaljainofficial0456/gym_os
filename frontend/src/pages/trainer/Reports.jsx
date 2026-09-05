@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch, fmt1 } from '../../utils.js';
-import { Card, Kicker, Spinner, ErrorState } from '../../components/UI.jsx';
+import { Card, Kicker, Spinner, ErrorState, ArrowRightIcon, PageSkeleton } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -40,7 +40,7 @@ export default function Reports() {
     setSending(false);
   };
 
-  if (clients.loading) return <Spinner label="Loading clients…" />;
+  if (clients.loading) return <PageSkeleton variant="list" label="Loading clients" />;
   if (clients.error) return <ErrorState error={clients.error} onRetry={clients.reload} />;
 
   return (
@@ -75,8 +75,8 @@ export default function Reports() {
                 ['Water', report.avgWater != null ? `${report.avgWater} L` : '—', 'text-cyanx', 'daily avg'],
                 ['Sleep', report.avgSleep != null ? `${report.avgSleep} h` : '—', 'text-violetx', 'daily avg']
               ].map(([l, v, c, s]) => (
-                <div key={l} className="rounded-xl border border-line bg-white/[.03] p-3">
-                  <div className="text-[9px] uppercase tracking-wider text-mute font-grotesk mb-1">{l}</div>
+                <div key={l} className="rounded-xl border border-line bg-tint/[.03] p-3">
+                  <div className="t-micro mb-1">{l}</div>
                   <div className={`font-grotesk font-bold text-lg ${c}`}>{v}</div>
                   <div className="text-[10px] text-faint">{s}</div>
                 </div>
@@ -87,14 +87,14 @@ export default function Reports() {
             <AdherenceBreakdown components={report.adherence.components} />
 
             <div className="mt-5 grid sm:grid-cols-2 gap-3">
-              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(8,127,123,.12), rgba(18,184,176,.05))', border: '1px solid rgba(8,127,123,.3)' }}>
-                <div className="text-[10px] uppercase tracking-wider text-ember font-grotesk mb-1.5">Coach summary</div>
+              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(150deg, rgba(8,127,123,.12), rgb(var(--accent-rgb) / .05))', border: '1px solid rgba(8,127,123,.3)' }}>
+                <div className="t-micro mb-1.5" style={{ color: 'var(--accent)' }}>Coach summary</div>
                 <p className="text-sm leading-relaxed">{report.coachSummary}</p>
               </div>
-              <div className="rounded-2xl p-4 border border-line bg-white/[.03]">
-                <div className="text-[10px] uppercase tracking-wider text-gold font-grotesk mb-1.5">Next week</div>
+              <div className="rounded-2xl p-4 border border-line bg-tint/[.03]">
+                <div className="t-micro mb-1.5" style={{ color: 'var(--accent)' }}>Next week</div>
                 <ul className="space-y-1.5 text-sm">
-                  {(report.nextWeek || []).map((n, i) => <li key={i} className="flex gap-2"><span className="text-gold">→</span><span>{n}</span></li>)}
+                  {(report.nextWeek || []).map((n, i) => <li key={i} className="flex gap-2"><span style={{ color: 'var(--accent)' }}><ArrowRightIcon /></span><span>{n}</span></li>)}
                 </ul>
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function Reports() {
         </Card>
       )}
 
-      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {toast && <div className="toast anim-toast">{toast}</div>}
     </div>
   );
 }

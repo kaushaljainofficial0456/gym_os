@@ -79,32 +79,33 @@ export function CookieConsentProvider({ children }) {
   );
 }
 
+/**
+ * The banner used to be a tall block of legal prose pinned over the bottom
+ * of the screen — it covered the entire tab bar, so the first thing a new
+ * user saw was an app they couldn't navigate. It is now a compact bar with
+ * the two decisions side by side, sitting ABOVE the tab bar rather than on
+ * top of it, and it says what it does in one line instead of five.
+ */
 function CookieBanner({ onAcceptAll, onRejectOptional, onManage }) {
   return (
     <div
-      className="fixed bottom-0 inset-x-0 z-50 p-3 sm:p-4 anim-fadeUp"
-      style={{ animationDuration: '0.35s' }}
+      className="fixed inset-x-0 z-50 px-3 anim-fadeUp"
+      role="region"
+      aria-label="Cookie choices"
+      /* Clears the tab bar (64px) plus the phone's home indicator, so the
+         banner never sits on top of navigation. */
+      style={{ animationDuration: '0.35s', bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
     >
-      <div
-        className="max-w-2xl mx-auto rounded-2xl border border-[var(--line)] px-4 py-4 sm:px-6 sm:py-5 space-y-3"
-        style={{
-          background: 'var(--panel)',
-          boxShadow: '0 -8px 32px rgba(0,0,0,.35), 0 0 0 1px rgba(255,223,221,.04)',
-        }}
-      >
-        <p className="text-sm text-[var(--ink)] leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
-          SK OS uses cookies and similar technologies to operate the service, remember preferences, understand usage, and where applicable, support optional analytics or marketing.
+      <div className="max-w-2xl mx-auto p-4"
+        style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--e-3)' }}>
+        <p className="t-sub" style={{ color: 'var(--ink)' }}>
+          We use cookies to keep you signed in and remember your preferences. Analytics and
+          marketing cookies are optional.
         </p>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={onAcceptAll} className="btn-primary text-xs px-4 py-2 rounded-full">
-            Accept all
-          </button>
-          <button onClick={onRejectOptional} className="btn text-xs px-4 py-2 rounded-full">
-            Reject optional
-          </button>
-          <button onClick={onManage} className="btn-ghost text-xs px-3 py-2 rounded-full">
-            Manage preferences
-          </button>
+        <div className="flex flex-wrap items-center gap-2 mt-3.5">
+          <button onClick={onAcceptAll} className="btn-primary btn-sm flex-1">Accept all</button>
+          <button onClick={onRejectOptional} className="btn btn-sm flex-1">Reject optional</button>
+          <button onClick={onManage} className="btn-ghost btn-sm">Manage</button>
         </div>
       </div>
     </div>
@@ -125,24 +126,24 @@ function CookiePreferencesModal({ onClose, onSave, current }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 anim-fadeIn" />
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}
+      role="dialog" aria-modal="true" aria-labelledby="cookie-prefs-title">
+      <div className="scrim !z-0 anim-fadeIn" />
 
-      {/* Modal */}
       <div
-        className="relative w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-[var(--line)] anim-scaleIn"
-        style={{ background: 'var(--panel)', boxShadow: '0 24px 48px -24px rgba(0,0,0,.6)' }}
+        className="relative w-full sm:max-w-lg max-h-[85vh] flex flex-col sheet anim-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-5 pt-5 pb-3 border-b border-[var(--line)]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-[var(--ink)]" style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}>
-              Cookie Preferences
-            </h2>
-            <button onClick={onClose} className="text-[var(--faint)] hover:text-[var(--ink)] transition-colors text-lg leading-none px-1" aria-label="Close">✕</button>
-          </div>
+        <div className="sheet-handle sm:hidden" />
+        <div className="sheet-header">
+          <h2 id="cookie-prefs-title" className="t-card">Cookie preferences</h2>
+          {/* Was '✕' — a text glyph that inherits the body font's weight,
+              so it never optically matched the SVG icons elsewhere. */}
+          <button onClick={onClose} className="chrome-btn btn-icon justify-center" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Categories */}
@@ -175,16 +176,9 @@ function CookiePreferencesModal({ onClose, onSave, current }) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[var(--line)] flex gap-2">
-          <button onClick={onClose} className="btn flex-1 text-xs py-2.5 rounded-full">
-            Cancel
-          </button>
-          <button
-            onClick={() => onSave(prefs)}
-            className="btn-primary flex-1 text-xs py-2.5 rounded-full"
-          >
-            Save preferences
-          </button>
+        <div className="px-5 py-4 flex gap-2" style={{ borderTop: '1px solid var(--line)', paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}>
+          <button onClick={onClose} className="btn flex-1">Cancel</button>
+          <button onClick={() => onSave(prefs)} className="btn-primary flex-1">Save preferences</button>
         </div>
       </div>
     </div>
@@ -193,39 +187,39 @@ function CookiePreferencesModal({ onClose, onSave, current }) {
 
 function CategoryCard({ title, description, enabled, onToggle, required, locked }) {
   return (
-    <div className="rounded-xl border border-[var(--line)] bg-[var(--bg2)] p-4 space-y-2">
+    <div className="p-4 space-y-2"
+      style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--line)', background: 'var(--bg2)' }}>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-[var(--ink)]" style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}>
-            {title}
-          </h3>
-          {required && (
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[var(--accent-soft)] text-[var(--accent)]" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
-              Required
-            </span>
-          )}
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="font-grotesk text-[13px] font-bold" style={{ color: 'var(--ink)' }}>{title}</h3>
+          {required && <span className="badge badge-plain">Required</span>}
         </div>
         {!locked && (
           <button
             onClick={onToggle}
-            className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200"
+            className="relative inline-flex h-[22px] w-10 items-center shrink-0 transition-colors"
             style={{
-              background: enabled ? 'var(--accent)' : 'rgb(var(--tint-rgb) / .15)',
+              borderRadius: 'var(--r-pill)',
+              background: enabled ? 'var(--accent)' : 'rgb(var(--tint-rgb) / .18)',
+              transitionDuration: 'var(--dur-base)',
             }}
             role="switch"
             aria-checked={enabled}
             aria-label={`${title} cookies`}
           >
             <span
-              className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform duration-200"
-              style={{ transform: enabled ? 'translateX(18px)' : 'translateX(3px)' }}
+              className="inline-block h-4 w-4 rounded-full"
+              style={{
+                background: enabled ? 'var(--accent-contrast)' : 'var(--panel)',
+                boxShadow: '0 1px 2px rgba(0,0,0,.25)',
+                transform: enabled ? 'translateX(21px)' : 'translateX(3px)',
+                transition: 'transform var(--dur-base) var(--ease-out), background-color var(--dur-base) ease',
+              }}
             />
           </button>
         )}
       </div>
-      <p className="text-xs text-[var(--mute)] leading-relaxed" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
-        {description}
-      </p>
+      <p className="t-sub" style={{ fontSize: '.75rem' }}>{description}</p>
     </div>
   );
 }

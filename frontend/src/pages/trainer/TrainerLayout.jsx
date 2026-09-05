@@ -5,6 +5,7 @@ import { useAuth } from '../../auth.jsx';
 import LineNavList from '../../components/LineNavList.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
+import { Avatar } from '../../components/UI.jsx';
 import '../../components/LineNavList.css';
 
 const NAV = [
@@ -100,23 +101,24 @@ export default function TrainerLayout() {
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
 
       {/* ── persistent top bar: hamburger + wordmark, nothing else ── */}
-      <header className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b backdrop-blur"
-        style={{ borderColor: 'var(--line)', background: 'rgb(var(--bg-rgb) / .85)' }}>
+      <header className="app-header !z-30 flex items-center gap-3 px-4">
         <button
           onClick={() => setNavOpen(true)}
           aria-label="Open menu"
           aria-expanded={navOpen}
           data-tour="trainer-hamburger"
-          className="w-9 h-9 grid place-items-center rounded-xl border transition-colors active:scale-95"
-          style={{ borderColor: 'var(--line)', color: 'var(--ink)' }}>
+          className="w-9 h-9 grid place-items-center border transition-colors active:scale-95 shrink-0"
+          style={{ borderRadius: 'var(--r-sm)', borderColor: 'var(--line)', color: 'var(--ink)' }}>
           <motion.span animate={{ rotate: navOpen ? 90 : 0 }} transition={{ duration: 0.25, ease: [0.22, 0.8, 0.3, 1] }} style={{ display: 'inline-flex' }}>
             <Icon name={navOpen ? 'close' : 'menu'} size={18} />
           </motion.span>
         </button>
-        <button className="flex items-center gap-2" onClick={() => nav('/app/trainer')}>
-          <img src="/logo.png" alt="SK OS" className="w-7 h-7 rounded-lg object-cover" />
-          <span className="font-brand text-[13px] font-bold leading-none">SK OS</span>
-          <span className="text-[10px] tracking-[.16em] uppercase" style={{ color: 'var(--faint)' }}>
+        <button className="flex items-center gap-2 min-w-0" onClick={() => nav('/app/trainer')}>
+          <img src="/logo.png" alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover shrink-0" />
+          <span className="font-brand text-[13px] font-bold leading-none shrink-0">SK OS</span>
+          {/* `truncate` matters: a long gym name pushed the wordmark out of
+              the bar entirely at 375px. */}
+          <span className="text-[10px] tracking-[.16em] uppercase truncate" style={{ color: 'var(--faint)' }}>
             {user?.orgName || 'Workspace'}
           </span>
         </button>
@@ -148,8 +150,12 @@ export default function TrainerLayout() {
             role="dialog"
             aria-modal="true"
             aria-label="Trainer navigation"
-            className="fixed inset-y-0 left-0 z-50 w-[272px] flex flex-col p-4 border-r"
-            style={{ background: 'var(--panel)', borderColor: 'var(--line)', boxShadow: '24px 0 60px -20px rgb(0 0 0 / .35)' }}
+            className="fixed inset-y-0 left-0 z-50 w-[272px] max-w-[86vw] flex flex-col p-4 border-r overflow-y-auto"
+            style={{
+              background: 'var(--panel)', borderColor: 'var(--line)', boxShadow: 'var(--e-4)',
+              paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))',
+              paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+            }}
             initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
             transition={{ duration: 0.38, ease: [0.22, 0.8, 0.3, 1] }}
           >
@@ -164,7 +170,7 @@ export default function TrainerLayout() {
                 </div>
               </button>
               <button onClick={() => setNavOpen(false)} aria-label="Close menu"
-                className="w-8 h-8 grid place-items-center rounded-lg" style={{ color: 'var(--mute)' }}>
+                className="chrome-btn w-8 h-8 justify-center shrink-0">
                 <Icon name="close" size={16} />
               </button>
             </div>
@@ -174,23 +180,21 @@ export default function TrainerLayout() {
               onNavigate={() => setNavOpen(false)}
             />
 
-            <div className="border-t pt-3 mt-3" style={{ borderColor: 'var(--line)' }}>
-              <div className="flex items-center gap-2.5 px-2 mb-2">
-                <div className="w-8 h-8 rounded-full grid place-items-center border font-grotesk text-xs font-bold"
-                  style={{ background: 'var(--panel2)', borderColor: 'var(--line)' }}>
-                  {user?.name?.[0] || '?'}
-                </div>
+            {/* mt-auto pins the identity block to the bottom of the drawer.
+                Without it, on a short viewport the nav list and this block
+                sat mid-panel with dead space below them. */}
+            <div className="border-t pt-3 mt-auto" style={{ borderColor: 'var(--line)' }}>
+              <div className="flex items-center gap-2.5 px-2 mb-1.5">
+                <Avatar name={user?.name} size={32} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold font-grotesk truncate">{user?.name}</div>
+                  <div className="text-xs font-semibold font-grotesk truncate" style={{ color: 'var(--ink)' }}>{user?.name}</div>
                   <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
                     {user?.role === 'GYM_OWNER' ? 'Gym Owner' : user?.role === 'TRAINER' ? 'Trainer' : 'Admin'}
                   </div>
                 </div>
               </div>
-              <button onClick={logout}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-semibold transition-colors"
-                style={{ color: 'var(--mute)' }}>
-                <Icon name="signOut" size={16} />
+              <button onClick={logout} className="menu-row menu-row-danger" style={{ borderRadius: 'var(--r-sm)' }}>
+                <span className="menu-icon"><Icon name="signOut" size={16} /></span>
                 Sign out
               </button>
             </div>

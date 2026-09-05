@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import Icon from './Icon.jsx';
 
 const STORAGE_KEY = 'sk-os-seen-features';
 
@@ -14,26 +14,33 @@ function markFeatureSeen(id) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(seen));
 }
 
+/* Icons were '🏠' '💪' '🥗' '📈' — literal emoji. Four problems, all real:
+   they render as a different artwork on every OS (and as a colour photo on
+   most, next to a monochrome accent-tinted interface), they can't be tinted
+   to the palette, they don't scale with the type ramp, and the bottom nav
+   already ships an SVG for each of these four destinations — so the popup
+   introducing a tab showed a different icon than the tab it introduced.
+   These now reuse the exact icon each nav item uses. */
 const FEATURES = {
   home: {
     title: 'Home',
-    description: 'Your personal fitness dashboard. See today\'s plan, recent activity, and quick actions at a glance.',
-    icon: '🏠',
+    description: 'Your day at a glance — today\'s session, how your eating is tracking, and where you are against your goal.',
+    icon: 'home',
   },
   workout: {
     title: 'Workout',
-    description: 'Track your exercises, log sets and reps, and follow your personalized training program.',
-    icon: '💪',
+    description: 'Follow your programme, log the weight and reps you actually hit, and time your rests.',
+    icon: 'strength',
   },
   nutrition: {
     title: 'Nutrition',
-    description: 'Log your meals, track calories and macros, and stay on top of your nutrition goals.',
-    icon: '🥗',
+    description: 'Log meals in a few taps and watch your calories and macros against target for the day.',
+    icon: 'food',
   },
   progress: {
     title: 'Progress',
-    description: 'Visualize your journey with charts, track body measurements, and celebrate milestones.',
-    icon: '📈',
+    description: 'Weight, measurements and adherence over time, so you can see the trend rather than one day\'s number.',
+    icon: 'trending',
   },
 };
 
@@ -51,20 +58,20 @@ export default function FeaturePopup({ featureId, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center p-4 anim-fadeIn" onClick={handleDismiss} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-6 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)', boxShadow: 'var(--card-shadow)' }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl grid place-items-center text-2xl shrink-0" style={{ background: 'var(--accent-soft)' }}>
-            {feature.icon}
+    <div className="scrim grid place-items-center p-4 anim-fadeIn" onClick={handleDismiss}
+      role="dialog" aria-modal="true" aria-labelledby="feature-popup-title">
+      <div className="sheet-centered w-full max-w-sm p-6 anim-scaleIn" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3.5 mb-5">
+          <div className="w-11 h-11 grid place-items-center shrink-0"
+            style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .12)', color: 'var(--accent)' }}>
+            <Icon name={feature.icon} size={21} />
           </div>
-          <div>
-            <h3 className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>{feature.title}</h3>
-            <p className="text-sm mt-1" style={{ color: 'var(--mute)' }}>{feature.description}</p>
+          <div className="min-w-0">
+            <h3 id="feature-popup-title" className="t-card">{feature.title}</h3>
+            <p className="t-sub mt-1.5">{feature.description}</p>
           </div>
         </div>
-        <button onClick={handleDismiss} className="w-full py-2.5 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]" style={{ background: 'var(--accent)', color: 'var(--accent-contrast)' }}>
-          Got it
-        </button>
+        <button onClick={handleDismiss} className="btn-primary btn-block" autoFocus>Got it</button>
       </div>
     </div>
   );

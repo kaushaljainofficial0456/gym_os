@@ -35,6 +35,7 @@ import Icon from './Icon.jsx';
 import BarcodeScanner from './BarcodeScanner.jsx';
 import PortionWheel from './PortionWheel.jsx';
 import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
+import { XIcon } from './UI.jsx';
 
 const OIL_LEVELS = [
   ['none', 'None'],
@@ -1109,7 +1110,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                 {dialogLabel}
               </div>
             </div>
-            <button onClick={requestClose} aria-label="Close" className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}>✕</button>
+            <button onClick={requestClose} aria-label="Close" className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}><XIcon /></button>
           </div>
 
           {(screen === 'search' || screen === 'custom') && (
@@ -1135,11 +1136,11 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                 placeholder="Search any food…" aria-label="Search foods"
                 className="input flex-1 !py-2.5 text-[14px]" />
               <Pressable onClick={startVoice} aria-label="Voice input"
-                         className={`btn !px-3 !py-2.5 shrink-0 ${listening ? 'btn-primary' : ''}`}>
+                         className={`btn btn-icon shrink-0 ${listening ? "btn-primary" : ""}`}>
                 <Icon name="mic" size={17} />
               </Pressable>
               <Pressable onClick={() => setScanning(true)} aria-label="Scan barcode"
-                         className="btn !px-3 !py-2.5 shrink-0">
+                         className="btn btn-sm shrink-0">
                 <Icon name="camera" size={17} />
               </Pressable>
             </div>
@@ -1250,14 +1251,14 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       Use existing
                     </Pressable>
                     <Pressable onClick={() => submitCustomFood(true)} disabled={customSaving}
-                               className="flex-1 btn-primary !py-2.5 text-[12px] font-bold">
+                               className="flex-1 btn-sm btn-primary text-[12px]">
                       {customSaving ? 'Saving…' : 'Create another'}
                     </Pressable>
                   </div>
                 </div>
               ) : (
                 <Pressable onClick={() => submitCustomFood(false)} disabled={customSaving || !customForm.name.trim()}
-                           className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                           className="btn-primary btn-lg btn-block text-[13px]">
                   {customSaving ? 'Saving…' : 'Save Custom Food & Log'}
                 </Pressable>
               )}
@@ -1283,7 +1284,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       </div>
                       <Pressable onClick={() => quickLogRecent(r)} disabled={!!recentLogging[r.name]}
                                  aria-label={recentChecked[r.name] ? `${r.name} logged` : `Log ${r.name} again`}
-                                 className="shrink-0 w-8 h-8 rounded-full grid place-items-center btn-primary !p-0 text-[16px] font-bold"
+                                 className="shrink-0 w-8 h-8 rounded-full grid place-items-center btn-primary !p-0 text-[16px]"
                                  style={recentChecked[r.name] ? { background: 'var(--good)' } : undefined}>
                         {recentLogging[r.name] ? '…' : recentChecked[r.name] ? '✓' : '+'}
                       </Pressable>
@@ -1297,7 +1298,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               {!searching && searchErr && (
                 <div className="py-3 space-y-2">
                   <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{searchErr}</div>
-                  <Pressable onClick={() => setSearchRetryNonce((n) => n + 1)} className="btn !py-2 !px-3 text-[11px] font-semibold">
+                  <Pressable onClick={() => setSearchRetryNonce((n) => n + 1)} className="btn btn-sm text-[11px]">
                     Try again
                   </Pressable>
                 </div>
@@ -1350,14 +1351,14 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       </div>
                       <div className="text-[10px] leading-relaxed" style={{ color: 'var(--faint)' }}>{knnEstimate.disclaimer}</div>
                       <Pressable onClick={commitKnn} disabled={knnLogging || !(Number(knnGrams) > 0)}
-                                 className="btn-primary w-full !py-2 text-[12px] font-bold">
+                                 className="btn-primary btn-sm btn-block text-[12px]">
                         {knnLogging ? 'Adding…' : 'Log it'}
                       </Pressable>
                     </div>
                   )}
 
                   <Pressable onClick={estimateWithAI} disabled={aiEstimating}
-                             className="btn w-full !py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2">
+                             className="btn btn-sm btn-block text-[12px] flex items-center justify-center gap-2">
                     <Icon name="robot" size={15} />
                     {aiEstimating ? 'Estimating…' : knnEstimate ? 'Not quite right? Estimate with AI' : 'Estimate with AI'}
                   </Pressable>
@@ -1429,7 +1430,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               {!searching && results.length > 0 && q.trim().length >= 2 && (
                 <div className="pt-1">
                   <Pressable onClick={estimateWithAI} disabled={aiEstimating}
-                             className="btn w-full !py-2 text-[11px] font-semibold flex items-center justify-center gap-2">
+                             className="btn btn-sm btn-block text-[11px] flex items-center justify-center gap-2">
                     <Icon name="robot" size={14} />
                     {aiEstimating ? 'Estimating…' : `Didn't find the exact food? Estimate "${q.trim()}" with AI`}
                   </Pressable>
@@ -1547,7 +1548,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                         className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold" style={{ border: '1px solid var(--line)', color: 'var(--mute)' }}>
                   Close
                 </button>
-                <Pressable onClick={commitAI} disabled={aiLogging} className="flex-1 btn-primary !py-2.5 text-[12px] font-bold">
+                <Pressable onClick={commitAI} disabled={aiLogging} className="flex-1 btn-sm btn-primary text-[12px]">
                   {aiLogging ? 'Adding…' : 'Log it'}
                 </Pressable>
               </div>
@@ -1641,7 +1642,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               </div>
 
               <Pressable onClick={commit} disabled={!bc?.totals || bc.totals.energy_kcal == null || busy}
-                         className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                         className="btn-primary btn-lg btn-block text-[13px]">
                 {busy ? 'Adding…' : 'Log Food'}
               </Pressable>
             </div>
@@ -1659,7 +1660,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               <input ref={labelFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
                      onChange={(e) => scanLabel(e.target.files?.[0])} />
               <Pressable onClick={() => labelFileRef.current?.click()} disabled={labelScanning}
-                         className="btn w-full !py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2">
+                         className="btn btn-sm btn-block text-[12px] flex items-center justify-center gap-2">
                 <Icon name="camera" size={15} />
                 {labelScanning ? 'Reading label…' : 'Scan the label instead'}
               </Pressable>
@@ -1718,7 +1719,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               {manualErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{manualErr}</div>}
 
               <Pressable onClick={submitManual} disabled={manualBusy}
-                         className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                         className="btn-primary btn-lg btn-block text-[13px]">
                 {manualBusy ? 'Saving…' : 'Save & continue'}
               </Pressable>
               <button onClick={() => { setManualAdd(false); setManualErr(''); }}
@@ -1818,7 +1819,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                           visible glyph without changing this row's compact
                           height (Part 33). */}
                       <button onClick={() => removeSelectedPortion(sp.key)} aria-label={`Remove ${sp.label}`}
-                              className="shrink-0 opacity-60 hover:opacity-100 text-[13px] p-2 -m-2" style={{ color: 'var(--bad)' }}>✕</button>
+                              className="shrink-0 opacity-60 hover:opacity-100 text-[13px] p-2 -m-2" style={{ color: 'var(--bad)' }}><XIcon /></button>
                     </div>
                   ))}
                 </div>
@@ -1897,7 +1898,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               </div>
 
               <Pressable onClick={commit} disabled={!resolved || busy}
-                         className="btn-primary w-full !py-3.5 text-[13px] font-bold">
+                         className="btn-primary btn-lg btn-block text-[13px]">
                 {busy ? 'Adding…' : 'Add to log'}
               </Pressable>
             </div>

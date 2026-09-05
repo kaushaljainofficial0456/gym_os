@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth.jsx';
+import Icon from '../../components/Icon.jsx';
 import { useCookieConsent } from '../../components/CookieConsent.jsx';
 import { api } from '../../api.js';
 
@@ -7,7 +8,7 @@ const SETTINGS_SECTIONS = [
   {
     id: 'account',
     label: 'Account Information',
-    icon: '👤',
+    icon: 'user',
     fields: [
       { key: 'name', label: 'Name', type: 'text', placeholder: 'Your full name' },
       { key: 'email', label: 'Email', type: 'email', placeholder: 'your@email.com', readOnly: true },
@@ -17,7 +18,7 @@ const SETTINGS_SECTIONS = [
   {
     id: 'security',
     label: 'Security',
-    icon: '🔒',
+    icon: 'lock',
     fields: [
       { key: 'current_password', label: 'Current Password', type: 'password', placeholder: '••••••••' },
       { key: 'new_password', label: 'New Password', type: 'password', placeholder: '••••••••' },
@@ -91,7 +92,7 @@ export default function Settings() {
       {SETTINGS_SECTIONS.map((section) => (
         <div key={section.id} data-tour={`settings-${section.id}`} className="card p-5">
           <div className="flex items-center gap-2.5 mb-4">
-            <span className="text-lg">{section.icon}</span>
+            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={18} /></span>
             <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</span>
           </div>
 
@@ -101,7 +102,7 @@ export default function Settings() {
                 <span className="text-[10.5px] font-grotesk uppercase tracking-wider font-medium" style={{ color: 'var(--faint)' }}>{field.label}</span>
                 <input
                   type={field.type}
-                  className="input mt-1"
+                  className="input mt-1.5"
                   placeholder={field.placeholder}
                   value={formState[field.key] || ''}
                   readOnly={field.readOnly}

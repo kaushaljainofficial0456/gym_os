@@ -57,7 +57,7 @@ export class ErrorBoundary extends Component {
     return (
       <div className="min-h-[50vh] grid place-items-center px-6 py-16">
         <div className="text-center max-w-sm mx-auto">
-          <div className="text-3xl mb-3">⚠️</div>
+          <div className="text-3xl mb-3" style={{ color: 'rgb(var(--warn-rgb))' }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg></div>
           <div className="font-grotesk text-sm font-bold" style={{ color: 'var(--ink)' }}>
             {this.props.title || 'Something went wrong'}
           </div>

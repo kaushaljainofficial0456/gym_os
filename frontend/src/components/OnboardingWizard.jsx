@@ -15,6 +15,7 @@ import { useCountUp } from '../utils.js';
 import ScrollWheel from './ScrollWheel.jsx';
 import HeightSelector from './HeightSelector.jsx';
 import WeightSelector from './WeightSelector.jsx';
+import Icon from './Icon.jsx';
 
 // Stepper's directional slide+fade, adapted from its stepVariants --
 // entering forward comes from the right, back comes from the left, so
@@ -49,12 +50,18 @@ const T = {
   },
 };
 
+/* Icons were emoji. This is the very first screen a new client sees,
+   and emoji there is the fastest possible way to say "improvised": the
+   artwork differs per OS, it cannot be tinted to the accent, and the
+   weightlifter in particular renders as a full-colour photographic
+   person on Apple platforms beside four flat monochrome shapes. These
+   are names from the shared Icon set the rest of the app uses. */
 const GOALS = [
-  { id: 'FAT_LOSS', label: 'Fat Loss', icon: '🔥', desc: 'Reduce body fat while preserving muscle' },
-  { id: 'MUSCLE_GAIN', label: 'Muscle Gain', icon: '💪', desc: 'Build lean muscle mass' },
-  { id: 'RECOMP', label: 'Recomposition', icon: '⚖️', desc: 'Simultaneously lose fat and gain muscle' },
-  { id: 'STRENGTH', label: 'Strength', icon: '🏋️', desc: 'Increase maximal strength' },
-  { id: 'GENERAL', label: 'General Fitness', icon: '🏃', desc: 'Overall health and wellness' },
+  { id: 'FAT_LOSS', label: 'Fat Loss', icon: 'trending', desc: 'Reduce body fat while preserving muscle' },
+  { id: 'MUSCLE_GAIN', label: 'Muscle Gain', icon: 'strength', desc: 'Build lean muscle mass' },
+  { id: 'RECOMP', label: 'Recomposition', icon: 'numbers', desc: 'Simultaneously lose fat and gain muscle' },
+  { id: 'STRENGTH', label: 'Strength', icon: 'target', desc: 'Increase maximal strength' },
+  { id: 'GENERAL', label: 'General Fitness', icon: 'chart', desc: 'Overall health and wellness' },
 ];
 
 const ACTIVITY = [
@@ -101,9 +108,13 @@ function StepName({ form, setForm, t }) {
 
 function StepSex({ form, setForm, t }) {
   const options = [
-    { id: 'MALE', label: 'Male', icon: '♂' },
-    { id: 'FEMALE', label: 'Female', icon: '♀' },
-    { id: 'OTHER', label: 'Other', icon: '⚧' },
+    /* The three gender glyphs were Unicode symbols with no consistent
+       rendering, and the transgender sign has patchy font coverage that
+       shows a tofu box on plenty of Android builds. The labels already
+       say which is which, so the tiles are label + selection state. */
+    { id: 'MALE', label: 'Male' },
+    { id: 'FEMALE', label: 'Female' },
+    { id: 'OTHER', label: 'Other' },
   ];
   return (
     <div className="space-y-4">
@@ -121,7 +132,7 @@ function StepSex({ form, setForm, t }) {
               color: form.sex === o.id ? t.accent : t.ink,
               boxShadow: form.sex === o.id ? `0 0 15px ${t.accent}15` : 'none',
             }}>
-            <div className="text-2xl mb-1">{o.icon}</div>
+            {o.icon && <div className="text-2xl mb-1">{o.icon}</div>}
             <div className="font-grotesk text-[11px] font-semibold">{o.label}</div>
           </button>
         ))}
@@ -205,7 +216,7 @@ function StepGoal({ form, setForm, t }) {
               border: `1px solid ${form.goal === g.id ? t.accent + '50' : t.border}`,
               color: form.goal === g.id ? t.accent : t.ink,
             }}>
-            <div className="text-xl shrink-0">{g.icon}</div>
+            <div className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={g.icon} size={20} /></div>
             <div className="min-w-0">
               <div className="font-grotesk text-sm font-bold">{g.label}</div>
               <div className="text-[10px]" style={{ color: form.goal === g.id ? t.accent + 'AA' : t.mute }}>{g.desc}</div>

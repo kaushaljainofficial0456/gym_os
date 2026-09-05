@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, PageHeader, Spinner, ErrorState } from '../../components/UI.jsx';
+import { Card, PageHeader, Spinner, ErrorState, CheckIcon, PageSkeleton } from '../../components/UI.jsx';
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
 
 const GYM_TYPES = [
@@ -28,7 +28,7 @@ const BILLING_CYCLES = [['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['ha
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>{label}</span>
+      <span className="field-label">{label}</span>
       <div className="mt-1">{children}</div>
     </label>
   );
@@ -121,7 +121,7 @@ export default function EnterpriseOnboarding() {
     finally { setSaving(false); }
   };
 
-  if (status.loading) return <Spinner label="Loading…" />;
+  if (status.loading) return <PageSkeleton variant="form" label="Loading onboarding" />;
   if (status.error) return <ErrorState error={status.error} onRetry={status.reload} />;
 
   return (
@@ -184,8 +184,8 @@ export default function EnterpriseOnboarding() {
                 ))}
               </div>
             </Field>
-            {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
-            <button className="btn-primary w-full !py-3" disabled={saving}>{saving ? 'Saving…' : 'Continue to plans'}</button>
+            {err && <div role="alert" className="field-error ">{err}</div>}
+            <button className="btn-primary btn-lg btn-block" disabled={saving}>{saving ? 'Saving…' : 'Continue to plans'}</button>
           </form>
         </Card>
       )}
@@ -224,7 +224,7 @@ export default function EnterpriseOnboarding() {
                   </>
                 ) : null}
               </div>
-              {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
+              {err && <div role="alert" className="field-error ">{err}</div>}
               <div className="flex gap-2">
                 <button className="btn flex-1" onClick={() => setStep('wizard')}>Back</button>
                 <button className="btn-primary flex-1" disabled={saving || !priced?.ok} onClick={proceedToCheckout}>
@@ -245,7 +245,7 @@ export default function EnterpriseOnboarding() {
 
       {step === 'done' && (
         <Card className="p-8 text-center">
-          <div className="text-3xl mb-2">✓</div>
+          <div className="text-3xl mb-2"><CheckIcon /></div>
           <div className="font-grotesk font-bold">Your gym is active!</div>
           <div className="text-xs mt-1" style={{ color: 'var(--mute)' }}>Taking you to your dashboard…</div>
         </Card>

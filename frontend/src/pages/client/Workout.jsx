@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
-import { useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Bar, Ring } from '../../components/UI.jsx';
+import { useFetch, exerciseLabel } from '../../utils.js';
+import { ErrorState, Bar, Ring, CheckIcon } from '../../components/UI.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
@@ -259,7 +259,40 @@ export default function Workout() {
   })();
   const weekRows = week.data?.week || [];
 
-  if (today.loading || week.loading || hist.loading || perms.loading) return <Spinner label="Loading your session…" />;
+  /* Shaped like the screen it becomes rather than a centred spinner — this
+     page is four stacked bands, so a spinner guarantees a hard layout jump
+     the moment any one of the four fetches lands. */
+  if (today.loading || week.loading || hist.loading || perms.loading) {
+    return (
+      <div className="space-y-5" aria-busy="true" aria-label="Loading your session">
+        <div className="card p-4">
+          <div className="skeleton-text" style={{ width: '45%' }} />
+          <div className="grid grid-cols-7 gap-1.5 mt-3">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 44, borderRadius: 'var(--r-md)' }} />
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 96, borderRadius: 'var(--r-lg)' }} />
+          ))}
+        </div>
+        <div>
+          <div className="skeleton-title" style={{ width: '55%' }} />
+          <div className="grid grid-cols-3 gap-2.5 mt-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 58, borderRadius: 'var(--r-lg)' }} />
+            ))}
+          </div>
+          <div className="skeleton mt-3" style={{ height: 40, borderRadius: 'var(--r-pill)' }} />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton-row" />)}
+        </div>
+      </div>
+    );
+  }
   if (today.error) return <ErrorState error={today.error} onRetry={today.reload} />;
 
   const toggleEx = async (ex) => {
@@ -431,9 +464,13 @@ export default function Workout() {
         {/* ── 1. THIS WEEK ── */}
         {weekRows.length > 0 && (
           <div className="card p-4 anim-fadeUp" style={{ animationDelay: '0ms' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">This week · {week.data?.program?.name || 'Your plan'}</div>
-              <span className="chip border-gold/30 text-gold !text-[9px]">{weekRows.filter((d) => d.name !== 'Rest').length} training days</span>
+            <div className="section-head">
+              <span className="t-micro truncate">This week · {week.data?.program?.name || 'Your plan'}</span>
+              {/* Was `border-gold/30 text-gold` — the bright amber (#FBBF24)
+                  from an earlier palette, still appearing on four elements
+                  in this file alone while the rest of the app had moved to
+                  the terracotta accent. */}
+              <span className="badge badge-accent shrink-0">{weekRows.filter((d) => d.name !== 'Rest').length} training days</span>
             </div>
             <div className="grid grid-cols-7 gap-1.5">
               {weekRows.map((d, i) => {
@@ -441,55 +478,69 @@ export default function Workout() {
                 const isRest = d.name === 'Rest';
                 return (
                   <button key={d.day_of_week} onClick={() => { setWeekDay(d); setWeekDayIdx(i); }}
-                    // Was bg-white/[.02] (+hover:bg-white/[.05]): a wash this
+                    // Was bg-tint/[.02] (+hover:bg-tint/[.05]): a wash this
                     // faint is invisible against the .card it sits inside on
                     // the light theme (already solid white), so these pills
                     // had no visible tile boundary at all -- just floating
                     // text. --panel2 is a step up from --panel specifically
                     // for this kind of nesting (see theme.css).
-                    className={`rounded-xl border px-1 py-2 text-center transition-all active:scale-95 ${isToday ? 'border-gold/60 bg-gold/10 shadow-lg shadow-ember/10' : isRest ? 'border-line opacity-60' : 'border-line hover:brightness-95'}`}
-                    style={isToday ? undefined : { background: 'var(--panel2)' }}>
-                    <div className={`text-[8px] uppercase tracking-wider font-grotesk ${isToday ? 'text-gold' : 'text-mute'}`}>{d.label}</div>
-                    <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight truncate ${isToday ? 'text-gold' : isRest ? 'text-faint' : 'text-ink'}`}>
+                    aria-current={isToday ? 'date' : undefined}
+                    aria-label={`${d.label}: ${isRest ? 'Rest day' : d.name}`}
+                    className="rounded-xl border px-1 py-2 text-center transition-all active:scale-95"
+                    style={isToday
+                      ? { borderColor: 'rgb(var(--accent-rgb) / .55)', background: 'rgb(var(--accent-rgb) / .12)' }
+                      : { borderColor: 'var(--line)', background: 'var(--panel2)', opacity: isRest ? .6 : 1 }}>
+                    <div className="text-[8px] uppercase tracking-wider font-grotesk"
+                      style={{ color: isToday ? 'var(--accent)' : 'var(--mute)' }}>{d.label}</div>
+                    <div className="text-[9px] font-grotesk font-semibold mt-0.5 leading-tight truncate"
+                      style={{ color: isToday ? 'var(--accent)' : isRest ? 'var(--faint)' : 'var(--ink)' }}>
                       {isRest ? 'Rest' : d.name.split(' ').slice(0, 2).join(' ')}
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div className="text-[10px] text-faint mt-2.5">Tap a day to preview its session.</div>
+            <div className="t-sub mt-2.5" style={{ fontSize: '.6875rem', color: 'var(--faint)' }}>Tap a day to preview its session.</div>
           </div>
         )}
 
         {/* ── 2. MY WORKOUT — 3 action cards ── */}
         <div className="anim-fadeUp" style={{ animationDelay: '60ms' }}>
-          <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">My workout</div>
+          <div className="t-micro mb-2.5">My workout</div>
+          {/* These three tiles used to wear three different colours —
+              gold, ember and good — for three peer actions with no
+              difference in kind between them. Colour that doesn't encode
+              anything is noise, and here it also implied "My PR" was a
+              success state. One accent treatment for all three; the icon
+              carries the distinction, which is its job.
+              Labels also had hard <br/> breaks mid-phrase ("My<br/>Workout"),
+              which forced a two-line ragged label at every width. */}
           <div className="grid grid-cols-3 gap-2.5">
-            {/* My Workouts (planner) */}
-            <button onClick={openPlanner}
-              className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-gold/10 border border-gold/25 grid place-items-center" style={{ color: 'var(--accent)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div>
-              <span className="font-grotesk text-[11px] font-semibold leading-tight">My<br/>Workout</span>
-            </button>
-            {/* Build Today */}
-            <button onClick={() => {
-              if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
-              setSelectedLibEx(null);
-              setBuilderOpen(true);
-            }}
-              className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-ember/10 border border-ember/25 grid place-items-center" style={{ color: 'var(--accent)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></div>
-              <span className="font-grotesk text-[11px] font-semibold leading-tight">Build<br/>Today</span>
-            </button>
-            {/* My PR */}
-            <button onClick={() => nav('/app/client/progress')}
-              className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-good/10 border border-good/25 grid place-items-center" style={{ color: 'var(--good)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/></svg></div>
-              <span className="font-grotesk text-[11px] font-semibold leading-tight">My<br/>PR</span>
-            </button>
+            {[
+              { label: 'My workouts', onClick: openPlanner,
+                path: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></> },
+              { label: 'Build today',
+                onClick: () => {
+                  if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
+                  setSelectedLibEx(null);
+                  setBuilderOpen(true);
+                },
+                path: <path d="M12 5v14M5 12h14"/> },
+              { label: 'My PRs', onClick: () => nav('/app/client/progress'),
+                path: <path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/> },
+            ].map((t) => (
+              <button key={t.label} onClick={t.onClick}
+                className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
+                <div className="w-11 h-11 grid place-items-center"
+                  style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .10)', border: '1px solid rgb(var(--accent-rgb) / .22)', color: 'var(--accent)' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.path}</svg>
+                </div>
+                <span className="font-grotesk text-[11px] font-semibold leading-tight" style={{ color: 'var(--ink)' }}>{t.label}</span>
+              </button>
+            ))}
           </div>
           {locked && (
-            <div className="text-[10px] text-faint mt-2 font-grotesk">Your gym has locked workout creation — follow your coach's plan.</div>
+            <div className="t-sub mt-2" style={{ fontSize: '.6875rem', color: 'var(--faint)' }}>Your gym has locked workout creation — follow your coach&rsquo;s plan.</div>
           )}
         </div>
 
@@ -511,35 +562,52 @@ export default function Workout() {
                    Estimated duration replaces it: also a prediction, but an
                    honest one, and the thing a user actually plans around. */
                 ['Exercises', meta.exerciseCount || exercises.length],
-                ['Total sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
-                ['Approx. time', meta.estMinutes ? `${meta.estMinutes} min` : '—']
+                ['Sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
+                /* Was "Approx. time" — at .08em tracking in a third of the
+                   screen it wrapped to two lines while its two siblings sat
+                   on one, so the row of three tiles had ragged heights and
+                   misaligned baselines. The value already reads "58 min";
+                   the label doesn't need to repeat the unit. */
+                ['Time', meta.estMinutes ? `${meta.estMinutes} min` : '—']
               ].map(([l, v]) => (
                 <div key={l} className="card !p-3 text-center">
-                  <div className="font-grotesk font-bold text-lg">{v}</div>
-                  <div className="text-[9px] uppercase tracking-wider text-mute font-grotesk mt-0.5">{l}</div>
+                  <div className="font-grotesk font-bold text-lg tabular-nums" style={{ color: 'var(--ink)' }}>{v}</div>
+                  <div className="t-micro mt-0.5 whitespace-nowrap">{l}</div>
                 </div>
               ))}
             </div>
-            {/* Share Workout + Start Session — side by side, both prominent */}
+            {/* Two actions, unequal weight: starting the session is the
+                reason this screen exists, sharing is a nicety. They used to
+                be `flex-1` twins, which is how a primary action gets lost.
+                "START SESSION" was also the only shouted button label in
+                the product — Home says "Start workout" three taps away. */}
             <div className="flex gap-2.5 mt-3">
               <button onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}
-                className="btn flex-1 !py-2.5 !text-xs active:scale-95 flex items-center justify-center gap-1.5">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                className="btn btn-icon shrink-0" aria-label="Share this workout">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
                 </svg>
-                Share Workout
               </button>
-              <button data-start-workout className="btn-primary flex-1 !py-2.5 !text-xs active:scale-95" onClick={startWorkout} disabled={!exercises.length || starting}>
-                {starting ? 'Starting…' : 'START SESSION'}
+              <button data-start-workout className="btn-primary flex-1" data-loading={starting ? 'true' : undefined}
+                onClick={startWorkout} disabled={!exercises.length || starting}>
+                Start session
               </button>
             </div>
           </div>
         ) : (
-          <div className="card p-10 text-center anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            
-            <div className="font-grotesk font-bold text-lg">Rest day</div>
-            <div className="text-xs text-mute mt-1.5 max-w-xs mx-auto">No session scheduled for today. Recovery is training too — fuel well and sleep 8 hours.</div>
-            <div className="mt-4 text-[10px] uppercase tracking-widest text-gold font-grotesk">Next session appears here tomorrow</div>
+          <div className="card anim-fadeUp" style={{ animationDelay: '120ms' }}>
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                </svg>
+              </div>
+              <div className="empty-state-title">Rest day</div>
+              <p className="empty-state-body">
+                No session scheduled for today. Recovery is training too — fuel well and sleep eight hours.
+              </p>
+              <div className="t-micro mt-4">Next session appears here tomorrow</div>
+            </div>
           </div>
         )}
 
@@ -562,9 +630,9 @@ export default function Workout() {
                   <div className="p-3.5 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
+                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(ex.name)}</span>
                         {equipMap[ex.id]?.missing?.length > 0 && (
-                          <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}>⚠ equipment</span>
+                          <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>equipment</span>
                         )}
                       </div>
                       <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
@@ -572,7 +640,7 @@ export default function Workout() {
                       </div>
                     </div>
                     <button
-                      aria-label={`About ${ex.name}`}
+                      aria-label={`About ${exerciseLabel(ex.name)}`}
                       aria-expanded={infoEx === ex.id}
                       onClick={() => setInfoEx(infoEx === ex.id ? null : ex.id)}
                       className="w-8 h-8 rounded-full border grid place-items-center shrink-0 transition-all active:scale-90"
@@ -623,7 +691,7 @@ export default function Workout() {
         {/* ── 5. RECENT SESSIONS ── */}
         {!!hist.data?.workouts?.length && (
           <div className="card p-4 anim-fadeUp" style={{ animationDelay: '260ms' }}>
-            <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">Recent sessions</div>
+            <div className="t-micro mb-2.5">Recent sessions</div>
             <div className="space-y-1.5">
               {hist.data.workouts.filter((w) => w.id !== workout?.id).slice(0, 5).map((w) => (
                 <div key={w.id} className="flex items-center justify-between text-xs border-b border-line/50 last:border-0 py-2">
@@ -645,7 +713,7 @@ export default function Workout() {
                   <div className="font-grotesk font-bold">Build my workout</div>
                   <div className="text-[10px] text-mute">Picks any exercises — saves as today's session</div>
                 </div>
-                <button className="text-mute hover:text-ink text-lg active:scale-90" onClick={() => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); }} aria-label="Close">✕</button>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); }} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 <input className="input" placeholder="Workout name (e.g. My Upper Day)" value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
@@ -655,14 +723,14 @@ export default function Workout() {
                 {selectedLibEx ? (
                   /* ── exercise detail view with animation + muscle map ── */
                   <div className="space-y-3">
-                    <button onClick={() => setSelectedLibEx(null)} className="btn !text-xs !py-1.5 active:scale-95">← Back to library</button>
+                    <button onClick={() => setSelectedLibEx(null)} className="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to library</button>
 
                     <div className="anim-slideUp" style={{ animationDelay: '50ms' }}>
                       <ExerciseAnim anim={selectedLibEx.animation_key || 'fallback'} muscle={selectedLibEx.primary_muscle} label="" />
                     </div>
 
                     <div className="anim-slideUp" style={{ animationDelay: '100ms' }}>
-                      <div className="font-grotesk font-bold text-lg">{selectedLibEx.name}</div>
+                      <div className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>{exerciseLabel(selectedLibEx.name)}</div>
                       <div className="flex items-center gap-2 text-[11px] text-mute flex-wrap mt-1">
                         {selectedLibEx.primary_muscle && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.primary_muscle}</span>}
                         {selectedLibEx.secondary_muscles && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.secondary_muscles}</span>}
@@ -676,8 +744,8 @@ export default function Workout() {
                         ['Secondary', (selectedLibEx.secondary_muscles || '—').replace(/,/g, ' · ')],
                         ['Equipment', selectedLibEx.equipment || '—']
                       ].map(([l, v]) => (
-                        <div key={l} className="rounded-xl bg-white/[.03] border border-line px-2 py-2 text-center">
-                          <div className="text-[8px] uppercase tracking-wider text-mute font-grotesk">{l}</div>
+                        <div key={l} className="rounded-xl bg-tint/[.03] border border-line px-2 py-2 text-center">
+                          <div className="t-micro" style={{ fontSize: '.5rem' }}>{l}</div>
                           <div className="text-[10px] font-grotesk font-semibold mt-0.5 leading-tight">{v}</div>
                         </div>
                       ))}
@@ -720,14 +788,14 @@ export default function Workout() {
                       const added = builderExs.some((b) => b.exercise_id === x.id);
                       return (
                         <button key={x.id}
-                          className={`w-full flex items-center gap-2 rounded-xl border bg-white/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] anim-fadeUp ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}
+                          className={`w-full flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] anim-fadeUp ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}
                           style={{ animationDelay: `${40 + i * 25}ms` }}
                           onClick={() => setSelectedLibEx(x)}>
                           <span className="flex-1 min-w-0">
                             <span className="block text-[13px] font-grotesk font-semibold truncate">{x.name}</span>
                             <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
                           </span>
-                          {added && <span className="text-[10px] text-good shrink-0 anim-checkBounce">✓</span>}
+                          {added && <span className="text-[10px] text-good shrink-0 anim-checkBounce"><CheckIcon /></span>}
                         </button>
                       );
                     })}
@@ -786,7 +854,7 @@ export default function Workout() {
                   <div className="font-grotesk font-bold">My workouts</div>
                   <div className="text-[10px] text-mute">Reusable sessions + your weekly plan</div>
                 </div>
-                <button className="text-mute hover:text-ink text-lg" onClick={() => setPlannerOpen(false)} aria-label="Close">✕</button>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setPlannerOpen(false)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* weekly schedule */}
@@ -800,8 +868,8 @@ export default function Workout() {
                       const nextId = w ? null : (dayWorkouts.length ? dayWorkouts[(dayWorkouts.findIndex((x) => x.id === s?.workout_id) + 1) % dayWorkouts.length].id : null);
                       return (
                         <button key={dow} onClick={() => dayWorkouts.length && setDayWorkout(dow, nextId)}
-                          className={`rounded-xl border px-1 py-2 text-center transition-all ${w ? 'border-gold/40 bg-gold/10' : 'border-line bg-white/[.02]'}`}>
-                          <div className="text-[8px] uppercase tracking-wider text-mute font-grotesk">{d}</div>
+                          className={`rounded-xl border px-1 py-2 text-center transition-all ${w ? 'border-gold/40 bg-gold/10' : 'border-line bg-tint/[.02]'}`}>
+                          <div className="t-micro" style={{ fontSize: '.5rem' }}>{d}</div>
                           <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight ${w ? 'text-gold' : 'text-faint'}`}>
                             {w ? w.name.split(' ').slice(0, 2).join(' ') : 'Rest'}
                           </div>
@@ -816,7 +884,7 @@ export default function Workout() {
                   <div className="rounded-xl border border-gold/30 bg-gold/5 p-3 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="text-[10px] text-gold font-grotesk uppercase tracking-wider">{planForm.id ? 'Edit workout' : 'New workout'}</div>
-                      <button className="text-[10px] text-mute" onClick={() => setPlanForm(null)}>← Back</button>
+                      <button className="section-head-action" style={{ color: 'var(--mute)' }} onClick={() => setPlanForm(null)}>Back</button>
                     </div>
                     <input className="input" placeholder="Workout name (e.g. Push A, Legs, My Upper Day)" value={planForm.name || ''} onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))} />
                     <input className="input" placeholder="Search exercises…" value={planForm.search || ''} onChange={(e) => setPlanForm((f) => ({ ...f, search: e.target.value }))} />
@@ -825,12 +893,12 @@ export default function Workout() {
                         const added = (planForm.exercises || []).some((b) => b.exercise_id === x.id);
                         return (
                           <button key={x.id} disabled={added} onClick={() => setPlanForm((f) => ({ ...f, exercises: [...(f.exercises || []), { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW', rest_sec: 90 }] }))}
-                            className={`w-full flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left ${added ? 'border-line opacity-40' : 'border-line bg-white/[.02]'}`}>
+                            className={`w-full flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left ${added ? 'border-line opacity-40' : 'border-line bg-tint/[.02]'}`}>
                             <span className="min-w-0">
                               <span className="block text-[12px] font-grotesk font-semibold truncate">{x.name}</span>
                               <span className="text-[9px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
                             </span>
-                            <span className="text-[10px] text-gold shrink-0">{added ? '✓' : '+ Add'}</span>
+                            <span className="text-[10px] text-gold shrink-0">{added ? 'Added' : 'Add'}</span>
                           </button>
                         );
                       })}
@@ -850,13 +918,13 @@ export default function Workout() {
                         <div className="text-[8px] text-faint mt-1 font-grotesk">sets · reps · weight · rest(s)</div>
                       </div>
                     ))}
-                    <button className="btn-primary w-full !py-2.5 !text-xs" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
+                    <button className="btn-primary btn-sm btn-block" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
                       {savingPlan ? 'Saving…' : (planForm.id ? 'Save changes' : 'Create workout')}
                     </button>
                   </div>
                 ) : (
                   <>
-                    <button className="btn-primary w-full !py-2.5 !text-xs" onClick={() => {
+                    <button className="btn-primary btn-sm btn-block" onClick={() => {
                       if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
                       setPlanForm({ id: null, name: '', exercises: [], search: '' });
                     }}>+ Create new workout</button>
@@ -870,19 +938,19 @@ export default function Workout() {
                         </div>
                       )}
                       {(planner?.workouts || []).map((w) => (
-                        <div key={w.id} className="rounded-xl border border-line bg-white/[.02] p-3">
+                        <div key={w.id} className="rounded-xl border border-line bg-tint/[.02] p-3">
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
                               <div className="font-grotesk text-[13px] font-semibold truncate">{w.name}</div>
                               <div className="text-[10px] text-mute">{(w.exercises || []).length} exercises · {((w.exercises || []).reduce((s, e) => s + (e.sets || 0), 0))} sets</div>
                             </div>
                             <div className="flex gap-1 shrink-0">
-                              <button className="btn !px-2 !py-1 !text-[10px]" onClick={() => { setPlanForm({ id: w.id, name: w.name, exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })), search: '' }); }}>Edit</button>
-                              <button className="btn !px-2 !py-1 !text-[10px]" onClick={() => duplicatePlan(w)}>Copy</button>
-                              <button className="btn !px-2 !py-1 !text-[10px] text-bad" onClick={() => deletePlan(w)}>Del</button>
+                              <button className="btn btn-sm" onClick={() => { setPlanForm({ id: w.id, name: w.name, exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })), search: '' }); }}>Edit</button>
+                              <button className="btn btn-sm" onClick={() => duplicatePlan(w)}>Copy</button>
+                              <button className="btn btn-sm text-bad" onClick={() => deletePlan(w)}>Del</button>
                             </div>
                           </div>
-                          <button className="btn w-full !py-1.5 !text-[10px] mt-2 border-gold/30 text-gold" onClick={() => startPlanToday(w)}>▶ Do today</button>
+                          <button className="btn btn-sm btn-block mt-2" onClick={() => startPlanToday(w)}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Do today</button>
                         </div>
                       ))}
                     </div>
@@ -903,13 +971,13 @@ export default function Workout() {
                   <div className="font-grotesk font-bold text-lg leading-tight">{weekDay.name}</div>
                   {weekDay.focus && <div className="text-[10px] text-mute mt-1 font-grotesk">{weekDay.focus}</div>}
                 </div>
-                <button className="btn-ghost !text-mute shrink-0" onClick={() => setWeekDay(null)} aria-label="Close">✕</button>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setWeekDay(null)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {weekDay.exercises?.length ? weekDay.exercises.map((ex, i) => (
-                  <div key={i} className="rounded-xl border border-line bg-white/[.02] p-3">
+                  <div key={i} className="rounded-xl border border-line bg-tint/[.02] p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-grotesk text-[13px] font-semibold truncate">{ex.name}</span>
+                      <span className="font-grotesk text-[13px] font-semibold truncate">{exerciseLabel(ex.name)}</span>
                     </div>
                     <div className="text-[11px] text-mute mt-1">{ex.sets} × {ex.reps} · {ex.weight}</div>
                   </div>
@@ -927,7 +995,7 @@ export default function Workout() {
           </div>
         )}
 
-        {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+        {toast && <div className="toast anim-toast">{toast}</div>}
         <ShareWorkoutSheet
           open={shareSheetOpen}
           onClose={() => setShareSheetOpen(false)}
@@ -999,7 +1067,7 @@ export default function Workout() {
                 aria-expanded={open}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
+                    <span className="font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(ex.name)}</span>
                     {complete && (
                       <span className="text-[9px] font-bold uppercase tracking-[.12em] px-1.5 py-0.5 rounded shrink-0"
                             style={{ color: 'var(--good)', border: '1px solid rgb(var(--good-rgb) / .5)' }}>
@@ -1065,7 +1133,7 @@ export default function Workout() {
           <Pressable
             onClick={() => finishWorkout()}
             disabled={submitting}
-            className="btn-primary w-full !py-4 text-[13px] font-bold tracking-[.02em]">
+            className="btn-primary btn-lg btn-block text-[13px] tracking-[.02em]">
             {submitting ? 'Saving…' : doneSets === 0 ? 'End session' : `End session · ${doneSets} sets`}
           </Pressable>
         </div>
@@ -1122,7 +1190,7 @@ export default function Workout() {
             ].map(([l, v]) => (
               <div key={l} className="rounded-xl px-2 py-3"
                    style={{
-                     /* Was bg-white/[.04]: a white wash, which on the peach
+                     /* Was bg-tint/[.04]: a white wash, which on the peach
                         light theme reads as a grey smudge and gives the text
                         almost no separation from the animation behind it.
                         A panel-tinted tile with a real border sits correctly
@@ -1145,7 +1213,7 @@ export default function Workout() {
               <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>How intense was that session?</div>
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {[['light', 'Light'], ['moderate', 'Moderate'], ['hard', 'Hard']].map(([tier, label]) => (
-                  <button key={tier} className="btn !py-2.5 !text-[12px]" onClick={() => pickIntensity(tier)}>{label}</button>
+                  <button key={tier} className="btn btn-sm" onClick={() => pickIntensity(tier)}>{label}</button>
                 ))}
               </div>
             </div>
@@ -1252,8 +1320,8 @@ export default function Workout() {
         </div>
       </div>
       {shareToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card anim-toast">
-          <span className="text-good mr-2">✓</span>{shareToast}
+        <div className="toast anim-toast">
+          <span className="text-good mr-2"><CheckIcon /></span>{shareToast}
         </div>
       )}
       <ShareWorkoutSheet

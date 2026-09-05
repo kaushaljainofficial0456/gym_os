@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCountUp } from '../../utils.js';
+import { XIcon } from './../UI.jsx';
 
 /**
  * INFORMATION ABOUT MY MEALS — today's eaten meals, tap the eye icon on
@@ -87,7 +88,7 @@ export default function MealInfoSheet({ open, onClose, meals, plan, goal, t }) {
       <div className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: 'var(--panel)' }}>
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Information About My Meals</div>
-          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}><XIcon /></button>
         </div>
         <div className="px-4 pb-5 space-y-2">
           {meals.length === 0 && <div className="text-center py-6 font-grotesk text-[12px]" style={{ color: t.mute }}>No meals logged today yet</div>}
@@ -100,7 +101,7 @@ export default function MealInfoSheet({ open, onClose, meals, plan, goal, t }) {
                   <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{m.name}</span>
                   <span className="block font-grotesk text-[10px]" style={{ color: t.faint }}>{Math.round(m.calories)} kcal</span>
                 </span>
-                <span className="shrink-0 text-base" style={{ color: openId === m.id ? t.accent : t.mute }}>👁</span>
+                <span className="shrink-0 text-base" style={{ color: openId === m.id ? t.accent : t.mute }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z" /><circle cx="12" cy="12" r="3" /></svg></span>
               </button>
               {openId === m.id && <div className="mt-1.5"><AnalysisCard meal={m} plan={plan} goal={goal} t={t} /></div>}
             </div>

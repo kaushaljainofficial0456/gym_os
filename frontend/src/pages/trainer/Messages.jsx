@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, Spinner, ErrorState, Empty } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Empty, PageSkeleton } from '../../components/UI.jsx';
 
 const TYPES = [
   ['message', 'Message'], ['workout_update', 'Workout update'],
@@ -23,7 +23,7 @@ export default function Messages() {
     if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [thread.data, clientId]);
 
-  if (clients.loading) return <Spinner label="Loading messages…" />;
+  if (clients.loading) return <PageSkeleton variant="split" label="Loading messages" />;
   if (clients.error) return <ErrorState error={clients.error} onRetry={clients.reload} />;
 
   const send = async () => {
@@ -60,7 +60,7 @@ export default function Messages() {
             const mine = m.from_user === user?.id || m.from_name === user?.name;
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${mine ? 'rounded-br-md' : 'rounded-bl-md'} ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30' : 'bg-white/[.05] border border-line'}`}>
+                <div className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${mine ? 'rounded-br-md' : 'rounded-bl-md'} ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30' : 'bg-tint/[.05] border border-line'}`}>
                   {!mine && <div className="text-[10px] text-mute font-grotesk mb-1">{m.from_name}{m.type !== 'message' ? ` · ${m.type.replace(/_/g, ' ')}` : ''}</div>}
                   <div className="leading-relaxed">{m.body}</div>
                   <div className="text-[9px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>

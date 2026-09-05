@@ -18,7 +18,7 @@ function timeLeft(iso) {
   return m < 60 ? `${m}m left` : `${Math.floor(m / 60)}h ${m % 60}m left`;
 }
 
-const STATUS_TONE = { AVAILABLE: 'text-good border-good/40 bg-good/10', CONSUMED: 'text-mute border-line bg-white/5', EXPIRED: 'text-warn border-warn/40 bg-warn/10', REVOKED: 'text-bad border-bad/40 bg-bad/10' };
+const STATUS_TONE = { AVAILABLE: 'text-good border-good/40 bg-good/10', CONSUMED: 'text-mute border-line bg-tint/5', EXPIRED: 'text-warn border-warn/40 bg-warn/10', REVOKED: 'text-bad border-bad/40 bg-bad/10' };
 
 export default function EnterpriseQR() {
   const [purpose, setPurpose] = useState('CLIENT');
@@ -87,7 +87,7 @@ export default function EnterpriseQR() {
       <Card className="p-5 space-y-4">
         {purpose === 'CLIENT' && (
           <div>
-            <div className="text-[11px] uppercase tracking-wider font-grotesk mb-1" style={{ color: 'var(--mute)' }}>Membership plan</div>
+            <div className="field-label mb-1.5">Membership plan</div>
             {noPackages ? (
               <div className="text-sm" style={{ color: 'var(--mute)' }}>
                 You haven't added any membership plans yet — <Link to="/app/trainer/business" className="text-gold hover:underline">add one in Business</Link> to start generating client QR codes.

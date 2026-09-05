@@ -48,6 +48,24 @@
  * Kept as explicit pairs so the 3D layer can pick the right one, since a
  * WebGL scene cannot inherit a CSS variable.
  */
+/**
+ * THIS OBJECT MIRRORS theme.css. IT IS NOT DECORATIVE.
+ *
+ * `brand` is not just documentation for the /design page — exerciseSVG.jsx
+ * draws its figures from it and charts.jsx colours the adherence breakdown
+ * from it, because SVG and Recharts internals cannot read CSS variables.
+ * So when these literals drift from theme.css, real pixels are wrong.
+ *
+ * They had drifted on almost every value: `dark.bg` still said the warm
+ * near-black #1C1210 (theme.css moved to true #000000), `dark.panel` said
+ * #2A1D19 (now #161616) and `dark.ink` said #F7ECE7 (now blush #FFDFDD) —
+ * so every exercise animation in the product was being drawn from a
+ * palette the app abandoned two repaints ago, on top of a page painted in
+ * the current one. The /design page compounded it by rendering each swatch
+ * with the live CSS variable but LABELLING it with the stale hex here.
+ *
+ * If you change a colour in theme.css, change it here in the same commit.
+ */
 export const brand = {
   dark: {
     accent: '#E07A63',        // terracotta
@@ -55,28 +73,43 @@ export const brand = {
     accentContrast: '#2B120A',// dark ink ON the accent
     cyan: '#22D3EE',
     violet: '#7C3AED',
-    bg: '#1C1210',            // warm near-black canvas
-    panel: '#2A1D19',
-    ink: '#F7ECE7',
+    bg: '#000000',            // true black canvas
+    panel: '#161616',
+    ink: '#FFDFDD',           // blush
   },
   light: {
-    accent: '#C15C4C',        // terracotta for light mode
-    accentDeep: '#9C4436',
+    accent: '#B0503F',        // terracotta, darkened in the contrast pass
+    accentDeep: '#8E3D30',
     accentContrast: '#FFFFFF',
-    cyan: '#0E7490',
-    violet: '#6D28D9',
-    bg: '#FFDFDD',            // blush
+    cyan: '#2A7A85',
+    violet: '#7A609C',
+    bg: '#FAF5F3',            // warm off-white
     panel: '#FFFFFF',
-    ink: '#2B211C',
+    ink: '#1E1714',
   },
 };
 
-/** Semantic status colours. Identical in both themes -- "danger" must not
- *  change hue with the theme, or users learn the colour twice. */
+/**
+ * Semantic status colours.
+ *
+ * The hue is identical in both themes — "danger" must not change hue with
+ * the theme, or users learn the colour twice. The LIGHTNESS is not: the
+ * dark values sit at 3.8:1 and 3.1:1 as text on a white panel, which fails
+ * WCAG AA, and these are used as label text ("On track", "Expires in 3
+ * days") rather than only as fills. Light mode therefore carries the same
+ * hues driven dark enough to clear 4.5:1 — matching --good-rgb /
+ * --warn-rgb / --bad-rgb in theme.css's `.light` block.
+ */
 export const status = {
   good: '#7AA880',
   warn: '#C7955C',
   bad: '#C15C4C',
+};
+
+export const statusLight = {
+  good: '#56805B',
+  warn: '#946E3E',
+  bad: '#8E3D30',
 };
 
 /* ------------------------------------------------------------------ */

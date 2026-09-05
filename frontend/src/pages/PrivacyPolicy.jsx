@@ -11,11 +11,10 @@ export default function PrivacyPolicy() {
           <button
             onClick={() => navigate(-1)}
             className="text-[var(--mute)] hover:text-[var(--ink)] transition-colors text-sm"
-            style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}
           >
             ← Back
           </button>
-          <h1 className="text-xl font-bold text-[var(--ink)]" style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}>
+          <h1 className="text-xl font-bold text-[var(--ink)]">
             Privacy Policy
           </h1>
         </div>
@@ -23,7 +22,7 @@ export default function PrivacyPolicy() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 pb-8">
-        <div className="max-w-2xl mx-auto space-y-6 text-sm leading-relaxed text-[var(--mute)]" style={{ fontFamily: 'DM Sans, system-ui, sans-serif' }}>
+        <div className="max-w-2xl mx-auto space-y-6 text-sm leading-relaxed text-[var(--mute)]">
           <p className="text-xs text-[var(--faint)] italic">
             Last updated: [PLACEHOLDER DATE — requires legal review]
           </p>
@@ -81,7 +80,6 @@ function Section({ title, children }) {
     <div className="space-y-2">
       <h2
         className="text-sm font-bold text-[var(--ink)] uppercase tracking-wider"
-        style={{ fontFamily: 'Satoshi, system-ui, sans-serif' }}
       >
         {title}
       </h2>

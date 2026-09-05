@@ -4,6 +4,7 @@ import { api } from '../../api.js';
 import SavingOverlay from './SavingOverlay.jsx';
 import MealFoodRow from './MealFoodRow.jsx';
 import CustomFoodBadge from './CustomFoodBadge.jsx';
+import { CheckIcon, XIcon } from './../UI.jsx';
 
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
 const makeRowId = () => `row_${Math.random().toString(36).slice(2)}`;
@@ -222,7 +223,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
           <div className="flex items-center justify-between mb-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Create New Meal</div>
             <button onClick={onClose} aria-label="Close"
-                    className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}>✕</button>
+                    className="shrink-0 -mr-2.5 w-11 h-11 rounded-full grid place-items-center text-[15px]" style={{ color: 'var(--mute)' }}><XIcon /></button>
           </div>
           <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} placeholder="Meal name, e.g. Post Workout Bowl"
                  aria-label="Meal name" className="input w-full !py-2.5 text-[14px] font-semibold" />
@@ -243,7 +244,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                 <button onClick={() => removeRow(id)} aria-label="Cancel this food entry"
                         className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full grid place-items-center">
                   <span className="w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold leading-none"
-                        style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}>✕</span>
+                        style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}><XIcon /></span>
                 </button>
               </div>
             ))}
@@ -271,7 +272,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                       {/* A completed block's own compact card (Sections
                           8-11) -- this list IS that card format, once a
                           row's MealFoodRow collapses out of `rowIds`. */}
-                      <span className="shrink-0" style={{ color: 'var(--good)' }} aria-hidden="true">✓</span>
+                      <span className="shrink-0" style={{ color: 'var(--good)' }} aria-hidden="true"><CheckIcon /></span>
                       <span className="truncate">{it.name}</span>
                       <CustomFoodBadge source={it.source} t={t} />
                     </span>
@@ -287,7 +288,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                          className="w-14 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }} />
                   {isAI && <span className="text-[9px] shrink-0" style={{ color: t.faint }}>g</span>}
                   <span className="w-14 text-right shrink-0 font-grotesk text-[11px] font-bold tabular-nums" style={{ color: t.mute }}>{Math.round(it.calories)} kcal</span>
-                  <button onClick={() => removeItem(it)} aria-label={`Remove ${it.name}`} className="shrink-0 opacity-60 hover:opacity-100" style={{ color: t.danger }}>✕</button>
+                  <button onClick={() => removeItem(it)} aria-label={`Remove ${it.name}`} className="shrink-0 opacity-60 hover:opacity-100" style={{ color: t.danger }}><XIcon /></button>
                 </div>
                 );
               })}

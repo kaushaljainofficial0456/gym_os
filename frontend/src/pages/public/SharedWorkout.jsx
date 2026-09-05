@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api, getToken, setReturnTo } from '../../api.js';
+import { exerciseLabel } from '../../utils.js';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
 
 /**
@@ -119,7 +120,7 @@ export default function SharedWorkout() {
     return (
       <div className="min-h-screen grid place-items-center px-6" style={{ background: bg }}>
         <div className="text-center max-w-sm">
-          <div className="text-3xl mb-3">🔗</div>
+          <div className="text-3xl mb-3"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block' }}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg></div>
           <div className="font-bold text-lg mb-1" style={{ color: ink }}>Link not found</div>
           <div className="text-sm" style={{ color: mute }}>{error}</div>
         </div>
@@ -217,7 +218,7 @@ export default function SharedWorkout() {
                     {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: ink }}>{ex.name}</div>
+                    <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: ink }}>{exerciseLabel(ex.name)}</div>
                     <div className="text-[11px] mt-0.5" style={{ color: mute }}>
                       {ex.sets} sets · {ex.reps} reps · {ex.weight}
                       {ex.rest_sec ? ` · ${ex.rest_sec}s rest` : ''}
@@ -273,7 +274,7 @@ export default function SharedWorkout() {
             style={{ background: cardBg, border: `1px solid ${border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: '#FEF3C7', border: '1px solid #F59E0B33' }}>
-                <span className="text-lg">⚡</span>
+                <span className="text-lg"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg></span>
               </div>
               <div>
                 <div className="font-grotesk text-[14px] font-bold" style={{ color: ink }}>Add for Today</div>
@@ -370,7 +371,7 @@ export default function SharedWorkout() {
             {exercises.map((ex, i) => (
               <div key={i} className="rounded-xl px-3 py-3 anim-fadeUp" style={{ background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.02)', border: `1px solid ${border}`, animationDelay: `${i * 60}ms` }}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: ink }}>{ex.name}</div>
+                  <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: ink }}>{exerciseLabel(ex.name)}</div>
                 </div>
                 <div className="text-[11px] mt-1" style={{ color: mute }}>
                   {ex.sets} sets · {ex.reps} reps · {ex.weight}

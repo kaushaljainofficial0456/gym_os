@@ -6,6 +6,7 @@ import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import Icon from '../components/Icon.jsx';
+import { PasswordInput } from '../components/UI.jsx';
 import './../components/BorderGlow.css';
 
 // The three top-level paths onto SK OS. Each is a genuinely different
@@ -29,10 +30,16 @@ const ROLES = [
   { id: 'CLIENT', icon: 'user', title: 'Client', desc: 'Your training portal.' },
 ];
 
+/* Icons were '◧', '₹' and '⌁' — three Unicode glyphs from three different
+   blocks, rendered at three different optical weights, one of which (the
+   rupee sign) is a currency symbol pressed into service as a picture. They
+   now reuse the same Icon names the role cards above them already use, so
+   picking "Trainer" and then seeing the trainer demo shows one icon, not
+   two unrelated ones. */
 const DEMO_BY_ROLE = {
-  TRAINER: { label: 'Trainer', email: 'trainer1@ironforge.in', icon: '◧', desc: 'Arjun Mehta · coaching workspace' },
-  GYM_OWNER: { label: 'Gym Owner', email: 'owner@ironforge.in', icon: '₹', desc: 'Maya Kapoor · business view' },
-  CLIENT: { label: 'Client', email: 'client1@ironforge.in', icon: '⌁', desc: 'Rahul Sharma · client portal' },
+  TRAINER: { label: 'Trainer', email: 'trainer1@ironforge.in', icon: 'chart', desc: 'Arjun Mehta · coaching workspace' },
+  GYM_OWNER: { label: 'Gym Owner', email: 'owner@ironforge.in', icon: 'clipboard', desc: 'Maya Kapoor · business view' },
+  CLIENT: { label: 'Client', email: 'client1@ironforge.in', icon: 'user', desc: 'Rahul Sharma · client portal' },
 };
 
 const ROLE_COPY = {
@@ -44,27 +51,41 @@ const ROLE_COPY = {
 function OptionCard({ icon, title, desc, onClick, delay = 0 }) {
   return (
     <button onClick={onClick}
-      className="w-full flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200 text-left anim-fadeUp"
-      style={{ borderColor: 'var(--line)', background: 'rgba(128,128,128,.025)' }}
-      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.05)'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.025)'}
-      animation-delay={`${delay}ms`}>
-      <span className="w-11 h-11 rounded-xl grid place-items-center border shrink-0" style={{ background: 'var(--accent-soft)', borderColor: 'var(--line)', color: 'var(--accent)' }}>
+      /* `animation-delay={...}` was passed as a JSX PROP here, which React
+         forwards to the DOM as a literal attribute named
+         "animation-delay" — not a style. It has never done anything, so
+         all three cards faded up on the same frame and the intended
+         stagger was invisible. It belongs in `style`. */
+      className="row row-interactive gap-4 p-4 anim-fadeUp"
+      style={{ borderRadius: 'var(--r-lg)', animationDelay: `${delay}ms` }}>
+      <span className="w-11 h-11 grid place-items-center shrink-0"
+        style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .12)', border: '1px solid rgb(var(--accent-rgb) / .2)', color: 'var(--accent)' }}>
         <Icon name={icon} size={20} />
       </span>
       <span className="flex-1 min-w-0">
         <span className="block font-grotesk text-sm font-bold" style={{ color: 'var(--ink)' }}>{title}</span>
         <span className="block text-[12px] mt-0.5 leading-snug" style={{ color: 'var(--mute)' }}>{desc}</span>
       </span>
-      <span style={{ color: 'var(--faint)' }}>›</span>
+      {/* Was the '›' character — a single-glyph chevron that inherits the
+          body font's weight and sits off the optical centre. */}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+        className="shrink-0" style={{ color: 'var(--faint)' }}>
+        <path d="m9 18 6-6-6-6" />
+      </svg>
     </button>
   );
 }
 
 function BackLink({ onClick, label }) {
   return (
-    <button onClick={onClick} className="flex items-center gap-1.5 text-[12px] font-grotesk font-semibold mb-5" style={{ color: 'var(--mute)' }}>
-      <span aria-hidden>‹</span> {label}
+    <button onClick={onClick} className="chrome-btn gap-1.5 mb-5 -ml-1.5 px-1.5 py-1 font-grotesk"
+      style={{ fontSize: '.75rem', fontWeight: 600 }}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+      {label}
     </button>
   );
 }
@@ -162,8 +183,14 @@ export default function Login() {
               The operating system for fitness professionals — and for anyone training on their own.
             </p>
             <div className="mt-8 flex items-center gap-2 text-[11px] font-grotesk uppercase tracking-[.2em]" style={{ color: 'var(--faint)' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-good" style={{ boxShadow: '0 0 8px rgba(52,211,153,.8)' }} />
-              IRONFORGE FITNESS · demo workspace
+              {/* The glow was `rgba(52,211,153,.8)` — the neon mint that
+                  --good-rgb was deliberately moved away from (see the
+                  token comment in theme.css). It was the only literal
+                  colour left on this screen, and it didn't match the dot
+                  it was glowing behind. */}
+              <span className="w-1.5 h-1.5 rounded-full anim-pulse-soft"
+                style={{ background: 'rgb(var(--good-rgb))', boxShadow: '0 0 8px rgb(var(--good-rgb) / .7)' }} />
+              Ironforge Fitness · demo workspace
             </div>
           </div>
         </div>
@@ -210,21 +237,31 @@ export default function Login() {
                 <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>{copy.heading}</h2>
                 <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>{copy.sub}</p>
 
-                <form onSubmit={submit} className="space-y-3">
-                  <div>
-                    <label htmlFor="email" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
-                    <input id="email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@ironforge.in" required autoFocus />
+                <form onSubmit={submit} className="space-y-3.5">
+                  <div className="field">
+                    <label htmlFor="email" className="field-label">Email</label>
+                    <input id="email" className="input mt-1.5" type="email" value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="username"
+                      aria-invalid={err ? 'true' : undefined}
+                      placeholder="you@yourgym.com" required autoFocus />
                   </div>
-                  <div>
-                    <label htmlFor="password" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
-                    <input id="password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••" required />
+                  <div className="field">
+                    <label htmlFor="password" className="field-label">Password</label>
+                    {/* Was an inline copy of the reveal toggle. Extracted to
+                        `PasswordInput` so the four password fields in the
+                        product (here, SignUp, SetupOrg, TrainerSignUp) share
+                        one implementation rather than four that drift. */}
+                    <PasswordInput id="password" className="mt-1.5" value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      aria-invalid={err ? 'true' : undefined}
+                      placeholder="Your password" required />
                   </div>
-                  {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
+                  {err && <div className="field-error anim-fadeIn" role="alert" style={{ marginTop: 12 }}>{err}</div>}
                   <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
-                    <button className="btn-primary w-full !py-3" disabled={busy}>
-                      {busy ? 'Signing in…' : 'Sign in'}
+                    <button className="btn-primary btn-lg btn-block" data-loading={busy ? 'true' : undefined} disabled={busy}>
+                      Sign in
                     </button>
                   </BorderGlow>
                 </form>
@@ -253,16 +290,16 @@ export default function Login() {
                       <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
                     </div>
                     <button onClick={() => quick(demo.email)} disabled={busy}
-                      className="w-full flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 text-left anim-fadeUp"
-                      style={{ borderColor: 'var(--line)', background: 'rgba(128,128,128,.025)' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.05)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.025)'}>
-                      <span className="w-9 h-9 rounded-xl grid place-items-center border text-base" style={{ background: 'var(--accent-soft)', borderColor: 'var(--line)', color: 'var(--accent)' }}>{demo.icon}</span>
+                      className="row row-interactive gap-3 anim-fadeUp">
+                      <span className="w-9 h-9 grid place-items-center shrink-0"
+                        style={{ borderRadius: 'var(--r-sm)', background: 'rgb(var(--accent-rgb) / .12)', border: '1px solid rgb(var(--accent-rgb) / .2)', color: 'var(--accent)' }}>
+                        <Icon name={demo.icon} size={17} />
+                      </span>
                       <span className="flex-1 min-w-0">
                         <span className="block font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{demo.label}</span>
                         <span className="block text-[11px] truncate" style={{ color: 'var(--mute)' }}>{demo.desc}</span>
                       </span>
-                      <span className="chip !text-[9px]">demo1234</span>
+                      <span className="badge badge-plain shrink-0">demo1234</span>
                     </button>
                   </>
                 )}

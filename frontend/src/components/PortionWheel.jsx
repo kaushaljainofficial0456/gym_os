@@ -151,7 +151,7 @@ export default function PortionWheel({ open, portion, initialQty = 1, onCancel, 
 
         <div className="px-5 pt-3 pb-5 flex gap-2">
           <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold" style={{ border: '1px solid var(--line)', color: 'var(--mute)' }}>Cancel</button>
-          <Pressable onClick={() => onDone(qty)} className="flex-1 btn-primary !py-2.5 text-[12px] font-bold">Done</Pressable>
+          <Pressable onClick={() => onDone(qty)} className="flex-1 btn-sm btn-primary text-[12px]">Done</Pressable>
         </div>
       </div>
     </div>

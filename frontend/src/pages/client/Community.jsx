@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Avatar, Empty, Toast, Skeleton } from '../../components/UI.jsx';
+import { ErrorState, Avatar, Empty, Toast, Skeleton, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 
 // Page size for the activity feed. The API caps limit at 100 and defaults to
@@ -20,11 +20,29 @@ export default function Community() {
   const nav = useNavigate();
   const membershipFetch = useFetch(() => api('/community/membership'));
   const [period, setPeriod] = useState('week');
-  const lbFetch = useFetch(() => api(`/community/leaderboards?period=${period}`), [period]);
+
+  /* Both of these are gated on membership.
+     They used to fire unconditionally on mount, in parallel with the
+     membership check — so every visit by a client who has NOT joined the
+     community made two requests the server correctly answered 403, on a
+     page that then rendered the join prompt and never used either result.
+     Two wasted round trips per visit, and a console full of red for anyone
+     debugging something else on this screen.
+     `Promise.resolve(null)` rather than a conditional hook, matching the
+     pattern Dashboard.jsx already uses for its trainer/owner split — hooks
+     cannot be called conditionally, but the work inside them can be. */
+  const joined = !!membershipFetch.data?.membership?.enabled;
+  const lbFetch = useFetch(
+    () => (joined ? api(`/community/leaderboards?period=${period}`) : Promise.resolve(null)),
+    [period, joined]
+  );
   // Page 1 stays on useFetch so it keeps the shared loading/error/Retry
   // semantics, and so the reload() calls after share/unshare/copy below
   // reset pagination for free. Later pages are appended separately.
-  const feedFetch = useFetch(() => api(`/community/feed?limit=${FEED_PAGE_SIZE}&offset=0`));
+  const feedFetch = useFetch(
+    () => (joined ? api(`/community/feed?limit=${FEED_PAGE_SIZE}&offset=0`) : Promise.resolve(null)),
+    [joined]
+  );
   const [extraShares, setExtraShares] = useState([]);
   const [moreLoading, setMoreLoading] = useState(false);
   const [moreError, setMoreError] = useState(null);
@@ -153,7 +171,7 @@ export default function Community() {
     setCopying(false);
   };
 
-  if (membershipFetch.loading) return <Spinner label="Loading community…" />;
+  if (membershipFetch.loading) return <PageSkeleton variant="split" label="Loading community" />;
   if (membershipFetch.error) return <ErrorState error={membershipFetch.error} onRetry={membershipFetch.reload} />;
 
   // Community not enabled by gym
@@ -189,7 +207,7 @@ export default function Community() {
             You control what's visible — participation is always optional.
           </p>
           <div className="mt-6 space-y-3">
-            <button className="btn-primary w-full !py-3" onClick={toggleMembership}>
+            <button className="btn-primary btn-lg btn-block" onClick={toggleMembership}>
               Join Community
             </button>
             <button className="btn w-full" onClick={() => nav(-1)}>Maybe later</button>
@@ -238,7 +256,7 @@ export default function Community() {
             Member leaderboards &amp; workout sharing
           </p>
         </div>
-        <button className="btn !text-xs !py-1.5" onClick={toggleMembership}>Leave</button>
+        <button className="btn btn-sm" onClick={toggleMembership}>Leave</button>
       </div>
 
       {/* Period tabs */}
@@ -262,7 +280,7 @@ export default function Community() {
       ) : lbFetch.error ? (
         <div className="card p-4 text-center">
           <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load leaderboards</p>
-          <button className="btn !text-xs" onClick={lbFetch.reload}>Retry</button>
+          <button className="btn btn-sm" onClick={lbFetch.reload}>Retry</button>
         </div>
       ) : (
         <>
@@ -298,7 +316,7 @@ export default function Community() {
         ) : feedFetch.error ? (
           <div className="card p-4 text-center">
             <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load activity feed</p>
-            <button className="btn !text-xs" onClick={feedFetch.reload}>Retry</button>
+            <button className="btn btn-sm" onClick={feedFetch.reload}>Retry</button>
           </div>
         ) : shares.length === 0 ? (
           <Empty title="No shared workouts yet" hint="Complete a workout and share it with your gym friends!" icon="trending" />
@@ -335,12 +353,12 @@ export default function Community() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  <button className="btn-primary flex-1 !text-xs !py-2"
+                  <button className="btn-primary btn-sm flex-1"
                     onClick={() => openCopy(share)}>
                     Copy Workout
                   </button>
                   {share.clientId === membership?.client_id && (
-                    <button className="btn !text-xs !py-2"
+                    <button className="btn btn-sm"
                       onClick={() => unshare(share.id)}>
                       Remove
                     </button>
@@ -353,11 +371,11 @@ export default function Community() {
             {moreError ? (
               <div className="card p-4 text-center">
                 <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load more activity</p>
-                <button className="btn !text-xs" onClick={loadMore}>Retry</button>
+                <button className="btn btn-sm" onClick={loadMore}>Retry</button>
               </div>
             ) : hasMore ? (
               <button
-                className="btn w-full !text-xs !py-2.5"
+                className="btn btn-sm btn-block"
                 onClick={loadMore}
                 disabled={moreLoading}
                 aria-busy={moreLoading}>
@@ -384,7 +402,7 @@ export default function Community() {
                 <div className="font-grotesk font-bold">Copy Workout</div>
                 <div className="text-[10px]" style={{ color: 'var(--mute)' }}>Edit and add to your library</div>
               </div>
-              <button className="text-lg" style={{ color: 'var(--mute)' }} onClick={() => setCopyModal(null)}>✕</button>
+              <button className="text-lg" style={{ color: 'var(--mute)' }} onClick={() => setCopyModal(null)}><XIcon /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               <input className="input" placeholder="Workout name" value={copyForm.name}

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
-import { Spinner, ErrorState, Ring } from '../../components/UI.jsx';
+import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -31,7 +31,11 @@ const PROFILE_SECTIONS = [
   { id: 'nutrition-tracker', label: 'Nutrition Tracker', icon: 'food', desc: 'Calendar and full logging history' },
   { id: 'coach', label: 'Coach Preference', icon: 'chat', desc: 'Coach settings and messages' },
   { id: 'dashboard', label: 'Dashboard', icon: 'clipboard', desc: 'Customize your home dashboard' },
-  { id: 'help', label: 'Help', icon: '❓', desc: 'Learn how to use SK OS' },
+  // Was '❓' — a literal emoji where the other six rows pass an Icon name,
+  // so this one row rendered Icon.jsx's fallback glyph instead of a real
+  // icon. Same bug class ClientLayout.jsx already documents fixing at 9
+  // other sites.
+  { id: 'help', label: 'Help', icon: 'bulb', desc: 'Learn how to use SK OS' },
 ];
 
 function MiniSpark({ values, color = 'var(--accent)' }) {
@@ -51,11 +55,9 @@ function MiniSpark({ values, color = 'var(--accent)' }) {
 
 function BackButton({ onClick }) {
   return (
-    <button onClick={onClick} className="flex items-center gap-2 transition-colors mb-4" style={{ color: 'var(--mute)' }}
-      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ink)'}
-      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--mute)'}>
-      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M10 3L5 8L10 13" />
+    <button onClick={onClick} className="chrome-btn gap-2 mb-4 -ml-2 px-2 py-1.5">
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m15 18-6-6 6-6" />
       </svg>
       <span className="font-grotesk text-sm font-semibold">Back to Profile</span>
     </button>
@@ -79,7 +81,11 @@ function HelpInline() {
           <button onClick={() => setExpanded(expanded === section.id ? null : section.id)} className="w-full flex items-center gap-3 p-4 text-left" style={{ color: 'var(--ink)' }}>
             <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={20} /></span>
             <span className="flex-1 font-grotesk font-bold text-sm">{section.title}</span>
-            <span className="text-lg transition-transform duration-200" style={{ color: 'var(--mute)', transform: expanded === section.id ? 'rotate(45deg)' : 'none' }}>+</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+              className="shrink-0 transition-transform duration-200"
+              style={{ color: 'var(--mute)', transform: expanded === section.id ? 'rotate(180deg)' : 'none' }}>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </button>
           {expanded === section.id && (
             <div className="px-4 pb-4 border-t border-line/40 pt-3 anim-fadeUp">
@@ -87,7 +93,7 @@ function HelpInline() {
               <div className="space-y-2">
                 {section.items.map((item, i) => (
                   <div key={i} className="flex items-start gap-2.5">
-                    <span className="text-gold text-xs mt-0.5 shrink-0">•</span>
+                    <span className="text-xs mt-0.5 shrink-0" style={{ color: 'var(--accent)' }}>•</span>
                     <span className="text-[12px] leading-relaxed" style={{ color: 'var(--mute)' }}>{item}</span>
                   </div>
                 ))}
@@ -107,7 +113,7 @@ function ThemeToggle() {
     <div className="card p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium" style={{ color: 'var(--mute)' }}>Appearance</div>
+          <div className="t-micro">Appearance</div>
           <div className="text-sm font-grotesk mt-0.5" style={{ color: 'var(--ink)' }}>{isDark ? 'Dark Mode' : 'Light Mode'}</div>
         </div>
         <button
@@ -132,7 +138,29 @@ function ThemeToggle() {
 }
 
 export default function Profile() {
-  const [activeSection, setActiveSection] = useState(null);
+  /* Which panel is open lives in the URL, not only in state, so the
+     header menu's "Measurements" / "Goals" rows can land on the panel they
+     name instead of dumping you on the hub to find it yourself. Back still
+     works: closing a panel clears the param rather than pushing history. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSection = searchParams.get('section');
+  const [activeSection, setActiveSectionState] = useState(
+    () => (PROFILE_SECTIONS.some((s) => s.id === requestedSection) ? requestedSection : null)
+  );
+  const setActiveSection = (id) => {
+    setActiveSectionState(id);
+    setSearchParams(id ? { section: id } : {}, { replace: true });
+  };
+  // A later navigation to ?section=… (menu row tapped while already on
+  // Profile) doesn't remount, so the param has to be watched, not just read
+  // once at mount.
+  useEffect(() => {
+    if (requestedSection && PROFILE_SECTIONS.some((s) => s.id === requestedSection)) {
+      setActiveSectionState(requestedSection);
+    } else if (!requestedSection) {
+      setActiveSectionState(null);
+    }
+  }, [requestedSection]);
 
   // Already fetched once by the persistent ClientLayout — reuse it instead
   // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
@@ -243,7 +271,7 @@ export default function Profile() {
     if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [msgs]);
 
-  if (home.loading || meDash.loading) return <Spinner label="Loading your profile…" />;
+  if (home.loading || meDash.loading) return <PageSkeleton variant="list" label="Loading your profile" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
 
   const c = data.client;
@@ -377,10 +405,10 @@ export default function Profile() {
             {/* goal progress */}
             <div className="card p-4">
               <div className="flex items-center justify-between mb-1.5">
-                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">Goal progress</div>
+                <div className="t-micro">Goal progress</div>
                 <div className="font-grotesk text-xs font-bold text-gold">{Math.round(progress)}%</div>
               </div>
-              <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-2">
+              <div className="h-2 rounded-full bg-tint/8 overflow-hidden mb-2">
                 <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700" style={{ width: `${progress}%` }} />
               </div>
               <div className="flex justify-between text-[11px] text-mute font-grotesk">
@@ -391,7 +419,7 @@ export default function Profile() {
             </div>
             {/* goal editor */}
             <div className="card p-4">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">My goal & setup</div>
+              <div className="t-micro mb-3">My goal & setup</div>
               {gForm && (
                 <div className="space-y-3">
                   <div>
@@ -434,7 +462,7 @@ export default function Profile() {
           <div className="space-y-4 anim-fadeUp">
             <BackButton onClick={goBack} />
             <div className="card p-4">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">My Equipment</div>
+              <div className="t-micro mb-3">My Equipment</div>
               {gForm ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -461,11 +489,11 @@ export default function Profile() {
             <BackButton onClick={goBack} />
             <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">My metrics</div>
+                <div className="t-micro">My metrics</div>
                 <span className="text-[10px] text-faint font-grotesk">track what matters to you</span>
               </div>
               {/* create form */}
-              <div className="rounded-xl border border-line bg-white/[.03] p-3 space-y-2 mt-2">
+              <div className="rounded-xl border border-line bg-tint/[.03] p-3 space-y-2 mt-2">
                 <div className="grid grid-cols-2 gap-2">
                   <input className="input" placeholder="Metric name (e.g. Waist, Steps, Bench)" value={mForm.name} onChange={(e) => setMForm((f) => ({ ...f, name: e.target.value }))} />
                   <input className="input" placeholder="Unit (cm, kg, steps…)" value={mForm.unit} onChange={(e) => setMForm((f) => ({ ...f, unit: e.target.value }))} />
@@ -509,7 +537,7 @@ export default function Profile() {
                 {(metrics.data?.metrics || []).map((m) => {
                   const vals = (m.entries || []).map((e) => e.value).reverse();
                   return (
-                    <div key={m.id} className="rounded-xl border border-line bg-white/[.03] p-3">
+                    <div key={m.id} className="rounded-xl border border-line bg-tint/[.03] p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <span className="font-grotesk text-sm font-bold">{m.name}</span>
@@ -519,7 +547,7 @@ export default function Profile() {
                         </div>
                         <div className="flex gap-1.5 shrink-0">
                           <button className="text-[10px] text-mute hover:text-ink" onClick={() => setEditingM({ id: m.id, name: m.name, unit: m.unit || '', frequency: m.frequency, target: m.target ?? '', type: m.type || 'number' })} aria-label={`Edit ${m.name}`}>Edit</button>
-                          <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}>✕</button>
+                          <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}><XIcon /></button>
                         </div>
                       </div>
                       <MiniSpark values={vals} color={m.color || 'var(--accent)'} />
@@ -528,15 +556,15 @@ export default function Profile() {
                           {(m.entries || []).slice(0, 4).map((e) => (
                             <span key={e.id} className="inline-flex items-center gap-1 chip border-line !px-2 !py-0.5 text-[10px]">
                               {m.type === 'boolean' ? (e.value ? '✓ done' : '✗ no') : `${e.value}${m.unit ? ' ' + m.unit : ''}`} · {e.date}
-                              <button className="text-faint hover:text-bad" onClick={() => deleteEntry(m.id, e.id)} aria-label={`Delete entry ${e.date}`}>✕</button>
+                              <button className="text-faint hover:text-bad" onClick={() => deleteEntry(m.id, e.id)} aria-label={`Delete entry ${e.date}`}><XIcon /></button>
                             </span>
                           ))}
                         </div>
                       )}
                       {m.type === 'boolean' ? (
                         <div className="flex gap-2 mt-1.5">
-                          <button className="btn !py-1.5 !px-3 !text-[11px] flex-1" onClick={() => logBoolean(m.id, true)} disabled={savingM}>✓ Yes</button>
-                          <button className="btn !py-1.5 !px-3 !text-[11px] flex-1" onClick={() => logBoolean(m.id, false)} disabled={savingM}>✗ No</button>
+                          <button className="btn btn-sm flex-1" onClick={() => logBoolean(m.id, true)} disabled={savingM}>✓ Yes</button>
+                          <button className="btn btn-sm flex-1" onClick={() => logBoolean(m.id, false)} disabled={savingM}>✗ No</button>
                         </div>
                       ) : (
                         <div className="flex gap-2 mt-1.5">
@@ -544,7 +572,7 @@ export default function Profile() {
                             value={mLog[m.id]?.value ?? ''} onChange={(e) => setMLog((x) => ({ ...x, [m.id]: { ...x[m.id], value: e.target.value } }))} />
                           <input type="date" className="input !py-1.5 !text-xs" value={mLog[m.id]?.date || ''}
                             onChange={(e) => setMLog((x) => ({ ...x, [m.id]: { ...x[m.id], date: e.target.value } }))} />
-                          <button className="btn !py-1.5 !px-3 !text-[11px] shrink-0" onClick={() => logEntry(m.id)} disabled={savingM}>Log</button>
+                          <button className="btn btn-sm shrink-0" onClick={() => logEntry(m.id)} disabled={savingM}>Log</button>
                         </div>
                       )}
                     </div>
@@ -562,7 +590,7 @@ export default function Profile() {
             <BackButton onClick={goBack} />
             {/* adherence breakdown */}
             <div className="card p-4">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">This week</div>
+              <div className="t-micro mb-3">This week</div>
               <AdherenceBreakdown components={data.adherenceComponents} />
             </div>
             {/* coach message */}
@@ -572,7 +600,7 @@ export default function Profile() {
             </div>
             {/* coach preferences */}
             <div className="card p-4">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Coach preferences</div>
+              <div className="t-micro mb-3">Coach preferences</div>
               <div className="space-y-2">
                 {[['training_time', 'Preferred training time', 'text'], ['workout_duration', 'Workout duration (min)', 'number'],
                   ['equipment_pref', 'Equipment preference', 'text'], ['liked_foods', 'Liked foods', 'text'],
@@ -610,13 +638,13 @@ export default function Profile() {
                 tracking.js, where trainerId was added alongside this. */}
             {c.trainerId ? (
               <div className="card p-4">
-                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-3">Message your coach</div>
+                <div className="t-micro mb-3">Message your coach</div>
                 <div className="h-44 overflow-y-auto space-y-2 pr-1 mb-3">
                   {(msgs || []).map((m) => {
                     const mine = m.from_name === c.name || m.mine;
                     return (
                       <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30 rounded-br-md' : 'bg-white/[.05] border border-line rounded-bl-md'}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30 rounded-br-md' : 'bg-tint/[.05] border border-line rounded-bl-md'}`}>
                           {!mine && <div className="text-[9px] text-mute font-grotesk mb-0.5">{m.from_name}</div>}
                           <div>{m.body}</div>
                           <div className="text-[8px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -634,7 +662,7 @@ export default function Profile() {
               </div>
             ) : (
               <div className="card p-4 text-center">
-                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-1.5">Training independently</div>
+                <div className="t-micro mb-1.5">Training independently</div>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--mute)' }}>No human coach assigned — SK Coach above still tracks your data and gives you priorities.</p>
               </div>
             )}
@@ -647,7 +675,7 @@ export default function Profile() {
             <BackButton onClick={goBack} />
             <div className="card p-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">My dashboard</div>
+                <div className="t-micro">My dashboard</div>
                 <span className="text-[10px] text-faint font-grotesk">show · hide · reorder</span>
               </div>
               <div className="space-y-1.5">
@@ -655,7 +683,7 @@ export default function Profile() {
                   const label = DASH_CARDS.find((d) => d[0] === key)?.[1] || key;
                   const isHidden = hidden.includes(key);
                   return (
-                    <div key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isHidden ? 'border-line opacity-45' : 'border-line bg-white/[.03]'}`}>
+                    <div key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isHidden ? 'border-line opacity-45' : 'border-line bg-tint/[.03]'}`}>
                       <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, -1)} aria-label={`Move ${label} up`}>↑</button>
                       <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, 1)} aria-label={`Move ${label} down`}>↓</button>
                       <span className="flex-1 text-sm">{label}</span>
@@ -698,21 +726,35 @@ export default function Profile() {
           </button>
           {/* X/remove button when photo exists */}
           {(localAvatar || c.avatar) && (
-            <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmOpen(true); }} className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full grid place-items-center text-[8px] font-bold border transition-all hover:scale-110" style={{ background: 'var(--panel)', borderColor: 'var(--line)', color: 'var(--mute)' }} title="Remove photo">✕</button>
+            <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmOpen(true); }} className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full grid place-items-center text-[8px] font-bold border transition-all hover:scale-110" style={{ background: 'var(--panel)', borderColor: 'var(--line)', color: 'var(--mute)' }} title="Remove photo"><XIcon /></button>
           )}
           {/* Photo menu */}
           {avatarMenuOpen && (
-            <div className="absolute top-full left-0 mt-2 z-30 rounded-xl overflow-hidden anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)', boxShadow: '0 12px 40px rgba(0,0,0,0.4)' }}>
-              <button onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-camera').click(); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors" style={{ color: 'var(--ink)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <span className="text-base">📷</span>
-                <span className="font-grotesk text-sm font-semibold">Camera</span>
+            /* All three rows here set their hover with an inline handler
+               assigning `var(--surfaceHover)` — a token that does not exist
+               anywhere in theme.css. `background: var(--<undefined>)` is an
+               invalid declaration, so it was dropped: this menu has had NO
+               hover feedback at all, on any row, since it was written. The
+               icons were also emoji (📷 / 🖼️), the only two left in the
+               client app after the nav and popup passes. */
+            <div className="absolute top-full left-0 mt-2 z-30 overflow-hidden anim-scaleIn"
+              role="menu"
+              style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', boxShadow: 'var(--e-3)', minWidth: 168 }}>
+              <button role="menuitem" onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-camera').click(); }} className="menu-row">
+                <span className="menu-icon"><Icon name="camera" size={16} /></span>
+                Camera
               </button>
-              <button onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-gallery').click(); }} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors" style={{ color: 'var(--ink)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <span className="text-base">🖼️</span>
-                <span className="font-grotesk text-sm font-semibold">Gallery</span>
+              <button role="menuitem" onClick={() => { setAvatarMenuOpen(false); document.getElementById('avatar-gallery').click(); }} className="menu-row">
+                <span className="menu-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />
+                  </svg>
+                </span>
+                Gallery
               </button>
-              <button onClick={() => setAvatarMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-t" style={{ borderColor: 'var(--line)', color: 'var(--mute)' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surfaceHover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <span className="font-grotesk text-sm font-semibold">Cancel</span>
+              <button role="menuitem" onClick={() => setAvatarMenuOpen(false)} className="menu-row" style={{ borderTop: '1px solid var(--line)', color: 'var(--mute)' }}>
+                <span className="menu-icon" />
+                Cancel
               </button>
             </div>
           )}

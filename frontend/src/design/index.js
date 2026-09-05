@@ -27,6 +27,7 @@ export { cn } from './cn.js';
 export {
   brand,
   status,
+  statusLight,
   easing,
   duration,
   spring,

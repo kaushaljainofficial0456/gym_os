@@ -38,7 +38,7 @@ export default function CoachBriefDrawer({ open, onClose, briefFetch, weeklyFetc
             </div>
 
             {brief.priority && (
-              <div className="rounded-xl border border-gold/30 px-3 py-2.5" style={{ background: 'rgba(20,196,188,.04)' }}>
+              <div className="rounded-xl border border-gold/30 px-3 py-2.5" style={{ background: 'rgb(var(--accent-rgb) / .04)' }}>
                 <div className="font-grotesk text-[9px] uppercase tracking-[.14em] text-gold">Today's priority · {brief.priority.priority}</div>
                 <div className="font-grotesk text-[13px] font-semibold mt-0.5" style={{ color: 'var(--ink)' }}>{brief.priority.title}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{brief.priority.message}</div>
@@ -94,13 +94,13 @@ export default function CoachBriefDrawer({ open, onClose, briefFetch, weeklyFetc
               <div>
                 <div className="font-grotesk text-[9px] uppercase tracking-[.14em] text-warn font-medium mb-1">Needs attention</div>
                 {weekly.needs_attention.map((item, i) => (
-                  <div key={i} className="text-[12px] leading-relaxed" style={{ color: 'var(--ink)' }}>⚠ {typeof item === 'string' ? item : item.message || item.title || ''}</div>
+                  <div key={i} className="text-[12px] leading-relaxed" style={{ color: 'var(--ink)' }}><span style={{ color: 'rgb(var(--warn-rgb))' }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg></span> {typeof item === 'string' ? item : item.message || item.title || ''}</div>
                 ))}
               </div>
             )}
 
             {weekly.next_week_priority && (
-              <div className="rounded-xl border border-gold/30 px-3 py-2.5" style={{ background: 'rgba(20,196,188,.04)' }}>
+              <div className="rounded-xl border border-gold/30 px-3 py-2.5" style={{ background: 'rgb(var(--accent-rgb) / .04)' }}>
                 <div className="font-grotesk text-[9px] uppercase tracking-[.14em] text-gold">Next week priority</div>
                 <div className="font-grotesk text-[13px] font-semibold mt-0.5" style={{ color: 'var(--ink)' }}>{weekly.next_week_priority.title || weekly.next_week_priority}</div>
                 {weekly.next_week_priority.message && <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{weekly.next_week_priority.message}</div>}

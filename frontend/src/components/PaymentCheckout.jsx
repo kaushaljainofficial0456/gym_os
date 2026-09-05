@@ -27,6 +27,17 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
+/** Razorpay's widget takes a literal hex, not a CSS variable, so the live
+ *  token value is read off the document at call time. Falls back to the
+ *  dark-mode accent if the variable can't be resolved (SSR/edge cases). */
+function readAccentHex() {
+  try {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    if (/^#[0-9a-f]{3,8}$/i.test(raw)) return raw;
+  } catch { /* fall through to the default below */ }
+  return '#E07A63';
+}
+
 let razorpayScriptPromise = null;
 function loadRazorpayScript() {
   if (razorpayScriptPromise) return razorpayScriptPromise;
@@ -81,48 +92,67 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
           onComplete(response.razorpay_payment_id, response.razorpay_signature);
         },
         modal: { ondismiss: () => setBusy(false) },
-        theme: { color: '#14C4BC' },
+        /* Was '#14C4BC' — a teal from a palette two repaints ago, which
+           meant the ONE screen a paying customer sees rendered the gateway
+           in a colour the product no longer uses anywhere. Read from the
+           live accent token so it can never drift again. */
+        theme: { color: readAccentHex() },
       });
       rp.on('payment.failed', (resp) => { setErr(resp?.error?.description || 'Payment failed'); setBusy(false); });
       rp.open();
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
-  if (!provider) return <div className="text-xs" style={{ color: 'var(--mute)' }}>Preparing checkout…</div>;
+  if (!provider) {
+    return (
+      <div className="space-y-3" aria-busy="true">
+        <div className="skeleton-text" style={{ width: '45%' }} />
+        <div className="skeleton" style={{ height: 48, borderRadius: 'var(--r-md)' }} />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs" style={{ color: 'var(--mute)' }}>Amount due</span>
-        <span className="font-grotesk font-bold text-xl" style={{ color: 'var(--ink)' }}>
-          {order.currency === 'INR' ? '₹' : order.currency + ' '}{order.amount.toLocaleString('en-IN')}
+    <div className="space-y-4">
+      {/* The amount is the single most important thing on a checkout —
+          it gets the metric treatment, not a body-text weight. */}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="t-micro">Amount due</span>
+        <span className="font-grotesk tabular-nums" style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-.03em', color: 'var(--ink)' }}>
+          {order.currency === 'INR' ? '₹' : `${order.currency} `}{order.amount.toLocaleString('en-IN')}
         </span>
       </div>
 
       {provider === 'mock' ? (
-        <div className="rounded-xl border p-3" style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
-          <div className="text-[10px] uppercase tracking-[.16em] font-grotesk font-semibold mb-2" style={{ color: 'var(--accent)' }}>
-            Test mode — no real payment gateway configured
-          </div>
-          <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
-            SK OS is running on the built-in mock payment provider. This simulates what a real checkout would do —
-            no money moves, but the same server-side signature verification runs.
+        <div style={{ borderRadius: 'var(--r-md)', border: '1px solid rgb(var(--warn-rgb) / .35)', background: 'rgb(var(--warn-rgb) / .08)', padding: 14 }}>
+          <div className="badge badge-warn mb-2">Test mode</div>
+          <p className="t-sub" style={{ fontSize: '.75rem' }}>
+            No real payment gateway is configured, so this simulates a checkout — no money moves, but the same
+            server-side signature verification runs.
           </p>
-          <div className="flex gap-2">
-            <button className="btn-primary flex-1 !py-2.5" disabled={busy} onClick={() => runMock('success')}>
-              {busy ? 'Processing…' : 'Simulate successful payment'}
+          <div className="flex gap-2 mt-3">
+            <button className="btn-primary flex-1" data-loading={busy ? 'true' : undefined} disabled={busy} onClick={() => runMock('success')}>
+              Simulate success
             </button>
-            <button className="btn flex-1 !py-2.5" disabled={busy} onClick={() => runMock('failure')}>Simulate failure</button>
+            <button className="btn flex-1" disabled={busy} onClick={() => runMock('failure')}>Simulate failure</button>
           </div>
         </div>
       ) : (
-        <button className="btn-primary w-full !py-3" disabled={busy} onClick={runRazorpay}>
-          {busy ? 'Opening secure checkout…' : 'Pay now'}
+        <button className="btn-primary btn-lg btn-block" data-loading={busy ? 'true' : undefined} disabled={busy} onClick={runRazorpay}>
+          Pay {order.currency === 'INR' ? '₹' : `${order.currency} `}{order.amount.toLocaleString('en-IN')}
         </button>
       )}
 
-      {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
-      {onCancel && <button className="btn-ghost w-full" onClick={onCancel} disabled={busy}>Cancel</button>}
+      {err && (
+        <div className="field-error" role="alert" style={{ marginTop: 0 }}>{err}</div>
+      )}
+      {onCancel && <button className="btn-ghost btn-block" onClick={onCancel} disabled={busy}>Cancel</button>}
+
+      {/* Trust cue: people abandon checkouts that don't say who is handling
+          the money. One quiet line, not a badge farm. */}
+      <p className="t-sub text-center" style={{ fontSize: '.6875rem' }}>
+        Payments are verified server-side. SK OS never stores your card details.
+      </p>
     </div>
   );
 }

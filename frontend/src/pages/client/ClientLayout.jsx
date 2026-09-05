@@ -11,6 +11,7 @@ import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
+import { Avatar } from '../../components/UI.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -32,20 +33,34 @@ const NAV = [
   { to: '/app/client/progress', label: 'Progress', icon: 'trending' },
 ];
 
+/* Grouped, because a flat list of eight rows makes the reader scan all
+   eight to find one. The groups are "who I am" / "what I use" / "how it
+   behaves", which is also the order people look for them in.
+   ── 'Measurements' and 'Goals' used to point at bare /app/client/profile,
+   the same destination as 'Profile' itself: three rows, one landing place,
+   so two of them silently lied about where they'd take you. Profile drives
+   its panels off internal `activeSection` state, so they now carry the
+   section in the URL (?section=…) and Profile opens it directly. */
 const PROFILE_MENU = [
-  { to: '/app/client/profile', label: 'Profile', icon: 'user' },
-  { to: '/app/client/profile', label: 'Measurements', icon: 'ruler' },
-  { to: '/app/client/profile', label: 'Goals', icon: 'target' },
-  { to: '/app/client/nutrition-tracker', label: 'Nutrition Tracker', icon: 'food' },
-  { to: '/app/client/membership', label: 'Membership', icon: 'clipboard' },
-  // Was '⚙️'/'❓' -- literal emoji, neither a key in Icon.jsx's PATHS table,
-  // same bug class this file's own comment above already flags as fixed
-  // at 9 other sites. 'bulb' has no dedicated question-mark glyph in the
-  // shared icon set; it's the closest semantic fit ("here's something to
-  // know") rather than adding a one-off icon for a single menu row.
-  { to: '/app/client/community', label: 'Community', icon: 'users' },
-  { to: '/app/client/settings', label: 'Settings', icon: 'settings' },
-  { to: '/app/client/help', label: 'Help', icon: 'bulb' },
+  [
+    { to: '/app/client/profile', label: 'Profile', icon: 'user' },
+    { to: '/app/client/profile?section=metrics', label: 'Measurements', icon: 'ruler' },
+    { to: '/app/client/profile?section=goal', label: 'Goals', icon: 'target' },
+  ],
+  [
+    { to: '/app/client/nutrition-tracker', label: 'Nutrition tracker', icon: 'food' },
+    { to: '/app/client/membership', label: 'Membership', icon: 'clipboard' },
+    { to: '/app/client/community', label: 'Community', icon: 'users' },
+  ],
+  [
+    { to: '/app/client/settings', label: 'Settings', icon: 'settings' },
+    // Was '⚙️'/'❓' -- literal emoji, neither a key in Icon.jsx's PATHS
+    // table, same bug class this file's own comment above already flags as
+    // fixed at 9 other sites. 'bulb' has no dedicated question-mark glyph
+    // in the shared icon set; it's the closest semantic fit ("here's
+    // something to know") rather than adding a one-off icon for one row.
+    { to: '/app/client/help', label: 'Help', icon: 'bulb' },
+  ],
 ];
 
 export default function ClientLayout() {
@@ -133,94 +148,69 @@ export default function ClientLayout() {
   return (
     <div className="min-h-screen max-w-lg mx-auto px-4 pb-28 pt-0">
       {/* ── TOP HEADER ── */}
-      <header
-        className="sticky top-0 z-40 backdrop-blur-md border-b px-1 pt-3 pb-2"
-        style={{
-          backgroundColor: 'color-mix(in srgb, var(--bg) 92%, transparent)',
-          borderColor: 'var(--line)',
-        }}
-      >
-        <div className="flex items-center justify-between">
+      <header className="app-header px-1">
+        <div className="flex items-center justify-between gap-2">
           {/* LEFT: Profile button */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((v) => !v)}
               data-tour="header-profile"
-              className="flex items-center gap-2 py-1.5 px-2 rounded-xl transition-colors"
-              style={{ color: 'var(--ink)' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.08)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              className="chrome-btn gap-2 py-1.5 px-2"
               aria-expanded={dropdownOpen}
+              aria-haspopup="menu"
               aria-label="Profile menu"
             >
-              <div
-                className="w-8 h-8 rounded-full grid place-items-center font-grotesk font-bold text-xs border shrink-0 overflow-hidden"
-                style={{ background: user?.avatar ? 'none' : 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.06))', borderColor: 'var(--line)' }}
-              >
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{user?.name?.[0]?.toUpperCase() || '?'}</span>
-                )}
-              </div>
+              <Avatar name={user?.name} src={user?.avatar} size={30} />
               <div className="hidden sm:flex flex-col items-start">
                 <span className="font-grotesk text-[11px] font-semibold leading-none" style={{ color: 'var(--ink)' }}>{user?.name?.split(' ')[0]}</span>
                 <span className="text-[9px] mt-0.5" style={{ color: 'var(--faint)' }}>Profile</span>
               </div>
-              <svg className={`w-3 h-3 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="var(--faint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg className={`w-3 h-3 shrink-0 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 4.5L6 7.5L9 4.5" />
               </svg>
             </button>
 
             {/* ── PROFILE DROPDOWN ── */}
             {dropdownOpen && (
-              <div className="absolute left-0 top-full mt-1 w-56 rounded-2xl border overflow-hidden anim-scaleIn z-50 card" style={{ borderColor: 'var(--line)' }}>
-                {/* User info */}
-                <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--line)' }}>
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full grid place-items-center font-grotesk font-bold text-sm border"
-                      style={{ background: 'linear-gradient(135deg, var(--accent-soft), rgba(200,169,138,.06))', borderColor: 'var(--line)' }}
-                    >
-                      {user?.name?.[0]?.toUpperCase() || '?'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-grotesk text-sm font-bold truncate" style={{ color: 'var(--ink)' }}>{user?.name || 'User'}</div>
-                      <div className="text-[10px] truncate" style={{ color: 'var(--faint)' }}>{user?.email || ''}</div>
-                    </div>
+              <div role="menu" className="absolute left-0 top-full mt-1.5 w-60 overflow-hidden anim-scaleIn z-50 card !p-0"
+                style={{ borderRadius: 'var(--r-lg)', boxShadow: 'var(--e-3)' }}>
+                {/* Identity — who you're signed in as, before any action */}
+                <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid var(--line)' }}>
+                  <Avatar name={user?.name} src={user?.avatar} size={38} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-grotesk text-[13px] font-bold truncate" style={{ color: 'var(--ink)' }}>{user?.name || 'User'}</div>
+                    <div className="text-[10.5px] truncate mt-0.5" style={{ color: 'var(--faint)' }}>{user?.email || ''}</div>
                   </div>
                 </div>
 
-                {/* Menu items */}
-                <div className="py-1.5">
-                  {PROFILE_MENU.map((item, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleMenuClick(item)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-                      style={{
-                        color: 'var(--ink)',
-                        background: loc.pathname === item.to && item.label === 'Profile' ? 'rgba(128,128,128,.06)' : 'transparent',
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(128,128,128,.08)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = loc.pathname === item.to && item.label === 'Profile' ? 'rgba(128,128,128,.06)' : 'transparent'}
-                    >
-                      <span className="w-5 grid place-items-center"><Icon name={item.icon} size={16} /></span>
-                      <span className="font-grotesk text-[13px]">{item.label}</span>
-                    </button>
-                  ))}
-                </div>
+                {PROFILE_MENU.map((group, gi) => (
+                  <div key={gi} className="py-1" style={gi > 0 ? { borderTop: '1px solid var(--line)' } : undefined}>
+                    {group.map((item) => (
+                      <button
+                        key={item.label}
+                        role="menuitem"
+                        onClick={() => handleMenuClick(item)}
+                        className="menu-row"
+                        aria-current={loc.pathname + loc.search === item.to ? 'page' : undefined}
+                      >
+                        <span className="menu-icon"><Icon name={item.icon} size={16} /></span>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
 
-                {/* Logout */}
-                <div className="py-1.5" style={{ borderTop: '1px solid var(--line)' }}>
-                  <button
-                    onClick={logout}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors text-bad/80 hover:text-bad"
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(248,113,113,.06)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span className="text-sm w-5 text-center">⏻</span>
-                    <span className="font-grotesk text-[13px]">Sign out</span>
+                <div className="py-1" style={{ borderTop: '1px solid var(--line)' }}>
+                  <button role="menuitem" onClick={logout} className="menu-row menu-row-danger">
+                    {/* Was '⏻' — a Unicode power symbol next to eight real
+                        SVG icons, rendering at a different weight and
+                        baseline than every row above it. */}
+                    <span className="menu-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                      </svg>
+                    </span>
+                    Sign out
                   </button>
                 </div>
               </div>
@@ -229,26 +219,24 @@ export default function ClientLayout() {
 
           {/* CENTER: SK OS branding */}
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="SK OS" className="w-7 h-7 rounded-lg object-cover" />
-            <span className="font-brand text-[13px] font-bold leading-none tracking-wide" style={{ color: 'var(--ink)' }}>SK OS</span>
+            <img src="/logo.png" alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
+            <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>SK OS</span>
           </div>
 
           {/* RIGHT: Coach notification */}
           <button
             onClick={() => setCoachOpen(true)}
-            className="relative flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-colors"
-            style={{ color: 'var(--mute)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(128,128,128,.08)'; e.currentTarget.style.color = 'var(--ink)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--mute)'; }}
-            aria-label="Coach brief"
+            className="chrome-btn relative gap-1.5 py-1.5 px-2.5"
+            aria-label={hasBrief && briefPriority ? 'Coach brief — new' : 'Coach brief'}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
             </svg>
-            <span className="hidden sm:block font-grotesk text-[11px]">Coach</span>
+            <span className="hidden sm:block font-grotesk text-[11px] font-medium">Coach</span>
             {hasBrief && briefPriority && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-gold anim-pulse-soft" />
+              <span aria-hidden="true" className="absolute top-0.5 right-1 w-2 h-2 rounded-full anim-pulse-soft"
+                style={{ background: 'var(--accent)', boxShadow: '0 0 0 2px rgb(var(--bg-rgb))' }} />
             )}
           </button>
         </div>
@@ -304,8 +292,7 @@ export default function ClientLayout() {
           demo's floating pill: this is a persistent mobile tab bar,
           not a desktop dock, and it needs to keep working with zero
           hover capability at all on a touchscreen. ── */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderColor: 'var(--line)' }}
+      <nav className="app-tabbar" aria-label="Main"
         onMouseMove={(e) => bottomNavMouseX.set(e.clientX)}
         onMouseLeave={() => bottomNavMouseX.set(Infinity)}>
         <div data-tour="bottom-nav" className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">

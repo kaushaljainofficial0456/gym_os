@@ -6,6 +6,7 @@ import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import './../components/BorderGlow.css';
+import { PasswordInput } from '../components/UI.jsx';
 
 // Client self-signup -- the "New to SK OS?" path off Login. Asks for
 // name/email/password, and an OPTIONAL gym code: goal, weight, height
@@ -93,31 +94,31 @@ export default function SignUp() {
 
             <form onSubmit={submit} className="space-y-3">
               <div>
-                <label htmlFor="name" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Full name</label>
-                <input id="name" className="input mt-1" type="text" value={name} onChange={(e) => setName(e.target.value)}
+                <label htmlFor="name" className="field-label">Full name</label>
+                <input id="name" className="input mt-1.5" type="text" value={name} onChange={(e) => setName(e.target.value)}
                   placeholder="Rahul Sharma" required autoFocus />
               </div>
               <div>
-                <label htmlFor="signup-email" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
-                <input id="signup-email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                <label htmlFor="signup-email" className="field-label">Email</label>
+                <input id="signup-email" className="input mt-1.5" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com" required />
               </div>
               <div>
-                <label htmlFor="signup-password" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
-                <input id="signup-password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                <label htmlFor="signup-password" className="field-label">Password</label>
+                <PasswordInput id="signup-password" className="mt-1.5" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters" required minLength={6} />
               </div>
               <div>
-                <label htmlFor="gymCode" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Gym code <span style={{ color: 'var(--faint)' }}>(optional)</span></label>
-                <input id="gymCode" className="input mt-1" type="text" value={gymCode} onChange={(e) => setGymCode(e.target.value)}
+                <label htmlFor="gymCode" className="field-label">Gym code <span style={{ color: 'var(--faint)' }}>(optional)</span></label>
+                <input id="gymCode" className="input mt-1.5" type="text" value={gymCode} onChange={(e) => setGymCode(e.target.value)}
                   placeholder="Have a code? Enter it — or leave blank" />
                 <p className="text-[11px] mt-1" style={{ color: 'var(--faint)' }}>
                   No code yet? Leave this blank — you'll scan your gym's QR code right after signing up.
                 </p>
               </div>
-              {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
+              {err && <div role="alert" className="field-error anim-fadeIn">{err}</div>}
               <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
-                <button className="btn-primary w-full !py-3" disabled={busy}>
+                <button className="btn-primary btn-lg btn-block" disabled={busy}>
                   {busy ? 'Creating account…' : 'Create account'}
                 </button>
               </BorderGlow>

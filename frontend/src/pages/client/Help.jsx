@@ -132,7 +132,7 @@ export default function Help() {
 
       <div className="card p-5">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl grid place-items-center border" style={{ background: 'linear-gradient(135deg, rgba(10,138,133,.2), rgba(20,196,188,.1))', borderColor: 'var(--line)' }}>
+          <div className="w-10 h-10 rounded-xl grid place-items-center border" style={{ background: 'linear-gradient(135deg, rgb(var(--accent-deep-rgb) / .2), rgb(var(--accent-rgb) / .1))', borderColor: 'var(--line)' }}>
 
           </div>
           <div className="flex-1">

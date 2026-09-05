@@ -10,6 +10,7 @@ import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
 import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
+import { CheckIcon } from './UI.jsx';
 
 const T = {
   dark: {
@@ -176,7 +177,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
 
           {confirmed && (
             <div className="text-center py-8">
-              <div className="w-14 h-14 mx-auto rounded-full grid place-items-center text-2xl mb-3" style={{ background: t.accentDim, border: `1px solid ${t.accent}40` }}>✓</div>
+              <div className="w-14 h-14 mx-auto rounded-full grid place-items-center text-2xl mb-3" style={{ background: t.accentDim, border: `1px solid ${t.accent}40` }}><CheckIcon /></div>
               <div className="font-grotesk font-bold" style={{ color: t.accent }}>Targets confirmed!</div>
               <div className="text-[11px] mt-1" style={{ color: t.mute }}>Redirecting to your nutrition dashboard…</div>
             </div>

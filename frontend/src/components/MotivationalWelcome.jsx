@@ -22,8 +22,8 @@ export default function MotivationalWelcome({ onComplete }) {
 
   const bgColor = isDark ? brand.dark.bg : brand.light.bg;
   const textColor = isDark ? 'rgba(240,244,243,.88)' : 'rgba(61,48,38,.88)';
-  const accentGlow = isDark ? 'rgba(20,196,188,.30)' : 'rgba(140,106,77,.12)';
-  const accentGlow2 = isDark ? 'rgba(10,138,133,.35)' : 'rgba(177,134,99,.08)';
+  const accentGlow = isDark ? 'rgb(var(--accent-rgb) / .30)' : 'rgba(140,106,77,.12)';
+  const accentGlow2 = isDark ? 'rgb(var(--accent-deep-rgb) / .35)' : 'rgba(177,134,99,.08)';
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden"
@@ -54,7 +54,7 @@ export default function MotivationalWelcome({ onComplete }) {
 
         {/* subtle divider */}
         <div className="mt-8 w-12 h-[1.5px] rounded-full"
-             style={{ background: `linear-gradient(90deg, transparent, ${isDark ? 'rgba(20,196,188,.45)' : 'rgba(140,106,77,.25)'}, transparent)` }} />
+             style={{ background: `linear-gradient(90deg, transparent, ${isDark ? 'rgb(var(--accent-rgb) / .45)' : 'rgba(140,106,77,.25)'}, transparent)` }} />
       </div>
     </div>
   );

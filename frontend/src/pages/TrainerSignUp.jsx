@@ -5,6 +5,7 @@ import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import './../components/BorderGlow.css';
+import { PasswordInput } from '../components/UI.jsx';
 
 // Self-serve TRAINER signup -- the QR-based counterpart to a gym owner
 // creating a trainer account for someone directly. No gym code: a
@@ -74,20 +75,20 @@ export default function TrainerSignUp() {
 
             <form onSubmit={submit} className="space-y-3">
               <div>
-                <label htmlFor="tname" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Full name</label>
-                <input id="tname" className="input mt-1" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Arjun Mehta" required autoFocus />
+                <label htmlFor="tname" className="field-label">Full name</label>
+                <input id="tname" className="input mt-1.5" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Arjun Mehta" required autoFocus />
               </div>
               <div>
-                <label htmlFor="temail" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Email</label>
-                <input id="temail" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+                <label htmlFor="temail" className="field-label">Email</label>
+                <input id="temail" className="input mt-1.5" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
               </div>
               <div>
-                <label htmlFor="tpassword" className="text-[11px] uppercase tracking-wider font-grotesk" style={{ color: 'var(--mute)' }}>Password</label>
-                <input id="tpassword" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" required minLength={6} />
+                <label htmlFor="tpassword" className="field-label">Password</label>
+                <PasswordInput id="tpassword" className="mt-1.5" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" required minLength={6} />
               </div>
-              {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5 anim-fadeIn">{err}</div>}
+              {err && <div role="alert" className="field-error anim-fadeIn">{err}</div>}
               <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
-                <button className="btn-primary w-full !py-3" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
+                <button className="btn-primary btn-lg btn-block" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
               </BorderGlow>
             </form>
 
