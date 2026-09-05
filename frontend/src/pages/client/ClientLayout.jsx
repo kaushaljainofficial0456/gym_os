@@ -11,6 +11,7 @@ import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
+import NotificationBell from '../../components/NotificationBell.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -233,7 +234,9 @@ export default function ClientLayout() {
             <span className="font-brand text-[13px] font-bold leading-none tracking-wide" style={{ color: 'var(--ink)' }}>SK OS</span>
           </div>
 
-          {/* RIGHT: Coach notification */}
+          {/* RIGHT: Notification bell + Coach */}
+          <div className="flex items-center gap-1">
+          <NotificationBell />
           <button
             onClick={() => setCoachOpen(true)}
             className="relative flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-colors"
@@ -251,6 +254,7 @@ export default function ClientLayout() {
               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-gold anim-pulse-soft" />
             )}
           </button>
+          </div>
         </div>
       </header>
 

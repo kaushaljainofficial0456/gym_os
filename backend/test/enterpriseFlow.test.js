@@ -39,7 +39,7 @@ async function memDb() {
   db.exec(`ALTER TABLE trainers ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE'`);
   db.exec(`ALTER TABLE packages ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`);
   for (const ddl of ['data_json TEXT', `channel TEXT NOT NULL DEFAULT 'in_app'`]) {
-    db.exec(`ALTER TABLE notifications ADD COLUMN ${ddl}`);
+    try { db.exec(`ALTER TABLE notifications ADD COLUMN ${ddl}`); } catch {}
   }
   db.exec(`ALTER TABLE subscriptions ADD COLUMN lifecycle_status TEXT CHECK (lifecycle_status IN ('PENDING_PAYMENT','ACTIVE','PAUSED','SUSPENDED','EXPIRED','CANCELLED','REFUND_PENDING','REFUNDED','TRANSFERRED'))`);
   const mk = () => ({

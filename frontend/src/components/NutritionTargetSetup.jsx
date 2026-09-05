@@ -1,15 +1,20 @@
 /**
- * NutritionTargetSetup — shown when a client first reaches Nutrition
- * without an active nutrition plan. Displays calculated targets
- * and allows confirmation.
+ * NutritionTargetSetup ΓÇö dual-mode component:
+ *
+ * 1. FIRST-TIME SETUP: shown when a client first reaches Nutrition
+ *    without an active nutrition plan. Displays calculated targets
+ *    and allows confirmation (POST /me/nutrition/targets/confirm).
+ *
+ * 2. EDIT MODE: shown when the client taps the edit icon next to
+ *    their existing calorie target. Allows manual override (PUT /me/nutrition/targets)
+ *    and reset to calculated values.
  *
  * Zero new dependencies.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
-import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
 
 const T = {
   dark: {
@@ -20,8 +25,6 @@ const T = {
     protein: '#FF8C42', carbs: '#FFD166', fat: '#4ECDC4',
   },
   light: {
-    // surface was rgba(0,0,0,0.03) -- a near-invisible tint over the peach
-    // page background. var(--panel) matches the app's actual white .card.
     bg: 'var(--bg)', surface: 'var(--panel)', glass: 'rgba(255,255,255,0.6)',
     border: 'var(--line)', ink: 'var(--ink)', mute: 'var(--mute)',
     faint: 'var(--faint)', accent: 'var(--accent)', accentDim: 'var(--accent-soft)',
@@ -30,12 +33,18 @@ const T = {
   },
 };
 
-function AnimatedNumber({ value, t, suffix = '' }) {
+function AnimatedNumber({ value, t }) {
   const anim = useCountUp(value, 1000);
-  return <span style={{ color: t.ink }}>{anim.toLocaleString()}{suffix}</span>;
+  return <span style={{ color: t.ink }}>{anim.toLocaleString()}</span>;
 }
 
-export default function NutritionTargetSetup({ open, onComplete }) {
+/**
+ * @param {boolean} open - whether the modal is visible
+ * @param {function} onComplete - called after successful save
+ * @param {object|null} currentPlan - existing plan { calories, protein, carbs, fat, name } when editing
+ * @param {boolean} isEdit - true when editing an existing plan (vs first-time setup)
+ */
+export default function NutritionTargetSetup({ open, onComplete, currentPlan = null, isEdit = false }) {
   const { theme } = useTheme();
   const t = T[theme] || T.dark;
   const [targets, setTargets] = useState(null);
@@ -45,17 +54,14 @@ export default function NutritionTargetSetup({ open, onComplete }) {
   const [confirmed, setConfirmed] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  // Editable values -- calories is intentionally NOT its own state. It's
-  // a LIVE-DERIVED value (protein×4 + carbs×4 + fat×9, the canonical 4/4/9
-  // rule -- see nutritionCalc.js) so it can never drift out of sync with
-  // whatever the user actually typed into the macro fields below, which
-  // is exactly the bug this used to have: calories was a fourth
-  // independent number that silently stopped updating the moment any
-  // macro changed, right up until it was saved as-is.
+  // Editable values
+  const [calories, setCalories] = useState(0);
   const [protein, setProtein] = useState(0);
   const [carbs, setCarbs] = useState(0);
   const [fat, setFat] = useState(0);
-  const calories = useMemo(() => calculateCaloriesFromMacros({ protein, carbs, fat }), [protein, carbs, fat]);
+
+  // Track whether the current plan is manual or calculated
+  const isManual = currentPlan?.name?.includes('(Manual)');
 
   useEffect(() => {
     if (!open) return;
@@ -63,6 +69,8 @@ export default function NutritionTargetSetup({ open, onComplete }) {
     setError(null);
     setSaveError(null);
     setConfirmed(false);
+
+    // Always fetch calculated targets for the "Reset to calculated" feature
     api('/me/nutrition/targets')
       .then((res) => {
         if (res.incomplete) {
@@ -70,34 +78,94 @@ export default function NutritionTargetSetup({ open, onComplete }) {
           return;
         }
         setTargets(res.targets);
-        setProtein(res.targets.protein);
-        setCarbs(res.targets.carbs);
-        setFat(res.targets.fat);
+
+        // In edit mode, start with the current plan values; otherwise use calculated
+        if (isEdit && currentPlan) {
+          setCalories(currentPlan.calories || res.targets.calories);
+          setProtein(currentPlan.protein || res.targets.protein);
+          setCarbs(currentPlan.carbs || res.targets.carbs);
+          setFat(currentPlan.fat || res.targets.fat);
+        } else {
+          setCalories(res.targets.calories);
+          setProtein(res.targets.protein);
+          setCarbs(res.targets.carbs);
+          setFat(res.targets.fat);
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, isEdit, currentPlan?.calories]);
 
-  const handleConfirm = async () => {
+  const handleSave = async () => {
+    // Validation
+    if (!calories || calories < 500 || calories > 10000) {
+      setSaveError('Please enter a valid daily calorie target (500ΓÇô10,000).');
+      return;
+    }
+    if (!protein || protein < 20 || protein > 500) {
+      setSaveError('Please enter valid protein (20ΓÇô500g).');
+      return;
+    }
+    if (!carbs || carbs < 20 || carbs > 800) {
+      setSaveError('Please enter valid carbs (20ΓÇô800g).');
+      return;
+    }
+    if (!fat || fat < 15 || fat > 300) {
+      setSaveError('Please enter valid fat (15ΓÇô300g).');
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
-      // `calories` is never sent -- the backend derives it itself from
-      // these same three numbers via the identical 4/4/9 formula, the
-      // one canonical place that calculation happens server-side. Sending
-      // it here would just be a value the server ignores.
-      await api('/me/nutrition/targets/confirm', {
-        method: 'POST',
-        body: JSON.stringify({ protein, carbs, fat }),
-      });
+      if (isEdit) {
+        // Update existing plan ΓÇö mark as manual
+        await api('/me/nutrition/targets', {
+          method: 'PUT',
+          body: JSON.stringify({
+            calories, protein, carbs, fat,
+            name: 'My Nutrition Plan (Manual)',
+          }),
+        });
+      } else {
+        // First-time setup ΓÇö create new plan
+        await api('/me/nutrition/targets/confirm', {
+          method: 'POST',
+          body: JSON.stringify({ calories, protein, carbs, fat }),
+        });
+      }
       setConfirmed(true);
       setTimeout(() => onComplete(), 1200);
     } catch (e) {
-      // Separate from `error` (the initial-load failure state, which hides
-      // the whole editor) -- a save failure here must leave the editor and
-      // Confirm button visible so the user can see what went wrong and
-      // retry, instead of the UI going silently unresponsive.
       setSaveError(e.message || 'Could not save targets');
+    }
+    setSaving(false);
+  };
+
+  const handleReset = async () => {
+    if (!targets) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      // Reset to calculated values ΓÇö mark as automatic
+      await api('/me/nutrition/targets', {
+        method: 'PUT',
+        body: JSON.stringify({
+          calories: targets.calories,
+          protein: targets.protein,
+          carbs: targets.carbs,
+          fat: targets.fat,
+          name: 'My Nutrition Plan',
+        }),
+      });
+      setCalories(targets.calories);
+      setProtein(targets.protein);
+      setCarbs(targets.carbs);
+      setFat(targets.fat);
+      setConfirmed(true);
+      setTimeout(() => onComplete(), 1200);
+    } catch (e) {
+      setSaveError(e.message || 'Could not reset targets');
     }
     setSaving(false);
   };
@@ -111,8 +179,14 @@ export default function NutritionTargetSetup({ open, onComplete }) {
         {/* Header */}
         <div className="px-6 pt-6 pb-2">
           <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Nutrition Targets</div>
-          <div className="font-grotesk text-lg font-bold mt-1" style={{ color: t.ink }}>Your Daily Targets</div>
-          <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>Calculated from your profile and goal. You can adjust these.</div>
+          <div className="font-grotesk text-lg font-bold mt-1" style={{ color: t.ink }}>
+            {isEdit ? 'Edit Daily Targets' : 'Your Daily Targets'}
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>
+            {isEdit
+              ? 'Adjust your daily calorie and macro targets.'
+              : 'Calculated from your profile and goal. You can adjust these.'}
+          </div>
         </div>
 
         {/* Body */}
@@ -120,7 +194,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
           {loading && (
             <div className="text-center py-10">
               <div className="w-8 h-8 mx-auto rounded-full border-2 animate-spin mb-3" style={{ borderColor: t.border, borderTopColor: t.accent }} />
-              <div className="text-[11px]" style={{ color: t.mute }}>Calculating your targets…</div>
+              <div className="text-[11px]" style={{ color: t.mute }}>Loading targetsΓÇª</div>
             </div>
           )}
 
@@ -132,20 +206,23 @@ export default function NutritionTargetSetup({ open, onComplete }) {
 
           {targets && !loading && !confirmed && (
             <div className="space-y-4">
-              {/* Calories — large display */}
-              <div className="text-center py-4 rounded-2xl" style={{ background: t.accentDim, border: `1px solid ${t.accent}25` }}>
-                <div className="font-grotesk font-bold" style={{ fontSize: 42, color: t.accent, letterSpacing: '-0.02em' }}>
-                  <AnimatedNumber value={calories} t={t} />
-                </div>
-                <div className="font-grotesk text-[11px] mt-1" style={{ color: t.mute }}>kcal per day</div>
+              {/* Manual / Recommended badge */}
+              <div className="flex justify-center">
+                <span className="font-grotesk text-[9px] uppercase tracking-[.12em] px-2 py-0.5 rounded-full"
+                  style={isManual
+                    ? { background: `${t.gold}15`, color: t.gold, border: `1px solid ${t.gold}30` }
+                    : { background: `${t.accent}10`, color: t.accent, border: `1px solid ${t.accent}20` }}>
+                  {isManual ? 'Manual target' : 'Recommended'}
+                </span>
               </div>
 
-              {/* Macros — editable */}
+              {/* All macros ΓÇö editable including calories */}
               <div className="space-y-3">
                 {[
-                  { label: 'Protein', value: protein, set: setProtein, color: t.protein, unit: 'g' },
-                  { label: 'Carbs', value: carbs, set: setCarbs, color: t.carbs, unit: 'g' },
-                  { label: 'Fat', value: fat, set: setFat, color: t.fat, unit: 'g' },
+                  { label: 'Calories', value: calories, set: setCalories, color: t.accent, unit: 'kcal', min: 500 },
+                  { label: 'Protein', value: protein, set: setProtein, color: t.protein, unit: 'g', min: 15 },
+                  { label: 'Carbs', value: carbs, set: setCarbs, color: t.carbs, unit: 'g', min: 15 },
+                  { label: 'Fat', value: fat, set: setFat, color: t.fat, unit: 'g', min: 15 },
                 ].map((m) => (
                   <div key={m.label} className="flex items-center gap-3">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m.color }} />
@@ -158,7 +235,7 @@ export default function NutritionTargetSetup({ open, onComplete }) {
                         className="w-16 text-right px-2 py-1.5 rounded-lg font-grotesk text-sm font-bold outline-none"
                         style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}
                         value={m.value}
-                        onChange={(e) => m.set(Math.max(15, Number(e.target.value) || 0))}
+                        onChange={(e) => m.set(Math.max(m.min || 15, Number(e.target.value) || 0))}
                       />
                       <span className="font-grotesk text-[10px]" style={{ color: t.mute }}>{m.unit}</span>
                     </div>
@@ -176,18 +253,18 @@ export default function NutritionTargetSetup({ open, onComplete }) {
 
           {confirmed && (
             <div className="text-center py-8">
-              <div className="w-14 h-14 mx-auto rounded-full grid place-items-center text-2xl mb-3" style={{ background: t.accentDim, border: `1px solid ${t.accent}40` }}>✓</div>
-              <div className="font-grotesk font-bold" style={{ color: t.accent }}>Targets confirmed!</div>
-              <div className="text-[11px] mt-1" style={{ color: t.mute }}>Redirecting to your nutrition dashboard…</div>
+              <div className="w-14 h-14 mx-auto rounded-full grid place-items-center text-2xl mb-3" style={{ background: t.accentDim, border: `1px solid ${t.accent}40` }}>Γ£ô</div>
+              <div className="font-grotesk font-bold" style={{ color: t.accent }}>Targets saved!</div>
+              <div className="text-[11px] mt-1" style={{ color: t.mute }}>Redirecting to your nutrition dashboardΓÇª</div>
             </div>
           )}
         </div>
 
         {/* Actions */}
         {targets && !loading && !confirmed && (
-          <div className="px-6 pb-6 flex gap-3">
-            <button onClick={handleConfirm} disabled={saving}
-              className="flex-1 py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"
+          <div className="px-6 pb-6 space-y-2">
+            <button onClick={handleSave} disabled={saving}
+              className="w-full py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"
               style={{
                 background: saving ? t.surface : t.accent,
                 color: saving ? t.mute : 'var(--accent-contrast)',
@@ -195,8 +272,21 @@ export default function NutritionTargetSetup({ open, onComplete }) {
                 opacity: saving ? 0.5 : 1,
                 cursor: saving ? 'not-allowed' : 'pointer',
               }}>
-              {saving ? 'Saving…' : 'Confirm Targets'}
+              {saving ? 'SavingΓÇª' : isEdit ? 'Save Changes' : 'Confirm Targets'}
             </button>
+
+            {/* Reset to calculated ΓÇö only shown in edit mode when plan is manual */}
+            {isEdit && isManual && (
+              <button onClick={handleReset} disabled={saving}
+                className="w-full py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-[.97]"
+                style={{
+                  background: 'transparent',
+                  color: t.mute,
+                  border: `1px solid ${t.border}`,
+                }}>
+                Reset to calculated
+              </button>
+            )}
           </div>
         )}
       </div>

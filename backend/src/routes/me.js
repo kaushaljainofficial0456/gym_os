@@ -303,6 +303,42 @@ export default function meRoutes(db) {
     res.json({ ok: true, plan: { calories: cal, protein: values.protein, carbs: values.carbs, fat: values.fat } });
   });
 
+  // Update the client's most-recent nutrition plan (manual calorie override)
+  r.put('/nutrition/targets', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { calories, protein, carbs, fat, name } = req.body || {};
+    if (!calories || !protein || !carbs || !fat) {
+      return res.status(400).json({ error: 'All macro fields are required' });
+    }
+    const cal = Math.max(500, Math.min(Number(calories), 10000));
+    const pro = Math.max(20, Math.min(Number(protein), 500));
+    const carb = Math.max(20, Math.min(Number(carbs), 800));
+    const fatV = Math.max(15, Math.min(Number(fat), 300));
+    const planName = name || 'My Nutrition Plan';
+
+    // Find the client's most-recent non-template plan
+    const existing = await db.q1(
+      'SELECT id FROM nutrition_plans WHERE client_id = ? AND is_template = 0 ORDER BY created_at DESC LIMIT 1',
+      [c.id]
+    );
+    if (existing) {
+      await db.run(
+        'UPDATE nutrition_plans SET calories = ?, protein = ?, carbs = ?, fat = ?, name = ? WHERE id = ?',
+        [cal, pro, carb, fatV, planName, existing.id]
+      );
+    } else {
+      // No plan yet — create one
+      const id = 'np_' + Math.random().toString(36).slice(2, 10);
+      await db.run(
+        `INSERT INTO nutrition_plans (id, org_id, trainer_id, client_id, name, calories, protein, carbs, fat, is_template, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+        [id, c.org_id, req.user.sub, c.id, planName, cal, pro, carb, fatV, now()]
+      );
+    }
+    track(db, 'nutrition_plan_updated', req.user.org, req.user.sub, { client_id: c.id });
+    res.json({ ok: true, plan: { calories: cal, protein: pro, carbs: carb, fat: fatV, name: planName } });
+  });
+
   // ---------------- dashboard preferences ----------------
   r.get('/dashboard', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;

@@ -221,7 +221,7 @@ export default function Profile() {
       const c = profile.data.client, p = profile.data.profile || {};
       let eq = [];
       try { eq = p.equipment ? JSON.parse(p.equipment) : (c.equipment ? JSON.parse(c.equipment) : []); } catch { eq = []; }
-      setGForm({ goal: c.goal, targetWeight: c.target_weight, goalDate: c.goal_date || '', experience: p.experience || 'INTERMEDIATE', equipment: eq });
+      setGForm({ goal: c.goal, targetWeight: c.target_weight, goalDate: c.goal_date || '', experience: p.experience || 'INTERMEDIATE', equipment: eq, heightCm: c.height_cm ?? '', currentWeight: c.current_weight ?? '', age: c.age ?? '', sex: c.sex || '' });
     }
   }, [profile.data]);
 
@@ -345,9 +345,17 @@ export default function Profile() {
     if (!gForm) return;
     setSavingG(true);
     try {
+      // Validate physical profile fields before saving
+      const heightVal = gForm.heightCm !== '' && gForm.heightCm != null ? Number(gForm.heightCm) : null;
+      const weightVal = gForm.currentWeight !== '' && gForm.currentWeight != null ? Number(gForm.currentWeight) : null;
+      const ageVal = gForm.age !== '' && gForm.age != null ? Number(gForm.age) : null;
+      if (heightVal !== null && (heightVal < 100 || heightVal > 250)) { setToast('Height must be between 100–250 cm'); setSavingG(false); return; }
+      if (weightVal !== null && (weightVal < 20 || weightVal > 400)) { setToast('Weight must be between 20–400 kg'); setSavingG(false); return; }
+      if (ageVal !== null && (ageVal < 10 || ageVal > 120)) { setToast('Age must be between 10–120'); setSavingG(false); return; }
       await api('/me/profile', { method: 'PUT', body: JSON.stringify({
         goal: gForm.goal, target_weight: Number(gForm.targetWeight) || null,
-        goal_date: gForm.goalDate || null, experience: gForm.experience, equipment: gForm.equipment
+        goal_date: gForm.goalDate || null, experience: gForm.experience, equipment: gForm.equipment,
+        height_cm: heightVal, current_weight: weightVal, age: ageVal, sex: gForm.sex || null
       }) });
       home.reload({ silent: true });
       setToast('Goal updated');
@@ -411,6 +419,31 @@ export default function Profile() {
                           className={`chip ${gForm.experience === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
                       ))}
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[10px] text-faint font-grotesk">HEIGHT (CM)</span>
+                      <input type="number" className="input mt-1" placeholder="170" value={gForm.heightCm ?? ''} onChange={(e) => setGForm((f) => ({ ...f, heightCm: e.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-faint font-grotesk">CURRENT WEIGHT (KG)</span>
+                      <input type="number" className="input mt-1" placeholder="75" value={gForm.currentWeight ?? ''} onChange={(e) => setGForm((f) => ({ ...f, currentWeight: e.target.value }))} />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[10px] text-faint font-grotesk">AGE</span>
+                      <input type="number" className="input mt-1" placeholder="25" value={gForm.age ?? ''} onChange={(e) => setGForm((f) => ({ ...f, age: e.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-faint font-grotesk">SEX</span>
+                      <select className="input mt-1" value={gForm.sex || ''} onChange={(e) => setGForm((f) => ({ ...f, sex: e.target.value }))}>
+                        <option value="">Select…</option>
+                        <option value="MALE">Male</option>
+                        <option value="FEMALE">Female</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </label>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
@@ -737,7 +770,7 @@ export default function Profile() {
         )}
         <div className="flex-1 min-w-0">
           <div className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{c.name}</div>
-          <div className="text-xs" style={{ color: 'var(--mute)' }}>{c.goal.replace(/_/g, ' ')} · {c.currentWeight} kg now</div>
+          <div className="text-xs" style={{ color: 'var(--mute)' }}>{c.goal.replace(/_/g, ' ')}{c.currentWeight ? ` · ${c.currentWeight} kg` : ''}{c.height_cm ? ` · ${c.height_cm} cm` : ''}{c.age ? ` · ${c.age} yrs` : ''}</div>
         </div>
         <Ring value={data.adherence} max={100} size={72} stroke={7} label={<span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{data.adherence}%</span>} sub={<span className="text-[7px]" style={{ color: 'var(--mute)' }}>adh.</span>} />
       </div>

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
-import { useCountUp, useFetch } from '../../utils.js';
+import { useCountUp } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
@@ -11,8 +11,6 @@ import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
-import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
-import { sumEatenTotals } from '../../nutritionCalc.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -434,12 +432,7 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
           <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>✕</button>
           <div className="w-12 h-12 mx-auto rounded-full grid place-items-center text-xl mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30` }}>🗑️</div>
           <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>Remove from today's intake?</div>
-          {/* Only show a quantity when one is genuinely known -- a bare
-              `|| 100` fallback here would display a fabricated weight for
-              any entry logged before quantity/unit were tracked (or a
-              Recent-foods snapshot replay, which never has one), stating
-              a number as fact that was never actually captured. */}
-          <div className="text-[11px]" style={{ color: t.mute }}>{log.name}{log.quantity ? ` · ${log.quantity}${log.unit || 'g'}` : ''} · {log.calories} kcal</div>
+          <div className="text-[11px]" style={{ color: t.mute }}>{log.name} · {log.quantity || 100}{log.unit || 'g'} · {log.calories} kcal</div>
         </div>
         <div className="px-5 pb-5 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
@@ -476,10 +469,6 @@ export default function Nutrition() {
   const [showAddSupplement, setShowAddSupplement] = useState(false);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
-  // Lifted out of FoodLogSheet's own local state (Custom Macros needs to
-  // survive a remount of the sheet -- see FoodLogSheet.jsx's own comment
-  // on why `mode` is a controlled prop, not local state).
-  const [foodLogMode, setFoodLogMode] = useState('search');
 
   // Today's Eaten Meals edit mode -- [-]/[Edit Quantity] per row, "Save
   // Changes" is a confirming exit flourish (each action already persisted
@@ -496,14 +485,6 @@ export default function Nutrition() {
   const data = home.data;
   const clientId = data?.client?.id;
 
-  // Flexible Calorie Balance -- own targeted endpoint (Section 26: no
-  // reason to bloat /me/home's payload for every client on every page).
-  // Fetched unconditionally alongside `home` regardless of loading state,
-  // same as every other independent useFetch on this page (see supList
-  // above) -- the route itself resolves the client from the auth token.
-  const balance = useFetch(() => api('/me/nutrition/balance'), []);
-  const activePlan = balance.data?.activePlan;
-
   useEffect(() => { if (clientId) api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {}); }, [clientId]);
 
   const plan = data?.nutrition?.plan;
@@ -512,7 +493,10 @@ export default function Nutrition() {
   const mealState = meals || data?.nutrition?.meals || [];
   const waterState = water ?? (data ? data.water.litres : 0);
 
-  const eaten = sumEatenTotals(mealState);
+  const eaten = mealState.filter((m) => m.eaten).reduce((s, m) => ({
+    calories: s.calories + m.calories, protein: s.protein + m.protein,
+    carbs: s.carbs + m.carbs, fat: s.fat + m.fat
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
 
@@ -530,12 +514,7 @@ export default function Nutrition() {
       await api(`/nutrition/clients/${clientId}/meals/toggle`, { method: 'POST', body: JSON.stringify({ meal_id: m.id, eaten: next }) });
     } catch (e) {
       setToast(e.message || "Couldn't update that — reverted");
-      // silent: true -- a bare reload() here would flip home.loading back
-      // to true and unmount this whole page (see utils.js's useFetch for
-      // why); every reload() call in this file that fires from an
-      // in-page action, success OR failure, uses the silent form so the
-      // page/any open sheet never disappears for a background refresh.
-      home.reload({ silent: true });
+      home.reload();
     }
   };
 
@@ -544,7 +523,7 @@ export default function Nutrition() {
       await api(`/me/meal-logs/${logId}`, { method: 'PUT', body: JSON.stringify(updates) });
       setToast('Entry updated ✓');
       setEditLogOpen(false); setEditLog(null);
-      home.reload({ silent: true });
+      home.reload();
     } catch (e) { setToast(e.message); }
   };
 
@@ -553,7 +532,7 @@ export default function Nutrition() {
       await api(`/me/meal-logs/${logId}`, { method: 'DELETE' });
       setToast('Entry removed ✓');
       setDeleteLogOpen(false); setDeleteLog(null);
-      home.reload({ silent: true });
+      home.reload();
     } catch (e) { setToast(e.message); }
   };
 
@@ -573,7 +552,7 @@ export default function Nutrition() {
       await api(`/tracking/clients/${clientId}/water`, { method: 'POST', body: JSON.stringify({ litres: next }) });
     } catch (e) {
       setToast(e.message || "Couldn't log water — reverted");
-      home.reload({ silent: true });
+      home.reload();
     }
   };
 
@@ -587,46 +566,12 @@ export default function Nutrition() {
         ai_provider: entry.ai_provider || undefined,
         ai_model: entry.ai_model || undefined,
         ai_confidence: entry.ai_confidence || undefined,
-        // The REAL logged quantity/unit, when the caller knows one (a
-        // resolved gram weight, or "1 serving" for Custom Macros) --
-        // without this, every individually-logged food stored quantity
-        // as NULL, so PUT /me/meal-logs/:id's later proportional-scaling
-        // edit had no real baseline to scale FROM (it silently assumed
-        // "originally 100", which was almost never true). Omitted
-        // entirely (not sent as null) when the caller genuinely has no
-        // meaningful quantity to report (e.g. a bare Recent replay).
-        quantity: entry.quantity || undefined,
-        unit: entry.unit || undefined,
       }),
     });
-    // silent: true is THE fix for the "tapping + reloads the whole page"
-    // complaint -- a bare reload() flips home.loading to true, and this
-    // component's own `if (home.loading) return <Spinner/>` (above) then
-    // swaps Nutrition's entire returned tree to just that spinner for the
-    // duration of the refetch. Nutrition itself doesn't unmount (it's the
-    // same component instance across that render), but every CHILD that
-    // was only present in the "real" tree -- including the open
-    // FoodLogSheet, with all its own local search-query/results/grams
-    // state -- does: gone on the way to <Spinner/>, mounted fresh (blank)
-    // on the way back. That's the actual mechanism behind "search
-    // interface disappears/reopens" for what looks like one background
-    // refetch. silent:true keeps `data` visibly stale-but-present and
-    // `loading` false throughout, so this render gate never fires and
-    // nothing under it ever unmounts.
-    home.reload({ silent: true });
+    home.reload();
   };
 
   const eatenTodayList = mealState.filter((m) => m.eaten);
-
-  // Today's EFFECTIVE target -- the adjusted target while a Flexible
-  // Calorie Balance plan is active, otherwise the base plan unchanged.
-  // One shared object so the ring, macro bars, and the insight line below
-  // can never drift out of sync with each other (a real gap caught live:
-  // the insight text initially still read off the base `plan` after the
-  // ring/bars below were already switched over).
-  const effectivePlan = activePlan
-    ? { calories: activePlan.adjustedCalorieTarget, protein: activePlan.adjustedProteinTarget, carbs: activePlan.adjustedCarbsTarget, fat: activePlan.adjustedFatTarget }
-    : plan;
 
   return (
     <div className="space-y-5 pb-24">
@@ -637,11 +582,7 @@ export default function Nutrition() {
           <h1 className="font-grotesk font-black text-2xl leading-tight" style={{ color: t.ink }}>Today's Fuel</h1>
           <div className="flex items-center gap-1.5 mt-1">
             <span className="text-[13px] font-medium" style={{ color: t.mute }}>
-              {plan
-                ? (activePlan
-                  ? `${activePlan.adjustedCalorieTarget} kcal today (base ${plan.calories}) · P${activePlan.adjustedProteinTarget}g · C${activePlan.adjustedCarbsTarget}g · F${activePlan.adjustedFatTarget}g`
-                  : `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g`)
-                : 'No plan assigned'}
+              {plan ? `${plan.calories} kcal target · P${plan.protein}g · C${plan.carbs}g · F${plan.fat}g` : 'No plan assigned'}
             </span>
             <button onClick={() => setTargetSetupOpen(true)} aria-label="Edit calorie target" className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-colors" style={{ color: t.mute, background: t.glass }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
@@ -666,52 +607,18 @@ export default function Nutrition() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: t.heroGlow }} />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="shrink-0"><CalorieRing value={eaten.calories} max={effectivePlan?.calories || 0} t={t} /></div>
+            <div className="shrink-0"><CalorieRing value={eaten.calories} max={plan?.calories || 0} t={t} /></div>
             <div className="flex-1 w-full space-y-4">
-              <MacroBar label="Protein" value={eaten.protein} max={effectivePlan?.protein || 0} color={t.protein} t={t} />
-              <MacroBar label="Carbs" value={eaten.carbs} max={effectivePlan?.carbs || 0} color={t.carbs} t={t} />
-              <MacroBar label="Fat" value={eaten.fat} max={effectivePlan?.fat || 0} color={t.fat} t={t} />
+              <MacroBar label="Protein" value={eaten.protein} max={plan?.protein || 0} color={t.protein} t={t} />
+              <MacroBar label="Carbs" value={eaten.carbs} max={plan?.carbs || 0} color={t.carbs} t={t} />
+              <MacroBar label="Fat" value={eaten.fat} max={plan?.fat || 0} color={t.fat} t={t} />
             </div>
           </div>
         </div>
       </div>
 
       {/* ══════ INSIGHT ══════ */}
-      <NutritionInsight plan={effectivePlan} eaten={eaten} t={t} />
-
-      {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
-      {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
-
-      {/* ══════ FOOD & MEAL TOOLS ══════
-          Moved above Today's Eaten Meals / Saved Foods & Meals -- the
-          primary task on this page is "log what I ate", so the primary
-          actions come right after the summary, not buried below it. */}
-      <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
-        <div className="grid grid-cols-3 gap-1.5 p-1">
-          {[
-            // Log / Estimate Food is the most frequent action by far --
-            // accent-filled and full-weight vs. the other two's glass
-            // treatment, so it reads as the strongest option at a glance
-            // without introducing a new visual style.
-            { label: 'Log / Estimate Food', icon: '🍽️', onClick: () => setFoodLogSheetOpen(true), primary: true },
-            { label: 'Customize My Meals', icon: '🧩', onClick: () => setCustomizeOpen(true) },
-            { label: 'Meal Information', icon: '📊', onClick: () => setInfoOpen(true) },
-          ].map((tool) => (
-            <button key={tool.label} onClick={tool.onClick}
-                    className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
-                    style={tool.primary
-                      ? { background: t.accent, border: `1px solid ${t.accent}` }
-                      : { background: t.glass, border: `1px solid ${t.border}` }}>
-              <span className="text-lg">{tool.icon}</span>
-              <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: tool.primary ? 'var(--accent-contrast)' : t.ink }}>{tool.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ══════ SAVED FOODS & MEALS ══════ */}
-      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
+      <NutritionInsight plan={plan} eaten={eaten} t={t} />
 
       {/* ══════ TODAY'S EATEN MEALS ══════ */}
       <div data-tour="nutrition-meals" className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
@@ -749,6 +656,28 @@ export default function Nutrition() {
           </button>
         )}
         <SavingOverlay open={savingTodaysEdit} stage={todaysSaveStage} label={todaysSaveStage === 'success' ? 'Changes Saved' : 'Saving changes'} mode="overlay" size="sm" />
+      </div>
+
+      {/* ══════ MY DIET (Saved Foods + Saved Meals) ══════ */}
+      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload())} t={t} toast={setToast} />
+
+      {/* ══════ FOOD & MEAL TOOLS ══════ */}
+      <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+        <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
+        <div className="grid grid-cols-3 gap-1.5 p-1">
+          {[
+            { label: 'Log / Estimate Food', icon: '🍽️', onClick: () => setFoodLogSheetOpen(true) },
+            { label: 'Customize My Meals', icon: '🧩', onClick: () => setCustomizeOpen(true) },
+            { label: 'Meal Information', icon: '📊', onClick: () => setInfoOpen(true) },
+          ].map((tool) => (
+            <button key={tool.label} onClick={tool.onClick}
+                    className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
+                    style={{ background: t.glass, border: `1px solid ${t.border}` }}>
+              <span className="text-lg">{tool.icon}</span>
+              <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: t.ink }}>{tool.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ══════ SUPPLEMENTS ══════ */}
@@ -831,14 +760,10 @@ export default function Nutrition() {
       <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
 
       {/* ══════ TOAST ══════ */}
-      {/* z-[70], above every sheet's z-50 -- a toast fired while, say, the
-          Food Log Sheet stays open after a quick-log (see FoodLogSheet's
-          own onAdd(entry, { keepOpen: true }) path) must still be visible
-          on top of it, not silently painted underneath. */}
-      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
+      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
 
       {/* ══════ NUTRITION TARGET SETUP ══════ */}
-      <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }} />
+      <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload(); }} currentPlan={plan} isEdit={!!plan} />
 
       {/* ══════ MODALS ══════ */}
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
@@ -848,19 +773,12 @@ export default function Nutrition() {
       <FoodLogSheet
         open={foodLogSheetOpen}
         autoScan={foodLogAutoScan}
-        mode={foodLogMode}
-        setMode={setFoodLogMode}
-        toast={setToast}
         onClose={() => { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }}
-        onAdd={async (entry, opts) => {
+        onAdd={async (entry) => {
           await logEntry(entry);
-          // `opts?.keepOpen` -- a quick-log path (currently: Custom Macros)
-          // that wants to stay on the sheet for the next entry rather than
-          // exiting back to the dashboard. Backward compatible: every
-          // existing call site that doesn't pass a second argument keeps
-          // closing exactly as before.
-          if (!opts?.keepOpen) { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }
-          setToast(opts?.keepOpen ? `${entry.name} logged ✓` : 'Food logged ✓');
+          setFoodLogSheetOpen(false);
+          setFoodLogAutoScan(false);
+          setToast('Food logged ✓');
         }}
       />
 
@@ -868,7 +786,7 @@ export default function Nutrition() {
       <ShareMealsSheet open={shareOpen} onClose={() => setShareOpen(false)} t={t} />
 
       {/* ══════ CUSTOMIZE MY MEALS ══════ */}
-      <CustomizeMealSheet open={customizeOpen} onClose={() => setCustomizeOpen(false)} onLogged={() => home.reload({ silent: true })} t={t} toast={setToast} />
+      <CustomizeMealSheet open={customizeOpen} onClose={() => setCustomizeOpen(false)} onLogged={home.reload} t={t} toast={setToast} />
 
       {/* ══════ INFORMATION ABOUT MY MEALS ══════ */}
       <MealInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} meals={eatenTodayList} plan={plan} goal={data?.client?.goal} t={t} />
