@@ -82,8 +82,16 @@ export default function Dashboard() {
                   this headline. Every other trainer heading stays Satoshi;
                   this is a one-element swap, not a section-wide font
                   change. */}
+              {/* REMEDIATION (responsive): fontSize was a flat 50px with no
+                  mobile scale-down -- live-tested at 375px width, this
+                  headline alone consumed roughly 40% of the first viewport
+                  before any real data was visible. clamp() gives it a
+                  fluid floor (28px) that grows with viewport width and
+                  saturates back to the original, unchanged 50px once
+                  there's room for it (around ~625px and up) -- desktop
+                  is pixel-identical to before. */}
               <span className="font-black leading-[1.05] tracking-[-.03em]"
-                    style={{ fontSize: 50, color: 'var(--ink)', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
+                    style={{ fontSize: 'clamp(28px, 8vw, 50px)', color: 'var(--ink)', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
                 <AnimatedNumber value={k.needsAttention + k.atRisk} />
                 {' '}
                 {(k.needsAttention + k.atRisk) === 1 ? 'client needs you today' : 'clients need you today'}
