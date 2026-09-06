@@ -266,6 +266,49 @@ export default function workoutRoutes(db) {
     res.json({ ok: true, done: !cur.done });
   });
 
+  // ---- add exercise to an in-progress workout (client only) ----
+  // Allows adding exercises during an active session without affecting the
+  // saved workout template. Only in-progress (started, not completed) workouts
+  // can be modified. Inserted at the end of the existing exercise list.
+  r.post('/:id/exercises', validate(z.object({
+    exercise_id: z.string().min(1),
+    name: z.string().min(1).max(100),
+    sets: z.number().int().min(1).max(20).default(3),
+    reps: z.union([z.string(), z.number()]).default('10'),
+    weight: z.union([z.string(), z.number()]).default('BW'),
+    rest_sec: z.number().int().min(0).max(600).optional(),
+  })), async (req, res) => {
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    const client = await resolveClient(db, req, res, w.client_id);
+    if (!client) return;
+    if (w.status === 'completed') return res.status(409).json({ error: 'Workout already completed' });
+
+    // Validate the exercise exists in the library
+    const libEx = await db.q1('SELECT * FROM exercise_library WHERE id = ?', [req.body.exercise_id]);
+    if (!libEx) return res.status(404).json({ error: 'Exercise not found in library' });
+
+    // Get next position
+    const last = await db.q1(
+      'SELECT MAX(position) AS maxPos FROM workout_exercises WHERE workout_id = ?', [w.id]);
+    const position = (last?.maxPos ?? -1) + 1;
+
+    const weId = id('wxe');
+    await db.run(
+      `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+      [weId, w.id, req.body.exercise_id, position, req.body.name,
+       req.body.sets, String(req.body.reps), String(req.body.weight), req.body.rest_sec ?? 90]);
+
+    // Return the full exercise row with library metadata (matches todaySession shape)
+    const exercise = await db.q1(
+      `SELECT we.*, el.primary_muscle, el.secondary_muscles, el.equipment, el.difficulty, el.cues, el.animation_key, el.is_global
+         FROM workout_exercises we
+         LEFT JOIN exercise_library el ON el.id = we.exercise_id
+        WHERE we.id = ?`, [weId]);
+    res.status(201).json({ exercise });
+  });
+
   // ---- start a workout: backend records the session start (source of truth) ----
   // Idempotent — a second call returns the existing started_at.
   r.post('/:id/start', async (req, res) => {
@@ -339,14 +382,17 @@ export default function workoutRoutes(db) {
     }
     const d = dayKey();
     const completedAt = now();
-    // Server-authoritative timing: duration is measured ONLY from the DB
-    // started_at (POST /start). A client-supplied started_at is NEVER accepted
-    // — the client cannot influence duration. No /start => no measured duration
-    // (duration_min stays null; an estimated duration is never substituted for
-    // a measured session).
+    // Duration calculation:
+    //   1. If the client supplies duration_seconds (active time excluding
+    //      pauses), use it — the frontend tracks pause/resume timestamps
+    //      and sends only the active portion.
+    //   2. Otherwise fall back to server-authoritative completed_at −
+    //      started_at (legacy behaviour).
     const startedAt = w.started_at || null;
     let durationMin = null;
-    if (startedAt) {
+    if (req.body.duration_seconds != null && Number.isFinite(req.body.duration_seconds)) {
+      durationMin = Math.round((req.body.duration_seconds / 60) * 10) / 10;
+    } else if (startedAt) {
       const ms = Date.parse(completedAt) - Date.parse(startedAt);
       if (Number.isFinite(ms)) durationMin = ms > 0 ? Math.round((ms / 60000) * 10) / 10 : 0;
     }
@@ -513,6 +559,15 @@ function z_workoutComplete() {
       weight: z.number().min(0).max(1000).optional(),
       rir: z.number().int().min(0).max(5).optional(),
       notes: z.string().max(200).optional()
-    })).default([])
+    })).default([]),
+    // Client-reported active duration in seconds (excludes paused time).
+    // When provided and positive, the backend trusts this value over the
+    // naive completed_at − started_at so that paused time never enters
+    // calorie calculations.  Capped at 12 h to reject obviously bad input.
+    duration_seconds: z.number().min(0).max(43200).optional(),
+    // Accumulated paused time in milliseconds — stored for analytics but
+    // does NOT influence duration_min or calorie calculation when
+    // duration_seconds is supplied.
+    paused_ms: z.number().min(0).max(86400000).optional()
   });
 }

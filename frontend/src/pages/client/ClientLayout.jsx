@@ -12,6 +12,13 @@ import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import { Avatar } from '../../components/UI.jsx';
+// NotificationBell was NOT merged: manavi-progress-enhancements-v2 imports
+// it here (and wires a matching backend route in index.js) but never
+// actually adds either file -- frontend/src/components/NotificationBell.jsx
+// and backend/src/routes/notifications.js both don't exist anywhere in
+// that commit. Merged as-is this breaks the Vite build (unresolvable
+// import) AND crashes the backend at boot (Cannot find module) --
+// dropped here until the two missing files exist.
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -223,7 +230,8 @@ export default function ClientLayout() {
             <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>SK OS</span>
           </div>
 
-          {/* RIGHT: Coach notification */}
+          {/* RIGHT: Coach notification -- see the NotificationBell note above;
+              the bell itself is deferred until its two missing files land. */}
           <button
             onClick={() => setCoachOpen(true)}
             className="chrome-btn relative gap-1.5 py-1.5 px-2.5"

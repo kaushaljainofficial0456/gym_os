@@ -8,12 +8,11 @@ import Icon from '../../components/Icon.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
+import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
 import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
-import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
-import { sumEatenTotals } from '../../nutritionCalc.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -435,12 +434,7 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
           <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}><XIcon /></button>
           <div className="w-12 h-12 mx-auto rounded-full grid place-items-center mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30`, color: t.danger }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></div>
           <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>Remove from today's intake?</div>
-          {/* Only show a quantity when one is genuinely known -- a bare
-              `|| 100` fallback here would display a fabricated weight for
-              any entry logged before quantity/unit were tracked (or a
-              Recent-foods snapshot replay, which never has one), stating
-              a number as fact that was never actually captured. */}
-          <div className="text-[11px]" style={{ color: t.mute }}>{log.name}{log.quantity ? ` · ${log.quantity}${log.unit || 'g'}` : ''} · {log.calories} kcal</div>
+          <div className="text-[11px]" style={{ color: t.mute }}>{log.name} · {log.quantity || 100}{log.unit || 'g'} · {log.calories} kcal</div>
         </div>
         <div className="px-5 pb-5 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
@@ -477,9 +471,13 @@ export default function Nutrition() {
   const [showAddSupplement, setShowAddSupplement] = useState(false);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
-  // Lifted out of FoodLogSheet's own local state (Custom Macros needs to
-  // survive a remount of the sheet -- see FoodLogSheet.jsx's own comment
-  // on why `mode` is a controlled prop, not local state).
+  // Controlled by this page, not FoodLogSheet itself -- see that
+  // component's own comment on why (Custom Macros' "keep sheet open for
+  // the next entry" flow needs the parent to own which tab is active).
+  // Silently dropped by this merge's auto-merge (same defect class as
+  // effectivePlan/activePlan/balance a few lines above): FoodLogSheet
+  // crashed with "setMode is not a function" the moment it rendered,
+  // because the prop it requires was never being passed at all.
   const [foodLogMode, setFoodLogMode] = useState('search');
 
   // Today's Eaten Meals edit mode -- [-]/[Edit Quantity] per row, "Save
@@ -497,23 +495,27 @@ export default function Nutrition() {
   const data = home.data;
   const clientId = data?.client?.id;
 
-  // Flexible Calorie Balance -- own targeted endpoint (Section 26: no
-  // reason to bloat /me/home's payload for every client on every page).
-  // Fetched unconditionally alongside `home` regardless of loading state,
-  // same as every other independent useFetch on this page (see supList
-  // above) -- the route itself resolves the client from the auth token.
-  const balance = useFetch(() => api('/me/nutrition/balance'), []);
-  const activePlan = balance.data?.activePlan;
-
   useEffect(() => { if (clientId) api(`/tracking/clients/${clientId}/supplements`).then((r) => setSupList(r.supplements || [])).catch(() => {}); }, [clientId]);
 
   const plan = data?.nutrition?.plan;
+  // Flexible Calorie Balance -- this whole block (through effectivePlan
+  // below) was silently dropped by git's auto-merge: manavi's branch
+  // predates this feature entirely (no CalorieBalance import, no
+  // /me/nutrition/balance fetch), so the region auto-merged to HER
+  // simpler version everywhere it didn't textually conflict, not just at
+  // the one spot git actually flagged. Restored -- this is a real,
+  // already-shipped feature, not something a merge gets to drop.
+  const balance = useFetch(() => api('/me/nutrition/balance'), []);
+  const activePlan = balance.data?.activePlan;
 
   useEffect(() => { if (data && !plan && !targetSetupOpen) setTargetSetupOpen(true); }, [data, plan]);
   const mealState = meals || data?.nutrition?.meals || [];
   const waterState = water ?? (data ? data.water.litres : 0);
 
-  const eaten = sumEatenTotals(mealState);
+  const eaten = mealState.filter((m) => m.eaten).reduce((s, m) => ({
+    calories: s.calories + m.calories, protein: s.protein + m.protein,
+    carbs: s.carbs + m.carbs, fat: s.fat + m.fat
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
 
@@ -531,11 +533,6 @@ export default function Nutrition() {
       await api(`/nutrition/clients/${clientId}/meals/toggle`, { method: 'POST', body: JSON.stringify({ meal_id: m.id, eaten: next }) });
     } catch (e) {
       setToast(e.message || "Couldn't update that — reverted");
-      // silent: true -- a bare reload() here would flip home.loading back
-      // to true and unmount this whole page (see utils.js's useFetch for
-      // why); every reload() call in this file that fires from an
-      // in-page action, success OR failure, uses the silent form so the
-      // page/any open sheet never disappears for a background refresh.
       home.reload({ silent: true });
     }
   };
@@ -588,32 +585,8 @@ export default function Nutrition() {
         ai_provider: entry.ai_provider || undefined,
         ai_model: entry.ai_model || undefined,
         ai_confidence: entry.ai_confidence || undefined,
-        // The REAL logged quantity/unit, when the caller knows one (a
-        // resolved gram weight, or "1 serving" for Custom Macros) --
-        // without this, every individually-logged food stored quantity
-        // as NULL, so PUT /me/meal-logs/:id's later proportional-scaling
-        // edit had no real baseline to scale FROM (it silently assumed
-        // "originally 100", which was almost never true). Omitted
-        // entirely (not sent as null) when the caller genuinely has no
-        // meaningful quantity to report (e.g. a bare Recent replay).
-        quantity: entry.quantity || undefined,
-        unit: entry.unit || undefined,
       }),
     });
-    // silent: true is THE fix for the "tapping + reloads the whole page"
-    // complaint -- a bare reload() flips home.loading to true, and this
-    // component's own `if (home.loading) return <Spinner/>` (above) then
-    // swaps Nutrition's entire returned tree to just that spinner for the
-    // duration of the refetch. Nutrition itself doesn't unmount (it's the
-    // same component instance across that render), but every CHILD that
-    // was only present in the "real" tree -- including the open
-    // FoodLogSheet, with all its own local search-query/results/grams
-    // state -- does: gone on the way to <Spinner/>, mounted fresh (blank)
-    // on the way back. That's the actual mechanism behind "search
-    // interface disappears/reopens" for what looks like one background
-    // refetch. silent:true keeps `data` visibly stale-but-present and
-    // `loading` false throughout, so this render gate never fires and
-    // nothing under it ever unmounts.
     home.reload({ silent: true });
   };
 
@@ -686,7 +659,12 @@ export default function Nutrition() {
       {/* ══════ FOOD & MEAL TOOLS ══════
           Moved above Today's Eaten Meals / Saved Foods & Meals -- the
           primary task on this page is "log what I ate", so the primary
-          actions come right after the summary, not buried below it. */}
+          actions come right after the summary, not buried below it.
+          (manavi-progress-enhancements-v2 still had this block in its
+          OLD position further down the page, below Today's Eaten Meals --
+          that duplicate copy is removed below rather than kept, so the
+          page renders one Food & Meal Tools / Saved Foods & Meals
+          section, not two.) */}
       <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
         <div className="grid grid-cols-3 gap-1.5 p-1">
@@ -751,6 +729,17 @@ export default function Nutrition() {
         )}
         <SavingOverlay open={savingTodaysEdit} stage={todaysSaveStage} label={todaysSaveStage === 'success' ? 'Changes Saved' : 'Saving changes'} mode="overlay" size="sm" />
       </div>
+
+      {/* MyDietCard / Food & Meal Tools already render above, right after
+          the Insight/Flexible Calorie Balance section -- this was
+          manavi-progress-enhancements-v2's OLD position for both (her
+          branch predates the "move tools above Today's Eaten Meals"
+          pass), left over from a git auto-merge that didn't know the two
+          copies were the same feature. Removed as a duplicate, not a
+          feature loss: same components, same handlers, same clientId --
+          the surviving copy above additionally uses the shared Icon set
+          instead of emoji and the silent-reload fix on MyDietCard's
+          onLogged. */}
 
       {/* ══════ SUPPLEMENTS ══════ */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
@@ -832,14 +821,10 @@ export default function Nutrition() {
       <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
 
       {/* ══════ TOAST ══════ */}
-      {/* z-[70], above every sheet's z-50 -- a toast fired while, say, the
-          Food Log Sheet stays open after a quick-log (see FoodLogSheet's
-          own onAdd(entry, { keepOpen: true }) path) must still be visible
-          on top of it, not silently painted underneath. */}
-      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
+      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
 
       {/* ══════ NUTRITION TARGET SETUP ══════ */}
-      <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }} />
+      <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }} currentPlan={plan} isEdit={!!plan} />
 
       {/* ══════ MODALS ══════ */}
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
@@ -868,7 +853,13 @@ export default function Nutrition() {
       {/* ══════ SHARE MEALS ══════ */}
       <ShareMealsSheet open={shareOpen} onClose={() => setShareOpen(false)} t={t} />
 
-      {/* ══════ CUSTOMIZE MY MEALS ══════ */}
+      {/* ══════ CUSTOMIZE MY MEALS ══════
+          onLogged was bare `home.reload` here (Manavi's branch predates
+          the silent-reload fix) -- a non-silent reload flips
+          `home.loading` back to true, and this page's own loading gate
+          (PageSkeleton, above) would unmount the whole page -- including
+          this very sheet -- mid-edit, for the duration of the refetch.
+          Same class of bug as foodLogMode above. */}
       <CustomizeMealSheet open={customizeOpen} onClose={() => setCustomizeOpen(false)} onLogged={() => home.reload({ silent: true })} t={t} toast={setToast} />
 
       {/* ══════ INFORMATION ABOUT MY MEALS ══════ */}

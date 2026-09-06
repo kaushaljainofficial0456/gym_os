@@ -48,6 +48,15 @@ const Settings = lazy(() => import('./pages/client/Settings.jsx'));
 const Help = lazy(() => import('./pages/client/Help.jsx'));
 const Community = lazy(() => import('./pages/client/Community.jsx'));
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
+// DailyHistory dropped, same as NotificationBell in ClientLayout.jsx: this
+// import (and its /app/client/day/:date route below) was added by
+// manavi-progress-enhancements-v2, but frontend/src/pages/client/
+// DailyHistory.jsx itself was never committed to that branch -- the
+// backend endpoint it would consume (GET /tracking/me/day/:date) IS real
+// and merged in, waiting for this page. Left as an unresolvable static
+// import this would fail the Vite/Rollup build outright (not just crash
+// at runtime like the notification bell did), so it's out until the page
+// exists.
 // Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
