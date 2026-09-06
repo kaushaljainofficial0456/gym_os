@@ -7,9 +7,6 @@
 //   * every action is recorded in intelligence_events
 // ============================================================
 import { Router } from 'express';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { rateLimit } from '../rateLimit.js';
 import { validate, schemas } from '../validate.js';
@@ -37,9 +34,6 @@ import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured
 import { foodAIConfigSummary } from '../services/intelligence/foodAI.js';
 import { buildClientAIContext } from '../services/intelligence/aiContext.js';
 import { buildBrief, buildWeekly, pickPriority, computeInsights, suggestFoods } from '../services/intelligence/coachEngine.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOAD_DIR = path.resolve(__dirname, '..', '..', 'data', 'uploads');
 
 function logEvent(db, orgId, clientId, domain, input, resolution, result, source) {
   return db.run(
@@ -468,7 +462,7 @@ export default function intelligenceRoutes(db) {
   });
 
   // ---------------- label scan (photo upload → editable extraction) ----------------
-  r.post('/label-scan', async (req, res) => {
+  r.post('/label-scan', async (req, res, next) => {
     const c = await getClient(req, res); if (!c) return;
     const { image } = req.body || {};   // data URL: data:image/png;base64,...
     if (!image || typeof image !== 'string') return res.status(400).json({ error: 'image required (data URL)' });
@@ -480,15 +474,36 @@ export default function intelligenceRoutes(db) {
     // basic dimension sanity: PNG/JPEG header gives width/height
     const dims = readImageDims(buf, ext);
     if (dims && (dims.w < 32 || dims.h < 32)) return res.status(400).json({ error: 'Image too small to read' });
-    // store privately (never served statically) — tmp namespace, cleaned on save
-    // Async fs calls (not *Sync) so a label-scan upload doesn't block the
-    // Node event loop — and therefore every other in-flight request — while
-    // it writes up to 5 MB to disk.
-    const dir = path.join(UPLOAD_DIR, 'tmp', c.id);
-    await fs.promises.mkdir(dir, { recursive: true });
+    // REMEDIATION: store privately (never served statically) — tmp
+    // namespace, cleaned on save — via storage.js's driver abstraction,
+    // not a direct fs write. This was the one upload path in the app
+    // that still bypassed it entirely: STORAGE_DRIVER=s3 in production
+    // had no effect here, so a label scan would still try (and fail, or
+    // silently not persist across requests) to write to this app's
+    // read-only/ephemeral Vercel serverless filesystem — see storage.js's
+    // own header for the full reasoning, and routes/clients.js's photo
+    // upload for the pattern this now matches. saveImage()'s own
+    // format/size/dimension validation is redundant with the checks just
+    // above (same rules) — kept anyway as defense-in-depth, and because
+    // removing this route's own specific error messages ("Unsupported
+    // image format...", "Image too large...") in favor of saveImage()'s
+    // slightly different wording would be a needless API-response change.
     const fileId = id('img').replace(/^img_/, '');
-    const rel = `tmp/${c.id}/${fileId}.${ext === 'jpg' ? 'jpg' : ext}`;
-    await fs.promises.writeFile(path.join(UPLOAD_DIR, rel), buf);
+    const { saveImage, StorageUnavailableError } = await import('../storage.js');
+    let rel;
+    try {
+      const saved = await saveImage({ dataUrl: image, clientId: c.id, scope: 'tmp', fileId });
+      rel = saved.storageKey;
+    } catch (e) {
+      // A StorageUnavailableError means the DEPLOYMENT is misconfigured
+      // (STORAGE_DRIVER=local in production) -- hand it to the central
+      // error handler for a 503, exactly like routes/clients.js's photo
+      // upload does, rather than the 400 below (reserved for a genuine
+      // per-request validation failure this route's own checks above
+      // should already have caught).
+      if (e instanceof StorageUnavailableError) return next(e);
+      return res.status(400).json({ error: e.message });
+    }
 
     // vision extraction when an AI provider is configured; otherwise editable manual entry
     let ocrFields = null;
@@ -677,11 +692,16 @@ export default function intelligenceRoutes(db) {
       [fId, c.org_id, c.id, String(name).trim().slice(0, 80), brand ? String(brand).slice(0, 60) : null,
        unit ? String(unit).slice(0, 20) : 'g', serving_size ? `1 ${String(serving_size).slice(0, 20)} ${unit || 'g'}` : null,
        num(calories), num(protein), num(carbs), num(fat), num(fiber), num(sugar), num(sodium)]);
-    // cleanup temp image if provided
+    // REMEDIATION: cleanup temp image if provided, via storage.js's
+    // deleteObject() (driver-aware, already best-effort/non-throwing on
+    // both drivers) instead of a direct fs.unlinkSync -- the write side
+    // above now goes through the same abstraction, so a scan stored in
+    // S3 needs its delete to go there too, not silently no-op against a
+    // local path that was never written.
     if (req.body.imagePath) {
+      const { deleteObject } = await import('../storage.js');
       const safe = String(req.body.imagePath).replace(/^\/uploads\//, '');
-      const abs = path.join(UPLOAD_DIR, safe);
-      try { if (fs.existsSync(abs) && abs.startsWith(UPLOAD_DIR)) fs.unlinkSync(abs); } catch {}
+      await deleteObject(safe);
     }
     await logEvent(db, c.org_id, c.id, 'label', JSON.stringify(req.body),
       { savedFood: fId }, { source: 'PACKAGING_LABEL' }, 'confirm');

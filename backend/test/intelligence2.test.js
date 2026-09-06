@@ -366,6 +366,50 @@ test('label-scan validates image and stores privately', async (t) => {
   assert.equal(tiny.status, 400, 'rejects 1x1 (too small to read)');
 });
 
+// REMEDIATION: label-scan now writes through storage.js's driver
+// abstraction (saveImage/deleteObject) instead of a direct fs call --
+// see storage.js's own header and routes/clients.js's photo upload for
+// the pattern this now matches; it was the one upload path in the app
+// that still bypassed it. storageProductionGate.test.js already proves
+// saveImage() throws StorageUnavailableError (-> 503) in production with
+// STORAGE_DRIVER=local, and clients.js's photo route already proves the
+// identical instanceof-check -> next(e) pattern reaches the central
+// handler for a 503 -- this test covers what's specific to THIS route:
+// the success-path response contract (imagePath shape) is byte-for-byte
+// unchanged after the refactor, and /foods/label's cleanup call actually
+// removes the file (now via deleteObject(), not a direct fs.unlinkSync).
+test('label-scan (success path, unchanged contract) + /foods/label cleanup: imagePath shape is unchanged, and the temp file is actually removed on save', async () => {
+  const db = await memDb();
+  await seedOrg(db);
+  const api = await startIntelApi(db, { id: 'u1', role: 'CLIENT', org_id: 'o1' });
+  const fs = await import('node:fs');
+  const nodePath = await import('node:path');
+  const uploadsRoot = nodePath.resolve(__dirname, '..', 'data', 'uploads');
+  let abs = null;
+  try {
+    const validPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAGUlEQVR4nO3BMQEAAADCoPVP7WENoAAAAG4MIAABt9NlCQAAAABJRU5ErkJggg==';
+    const scanned = await api.call('POST', '/intel/label-scan', { image: validPng });
+    assert.equal(scanned.status, 200, JSON.stringify(scanned.json));
+    assert.match(scanned.json.imagePath, /^\/uploads\/tmp\/c1\/[A-Za-z0-9_-]+\.png$/, 'unchanged contract: /uploads/tmp/<client>/<id>.<ext>');
+
+    // The file must actually exist on disk (local driver, dev) right after the scan.
+    abs = nodePath.resolve(uploadsRoot, scanned.json.imagePath.replace(/^\/uploads\//, ''));
+    assert.ok(fs.existsSync(abs), 'saveImage() must have actually written the file for the local driver');
+
+    // /foods/label's cleanup must remove it via deleteObject(), not leave it orphaned.
+    const saved = await api.call('POST', '/intel/foods/label', { name: 'Test Snack', calories: '100', imagePath: scanned.json.imagePath });
+    assert.equal(saved.status, 200, JSON.stringify(saved.json));
+    assert.ok(!fs.existsSync(abs), 'deleteObject() must remove the temp file on save, exactly like the old direct fs.unlinkSync did');
+    abs = null; // already cleaned up by the code under test -- nothing left for the finally block to do
+  } finally {
+    // Belt-and-suspenders: if an assertion above threw before the code
+    // under test got to clean up, don't leave a stray file in the real
+    // uploads directory across test runs. Safe/idempotent either way.
+    if (abs) { try { fs.unlinkSync(abs); } catch {} }
+    await api.close();
+  }
+});
+
 // ================= 7. SECURITY =================
 test('production refuses to start without a strong JWT_SECRET', () => {
   const cfgPath = path.resolve(__dirname, '..', 'src', 'config.js').replace(/\\/g, '/');
