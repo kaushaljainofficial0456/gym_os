@@ -404,6 +404,27 @@ function applySqliteMigrations(db) {
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
   db.exec(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
+  // --- notification-center preferences (also in schema.sql; repeated here
+  // for older DBs / parity with the PG path, same as exercise_relations
+  // above) ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      enabled             INTEGER NOT NULL DEFAULT 1,
+      workout_reminders   INTEGER NOT NULL DEFAULT 1,
+      water_reminders     INTEGER NOT NULL DEFAULT 1,
+      water_interval_h    REAL NOT NULL DEFAULT 2,
+      nutrition_reminders INTEGER NOT NULL DEFAULT 1,
+      daily_summary       INTEGER NOT NULL DEFAULT 1,
+      daily_summary_time  TEXT NOT NULL DEFAULT '23:30',
+      tomorrow_workout    INTEGER NOT NULL DEFAULT 1,
+      rest_day_reminders  INTEGER NOT NULL DEFAULT 0,
+      incomplete_workout  INTEGER NOT NULL DEFAULT 1,
+      quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
+      quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      updated_at          TEXT NOT NULL
+    )`);
 }
 
 async function applyPgMigrations(pool) {
@@ -461,6 +482,25 @@ async function applyPgMigrations(pool) {
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
+  // --- notification-center preferences (also in schema.sql) ---
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      enabled             INTEGER NOT NULL DEFAULT 1,
+      workout_reminders   INTEGER NOT NULL DEFAULT 1,
+      water_reminders     INTEGER NOT NULL DEFAULT 1,
+      water_interval_h    REAL NOT NULL DEFAULT 2,
+      nutrition_reminders INTEGER NOT NULL DEFAULT 1,
+      daily_summary       INTEGER NOT NULL DEFAULT 1,
+      daily_summary_time  TEXT NOT NULL DEFAULT '23:30',
+      tomorrow_workout    INTEGER NOT NULL DEFAULT 1,
+      rest_day_reminders  INTEGER NOT NULL DEFAULT 0,
+      incomplete_workout  INTEGER NOT NULL DEFAULT 1,
+      quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
+      quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      updated_at          TEXT NOT NULL
+    )`);
 }
 
 if (config.databaseUrl) {

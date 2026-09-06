@@ -59,9 +59,16 @@ const EMPTY_MANUAL = {
   calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '',
 };
 
-// servingGrams defaults to '100' -- typing straight per-100g values (the
-// old behavior) still works with zero extra steps.
-const EMPTY_CUSTOM = { name: '', servingGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// servingGrams (the NUTRITION REFERENCE quantity -- "what quantity are
+// these nutrition details for?") defaults to '100', so typing straight
+// per-100g values still works with zero extra steps. eatenGrams (a
+// SEPARATE quantity -- "how much did you eat?") starts mirroring
+// servingGrams, since eating exactly the described amount is the common
+// case; see customEatenTouched below for when that mirroring stops.
+// protein+carbs+fat are never required to sum to either of these
+// quantities -- they are a subset of a food's total mass (water/ash make
+// up the rest), not all of it.
+const EMPTY_CUSTOM = { name: '', servingGrams: '100', eatenGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
 // Same convention as MyDietCard.jsx's own parseServing / me.js's
 // baseServingAmount -- the leading number in a "123 g"-style serving
 // string, defaulting to 100 for anything else (blank, "1 serving", a
@@ -186,6 +193,12 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   // its own `open` state has been verified to persist) is what actually
   // fixes it, rather than fighting the remount itself.
   const [customForm, setCustomForm] = useState(EMPTY_CUSTOM);
+  // Tracks whether the user has edited "how much did you eat" DIRECTLY, as
+  // opposed to it still just mirroring the nutrition-reference quantity
+  // (servingGrams). Once true, the two fields are independent -- changing
+  // the reference quantity no longer touches eatenGrams. Reset alongside
+  // the rest of the Custom Macros form whenever the sheet closes.
+  const [customEatenTouched, setCustomEatenTouched] = useState(false);
   const [customErr, setCustomErr] = useState('');
   const [customSaving, setCustomSaving] = useState(false);
   const [showMoreMacros, setShowMoreMacros] = useState(false);
@@ -283,7 +296,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       setLabelScanning(false); setLabelNote('');
       setAiResult(null); setAiErr(''); setAiEstimating(false);
       setKnnEstimate(null); setKnnGrams('100'); setKnnLogging(false);
-      setMode('search'); setCustomForm(EMPTY_CUSTOM); setCustomErr(''); setCustomSaving(false); setCustomDuplicate(null); setShowMoreMacros(false); setCustomCalorieOverride(false);
+      setMode('search'); setCustomForm(EMPTY_CUSTOM); setCustomEatenTouched(false); setCustomErr(''); setCustomSaving(false); setCustomDuplicate(null); setShowMoreMacros(false); setCustomCalorieOverride(false);
       setRowGrams({}); setRowLogging({}); setRowErr({});
       setRecentFoods([]); setRecentLogging({});
     }
@@ -675,6 +688,20 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   // dismisses that notice -- it was a judgment about the PREVIOUS name/
   // values, not a permanent lock on the form.
   const setCustomField = (key, value) => { setCustomForm((f) => ({ ...f, [key]: value })); setCustomDuplicate(null); };
+  // The nutrition-reference quantity and "how much did you eat" are
+  // DISTINCT concepts (see the screen's own copy below) but share the same
+  // starting value in the common case of eating exactly the described
+  // amount -- changing the reference quantity keeps mirroring into
+  // eatenGrams UNTIL the user edits eatenGrams directly, never after.
+  const setCustomServingGrams = (value) => {
+    setCustomForm((f) => ({ ...f, servingGrams: value, eatenGrams: customEatenTouched ? f.eatenGrams : value }));
+    setCustomDuplicate(null);
+  };
+  const setCustomEatenGrams = (value) => {
+    setCustomEatenTouched(true);
+    setCustomForm((f) => ({ ...f, eatenGrams: value }));
+    setCustomDuplicate(null);
+  };
 
   // Custom Macros: create a private "MY FOODS" row (POST /me/foods --
   // client_id-scoped, never global, same route My Diet's saved-foods
@@ -691,21 +718,36 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     const cf = customForm;
     const name = cf.name.trim();
     if (!name) { setCustomErr('Name this food first'); return; }
+    // Two DISTINCT quantities: the NUTRITION REFERENCE quantity ("what
+    // quantity are these nutrition details for?") and the amount actually
+    // eaten. Both must be positive; neither is required to relate to
+    // protein+carbs+fat in any particular way -- a food's macro grams are
+    // NOT required to sum to any reference weight (water/ash make up the
+    // rest of a real food's mass; a 40g chapati can genuinely be 3g
+    // protein + 18g carbs + 2g fat, 23g total, and that is correct, not an
+    // error). See foodValidation.js's own comment on the "impossible"
+    // check this app used to (wrongly) enforce and why it was removed.
     const servingG = Number(cf.servingGrams);
-    if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
-    // Calories = protein×4 + carbs×4 + fat×9 (nutritionCalc.js's single
-    // canonical formula) by default -- never required as typed input.
-    // The manual override field (revealed only when the user explicitly
-    // asks for it) still goes through the same validation below.
+    if (!(servingG > 0)) { setCustomErr('Enter a valid, positive quantity for "what quantity are these nutrition details for?"'); return; }
+    const eatenG = Number(cf.eatenGrams);
+    if (!(eatenG > 0)) { setCustomErr('Enter a valid, positive quantity for "how much did you eat?"'); return; }
+    // Reference-quantity macros/calories -- exactly as typed, describing
+    // servingG grams. Calories = protein×4 + carbs×4 + fat×9
+    // (nutritionCalc.js's single canonical formula) by default -- never
+    // required as typed input, and never validated against
+    // protein+carbs+fat summing to servingG. The manual override field
+    // (revealed only when the user explicitly asks for it) still goes
+    // through the same non-negative validation below.
     const calculatedCalories = calculateCaloriesFromMacros({ protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) });
-    const entered = {
+    const reference = {
       calories: customCalorieOverride && cf.calories !== '' ? Number(cf.calories) : calculatedCalories,
       protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat),
     };
     for (const key of REQUIRED_CUSTOM_MACROS) {
-      const v = entered[key];
-      if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key === 'calories' ? 'calorie' : key} value`); return; }
+      const v = reference[key];
+      if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key} value`); return; }
     }
+    if (!Number.isFinite(reference.calories) || reference.calories < 0) { setCustomErr('Enter a valid, non-negative calorie value'); return; }
     // fiber/sugar/sodium are OPTIONAL -- blank means "not tracked", never
     // coerced to 0; only sent if the user actually typed something.
     for (const key of OPTIONAL_CUSTOM_MACROS) {
@@ -713,7 +755,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       if (raw === '' || raw == null) continue;
       const v = Number(raw);
       if (!Number.isFinite(v) || v < 0) { setCustomErr(`Enter a valid, non-negative ${key} value`); return; }
-      entered[key] = v;
+      reference[key] = v;
     }
     if (!skipDuplicateCheck) {
       try {
@@ -724,33 +766,43 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     }
     setCustomSaving(true);
     try {
-      // Real bug, found live: every `foods` row in this app is per-100g
+      // Save the REFERENCE nutrition, converted to this app's per-100g
+      // storage convention -- unchanged: every `foods` row is per-100g
       // internally (same convention the manual-barcode form already
-      // follows -- "entered values are per-serving; store per-100g like
-      // every other source"), but this form let someone type values for
-      // ANY serving size with no conversion, so a real 300-400g meal's
-      // totals (completely normal for that size) tripped the backend's
-      // physical-plausibility check ("protein+carbs+fat+fiber can't
-      // exceed 100g per 100g of food") -- which is CORRECT for 100g, just
-      // being fed numbers that were never meant to represent 100g.
-      // `nums` below is what actually gets stored; `entered` (the values
-      // exactly as typed) is what gets logged right now, since that's
-      // the real amount being eaten today.
+      // follows), so `nums` below is what actually gets stored, scaled
+      // from the reference quantity exactly as typed. This is what future
+      // searches/logs of this saved food read from, and it is NEVER
+      // overwritten just because today's eaten amount differs from the
+      // reference (Master Prompt §13 -- editing today's log must not
+      // silently rewrite the food's own stored template).
       // `serving` describes what the STORED numbers represent -- always
-      // "100 g" here, never the user's original serving size. Storing
-      // the original size instead would double-scale every future
-      // resolve: baseServingAmount() would divide by (say) 400 on top of
-      // numbers that are already per-100g, quietly quartering every
-      // later quantity this food is logged at.
-      const factor = 100 / servingG;
-      const nums = Object.fromEntries(Object.entries(entered).map(([k, v]) => [k, v * factor]));
+      // "100 g" here, never the user's original reference quantity.
+      // Storing the original quantity instead would double-scale every
+      // future resolve: baseServingAmount() would divide by (say) 400 on
+      // top of numbers that are already per-100g, quietly quartering
+      // every later quantity this food is logged at.
+      const factor100 = 100 / servingG;
+      const nums = Object.fromEntries(Object.entries(reference).map(([k, v]) => [k, v * factor100]));
       await api('/me/foods', { method: 'POST', body: JSON.stringify({ name, serving: '100 g', ...nums }) });
-      // quantity/unit now reflect the REAL entered serving size, not a
-      // fabricated "1 serving" -- lets a later "Edit Quantity" scale
-      // proportionally from an actual baseline (see PUT /me/meal-logs/:id's
-      // own comment on the bug this pattern closes elsewhere).
-      await onAdd({ name, calories: Math.round(entered.calories), protein: entered.protein, carbs: entered.carbs, fat: entered.fat, source: 'manual', quantity: servingG, unit: 'g' }, { keepOpen: true });
+      // Log the ACTUAL eaten amount -- reference values scaled by
+      // eatenG/servingG, never assumed equal to the reference quantity.
+      // scale === 1 whenever eatenGrams still mirrors servingGrams (the
+      // common case, e.g. the Chapati test: 40g reference, 40g eaten),
+      // so this is a no-op change of behavior for anyone who never
+      // touches "how much did you eat".
+      const scale = eatenG / servingG;
+      const logged = {
+        calories: reference.calories * scale, protein: reference.protein * scale,
+        carbs: reference.carbs * scale, fat: reference.fat * scale,
+      };
+      // quantity/unit reflect the REAL eaten quantity, not the reference
+      // and not a fabricated "1 serving" -- lets a later "Edit Quantity"
+      // scale proportionally from an actual baseline (see
+      // PUT /me/meal-logs/:id's own comment on the bug this pattern
+      // closes elsewhere).
+      await onAdd({ name, calories: Math.round(logged.calories), protein: logged.protein, carbs: logged.carbs, fat: logged.fat, source: 'manual', quantity: eatenG, unit: 'g' }, { keepOpen: true });
       setCustomForm(EMPTY_CUSTOM);
+      setCustomEatenTouched(false);
       setCustomDuplicate(null);
       setShowMoreMacros(false);
       setCustomCalorieOverride(false);
@@ -770,13 +822,23 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     if (!customDuplicate) return;
     setCustomSaving(true);
     try {
+      // customDuplicate's own macros are per-100g (baseServingGrams parses
+      // its stored `serving`, defaulting to 100 for a legacy row). Scale
+      // by whatever the user already typed into "how much did you eat" on
+      // this form -- the eaten amount is independent of the saved food's
+      // own reference quantity, same as a fresh save -- falling back to
+      // the food's own base serving only if that field is empty/invalid.
       const baseG = baseServingGrams(customDuplicate.serving);
+      const eatenG = Number(customForm.eatenGrams);
+      const logG = eatenG > 0 ? eatenG : baseG;
+      const scale = logG / baseG;
       await onAdd({
-        name: customDuplicate.name, calories: Math.round(customDuplicate.calories || 0),
-        protein: customDuplicate.protein || 0, carbs: customDuplicate.carbs || 0, fat: customDuplicate.fat || 0,
-        source: 'manual', quantity: baseG, unit: 'g',
+        name: customDuplicate.name, calories: Math.round((customDuplicate.calories || 0) * scale),
+        protein: (customDuplicate.protein || 0) * scale, carbs: (customDuplicate.carbs || 0) * scale, fat: (customDuplicate.fat || 0) * scale,
+        source: 'manual', quantity: logG, unit: 'g',
       }, { keepOpen: true });
       setCustomForm(EMPTY_CUSTOM);
+      setCustomEatenTouched(false);
       setCustomDuplicate(null);
     } catch (e) {
       setCustomErr(e.message || 'Could not log that food');
@@ -1073,6 +1135,25 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   // level.
   const dialogLabel = screen === 'manual' ? 'Add product manually' : screen === 'ai' ? 'AI estimate' : screen === 'portion' ? (barcodeItem ? 'Confirm product' : 'How much?') : screen === 'custom' ? 'Custom Macros' : 'Log Food';
 
+  // Custom Macros live preview -- the SAME reference->eaten scaling
+  // submitCustomFood will actually log, computed identically here purely
+  // for display (protein/carbs/fat/calories × eatenGrams/servingGrams).
+  // Only rendered once both quantities are valid positive numbers, so a
+  // blank/mid-typed field shows nothing rather than NaN.
+  const customReferenceCalories = customCalorieOverride && customForm.calories !== ''
+    ? Number(customForm.calories)
+    : calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) });
+  const customServingG = Number(customForm.servingGrams);
+  const customEatenG = Number(customForm.eatenGrams);
+  const customPreviewValid = customServingG > 0 && customEatenG > 0 && Number.isFinite(customReferenceCalories);
+  const customPreviewScale = customPreviewValid ? customEatenG / customServingG : 1;
+  const customPreviewLogged = {
+    protein: Number(customForm.protein || 0) * customPreviewScale,
+    carbs: Number(customForm.carbs || 0) * customPreviewScale,
+    fat: Number(customForm.fat || 0) * customPreviewScale,
+    calories: customReferenceCalories * customPreviewScale,
+  };
+
   // Rendered via a portal straight to <body> rather than in place --
   // ClientLayout.jsx's page-transition wrapper carries `.anim-fadeUp`
   // (animation ... both, ending on a transform keyframe), and a fill-
@@ -1159,28 +1240,30 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                        placeholder="e.g. Homemade Paneer" autoFocus
                        className="input w-full !py-2 mt-1" aria-label="Food name" />
               </label>
-              {/* Real bug, found live: this form used to have no serving
-                  concept at all -- whatever someone typed was stored
-                  as-is and treated as per-100g internally (the same
-                  convention every other food in this app uses), so a
-                  genuinely normal 300-400g meal's real totals (never
-                  meant to describe 100g) tripped the backend's own
-                  physical-plausibility check ("protein+carbs+fat+fiber
-                  can't exceed 100g per 100g of food") -- a correct
-                  check, just being fed numbers for the wrong amount.
-                  Fixed the actual gap instead of just explaining it:
-                  a real serving-size field, converted to per-100g
-                  before saving (submitCustomFood's own comment), the
-                  same way the manual-barcode form already does. */}
+              {/* NUTRITION REFERENCE -- the quantity the macros below
+                  describe. Protein+carbs+fat are NOT required to sum to
+                  this number: they're a subset of a food's total mass
+                  (water/ash make up the rest), never the whole of it. A
+                  40g chapati can genuinely be 3g protein + 18g carbs + 2g
+                  fat -- 23g, not 40g -- and that's correct, not an error.
+                  Converted to this app's per-100g storage convention
+                  before saving (see submitCustomFood's own comment), the
+                  same way the manual-barcode form already does -- but
+                  that conversion never validates macros against this
+                  quantity; it only rescales them. */}
+              <div className="text-[9px] uppercase tracking-[.16em] font-bold pt-1" style={{ color: 'var(--accent)' }}>Nutrition reference</div>
               <label className="block">
-                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Serving size (g) *</span>
-                <input type="number" min="1" step="any" value={customForm.servingGrams}
-                       onChange={(e) => setCustomField('servingGrams', e.target.value)}
-                       placeholder="e.g. 250 for one bowl"
-                       className="input w-full !py-2 mt-1 tabular-nums" aria-label="Serving size in grams" />
+                <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>What quantity are these nutrition details for? *</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <input type="number" min="1" step="any" value={customForm.servingGrams}
+                         onChange={(e) => setCustomServingGrams(e.target.value)}
+                         placeholder="e.g. 250 for one bowl"
+                         className="input w-full !py-2 tabular-nums" aria-label="Nutrition reference quantity, in grams" />
+                  <span className="text-[11px] shrink-0" style={{ color: 'var(--faint)' }}>g</span>
+                </div>
               </label>
               <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
-                Enter the macros below for <b>that serving</b> — e.g. everything in one full bowl or plate, not per 100&nbsp;g.
+                Nutrition for {Number.isFinite(customServingG) && customServingG > 0 ? customServingG : '—'}&nbsp;g — protein, carbs and fat don't need to add up to this number.
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (
@@ -1204,7 +1287,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                            className="input w-full !py-2 mt-1 tabular-nums" aria-label="Calories (manual override)" />
                   ) : (
                     <div className="input w-full !py-2 mt-1 tabular-nums flex items-center justify-between" style={{ color: 'var(--ink)', cursor: 'default' }}>
-                      <span>{calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) })} kcal</span>
+                      <span>{customReferenceCalories} kcal</span>
                     </div>
                   )}
                 </label>
@@ -1235,6 +1318,38 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                   + Fiber, sugar, sodium (optional)
                 </button>
               )}
+
+              {/* HOW MUCH DID YOU EAT? -- a SEPARATE quantity from the
+                  reference above. Defaults to mirroring it (most people
+                  describe macros for exactly what they ate), but can be
+                  changed independently -- e.g. a 40g-reference chapati
+                  when only half of it was eaten. */}
+              <div className="h-px my-1" style={{ background: 'var(--line)' }} />
+              <div className="text-[9px] uppercase tracking-[.16em] font-bold pt-1" style={{ color: 'var(--accent)' }}>How much did you eat?</div>
+              <label className="block">
+                <div className="flex items-center gap-2 mt-1">
+                  <input type="number" min="1" step="any" value={customForm.eatenGrams}
+                         onChange={(e) => setCustomEatenGrams(e.target.value)}
+                         className="input w-full !py-2 tabular-nums" aria-label="Amount you ate, in grams" />
+                  <span className="text-[11px] shrink-0" style={{ color: 'var(--faint)' }}>g</span>
+                </div>
+              </label>
+              {/* Live preview -- the exact scaled values submitCustomFood
+                  will log (protein/carbs/fat/calories ×
+                  eatenGrams/servingGrams), so what's shown here is what
+                  gets saved, never an approximation of it. */}
+              {customPreviewValid && (
+                <div className="rounded-xl px-3 py-2.5 space-y-1.5" style={{ border: '1px solid var(--line)', background: 'var(--accent-soft)' }}>
+                  <div className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Your logged nutrition — for {customEatenG}&nbsp;g</div>
+                  <div className="flex items-center justify-between text-[11px] tabular-nums" style={{ color: 'var(--ink)' }}>
+                    <span>Protein {r1(customPreviewLogged.protein)} g</span>
+                    <span>Carbs {r1(customPreviewLogged.carbs)} g</span>
+                    <span>Fat {r1(customPreviewLogged.fat)} g</span>
+                  </div>
+                  <div className="text-[14px] font-bold tabular-nums" style={{ color: 'var(--accent)' }}>{Math.round(customPreviewLogged.calories)} kcal</div>
+                </div>
+              )}
+
               <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
                 Private to you — saved as one of your own foods, never added to the shared SK OS database. It'll show up first the next time you search for it.
               </div>

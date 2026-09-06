@@ -106,6 +106,8 @@ ALTER TABLE messages           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages           FORCE ROW LEVEL SECURITY;
 ALTER TABLE notifications      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications      FORCE ROW LEVEL SECURITY;
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_preferences FORCE ROW LEVEL SECURITY;
 ALTER TABLE events             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events             FORCE ROW LEVEL SECURITY;
 ALTER TABLE ai_memory          ENABLE ROW LEVEL SECURITY;
@@ -195,7 +197,8 @@ BEGIN
     'nutrition_plans','nutrition_balance_adjustments','nutrition_balance_prompts',
     'intelligence_events','gym_settings','custom_metrics','metric_entries',
     'client_meal_templates','client_workouts','attendance_events','alerts','coach_insights',
-    'packages','subscriptions','payments','attendance','messages','notifications','events',
+    'packages','subscriptions','payments','attendance','messages','notifications',
+    'notification_preferences','events',
     'ai_memory','ai_feedback',
     'community_members','community_workout_shares','shared_workouts'
   ] LOOP

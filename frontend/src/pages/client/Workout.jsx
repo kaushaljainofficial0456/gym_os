@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
-import { ErrorState, Bar, Ring, CheckIcon } from '../../components/UI.jsx';
+import { ErrorState, Bar, Ring, CheckIcon, XIcon } from '../../components/UI.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
@@ -56,8 +57,19 @@ function ChipRow({ options, value, onChange, label }) {
  * Used by BOTH the "Build my workout" modal and the personal planner form so
  * they share the exact same alias-aware search (GET /workouts/exercises).
  * No text/filters => shows `fallback` (the cached full library).
+ *
+ * `onQuickAdd` (optional): when passed, each row splits into two controls
+ * -- tapping the name still opens the detail view via `onPick` (demo,
+ * muscle/equipment, form cues), but a separate "+" icon adds the exercise
+ * to the session immediately with sensible defaults (3×10, bodyweight --
+ * all editable afterward in the session list), without leaving this
+ * search screen. Matches the Add Cardio list's own quick-add pattern a
+ * few hundred lines down in this same file. Omitted entirely, this
+ * reverts to the original single-button row (the personal planner form's
+ * call site already adds on tap with no detail step, so it never needs
+ * a second control here).
  */
-function ExerciseSearchList({ fallback, addedIds, onPick, dense }) {
+function ExerciseSearchList({ fallback, addedIds, onPick, onQuickAdd, dense }) {
   const [q, setQ] = useState('');
   const [region, setRegion] = useState('');
   const [equip, setEquip] = useState('');
@@ -97,15 +109,39 @@ function ExerciseSearchList({ fallback, addedIds, onPick, dense }) {
         {!loading && !list.length && <div className="text-[11px] text-mute px-1 py-3 text-center">No exercises match — try fewer filters.</div>}
         {list.slice(0, 40).map((x) => {
           const added = addedIds?.has(x.id);
+          if (!onQuickAdd) {
+            return (
+              <button key={x.id} type="button" disabled={added} onClick={() => onPick(x)}
+                className={`w-full flex items-center justify-between gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
+                  <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
+                </span>
+                {added && <span className="text-[10px] text-good shrink-0"><CheckIcon /></span>}
+              </button>
+            );
+          }
           return (
-            <button key={x.id} type="button" disabled={added} onClick={() => onPick(x)}
-              className={`w-full flex items-center justify-between gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
-              <span className="min-w-0">
+            <div key={x.id}
+              className={`flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 transition-all ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
+              <button type="button" className="flex-1 min-w-0 text-left" onClick={() => onPick(x)}>
                 <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
                 <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-              </span>
-              {added && <span className="text-[10px] text-good shrink-0"><CheckIcon /></span>}
-            </button>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); if (!added) onQuickAdd(x); }}
+                className="shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-all active:scale-90"
+                style={added
+                  ? { color: 'rgb(var(--good-rgb))' }
+                  : { color: 'var(--accent)', border: '1px solid rgb(var(--accent-rgb) / .4)', background: 'rgb(var(--accent-rgb) / .10)' }}
+                aria-label={added ? `${exerciseLabel(x.name)} added` : `Add ${exerciseLabel(x.name)}`}
+                disabled={added}>
+                {added ? <CheckIcon /> : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                )}
+              </button>
+            </div>
           );
         })}
       </div>
@@ -1496,7 +1532,18 @@ export default function Workout() {
         )}
 
         {/* ═══════════ BUILD TODAY MODAL ═══════════ */}
-        {builderOpen && (
+        {/* Rendered via a portal straight to <body> -- same fix, same
+            reason, as FoodLogSheet.jsx's own portal (see its header
+            comment): this page's cards use `.anim-fadeUp`, whose
+            `animation-fill-mode: both` leaves a non-`none` transform on
+            its own element for as long as it exists, which becomes the
+            containing block for any `position: fixed` DESCENDANT of it --
+            so without a portal, this modal was fixed relative to that
+            ancestor's (much taller, scrolled) box instead of the true
+            viewport. Confirmed live: the modal rendered, but its
+            bounding rect landed hundreds of pixels above/below the
+            visible screen depending on scroll position. */}
+        {builderOpen && createPortal((
           <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
             <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
@@ -1593,6 +1640,15 @@ export default function Workout() {
                     fallback={libList}
                     addedIds={new Set(builderExs.map((b) => b.exercise_id))}
                     onPick={(x) => setSelectedLibEx(x)}
+                    // Quick-add: identical object shape and justAdded
+                    // feedback as the detail view's own "+ Add" button
+                    // above -- this just skips having to open that view
+                    // first for someone who already knows what they want.
+                    onQuickAdd={(x) => {
+                      setJustAdded(x.id);
+                      setTimeout(() => setJustAdded(null), 500);
+                      setBuilderExs((b) => [...b, { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
+                    }}
                   />
 
                 )}
@@ -1637,7 +1693,7 @@ export default function Workout() {
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
         {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
         {plannerOpen && (
@@ -1780,7 +1836,9 @@ export default function Workout() {
         )}
 
         {/* ────── CARDIO SELECTION MODAL ────── */}
-        {cardioOpen && (
+        {/* Same portal fix as the Build Today modal above -- identical
+            broken-containing-block bug, same cause, same reason. */}
+        {cardioOpen && createPortal((
           <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
             <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
@@ -1851,13 +1909,32 @@ export default function Workout() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (added) return;
-                                setCardioConfigItem(id);
+                                // Quick-add: skip the parameter-configuration
+                                // screen entirely, using each field's own
+                                // placeholder as its default (the same
+                                // number that would already be pre-filled if
+                                // you opened that screen and accepted it
+                                // as-is). Tapping the row's NAME still opens
+                                // the full config screen for anyone who
+                                // wants to set real numbers first -- this
+                                // "+" is the immediate-add path, matching
+                                // how the food search list's own "+" works.
+                                // Stays open (no setCardioOpen(false)) so
+                                // more than one cardio exercise can be
+                                // quick-added in a row, same as a food
+                                // search list's quick-log.
+                                const params = {};
+                                cardioExerciseConfig(id).forEach((field) => {
+                                  if (field.placeholder) params[field.key] = field.placeholder;
+                                });
+                                setCardioItems((prev) => [...prev, { id, params, segments: [], currentParams: { ...params } }]);
+                                setToast(`${cardioName(id)} added`);
                               }}
                               className="shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-all active:scale-90"
                               style={added
                                 ? { color: 'rgb(var(--good-rgb))' }
                                 : { color: 'var(--accent)', border: '1px solid rgb(var(--accent-rgb) / .4)', background: 'rgb(var(--accent-rgb) / .10)' }}
-                              aria-label={`Add ${cardioName(id)}`}
+                              aria-label={added ? `${cardioName(id)} added` : `Add ${cardioName(id)}`}
                               disabled={added}>
                               {added ? <CheckIcon /> : (
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -1872,7 +1949,7 @@ export default function Workout() {
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
         {toast && <div className="toast anim-toast">{toast}</div>}
         <ShareWorkoutSheet

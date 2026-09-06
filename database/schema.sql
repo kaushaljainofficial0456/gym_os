@@ -828,6 +828,30 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- applyPgMigrations instead, after the column is guaranteed to exist on
 -- databases that predate it.
 
+-- One row per user -- the notification-center toggles surfaced by
+-- Settings.jsx's NotificationSettingsCard (routes/notifications.js's
+-- GET/PATCH /preferences). Lazily created with defaults on first read,
+-- never required to exist for a user who has never opened Settings.
+-- Booleans are INTEGER 0/1 (SQLite has no native boolean; every other
+-- flag column in this schema follows the same convention).
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  enabled             INTEGER NOT NULL DEFAULT 1,
+  workout_reminders   INTEGER NOT NULL DEFAULT 1,
+  water_reminders     INTEGER NOT NULL DEFAULT 1,
+  water_interval_h    REAL NOT NULL DEFAULT 2,
+  nutrition_reminders INTEGER NOT NULL DEFAULT 1,
+  daily_summary       INTEGER NOT NULL DEFAULT 1,
+  daily_summary_time  TEXT NOT NULL DEFAULT '23:30',
+  tomorrow_workout    INTEGER NOT NULL DEFAULT 1,
+  rest_day_reminders  INTEGER NOT NULL DEFAULT 0,
+  incomplete_workout  INTEGER NOT NULL DEFAULT 1,
+  quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
+  quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+  updated_at          TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id        TEXT PRIMARY KEY,
   org_id    TEXT REFERENCES organizations(id) ON DELETE CASCADE,

@@ -35,7 +35,7 @@ import enrollmentRoutes from './routes/enrollment.js';
 import paymentsDevRoutes from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
-// notificationRoutes import removed -- see the mount site below for why.
+import notificationRoutes from './routes/notifications.js';
 import communityRoutes from './routes/community.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
@@ -224,19 +224,7 @@ app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
 app.use('/api/workout-share', workoutShareRoutes(db)); // PUBLIC: preview a shared workout link (no auth) -- importing requires auth, see POST /api/me/workout-share/:id/import
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
-// /api/notifications is NOT mounted: manavi-progress-enhancements-v2 added
-// this import + mount line, but backend/src/routes/notifications.js was
-// never committed to that branch. An ESM import of a nonexistent file
-// throws at module load, which crashes this file's `import` chain and
-// takes down the ENTIRE API on every request (confirmed live: this was
-// the actual cause of "request failed while login" right after that
-// merge landed, not the login route itself). frontend/src/pages/client/
-// Settings.jsx's NotificationSettingsCard already calls
-// GET/PATCH /api/notifications/preferences and fails that call
-// gracefully (renders nothing, no crash) -- once routes/notifications.js
-// exists, re-add the import above and this line to wire it up; a 404
-// from a real, mounted-but-incomplete route is a fine intermediate state,
-// an unresolvable import at boot is not.
+app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js

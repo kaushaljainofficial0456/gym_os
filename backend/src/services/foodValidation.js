@@ -67,13 +67,26 @@ function validateFoodRecord(record = {}) {
     }
   }
 
-  // A macro gram total that alone exceeds 100 g per 100 g of food is
-  // physically impossible for a solid (moisture/ash take up the rest).
-  const perHundred = ['protein_g', 'carb_g', 'fat_g', 'fiber_g']
-    .reduce((sum, f) => sum + (Number.isFinite(Number(record[f])) ? Number(record[f]) : 0), 0);
-  if (perHundred > 100) {
-    errors.push(`protein + carbs + fat + fiber (${perHundred.toFixed(1)} g) exceeds 100 g per 100 g — impossible`);
-  }
+  // REMOVED (was here through the previous revision of this file): a check
+  // rejecting any record whose protein_g + carb_g + fat_g + fiber_g summed
+  // to more than 100 -- on the theory that macro grams can never exceed
+  // 100g per 100g of food. That premise is correct for a food's TOTAL
+  // physical weight (water/ash make up the rest), but this function has no
+  // way to know whether the caller's numbers actually represent a 100g
+  // basis -- and in this app's own Custom Macros flow they never did: a
+  // person enters macros for whatever quantity they're describing (a 40g
+  // chapati: 3g protein, 18g carbs, 2g fat), and protein+carbs+fat is NOT
+  // required to equal that quantity in the first place (the rest is water
+  // and other non-macro mass) -- 3+18+2=23, not 40, and that is correct,
+  // not "impossible". Rejecting on a raw gram sum crossing 100 produced
+  // real false positives for ordinary small-serving, calorie-dense foods
+  // once fed through a per-100g conversion upstream (a 25g protein bar
+  // with 15g protein/15g carbs/8g fat converts to 60+60+32=152 per 100g,
+  // which is high but not remotely "impossible" for a concentrated food).
+  // Never reinstate an equality/upper-bound check between macro grams and
+  // a serving/reference weight -- see FoodLogSheet.jsx's Custom Macros
+  // screen for the reference-quantity-vs-eaten-quantity model this
+  // function's callers now use instead.
 
   return { valid: errors.length === 0, errors, warnings };
 }
