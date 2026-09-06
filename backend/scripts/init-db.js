@@ -248,6 +248,9 @@ const MIGRATIONS = [
   // feature's first migration, these two columns are additive to it ---
   ['nutrition_balance_adjustments', 'custom_days', `custom_days INTEGER`],
   ['nutrition_balance_adjustments', 'custom_protein_target', `custom_protein_target REAL`],
+  // --- REMEDIATION: session revocation (see schema.sql's own comment on
+  // this column and auth.js's signToken/requireAuth) ---
+  ['users', 'token_epoch', `token_epoch INTEGER NOT NULL DEFAULT 0`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

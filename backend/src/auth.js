@@ -45,10 +45,53 @@ export const JWT_ALGORITHM = 'HS256';
 
 export function signToken(user) {
   return jwt.sign(
-    { sub: user.id, role: user.role, org: user.org_id, name: user.name, email: user.email },
+    // `epoch` (REMEDIATION: session revocation) -- carries the user's
+    // token_epoch at sign time. requireAuth below rejects a token whose
+    // epoch doesn't match the user's CURRENT epoch, which is what makes
+    // /auth/change-password, /auth/reset-password and
+    // /auth/logout-everywhere able to revoke every OTHER already-issued
+    // token for this user, not just clear one browser's own cookie.
+    // Defaults to 0 -- a caller that doesn't carry token_epoch on its user
+    // object (none of this codebase's other call sites need to) signs an
+    // epoch-0 token, matching every existing user row's DB default.
+    { sub: user.id, role: user.role, org: user.org_id, name: user.name, email: user.email, epoch: user.token_epoch || 0 },
     config.jwtSecret,
     { expiresIn: config.jwtExpiresIn, algorithm: JWT_ALGORITHM }
   );
+}
+
+// ---- REMEDIATION: session revocation (per-user token epoch) ----
+// Same shape as utils/time.js's getOrgTzCached: a per-key TTL cache in
+// front of a DB read, so requireAuth's hot path doesn't take a second
+// query on every single authenticated request. The trade-off is explicit
+// and bounded: a token revoked by a password change/reset/logout-
+// everywhere on ONE serverless instance stops working there immediately
+// (the cache is invalidated in-process the moment the epoch is bumped),
+// but a DIFFERENT warm instance that already cached the old epoch keeps
+// accepting that token for up to EPOCH_TTL_MS. That is a real, bounded
+// window, not instant global revocation -- true instant cross-instance
+// revocation would need a shared cache/pub-sub this codebase doesn't have
+// (the same limitation upstashRateLimitStore.js's own header discusses for
+// rate-limit state). 60s was chosen to keep the residual window small
+// without adding a DB round trip to every request in the common case.
+const EPOCH_TTL_MS = 60_000;
+const epochCache = new Map(); // userId -> { epoch, at }
+
+export async function getUserEpochCached(db, userId) {
+  const hit = epochCache.get(userId);
+  const now = Date.now();
+  if (hit && (now - hit.at) < EPOCH_TTL_MS) return hit.epoch;
+  const row = await db.q1('SELECT token_epoch FROM users WHERE id = ?', [userId]);
+  const epoch = row?.token_epoch || 0;
+  epochCache.set(userId, { epoch, at: now });
+  return epoch;
+}
+
+// Call immediately after any write to users.token_epoch so THIS process
+// stops accepting the old epoch right away, instead of waiting out the TTL.
+export function invalidateUserEpochCache(userId) {
+  if (userId) epochCache.delete(userId);
+  else epochCache.clear();
 }
 
 // Set the JWT as an httpOnly cookie — immune to XSS token theft.
@@ -81,9 +124,30 @@ export async function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+  // REMEDIATION: session revocation. A token's own `epoch` claim (defaults
+  // to 0 for tokens signed before this existed, or by any caller that never
+  // set one) must match the user's CURRENT token_epoch -- see signToken's
+  // own comment and getUserEpochCached above for exactly what this closes.
+  // Fails OPEN on any error getting there (db unavailable, or the epoch
+  // read itself failing), matching this function's own pre-existing
+  // posture on the tz lookup right below: a transient DB hiccup failing
+  // EVERY authenticated request app-wide is a worse outage than the narrow
+  // window where a revoked token might still work during that same hiccup
+  // -- and any route this request goes on to call almost certainly hits
+  // the same DB anyway, so failing closed here would not add real
+  // protection, only a new single point of failure on the auth hot path.
+  let db;
   try {
-    const db = await getDb();
-    req.tz = await getOrgTzCached(db, req.user.org || null);
+    db = await getDb();
+    const currentEpoch = await getUserEpochCached(db, req.user.sub);
+    if ((req.user.epoch || 0) !== currentEpoch) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  } catch (e) {
+    console.error('[auth] token-epoch check failed, failing open:', e?.message || e);
+  }
+  try {
+    req.tz = db ? await getOrgTzCached(db, req.user.org || null) : DEFAULT_TZ;
   } catch {
     req.tz = DEFAULT_TZ;
   }

@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS users (
   email_verified INTEGER NOT NULL DEFAULT 0,
   terms_accepted_at TEXT,
   terms_version     TEXT,
+  -- REMEDIATION (session revocation): bumped on password change/reset (and
+  -- POST /auth/logout-everywhere). Carried as the epoch claim in every
+  -- signed JWT (see auth.js signToken/requireAuth) -- a token whose epoch
+  -- doesn't match the user's current value is rejected, which is what
+  -- makes a password reset actually revoke sessions on OTHER devices
+  -- instead of only clearing the resetting browser's own cookie. Default 0
+  -- so every token issued before this column existed keeps validating.
+  token_epoch   INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL
 );
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
-import { hashPassword, verifyPassword, needsRehash, signToken, setAuthCookie, clearAuthCookie, requireAuth } from '../auth.js';
+import { hashPassword, verifyPassword, needsRehash, signToken, setAuthCookie, clearAuthCookie, requireAuth, invalidateUserEpochCache } from '../auth.js';
 import { rateLimit, getRateLimitStore } from '../rateLimit.js';
 import { validate } from '../validate.js';
 import { id, now } from '../ids.js';
@@ -624,18 +624,44 @@ export default function authRoutes(db) {
     if (!(await verifyPassword(req.body.current_password, user.password_hash))) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
-    await db.run('UPDATE users SET password_hash = ? WHERE id = ?',
-      [await hashPassword(req.body.new_password), user.id]);
-    // F-10: does NOT clear this session's own cookie (unlike
-    // /reset-password, which does) -- the caller just proved BOTH the
-    // old and new password from an already-authenticated session, so
-    // forcing an immediate re-login here would be a pure UX regression
-    // with no real security benefit for THIS device. Cross-device
-    // session revocation has the same residual-risk limitation noted on
-    // /reset-password above (stateless JWTs, no token-epoch mechanism
-    // yet) -- an attacker who already has a valid token for this
-    // account from another device keeps it until natural expiry.
-    res.json({ ok: true });
+    // REMEDIATION: token_epoch bump closes the residual risk the comment
+    // below used to describe -- every OTHER device's already-issued token
+    // (epoch 0/whatever it was) now fails requireAuth's epoch check
+    // immediately (this process) to within EPOCH_TTL_MS (any other warm
+    // instance) -- see auth.js's getUserEpochCached for the exact bound.
+    const newEpoch = (user.token_epoch || 0) + 1;
+    await db.run('UPDATE users SET password_hash = ?, token_epoch = ? WHERE id = ?',
+      [await hashPassword(req.body.new_password), newEpoch, user.id]);
+    invalidateUserEpochCache(user.id);
+    // Does NOT clear THIS session's own cookie (unlike /reset-password,
+    // which does) -- the caller just proved BOTH the old and new password
+    // from an already-authenticated session, so forcing an immediate
+    // re-login here would be a pure UX regression with no real security
+    // benefit for THIS device. Re-signs a fresh token at the NEW epoch so
+    // this device's own session keeps working seamlessly -- without this,
+    // bumping the epoch would immediately log the caller themselves out
+    // along with every other device, which defeats the UX reasoning above.
+    const freshToken = signToken({ ...user, token_epoch: newEpoch });
+    setAuthCookie(res, freshToken);
+    res.json({ ok: true, token: freshToken });
+  });
+
+  // ---- REMEDIATION: sign out of every other device, without a password
+  // change. Same token_epoch mechanism as /change-password and
+  // /reset-password, exposed as its own action for the case where a user
+  // wants to revoke stolen/lost-device sessions without also being forced
+  // to pick a new password. Re-signs a fresh token for THIS device (same
+  // reasoning as /change-password) -- calling this does not log the
+  // caller themselves out, only every other already-issued token. ----
+  r.post('/logout-everywhere', requireAuth, async (req, res) => {
+    const user = await db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const newEpoch = (user.token_epoch || 0) + 1;
+    await db.run('UPDATE users SET token_epoch = ? WHERE id = ?', [newEpoch, user.id]);
+    invalidateUserEpochCache(user.id);
+    const freshToken = signToken({ ...user, token_epoch: newEpoch });
+    setAuthCookie(res, freshToken);
+    res.json({ ok: true, token: freshToken });
   });
 
   // ---- Phase 2: multi-gym identity ----
@@ -775,19 +801,18 @@ export default function authRoutes(db) {
       };
       return res.status(422).json({ error: messages[result.reason] || 'This reset link is invalid.', reason: result.reason });
     }
-    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(req.body.newPassword), result.userId]);
-    // Clears THIS browser's own session cookie, if the reset happened to
-    // be performed from an already-logged-in tab -- forces a fresh
-    // login with the new password on this device. Does NOT invalidate
-    // any OTHER device's still-live session/cookie: this app's JWTs are
-    // stateless with no server-side session store to revoke against, so
-    // true cross-device revocation on password change would need a
-    // per-user token-epoch check added to requireAuth's own hot path
-    // (which runs on nearly every request across the whole app) -- a
-    // real, load-tested performance-sensitive change in its own right,
-    // deliberately scoped OUT of this pass rather than bolted on
-    // untested. See the security verification report's F-10 section for
-    // this called out explicitly as a residual risk, not an oversight.
+    // REMEDIATION: token_epoch bump (see auth.js's signToken/requireAuth
+    // and getUserEpochCached) -- this now ALSO invalidates every other
+    // device's already-issued token, not just this browser's own cookie
+    // below. Increment via SQL (not a read-then-write) since result.userId
+    // is all we have here, no already-loaded user row to read token_epoch
+    // off of.
+    await db.run('UPDATE users SET password_hash = ?, token_epoch = token_epoch + 1 WHERE id = ?', [await hashPassword(req.body.newPassword), result.userId]);
+    invalidateUserEpochCache(result.userId);
+    // Clears THIS browser's own session cookie too, if the reset happened
+    // to be performed from an already-logged-in tab -- forces a fresh
+    // login with the new password on this device, same as every other
+    // device now needs (the epoch bump just above already revoked them).
     clearAuthCookie(res);
     res.json({ ok: true });
   });
