@@ -34,12 +34,12 @@ export default function AuditLog() {
       <div className="card">
         <div className="filter-grid">
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Search</label>
-            <input className="input" placeholder="action, entity type, entity id…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />
+            <label htmlFor="audit-search">Search</label>
+            <input id="audit-search" className="input" placeholder="action, entity type, entity id…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Entity type</label>
-            <select className="input" value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(0); }}>
+            <label htmlFor="audit-entity-type">Entity type</label>
+            <select id="audit-entity-type" className="input" value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(0); }}>
               <option value="">All</option>
               {['organization', 'payment_order', 'support_ticket', 'reconciliation_issue', 'risk_event', 'export'].map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -47,8 +47,8 @@ export default function AuditLog() {
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Since</label>
-            <input className="input" type="date" value={since} onChange={(e) => { setSince(e.target.value); setPage(0); }} />
+            <label htmlFor="audit-since">Since</label>
+            <input id="audit-since" className="input" type="date" value={since} onChange={(e) => { setSince(e.target.value); setPage(0); }} />
           </div>
           <button className="btn ghost" onClick={resetFilters}>Clear</button>
         </div>

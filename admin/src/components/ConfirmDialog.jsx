@@ -37,8 +37,8 @@ export default function ConfirmDialog({
         {children}
         {confirmText && (
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Type <strong>{confirmText}</strong> to confirm</label>
-            <input ref={inputRef} className="input" value={typed} onChange={(e) => setTyped(e.target.value)}
+            <label htmlFor="confirm-dialog-typed">Type <strong>{confirmText}</strong> to confirm</label>
+            <input id="confirm-dialog-typed" ref={inputRef} className="input" value={typed} onChange={(e) => setTyped(e.target.value)}
               placeholder={confirmText} autoComplete="off" />
           </div>
         )}

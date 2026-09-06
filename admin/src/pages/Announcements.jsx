@@ -89,33 +89,33 @@ export default function Announcements() {
         <h2>{editingId ? 'Edit announcement' : 'New announcement'}</h2>
         <form onSubmit={submit}>
           <div className="field">
-            <label>Title</label>
-            <input className="input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+            <label htmlFor="ann-title">Title</label>
+            <input id="ann-title" className="input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
           </div>
           <div className="field">
-            <label>Message</label>
-            <textarea className="input" rows={3} value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} />
+            <label htmlFor="ann-message">Message</label>
+            <textarea id="ann-message" className="input" rows={3} value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} />
           </div>
           <div className="form-grid-4">
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Audience</label>
-              <select className="input" value={form.audience} onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value }))}>
+              <label htmlFor="ann-audience">Audience</label>
+              <select id="ann-audience" className="input" value={form.audience} onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value }))}>
                 {Object.entries(AUDIENCE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Priority</label>
-              <select className="input" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}>
+              <label htmlFor="ann-priority">Priority</label>
+              <select id="ann-priority" className="input" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}>
                 {['LOW', 'NORMAL', 'HIGH', 'URGENT'].map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Starts (optional)</label>
-              <input className="input" type="datetime-local" value={form.startsAt} onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))} />
+              <label htmlFor="ann-starts">Starts (optional)</label>
+              <input id="ann-starts" className="input" type="datetime-local" value={form.startsAt} onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))} />
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Ends (optional)</label>
-              <input className="input" type="datetime-local" value={form.endsAt} onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))} />
+              <label htmlFor="ann-ends">Ends (optional)</label>
+              <input id="ann-ends" className="input" type="datetime-local" value={form.endsAt} onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>

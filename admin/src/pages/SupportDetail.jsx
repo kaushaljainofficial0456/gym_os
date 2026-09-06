@@ -108,14 +108,14 @@ export default function SupportDetail() {
         <div className="card" style={{ position: 'sticky', top: 14 }}>
           <h2>Details</h2>
           <div className="field">
-            <label>Priority</label>
-            <select className="input" value={ticket.priority} disabled={priorityBusy} onChange={(e) => setPriority(e.target.value)}>
+            <label htmlFor="ticket-priority">Priority</label>
+            <select id="ticket-priority" className="input" value={ticket.priority} disabled={priorityBusy} onChange={(e) => setPriority(e.target.value)}>
               {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label>Assigned to</label>
-            <select className="input" value={ticket.assigned_admin_id || ''} disabled={assignBusy || admins.loading} onChange={(e) => setAssignee(e.target.value)}>
+            <label htmlFor="ticket-assignee">Assigned to</label>
+            <select id="ticket-assignee" className="input" value={ticket.assigned_admin_id || ''} disabled={assignBusy || admins.loading} onChange={(e) => setAssignee(e.target.value)}>
               <option value="">Unassigned</option>
               {(admins.data?.admins || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>

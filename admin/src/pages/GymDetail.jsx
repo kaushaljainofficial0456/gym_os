@@ -169,8 +169,8 @@ export default function GymDetail() {
         onCancel={() => { setRefundOpen(false); setRefundError(''); }}
       >
         <div className="field">
-          <label>Reason (optional)</label>
-          <input className="input" placeholder="e.g. duplicate charge" value={refundReason} onChange={(e) => setRefundReason(e.target.value)} />
+          <label htmlFor="refund-reason">Reason (optional)</label>
+          <input id="refund-reason" className="input" placeholder="e.g. duplicate charge" value={refundReason} onChange={(e) => setRefundReason(e.target.value)} />
         </div>
         {refundError && <p className="error-text" style={{ marginTop: -8 }}>{refundError}</p>}
       </ConfirmDialog>

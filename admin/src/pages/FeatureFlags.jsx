@@ -69,18 +69,18 @@ export default function FeatureFlags() {
         <form onSubmit={create}>
           <div className="form-grid-2">
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Key</label>
-              <input className="input" value={form.key} onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))} placeholder="new_dashboard" />
+              <label htmlFor="flag-key">Key</label>
+              <input id="flag-key" className="input" value={form.key} onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))} placeholder="new_dashboard" />
               <div className="faint" style={{ marginTop: 5 }}>lowercase letters, digits, underscore, dot, dash</div>
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Name</label>
-              <input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="New dashboard" />
+              <label htmlFor="flag-name">Name</label>
+              <input id="flag-name" className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="New dashboard" />
             </div>
           </div>
           <div className="field">
-            <label>Description (optional)</label>
-            <input className="input" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            <label htmlFor="flag-description">Description (optional)</label>
+            <input id="flag-description" className="input" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           </div>
           <button className="btn" type="submit" disabled={creating || !form.key.trim() || !form.name.trim()}>{creating ? 'Creating…' : 'Create flag'}</button>
           {formError && <div className="error-text">{formError}</div>}

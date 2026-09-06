@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
 import Icon from './Icon.jsx';
@@ -155,18 +155,54 @@ export function Seg({ options, value, onChange }) {
   );
 }
 
+// REMEDIATION (accessibility): every screen using this shared Modal --
+// there are many, see the design system's own note that adoption of
+// dedicated focus-managed dialogs (like TrainerLayout's own nav drawer,
+// or admin's ConfirmDialog) is inconsistent app-wide -- previously had
+// role="dialog"/aria-modal="true" but nothing actually MOVED focus:
+// opening one left a keyboard/screen-reader user's focus wherever it
+// already was (often the button that opened it, now hidden behind an
+// overlay), and closing one never returned focus to that trigger either.
+// Both are now handled: focus moves into the dialog panel on open
+// (tabIndex={-1} makes a non-interactive div a valid, if last-resort,
+// focus target -- a modal with an input/button focuses that instead,
+// since the browser's own focus-trap semantics aren't reimplemented
+// here, only entry/exit), and back to the exact element that had focus
+// before opening once it closes.
 export function Modal({ open, onClose, title, children, wide }) {
+  const panelRef = useRef(null);
+  const previouslyFocused = useRef(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    previouslyFocused.current = document.activeElement;
+    // Prefer the first focusable element inside the panel (a form field,
+    // a button) so a keyboard user can act immediately; fall back to the
+    // panel itself so focus still lands somewhere inside the dialog even
+    // when it's pure read-only content.
+    const t = setTimeout(() => {
+      const focusable = panelRef.current?.querySelector(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      (focusable || panelRef.current)?.focus();
+    }, 30);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      clearTimeout(t);
+      // Return focus to whatever opened this modal -- but only if it's
+      // still attached to the page (a row that triggered this modal may
+      // have been removed by the very action the modal just confirmed).
+      if (previouslyFocused.current?.isConnected) previouslyFocused.current.focus();
+    };
   }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 anim-fadeIn" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}
       style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(8px)' }}>
-      <div className={cls('card w-full p-6 anim-scaleIn max-h-[90vh] overflow-auto', wide ? 'max-w-2xl' : 'max-w-md')} onClick={(e) => e.stopPropagation()}>
+      <div ref={panelRef} tabIndex={-1} className={cls('card w-full p-6 anim-scaleIn max-h-[90vh] overflow-auto outline-none', wide ? 'max-w-2xl' : 'max-w-md')} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{title}</h3>
           <button className="btn-ghost" onClick={onClose} aria-label="Close">✕</button>
@@ -217,7 +253,7 @@ export function Toast({ message, tone = 'success' }) {
 export function ErrorState({ error, onRetry }) {
   return (
     <div className="text-center py-10">
-      <div className="text-2xl mb-2">⚠️</div>
+      <div className="text-2xl mb-2" aria-hidden="true">⚠️</div>
       <div className="text-sm text-bad font-semibold font-grotesk">Something went wrong</div>
       <div className="text-xs mt-1 max-w-sm mx-auto break-words" style={{ color: 'var(--mute)' }}>{error?.message || String(error)}</div>
       {onRetry && <button className="btn mt-4" onClick={onRetry}>Try again</button>}

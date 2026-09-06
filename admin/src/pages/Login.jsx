@@ -39,12 +39,12 @@ export default function Login() {
         <p className="login-sub">Platform operator access only.</p>
         <form onSubmit={submit}>
           <div className="field">
-            <label>Email</label>
-            <input className="input-ghost" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+            <label htmlFor="admin-email">Email</label>
+            <input id="admin-email" className="input-ghost" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
           </div>
           <div className="field">
-            <label>Password</label>
-            <input className="input-ghost" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <label htmlFor="admin-password">Password</label>
+            <input id="admin-password" className="input-ghost" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <button className="btn" type="submit" disabled={busy} style={{ width: '100%' }}>
             {busy ? 'Signing in…' : 'Sign in'}
