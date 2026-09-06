@@ -1,8 +1,21 @@
 # Row-Level Security boundary — what it covers, what it doesn't, and how to close the gap
 
-**Status:** documented, not fixed. Written during a security review on
-2026-09-03 after confirming there is no safe, localized code change for
-this — see "Why this isn't a quick fix" below before attempting one.
+**Status:** documented, partially prototyped, NOT verified. Written during
+a security review on 2026-09-03 after confirming there is no safe,
+localized code change for this — see "Why this isn't a quick fix" below
+before attempting one.
+
+**2026-09-07 update:** step 1 of the remediation plan below (the opt-in
+explicit-checkout path) is now implemented — see `db.js`'s
+`PG_RLS_EXPLICIT_CHECKOUT` env var and its own header comment for exactly
+what it does and doesn't cover. It is **off by default** (zero behavior
+change for every existing deployment) and has **not been load-tested
+against a real Postgres instance** — no such instance was available in the
+environment this was written in. Step 2 (load-test it) is the mandatory
+next action before this goes anywhere near staging or production; steps 3
+and 4 (tightening the policies' IS NULL escape, extending the RLS
+integration tests) remain entirely undone and out of scope until step 2
+has real numbers behind it.
 
 ## The boundary, precisely
 
@@ -98,7 +111,7 @@ speculatively inside an unrelated fix pass.
 
 ## Concrete remediation plan (for a dedicated change)
 
-1. **Prototype behind `PG_POOL_METRICS`-style opt-in first.** Add an
+1. **[DONE 2026-09-07, unverified] Prototype behind `PG_POOL_METRICS`-style opt-in first.** Add an
    explicit-checkout path to `runQuery()` that mirrors the existing
    metrics branch (which already does `pool.connect()` → `query()` →
    `release()`) but wraps in `BEGIN; SELECT set_config('app.org_id',

@@ -137,7 +137,76 @@ async function createPg() {
   // inferred from slow responses.
   const metricsOn = process.env.PG_POOL_METRICS === '1';
   const logThresholdMs = Number(process.env.PG_POOL_METRICS_LOG_MS || 20);
+
+  // ============================================================
+  // REMEDIATION PROTOTYPE (docs/RLS-BOUNDARY.md step 1) -- NOT enabled by
+  // default, and not yet load-tested. Read the doc before touching this.
+  //
+  // The gap: database/rls.sql's policies gate on the app.org_id session
+  // variable, which today is set ONLY inside db.tx() via SET LOCAL. Plain
+  // q()/q1()/run() calls -- the large majority of this codebase's reads
+  // and single-row writes -- go through pool.query() directly, a single
+  // pooled round trip with no transaction and nowhere to scope a session
+  // variable, so app.org_id is never set for them and RLS's own "unset ->
+  // all rows visible" branch always applies. Application-level org/client
+  // filters are the real, tested boundary for that path today; this
+  // prototype is what closes it too.
+  //
+  // What this does, only when PG_RLS_EXPLICIT_CHECKOUT=1 AND an org
+  // context exists (requireAuth already populates it via runWithOrg on
+  // every authenticated request -- see auth.js): checks out ONE connection
+  // explicitly (pool.connect(), not pool.query()) and wraps the real query
+  // in BEGIN; SELECT set_config('app.org_id', ..., true); <query>; COMMIT.
+  // SET LOCAL's own semantics (via set_config's third argument) reset it
+  // automatically at COMMIT/ROLLBACK, so it can never leak onto a later,
+  // unrelated request that reuses this same pooled connection -- the exact
+  // failure mode RLS-BOUNDARY.md warns a naive "just SET it" fix risks.
+  //
+  // Why this is NOT wired in unconditionally, per that doc's own plan:
+  //   1. UNMEASURED performance cost. Every plain query goes from "one
+  //      pooled round trip" to "checkout a connection, 3 round trips
+  //      (BEGIN/set_config/query, +COMMIT), release" -- on the SAME
+  //      connection-pool-starvation-sensitive hot path PG_POOL_METRICS
+  //      exists to observe. Load-test with scripts/loadtest.mjs, with and
+  //      without this flag, before trusting it anywhere near production.
+  //   2. community.js, the admin console, and the reconciliation sweep
+  //      all deliberately rely on the "unset app.org_id -> all rows
+  //      visible" branch for legitimate cross-org reads on a shared DB
+  //      role (financialRls.test.js / communityPg.test.js pin this on
+  //      purpose). Those call sites run with NO org context (currentOrg()
+  //      is null for them), so this prototype correctly leaves them on
+  //      the plain pool.query() path below -- but that also means this
+  //      alone does not yet let the policies' IS NULL escape be tightened
+  //      (step 3 of the doc's plan); a platform-level session flag for
+  //      those specific call sites would need to exist first.
+  // Opt in only in a staging/load-test environment: PG_RLS_EXPLICIT_CHECKOUT=1.
+  // ============================================================
+  const rlsExplicitCheckout = process.env.PG_RLS_EXPLICIT_CHECKOUT === '1';
+
   async function runQuery(sql, params) {
+    if (rlsExplicitCheckout) {
+      const orgId = currentOrg();
+      if (orgId) {
+        // Same BEGIN/COMMIT/ROLLBACK/release shape as client.tx() above --
+        // deliberately, not reinvented: COMMIT lives inside the try (right
+        // after the real query succeeds) so a COMMIT failure itself still
+        // reaches the catch's ROLLBACK attempt, and release() only ever
+        // happens once, in finally.
+        const c = await pool.connect();
+        try {
+          await c.query('BEGIN');
+          await c.query(`SELECT set_config('app.org_id', $1, true)`, [String(orgId)]);
+          const res = await c.query(translateSql(sql), params);
+          await c.query('COMMIT');
+          return res;
+        } catch (e) {
+          try { await c.query('ROLLBACK'); } catch { /* already rolled back */ }
+          throw e;
+        } finally {
+          c.release();
+        }
+      }
+    }
     if (!metricsOn) return pool.query(translateSql(sql), params);
     const tWaitStart = performance.now();
     const conn = await pool.connect();
