@@ -110,6 +110,30 @@ test('production + fully configured live payment provider -> boots normally', ()
   assert.match(r.stdout, /BOOTED:production/);
 });
 
+// ESCAPE HATCH regression: this gate shipped and was deployed to a
+// production environment that (as of that same day) had no real Razorpay
+// account configured yet -- config.js throws at import time, so the
+// missing payment config crashed the ENTIRE API, not just payment routes,
+// taking down login along with everything else. ALLOW_MOCK_PAYMENTS_IN_
+// PRODUCTION=true is the deliberate, explicit-opt-in way past that while
+// real credentials are pending -- every other production posture (unset)
+// must still refuse to boot exactly as the tests above already pin.
+test('production + zero payment config + ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true -> boots anyway', () => {
+  const r = loadConfig({ PAYMENT_PROVIDER: undefined, RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '', ALLOW_MOCK_PAYMENTS_IN_PRODUCTION: 'true' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /BOOTED:production/);
+  assert.match(r.stderr, /WARN/);
+  assert.match(r.stderr, /ALLOW_MOCK_PAYMENTS_IN_PRODUCTION/);
+});
+
+test('production + zero payment config + ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=false -> still refuses to start', () => {
+  // Anything other than the literal string 'true' must NOT bypass the
+  // gate -- confirms this isn't an accidental truthy-string check.
+  const r = loadConfig({ PAYMENT_PROVIDER: undefined, RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '', ALLOW_MOCK_PAYMENTS_IN_PRODUCTION: 'false' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /FATAL/);
+});
+
 test('development + no payment config at all -> boots normally (mock provider allowed in dev)', () => {
   const env = { PATH: process.env.PATH, NODE_ENV: 'development' };
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `

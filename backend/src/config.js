@@ -107,7 +107,28 @@ if (nodeEnv === 'production') {
 // without being asked risks breaking a legitimate staging workflow this
 // change has no visibility into. Revisit if staging is ever meant to
 // take real payments too.
-if (nodeEnv === 'production') {
+// ESCAPE HATCH -- added the same day this gate first shipped, after it
+// took down the entire production API (every route, not just payments --
+// config.js throws at import time, so a missing Razorpay config crashed
+// the whole serverless function, login included) against a deployment
+// that, as of this commit, has no real Razorpay account configured yet.
+//
+// ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true is the ONLY way past this check.
+// It does not weaken anything else this gate protects against: unset (the
+// default -- nothing changes for any deployment that doesn't explicitly
+// set this) still fails exactly as before, and routes/paymentsDev.js's
+// mock-checkout endpoint stays hard-unmounted in production regardless
+// (see index.js) -- so setting this var reopens the ORIGINAL boot, not
+// the original exploit; mock "payments" remain genuinely unreachable,
+// which means checkout will not actually complete until real Razorpay
+// keys are configured. This exists to unblock the REST of the app (auth,
+// dashboards, everything non-payment) while that's pending, not to make
+// production payments quietly work again.
+const allowMockPaymentsInProd = process.env.ALLOW_MOCK_PAYMENTS_IN_PRODUCTION === 'true';
+if (nodeEnv === 'production' && allowMockPaymentsInProd) {
+  console.warn('[sk-os] WARN: ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true -- booting without a live payment provider. Checkout will not complete (the mock endpoint stays disabled in production); this exists only to keep the rest of the app running until real Razorpay credentials are configured. Remove this var once they are.');
+}
+if (nodeEnv === 'production' && !allowMockPaymentsInProd) {
   const paymentProviderEnv = (process.env.PAYMENT_PROVIDER || 'mock').toLowerCase();
   const missingPayment = [];
   if (paymentProviderEnv !== 'razorpay') missingPayment.push('PAYMENT_PROVIDER=razorpay');
@@ -115,7 +136,7 @@ if (nodeEnv === 'production') {
   if (!process.env.RAZORPAY_KEY_SECRET) missingPayment.push('RAZORPAY_KEY_SECRET');
   if (!process.env.RAZORPAY_WEBHOOK_SECRET) missingPayment.push('RAZORPAY_WEBHOOK_SECRET');
   if (missingPayment.length) {
-    console.error(`[sk-os] FATAL: production requires a fully configured live payment provider — missing: ${missingPayment.join(', ')}. The mock payment provider must never run in production.`);
+    console.error(`[sk-os] FATAL: production requires a fully configured live payment provider — missing: ${missingPayment.join(', ')}. The mock payment provider must never run in production. Set ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true to boot anyway while Razorpay isn't configured yet (checkout will stay disabled until it is).`);
     process.exit(1);
   }
 }
