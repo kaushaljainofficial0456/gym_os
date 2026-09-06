@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { requireAuth } from './auth.js';
 import { setRateLimitStore } from './rateLimit.js';
 import { upstashStoreFromEnv } from './upstashRateLimitStore.js';
+import { sendErrorAlert } from './services/errorAlert.js';
 
 let server = null;
 let dbInstance = null;
@@ -311,6 +312,19 @@ app.use('/uploads', requireAuth, async (req, res) => {
       userId: req.user?.sub || null,
       data: { path: req.originalUrl, method: req.method, status: code, message: String(err?.message || err).slice(0, 500), reqId: req.id || null },
     }).catch(() => {});
+    // REMEDIATION: an actual unexpected 500 is exactly the class of
+    // incident that used to be invisible until a user reported it (see
+    // PROGRESS.md's OAuth investigation -- discoverable only in Vercel
+    // function logs or by reading the events table by hand). No-op when
+    // ERROR_ALERT_WEBHOOK_URL isn't configured -- see errorAlert.js's own
+    // header. Fire-and-forget: an alerting hiccup must never delay or
+    // affect the response already being sent below. Deliberately NOT sent
+    // for the controlled payments_not_configured 503 above (or the 413
+    // case) -- those are expected, handled states, not incidents.
+    sendErrorAlert({
+      kind: 'server_error', message: err?.message || String(err),
+      path: req.originalUrl, method: req.method, status: code, reqId: req.id || null,
+    }).catch(() => {});
     res.status(500).json({ error: 'Internal server error', message: config.nodeEnv === 'production' ? undefined : err.message });
   });
 
@@ -335,13 +349,22 @@ if (isMain) {
 // Unhandled promise rejections crash the process (Node >=15 default).
 // Log the error for diagnostics before exiting — the process manager
 // (systemd, k8s, PM2, etc.) will restart the server.
-process.on('unhandledRejection', (reason) => {
+// REMEDIATION: these two handlers ARE awaited before exit (unlike the
+// request-path alert above, which is deliberately fire-and-forget) --
+// the process terminates immediately after either fires, so an
+// un-awaited fetch would never get a chance to leave the process. The
+// alert itself carries its own 5s timeout (see errorAlert.js), so a
+// broken/unreachable webhook cannot meaningfully delay the crash/restart
+// this handler exists to guarantee.
+process.on('unhandledRejection', async (reason) => {
   console.error('[fatal] Unhandled rejection:', reason);
+  await sendErrorAlert({ kind: 'unhandled_rejection', message: reason?.message || String(reason) }).catch(() => {});
   process.exit(1);
 });
 
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', async (err) => {
   console.error('[fatal] Uncaught exception:', err);
+  await sendErrorAlert({ kind: 'uncaught_exception', message: err?.message || String(err) }).catch(() => {});
   process.exit(1);
 });
 
