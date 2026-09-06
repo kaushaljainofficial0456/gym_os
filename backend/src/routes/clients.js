@@ -273,13 +273,13 @@ export default function clientRoutes(db) {
     })) });
   });
 
-  r.post('/:id/photos', validate(schemas.photo), async (req, res) => {
+  r.post('/:id/photos', validate(schemas.photo), async (req, res, next) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const photoId = id('pho');
     // Images are stored as private files (storage_key), never as base64 in the
     // DB. The client still sends a data URL; the server converts + validates it.
-    const { saveImage } = await import('../storage.js');
+    const { saveImage, StorageUnavailableError } = await import('../storage.js');
     let storageKey = null;
     let storage = 'data_url';
     try {
@@ -287,6 +287,13 @@ export default function clientRoutes(db) {
       storageKey = saved.storageKey;
       storage = saved.storage;
     } catch (e) {
+      // A StorageUnavailableError means the DEPLOYMENT is misconfigured
+      // (STORAGE_DRIVER=local in production) -- not that this request was
+      // bad. Hand it to the central error handler for a 503, the same way
+      // every payment entry point already does for PaymentsNotConfiguredError,
+      // instead of the 400 below, which is reserved for genuine per-request
+      // validation failures (bad MIME, too large, too small, malformed data URL).
+      if (e instanceof StorageUnavailableError) return next(e);
       return res.status(400).json({ error: e.message });
     }
     await db.run(

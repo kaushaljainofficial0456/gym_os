@@ -296,6 +296,15 @@ app.use('/uploads', requireAuth, async (req, res) => {
     if (err?.code === 'payments_not_configured') {
       return res.status(503).json({ error: 'payments_not_configured', message: 'Payments are not configured on this deployment.' });
     }
+    // Storage misconfiguration (storage.js's StorageUnavailableError) --
+    // same posture as payments_not_configured just above: the caller sent
+    // a perfectly valid request, the DEPLOYMENT can't durably store it
+    // (STORAGE_DRIVER=local in production). A controlled 503, never a
+    // generic 500 or a route-local 400 that would wrongly imply the
+    // caller's upload itself was invalid.
+    if (err?.code === 'storage_not_configured') {
+      return res.status(503).json({ error: 'storage_not_configured', message: err.message });
+    }
     // log diagnostics server-side only — never expose SQL/stack/secrets to clients
     console.error(`[error] req=${req.id || '-'}`, err?.message || err);
     // Also persist to the events table (best-effort, never blocks the

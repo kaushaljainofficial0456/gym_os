@@ -111,6 +111,21 @@ const ALLOWED = {
 };
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
+/** Thrown when this deployment cannot durably store an upload (production
+ *  with STORAGE_DRIVER=local). Carries an HTTP status + stable code, same
+ *  shape as payments/paymentProvider.js's PaymentsNotConfiguredError, so
+ *  index.js's central error handler can turn it into a controlled 503
+ *  instead of a route-local 400 -- the caller did nothing wrong here, the
+ *  deployment is misconfigured, and those are different status codes. */
+export class StorageUnavailableError extends Error {
+  constructor() {
+    super('File uploads are unavailable: STORAGE_DRIVER=local cannot persist files in production. Configure STORAGE_DRIVER=s3 with a real object-storage bucket.');
+    this.name = 'StorageUnavailableError';
+    this.status = 503;
+    this.code = 'storage_not_configured';
+  }
+}
+
 function parseDataUrl(dataUrl) {
   if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
   const m = dataUrl.match(/^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i);
@@ -175,7 +190,7 @@ export async function saveImage({ dataUrl, clientId, scope = 'photos', fileId })
   // before ever touching the filesystem, instead of a confusing EROFS (or
   // worse, an apparently-successful write that a later request can't see).
   if (config.nodeEnv === 'production') {
-    throw new Error('File uploads are unavailable: STORAGE_DRIVER=local cannot persist files in production. Configure STORAGE_DRIVER=s3 with a real object-storage bucket.');
+    throw new StorageUnavailableError();
   }
 
   const abs = path.join(UPLOAD_ROOT, key);

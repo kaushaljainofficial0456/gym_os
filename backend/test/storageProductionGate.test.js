@@ -88,6 +88,38 @@ test('production + STORAGE_DRIVER=local: an actual upload attempt fails with a c
   assert.doesNotMatch(r.stdout, /EROFS|ENOENT/, 'must be the clear custom message, not a raw fs error leaking a path');
 });
 
+// REMEDIATION (P0): this used to be a plain Error with no status/code --
+// every caller's catch block had no reliable way to tell "deployment is
+// misconfigured" apart from "your image was invalid" and both surfaced as
+// a generic/route-chosen status. It's now a StorageUnavailableError,
+// exactly the same shape as paymentProvider.js's PaymentsNotConfiguredError
+// (status 503, a stable machine-readable code), so index.js's central
+// error handler -- and any route that does `if (e instanceof
+// StorageUnavailableError) return next(e)` -- can turn it into a real 503
+// instead of a misleading 400. See routes/clients.js's POST /:id/photos
+// for the one call site wired to this today.
+test('production + STORAGE_DRIVER=local: the thrown error is a StorageUnavailableError (503, storage_not_configured) -- the exact contract index.js and routes/clients.js depend on', () => {
+  const r = run(`
+    const { saveImage, StorageUnavailableError } = await import('file://${storagePath}');
+    try {
+      await saveImage({ dataUrl: '${TINY_PNG_DATA_URL}', clientId: 'cl_test', scope: 'photos', fileId: 'pho_test2' });
+      console.log('UNEXPECTED_SUCCESS');
+    } catch (e) {
+      console.log(JSON.stringify({
+        isStorageUnavailableError: e instanceof StorageUnavailableError,
+        name: e.name, status: e.status, code: e.code,
+      }));
+    }
+  `, { STORAGE_DRIVER: undefined });
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout, /UNEXPECTED_SUCCESS/);
+  const out = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.equal(out.isStorageUnavailableError, true);
+  assert.equal(out.name, 'StorageUnavailableError');
+  assert.equal(out.status, 503);
+  assert.equal(out.code, 'storage_not_configured');
+});
+
 test('development (not production): STORAGE_DRIVER=local still works exactly as before -- this gate is production-only', async () => {
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     const { saveImage } = await import('file://${storagePath}');
