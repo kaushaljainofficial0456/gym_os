@@ -31,3 +31,33 @@ Thumbs.db
 .claude/settings.local.json
 .claude/worktrees/
 .vercel
+
+# REMEDIATION (repo hygiene, 2026-09-07): a food/exercise-library
+# data-curation pipeline's scratch inputs/outputs -- LLM audit batches,
+# extraction scripts, intermediate merged datasets. Working files for
+# that effort, not part of the shipped app (nothing under backend/src,
+# frontend/src or admin/src reads any of these). Ignored so they stop
+# showing as untracked noise in every `git status` and can't be swept
+# into a commit by an unrelated `git add -A` -- several are multi-MB.
+# Not deleted: if this pipeline becomes a permanent, real tool, move it
+# into its own directory (e.g. tools/data-audit/) with its own README
+# and un-ignore it deliberately there, rather than leaving it loose at
+# the repo root either way.
+/audit_batch*.py
+/audit_script.ps1
+/batches/
+/new_audit_batches/
+/sonnet_review_batches/
+/canonical/
+/exercises.json
+/interim_merged_v4.json
+/build_interim_workbook.py
+/extract_batches.js
+/extract_canonical.js
+/batch_*_analysis.csv
+/SKOS_Audit_Interim_Snapshot.xlsx
+backend/scripts/phase3d-audit.mjs
+ml/data/benchmark/_tmp_check.json
+ml/data/benchmark/build_phase3d.mjs
+ml/data/benchmark/phase3d_audit_report.json
+ml/data/benchmark/phase3d_composite_audit.*

@@ -197,10 +197,11 @@ backend/src/
   config.js              → Env-based configuration
   ids.js                 → ID generator
   index.js               → Express app + routes
-  routes/                → 12 route modules (incl. /api/me client personalization)
-  services/              → 14 service modules (trainingProgram, progressiveOverload,
+  routes/                → 22 route modules (incl. /api/me client personalization) [count last verified 2026-09-07]
+  services/              → 67 service modules, incl. subdirectories (trainingProgram, progressiveOverload,
                            personalRecords, volumeAnalysis, muscles, equipment, adherence,
-                           atRisk, aiCoach, alerts, insights, reports, messaging, analytics)
+                           atRisk, aiCoach, alerts, insights, reports, messaging, analytics,
+                           enterprise/*, intelligence/*, payments/*) [count last verified 2026-09-07]
   test/business.test.js  → 10 tests: split validation, set logging, PRs, overload,
                            alert dedup, timezone day boundaries, tenant isolation
 
@@ -377,13 +378,13 @@ backend/src/
   config.js              → Env-based configuration
   ids.js                 → ID generator
   index.js               → Express app + routes
-  routes/                → 13 route modules (incl. /api/me client personalization + /api/intel intelligence)
-  services/              → 18 service modules (trainingProgram, progressiveOverload,
+  routes/                → 22 route modules (incl. /api/me client personalization + /api/intel intelligence) [count last verified 2026-09-07]
+  services/              → 67 service modules, incl. subdirectories (trainingProgram, progressiveOverload,
                            personalRecords, volumeAnalysis, muscles, equipment, adherence,
                            atRisk, aiCoach, alerts, insights, reports, messaging, analytics,
                            occupancy, intelligence/{units, parseFoods, parseWorkout, nutrition,
                            foodSearch, exerciseSearch, generateProgram, context, aiProvider,
-                           aiContext, coachEngine})
+                           aiContext, coachEngine}, enterprise/*, payments/*) [count last verified 2026-09-07]
   test/business.test.js   → 10 tests: split validation, set logging, PRs, overload,
                             alert dedup, timezone day boundaries, tenant isolation
   test/hardening.test.js  → 10 tests: permissions, planner, meal items, occupancy,
@@ -586,7 +587,7 @@ Rate limiting protects login, org setup, and all AI/upload endpoints.
 
 ## Known Limitations
 
-- **Payments:** Package/subscription system tracks amounts but accepts no real payment processor. Manual/cash records only.
+- **Payments [corrected 2026-09-07 — this line was stale]:** A real Razorpay integration exists (`backend/src/services/payments/paymentProvider.js`) — order creation, checkout-signature verification, webhook signature verification, and refunds, all HMAC-verified and live-tested for order creation against Razorpay's TEST API. It is gated behind a three-state provider (`razorpay` / `none` / `mock`) so a production deployment can never silently fall back to the mock signer (see `config.js`'s boot-time gate). **Still open:** the full checkout-completion + webhook-delivery loop has not been live-tested end to end (only order creation has) — see the payment-provider file's own header comment before treating it as fully proven.
 - **WhatsApp:** Messages channel column is ready for WhatsApp Business API integration but not wired.
 - **Wearables:** Sleep data must be entered manually or via a future wearable integration.
 - **Photos:** New uploads use the private-file storage abstraction (local driver; S3-compatible slot documented). Legacy base64 rows remain readable for back-compat.
