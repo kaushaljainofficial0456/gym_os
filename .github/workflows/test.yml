@@ -82,6 +82,13 @@ jobs:
         with:
           node-version: '22'
       - run: npm run setup
+      # REMEDIATION: the admin console (admin/) is a genuinely separate
+      # app/package.json (see README's own note) -- root `npm run setup`
+      # deliberately never installs it, so it needs its own explicit
+      # install step here, same as it would on anyone's machine before
+      # running its tests locally.
+      - run: npm install --prefix admin --include=dev
+      - run: npm test --prefix admin
       # db:check needs a live database and self-skips without DATABASE_URL, so
       # here this only verifies the frontend build. The real schema gate runs
       # in the Vercel build, which does have DATABASE_URL.

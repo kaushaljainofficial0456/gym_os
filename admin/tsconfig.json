@@ -1,0 +1,22 @@
+// This project has no TypeScript files -- this file exists ONLY so `tsx`
+// (test/setup.js's JSX transform for `npm test`, see its own comment)
+// knows to use the automatic JSX runtime ("jsx": "react-jsx"), matching
+// how @vitejs/plugin-react actually compiles this app in vite.config.js.
+// Without it, tsx falls back to the classic transform (<X/> ->
+// React.createElement(X)), which throws "React is not defined" the
+// moment a test renders any real app component -- none of them import
+// React themselves, exactly like the automatic runtime intends. Vite
+// itself does not read this file; it has its own JSX handling. Same
+// rationale as frontend/tsconfig.json (this is the admin console's own
+// separate app/package.json, hence its own copy).
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["src/**/*", "test/**/*"]
+}
