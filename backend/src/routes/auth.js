@@ -522,7 +522,24 @@ export default function authRoutes(db) {
   // setup is open to anyone, in every environment. This is a deliberate
   // security-posture change, not an oversight -- flagged to the user.
   const setupSecret = process.env.SETUP_SECRET || '';
-  r.post('/setup-org', rateLimit({ windowMs: 60_000, max: 10 }),
+  // REMEDIATION: SETUP_SECRET abuse gate. When unset (the documented,
+  // deliberate default -- see this route's own header comment on why),
+  // the ONLY thing standing between this public, unauthenticated endpoint
+  // and unlimited org creation used to be a flat 10/min-per-IP ceiling --
+  // generous enough that a legitimate gym owner (who creates exactly ONE
+  // org, ever) would never notice it, but permissive enough to let a
+  // sustained script create thousands of orgs per day from one IP. Two
+  // layers now, stacked (both must pass, each independently namespaced --
+  // see rateLimit.js's own comment on why stacking multiple instances is
+  // safe): a tighter burst ceiling AND a hard daily ceiling per IP. This
+  // does not require a CAPTCHA/email-verification product decision (a
+  // bigger UX change, out of scope for this pass) and does not touch the
+  // SETUP_SECRET opt-in gate itself -- a deployment that sets
+  // SETUP_SECRET still gets that check FIRST (see below); this just
+  // bounds the blast radius for every deployment that hasn't.
+  r.post('/setup-org',
+    rateLimit({ windowMs: 60_000, max: 5 }),
+    rateLimit({ windowMs: 24 * 60 * 60 * 1000, max: 20 }),
     validate(z.object({
       orgName: z.string().min(2).max(80),
       ownerName: z.string().min(2).max(80),
