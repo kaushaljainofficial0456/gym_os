@@ -82,6 +82,12 @@ jobs:
         with:
           node-version: '22'
       - run: npm run setup
+      # REMEDIATION: frontend component tests (node --test + tsx + jsdom +
+      # React Testing Library -- see frontend/test/setup.js's own comment
+      # for why this isn't Vitest). Runs before the build so a test
+      # failure fails fast, same ordering reasoning as everywhere else in
+      # this file. First frontend tests this repo has ever had.
+      - run: npm test --prefix frontend
       # db:check needs a live database and self-skips without DATABASE_URL, so
       # here this only verifies the frontend build. The real schema gate runs
       # in the Vercel build, which does have DATABASE_URL.
