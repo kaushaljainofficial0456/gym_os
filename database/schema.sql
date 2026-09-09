@@ -1705,6 +1705,47 @@ CREATE INDEX IF NOT EXISTS idx_health_conn_user ON health_provider_connections(u
 -- until a provider that populates it (WHOOP) actually connects.
 CREATE INDEX IF NOT EXISTS idx_health_conn_external ON health_provider_connections(provider, external_account_id) WHERE external_account_id IS NOT NULL;
 
+-- One canonical workout can be backed by several health_records (the
+-- "source graph" -- section 31): a SK OS-logged session, a wearable's
+-- auto-detected session, heart-rate samples, etc. all point back here.
+--
+-- Defined BEFORE health_records even though health_records is the more
+-- "primary" table -- health_records.canonical_workout_id has a foreign
+-- key INTO this table, and Postgres (unlike SQLite, which never
+-- validates a REFERENCES target at CREATE TABLE time) requires the
+-- referenced table to already exist. Caught live 2026-09-09 running
+-- 'npm run db:init' against real production Postgres: every test and
+-- every local SQLite run passed with the tables in the OTHER order,
+-- because SQLite silently allows a forward reference -- Postgres does
+-- not, and failed with "relation health_canonical_workouts does not
+-- exist" the first time this schema ever ran against a real Postgres
+-- database.
+CREATE TABLE IF NOT EXISTS health_canonical_workouts (
+  id                    TEXT PRIMARY KEY,
+  user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id                TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  skos_workout_id       TEXT REFERENCES workouts(id) ON DELETE SET NULL,
+  activity_type         TEXT,
+  start_time            TEXT NOT NULL,
+  end_time              TEXT NOT NULL,
+  duration_seconds      REAL,
+  primary_energy_source TEXT,   -- e.g. 'whoop' | 'oura' | 'apple_health' | 'skos_ml' | 'met_fallback'
+  active_kcal           REAL,
+  coverage_ratio        REAL,   -- 0..1 -- how much of the SK OS-logged duration has wearable evidence
+  confidence_score       REAL,  -- 0..1
+  confidence_level       TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+  match_score            REAL,  -- 0..1, from the WorkoutMatchingEngine
+  match_reason           TEXT,
+  auto_detected          INTEGER NOT NULL DEFAULT 0,
+  user_entered            INTEGER NOT NULL DEFAULT 0,
+  data_quality             TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+  matched_at                TEXT,
+  created_at                TEXT NOT NULL,
+  updated_at                TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_health_canon_user_time ON health_canonical_workouts(user_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_health_canon_skos_workout ON health_canonical_workouts(skos_workout_id);
+
 -- Every normalized health/activity record, from any source. A SK OS
 -- workout itself is represented here too (provider='skos',
 -- provider_record_id = the workouts.id it came from) so the
@@ -1765,35 +1806,6 @@ CREATE INDEX IF NOT EXISTS idx_health_records_canonical ON health_records(canoni
 CREATE UNIQUE INDEX IF NOT EXISTS idx_health_records_provider_dedup
   ON health_records(user_id, provider, provider_record_id)
   WHERE provider_record_id IS NOT NULL;
-
--- One canonical workout can be backed by several health_records (the
--- "source graph" -- section 31): a SK OS-logged session, a wearable's
--- auto-detected session, heart-rate samples, etc. all point back here.
-CREATE TABLE IF NOT EXISTS health_canonical_workouts (
-  id                    TEXT PRIMARY KEY,
-  user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  org_id                TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  skos_workout_id       TEXT REFERENCES workouts(id) ON DELETE SET NULL,
-  activity_type         TEXT,
-  start_time            TEXT NOT NULL,
-  end_time              TEXT NOT NULL,
-  duration_seconds      REAL,
-  primary_energy_source TEXT,   -- e.g. 'whoop' | 'oura' | 'apple_health' | 'skos_ml' | 'met_fallback'
-  active_kcal           REAL,
-  coverage_ratio        REAL,   -- 0..1 -- how much of the SK OS-logged duration has wearable evidence
-  confidence_score       REAL,  -- 0..1
-  confidence_level       TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
-  match_score            REAL,  -- 0..1, from the WorkoutMatchingEngine
-  match_reason           TEXT,
-  auto_detected          INTEGER NOT NULL DEFAULT 0,
-  user_entered            INTEGER NOT NULL DEFAULT 0,
-  data_quality             TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
-  matched_at                TEXT,
-  created_at                TEXT NOT NULL,
-  updated_at                TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_health_canon_user_time ON health_canonical_workouts(user_id, start_time);
-CREATE INDEX IF NOT EXISTS idx_health_canon_skos_workout ON health_canonical_workouts(skos_workout_id);
 
 -- The reconciled energy-per-interval primitive (section 58/59/60). A
 -- day is partitioned into non-overlapping intervals, each attributed to
