@@ -202,5 +202,21 @@ export const config = {
   // itself never redirects here or trusts this for anything security-
   // relevant. Falls back to the same localhost dev origin api.js/vite
   // already assume elsewhere in this codebase.
-  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, ''),
+  // SK OS Health Intelligence Engine -- WHOOP/Oura OAuth app credentials.
+  // Same no-fail-fast pattern as foodDatabaseApiKey above: these are
+  // OPTIONAL. A missing client id/secret does not stop the server from
+  // starting -- backend/src/services/health/providers/{whoop,oura}Provider.js
+  // check for these at CALL time and throw ProviderNotConfiguredError
+  // rather than pretending to connect. No default values (unlike
+  // frontendUrl) -- there is no sane placeholder for an OAuth secret.
+  // Backend's OWN public URL, used to build the OAuth redirect_uri sent
+  // to WHOOP/Oura (e.g. `${healthApiBaseUrl}/api/health/providers/whoop/callback`)
+  // -- deliberately NOT frontendUrl, which is a different origin (the
+  // Vite app), and this callback is a backend route.
+  healthApiBaseUrl: (process.env.HEALTH_API_BASE_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/+$/, ''),
+  whoopClientId: process.env.WHOOP_CLIENT_ID || null,
+  whoopClientSecret: process.env.WHOOP_CLIENT_SECRET || null,
+  ouraClientId: process.env.OURA_CLIENT_ID || null,
+  ouraClientSecret: process.env.OURA_CLIENT_SECRET || null,
 };

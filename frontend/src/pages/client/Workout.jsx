@@ -9,6 +9,7 @@ import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
+import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
@@ -379,6 +380,12 @@ export default function Workout() {
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
   const [intensity, setIntensity] = useState(null);
+  // SK OS Health Intelligence Engine -- best-effort, NEVER blocking. null
+  // until (and unless) a background check finds real wearable evidence
+  // for this exact session; the summary screen's own "Calories burned"
+  // card above already renders instantly off `burn` regardless of this.
+  // See checkWorkoutSource() below for why this is fire-and-forget.
+  const [burnSource, setBurnSource] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model
   // Workout link sharing (personal share, NOT community)
@@ -950,10 +957,41 @@ export default function Workout() {
         body: JSON.stringify({ ...burnInput, intensity: tier }),
       });
       setBurn(res);
+      checkWorkoutSource(); // fire-and-forget -- see its own comment
     } catch {
       setBurn(null); // 422 = model declined; show nothing
     }
     setBurnLoading(false);
+  };
+
+  // Best-effort source check (spec §45: "Detected automatically" /
+  // "Recorded from Apple Watch" / "Estimated by SK OS"). Deliberately
+  // NOT awaited by its one call site above -- the "Workout complete"
+  // summary already renders instantly off `burn` (see that card's own
+  // comment on why), and this must never make it wait on a
+  // reconciliation pass. Runs in the background; if it resolves with
+  // real wearable evidence for THIS exact session, upgrades the label
+  // from the (already honest) default. If it fails, is slow, or finds
+  // nothing better, the summary is unaffected -- no wearable is required
+  // for a complete result (spec §87).
+  const checkWorkoutSource = async () => {
+    try {
+      await api('/health/daily-intelligence?refresh=1');
+      const today = new Date().toISOString().slice(0, 10);
+      const { workouts: canon } = await api(`/health/workouts?date=${today}`);
+      const match = canon?.find((c) => c.skos_workout_id === workout?.id);
+      // Allowlist check (isWearableSource), not a denylist -- a
+      // canonical workout's primary_energy_source is either one of the
+      // ten real wearable provider keys, OR one of SK OS's OWN internal
+      // calorie-model provider names ('baseline' | 'ml' | 'mock' -- see
+      // calorieModel.js). A denylist of "not a wearable" names silently
+      // mislabels any internal name it doesn't already know about --
+      // caught live: 'baseline' briefly rendered as "baseline + SK OS"
+      // instead of falling through to the correct default below.
+      if (isWearableSource(match?.primary_energy_source)) {
+        setBurnSource(burnSourceLabel({ providers: [match.primary_energy_source] }));
+      }
+    } catch { /* best-effort only -- the summary already has a real estimate without this */ }
   };
 
   // ---- cardio: start a cardio session ----
@@ -2518,6 +2556,13 @@ export default function Workout() {
               <div className="mt-0.5 text-[11px]" style={{ color: 'var(--mute)' }}>
                 best estimate ≈{burn.kcal} kcal
               </div>
+              {/* SK OS Health Intelligence Engine -- see checkWorkoutSource's
+                  own comment. Honest immediately (skos-cal-v1 is genuinely
+                  what produced the number above); upgrades in place if a
+                  connected wearable's own reading for this session arrives. */}
+              <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
+                Source: {burnSource || 'Estimated by SK OS'}
+              </div>
               {/* The model's own caveats, surfaced rather than swallowed. An
                   estimate it has flagged as shaky must not read as clean. */}
               {!!burn.notes?.length && (
@@ -2635,7 +2680,7 @@ export default function Workout() {
               {sharing ? 'Sharing…' : 'Share to Community'}
             </button>
           )}
-          <button className="btn w-full mt-3" onClick={() => { clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setBurn(null); setBurnInput(null); setIntensity(null); setSharing(false); setShareToast(''); setCardioMode('browse'); setCardioResult(null); setCardioItems([]); setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0); }}>Done</button>
+          <button className="btn w-full mt-3" onClick={() => { clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setBurn(null); setBurnInput(null); setIntensity(null); setBurnSource(null); setSharing(false); setShareToast(''); setCardioMode('browse'); setCardioResult(null); setCardioItems([]); setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0); }}>Done</button>
         </div>
       </div>
       {shareToast && (

@@ -13,6 +13,7 @@ import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
+import { burnSourceLabel } from '../../healthProviderLabels.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -507,6 +508,17 @@ export default function Nutrition() {
   // already-shipped feature, not something a merge gets to drop.
   const balance = useFetch(() => api('/me/nutrition/balance'), []);
   const activePlan = balance.data?.activePlan;
+  // SK OS Health Intelligence Engine -- a SEPARATE fetch from `home`
+  // above, same reasoning as Home.jsx's own identical comment: this page's
+  // real data (home.data, via the shared ClientLayout fetch) must never
+  // wait on or be gated by this. Purely informational here (spec §80:
+  // Nutrition consumes the ONE canonical energy number rather than any
+  // raw wearable/ML figure directly) -- it does NOT adjust the calorie
+  // target/budget math above. Building a safe, bounded activity-adjusted
+  // budget (spec §49/§50: never a punitive deficit, protein always
+  // protected) is real, separate, safety-sensitive work, deliberately
+  // NOT done as a side effect of wiring up a display card.
+  const health = useFetch(() => api('/health/daily-intelligence'), []);
 
   useEffect(() => { if (data && !plan && !targetSetupOpen) setTargetSetupOpen(true); }, [data, plan]);
   const mealState = meals || data?.nutrition?.meals || [];
@@ -652,6 +664,25 @@ export default function Nutrition() {
 
       {/* ══════ INSIGHT ══════ */}
       <NutritionInsight plan={effectivePlan} eaten={eaten} t={t} />
+
+      {/* ══════ TODAY'S ACTIVITY — SK OS Health Intelligence Engine ══════
+          Informational only (see the `health` fetch's own comment above)
+          -- shows the one canonical active-energy figure the app has for
+          today, with real source attribution, never a raw provider or
+          "AI calculated" label (spec §51). Hidden entirely when there's
+          nothing real to report, same as Home.jsx's identical card. */}
+      {!health.loading && health.data?.intelligence && (health.data.intelligence.active_energy > 0 || health.data.intelligence.workout_minutes > 0) && (
+        <div className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[.14em] font-medium" style={{ color: t.faint }}>Today's activity</div>
+            <div className="text-[10.5px] mt-0.5" style={{ color: t.mute }}>{burnSourceLabel(health.data.intelligence.source_summary)}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="font-grotesk font-bold text-lg tabular-nums" style={{ color: t.ink }}>{Math.round(health.data.intelligence.active_energy || 0)}</span>
+            <span className="text-[11px] ml-1" style={{ color: t.mute }}>kcal active</span>
+          </div>
+        </div>
+      )}
 
       {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
       {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}

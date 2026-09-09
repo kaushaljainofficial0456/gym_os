@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useCookieConsent } from '../../components/CookieConsent.jsx';
@@ -29,6 +30,7 @@ const SETTINGS_SECTIONS = [
 
 export default function Settings() {
   const { user } = useAuth();
+  const nav = useNavigate();
   const [toast, setToast] = useState('');
   const [formState, setFormState] = useState({
     name: user?.name || '',
@@ -151,6 +153,17 @@ export default function Settings() {
             <span className="chip border-good/40 text-good !text-[10px]">Active</span>
           </div>
         </div>
+      </div>
+
+      <div className="card p-5">
+        <div className="flex items-center gap-2.5 mb-1">
+          <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="trending" size={18} /></span>
+          <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Health Intelligence</span>
+        </div>
+        <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
+          Connect a wearable so SK OS can combine it with your logged workouts for a more complete burn estimate.
+        </p>
+        <button className="btn w-full" onClick={() => nav('/app/client/health')}>Connected devices</button>
       </div>
 
       <NotificationSettingsCard />

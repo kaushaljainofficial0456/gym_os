@@ -44,6 +44,12 @@ export default function Progress() {
   // Already fetched once by the persistent ClientLayout — reuse it instead
   // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
   const home = useOutletContext();
+  // SK OS Health Intelligence Engine (spec §82) -- a separate, independent
+  // fetch, same reasoning as Home.jsx/Nutrition.jsx's identical comment:
+  // this page's real data above must never wait on or be gated by it, and
+  // the backend route itself only ever reads an already-cached table (see
+  // GET /health/trends's own comment) rather than computing anything live.
+  const trends = useFetch(() => api('/health/trends?days=7'), []);
   const [weightInput, setWeightInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);   // { text, tone }
@@ -167,6 +173,20 @@ export default function Progress() {
         <div className="card p-4">
           <div className="t-micro mb-2">Adherence · last 14 days</div>
           <TrendChart data={adh.map((a) => ({ label: a.date.slice(5), value: a.score }))} color="var(--accent)" />
+        </div>
+      )}
+
+      {/* ══════ TRAINING LOAD — SK OS Health Intelligence Engine ══════
+          Reads the SAME cached daily summaries Home/Nutrition show today's
+          figure from (spec §80: one canonical source, not a per-screen
+          recalculation). Only renders with >=2 real days, same convention
+          the Adherence chart above already uses -- a single bar is not a
+          trend. Days never opened yet (no cached summary) are just absent
+          from the line rather than shown as a fabricated zero. */}
+      {(trends.data?.days || []).filter((d) => d.training_load > 0).length >= 2 && (
+        <div className="card p-4">
+          <div className="t-micro mb-2">Training load · last 7 days</div>
+          <TrendChart data={trends.data.days.map((d) => ({ label: d.date.slice(5), value: Math.round(d.training_load || 0) }))} color="var(--accent)" />
         </div>
       )}
 

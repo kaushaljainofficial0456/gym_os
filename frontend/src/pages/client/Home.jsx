@@ -35,6 +35,7 @@ import { useFetch } from '../../utils.js';
 import { ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
 import { sumEatenTotals } from '../../nutritionCalc.js';
+import { burnSourceLabel } from '../../healthProviderLabels.js';
 import {
   AmbientBackdrop, Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
 } from '../../design/index.js';
@@ -140,6 +141,17 @@ export default function Home() {
   const home = useOutletContext();
   const crowdFetch = useFetch(() => api('/me/crowd'));
   const [crowdOpen, setCrowdOpen] = useState(false);
+  // SK OS Health Intelligence Engine -- a SEPARATE, independent fetch from
+  // the shared homeCtx above, deliberately: /tracking/me/home is the
+  // already-optimized, single-fetched-per-navigation hot path (see
+  // ClientLayout.jsx's own comment on why it's fetched once and shared),
+  // and this must never be added to it or gate its render. This card's
+  // own loading/absence never blocks or slows down the rest of Home --
+  // it simply doesn't render until (and unless) it resolves. The daily
+  // intelligence result itself is cached server-side after first compute
+  // (health_daily_summaries), so repeat loads the same day are a single
+  // indexed read, not a live recomputation.
+  const health = useFetch(() => api('/health/daily-intelligence'), []);
 
   const data = home.data;
   const meals = data?.nutrition?.meals || [];
@@ -337,6 +349,41 @@ export default function Home() {
           </div>
         </Tilt>
       </Reveal>
+
+      {/* ═══ TODAY'S BURN — SK OS Health Intelligence Engine ═══
+          Renders only once there's something real to say (an active
+          canonical energy figure or logged workout minutes) -- an empty/
+          zero-evidence card would just be noise for a day nothing has
+          happened yet. This is the FIRST place Home has ever shown a
+          burn estimate at all; previously nothing on this screen
+          reflected today's calorie expenditure, wearable-informed or
+          not (spec §79/§88 -- a non-wearable user still gets a real
+          answer, from SK OS's own model). */}
+      {!health.loading && health.data?.intelligence && (health.data.intelligence.active_energy > 0 || health.data.intelligence.workout_minutes > 0) && (
+        <Reveal delay={110}>
+          <Tilt max={4}>
+            <div className="card p-5">
+              <div className="section-head !mb-0">
+                <span className="t-micro">Today's burn</span>
+                {health.data.intelligence.confidence_level && (
+                  <span className="text-[10.5px] capitalize" style={{ color: 'var(--faint)' }}>
+                    {health.data.intelligence.confidence_level.replace('_', ' ')} confidence
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="font-black text-[28px] tracking-[-.02em] tabular-nums" style={{ color: 'var(--ink)' }}>
+                  <AnimatedNumber value={Math.round(health.data.intelligence.active_energy || 0)} />
+                </span>
+                <span className="text-[12px] font-medium" style={{ color: 'var(--mute)' }}>kcal active</span>
+              </div>
+              <div className="mt-2 text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                {burnSourceLabel(health.data.intelligence.source_summary)}
+              </div>
+            </div>
+          </Tilt>
+        </Reveal>
+      )}
 
       {/* ═══ QUIET TILES ═══
           Goal and crowd are reference, not action, so they get half width

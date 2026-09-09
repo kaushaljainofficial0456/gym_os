@@ -39,6 +39,7 @@ import notificationRoutes from './routes/notifications.js';
 import communityRoutes from './routes/community.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
+import healthRoutes from './routes/health.js';
 
 // ---- Minimal cookie parser (no dependency needed) ----
 // Exported as a standalone pure function (rather than inlined in the
@@ -181,6 +182,13 @@ export async function buildApp() {
   // See enterprise.js's webhook handler, which converts it back to a
   // string itself.
   app.use('/api/enterprise/payment/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
+  // Same reasoning as the Razorpay line above -- WHOOP's webhook signature
+  // (see whoopProvider.js's verifyWebhookSignature) is HMAC'd over the
+  // exact raw bytes WHOOP sent, so this path also needs a raw Buffer body
+  // rather than pre-parsed JSON. This is what lets health.js's webhook
+  // route trigger an automatic sync the moment WHOOP pushes new data,
+  // instead of the user having to tap "Sync now".
+  app.use('/api/health/providers/whoop/webhook', express.raw({ type: 'application/json', limit: '256kb' }));
   app.use(express.json({ limit: '1mb' }));
 
 app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.driver, ts: new Date().toISOString() }));
@@ -228,6 +236,7 @@ app.use('/api/notifications', notificationRoutes(db)); // client/trainer notific
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
+app.use('/api/health', healthRoutes(db)); // SK OS Health Intelligence Engine: wearable connections, sync, canonical workouts, daily intelligence -- see health.js
 // Browser-callable mock-checkout bridge -- NEVER mounted in production.
 // The route's own internal guard (`if (providerName() !== 'mock') return
 // 409`) already makes this inert once a real gateway is configured, and
