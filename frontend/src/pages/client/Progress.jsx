@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Card } from '../../components/UI.jsx';
+import Skeleton from '../../components/Skeleton.jsx';
 import { WeightChart, TrendChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -15,7 +16,32 @@ export default function Progress() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
-  if (p.loading || home.loading) return <Spinner label="Loading your progress…" />;
+  if (p.loading || home.loading) return (
+    <div className="space-y-4">
+      {/* Header skeleton */}
+      <div className="space-y-1.5">
+        <div className="skeleton h-6 rounded-lg" style={{ width: '30%' }} />
+        <div className="skeleton h-3 rounded-md" style={{ width: '55%' }} />
+      </div>
+      {/* Weight entry skeleton */}
+      <div className="card p-4 flex gap-2">
+        <div className="skeleton h-10 flex-1 rounded-xl" />
+        <div className="skeleton h-10 w-14 rounded-xl shrink-0" />
+      </div>
+      {/* Chart skeletons */}
+      <Skeleton.ProgressCard hasChart />
+      <Skeleton.ProgressCard hasChart />
+      {/* Photos skeleton */}
+      <div className="card p-4 space-y-3">
+        <div className="skeleton h-3 rounded-md" style={{ width: '40%' }} />
+        <div className="grid grid-cols-3 gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton aspect-[3/4] rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
   if (p.error) return <ErrorState error={p.error} onRetry={p.reload} />;
 
   const clientId = home.data?.client?.id;

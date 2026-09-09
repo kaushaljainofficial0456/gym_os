@@ -819,6 +819,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   type      TEXT NOT NULL,
   title     TEXT NOT NULL,
   body      TEXT,
+  data_json TEXT,
+  dedup_key TEXT,
   read      INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
@@ -827,6 +829,32 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- MIGRATIONS), so this index is created in applySqliteMigrations/
 -- applyPgMigrations instead, after the column is guaranteed to exist on
 -- databases that predate it.
+
+-- Per-user notification preferences: toggle individual reminder types,
+-- set quiet hours, and track whether the browser permission prompt has
+-- been shown (so we never re-prompt a user who already answered).
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id              TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  enabled              INTEGER NOT NULL DEFAULT 1,
+  workout_reminders    INTEGER NOT NULL DEFAULT 1,
+  water_reminders      INTEGER NOT NULL DEFAULT 1,
+  water_interval_h     REAL NOT NULL DEFAULT 2,
+  nutrition_reminders  INTEGER NOT NULL DEFAULT 1,
+  daily_summary        INTEGER NOT NULL DEFAULT 1,
+  daily_summary_time   TEXT NOT NULL DEFAULT '23:30',
+  tomorrow_workout     INTEGER NOT NULL DEFAULT 1,
+  rest_day_reminders   INTEGER NOT NULL DEFAULT 1,
+  incomplete_workout   INTEGER NOT NULL DEFAULT 1,
+  quiet_hours_start    TEXT,
+  quiet_hours_end      TEXT,
+  -- Browser Notification API permission state: 'granted' | 'denied' | 'default'.
+  -- Stored so we never re-prompt a user who already answered.
+  browser_permission   TEXT NOT NULL DEFAULT 'default',
+  -- Timestamp of when the custom Gym OS prompt was last shown, to prevent
+  -- repeated prompting on every login.
+  prompted_at          TEXT,
+  updated_at           TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS events (
   id        TEXT PRIMARY KEY,

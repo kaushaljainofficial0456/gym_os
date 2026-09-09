@@ -4,6 +4,7 @@ import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
 import { useCountUp } from '../../utils.js';
 import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
+import Skeleton from '../../components/Skeleton.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
@@ -469,6 +470,7 @@ export default function Nutrition() {
   const [showAddSupplement, setShowAddSupplement] = useState(false);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
+  const [foodLogMode, setFoodLogMode] = useState('search');
 
   // Today's Eaten Meals edit mode -- [-]/[Edit Quantity] per row, "Save
   // Changes" is a confirming exit flourish (each action already persisted
@@ -500,7 +502,51 @@ export default function Nutrition() {
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
 
-  if (home.loading) return <Spinner label="Loading your fuel plan…" />;
+  if (home.loading) return (
+    <div className="space-y-5 pb-24">
+      {/* Header skeleton */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2 flex-1">
+          <div className="skeleton h-7 rounded-lg" style={{ width: '45%' }} />
+          <div className="skeleton h-3 rounded-md" style={{ width: '65%' }} />
+        </div>
+        <div className="skeleton w-10 h-10 rounded-xl shrink-0" />
+      </div>
+      {/* Hero ring + bars skeleton */}
+      <div className="rounded-3xl p-6 space-y-4" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          <div className="shrink-0"><Skeleton width={170} height={170} radius="50%" /></div>
+          <div className="flex-1 w-full space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex justify-between">
+                  <div className="skeleton h-3 rounded-md w-16" />
+                  <div className="skeleton h-3 rounded-md w-10" />
+                </div>
+                <div className="skeleton h-2 rounded-full w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* Insight skeleton */}
+      <div className="card p-4 space-y-2">
+        <div className="skeleton h-3 rounded-md" style={{ width: '40%' }} />
+        <div className="skeleton h-3 rounded-md w-full" />
+        <div className="skeleton h-3 rounded-md" style={{ width: '70%' }} />
+      </div>
+      {/* Meals skeleton */}
+      <div className="rounded-3xl p-5 space-y-3" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+        <div className="flex items-center justify-between">
+          <div className="skeleton h-4 rounded-md" style={{ width: '45%' }} />
+          <div className="skeleton h-6 w-14 rounded-full" />
+        </div>
+        <Skeleton.NutritionCard />
+        <Skeleton.NutritionCard />
+        <Skeleton.NutritionCard />
+      </div>
+    </div>
+  );
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
 
   const toggleMeal = async (m) => {
@@ -773,6 +819,8 @@ export default function Nutrition() {
       <FoodLogSheet
         open={foodLogSheetOpen}
         autoScan={foodLogAutoScan}
+        mode={foodLogMode}
+        setMode={setFoodLogMode}
         onClose={() => { setFoodLogSheetOpen(false); setFoodLogAutoScan(false); }}
         onAdd={async (entry) => {
           await logEntry(entry);

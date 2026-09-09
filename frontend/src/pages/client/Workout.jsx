@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Spinner, ErrorState, Bar, Ring } from '../../components/UI.jsx';
+import Skeleton from '../../components/Skeleton.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
@@ -604,7 +605,29 @@ export default function Workout() {
   })();
   const weekRows = week.data?.week || [];
 
-  if (today.loading || week.loading || hist.loading || perms.loading) return <Spinner label="Loading your sessionÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" />;
+  if (today.loading || week.loading || hist.loading || perms.loading) return (
+    <div className="space-y-5 pb-2">
+      <Skeleton.WeekStrip />
+      <Skeleton.ActionGrid />
+      <div className="space-y-2.5">
+        <div className="skeleton h-3 rounded-md" style={{ width: '40%' }} />
+        <div className="skeleton h-7 rounded-lg" style={{ width: '60%' }} />
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="card !p-3 text-center space-y-1.5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+            <div className="skeleton h-6 w-10 mx-auto rounded-md" />
+            <div className="skeleton h-2.5 w-14 mx-auto rounded-md" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3">
+        <Skeleton.ExerciseCard />
+        <Skeleton.ExerciseCard />
+        <Skeleton.ExerciseCard />
+      </div>
+    </div>
+  );
   if (today.error) return <ErrorState error={today.error} onRetry={today.reload} />;
 
   const toggleEx = async (ex) => {
