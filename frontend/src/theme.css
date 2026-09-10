@@ -120,10 +120,21 @@
      in the last contrast pass, just recoloured from ink's old RGB to
      blush's. accent/accent-contrast are untouched -- terracotta stays
      the brand accent, this only changes canvas + highlight. */
-  --bg: #000000;
-  --bg2: #0D0D0D;
-  --panel: #161616;
-  --panel2: #202020;
+  /* DARK CANVAS (Progress 2.0 pass): was pure #000 with near-neutral greys.
+     Pure black is a default, not a choice -- it crushes the surface
+     hierarchy (every elevation has to fight an absolute floor) and reads
+     as an OLED test card rather than as a designed ground. These are
+     near-blacks carrying a faint warm bias toward the blush ink and
+     terracotta accent, so the neutrals look chosen rather than inherited,
+     and each step up is a legible surface level:
+       --bg      page ground
+       --bg2     recessed / inset areas
+       --panel   card surface
+       --panel2  elevated surface (sheets, popovers) */
+  --bg: #0A0909;
+  --bg2: #121011;
+  --panel: #1A1717;
+  --panel2: #241F20;
   --line: rgba(255,223,221,.08);
   --ink: #FFDFDD;                      /* blush -- was warm off-white */
   --mute: rgba(255,223,221,.68);
@@ -167,8 +178,8 @@
   --accent-rgb: 224 122 99;
   --accent-deep-rgb: 193 92 76;
   --accent-contrast: #2B120A;          /* dark ink ON terracotta */
-  --bg-rgb: 0 0 0;
-  --bg2-rgb: 13 13 13;
+  --bg-rgb: 10 9 9;
+  --bg2-rgb: 18 16 17;
   --panel-rgb: 22 22 22;
   --panel2-rgb: 32 32 32;
   --ink-rgb: 255 223 221;

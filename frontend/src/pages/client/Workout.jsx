@@ -1171,7 +1171,7 @@ export default function Workout() {
                   setBuilderOpen(true);
                 },
                 path: <path d="M12 5v14M5 12h14"/> },
-              { label: 'My PRs', onClick: () => nav('/app/client/progress'),
+              { label: 'My PRs', onClick: () => nav('/app/client/progress?section=prs'),
                 path: <path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/> },
             ].map((t) => (
               <button key={t.label} onClick={t.onClick}

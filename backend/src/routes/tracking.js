@@ -7,6 +7,7 @@ import { computeAdherence } from '../services/adherence.js';
 import { generateCoachMessage } from '../services/aiCoach.js';
 import { todaySession, getActiveProgram, getProgramDays } from '../services/trainingProgram.js';
 import { track } from '../services/events.js';
+import { getProgressIntel, exerciseHistory } from '../services/progress/progressIntel.js';
 
 export default function trackingRoutes(db) {
   const r = Router();
@@ -213,6 +214,29 @@ export default function trackingRoutes(db) {
       db.q('SELECT * FROM supplements WHERE client_id = ? AND active = 1', [client.id])
     ]);
     res.json({ weights, adherence: adherence.reverse(), measurements, photos, supplements });
+  });
+
+  // ---- Progress intelligence (Progress 2.0) ----
+  // ONE round trip for the whole Progress screen: capabilities, weight,
+  // training, nutrition, PRs, health summaries and ranked insights. The
+  // trend/insight maths lives in services/progress/* so it has a single
+  // implementation rather than being re-derived in the client.
+  r.get('/me/progress/intel', async (req, res) => {
+    if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
+    const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.status(404).json({ error: 'Client profile not found' });
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 90, 7), 730);
+    const intel = await getProgressIntel(db, { userId: req.user.sub, clientId: client.id, days });
+    res.json(intel);
+  });
+
+  // ---- one exercise's full logged history (PR progression chart) ----
+  r.get('/me/progress/exercise/:exerciseId', async (req, res) => {
+    if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
+    const client = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.status(404).json({ error: 'Client profile not found' });
+    const history = await exerciseHistory(db, { clientId: client.id, exerciseId: req.params.exerciseId });
+    res.json({ history });
   });
 
   // ---- client home bundle (client portal) ----
