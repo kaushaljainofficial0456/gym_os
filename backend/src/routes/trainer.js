@@ -59,7 +59,9 @@ export default function trainerRoutes(db) {
       openAlerts,
       latestPlan,
       todayMealLogs,
-      waterLog
+      waterLog,
+      photoRows,
+      measurements
     ] = await Promise.all([
       // Profile for sleep/water targets
       db.q1('SELECT * FROM client_profiles WHERE client_id = ?', [client.id]),
@@ -93,8 +95,20 @@ export default function trainerRoutes(db) {
         [client.id, today]),
       // Today's water
       db.q1(`SELECT litres FROM water_logs WHERE client_id = ? AND date = ?`,
-        [client.id, today])
+        [client.id, today]),
+      // Progress photos — this endpoint never fetched these at all, so a
+      // TRAINER (as opposed to GYM_OWNER, who reads the client through the
+      // separate /clients/:id/overview route) could never see a client's
+      // transformation photos through their own client-detail page, even
+      // right after uploading one themselves. See mapTrainerResponse() in
+      // ClientProfile.jsx, which previously had no choice but to hardcode
+      // `photos: []` because there was nothing here to map from.
+      db.q('SELECT * FROM progress_photos WHERE client_id = ? ORDER BY taken_at', [client.id]),
+      // Measurements — same gap, same fix.
+      db.q('SELECT * FROM measurements WHERE client_id = ? ORDER BY taken_at DESC LIMIT 12', [client.id])
     ]);
+    const { objectUrl } = await import('../storage.js');
+    const photos = photoRows.map((p) => ({ ...p, imageUrl: objectUrl(p.storage_key) || p.data_url || null }));
 
     // ---- 4. Compute summary metrics ----
 
@@ -229,7 +243,9 @@ export default function trainerRoutes(db) {
       nutrition,
       hydration,
       alerts,
-      recentActivity
+      recentActivity,
+      photos,
+      measurements
     });
   });
 

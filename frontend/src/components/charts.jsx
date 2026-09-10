@@ -43,7 +43,7 @@ function getTooltipStyle() {
 
 export function WeightChart({ data }) {
   if (!data || !data.length) return null;
-  const rows = data.map((d, i) => ({ i, label: d.date.slice(5), weight: d.weight }));
+  const rows = data.map((d, i) => ({ i, label: d.date.slice(5), weight: d.weight, date: d.date }));
   return (
     <ResponsiveContainer width="100%" height={210}>
       <AreaChart data={rows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -56,7 +56,14 @@ export function WeightChart({ data }) {
         <CartesianGrid strokeDasharray="3 6" stroke="rgba(128,128,128,.08)" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} />
         <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => [`${v} kg`, 'Weight']} labelFormatter={(l) => data[l]?.date} />
+        {/* Recharts calls labelFormatter(label, payload) with `label` set to
+            the hovered point's OWN dataKey value -- here that's the "label"
+            field ("09-11"), a string, not an array index. `data[l]` indexed
+            the ORIGINAL array with that string and was always undefined,
+            so the tooltip's date line read literally "undefined" for every
+            point. `payload[0].payload` is the hovered ROW itself (rows[],
+            not data[]), which now carries the real date directly. */}
+        <Tooltip contentStyle={getTooltipStyle()} formatter={(v) => [`${v} kg`, 'Weight']} labelFormatter={(l, payload) => payload?.[0]?.payload?.date ?? l} />
         <Area type="monotone" dataKey="weight" stroke="var(--accent)" strokeWidth={2.5} fill="url(#wGrad)" dot={false} activeDot={{ r: 4, fill: 'var(--accent)' }} />
       </AreaChart>
     </ResponsiveContainer>

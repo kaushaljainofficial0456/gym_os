@@ -192,13 +192,24 @@ export default function clientRoutes(db) {
     if (!client) return;
     const profile = await db.q1('SELECT * FROM client_profiles WHERE client_id = ?', [client.id]);
     const ev = await evaluateClient(db, client);
-    const [weights, measurements, photos, workoutHistory, insights] = await Promise.all([
+    const [weights, measurements, photoRows, workoutHistory, insights] = await Promise.all([
       db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? AND date >= ? ORDER BY date', [client.id, daysAgoIso(90)]),
       db.q('SELECT * FROM measurements WHERE client_id = ? ORDER BY taken_at DESC LIMIT 12', [client.id]),
       db.q('SELECT * FROM progress_photos WHERE client_id = ? ORDER BY taken_at', [client.id]),
       db.q('SELECT * FROM workouts WHERE client_id = ? ORDER BY scheduled_date DESC LIMIT 20', [client.id]),
       db.q('SELECT * FROM coach_insights WHERE client_id = ? ORDER BY created_at DESC LIMIT 10', [client.id])
     ]);
+    // Resolve each photo's real, authenticated URL the SAME way GET
+    // /:id/photos already does -- this route used to return the raw row
+    // (storage_key + a data_url that is ALWAYS null for any photo uploaded
+    // through the current storage abstraction, see storage.js). The
+    // frontend's PhotosTab/BeforeAfter render `photo.data_url` directly, so
+    // every photo uploaded since the storage abstraction shipped was
+    // persisted correctly but could never actually be displayed here --
+    // confirmed live, "No front photo yet" shown for a photo that
+    // genuinely existed on disk and in the database.
+    const { objectUrl } = await import('../storage.js');
+    const photos = photoRows.map((p) => ({ ...p, imageUrl: objectUrl(p.storage_key) || p.data_url || null }));
     res.json({
       client: {
         id: client.id, name: client.name, email: client.email, avatar: client.avatar, phone: client.phone,

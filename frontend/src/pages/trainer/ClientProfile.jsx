@@ -39,8 +39,8 @@ function mapTrainerResponse(tr) {
     },
     rules: (tr.alerts || []).map(a => ({ type: a.type, severity: a.severity, title: a.title, detail: '' })),
     weights: (tr.weight?.history || []).map(w => ({ date: w.date, weight: w.weight })),
-    measurements: [],
-    photos: [],
+    measurements: tr.measurements || [],
+    photos: tr.photos || [],
     workoutHistory: (tr.workouts?.recent || []).map(w => ({
       id: w.date + w.name,
       name: w.name,
@@ -628,11 +628,21 @@ function PhotosTab({ clientId, photos, onChanged }) {
         const shots = group(v);
         const before = shots[0];
         const after = shots[shots.length - 1];
+        // imageUrl is the resolved, authenticated /uploads/:key path (see
+        // GET /:id/photos, /:id/overview, /trainer/clients/:id/dashboard) --
+        // data_url is a LEGACY field, always null for anything uploaded
+        // through the current private-storage pipeline (see storage.js).
+        // Reading data_url here made every photo persist correctly and then
+        // never render: "No {view} photo yet" forever, for a photo that
+        // genuinely existed. Falls back to data_url for any surviving
+        // pre-storage-abstraction row that still carries one.
+        const afterSrc = after?.imageUrl || after?.data_url;
+        const beforeSrc = before?.imageUrl || before?.data_url;
         return (
           <Card key={v}>
             <Kicker tone="cyan">{v.toUpperCase()} view</Kicker>
-            {after?.data_url ? (
-              <BeforeAfter before={before?.data_url} after={after.data_url} />
+            {afterSrc ? (
+              <BeforeAfter before={beforeSrc} after={afterSrc} />
             ) : (
               <div className="rounded-2xl border border-dashed border-line h-64 grid place-items-center text-mute text-sm">
                 No {v} photo yet

@@ -100,20 +100,35 @@ export function signToken(user) {
 }
 
 // Set the JWT as an httpOnly cookie — immune to XSS token theft.
-// The frontend's Bearer header continues to work as a fallback.
 export function setAuthCookie(res, token) {
   const isSecure = config.nodeEnv === 'production' || config.nodeEnv === 'staging';
   res.cookie('sk_token', token, {
     httpOnly: true,
     secure: isSecure,
     sameSite: 'strict',
-    path: '/api',
+    // Root, not '/api': requireAuth also gates /uploads/:key (private
+    // photo/image serving, see index.js), a SIBLING mount, not a path under
+    // /api. A cookie scoped to path=/api is a browser-enforced restriction
+    // the server-side route never knows happened -- every request to
+    // /uploads/* simply arrives with no cookie, at all, for every role,
+    // including the photo's own owner. Combined with the frontend no longer
+    // sending a Bearer header as a fallback (removed; auth is cookie-only
+    // now, see api.js), this meant NO transformation photo could ever
+    // actually load for anyone, in any environment -- confirmed live:
+    // authenticating and then requesting a just-uploaded photo's own URL
+    // returned 401 "Authentication required" regardless of who was logged
+    // in. Scoping to '/' costs nothing extra: the cookie is httpOnly
+    // (immune to XSS reads), secure+sameSite=strict in prod/staging
+    // (immune to cross-site leakage), so widening which same-origin PATHS
+    // it's attached to is not a new exposure -- it only fixes which of the
+    // app's OWN routes can see it.
+    path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days — matches JWT expiry
   });
 }
 
 export function clearAuthCookie(res) {
-  res.clearCookie('sk_token', { path: '/api' });
+  res.clearCookie('sk_token', { path: '/' });
 }
 
 // Attach req.user from the Bearer token (claims carry identity), then resolve the
