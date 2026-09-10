@@ -21,7 +21,7 @@
 // ============================================================
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, requireRole } from '../auth.js';
+import { requireAuth, requireRole, invalidateOrgBillingCache } from '../auth.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
@@ -142,6 +142,13 @@ export default function consoleRoutes(db) {
       await tx.run(`UPDATE org_billing_state SET status = 'SUSPENDED', updated_at = ? WHERE org_id = ?`, [now(), req.params.id]);
       await writeAuditLog(tx, req, { action: 'gym_suspended', entityType: 'organization', entityId: req.params.id, before, after: { status: 'SUSPENDED', reason: req.body.reason || null } });
     });
+    // Was previously the entire fix missing: this status update had no
+    // effect on anything else in the app (see auth.js's own comment on
+    // getOrgBillingStatusCached/invalidateOrgBillingCache) -- requireAuth
+    // now enforces it, cached with a short TTL, so this call makes the
+    // block take effect on the gym's NEXT request rather than up to a
+    // minute later.
+    invalidateOrgBillingCache(req.params.id);
     res.json({ ok: true });
   });
 
@@ -152,6 +159,7 @@ export default function consoleRoutes(db) {
       await tx.run(`UPDATE org_billing_state SET status = 'ACTIVE', updated_at = ? WHERE org_id = ?`, [now(), req.params.id]);
       await writeAuditLog(tx, req, { action: 'gym_reactivated', entityType: 'organization', entityId: req.params.id, before, after: { status: 'ACTIVE' } });
     });
+    invalidateOrgBillingCache(req.params.id);
     res.json({ ok: true });
   });
 

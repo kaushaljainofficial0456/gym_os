@@ -4,6 +4,54 @@ import { config } from './config.js';
 import { getDb, runWithOrg } from './db.js';
 import { getOrgTzCached, DEFAULT_TZ } from './utils/time.js';
 
+// Suspending a gym (SUPER_ADMIN console -> POST /console/gyms/:id/suspend)
+// updated org_billing_state.status but nothing in the actual request path
+// ever read it back -- a suspended gym's owner/trainers/clients could log
+// in and use every route completely normally. Confirmed live: suspending a
+// freshly-onboarded test gym, then logging in as its owner, returned a
+// normal 200 from GET /admin/overview. The platform operator's "Suspend"
+// button changed a database value nothing else consulted.
+//
+// Same cache/TTL/invalidate shape as getOrgTzCached just above (short TTL,
+// explicit invalidation on write so a suspend/reactivate takes effect on
+// the NEXT request rather than waiting out the TTL) -- requireAuth already
+// pays one cached lookup per request for org timezone; this adds the same
+// kind of lookup, not a second uncached query shape.
+//
+// org_billing_state is populated only for orgs that went through real
+// Enterprise onboarding (/setup-org, /auth/google-enterprise) -- a legacy
+// or directly-seeded org has no row at all, which correctly means "not
+// gated by this system" (getOrgBillingStatusCached returns null), not
+// "blocked". Only an explicit 'SUSPENDED' status blocks; every other
+// status (SETUP, ACTIVE, PAST_DUE, ...) passes through unchanged -- this
+// enforces the one state the console can actually put an org into via
+// /suspend, without inventing gating for states nothing here decided the
+// meaning of.
+const ORG_BILLING_TTL_MS = 60 * 1000;
+const orgBillingCache = new Map(); // orgId -> { status, at }
+
+export async function getOrgBillingStatusCached(db, orgId) {
+  if (!orgId) return null;
+  const hit = orgBillingCache.get(orgId);
+  const now = Date.now();
+  if (hit && (now - hit.at) < ORG_BILLING_TTL_MS) return hit.status;
+  let status = null;
+  try {
+    const row = await db.q1('SELECT status FROM org_billing_state WHERE org_id = ?', [orgId]);
+    status = row?.status || null;
+  } catch { status = null; } // table/row absent -- treat as ungated, never block on a lookup failure
+  orgBillingCache.set(orgId, { status, at: now });
+  return status;
+}
+
+// Call after any write to org_billing_state.status (console.js's
+// suspend/reactivate) so the change is picked up immediately instead of
+// waiting out the TTL.
+export function invalidateOrgBillingCache(orgId) {
+  if (orgId) orgBillingCache.delete(orgId);
+  else orgBillingCache.clear();
+}
+
 // F-12h hardening: bumped from 10 -> 12, OWASP's current recommended
 // bcrypt minimum. Benchmarked on this deployment's target hardware shape
 // before choosing it (see commit message): cost 10 ~75ms, 12 ~263ms,
@@ -81,11 +129,28 @@ export async function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+  let db;
   try {
-    const db = await getDb();
+    db = await getDb();
     req.tz = await getOrgTzCached(db, req.user.org || null);
   } catch {
     req.tz = DEFAULT_TZ;
+  }
+  // A SUSPENDED gym (SUPER_ADMIN console) blocks every org-scoped request
+  // for that org, at the one place ALL of them already pass through --
+  // see getOrgBillingStatusCached's own comment for why this exists and
+  // why only 'SUSPENDED' (not a missing row, and not any other status)
+  // blocks. SUPER_ADMIN is platform-wide (req.user.org is always null for
+  // that role, same as orgScope's own handling below) and is exactly who
+  // needs to still be able to act on a suspended org, so this can never
+  // lock an operator out of the gym they just suspended.
+  if (req.user.org && db) {
+    try {
+      const billingStatus = await getOrgBillingStatusCached(db, req.user.org);
+      if (billingStatus === 'SUSPENDED') {
+        return res.status(403).json({ error: 'This gym\'s account has been suspended. Contact support.' });
+      }
+    } catch { /* lookup failure must never itself block a login -- fail open, same as the tz lookup above */ }
   }
   // Scope the authenticated org for the rest of this request (db.tx uses it to
   // engage PostgreSQL RLS). Must wrap next() so the ALS context covers downstream.
