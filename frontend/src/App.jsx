@@ -82,6 +82,31 @@ function Require({ ready, ok, fallback = '/login', children }) {
   return children;
 }
 
+// Mirror of Require, for routes ONLY an unauthenticated visitor should see
+// (login, signup, setup-org, independent-client sign-in). Root cause of
+// "the app forces a signed-in user back through the login flow": every
+// OTHER route in this file redirects away when its own condition isn't
+// met, but these five had no such guard at all -- Login.jsx itself never
+// reads auth state either, so it rendered unconditionally regardless of
+// session validity. Landing here for any reason while a valid session
+// exists (a restored browser tab, a stale bookmark, browser back/forward)
+// showed the login screen instead of the dashboard. `authedHome` computes
+// the SAME destination the /app route and the catch-all route below
+// already use, so this can't drift from what "already signed in" means
+// elsewhere in this file.
+function GuestOnly({ ready, authed, target, children }) {
+  if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
+  if (authed) return <Navigate to={target} replace />;
+  return children;
+}
+
+// Where an authenticated user belongs right now -- extracted so /app,
+// the catch-all route, and GuestOnly's five entry routes can never
+// disagree about what "already signed in" resolves to.
+function authedHome(needsTerms, pendingGym, isTrainer) {
+  return needsTerms ? '/legal' : pendingGym ? '/join' : isTrainer ? '/app/trainer' : '/app/client';
+}
+
 // A CLIENT or TRAINER account can exist with no gym yet -- registered
 // directly (no gymCode) or self-served via /signup/trainer, waiting on a
 // QR scan to actually join an org (see auth.js's /register,
@@ -104,11 +129,11 @@ export default function App() {
   return (
     <ClickSparkLazy>
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<SignUp />} />
-      <Route path="/signup/trainer" element={page(TrainerSignUp)} />
-      <Route path="/setup-org" element={page(SetupOrg)} />
-      <Route path="/independent" element={page(IndependentLogin)} />
+      <Route path="/login" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><Login /></GuestOnly>} />
+      <Route path="/signup" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><SignUp /></GuestOnly>} />
+      <Route path="/signup/trainer" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(TrainerSignUp)}</GuestOnly>} />
+      <Route path="/setup-org" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(SetupOrg)}</GuestOnly>} />
+      <Route path="/independent" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(IndependentLogin)}</GuestOnly>} />
       {/* Design-system showcase. Intentionally unauthenticated: it renders
           only static demo data, and needing a login to check a colour token
           is friction that stops people checking. */}
@@ -148,9 +173,7 @@ export default function App() {
       )}
       <Route path="/app" element={
         <Require ready={ready} ok={() => authed}>
-          {needsTerms
-            ? <Navigate to="/legal" replace />
-            : pendingGym ? <Navigate to="/join" replace /> : isTrainer ? <Navigate to="/app/trainer" replace /> : <Navigate to="/app/client" replace />}
+          <Navigate to={authedHome(needsTerms, pendingGym, isTrainer)} replace />
         </Require>
       } />
       <Route path="/app/trainer" element={
@@ -188,7 +211,7 @@ export default function App() {
         <Route path="community" element={page(Community)} />
         <Route path="help" element={page(Help)} />
       </Route>
-      <Route path="*" element={<Navigate to={authed ? (needsTerms ? '/legal' : pendingGym ? '/join' : isTrainer ? '/app/trainer' : '/app/client') : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={authed ? authedHome(needsTerms, pendingGym, isTrainer) : '/login'} replace />} />
     </Routes>
     </ClickSparkLazy>
   );
