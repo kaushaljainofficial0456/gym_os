@@ -21,20 +21,107 @@ import { rateLimit } from '../rateLimit.js';
 import { getProvider, listProviders } from '../services/health/providers/registry.js';
 import { ProviderNotConfiguredError, RequiresNativeAppError } from '../services/health/providers/baseProvider.js';
 import { upsertHealthRecord } from '../services/health/dedup.js';
-import { reconcileUserDay, getDailyIntelligence } from '../services/health/dailyIntelligence.js';
+import { reconcileUserDay, getDailyIntelligence, getBurnBreakdown } from '../services/health/dailyIntelligence.js';
 
-/** Syncs ONE provider connection: fetch incremental records, upsert them
- *  (idempotent -- see dedup.js, so a redundant call from a duplicate
- *  webhook delivery is harmless), and update the connection's own sync
- *  state. Shared by POST /sync (loops over every connection for the
- *  calling user) and the webhook handler below (exactly one connection,
- *  pushed by the provider itself) -- same sync logic either way, only
- *  who triggers it differs. Never throws -- a webhook delivery needs to
- *  ack fast regardless of whether the provider-side fetch itself failed. */
+// Refresh a token this many ms BEFORE it actually expires, so a sync
+// that takes a few seconds can't have the token die mid-flight.
+const TOKEN_REFRESH_SKEW_MS = 120_000;
+
+/** Thrown when the refresh GRANT itself is dead (revoked at the provider,
+ *  or a rotated refresh token was lost). Distinct from a transient sync
+ *  failure: no amount of retrying fixes it -- only the user reconnecting. */
+class ReconnectRequiredError extends Error {
+  constructor(provider) {
+    super('This connection expired. Reconnect to resume syncing.');
+    this.code = 'reconnect_required';
+    this.provider = provider;
+  }
+}
+
+/** Returns a connection whose access token is valid RIGHT NOW, refreshing
+ *  it first if it has expired (or is about to).
+ *
+ *  Caught live: provider.refreshAccessToken existed in every OAuth
+ *  provider adapter but nothing ever called it -- syncOneConnection used
+ *  conn.access_token raw. WHOOP access tokens last ~1 hour, so every
+ *  connection worked for an hour and then failed every subsequent sync
+ *  with "sync failed" forever, with no way to recover short of
+ *  disconnecting and reconnecting by hand. This is the third instance of
+ *  the same class of bug in this feature (see whoopProvider.js's
+ *  incrementalSync and normalizeRecovery/normalizeSleep): written,
+ *  correct, and never wired up.
+ *
+ *  `force` skips the expiry check -- used when a sync gets a 401 despite
+ *  a token_expires_at that claims it is still valid (clock skew, a
+ *  provider-side revocation, or a connection created before this existed
+ *  and therefore carrying no expiry at all).
+ *
+ *  Persists the ROTATED refresh token, not just the new access token --
+ *  WHOOP invalidates the old refresh token on every refresh, so dropping
+ *  the new one bricks the connection on the NEXT refresh instead of this
+ *  one (see whoopProvider.js's refreshAccessToken). */
+async function ensureFreshToken(db, provider, conn, { force = false } = {}) {
+  if (!provider.refreshAccessToken || !conn.refresh_token) return conn;
+  if (!force) {
+    const expiresAt = conn.token_expires_at ? Date.parse(conn.token_expires_at) : NaN;
+    // No/unparseable expiry -> fall through and refresh, rather than
+    // optimistically using a token whose validity we cannot reason about.
+    if (Number.isFinite(expiresAt) && expiresAt - Date.now() > TOKEN_REFRESH_SKEW_MS) return conn;
+  }
+  let tokens;
+  try {
+    tokens = await provider.refreshAccessToken(conn.refresh_token);
+  } catch (e) {
+    // The grant is gone -- surface it as "reconnect", never as a generic
+    // sync failure the user can only stare at.
+    console.error(`[health] ${conn.provider} token refresh failed:`, e.message || e);
+    await db.run(
+      'UPDATE health_provider_connections SET status = ?, sync_status = ?, sync_error = ?, updated_at = ? WHERE id = ?',
+      ['revoked', 'error', 'Connection expired — reconnect to resume syncing', now(), conn.id]);
+    throw new ReconnectRequiredError(conn.provider);
+  }
+  const accessToken = tokens.accessToken ?? null;
+  const refreshToken = tokens.refreshToken ?? conn.refresh_token;
+  const tokenExpiresAt = tokens.expiresAt ?? null;
+  await db.run(
+    'UPDATE health_provider_connections SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE id = ?',
+    [accessToken, refreshToken, tokenExpiresAt, now(), conn.id]);
+  return { ...conn, access_token: accessToken, refresh_token: refreshToken, token_expires_at: tokenExpiresAt };
+}
+
+/** Our provider adapters format transport failures as
+ *  `<Provider> sync failed (<path>): <status>` -- match the status as a
+ *  whole token so a 401 appearing inside a longer number cannot
+ *  masquerade as an auth failure. */
+function isAuthFailure(err) {
+  const re = new RegExp('(?:^|[^0-9])(401|403)(?:[^0-9]|$)');
+  return re.test(String((err && err.message) || ''));
+}
+
+/** Syncs ONE provider connection: refresh the access token if needed,
+ *  fetch incremental records, upsert them (idempotent -- see dedup.js, so
+ *  a redundant call from a duplicate webhook delivery is harmless), and
+ *  update the connection's own sync state. Shared by POST /sync (loops
+ *  over every connection for the calling user) and the webhook handler
+ *  below (exactly one connection, pushed by the provider itself) -- same
+ *  sync logic either way, only who triggers it differs. Never throws -- a
+ *  webhook delivery needs to ack fast regardless of whether the
+ *  provider-side fetch itself failed. */
 async function syncOneConnection(db, provider, conn) {
   await db.run('UPDATE health_provider_connections SET sync_status = ?, updated_at = ? WHERE id = ?', ['syncing', now(), conn.id]);
   try {
-    const { records, nextCursor } = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: conn.last_synced_at });
+    conn = await ensureFreshToken(db, provider, conn);
+    let result;
+    try {
+      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: conn.last_synced_at });
+    } catch (e) {
+      // A 401 despite a token we believed was valid: force one refresh and
+      // retry exactly once. Anything else (or a second failure) propagates.
+      if (!isAuthFailure(e)) throw e;
+      conn = await ensureFreshToken(db, provider, conn, { force: true });
+      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: conn.last_synced_at });
+    }
+    const { records, nextCursor } = result;
     let inserted = 0;
     for (const rec of records) {
       const { inserted: wasInserted } = await upsertHealthRecord(db, { userId: conn.user_id, orgId: conn.org_id, connectionId: conn.id }, rec);
@@ -44,6 +131,11 @@ async function syncOneConnection(db, provider, conn) {
       ['idle', nextCursor, now(), now(), conn.id]);
     return { provider: conn.provider, ok: true, recordsSynced: records.length, recordsInserted: inserted };
   } catch (e) {
+    // ensureFreshToken already wrote status='revoked' + its own message for
+    // this case -- don't overwrite it with a generic sync error.
+    if (e instanceof ReconnectRequiredError) {
+      return { provider: conn.provider, ok: false, error: e.message, code: e.code, reconnectRequired: true };
+    }
     await db.run('UPDATE health_provider_connections SET sync_status = ?, sync_error = ?, updated_at = ? WHERE id = ?', ['error', e.message, now(), conn.id]);
     return { provider: conn.provider, ok: false, error: e.message };
   }
@@ -275,7 +367,10 @@ export default function healthRoutes(db) {
       const cached = await getDailyIntelligence(db, { userId: req.user.sub, date });
       if (cached) return res.json({ intelligence: cached, cached: true });
     }
-    const summary = await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date });
+    // Without tz, reconciliation buckets the day in the SERVER's default
+    // timezone, which is a different day's worth of records for a user in
+    // another one -- same class of bug as the UTC-bounds query below.
+    const summary = await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date, tz: req.tz || DEFAULT_TZ });
     res.json({ intelligence: summary, cached: false });
   });
 
@@ -283,10 +378,38 @@ export default function healthRoutes(db) {
   r.get('/workouts', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
+    // Wide UTC window + exact local-day filter -- the naive
+    // `date+T00:00Z .. date+T23:59Z` form this used to have silently drops
+    // evening sessions for any user east of UTC (see getBurnBreakdown's
+    // own comment, where the same defect was caught live).
+    const tz = req.tz || DEFAULT_TZ;
+    const wideStart = new Date(Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000).toISOString();
+    const wideEnd = new Date(Date.parse(`${date}T00:00:00Z`) + 48 * 3600 * 1000).toISOString();
     const rows = await db.q(
-      `SELECT * FROM health_canonical_workouts WHERE user_id = ? AND start_time >= ? AND start_time < ? ORDER BY start_time`,
-      [req.user.sub, `${date}T00:00:00Z`, `${date}T23:59:59Z`]);
-    res.json({ workouts: rows });
+      `SELECT * FROM health_canonical_workouts WHERE user_id = ? AND start_time >= ? AND start_time <= ? ORDER BY start_time`,
+      [req.user.sub, wideStart, wideEnd]);
+    res.json({ workouts: rows.filter((w) => dayKey(new Date(w.start_time), tz) === date) });
+  });
+
+  // ---- GET /health/burn-breakdown?date=YYYY-MM-DD -- the itemized day ----
+  // Powers the burn-detail screen: total burn split into resting (BMR),
+  // each workout with its real timestamps and winning source, and
+  // everyday movement from steps. Reads only already-reconciled rows;
+  // reconciliation itself happens on /daily-intelligence, so opening this
+  // screen never triggers a recompute.
+  r.get('/burn-breakdown', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    const tz = req.tz || DEFAULT_TZ;
+    let breakdown = await getBurnBreakdown(db, { userId: req.user.sub, date });
+    if (!breakdown) {
+      // Never reconciled yet (the user opened the breakdown before Home
+      // ever loaded this day) -- compute it once, then read it back.
+      await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date, tz });
+      breakdown = await getBurnBreakdown(db, { userId: req.user.sub, date });
+    }
+    res.json({ breakdown });
   });
 
   // ---- GET /health/trends?days=7 -- Progress screen (spec §82) ----

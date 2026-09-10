@@ -31,6 +31,8 @@ import {
 import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
 import { submitFeedback } from '../services/intelligence/foodFeedback.js';
 import { listActiveAnnouncements } from '../services/platform/announcements.js';
+import { mifflinStJeorBmr } from '../services/intelligence/restingEnergy.js';
+import { isIndependentOrg } from '../services/orgKind.js';
 import {
   BALANCE_CONFIG, calculateFlexibleCaloriePlan, getBaseTargets, getActivePlan,
   baseTargetChanged, checkSurplusPrompt, reconcileActivePlan, applyFlexibleCaloriePlan,
@@ -198,13 +200,11 @@ export default function meRoutes(db) {
       });
     }
 
-    // Mifflin-St Jeor BMR
-    let bmr;
-    if (sex === 'MALE') {
-      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-    } else {
-      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
-    }
+    // Mifflin-St Jeor BMR -- shared with the daily burn breakdown's
+    // resting-energy line (services/intelligence/restingEnergy.js) so the
+    // two can never drift apart. Behaviour is unchanged for the MALE/
+    // FEMALE values this app's UI actually writes.
+    const bmr = mifflinStJeorBmr({ weightKg: weight, heightCm: height, age, sex });
 
     // Activity multiplier from experience
     const activityMap = { BEGINNER: 1.375, INTERMEDIATE: 1.55, ADVANCED: 1.725 };
@@ -1140,6 +1140,13 @@ export default function meRoutes(db) {
   // ---------------- live gym crowd (occupancy engine) ----------------
   r.get('/crowd', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
+    // Independent clients have no physical gym, so there is no crowd to
+    // report. Returning enabled:false (rather than an empty snapshot)
+    // is what makes the Home card disappear instead of rendering a
+    // permanently-empty '0 / 150' gauge.
+    if (await isIndependentOrg(db, c.org_id)) {
+      return res.json({ enabled: false, reason: 'no_gym' });
+    }
     const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
     const snapshot = await computeOccupancy(db, c.org_id, req.tz, settings);
     res.json(snapshot);

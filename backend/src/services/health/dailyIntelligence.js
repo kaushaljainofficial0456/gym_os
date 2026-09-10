@@ -18,7 +18,8 @@
 // estimation (spec §32).
 // ============================================================
 import { id, now } from '../../ids.js';
-import { dayKey, DEFAULT_TZ } from '../../utils/time.js';
+import { dayKey, iso, DEFAULT_TZ } from '../../utils/time.js';
+import { mifflinStJeorBmr, composeDailyEnergy } from '../intelligence/restingEnergy.js';
 import { buildWorkoutCalorieInput, estimateWorkoutCalories, resolveBodyWeight } from '../intelligence/calorieModel.js';
 import { reconcileWorkout, buildExternalWorkoutCandidate, clusterWearableWorkouts, reconcileDailyEnergy } from './reconciliation.js';
 import { computeTrainingLoad } from './trainingLoad.js';
@@ -65,6 +66,19 @@ async function fetchSkosWorkouts(db, clientId, date) {
     })),
     setsByExercise: setsByExerciseByWorkout.get(w.id) || {},
   }));
+}
+
+/** Seconds of `date` that have actually elapsed in the user's own
+ *  timezone: the full day for any past date, zero for a future one, and
+ *  only the elapsed part for today -- so today's resting-energy line
+ *  reads a real "so far" figure instead of a full 24h of BMR at 9am. */
+function elapsedSecondsForDate(date, tz) {
+  const today = dayKey(new Date(), tz);
+  if (date < today) return 86400;
+  if (date > today) return 0;
+  const localTime = iso(new Date(), tz).split('T')[1] || '00:00:00';
+  const [h, m, sec] = localTime.split(':').map(Number);
+  return (h * 3600) + (m * 60) + (sec || 0);
 }
 
 async function fetchHealthRecords(db, userId, date, tz) {
@@ -187,6 +201,35 @@ export async function reconcileUserDay(db, { userId, orgId, clientId, date, tz =
   });
 
   const steps = healthRecords.filter((r) => r.data_type === 'steps').reduce((s, r) => s + (r.steps || 0), 0) || null;
+
+  // ---- The whole-day energy picture (resting + active), spec §24/§26 ----
+  // health_daily_summaries has carried resting_energy/total_energy columns
+  // since the schema was written, but nothing ever populated them: the
+  // engine only ever produced ACTIVE energy, so the app could show "1,077
+  // kcal active" and never "what did I actually burn today". The
+  // composition rules (never add a wearable's whole-day figure to our own
+  // workout sum, never add step energy on top of a figure that already
+  // contains it, never use TDEE as the resting base) all live in
+  // restingEnergy.js's composeDailyEnergy.
+  const bmrPerDay = mifflinStJeorBmr({
+    weightKg: client?.current_weight, heightCm: client?.height_cm, age: client?.age, sex: client?.sex,
+  });
+  // reconcileDailyEnergy reports source as 'interval_sum' when it simply
+  // added up our own reconciled workout intervals, or as a provider name
+  // ('whoop') / 'consensus' when a wearable's OWN whole-day active-energy
+  // figure won. Only the latter is authoritative for the whole day -- and
+  // only then must step energy NOT be added on top, since a whole-day
+  // wearable figure already contains everyday movement.
+  const wearableDailyActive = dailyEnergy.source !== 'interval_sum' ? dailyEnergy.activeEnergy : null;
+  const energy = composeDailyEnergy({
+    bmrPerDay,
+    elapsedSeconds: elapsedSecondsForDate(date, tz),
+    workoutKcal: intervalActiveKcalSum,
+    steps,
+    weightKg: client?.current_weight,
+    workouts: reconciledWorkouts,
+    wearableDailyActive,
+  });
   const sleepRecord = healthRecords.find((r) => r.data_type === 'sleep');
   const recoveryRecord = healthRecords.find((r) => r.data_type === 'recovery');
 
@@ -207,11 +250,16 @@ export async function reconcileUserDay(db, { userId, orgId, clientId, date, tz =
   });
 
   const summary = {
-    date, active_energy: dailyEnergy.activeEnergy, workout_minutes: reconciledWorkouts.reduce((s, w) => s + w.durationSeconds / 60, 0),
+    date, active_energy: energy.activeKcal, workout_minutes: reconciledWorkouts.reduce((s, w) => s + w.durationSeconds / 60, 0),
+    resting_energy: energy.restingKcal, total_energy: energy.totalKcal,
     training_load: trainingLoad, sleep_duration_seconds: sleepRecord?.sleep_duration_seconds ?? null,
     recovery_score: recoveryScore, readiness_label: readinessLabel, steps,
     data_quality: quality, reconciliation_status: dailyEnergy.reconciliationStatus,
-    source_summary: { workouts: reconciledWorkouts.length, providers: [...new Set(healthRecords.map((r) => r.provider))], dailyEnergySource: dailyEnergy.source },
+    source_summary: {
+      workouts: reconciledWorkouts.length, providers: [...new Set(healthRecords.map((r) => r.provider))],
+      dailyEnergySource: dailyEnergy.source, activeSource: energy.activeSource,
+      workoutKcal: energy.workoutKcal, movementKcal: energy.movementKcal, bmrPerDay,
+    },
     insights: insightsList, recoveryReasons,
   };
 
@@ -268,6 +316,22 @@ async function writeEnergyInterval(db, { userId, orgId, date, interval, decision
     [id('hei'), userId, orgId, date, interval.start_time, interval.end_time, decision.activeKcal, decision.activeKcal,
      decision.primarySource ?? 'skos_ml', interval.activity_type ?? null, decision.confidence?.score ?? null, decision.confidence?.level ?? null,
      decision.coverageRatio ?? null, decision.sourceType === 'skos_ml' || decision.sourceType === 'met_fallback' ? 1 : 0, canonicalId, now(), now()]);
+
+  // SECONDARY EVIDENCE (spec 14/23, TEST 14): when a wearable measured
+  // the session, SK OS's own estimate for it is retained rather than
+  // thrown away -- is_primary = 0, so it is never counted toward any
+  // total, only shown. This is what lets the burn breakdown say "WHOOP
+  // measured 327, SK OS estimated 420" instead of silently replacing one
+  // number with the other. The is_primary column existed for exactly
+  // this from the start and was always written as 1.
+  if (decision.secondaryEstimateKcal != null && decision.sourceType !== 'skos_ml') {
+    await db.run(
+      `INSERT INTO health_energy_intervals (id, user_id, org_id, date, start_time, end_time, active_kcal, resting_kcal, total_kcal, source, activity_type, confidence_score, confidence_level, coverage, is_primary, is_estimate, model_name, model_version, canonical_workout_id, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,0,1,?,?,?,?,?)`,
+      [id('hei'), userId, orgId, date, interval.start_time, interval.end_time, decision.secondaryEstimateKcal, decision.secondaryEstimateKcal,
+       'skos_ml', interval.activity_type ?? null, null, null, null,
+       decision.secondaryModel?.name ?? null, decision.secondaryModel?.version ?? null, canonicalId, now(), now()]);
+  }
 }
 
 async function upsertDailySummary(db, { userId, orgId, summary }) {
@@ -277,6 +341,7 @@ async function upsertDailySummary(db, { userId, orgId, summary }) {
     active_energy: summary.active_energy, workout_minutes: summary.workout_minutes, training_load: summary.training_load,
     sleep_duration_seconds: summary.sleep_duration_seconds, recovery_score: summary.recovery_score, readiness_label: summary.readiness_label,
     steps: summary.steps, data_quality: summary.data_quality, reconciliation_status: summary.reconciliation_status,
+    resting_energy: summary.resting_energy ?? null, total_energy: summary.total_energy ?? null,
     source_summary_json: JSON.stringify(summary.source_summary), insights_json: JSON.stringify(summary.insights),
   };
   if (existing) {
@@ -302,3 +367,150 @@ export async function getDailyIntelligence(db, { userId, date }) {
 }
 
 function safeParse(json) { try { return json ? JSON.parse(json) : null; } catch { return null; } }
+
+/**
+ * The itemized "where did today's burn come from" view (the burn-detail
+ * screen). Reads only ALREADY-reconciled rows -- it never recomputes
+ * anything, so opening the screen is a couple of indexed reads.
+ *
+ * Returns every component of the day as its own entry, so the total is
+ * always explainable line by line rather than being a number the user has
+ * to trust:
+ *   - resting  : BMR, prorated to the elapsed part of today
+ *   - workout  : one per canonical workout, with its real timestamps, the
+ *                source that won, and (when a wearable won) SK OS's own
+ *                estimate alongside it as a comparison
+ *   - movement : everyday steps, net of resting and of steps already
+ *                inside a step-driven workout
+ *
+ * `null` kcal on an entry means "not known", never zero -- an absent
+ * profile field or absent step data must not read as "you burned nothing".
+ */
+export async function getBurnBreakdown(db, { userId, date }) {
+  const summary = await getDailyIntelligence(db, { userId, date });
+  if (!summary) return null;
+
+  // Workout lines are derived from health_energy_intervals, NOT by
+  // re-querying canonical workouts by their own start_time.
+  //
+  // Caught live: a session that ran 22:58-23:58 local was bucketed into
+  // the NEXT day by reconcileUserDay (it keys off the workout's
+  // scheduled_date), so its energy was inside that day's total while a
+  // start_time-based query for the same day could not find it -- the
+  // breakdown showed a total 354 kcal larger than the lines beneath it.
+  // health_energy_intervals.date is written by the same pass that built
+  // the total, so reading the lines from there makes them sum to the
+  // total BY CONSTRUCTION, in every timezone, for every midnight-
+  // straddling session. That property matters more here than any
+  // individual query being clever.
+  const intervals = await db.q(
+    'SELECT * FROM health_energy_intervals WHERE user_id = ? AND date = ? ORDER BY start_time',
+    [userId, date]);
+  const workoutIds = [...new Set(intervals.map((iv) => iv.canonical_workout_id).filter(Boolean))];
+  const canonicalRows = workoutIds.length
+    ? await db.q(`SELECT * FROM health_canonical_workouts WHERE id IN (${workoutIds.map(() => '?').join(',')})`, workoutIds)
+    : [];
+  const canonicalById = new Map(canonicalRows.map((w) => [w.id, w]));
+  // One entry per PRIMARY interval -- these are the rows that actually
+  // contributed to the day's active energy.
+  const workouts = intervals
+    .filter((iv) => iv.is_primary && iv.canonical_workout_id && canonicalById.has(iv.canonical_workout_id))
+    .map((iv) => canonicalById.get(iv.canonical_workout_id));
+
+  // Secondary (is_primary = 0) rows are SK OS's own estimate for a session
+  // a wearable measured -- shown as a comparison, never added to a total.
+  const secondaryByWorkout = new Map();
+  for (const iv of intervals) {
+    if (!iv.is_primary && iv.canonical_workout_id) secondaryByWorkout.set(iv.canonical_workout_id, iv);
+  }
+
+  const src = summary.source_summary || {};
+  const entries = [];
+
+  if (summary.resting_energy != null) {
+    entries.push({
+      type: 'resting',
+      label: 'Resting',
+      sublabel: 'Basal metabolism',
+      kcal: summary.resting_energy,
+      startTime: `${date}T00:00:00`,
+      endTime: null,
+      source: 'skos_bmr',
+      sourceLabel: 'Mifflin-St Jeor',
+      isEstimate: true,
+      detail: src.bmrPerDay ? `${Math.round(src.bmrPerDay)} kcal/day at rest` : null,
+    });
+  }
+
+  for (const w of workouts) {
+    const secondary = secondaryByWorkout.get(w.id);
+    entries.push({
+      type: 'workout',
+      label: activityLabel(w.activity_type),
+      sublabel: w.skos_workout_id ? 'Logged in SK OS' : 'Detected by wearable',
+      kcal: w.active_kcal,
+      startTime: w.start_time,
+      endTime: w.end_time,
+      durationSeconds: w.duration_seconds,
+      source: w.primary_energy_source,
+      isEstimate: !isWearableKey(w.primary_energy_source),
+      confidenceLevel: w.confidence_level,
+      coverageRatio: w.coverage_ratio,
+      dataQuality: w.data_quality,
+      // Both numbers, side by side, when they exist -- the wearable's
+      // measurement and what SK OS would have estimated on its own.
+      comparison: secondary ? {
+        skosEstimateKcal: secondary.active_kcal,
+        measuredKcal: w.active_kcal,
+        model: secondary.model_name || null,
+      } : null,
+    });
+  }
+
+  if (src.movementKcal != null) {
+    entries.push({
+      type: 'movement',
+      label: 'Everyday movement',
+      sublabel: summary.steps != null ? `${Number(summary.steps).toLocaleString()} steps` : 'Steps',
+      kcal: src.movementKcal,
+      startTime: null,
+      endTime: null,
+      steps: summary.steps ?? null,
+      source: 'skos_steps',
+      isEstimate: true,
+      detail: 'Estimated from step count, above resting',
+    });
+  }
+
+  return {
+    date,
+    totals: {
+      total: summary.total_energy ?? null,
+      resting: summary.resting_energy ?? null,
+      active: summary.active_energy ?? null,
+      workouts: src.workoutKcal ?? null,
+      movement: src.movementKcal ?? null,
+    },
+    steps: summary.steps ?? null,
+    activeSource: src.activeSource || null,
+    providers: src.providers || [],
+    dataQuality: summary.data_quality,
+    // Sorted newest-first for display; the resting line stays pinned last
+    // since it spans the whole day rather than happening at a moment.
+    entries: entries.sort((a, b) => {
+      if (a.type === 'resting') return 1;
+      if (b.type === 'resting') return -1;
+      if (!a.startTime) return 1;
+      if (!b.startTime) return -1;
+      return Date.parse(b.startTime) - Date.parse(a.startTime);
+    }),
+  };
+}
+
+const WEARABLE_KEYS = new Set(['apple_health', 'health_connect', 'samsung_health', 'whoop', 'oura', 'garmin', 'fitbit', 'polar', 'coros', 'ultrahuman']);
+function isWearableKey(k) { return !!k && WEARABLE_KEYS.has(k); }
+
+function activityLabel(activityType) {
+  if (!activityType) return 'Workout';
+  return String(activityType).split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}

@@ -131,3 +131,52 @@ test('TEST 15 -- large wearable-vs-ML discrepancy is flagged, never blindly aver
   assert.equal(r.dataQualityFlag, true);
   assert.equal(r.confidence.level, 'low', 'a flagged large disagreement should not read as high confidence');
 });
+
+// ---------------------------------------------------------------
+// Reported from the live site: an SK OS session estimated 420 kcal
+// while the WHOOP strap reported 327 for the same session, and the app
+// showed only the SK OS number. The reconciliation rule the user asked
+// for -- "if the timestamps are the same for both, give priority to the
+// wearable; only use the SK OS number for stretches the wearable did not
+// record" -- is exactly what reconcileWorkout already does, so these
+// lock that behaviour in against regressions. (The live symptom was NOT
+// a reconciliation bug: the sync itself was failing on an expired access
+// token, so no WHOOP record ever reached this engine. See
+// backend/test/healthTokenRefresh.test.js.)
+// ---------------------------------------------------------------
+test('LIVE 420-vs-327 -- matching timestamps: the wearable wins outright, the SK OS estimate never overrides or sums', async () => {
+  const whoopSameSession = [{
+    id: 'w1', data_type: 'workout', provider: 'whoop',
+    start_time: '2026-01-01T18:00:00Z', end_time: '2026-01-01T19:00:00Z',
+    activity_type: 'strength_training', active_kcal: 327,
+  }];
+  const r = await reconcileWorkout(SKOS_WORKOUT, whoopSameSession, { estimateMl: fakeMl(420) });
+
+  assert.equal(r.activeKcal, 327, 'the strap is ground truth for a session it actually measured');
+  assert.equal(r.primarySource, 'whoop');
+  assert.equal(r.sourceType, 'wearable_direct');
+  assert.notEqual(r.activeKcal, 420, 'the SK OS estimate must not win');
+  assert.notEqual(r.activeKcal, 747, 'and must never be added on top');
+  // The SK OS estimate is kept as secondary evidence, not discarded --
+  // that is what powers the "SK OS estimated 420" line in the breakdown.
+  assert.equal(Math.round(r.secondaryEstimateKcal), 420, 'the SK OS estimate stays visible as secondary evidence');
+  // 327 vs 420 is a 22% gap -- real, but under the 40% flag threshold,
+  // so it is surfaced as a comparison rather than a data-quality warning.
+  assert.equal(r.dataQualityFlag, false);
+});
+
+test('LIVE 420-vs-327 -- a stretch the wearable did NOT record still falls back to the SK OS estimate', async () => {
+  // WHOOP recorded only the middle 30 minutes of a 60-minute session.
+  const partial = [{
+    id: 'w1', data_type: 'workout', provider: 'whoop',
+    start_time: '2026-01-01T18:15:00Z', end_time: '2026-01-01T18:45:00Z',
+    activity_type: 'strength_training', active_kcal: 160,
+  }];
+  const r = await reconcileWorkout(SKOS_WORKOUT, partial, { estimateMl: fakeMl(420) });
+
+  assert.equal(r.primarySource, 'whoop', 'the wearable still leads for the part it measured');
+  assert.ok(r.activeKcal > 160, 'the unmeasured half hour must be filled in, not dropped');
+  assert.ok(r.activeKcal < 420 + 160, 'but only the GAP is estimated -- never the whole session again');
+  assert.ok(r.uncoveredEstimateKcal > 0, 'the gap fill is reported separately so the UI can show it honestly');
+});
+

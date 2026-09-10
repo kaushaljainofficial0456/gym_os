@@ -298,10 +298,16 @@ export default function authRoutes(db) {
   // INSERT ... ON CONFLICT DO NOTHING + a SELECT-back is race-safe under
   // concurrent first-time signups (two requests racing to create it both
   // land on the same row), unlike a SELECT-then-INSERT-if-missing check.
-  // The gym_settings row is what actually turns off gym-only features for
-  // these clients: crowd_enabled=0 (there's no physical gym to have a live
-  // crowd) and full self-service permissions (custom workout mode, every
-  // allow_* on), since there's no trainer to prescribe anything.
+  // The gym_settings row turns off gym-only features for these clients:
+  // crowd_enabled=0 (no physical gym to have a live crowd) and
+  // community_enabled=0 (the community is a GYM community -- there are no
+  // fellow members here), plus full self-service permissions (custom
+  // workout mode, every allow_* on) since there's no trainer to prescribe
+  // anything. community_enabled was originally omitted from this INSERT,
+  // so it inherited the schema's DEFAULT 1 and independent clients were
+  // offered a community to join; because this INSERT is ON CONFLICT DO
+  // NOTHING, fixing it here does NOT repair orgs already created -- the
+  // structural gate in services/orgKind.js is what covers those.
   const INDEPENDENT_ORG_SLUG = 'independent';
   async function ensureIndependentOrg() {
     const existing = await db.q1('SELECT id FROM organizations WHERE slug = ?', [INDEPENDENT_ORG_SLUG]);
@@ -313,8 +319,8 @@ export default function authRoutes(db) {
       [orgId, 'Independent Clients', INDEPENDENT_ORG_SLUG, now()]);
     const row = await db.q1('SELECT id FROM organizations WHERE slug = ?', [INDEPENDENT_ORG_SLUG]);
     await db.run(
-      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, updated_at)
-       VALUES (?, 'SK OS', 'Your own coach, in your pocket.', 150, 0, 'custom', 1, 1, 1, ?)
+      `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, community_enabled, community_leaderboard_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, updated_at)
+       VALUES (?, 'SK OS', 'Your own coach, in your pocket.', 150, 0, 0, 0, 'custom', 1, 1, 1, ?)
        ON CONFLICT (org_id) DO NOTHING`,
       [row.id, now()]);
     return row.id;

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, orgScope } from '../auth.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
+import { isIndependentOrg } from '../services/orgKind.js';
 import {
   getMembership, setMembership, getCommunitySettings,
   leaderboards, feed, shareWorkout, unshareWorkout, copyWorkout,
@@ -35,9 +36,17 @@ export default function communityRoutes(db) {
     const membership = await getMembership(db, client.id);
     const settings = await getCommunitySettings(db, req.orgId);
     const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [req.orgId]);
+    // The community is a GYM community -- there is no gym, and no fellow
+    // members, for an independent client, so it is reported as
+    // unavailable rather than as an empty community they can join.
+    // (The independent org's gym_settings row never set community_enabled,
+    // so it inherited the schema default of 1 and these users were being
+    // offered a community that cannot exist -- see services/orgKind.js.)
+    const independent = await isIndependentOrg(db, req.orgId);
     res.json({
       membership: membership || { client_id: client.id, enabled: 0 },
-      settings,
+      settings: independent ? { ...settings, community_enabled: false, leaderboard_enabled: false } : settings,
+      available: !independent,
       gym: { id: req.orgId, name: org?.name || 'Your Gym' },
     });
   });
