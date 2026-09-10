@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, fmt1 } from '../../utils.js';
-import { Card, Kicker, Kpi, Spinner, ErrorState, StatusChip, Avatar, Skeleton } from '../../components/UI.jsx';
+import { Card, Kicker, Kpi, ErrorState, StatusChip, Avatar, Skeleton, CheckIcon } from '../../components/UI.jsx';
 import { Reveal, AnimatedNumber } from '../../design/index.js';
 import { TrendChart } from '../../components/charts.jsx';
 import { Stagger } from '../../components/motion.jsx';
@@ -77,13 +77,20 @@ export default function Dashboard() {
                 the reference exactly rather than the split-hierarchy
                 treatment this had before. */}
             <div className="mt-2 flex items-baseline gap-2.5 flex-wrap">
-              {/* Size (50px) and weight (font-black) unchanged -- only the
-                  typeface moves, to Bricolage Grotesque specifically for
-                  this headline. Every other trainer heading stays Satoshi;
-                  this is a one-element swap, not a section-wide font
-                  change. */}
-              <span className="font-black leading-[1.05] tracking-[-.03em]"
-                    style={{ fontSize: 50, color: 'var(--ink)', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
+              {/* The typeface override here named 'Bricolage Grotesque',
+                  which this app has never loaded — so the single largest
+                  piece of type in the trainer product silently rendered in
+                  the browser's default sans, at 50px, next to DM Sans
+                  everywhere else. It now uses the app face at its heaviest
+                  weight, which is what the override was reaching for. */}
+              {/* A fixed 50px was set against a desktop window. On a 375px
+                  phone the same sentence ran to four lines and pushed every
+                  KPI below the fold — the screen's whole job is "what do I
+                  do next", and you had to scroll past the question to reach
+                  the answers. clamp() ties it to the viewport so it lands at
+                  ~30px on a phone and still reaches 50px on a laptop. */}
+              <span className="font-black leading-[1.05] tracking-[-.035em]"
+                    style={{ fontSize: 'clamp(1.875rem, 6.2vw, 3.125rem)', color: 'var(--ink)', textWrap: 'balance' }}>
                 <AnimatedNumber value={k.needsAttention + k.atRisk} />
                 {' '}
                 {(k.needsAttention + k.atRisk) === 1 ? 'client needs you today' : 'clients need you today'}
@@ -120,12 +127,17 @@ export default function Dashboard() {
           <div className="px-3 pb-3 space-y-1.5">
             <Stagger step={70}>
               {attentionClients.slice(0, 6).map((c) => (
+                /* Was `bg-white/[.02] hover:bg-white/[.05] hover:border-white/15`
+                   — three white-alpha washes, all of which are invisible on
+                   the light theme's white panel, so these rows had no fill
+                   and no hover feedback at all in light mode. `.row` is the
+                   tint-driven equivalent that works on both grounds. */
                 <Link key={c.clientId} to={`/app/trainer/clients/${c.clientId}`}
-                  className="group flex items-center gap-3 p-3 rounded-2xl border border-line bg-white/[.02] hover:bg-white/[.05] hover:border-white/15 transition-all duration-200">
+                  className="group row row-interactive gap-3">
                   <Avatar name={c.name} size="w-10 h-10" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-grotesk text-sm font-semibold group-hover:text-gold transition-colors">{c.name}</span>
+                      <span className="font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{c.name}</span>
                       <StatusChip status={c.status} />
                     </div>
                     {/* Was text-bad on every row regardless of severity --
@@ -138,16 +150,21 @@ export default function Dashboard() {
                     <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--mute)' }}>
                       {c.rules.slice(0, 2).map((r) => r.title).join(' · ')}
                     </div>
-                    <div className="text-[10px] text-faint mt-0.5 font-grotesk">
-                      {c.goal.replace(/_/g, ' ')} · {c.currentWeight} → {c.targetWeight} kg · {c.adherence}% adherence
+                    {/* `{c.adherence}% adherence` printed a bare "% adherence"
+                        whenever adherence was null — visible on this very
+                        screen for every client with no logged days yet. A
+                        missing number is now stated as missing. */}
+                    <div className="text-[10px] text-faint mt-0.5 font-grotesk tabular-nums">
+                      {c.goal.replace(/_/g, ' ')} · {c.currentWeight} → {c.targetWeight} kg
+                      {c.adherence == null ? ' · no adherence data yet' : ` · ${fmt1(c.adherence)}% adherence`}
                     </div>
                   </div>
-                  <span className="chip !text-[10px] group-hover:border-gold/40 group-hover:text-gold transition-colors">VIEW ›</span>
+                  <span className="badge badge-plain shrink-0 group-hover:text-[color:var(--accent)] transition-colors">View</span>
                 </Link>
               ))}
             </Stagger>
             {!(attentionClients.length) && (
-              <div className="text-center py-10 text-mute text-sm">🎉 No clients need attention right now.</div>
+              <div className="empty-state"><div className="empty-state-icon"><CheckIcon /></div><div className="empty-state-title">Everyone is on track</div><p className="empty-state-body">No client needs attention right now.</p></div>
             )}
           </div>
         </Card>
@@ -158,7 +175,7 @@ export default function Dashboard() {
           {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} /> : <Skeleton lines={4} />}
           <div className="grid grid-cols-3 gap-2 mt-3 text-center">
             {[['ON TRACK', k.onTrack, 'text-good'], ['NEEDS ATTN', k.needsAttention, 'text-warn'], ['AT RISK', k.atRisk, 'text-bad']].map(([l, v, c]) => (
-              <div key={l} className="rounded-xl border border-line bg-white/[.02] py-2.5">
+              <div key={l} className="rounded-xl border border-line bg-tint/[.02] py-2.5">
                 <div className={`font-grotesk font-bold text-lg ${c}`}>{v}</div>
                 <div className="text-[9px] text-mute uppercase tracking-wider font-grotesk">{l}</div>
               </div>

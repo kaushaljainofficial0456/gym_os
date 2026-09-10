@@ -336,7 +336,195 @@ async function seedDefaultFeatureFlags(exec) {
   `);
 }
 
-function applySqliteMigrations(db) {
+// --- SK OS Health Intelligence Engine (also in schema.sql -- see that
+// file's own header comment for what each table is for). Shared between
+// both migration paths as a plain statement list (same idea as
+// backfillSetLogs above) so the six tables + indexes can't drift between
+// the SQLite and Postgres branches. `exec` is `(sql) => db.exec(sql)` for
+// SQLite or `(sql) => pool.query(sql)` for Postgres -- both accept a
+// single statement string, and awaiting a non-promise (the sync SQLite
+// call) is a no-op, so this one list works for both. ---
+const HEALTH_INTELLIGENCE_SQL = [
+  `CREATE TABLE IF NOT EXISTS health_provider_connections (
+    id                 TEXT PRIMARY KEY,
+    user_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id             TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    provider           TEXT NOT NULL CHECK (provider IN (
+                         'apple_health','health_connect','samsung_health',
+                         'whoop','oura','garmin','fitbit','polar','coros','ultrahuman'
+                       )),
+    status             TEXT NOT NULL DEFAULT 'disconnected' CHECK (status IN (
+                         'disconnected','pending','connected','error','revoked'
+                       )),
+    external_account_id TEXT,
+    scopes_json        TEXT,
+    capabilities_json  TEXT,
+    access_token       TEXT,
+    refresh_token      TEXT,
+    token_expires_at   TEXT,
+    oauth_state        TEXT,
+    sync_cursor        TEXT,
+    sync_status        TEXT NOT NULL DEFAULT 'idle' CHECK (sync_status IN ('idle','syncing','error')),
+    sync_error         TEXT,
+    connected_at       TEXT,
+    last_synced_at     TEXT,
+    disconnected_at    TEXT,
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL,
+    UNIQUE (user_id, provider)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_health_conn_user ON health_provider_connections(user_id)`,
+  `CREATE TABLE IF NOT EXISTS health_canonical_workouts (
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id                TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    skos_workout_id       TEXT REFERENCES workouts(id) ON DELETE SET NULL,
+    activity_type         TEXT,
+    start_time            TEXT NOT NULL,
+    end_time              TEXT NOT NULL,
+    duration_seconds      REAL,
+    primary_energy_source TEXT,
+    active_kcal           REAL,
+    coverage_ratio        REAL,
+    confidence_score       REAL,
+    confidence_level       TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+    match_score            REAL,
+    match_reason           TEXT,
+    auto_detected          INTEGER NOT NULL DEFAULT 0,
+    user_entered            INTEGER NOT NULL DEFAULT 0,
+    data_quality             TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+    matched_at                TEXT,
+    created_at                TEXT NOT NULL,
+    updated_at                TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_health_canon_user_time ON health_canonical_workouts(user_id, start_time)`,
+  `CREATE INDEX IF NOT EXISTS idx_health_canon_skos_workout ON health_canonical_workouts(skos_workout_id)`,
+  `CREATE TABLE IF NOT EXISTS health_records (
+    id                  TEXT PRIMARY KEY,
+    user_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    provider            TEXT NOT NULL,
+    provider_record_id  TEXT,
+    connection_id       TEXT REFERENCES health_provider_connections(id) ON DELETE SET NULL,
+    data_type           TEXT NOT NULL CHECK (data_type IN (
+                          'workout','energy_sample','heart_rate','steps','distance',
+                          'sleep','recovery','hrv','resting_hr','respiratory_rate','spo2',
+                          'body_temperature','body_metrics','vo2max'
+                        )),
+    activity_type       TEXT,
+    start_time          TEXT NOT NULL,
+    end_time            TEXT,
+    duration_seconds    REAL,
+    active_kcal         REAL,
+    total_kcal          REAL,
+    resting_kcal        REAL,
+    heart_rate_avg      REAL,
+    heart_rate_min      REAL,
+    heart_rate_max      REAL,
+    steps               INTEGER,
+    distance_m          REAL,
+    hrv_ms              REAL,
+    resting_hr          REAL,
+    respiratory_rate    REAL,
+    spo2_pct            REAL,
+    body_temperature_c  REAL,
+    vo2max              REAL,
+    sleep_duration_seconds REAL,
+    sleep_stages_json   TEXT,
+    source_score        REAL,
+    source_metric        TEXT,
+    auto_detected       INTEGER NOT NULL DEFAULT 0,
+    user_entered         INTEGER NOT NULL DEFAULT 0,
+    source_confidence    REAL,
+    data_quality         TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+    data_quality_reason  TEXT,
+    canonical_workout_id TEXT REFERENCES health_canonical_workouts(id) ON DELETE SET NULL,
+    skos_workout_id      TEXT REFERENCES workouts(id) ON DELETE SET NULL,
+    deleted_at            TEXT,
+    synced_at             TEXT NOT NULL,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_health_records_user_time ON health_records(user_id, start_time)`,
+  `CREATE INDEX IF NOT EXISTS idx_health_records_user_type ON health_records(user_id, data_type, start_time)`,
+  `CREATE INDEX IF NOT EXISTS idx_health_records_canonical ON health_records(canonical_workout_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_health_records_provider_dedup
+    ON health_records(user_id, provider, provider_record_id)
+    WHERE provider_record_id IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS health_energy_intervals (
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id                TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    date                  TEXT NOT NULL,
+    start_time            TEXT NOT NULL,
+    end_time              TEXT NOT NULL,
+    active_kcal           REAL NOT NULL DEFAULT 0,
+    resting_kcal          REAL NOT NULL DEFAULT 0,
+    total_kcal            REAL NOT NULL DEFAULT 0,
+    source                TEXT NOT NULL,
+    source_record_id      TEXT REFERENCES health_records(id) ON DELETE SET NULL,
+    activity_type         TEXT,
+    confidence_score       REAL,
+    confidence_level       TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+    coverage               REAL,
+    is_primary              INTEGER NOT NULL DEFAULT 1,
+    is_estimate              INTEGER NOT NULL DEFAULT 0,
+    model_name                TEXT,
+    model_version              TEXT,
+    canonical_workout_id        TEXT REFERENCES health_canonical_workouts(id) ON DELETE SET NULL,
+    created_at                   TEXT NOT NULL,
+    updated_at                    TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_health_energy_user_date ON health_energy_intervals(user_id, date)`,
+  `CREATE TABLE IF NOT EXISTS health_daily_summaries (
+    id                     TEXT PRIMARY KEY,
+    user_id                TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id                 TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    date                   TEXT NOT NULL,
+    active_energy          REAL,
+    resting_energy         REAL,
+    total_energy           REAL,
+    steps                  INTEGER,
+    distance_m             REAL,
+    workout_minutes        REAL,
+    training_load          REAL,
+    sleep_duration_seconds REAL,
+    sleep_score            REAL,
+    recovery_score         REAL,
+    readiness_score        REAL,
+    readiness_label        TEXT CHECK (readiness_label IN ('ready','moderate','recovery_recommended') OR readiness_label IS NULL),
+    data_quality            TEXT NOT NULL DEFAULT 'unknown' CHECK (data_quality IN ('complete','mostly_complete','partial','poor','unknown')),
+    confidence_score         REAL,
+    confidence_level         TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+    reconciliation_status     TEXT NOT NULL DEFAULT 'ok' CHECK (reconciliation_status IN ('ok','warning')),
+    source_summary_json        TEXT,
+    insights_json                TEXT,
+    computed_at                   TEXT NOT NULL,
+    created_at                     TEXT NOT NULL,
+    updated_at                     TEXT NOT NULL,
+    UNIQUE (user_id, date)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_health_daily_user_date ON health_daily_summaries(user_id, date)`,
+  `CREATE TABLE IF NOT EXISTS health_reconciliation_log (
+    id                   TEXT PRIMARY KEY,
+    user_id              TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    canonical_workout_id TEXT REFERENCES health_canonical_workouts(id) ON DELETE SET NULL,
+    date                 TEXT,
+    previous_source       TEXT,
+    new_source             TEXT,
+    previous_kcal           REAL,
+    new_kcal                 REAL,
+    reason                    TEXT NOT NULL,
+    model_version              TEXT,
+    created_at                  TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_health_reconlog_user ON health_reconciliation_log(user_id, created_at)`,
+];
+async function applyHealthIntelligenceSchema(exec) {
+  for (const stmt of HEALTH_INTELLIGENCE_SQL) await exec(stmt);
+}
+
+async function applySqliteMigrations(db) {
   const hasCol = (table, col) => {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all();
     return cols.some((c) => c.name === col);
@@ -404,6 +592,29 @@ function applySqliteMigrations(db) {
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
   db.exec(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
+  // --- notification-center preferences (also in schema.sql; repeated here
+  // for older DBs / parity with the PG path, same as exercise_relations
+  // above) ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      enabled             INTEGER NOT NULL DEFAULT 1,
+      workout_reminders   INTEGER NOT NULL DEFAULT 1,
+      water_reminders     INTEGER NOT NULL DEFAULT 1,
+      water_interval_h    REAL NOT NULL DEFAULT 2,
+      nutrition_reminders INTEGER NOT NULL DEFAULT 1,
+      daily_summary       INTEGER NOT NULL DEFAULT 1,
+      daily_summary_time  TEXT NOT NULL DEFAULT '23:30',
+      tomorrow_workout    INTEGER NOT NULL DEFAULT 1,
+      rest_day_reminders  INTEGER NOT NULL DEFAULT 0,
+      incomplete_workout  INTEGER NOT NULL DEFAULT 1,
+      quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
+      quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      updated_at          TEXT NOT NULL
+    )`);
+  // --- SK OS Health Intelligence Engine (also in schema.sql) ---
+  await applyHealthIntelligenceSchema((s) => db.exec(s));
 }
 
 async function applyPgMigrations(pool) {
@@ -461,6 +672,27 @@ async function applyPgMigrations(pool) {
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
+  // --- notification-center preferences (also in schema.sql) ---
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      enabled             INTEGER NOT NULL DEFAULT 1,
+      workout_reminders   INTEGER NOT NULL DEFAULT 1,
+      water_reminders     INTEGER NOT NULL DEFAULT 1,
+      water_interval_h    REAL NOT NULL DEFAULT 2,
+      nutrition_reminders INTEGER NOT NULL DEFAULT 1,
+      daily_summary       INTEGER NOT NULL DEFAULT 1,
+      daily_summary_time  TEXT NOT NULL DEFAULT '23:30',
+      tomorrow_workout    INTEGER NOT NULL DEFAULT 1,
+      rest_day_reminders  INTEGER NOT NULL DEFAULT 0,
+      incomplete_workout  INTEGER NOT NULL DEFAULT 1,
+      quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
+      quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      updated_at          TEXT NOT NULL
+    )`);
+  // --- SK OS Health Intelligence Engine (also in schema.sql) ---
+  await applyHealthIntelligenceSchema((s) => pool.query(s));
 }
 
 if (config.databaseUrl) {
@@ -487,7 +719,7 @@ if (config.databaseUrl) {
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(schemaPath, 'utf8'));
-  applySqliteMigrations(db);
+  await applySqliteMigrations(db);
   await seedDefaultPricing((s) => db.exec(s));
   await seedDefaultFeatureFlags((s) => db.exec(s));
   db.close();

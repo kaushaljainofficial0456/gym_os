@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, GOAL_LABEL, STATUS_META, cls } from '../../utils.js';
-import { Card, Kicker, Spinner, ErrorState, Modal, StatusChip } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, StatusChip, PageSkeleton } from '../../components/UI.jsx';
 
 const STATUS_FILTERS = ['ALL', 'ON_TRACK', 'NEEDS_ATTENTION', 'AT_RISK', 'INACTIVE'];
 
@@ -20,7 +20,7 @@ export default function Clients() {
     return rows;
   }, [data, q, status]);
 
-  if (loading) return <Spinner label="Loading clients…" />;
+  if (loading) return <PageSkeleton variant="list" label="Loading clients" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
   return (
@@ -66,7 +66,7 @@ export default function Clients() {
             </thead>
             <tbody>
               {filtered.map((c) => (
-                <tr key={c.id} className="border-b border-line/50 hover:bg-white/[.03] transition-colors">
+                <tr key={c.id} className="border-b border-line/50 hover:bg-tint/[.03] transition-colors">
                   <td className="px-5 py-3">
                     <Link to={`/app/trainer/clients/${c.id}`} className="flex items-center gap-3 group">
                       <div className="w-8 h-8 rounded-full grid place-items-center bg-gradient-to-br from-ember/30 to-gold/20 border border-line font-grotesk text-xs font-bold">
@@ -85,7 +85,7 @@ export default function Clients() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div className="w-16 h-1.5 rounded-full bg-tint/10 overflow-hidden">
                         <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold" style={{ width: `${Math.min(100, c.adherence)}%` }} />
                       </div>
                       <span className="font-grotesk text-xs">{c.adherence}%</span>

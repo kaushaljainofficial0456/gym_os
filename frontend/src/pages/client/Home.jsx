@@ -32,9 +32,10 @@ import { useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Ring, Bar } from '../../components/UI.jsx';
+import { ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
 import { sumEatenTotals } from '../../nutritionCalc.js';
+import { burnSourceLabel } from '../../healthProviderLabels.js';
 import {
   AmbientBackdrop, Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
 } from '../../design/index.js';
@@ -57,18 +58,22 @@ const CROWD = {
   VERY_HIGH: { label: 'Packed',   tone: 'var(--bad)' },
 };
 
-/** Small uppercase section label. One component so the tracking and size
- *  are defined once instead of being retyped per section — the old file
- *  repeated `text-[10.5px] uppercase tracking-[.14em]` five times and had
- *  drifted to two different sizes. */
-function Label({ children, className = '' }) {
+/* The local `Label` this file used to define is gone: it was a fourth
+   private copy of the same uppercase micro-label that Nutrition, Progress
+   and Workout each also redefined, and they had already drifted to three
+   different sizes. `.t-micro` in theme.css is now the single definition. */
+
+/** One chevron shape for every "this row goes somewhere" affordance on the
+ *  screen, instead of the '→' text glyph that used to sit here — a glyph
+ *  picks up the body font's weight and baseline, so it never optically
+ *  matched the SVG icons beside it. */
+function Chevron() {
   return (
-    <div
-      className={`text-[10px] font-medium uppercase tracking-[.18em] ${className}`}
-      style={{ color: 'var(--faint)' }}
-    >
-      {children}
-    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      className="shrink-0" style={{ color: 'var(--faint)' }}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   );
 }
 
@@ -83,20 +88,50 @@ function CommunityCard() {
     <Reveal delay={260}>
       <Tilt max={4}>
         <button onClick={() => nav('/app/client/community')}
-          className="card p-4 w-full text-left flex items-center gap-3 active:scale-[.98] transition-all">
-          <div className="w-10 h-10 rounded-2xl bg-gold/10 border border-gold/25 grid place-items-center shrink-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          className="card p-4 w-full text-left flex items-center gap-3.5 active:scale-[.98] transition-all">
+          {/* Was bg-gold/border-gold — a bright amber (#FBBF24) from an
+              earlier palette, the only place on this screen that colour
+              still appeared. */}
+          <div className="w-10 h-10 grid place-items-center shrink-0"
+            style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .10)', border: '1px solid rgb(var(--accent-rgb) / .22)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 21v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-grotesk text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>{gym?.name || 'Community'}</div>
-            <div className="text-[10px]" style={{ color: 'var(--faint)' }}>Leaderboards &amp; shared workouts</div>
+            <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{gym?.name || 'Community'}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--faint)' }}>Leaderboards &amp; shared workouts</div>
           </div>
-          <span className="text-sm" style={{ color: 'var(--faint)' }}>→</span>
+          <Chevron />
         </button>
       </Tilt>
     </Reveal>
+  );
+}
+
+/** Loading state shaped like the screen it becomes, so nothing jumps when
+ *  the data lands. A centred spinner on a page with this much structure
+ *  guarantees a layout shift on every single load. */
+function HomeSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading your day">
+      <div className="pt-4">
+        <div className="skeleton-text" style={{ width: '38%' }} />
+        <div className="skeleton mt-3" style={{ height: 34, width: '72%', borderRadius: 'var(--r-sm)' }} />
+        <div className="skeleton-text mt-3" style={{ width: '52%' }} />
+        <div className="skeleton mt-5" style={{ height: 50, borderRadius: 'var(--r-pill)' }} />
+      </div>
+      <div className="card p-5 flex items-center gap-5">
+        <div className="skeleton shrink-0" style={{ width: 104, height: 104, borderRadius: '50%' }} />
+        <div className="flex-1 space-y-3">
+          <div className="skeleton-text" /><div className="skeleton-text" /><div className="skeleton-text" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="skeleton" style={{ height: 108, borderRadius: 'var(--r-lg)' }} />
+        <div className="skeleton" style={{ height: 108, borderRadius: 'var(--r-lg)' }} />
+      </div>
+    </div>
   );
 }
 
@@ -106,6 +141,17 @@ export default function Home() {
   const home = useOutletContext();
   const crowdFetch = useFetch(() => api('/me/crowd'));
   const [crowdOpen, setCrowdOpen] = useState(false);
+  // SK OS Health Intelligence Engine -- a SEPARATE, independent fetch from
+  // the shared homeCtx above, deliberately: /tracking/me/home is the
+  // already-optimized, single-fetched-per-navigation hot path (see
+  // ClientLayout.jsx's own comment on why it's fetched once and shared),
+  // and this must never be added to it or gate its render. This card's
+  // own loading/absence never blocks or slows down the rest of Home --
+  // it simply doesn't render until (and unless) it resolves. The daily
+  // intelligence result itself is cached server-side after first compute
+  // (health_daily_summaries), so repeat loads the same day are a single
+  // indexed read, not a live recomputation.
+  const health = useFetch(() => api('/health/daily-intelligence'), []);
 
   const data = home.data;
   const meals = data?.nutrition?.meals || [];
@@ -119,7 +165,7 @@ export default function Home() {
   const eatenRaw = sumEatenTotals(meals);
   const eaten = { calories: Math.round(eatenRaw.calories), protein: r1(eatenRaw.protein), carbs: r1(eatenRaw.carbs), fat: r1(eatenRaw.fat) };
 
-  if (home.loading) return <Spinner label="Loading your day…" />;
+  if (home.loading) return <HomeSkeleton />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
 
   const c = data.client;
@@ -132,10 +178,15 @@ export default function Home() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const span = c.startWeight - c.targetWeight;
-  const goalPct = span > 0
-    ? Math.min(100, Math.max(0, ((c.startWeight - c.currentWeight) / span) * 100))
-    : 0;
+  /* Goal progress used to be `(start - current) / (start - target)` guarded
+     by `span > 0`, which only describes CUTTING. A client bulking from 68kg
+     toward 76kg has a negative span, fell into the else branch, and saw a
+     permanent "0%" no matter how much they gained. Distance-to-target works
+     in both directions and needs no special case. */
+  const span = Math.abs(c.startWeight - c.targetWeight);
+  const moved = Math.abs(c.startWeight - c.currentWeight);
+  const overshot = span > 0 && Math.sign(c.currentWeight - c.startWeight) !== Math.sign(c.targetWeight - c.startWeight);
+  const goalPct = span > 0 && !overshot ? Math.min(100, (moved / span) * 100) : 0;
   const crowd = crowdFetch.data;
   const kcalLeft = Math.max(0, (plan?.calories || 0) - eaten.calories);
 
@@ -212,7 +263,7 @@ export default function Home() {
               <Pressable
                 as={Link}
                 to="/app/client/workout"
-                className="btn-primary mt-5 w-full !py-4 text-center block text-[13px] font-bold tracking-[.02em]"
+                className="btn-primary btn-lg mt-5 btn-block text-center block text-[13px] tracking-[.02em]"
               >
                 {complete ? 'Review session' : doneEx > 0 ? 'Resume workout' : 'Start workout'}
               </Pressable>
@@ -230,7 +281,7 @@ export default function Home() {
               <Pressable
                 as={Link}
                 to="/app/client/workout"
-                className="btn mt-5 w-full !py-3.5 text-center block text-[13px] font-semibold"
+                className="btn btn-lg mt-5 btn-block text-center block text-[13px]"
               >
                 View training week
               </Pressable>
@@ -246,42 +297,93 @@ export default function Home() {
       <Reveal delay={80}>
         <Tilt max={4}>
           <div data-tour="home-fuel" className="card p-5">
-            <div className="flex items-start justify-between">
-              <Label>Fuel today</Label>
+            <div className="section-head !mb-0">
+              <span className="t-micro">Fuel today</span>
               {plan && (
-                <span className="text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
+                <span className="text-[10.5px] tabular-nums" style={{ color: 'var(--faint)' }}>
                   {plan.calories.toLocaleString()} kcal target
                 </span>
               )}
             </div>
 
-            <div className="mt-4 flex items-center gap-5">
-              <Ring
-                value={eaten.calories}
-                max={plan?.calories || 1}
-                size={104}
-                stroke={8}
-                label={
-                  <span className="font-black text-[22px] tracking-[-.02em]"
-                        style={{ color: 'var(--ink)' }}>
-                    <AnimatedNumber value={kcalLeft} />
-                  </span>
-                }
-                sub={<span className="text-[9px] tracking-[.1em] uppercase"
-                           style={{ color: 'var(--faint)' }}>left</span>}
-              />
-              <div className="flex-1 space-y-3">
-                <Bar label="Protein" value={eaten.protein} max={plan?.protein || 1}
-                     right={`${eaten.protein} / ${plan?.protein || 0} g`} height="h-1.5" />
-                <Bar label="Carbs" value={eaten.carbs} max={plan?.carbs || 1}
-                     right={`${eaten.carbs} / ${plan?.carbs || 0} g`} height="h-1.5" />
-                <Bar label="Fat" value={eaten.fat} max={plan?.fat || 1}
-                     right={`${eaten.fat} / ${plan?.fat || 0} g`} height="h-1.5" />
+            {/* Without a plan the ring divided by a fake max of 1 and the
+                bars read "0 / 0 g" — three rows of zeroes that look like a
+                broken screen rather than an un-started one. Say what's
+                missing and offer the one action that fixes it. */}
+            {plan ? (
+              <div className="mt-4 flex items-center gap-5">
+                <Ring
+                  value={eaten.calories}
+                  max={plan.calories || 1}
+                  size={104}
+                  stroke={8}
+                  label={
+                    <span className="font-black text-[22px] tracking-[-.02em] tabular-nums"
+                          style={{ color: 'var(--ink)' }}>
+                      <AnimatedNumber value={kcalLeft} />
+                    </span>
+                  }
+                  sub={<span className="text-[9px] tracking-[.1em] uppercase"
+                             style={{ color: 'var(--faint)' }}>left</span>}
+                />
+                <div className="flex-1 space-y-3">
+                  <Bar label="Protein" value={eaten.protein} max={plan.protein || 1}
+                       right={`${eaten.protein} / ${plan.protein || 0} g`} height="h-1.5" />
+                  <Bar label="Carbs" value={eaten.carbs} max={plan.carbs || 1}
+                       right={`${eaten.carbs} / ${plan.carbs || 0} g`} height="h-1.5" />
+                  <Bar label="Fat" value={eaten.fat} max={plan.fat || 1}
+                       right={`${eaten.fat} / ${plan.fat || 0} g`} height="h-1.5" />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-3">
+                <p className="t-sub" style={{ maxWidth: '36ch' }}>
+                  You don’t have calorie and macro targets yet. Set them once and this fills in
+                  automatically as you log meals.
+                </p>
+                <Pressable as={Link} to="/app/client/nutrition" className="btn-secondary btn-sm mt-3 inline-flex">
+                  Set my targets
+                </Pressable>
+              </div>
+            )}
           </div>
         </Tilt>
       </Reveal>
+
+      {/* ═══ TODAY'S BURN — SK OS Health Intelligence Engine ═══
+          Renders only once there's something real to say (an active
+          canonical energy figure or logged workout minutes) -- an empty/
+          zero-evidence card would just be noise for a day nothing has
+          happened yet. This is the FIRST place Home has ever shown a
+          burn estimate at all; previously nothing on this screen
+          reflected today's calorie expenditure, wearable-informed or
+          not (spec §79/§88 -- a non-wearable user still gets a real
+          answer, from SK OS's own model). */}
+      {!health.loading && health.data?.intelligence && (health.data.intelligence.active_energy > 0 || health.data.intelligence.workout_minutes > 0) && (
+        <Reveal delay={110}>
+          <Tilt max={4}>
+            <div className="card p-5">
+              <div className="section-head !mb-0">
+                <span className="t-micro">Today's burn</span>
+                {health.data.intelligence.confidence_level && (
+                  <span className="text-[10.5px] capitalize" style={{ color: 'var(--faint)' }}>
+                    {health.data.intelligence.confidence_level.replace('_', ' ')} confidence
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="font-black text-[28px] tracking-[-.02em] tabular-nums" style={{ color: 'var(--ink)' }}>
+                  <AnimatedNumber value={Math.round(health.data.intelligence.active_energy || 0)} />
+                </span>
+                <span className="text-[12px] font-medium" style={{ color: 'var(--mute)' }}>kcal active</span>
+              </div>
+              <div className="mt-2 text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                {burnSourceLabel(health.data.intelligence.source_summary)}
+              </div>
+            </div>
+          </Tilt>
+        </Reveal>
+      )}
 
       {/* ═══ QUIET TILES ═══
           Goal and crowd are reference, not action, so they get half width
@@ -290,7 +392,7 @@ export default function Home() {
         <Reveal delay={140}>
           <Tilt max={5} className="h-full">
             <div className="card p-4 h-full flex flex-col">
-              <Label>Goal</Label>
+              <span className="t-micro">Goal</span>
               <div className="mt-2 flex items-baseline gap-1">
                 <span className="font-black text-[26px] tracking-[-.03em]"
                       style={{ color: 'var(--ink)' }}>
@@ -325,7 +427,7 @@ export default function Home() {
                 onClick={() => setCrowdOpen(true)}
                 className="card p-4 h-full w-full text-left flex flex-col"
               >
-                <Label>Gym now</Label>
+                <span className="t-micro">Gym now</span>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="font-black text-[26px] tracking-[-.03em]"
                         style={{ color: 'var(--ink)' }}>
@@ -360,7 +462,7 @@ export default function Home() {
           <Reveal delay={200}>
             <Tilt max={5} className="h-full">
               <div className="card p-4 h-full flex flex-col">
-                <Label>Weight</Label>
+                <span className="t-micro">Weight</span>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="font-black text-[26px] tracking-[-.03em]"
                         style={{ color: 'var(--ink)' }}>

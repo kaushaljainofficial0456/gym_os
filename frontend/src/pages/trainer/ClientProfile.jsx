@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, GOAL_LABEL, fmt1, fmtK, cls } from '../../utils.js';
-import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg } from '../../components/UI.jsx';
+import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg, CheckIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 
@@ -61,7 +61,7 @@ export default function ClientProfile() {
   );
   const [tab, setTab] = useState('overview');
 
-  if (loading) return <Spinner label="Loading client profile…" />;
+  if (loading) return <PageSkeleton variant="detail" label="Loading client profile" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
   // Normalize: owner gets the raw overview shape, trainer gets the mapped shape
@@ -92,12 +92,30 @@ export default function ClientProfile() {
               <StatusChip status={client.status} />
             </div>
             <div className="text-xs text-mute mt-1 font-grotesk">
-              {client.age} yrs · {GOAL_LABEL[client.goal]} · BMI {client.bmi} · Goal {client.targetWeight} kg by {client.goalDate?.slice(0, 10)}
+              {/* Was an unconditional template: with no target weight and no
+                  goal date it rendered the literal "· Goal  kg by " — three
+                  orphaned words and a stray "kg" that read as a broken
+                  screen rather than as absent data. Each clause is now
+                  present only when it has a value to state. */}
+              {[
+                client.age && `${client.age} yrs`,
+                GOAL_LABEL[client.goal],
+                client.bmi != null && `BMI ${client.bmi}`,
+                client.targetWeight != null && `Goal ${client.targetWeight} kg`,
+                client.goalDate && `by ${client.goalDate.slice(0, 10)}`,
+              ].filter(Boolean).join(' · ')}
             </div>
             {delta !== null && (
               <div className="mt-1.5 text-xs font-grotesk">
-                <span className={delta <= 0 ? 'text-good' : 'text-bad'}>
-                  {delta > 0 ? '▲' : '▼'} {Math.abs(delta)} kg {delta > 0 ? 'gained' : 'lost'} since start
+                {/* Was the '▲'/'▼' geometric-shape characters. Those come
+                    from whatever font resolves U+25B2, render at a different
+                    weight than the label beside them, and sit off the text
+                    baseline. */}
+                <span className={`inline-flex items-center gap-1 ${delta <= 0 ? 'text-good' : 'text-bad'}`}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d={delta > 0 ? 'M12 4l9 16H3z' : 'M12 20L3 4h18z'} />
+                  </svg>
+                  {Math.abs(delta)} kg {delta > 0 ? 'gained' : 'lost'} since start
                 </span>
               </div>
             )}
@@ -112,18 +130,26 @@ export default function ClientProfile() {
           </div>
         </div>
 
-        {/* weight progression bar */}
-        <div className="mt-6 relative">
-          <div className="h-2 rounded-full bg-white/8 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-[900ms] ease-out"
-              style={{ width: `${progress}%`, boxShadow: '0 0 14px rgba(18,184,176,.5)' }} />
+        {/* Weight progression bar.
+            Rendered only when there IS a journey to show. Without a start
+            and a target this drew an empty track under the labels
+            "Start  kg" / "0% of journey" / "Target  kg" — a progress bar
+            for a goal that does not exist, which is worse than no bar.
+            The fill also carried `boxShadow: rgb(var(--accent-rgb) / .5)` — a TEAL
+            glow, from the same dead palette as the Razorpay theme colour
+            and the avatar gradient, sitting behind a terracotta gradient. */}
+        {startW != null && tgtW != null && (
+          <div className="mt-6 relative">
+            <div className="meter" style={{ height: 8 }}>
+              <span className="meter-fill" style={{ width: `${progress}%`, background: 'var(--accent-grad)' }} />
+            </div>
+            <div className="flex justify-between mt-2 text-[10px] text-faint font-grotesk tabular-nums">
+              <span>Start {startW} kg</span>
+              <span className="font-semibold" style={{ color: 'var(--accent)' }}>{Math.round(progress)}% of journey</span>
+              <span>Target {tgtW} kg</span>
+            </div>
           </div>
-          <div className="flex justify-between mt-2 text-[10px] text-faint font-grotesk">
-            <span>Start {startW} kg</span>
-            <span className="text-gold font-semibold">{Math.round(progress)}% of journey</span>
-            <span>Target {tgtW} kg</span>
-          </div>
-        </div>
+        )}
       </div>
 
       <Seg options={[
@@ -161,7 +187,7 @@ function TrainingTab({ clientId }) {
     return () => clearTimeout(h);
   }, [toast]);
 
-  if (prog.loading || volume.loading || equip.loading) return <Spinner label="Loading training analysis…" />;
+  if (prog.loading || volume.loading || equip.loading) return <PageSkeleton variant="detail" label="Loading client profile" />;
   if (volume.error) return <ErrorState error={volume.error} onRetry={volume.reload} />;
 
   const v = volume.data?.volume;
@@ -199,7 +225,7 @@ function TrainingTab({ clientId }) {
               {[1, 2, 3, 4, 5, 6, 0].map((dow) => {
                 const day = days.find((d) => d.day_of_week === dow);
                 return (
-                  <div key={dow} className={`rounded-lg border px-1.5 py-2 text-center ${day ? 'border-gold/40 bg-gold/10' : 'border-line bg-white/[.02]'}`}>
+                  <div key={dow} className={`rounded-lg border px-1.5 py-2 text-center ${day ? 'border-gold/40 bg-gold/10' : 'border-line bg-tint/[.02]'}`}>
                     <div className="text-[8px] font-grotesk font-bold text-mute">{['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][dow]}</div>
                     <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight ${day ? 'text-gold' : 'text-faint'}`}>{day ? day.name.split(' ')[0] : 'rest'}</div>
                   </div>
@@ -226,7 +252,7 @@ function TrainingTab({ clientId }) {
                     {m.sets} sets · target {m.min}–{m.max} · {m.status.replace(/_/g, ' ')}
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-tint/8 overflow-hidden">
                   <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700"
                     style={{ width: `${Math.min(100, (m.sets / (m.max || 16)) * 100)}%` }} />
                 </div>
@@ -260,20 +286,20 @@ function TrainingTab({ clientId }) {
                 const has = equipData?.full_gym || equipData?.available?.includes(it.id);
                 return (
                   <span key={it.id} className={`chip border ${has ? 'text-good border-good/40 bg-good/10' : 'text-faint'}`}>
-                    {has ? '✓' : '✕'} {it.label}
+                    {has ? <CheckIcon /> : <XIcon />} {it.label}
                   </span>
                 );
               })}
             </div>
             {!!equipData?.issues?.length && (
               <div className="mt-3 rounded-xl border border-warn/30 bg-warn/5 px-3 py-2.5 text-[11px]">
-                <div className="text-warn font-grotesk font-semibold mb-1">⚠ Program needs equipment this client doesn't have</div>
+                <div className="text-warn font-grotesk font-semibold mb-1 flex items-center gap-1.5"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg> Program needs equipment this client doesn't have</div>
                 {equipData.issues.map((i) => (
                   <div key={i.name} className="text-mute">{i.name} — needs {i.missing.join(', ')}</div>
                 ))}
               </div>
             )}
-            <button className="btn mt-3 !py-2 !text-xs" onClick={() => setEquipEdit(equipData?.full_gym ? ['full_gym'] : (equipData?.available || []))}>Edit equipment</button>
+            <button className="btn btn-sm mt-3" onClick={() => setEquipEdit(equipData?.full_gym ? ['full_gym'] : (equipData?.available || []))}>Edit equipment</button>
           </>
         ) : (
           <div className="mt-2">
@@ -290,14 +316,14 @@ function TrainingTab({ clientId }) {
               })}
             </div>
             <div className="flex gap-2 mt-3">
-              <button className="btn-primary !py-2 !text-xs" onClick={saveEquip}>Save</button>
-              <button className="btn !py-2 !text-xs" onClick={() => setEquipEdit(null)}>Cancel</button>
+              <button className="btn-primary btn-sm" onClick={saveEquip}>Save</button>
+              <button className="btn btn-sm" onClick={() => setEquipEdit(null)}>Cancel</button>
             </div>
           </div>
         )}
       </Card>
 
-      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {toast && <div className="toast anim-toast">{toast}</div>}
     </div>
   );
 }
@@ -349,10 +375,21 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
 
       <Card className="lg:col-span-2">
         <Kicker>Weight trend</Kicker>
-        <WeightChart data={weights} />
+        {/* WeightChart returns null on an empty series, so this card
+            rendered as a heading floating over blank space — the most
+            common "is it broken or just empty?" failure in the product. */}
+        {weights.length >= 2 ? <WeightChart data={weights} /> : (
+          <div className="empty-state" style={{ padding: '20px 16px' }}>
+            <p className="empty-state-body">
+              {weights.length === 1
+                ? 'One weight logged so far. A second entry draws the trend.'
+                : 'No weight entries yet.'}
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
           {measurements.slice(0, 3).map((m) => (
-            <div key={m.id} className="rounded-xl border border-line bg-white/[.02] p-3">
+            <div key={m.id} className="rounded-xl border border-line bg-tint/[.02] p-3">
               <div className="text-[9px] uppercase tracking-widest text-mute font-grotesk">{m.taken_at.slice(0, 10)}</div>
               <div className="font-grotesk font-bold mt-1">{m.weight ?? '—'} kg</div>
               {m.waist && <div className="text-[10px] text-mute">Waist {m.waist} cm</div>}
@@ -367,7 +404,7 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
             {rules.map((r) => (
               <div key={r.type} className={cls('rounded-xl border p-3',
-                r.severity === 'high' ? 'border-bad/40 bg-bad/8' : r.severity === 'medium' ? 'border-warn/40 bg-warn/8' : 'border-line bg-white/[.02]')}>
+                r.severity === 'high' ? 'border-bad/40 bg-bad/8' : r.severity === 'medium' ? 'border-warn/40 bg-warn/8' : 'border-line bg-tint/[.02]')}>
                 <div className="flex items-center gap-2">
                   <span className={cls('w-1.5 h-1.5 rounded-full', r.severity === 'high' ? 'bg-bad' : r.severity === 'medium' ? 'bg-warn' : 'bg-mute')} />
                   <span className="font-grotesk text-xs font-semibold">{r.title}</span>
@@ -400,7 +437,7 @@ function WorkoutsTab({ clientId, history, onChanged }) {
       </div>
       <div className="space-y-3">
         {history.map((w) => (
-          <div key={w.id} className="rounded-2xl border border-line bg-white/[.02] p-4">
+          <div key={w.id} className="rounded-2xl border border-line bg-tint/[.02] p-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="font-grotesk font-semibold">{w.name}</div>
               <div className="flex items-center gap-2">
@@ -464,7 +501,7 @@ function AssignWorkout({ clientId, templates, onClose, onDone }) {
         </select>
         <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         {t && (
-          <div className="rounded-xl border border-line bg-white/[.02] p-3 text-xs text-mute font-grotesk space-y-1">
+          <div className="rounded-xl border border-line bg-tint/[.02] p-3 text-xs text-mute font-grotesk space-y-1">
             {t.exercises.map((e, i) => (
               <div key={i}>{e.name} — {e.sets}×{e.reps}×{e.weight}</div>
             ))}
@@ -505,9 +542,9 @@ function NutritionTab({ clientId, profile }) {
             {data?.meals.map((m) => (
               <button key={m.id} onClick={() => toggle(m)}
                 className={cls('w-full flex items-center gap-3 p-3 rounded-2xl border transition-colors text-left',
-                  m.eaten ? 'border-gold/30 bg-gold/5' : 'border-line bg-white/[.02] hover:bg-white/[.05]')}>
+                  m.eaten ? 'border-gold/30 bg-gold/5' : 'border-line bg-tint/[.02] hover:bg-tint/[.05]')}>
                 <span className={cls('w-5 h-5 rounded-full border-2 grid place-items-center text-[10px] shrink-0',
-                  m.eaten ? 'border-gold bg-gold text-bg' : 'border-white/20')}>{m.eaten ? '✓' : ''}</span>
+                  m.eaten ? 'border-gold bg-gold text-bg' : 'border-tint/20')}>{m.eaten ? '✓' : ''}</span>
                 <span className="flex-1 min-w-0">
                   <span className="block font-grotesk text-sm font-semibold">{m.name}</span>
                   <span className="block text-[11px] text-mute">{m.slot} · {m.time}</span>
@@ -520,7 +557,7 @@ function NutritionTab({ clientId, profile }) {
             ))}
             {data?.customLogs?.map((m) => (
               <div key={m.id} className="flex items-center gap-3 p-3 rounded-2xl border border-cyanx/30 bg-cyanx/5">
-                <span className="w-5 h-5 rounded-full border-2 border-cyanx grid place-items-center text-[10px] text-bg bg-cyanx">✓</span>
+                <span className="w-5 h-5 rounded-full border-2 border-cyanx grid place-items-center text-[10px] text-bg bg-cyanx"><CheckIcon /></span>
                 <span className="flex-1 font-grotesk text-sm">{m.name} <span className="text-[10px] text-mute">· AI estimate</span></span>
                 <span className="font-grotesk text-xs">{m.calories} kcal</span>
               </div>
@@ -544,7 +581,7 @@ function NutritionTab({ clientId, profile }) {
         <Modal open onClose={() => setPlanOpen(false)} title="Assign nutrition plan" wide>
           <div className="space-y-2">
             {plans.data?.plans.map((p) => (
-              <button key={p.id} className="w-full flex items-center justify-between p-3 rounded-2xl border border-line bg-white/[.02] hover:bg-white/[.05]"
+              <button key={p.id} className="w-full flex items-center justify-between p-3 rounded-2xl border border-line bg-tint/[.02] hover:bg-tint/[.05]"
                 onClick={async () => {
                   await api(`/nutrition/clients/${clientId}/plan/assign`, { method: 'POST', body: JSON.stringify({ plan_id: p.id }) });
                   setPlanOpen(false); plans.reload({ silent: true }); reload({ silent: true });
@@ -624,7 +661,7 @@ function BeforeAfter({ before, after }) {
         className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize" aria-label="Compare photos" />
       <div className="absolute inset-y-0" style={{ left: `${pos}%` }}>
         <div className="h-full w-0.5 bg-white/80" />
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white/90 text-bg grid place-items-center text-xs font-bold">⇔</div>
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white/90 text-bg grid place-items-center text-xs font-bold" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg></div>
       </div>
       <span className="absolute top-2 left-2 chip !text-[9px]">BEFORE</span>
       <span className="absolute top-2 right-2 chip !text-[9px]">AFTER</span>
@@ -657,7 +694,7 @@ function AITab({ clientId }) {
   return (
     <div className="space-y-4">
       {err && <div className="text-xs text-bad rounded-xl px-3 py-2 border" style={{ borderColor: 'var(--line)', background: 'var(--panel2)' }}>{err}</div>}
-      <div className="card !p-0 overflow-hidden" style={{ padding: 1, background: 'linear-gradient(135deg, rgba(8,127,123,.55), rgba(18,184,176,.28) 45%, rgba(155,124,255,.4))', borderRadius: 19 }}>
+      <div className="card !p-0 overflow-hidden" style={{ padding: 1, background: 'linear-gradient(135deg, rgba(8,127,123,.55), rgb(var(--accent-rgb) / .28) 45%, rgba(155,124,255,.4))', borderRadius: 19 }}>
         <div className="bg-panel rounded-[18px] p-5 relative overflow-hidden">
           <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-violetx/10 blur-[80px] pointer-events-none" />
           <div className="flex items-center justify-between flex-wrap gap-3 relative">
@@ -670,7 +707,7 @@ function AITab({ clientId }) {
                 </div>
               </div>
             </div>
-            <button className="btn-primary" onClick={analyze} disabled={busy}>{busy ? 'Analyzing…' : '⚡ Analyze client'}</button>
+            <button className="btn-primary" onClick={analyze} disabled={busy}>{busy ? 'Analyzing…' : 'Analyze client'}</button>
           </div>
         </div>
       </div>
@@ -707,9 +744,9 @@ function AITab({ clientId }) {
                 </div>
               ) : (
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  <button className="btn !text-good !border-good/40" onClick={() => action(ins.id, 'accept')}>✓ Accept</button>
-                  <button className="btn" onClick={() => setEditing(ins.id)}>✎ Modify</button>
-                  <button className="btn !text-mute" onClick={() => action(ins.id, 'dismiss')}>Dismiss</button>
+                  <button className="btn btn-sm !border-good/40" onClick={() => action(ins.id, 'accept')}>✓ Accept</button>
+                  <button className="btn" onClick={() => setEditing(ins.id)}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg> Modify</button>
+                  <button className="btn btn-sm !text-mute" onClick={() => action(ins.id, 'dismiss')}>Dismiss</button>
                 </div>
               )}
             </Card>
@@ -745,7 +782,7 @@ function MessagesTab({ clientId }) {
       <div className="h-96 overflow-y-auto space-y-2 pr-1 mb-3">
         {loading ? <Spinner /> : (data?.messages || []).map((m) => (
           <div key={m.id} className={cls('max-w-[80%] rounded-2xl p-3 text-sm',
-            m.from_name === 'client' ? 'bg-white/5 border border-line' : 'bg-gradient-to-r from-ember/20 to-gold/10 border border-gold/20')}>
+            m.from_name === 'client' ? 'bg-tint/5 border border-line' : 'bg-gradient-to-r from-ember/20 to-gold/10 border border-gold/20')}>
             <div className="text-[10px] text-mute mb-1 font-grotesk">{m.from_name} · {m.created_at.slice(0, 16).replace('T', ' ')}</div>
             {m.body}
           </div>

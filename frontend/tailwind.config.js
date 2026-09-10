@@ -42,6 +42,17 @@ export default {
         warn: 'rgb(var(--warn-rgb) / <alpha-value>)',
         bad: 'rgb(var(--bad-rgb) / <alpha-value>)',
 
+        /* THE FIX FOR `bg-white/[.02]`.
+           That pattern appeared at ~38 sites as the standard "nested tile
+           inside a card" fill. It works on a near-black ground and is
+           completely invisible on the light theme, whose panels are already
+           white — so every one of those tiles lost its boundary in light
+           mode and became floating text on a flat card.
+           `--tint-rgb` is blush on dark and warm brown on light, so
+           `bg-tint/[.02]` is a visible, correctly-directioned wash on BOTH.
+           It is the same variable .btn/.chip/.row hovers already use. */
+        tint: 'rgb(var(--tint-rgb) / <alpha-value>)',
+
         /* DELIBERATE EXCEPTION — do not "fix" these into channel form.
            These bake in an alpha and are used BOTH bare (`border-line`,
            which must stay a .07 hairline) and with modifiers
@@ -71,22 +82,23 @@ export default {
          once. `font-serif` is the new one, and it is intentionally the only
          way to reach Sentient — see the note in theme.css about keeping the
          serif off data. */
+      /* ONE TYPEFACE, ONE JOB EACH WEIGHT.
+         brand / display / grotesk / body all resolve to DM Sans (variable,
+         400–1000 — see theme.css). They are kept as four separate ALIASES
+         rather than collapsed into one, because ~590 existing class usages
+         reference them by name; pointing them all at the same family is
+         what lets the entire product change typeface without touching a
+         single page file. Hierarchy is now expressed through WEIGHT and
+         SIZE (see the type scale in theme.css), not through swapping to a
+         different family mid-screen.
+         `serif` stays mapped to Sentient but is now used in exactly two
+         places (the Home/Dashboard greeting line) — a single human
+         sentence above an otherwise numeric page. */
       fontFamily: {
-        brand: ['Satoshi', 'system-ui', 'sans-serif'],
-        display: ['Satoshi', 'system-ui', 'sans-serif'],
-        /* grotesk carries the SUPPORTING text app-wide — kickers, list
-           sub-lines, table cells, form labels, timestamps — and points at
-           DM Sans, whose quieter geometric numerals read calmer at small
-           sizes than Satoshi's punchier default. brand/display/body (the
-           actual headings and hero numbers) stay on Satoshi. Two faces,
-           two distinct jobs: Satoshi says "this is the important number on
-           the screen", DM Sans says "this is context for it".
-           Set HERE rather than as a CSS override in theme.css: a
-           `.font-grotesk` rule there would tie with Tailwind's own utility
-           on specificity and win only by source order, which is a silent
-           trap for whoever edits the file next. */
-        grotesk: ['DM Sans', 'system-ui', 'sans-serif'],
-        body: ['Satoshi', 'system-ui', 'sans-serif'],
+        brand: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        grotesk: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        body: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
         serif: ['Sentient', 'Georgia', 'serif'],
       },
       borderRadius: {

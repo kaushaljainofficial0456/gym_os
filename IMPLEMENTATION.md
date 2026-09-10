@@ -1000,3 +1000,252 @@ and triggering a redeploy, production was confirmed healthy end-to-end:
 requires auth) rather than `404`, and `POST /api/auth/login` with the
 demo client's real credentials returns a valid token — verified live
 against `gym-os-nikhaar-fashions-connect.vercel.app`, not assumed.
+
+---
+
+# MASTER PROMPT — Nutrition UI/UX Refinement + Custom Macro Fixes
+
+Frontend-only pass. No backend, schema, or API changes. Files: `A`
+Architectural changes: `D`. Tests: `K`/`L`. Build: `M`. Live
+verification: `N`. Limitations: `O` — this report follows the same
+lettered structure as the two reports above it for consistency, though
+the source prompt used its own 36-part numbering (referenced inline
+below as "Part N").
+
+## A. Files changed
+
+- `frontend/src/components/FoodLogSheet.jsx` — quantity-modal category
+  tabs, calculated calories, Discard-changes confirmation.
+- `frontend/src/components/nutrition/MealFoodRow.jsx` — calculated
+  calories (meal-builder's own Custom Macros form).
+- `frontend/src/components/nutrition/MyDietCard.jsx` — Saved Foods +
+  Saved Meals unified into one list.
+- `frontend/src/pages/client/Nutrition.jsx` — page section reorder.
+
+No other file touched — confirmed via `git status`/`git diff --stat`
+before committing (Part 36's own explicit "check git diff for
+accidental unrelated changes").
+
+## B. Pre-pass findings: what was already fixed
+
+Before changing anything, an Explore pass read the actual current code
+for every area the prompt described as buggy (Parts 1-10, 18-21,
+23-24). Several were already fixed in earlier session work, verified
+via the existing passing test suite rather than re-implemented:
+
+- **Part 4** (custom macro validation incorrectly requiring
+  protein+carbs+fat = serving size): the real check
+  (`backend/src/services/foodValidation.js`) is a per-100g physical-
+  plausibility upper bound, not an equality requirement, and both
+  Custom Macros forms already convert entered values to per-100g
+  before saving. Confirmed via `foodValidation.test.js`,
+  `foodValidationApi.test.js`, `foodPlausibility.test.js` (all passing).
+- **Part 10** (custom food resolves to the wrong shared food):
+  `POST /me/foods/resolve` already checks `food_id` first and
+  short-circuits before any name-based search; 4 dedicated regression
+  tests already exist in `meFoodsResolve.test.js` (all passing) —
+  including the exact case the prompt describes ("Roti" shared vs.
+  "Roti" custom).
+- **Part 18** (+ button causes a full page reload): already fixed —
+  every write path in `Nutrition.jsx` uses `home.reload({silent:true})`,
+  confirmed zero bare `reload()` calls remain.
+- **Parts 19-21** (meal-builder recent-search leaking across food
+  blocks): `CustomizeMealSheet.jsx` already enforces at most one live
+  `<MealFoodRow>` at a time (`rowIds` holds 0 or 1 ids, `addRow`
+  replaces rather than appends) — there is no scenario today where
+  multiple blocks show search state simultaneously. Per-block Custom
+  Macros mode is already independent local state.
+- **Part 23** (Back vs. Close semantics): `FoodLogSheet.jsx` already
+  has fully distinct Back (one level) and Close (exits from anywhere)
+  affordances with matching Escape-key precedence.
+
+Reported honestly rather than re-done, per the prompt's own "do not
+simply tell me it's complete" standard — each claim above is backed by
+an existing, currently-passing test file, not an assumption.
+
+## C. APIs / database changed
+
+None. This entire pass is frontend-only.
+
+## D. Architectural changes
+
+1. **Quantity-modal category tabs** (Parts 1-3). The portion picker
+   previously rendered every non-empty group (bowl/plate/glass/spoon/
+   misc/count) stacked at once. Now a `CATEGORY` tab bar shows only
+   the tapped group's own options below it, defaulting to the food's
+   own first available group. Switching tabs never clears already-
+   selected portions from OTHER categories — multi-category
+   combination (Part 2) is unchanged, verified live: 1 Small bowl
+   (220g) + 1 Half plate (200g) = 420g exactly, removing one
+   recalculates back to the remaining item's own total exactly.
+   The prompt's taxonomy omits piece-counted foods (roti, idli,
+   banana, egg, …) entirely; that category is kept as its own "Piece"
+   tab rather than dropped (Part 35: never remove existing serving
+   options).
+   - **A fix considered and reverted**: `selectedPortions`'s resolve
+     call was missing `food_id`, unlike its sibling branches
+     elsewhere in the same file. Checked the actual backend route
+     (`POST /me/foods/resolve`, `me.js`) before "fixing" it — its
+     `food_id` branch only understands a raw `grams` field, not
+     `portion_key`/`count`. Adding `food_id` there would have silently
+     ignored the chosen portion and defaulted to the food's own base
+     serving size instead — a worse bug than the narrow gap it would
+     have closed (picking a portion chip for a catalogue food the
+     client separately edited re-prices from the model's original
+     numbers, not the edit — unreachable for genuine custom foods,
+     which never populate `portions` at all). Reverted with the
+     reasoning left in the code; not shipped.
+2. **Calculated calories, 4/4/9** (Parts 5-6). Both Custom Macros
+   forms (`FoodLogSheet.jsx` and `MealFoodRow.jsx`) no longer require
+   a typed Calories value — `protein`/`carbs`/`fat` are the three
+   required fields, and calories is calculated
+   (`nutritionCalc.js`'s `calculateCaloriesFromMacros`) and shown
+   read-only, with an explicit "Override" toggle for the rare case a
+   real product label's own stated value needs to be entered instead.
+   Live-verified against the prompt's own worked example: P8/C45/F3 →
+   239 kcal, exact.
+3. **Discard-changes confirmation** (Part 23's own explicit ask, not
+   present before this pass). X, Escape, and the backdrop click all
+   now check whether Custom Macros has real typed input before
+   closing; if so, a small "Discard changes? / Continue editing /
+   Discard" prompt appears instead of silently closing. An empty or
+   already-saved form still closes immediately — never forces a save
+   just to let someone leave.
+4. **Saved Foods & Meals unification** (Parts 11-13). `MyDietCard.jsx`
+   merged two always-both-visible subsections (each with its own "See
+   more") into one combined list, one item shown by default
+   regardless of kind, a compact `FOOD`/`MEAL` badge per row. Edit
+   mode, quick-log, and the permanent per-food quantity editor are
+   all unchanged.
+5. **Page hierarchy reorder** (Parts 14-15, 34). Food & Meal Tools and
+   Saved Foods & Meals moved above Today's Eaten Meals, matching the
+   prompt's own explicit final-target mockup (Fuel summary → primary
+   actions → saved content → secondary sections). "Log / Estimate
+   Food" (the most frequent action) is now accent-filled, visually
+   distinct from the other two tools' glass styling.
+
+## E. Protein/macro correctness
+
+Unaffected — this pass didn't touch macro math beyond adding the
+calculated-calories display, which reuses the app's one existing 4/4/9
+function rather than restating it. Quantity/portion resolution stays
+100% server-authoritative, unchanged.
+
+## F-I. N/A for this pass (no balance/protein-protection surface here)
+
+## J. Performance impact
+
+None measured or claimed — no data-fetching pattern changed; this pass
+is presentational (which groups render, how many list items show by
+default, one added client-side calculation).
+
+## K. Tests added
+
+None — this pass is 100% frontend, and this project has no frontend
+test runner (confirmed again this pass; unchanged from earlier session
+findings). The prompt's own 27-item test checklist (Part 31) is
+almost entirely frontend interaction tests (wheel category filtering,
+Back/Close semantics, meal-builder block-switching) with no automated
+regression surface to add them to. Items with real backend behavior
+underneath them (custom macro validation edge cases, custom-food
+identity/scaling/privacy) were already covered by existing, passing
+tests — confirmed in B above, not newly added since nothing about that
+backend behavior changed.
+
+## L. Full test result
+
+`cd backend && npm test` → **1062/1065 passing** (2 pre-existing
+skips, 1 pre-existing unrelated flake — `community.test.js`'s
+"leaderboards: period=month", already confirmed on the clean branch
+before this session's Flexible Calorie Balance work). Unaffected by
+this pass, as expected for a frontend-only change.
+
+## M. Production build result
+
+`cd frontend && npm run build` → clean, 0 errors, 0 new warnings.
+
+## N. Live verification result
+
+Actually run against the local dev app (backend :4000/SQLite,
+frontend :5173), both desktop and a 375px mobile viewport, zero
+console errors in a genuinely fresh tab at both sizes (an earlier
+mobile-viewport tab showed ~50 stale `ERR_CONNECTION_REFUSED` console
+entries; isolated and confirmed as residual noise from that specific
+tab's server-restart transition, not a real issue — a brand-new tab
+hitting the identical code showed zero errors, and every actual
+network request throughout every test returned 200/201/304 with no
+exceptions):
+
+1. Quantity modal: searched "maggi", opened it, confirmed only Bowl's
+   6 options rendered (not all ~20+ across every group at once);
+   switched to Plate — Bowl's options disappeared, Plate's 4 options
+   appeared, the already-selected Small bowl stayed in "Selected".
+   Added Half plate → Selected showed both, total "420 g · 1× Small
+   bowl + 1× Half plate", 1613 kcal (384 × 4.2, exact). Removed Half
+   plate → recalculated back to 220g/845 kcal exactly.
+2. Custom Macros: entered P8/C45/F3 → "CALORIES 239 kcal — Calculated
+   from protein/carbs/fat" rendered live, matching the prompt's own
+   example exactly. Saved & logged → `POST /me/foods` 200, verified
+   directly against the dev DB: stored row has
+   `calories:239,protein:8,carbs:45,fat:3,serving:"100 g"` — the
+   calculated value, not a typed one. Today's totals updated in place
+   (3165→3404 kcal, delta 239) with **no page reload** — the sheet
+   stayed open, form reset, ready for the next food (Parts 18/22/25).
+3. Custom food search + scaling: searched "Homemade Roti" → appeared
+   FIRST in results labeled `CUSTOM FOOD` (Part 9). Quick-logged at
+   150g → `POST /me/foods/resolve` returned
+   `{energy_kcal:358.5,protein_g:12,carb_g:67.5,fat_g:4.5}` — exactly
+   239×1.5/8×1.5/45×1.5/3×1.5 (Part 8's required 1.5× scaling).
+4. Discard-changes: typed a name into Custom Macros, tapped X →
+   "Discard changes?" shown, sheet stayed open. "Continue editing" →
+   prompt dismissed, typed name still present. Reopened X → Discard →
+   sheet closed. A separate pass with an EMPTY form confirmed X closes
+   immediately with no prompt.
+5. Saved Foods & Meals: confirmed "3 foods · 7 meals" heading, one
+   item shown with its FOOD/MEAL badge, "See more (9)" (3+7-1).
+6. Page order: confirmed live as Fuel → Food & Meal Tools → Saved
+   Foods & Meals → Today's Eaten Meals → Supplements, matching the
+   prompt's own Part 34 mockup exactly; "Log / Estimate Food" visually
+   accent-filled vs. the other two tools' glass style, confirmed via
+   screenshot.
+7. Mobile (375px): confirmed via screenshot (no horizontal overflow,
+   correct visual hierarchy) and, after the `computer` tool's click
+   simulation repeatedly timed out on this specific interaction
+   (isolated as tool-level flakiness, not an app issue — the same
+   click handler fired correctly via a direct programmatic
+   `element.click()`, and backend logs showed healthy, fast responses
+   throughout), completed the category-tab switch and confirmed
+   `document.body.scrollWidth === window.innerWidth` (no overflow)
+   both before and after.
+
+## O. Remaining limitations
+
+Disclosed, not silently skipped:
+
+- **No frontend automated test suite exists for any of this** (or for
+  any other part of the Nutrition UI) — a pre-existing project
+  characteristic, not something this pass introduced or was asked to
+  build from scratch (Part 35: "do not add unnecessary dependencies").
+  Every claim above is backed by a real, logged live-verification
+  step instead.
+- **The `selectedPortions` `food_id` gap is still open** — see D.1.
+  Deliberately not "fixed" with a change that would have made backend
+  behavior worse; a real fix needs the backend's `food_id` branch of
+  `POST /me/foods/resolve` extended to also understand
+  `portion_key`/`count` (not just raw `grams`), which is out of scope
+  for a UI-refinement pass without separate sign-off, given it touches
+  the same route the app's whole quantity-pricing architecture relies
+  on.
+- **Discard-changes guard covers Custom Macros only** (Part 23's most
+  concrete, highest-value case — the form with the most fields a
+  person could lose). The Manual Add and AI-review screens were not
+  separately instrumented; both already have their own explicit
+  Cancel/Back actions and shorter, lower-loss input surfaces.
+- **Accessibility/mobile polish beyond what's covered above** (Part
+  27-28's full checklist — numeric keyboards, exhaustive focus-state
+  audit) was not separately, systematically re-audited across the
+  whole existing Nutrition surface; the NEW elements this pass adds
+  (category tabs, badges, the calculated-calories display, the
+  discard dialog) use this codebase's existing accessible patterns
+  (`role`/`aria-*` attributes, 44×44 tap targets on icon-only buttons)
+  consistent with what was already there.

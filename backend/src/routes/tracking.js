@@ -100,6 +100,103 @@ export default function trackingRoutes(db) {
     res.json({ workouts: withEx });
   });
 
+  // ---- daily history detail for a specific date ----
+  // Returns everything recorded for a single day: workouts (assigned & completed),
+  // exercise set logs, meal logs, and nutrition totals.
+  r.get('/me/day/:date', async (req, res) => {
+    if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
+    const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.status(404).json({ error: 'Client profile not found' });
+    const d = req.params.date;
+
+    // 1. Workouts scheduled for this date
+    const workouts = await db.q(
+      'SELECT * FROM workouts WHERE client_id = ? AND scheduled_date = ?', [client.id, d]);
+
+    // 2. Batched exercise + set-log data for all workouts on this date
+    const wIds = workouts.map((w) => w.id);
+    const [allEx, allSetLogs] = await Promise.all([
+      wIds.length
+        ? db.q(
+            `SELECT we.*, el.animation_key, el.primary_muscle, el.equipment AS lib_equipment
+               FROM workout_exercises we
+               LEFT JOIN exercise_library el ON el.id = we.exercise_id
+              WHERE we.workout_id IN (${wIds.map(() => '?').join(',')})
+              ORDER BY we.workout_id, we.position`, wIds)
+        : [],
+      wIds.length
+        ? db.q(
+            `SELECT wl.*, wl.exercise_id AS wl_exercise_id
+               FROM workout_logs wl
+              WHERE wl.workout_id IN (${wIds.map(() => '?').join(',')})`, wIds)
+        : [],
+    ]);
+
+    // 3. Per-set detail for completed workout logs
+    const logIds = allSetLogs.map((l) => l.id);
+    const allSets = logIds.length
+      ? await db.q(
+          `SELECT * FROM exercise_set_logs
+            WHERE workout_log_id IN (${logIds.map(() => '?').join(',')})
+            ORDER BY workout_log_id, set_number`, logIds)
+      : [];
+    const setsByLog = new Map();
+    for (const s of allSets) {
+      const arr = setsByLog.get(s.workout_log_id) || [];
+      arr.push(s);
+      setsByLog.set(s.workout_log_id, arr);
+    }
+
+    // 4. Organise exercises per workout
+    const exByWorkout = new Map();
+    for (const ex of allEx) {
+      if (!exByWorkout.has(ex.workout_id)) exByWorkout.set(ex.workout_id, []);
+      exByWorkout.get(ex.workout_id).push(ex);
+    }
+
+    // 5. Organise logs per workout, attaching per-set detail
+    const logsByWorkout = new Map();
+    for (const log of allSetLogs) {
+      const arr = logsByWorkout.get(log.workout_id) || [];
+      arr.push({ ...log, sets: setsByLog.get(log.id) || [] });
+      logsByWorkout.set(log.workout_id, arr);
+    }
+
+    // 6. Assemble workout objects
+    const result = workouts.map((w) => ({
+      ...w,
+      exercises: exByWorkout.get(w.id) || [],
+      logs: logsByWorkout.get(w.id) || [],
+    }));
+
+    // 7. Meal logs for this date
+    const mealLogs = await db.q(
+      'SELECT * FROM meal_logs WHERE client_id = ? AND date = ?', [client.id, d]);
+
+    // 8. Nutrition totals (only eaten meals)
+    const nutrition = mealLogs
+      .filter((l) => l.eaten)
+      .reduce((s, l) => ({
+        calories: s.calories + (l.calories || 0),
+        protein: s.protein + (l.protein || 0),
+        carbs: s.carbs + (l.carbs || 0),
+        fat: s.fat + (l.fat || 0),
+      }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+    // 9. Calorie burned from completed workouts
+    const workoutCalories = result
+      .filter((w) => w.status === 'completed')
+      .reduce((s, w) => s + (w.estimated_active_kcal || 0), 0);
+
+    res.json({
+      date: d,
+      workouts: result,
+      mealLogs,
+      nutrition,
+      workoutCalories,
+    });
+  });
+
   // ---- client progress bundle (client portal) ----
   r.get('/me/progress', async (req, res) => {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });

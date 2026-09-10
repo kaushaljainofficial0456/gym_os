@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Pressable } from '../design/index.js';
+import { XIcon } from './UI.jsx';
 
 const supportsDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
@@ -127,7 +128,7 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
       <div className="card w-full max-w-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Scan barcode</div>
-          <button onClick={() => { stop(); onClose(); }} aria-label="Close scanner" style={{ color: 'var(--mute)' }}>✕</button>
+          <button onClick={() => { stop(); onClose(); }} aria-label="Close scanner" style={{ color: 'var(--mute)' }}><XIcon /></button>
         </div>
 
         {supportsDetector && (
@@ -156,7 +157,7 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
                    className="input flex-1 !py-2 tabular-nums" />
             <Pressable onClick={() => manual.length >= 8 && lookup(manual)}
                        disabled={manual.length < 8 || busy}
-                       className="btn-primary !px-4 !py-2 text-[12px] font-bold">
+                       className="btn-primary btn-sm text-[12px]">
               {busy ? '…' : 'Find'}
             </Pressable>
           </div>

@@ -2,17 +2,37 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { WEEKDAY } from '../utils.js';
 import { brand } from '../design/tokens.js';
 
-const tooltipStyle = {
-  background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 12,
-  fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#FAFAFA',
-  boxShadow: '0 24px 48px -20px rgba(0,0,0,.8)', padding: '8px 12px'
+/**
+ * Recharts renders its tooltip through an inline style object rather than a
+ * class, so it can't pick up the design system by itself — this is the one
+ * place the tokens have to be handed over explicitly.
+ *
+ * Three things were wrong here and all three were invisible in code review:
+ *  - `fontFamily: '"Plus Jakarta Sans", sans-serif'` named a typeface this
+ *    app has never loaded, so every chart tooltip in the product rendered
+ *    in the browser's default sans — a fourth face on screen, by accident.
+ *  - The text colours were literal hexes (#FAFAFA / #1A1D1A) from a palette
+ *    two repaints ago, so tooltips didn't follow the theme.
+ *  - The light variant hardcoded a pure-white panel on a warm off-white
+ *    page, which read as a floating white rectangle rather than a surface.
+ *
+ * One token-driven object now covers both themes: `var(--panel)` and
+ * `var(--ink)` already resolve per-theme, so the light/dark branch that
+ * used to exist here is unnecessary. Only the shadow differs, since a dark
+ * page needs a heavier one to separate the tooltip from the ground.
+ */
+const tooltipBase = {
+  background: 'var(--panel)',
+  border: '1px solid var(--line)',
+  borderRadius: 12,
+  fontSize: 12,
+  fontFamily: "'DM Sans', system-ui, sans-serif",
+  color: 'var(--ink)',
+  padding: '8px 12px',
 };
 
-const tooltipStyleLight = {
-  background: '#FFFFFF', border: '1px solid rgba(0,0,0,.08)', borderRadius: 12,
-  fontSize: 12, fontFamily: '"Plus Jakarta Sans", sans-serif', color: '#1A1D1A',
-  boxShadow: '0 4px 16px rgba(0,0,0,.06)', padding: '8px 12px'
-};
+const tooltipStyle = { ...tooltipBase, boxShadow: '0 20px 40px -18px rgba(0,0,0,.7)' };
+const tooltipStyleLight = { ...tooltipBase, boxShadow: '0 10px 24px -12px rgba(90,60,45,.22)' };
 
 function getTooltipStyle() {
   if (typeof document !== 'undefined' && document.documentElement.classList.contains('light')) {
@@ -43,22 +63,39 @@ export function WeightChart({ data }) {
   );
 }
 
+/**
+ * The gradient id was built as `tg${color.replace('#','')}` — fine for the
+ * hex literals this was written against, but every caller in the app now
+ * passes a token: `color="var(--accent)"`. That produced the id
+ * `tgvar(--accent)` and the reference `url(#tgvar(--accent))`, which is not
+ * a valid fragment identifier — the parentheses terminate it. The fill
+ * silently failed to resolve and Recharts fell back to its default slate
+ * fill, so every adherence and trend chart in the product rendered as a
+ * grey block under an accent-coloured stroke.
+ *
+ * Sanitising to `[A-Za-z0-9]` makes the id valid for any input, and the
+ * same expression is used for both the definition and the reference so
+ * they can't drift.
+ */
+const gradientId = (color) => `tg-${String(color).replace(/[^a-zA-Z0-9]/g, '')}`;
+
 export function TrendChart({ data, color = 'var(--accent)', domain }) {
   if (!data || !data.length) return null;
+  const gid = gradientId(color);
   return (
     <ResponsiveContainer width="100%" height={150}>
       <AreaChart data={data} margin={{ top: 6, right: 8, left: -20, bottom: 0 }}>
         <defs>
-          <linearGradient id={`tg${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={.3} />
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={.28} />
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 6" stroke="rgba(128,128,128,.08)" vertical={false} />
-        <XAxis dataKey="label" tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={24} />
-        <YAxis domain={domain || [0, 100]} tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 9 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={getTooltipStyle()} />
-        <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#tg${color.replace('#', '')})`} dot={false} />
+        <CartesianGrid strokeDasharray="3 6" stroke="rgb(var(--tint-rgb) / .10)" vertical={false} />
+        <XAxis dataKey="label" tick={{ fill: 'var(--faint)', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={24} />
+        <YAxis domain={domain || [0, 100]} tick={{ fill: 'var(--faint)', fontSize: 9 }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={getTooltipStyle()} cursor={{ stroke: 'rgb(var(--tint-rgb) / .2)' }} />
+        <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#${gid})`} dot={false} />
       </AreaChart>
     </ResponsiveContainer>
   );

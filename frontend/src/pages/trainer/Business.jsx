@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, fmtK, fmt1 } from '../../utils.js';
-import { Card, Kicker, Kpi, Spinner, ErrorState, Modal } from '../../components/UI.jsx';
+import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton } from '../../components/UI.jsx';
 import { TrendChart } from '../../components/charts.jsx';
 import { status } from '../../design/tokens.js';
 
@@ -22,8 +22,8 @@ const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', mon
 const MEMBERSHIP_TONE = {
   ACTIVE: 'text-good border-good/40 bg-good/10', PAUSED: 'text-warn border-warn/40 bg-warn/10',
   SUSPENDED: 'text-warn border-warn/40 bg-warn/10', EXPIRED: 'text-bad border-bad/40 bg-bad/10',
-  CANCELLED: 'text-mute border-line bg-white/5', REFUND_PENDING: 'text-warn border-warn/40 bg-warn/10',
-  REFUNDED: 'text-mute border-line bg-white/5',
+  CANCELLED: 'text-mute border-line bg-tint/5', REFUND_PENDING: 'text-warn border-warn/40 bg-warn/10',
+  REFUNDED: 'text-mute border-line bg-tint/5',
 };
 function MembershipActions({ member, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
@@ -39,10 +39,10 @@ function MembershipActions({ member, onChanged, onError }) {
   const s = member.lifecycle_status;
   return (
     <div className="flex gap-1.5 justify-end">
-      {s === 'ACTIVE' && <button className="btn-ghost !text-[11px] !px-2 !py-1" disabled={busy} onClick={() => act('suspend', `Suspend ${member.name}'s membership?`)}>Suspend</button>}
-      {s === 'SUSPENDED' || s === 'PAUSED' ? <button className="btn-ghost !text-[11px] !px-2 !py-1" disabled={busy} onClick={() => act('resume')}>Resume</button> : null}
+      {s === 'ACTIVE' && <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('suspend', `Suspend ${member.name}'s membership?`)}>Suspend</button>}
+      {s === 'SUSPENDED' || s === 'PAUSED' ? <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('resume')}>Resume</button> : null}
       {(s === 'ACTIVE' || s === 'SUSPENDED' || s === 'PAUSED') && (
-        <button className="btn-ghost !text-[11px] !px-2 !py-1 text-bad" disabled={busy} onClick={() => act('cancel', `Cancel ${member.name}'s membership? This cannot be undone.`)}>Cancel</button>
+        <button className="btn-ghost btn-sm text-bad" disabled={busy} onClick={() => act('cancel', `Cancel ${member.name}'s membership? This cannot be undone.`)}>Cancel</button>
       )}
     </div>
   );
@@ -77,7 +77,7 @@ export default function Business() {
     return () => clearTimeout(h);
   }, [toast]);
 
-  if (ov.loading || members.loading) return <Spinner label="Loading business overview…" />;
+  if (ov.loading || members.loading) return <PageSkeleton variant="dashboard" label="Loading business overview" />;
   if (ov.error) return <ErrorState error={ov.error} onRetry={ov.reload} />;
 
   const d = ov.data;
@@ -136,7 +136,7 @@ export default function Business() {
       <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
         <div>
           <div className="text-[11px] text-mute uppercase tracking-[.18em] font-grotesk">{todayLabel}</div>
-          {/* font-brand (Satoshi), not font-grotesk: this is a hero, and
+          {/* font-brand, not font-grotesk: this is a hero, and
               trainer scope repoints font-grotesk to DM Sans for small
               supporting text -- a hero staying on the punchier headline
               face is the whole point of having two. Gradient-clipped name
@@ -164,7 +164,20 @@ export default function Business() {
         {/* revenue trend */}
         <Card className="lg:col-span-2">
           <Kicker>Revenue · 6 months</Kicker>
-          {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} color={status.good} /> : <div className="text-sm text-mute py-10 text-center">No revenue recorded yet.</div>}
+          {trendRows.some((t) => t.value > 0) ? (
+            /* Was `color={status.good}`. Two reasons it moved to the accent:
+               `status.good` is the literal '#7AA880', which matches
+               --good-rgb in DARK mode only, so the chart's green did not
+               follow the theme; and revenue-over-time is this page's primary
+               metric, not a status — spending the semantic "good" colour on
+               it means an actual warning elsewhere reads no differently. */
+            <TrendChart data={trendRows} color="var(--accent)" />
+          ) : (
+            <div className="empty-state">
+              <div className="empty-state-title">No revenue recorded yet</div>
+              <p className="empty-state-body">Payments you record against a subscription appear here.</p>
+            </div>
+          )}
           <div className="text-[11px] text-faint mt-2">From recorded payments · ₹{fmtK(d.monthlyRevenue)} this month</div>
         </Card>
 
@@ -172,12 +185,12 @@ export default function Business() {
         <Card className="lg:col-span-3">
           <div className="flex items-center justify-between">
             <Kicker>Packages</Kicker>
-            <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => setPkgOpen(true)}>+ Add package</button>
+            <button className="btn btn-sm" onClick={() => setPkgOpen(true)}>+ Add package</button>
           </div>
           <div className="grid sm:grid-cols-3 gap-3">
             {(d.packages || []).map((p) => (
-              <div key={p.id} className="rounded-2xl border border-line bg-white/[.03] p-4">
-                <div className="text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">{p.period_days}-day plan</div>
+              <div key={p.id} className="rounded-2xl border border-line bg-tint/[.03] p-4">
+                <div className="t-micro mb-1">{p.period_days}-day plan</div>
                 <div className="font-grotesk font-bold text-lg">{p.name}</div>
                 <div className="font-grotesk text-xl font-bold text-gold mt-1">₹{fmtK(p.amount)}</div>
                 {p.features && <div className="text-[11px] text-mute mt-2 leading-relaxed">{p.features}</div>}
@@ -205,13 +218,13 @@ export default function Business() {
             consistently camelCased across endpoints, so both are read here
             rather than silently showing nothing after a refresh. */}
         {(user?.orgSlug || user?.org_slug) && (
-          <div className="mt-3 rounded-2xl border border-line bg-white/[.03] p-4 flex items-center justify-between flex-wrap gap-3">
+          <div className="mt-3 rounded-2xl border border-line bg-tint/[.03] p-4 flex items-center justify-between flex-wrap gap-3">
             <div>
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mb-1">Client sign-up code</div>
               <div className="font-grotesk font-bold text-lg tracking-tight" style={{ color: 'var(--ink)' }}>{user.orgSlug || user.org_slug}</div>
               <div className="text-[11px] text-mute mt-1">Share this with clients — they enter it at sign-up to join your gym automatically.</div>
             </div>
-            <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => {
+            <button className="btn btn-sm" onClick={() => {
               navigator.clipboard?.writeText(user.orgSlug || user.org_slug);
               setToast('Gym code copied');
             }}>Copy code</button>
@@ -277,7 +290,7 @@ export default function Business() {
           <Kicker>Attendance</Kicker>
           <div className="flex items-center gap-2">
             <input type="date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
-            {!attList && <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => loadAttendance()}>Load</button>}
+            {!attList && <button className="btn btn-sm" onClick={() => loadAttendance()}>Load</button>}
           </div>
         </div>
         {attList && (
@@ -285,7 +298,7 @@ export default function Business() {
             {loadingAtt && <div className="text-xs text-mute py-4 text-center">Loading…</div>}
             {!loadingAtt && !attList.length && <div className="text-xs text-mute py-4 text-center">No attendance records for this date.</div>}
             {attList.map((a) => (
-              <div key={a.client_id} className="flex items-center justify-between rounded-xl border border-line bg-white/[.03] px-3 py-2">
+              <div key={a.client_id} className="flex items-center justify-between rounded-xl border border-line bg-tint/[.03] px-3 py-2">
                 <span className="font-grotesk text-sm font-semibold">{a.client_name}</span>
                 <button className={`chip text-[10px] ${a.present ? 'border-good/40 text-good bg-good/10' : 'border-bad/40 text-bad bg-bad/10'}`} onClick={() => toggleAtt(a.client_id, !a.present)}>
                   {a.present ? 'Present ✓' : 'Absent ✕'}
@@ -300,7 +313,7 @@ export default function Business() {
       <Card>
         <div className="flex items-center justify-between">
           <Kicker>Payments</Kicker>
-          <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => setPayOpen(true)}>+ Record payment</button>
+          <button className="btn btn-sm" onClick={() => setPayOpen(true)}>+ Record payment</button>
         </div>
         {(d.recentPayments || []).length > 0 ? (
           <div className="overflow-x-auto mt-2">
@@ -352,13 +365,13 @@ export default function Business() {
                   <td className="py-2.5 pr-3 text-xs">{m.plan_name || '—'}</td>
                   <td className="py-2.5 pr-3 text-xs text-mute">{m.end_date ? m.end_date.slice(5) : '—'}</td>
                   <td className="py-2.5 pr-3">
-                    <span className={`chip border ${m.payment_status === 'paid' ? 'text-good border-good/40 bg-good/10' : m.payment_status === 'overdue' ? 'text-bad border-bad/40 bg-bad/10' : 'text-mute border-line bg-white/5'}`}>
+                    <span className={`chip border ${m.payment_status === 'paid' ? 'text-good border-good/40 bg-good/10' : m.payment_status === 'overdue' ? 'text-bad border-bad/40 bg-bad/10' : 'text-mute border-line bg-tint/5'}`}>
                       {(m.payment_status || '—').toUpperCase()}
                     </span>
                   </td>
                   <td className="py-2.5 pr-3">
                     {m.lifecycle_status && (
-                      <span className={`chip border ${MEMBERSHIP_TONE[m.lifecycle_status] || 'text-mute border-line bg-white/5'}`}>{m.lifecycle_status}</span>
+                      <span className={`chip border ${MEMBERSHIP_TONE[m.lifecycle_status] || 'text-mute border-line bg-tint/5'}`}>{m.lifecycle_status}</span>
                     )}
                   </td>
                   <td className="py-2.5 pr-3">
@@ -417,7 +430,7 @@ export default function Business() {
         </div>
       </Modal>
 
-      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {toast && <div className="toast anim-toast">{toast}</div>}
     </div>
   );
 }

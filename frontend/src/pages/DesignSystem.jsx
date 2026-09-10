@@ -16,9 +16,83 @@
 import { useState } from 'react';
 import {
   cn, Reveal, Stagger, Tilt, Pressable, AnimatedNumber,
-  AmbientBackdrop, easing, duration, spring, radius, brand, status,
+  AmbientBackdrop, easing, duration, spring, radius, brand, status, statusLight,
 } from '../design/index.js';
 import { Card, Kpi, Ring, Bar, StatusChip, Seg, Empty, Spinner, MacroPill } from '../components/UI.jsx';
+import PaymentResult from '../components/PaymentResult.jsx';
+
+/**
+ * Sample data for the showcase below. This is the ONE place in the
+ * codebase where receipt values are invented, and it is labelled as a
+ * sample on screen — every real caller passes figures that came from a
+ * payment_orders row. See ReceiptPrinterAnimation.jsx's header for why
+ * that distinction is enforced rather than merely intended.
+ */
+const SAMPLE_RECEIPT = {
+  gymName: 'Sample Gym',
+  number: 'SAMPLE-0001',
+  date: '01 Jan 2026',
+  currency: 'INR',
+  items: [{ label: 'Sample plan — 3 months', amount: 4500 }],
+  method: 'Sample method',
+  transactionId: 'sample_txn_0000',
+  total: 4500,
+};
+
+const PAYMENT_STATES = ['processing', 'verifying', 'success', 'failed', 'cancelled', 'refund_pending', 'refunded'];
+const RECEIPT_STATES = ['ready', 'generating', 'error', 'none'];
+
+function PaymentResultDemo() {
+  const [payment, setPayment] = useState('success');
+  const [receipt, setReceipt] = useState('ready');
+  return (
+    <div className="grid lg:grid-cols-[240px_1fr] gap-5 items-start">
+      <div className="space-y-4">
+        <div>
+          <div className="t-micro mb-2">Payment state</div>
+          <div className="flex flex-wrap gap-1.5">
+            {PAYMENT_STATES.map((s) => (
+              <button key={s} onClick={() => setPayment(s)}
+                className={`badge ${payment === s ? 'badge-accent' : 'badge-plain'}`}
+                style={{ cursor: 'pointer' }}>{s}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="t-micro mb-2">Receipt state</div>
+          <div className="flex flex-wrap gap-1.5">
+            {RECEIPT_STATES.map((s) => (
+              <button key={s} onClick={() => setReceipt(s)}
+                className={`badge ${receipt === s ? 'badge-accent' : 'badge-plain'}`}
+                style={{ cursor: 'pointer' }}>{s}</button>
+            ))}
+          </div>
+        </div>
+        <p className="t-sub" style={{ fontSize: '.6875rem' }}>
+          Set payment to <code>success</code> and receipt to <code>error</code> — the headline
+          stays &ldquo;Payment successful&rdquo;.
+        </p>
+      </div>
+      <Card className="p-6">
+        <PaymentResult
+          key={`${payment}-${receipt}`}
+          payment={payment}
+          receipt={receipt === 'none' ? undefined : receipt}
+          amountLabel="₹4,500"
+          purchase="Sample plan — 3 months"
+          method="Sample method"
+          transactionId="sample_txn_0000"
+          receiptData={receipt === 'none' ? undefined : SAMPLE_RECEIPT}
+          onViewReceipt={() => {}}
+          onDownloadReceipt={() => {}}
+          onRetryPayment={() => {}}
+          onRetryReceipt={() => {}}
+          onDone={() => {}}
+        />
+      </Card>
+    </div>
+  );
+}
 
 function Section({ title, note, children }) {
   return (
@@ -62,6 +136,9 @@ export default function DesignSystem() {
     typeof document !== 'undefined' &&
     document.documentElement.classList.contains('light');
   const palette = isLight ? brand.light : brand.dark;
+  // The status swatches label themselves with the theme's ACTUAL values —
+  // light mode darkens good/warn/bad to clear AA as text (see tokens.js).
+  const st = isLight ? statusLight : status;
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
@@ -100,9 +177,9 @@ export default function DesignSystem() {
             <Swatch name="bg" cssVar="var(--bg)" hex={palette.bg} />
             <Swatch name="panel" cssVar="var(--panel)" hex={palette.panel} />
             <Swatch name="ink" cssVar="var(--ink)" hex={palette.ink} />
-            <Swatch name="good" cssVar="rgb(var(--good-rgb))" hex={status.good} />
-            <Swatch name="warn" cssVar="rgb(var(--warn-rgb))" hex={status.warn} />
-            <Swatch name="bad" cssVar="rgb(var(--bad-rgb))" hex={status.bad} />
+            <Swatch name="good" cssVar="rgb(var(--good-rgb))" hex={st.good} />
+            <Swatch name="warn" cssVar="rgb(var(--warn-rgb))" hex={st.warn} />
+            <Swatch name="bad" cssVar="rgb(var(--bad-rgb))" hex={st.bad} />
           </div>
 
           <div className="mt-5">
@@ -123,20 +200,35 @@ export default function DesignSystem() {
           </div>
         </Section>
 
-        {/* ── Type ── */}
-        <Section title="Typography" note="DM Sans for display, Plus Jakarta Sans for UI and body.">
-          <div className="space-y-2">
-            <div className="font-display font-bold text-3xl" style={{ color: 'var(--ink)' }}>
-              Display / DM Sans Bold
-            </div>
-            <div className="font-grotesk font-semibold text-base" style={{ color: 'var(--ink)' }}>
-              UI / Plus Jakarta Semibold
-            </div>
-            <div className="text-sm" style={{ color: 'var(--mute)' }}>
-              Body / Plus Jakarta Regular — used for descriptions and secondary copy.
+        {/* ── Type ──
+            This section described "Plus Jakarta Sans for UI and body" — a
+            typeface the app has never loaded. The design system page
+            misdescribing the design system is the worst possible place for
+            stale documentation, so it now renders the real scale: every row
+            below IS the class it names, so if a token regresses this page
+            shows it rather than asserting otherwise. */}
+        <Section
+          title="Typography"
+          note="One typeface: DM Sans, variable 400–1000, carrying display, UI, numbers and body. Sentient (serif) appears in exactly one place — the greeting line at the top of a screen — and never on data. The rows below are the live type-scale classes from theme.css."
+        >
+          <div className="space-y-3">
+            <div className="t-display">Display / .t-display</div>
+            <div className="t-title">Title / .t-title</div>
+            <div className="t-section">Section / .t-section</div>
+            <div className="t-card">Card / .t-card</div>
+            <div className="t-body">Body / .t-body — descriptions and secondary copy.</div>
+            <div className="t-sub">Sub / .t-sub — the quieter supporting line.</div>
+            <div className="t-micro">Micro / .t-micro — the one uppercase label</div>
+            <div className="t-metric">1,248</div>
+            <div className="font-serif text-[15px]" style={{ color: 'var(--mute)' }}>
+              Serif / Sentient — “Good morning, Rahul”
             </div>
             <div className="kicker">Kicker / uppercase tracked label</div>
           </div>
+          <p className="t-sub mt-4" style={{ fontSize: '.6875rem' }}>
+            The weights above are real cuts. The three static DM Sans files this replaced were
+            byte-identical, so every “bold” label in the product was browser-synthesised faux bold.
+          </p>
         </Section>
 
         {/* ── Motion ── */}
@@ -292,6 +384,14 @@ export default function DesignSystem() {
               </ul>
             </Card>
           </div>
+        </Section>
+
+        {/* ── Payment & receipt ── */}
+        <Section
+          title="Payment result & receipt printer"
+          note="Payment state and receipt state are separate props on purpose: a receipt that fails to generate must never turn a successful payment into 'Payment failed'. Switch the payment state below and watch the headline and the receipt behave independently. The receipt renders only the fields it is handed — remove one from the data and its line disappears rather than being filled in."
+        >
+          <PaymentResultDemo />
         </Section>
 
         <p className="text-[11px] pb-10" style={{ color: 'var(--faint)' }}>

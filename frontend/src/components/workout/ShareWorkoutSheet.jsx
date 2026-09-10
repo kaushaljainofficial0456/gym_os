@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import SavingOverlay from '../nutrition/SavingOverlay.jsx';
+import { XIcon } from './../UI.jsx';
 
 /**
  * SHARE WORKOUT SHEET — select exercises from a workout, bundle them into
@@ -112,7 +113,7 @@ export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutNam
       <div className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: 'var(--panel)' }}>
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Share Workout</div>
-          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}><XIcon /></button>
         </div>
 
         <div className="px-4 pb-5 space-y-4">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, Spinner, ErrorState, Modal, Empty, MacroPill } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, Empty, MacroPill, ChevronRightIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
 
 const SLOTS = ['Breakfast', 'Lunch', 'Pre-workout', 'Post-workout', 'Dinner', 'Before bed'];
 const emptyMeal = () => ({ slot: 'Breakfast', name: '', time: '', calories: 400, protein: 25, carbs: 45, fat: 10, foods: '' });
@@ -29,7 +29,7 @@ export default function NutritionBuilder() {
     return () => clearTimeout(h);
   }, [toast]);
 
-  if (plans.loading || clients.loading) return <Spinner label="Loading nutrition builder…" />;
+  if (plans.loading || clients.loading) return <PageSkeleton variant="split" label="Loading nutrition builder" />;
   if (plans.error) return <ErrorState error={plans.error} onRetry={plans.reload} />;
 
   const startNew = () => {
@@ -106,16 +106,16 @@ export default function NutritionBuilder() {
           <Kicker>Your plans</Kicker>
           <div className="space-y-1.5">
             {list.map((p) => (
-              <div key={p.id} className={`rounded-xl border transition-colors ${selectedId === p.id ? 'border-gold/50 bg-white/[.05]' : 'border-line bg-white/[.02]'}`}>
+              <div key={p.id} className={`rounded-xl border transition-colors ${selectedId === p.id ? 'border-gold/50 bg-tint/[.05]' : 'border-line bg-tint/[.02]'}`}>
                 <button className="w-full text-left px-3.5 py-3 flex items-center gap-3" onClick={() => openPlan(p)}>
                   <div className="flex-1 min-w-0">
                     <div className="font-grotesk text-sm font-semibold truncate">{p.name}</div>
                     <div className="text-[11px] text-mute">{p.calories} kcal · {p.meals?.length || 0} meals</div>
                   </div>
-                  <span className="text-mute">›</span>
+                  <span className="text-mute"><ChevronRightIcon /></span>
                 </button>
                 <div className="px-3.5 pb-2.5">
-                  <button className="btn !py-1 !px-2.5 !text-[10px]" onClick={() => { openPlan(p); setAssignOpen(true); }}>✉ Assign to client</button>
+                  <button className="btn btn-sm" onClick={() => { openPlan(p); setAssignOpen(true); }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg> Assign to client</button>
                 </div>
               </div>
             ))}
@@ -142,13 +142,13 @@ export default function NutritionBuilder() {
 
               <div className="space-y-2">
                 {editing.meals.map((m, i) => (
-                  <div key={i} className="rounded-xl border border-line bg-white/[.02] p-3 space-y-2">
+                  <div key={i} className="rounded-xl border border-line bg-tint/[.02] p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <select className="input !py-2 w-36" value={m.slot} onChange={(e) => patchMeal(i, 'slot', e.target.value)}>
                         {SLOTS.map((s) => <option key={s}>{s}</option>)}
                       </select>
                       <input className="input !py-2 flex-1" value={m.name} onChange={(e) => patchMeal(i, 'name', e.target.value)} placeholder="e.g. 2 roti + dal + sabzi" />
-                      <button className="btn !px-2 !py-1.5 !text-xs !text-bad" onClick={() => setEditing((e) => ({ ...e, meals: e.meals.filter((_, j) => j !== i) }))} aria-label="Remove">✕</button>
+                      <button className="btn btn-sm !text-bad" onClick={() => setEditing((e) => ({ ...e, meals: e.meals.filter((_, j) => j !== i) }))} aria-label="Remove"><XIcon /></button>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       {[['time', 'Time'], ['calories', 'Kcal'], ['protein', 'P'], ['carbs', 'C'], ['fat', 'F']].map(([k, l]) => (
@@ -161,7 +161,7 @@ export default function NutritionBuilder() {
                     <input className="input !py-1.5 text-xs" value={m.foods} onChange={(e) => patchMeal(i, 'foods', e.target.value)} placeholder="Foods: roti, dal, sabzi…" />
                   </div>
                 ))}
-                <button className="btn w-full !border-dashed" onClick={() => setEditing((e) => ({ ...e, meals: [...e.meals, emptyMeal()] }))}>+ Add meal</button>
+                <button className="btn btn-block !border-dashed" onClick={() => setEditing((e) => ({ ...e, meals: [...e.meals, emptyMeal()] }))}>+ Add meal</button>
               </div>
 
               <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
@@ -170,7 +170,7 @@ export default function NutritionBuilder() {
                   f={editing.meals.reduce((s, m) => s + (Number(m.fat) || 0), 0)} />
                 <div className="flex gap-2">
                   <button className="btn-primary" onClick={savePlan} disabled={saving}>{saving ? 'Saving…' : 'Save plan'}</button>
-                  <button className="btn-ghost !text-mute" onClick={() => setEditing(null)}>Cancel</button>
+                  <button className="btn-ghost btn-sm !text-mute" onClick={() => setEditing(null)}>Cancel</button>
                 </div>
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function NutritionBuilder() {
         </div>
       </Modal>
 
-      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {toast && <div className="toast anim-toast">{toast}</div>}
     </div>
   );
 }

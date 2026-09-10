@@ -8,7 +8,7 @@
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, PageHeader, Kpi, Bar, Spinner, ErrorState } from '../../components/UI.jsx';
+import { Card, PageHeader, Kpi, Bar, ErrorState, PageSkeleton } from '../../components/UI.jsx';
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -20,7 +20,7 @@ export default function EnterpriseDashboard() {
   const status = useFetch(() => api('/enterprise/status'));
   const account = useFetch(() => api('/enterprise/payment-account'));
 
-  if (status.loading) return <Spinner label="Loading your gym's billing status…" />;
+  if (status.loading) return <PageSkeleton variant="detail" label="Loading your gym's billing status" />;
   if (status.error) return <ErrorState error={status.error} onRetry={status.reload} />;
   const d = status.data;
 

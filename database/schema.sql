@@ -828,6 +828,30 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- applyPgMigrations instead, after the column is guaranteed to exist on
 -- databases that predate it.
 
+-- One row per user -- the notification-center toggles surfaced by
+-- Settings.jsx's NotificationSettingsCard (routes/notifications.js's
+-- GET/PATCH /preferences). Lazily created with defaults on first read,
+-- never required to exist for a user who has never opened Settings.
+-- Booleans are INTEGER 0/1 (SQLite has no native boolean; every other
+-- flag column in this schema follows the same convention).
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  enabled             INTEGER NOT NULL DEFAULT 1,
+  workout_reminders   INTEGER NOT NULL DEFAULT 1,
+  water_reminders     INTEGER NOT NULL DEFAULT 1,
+  water_interval_h    REAL NOT NULL DEFAULT 2,
+  nutrition_reminders INTEGER NOT NULL DEFAULT 1,
+  daily_summary       INTEGER NOT NULL DEFAULT 1,
+  daily_summary_time  TEXT NOT NULL DEFAULT '23:30',
+  tomorrow_workout    INTEGER NOT NULL DEFAULT 1,
+  rest_day_reminders  INTEGER NOT NULL DEFAULT 0,
+  incomplete_workout  INTEGER NOT NULL DEFAULT 1,
+  quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
+  quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+  updated_at          TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id        TEXT PRIMARY KEY,
   org_id    TEXT REFERENCES organizations(id) ON DELETE CASCADE,
@@ -1607,3 +1631,257 @@ CREATE TABLE IF NOT EXISTS platform_announcements (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_announcements_window ON platform_announcements(starts_at, ends_at);
+
+-- ============================================================
+-- SK OS HEALTH INTELLIGENCE ENGINE
+-- Canonical schema for the wearable/energy reconciliation "brain" --
+-- see docs/health-intelligence.md (if present) and
+-- backend/src/services/health/ for the engine that reads/writes these.
+--
+-- Six tables, in dependency order:
+--   health_provider_connections -- one row per (user, provider) link
+--   health_records               -- every normalized ingested record,
+--                                    from ANY source including SK OS's
+--                                    own workouts (data_type='workout'
+--                                    provider='skos') -- the raw evidence
+--   health_canonical_workouts    -- deduplicated "what actually happened"
+--                                    workouts, each backed by 1+ records
+--   health_energy_intervals      -- the reconciled energy-per-time-slice
+--                                    primitives (section 58 of the spec
+--                                    this was built against)
+--   health_daily_summaries       -- cached SKOSDailyIntelligence per
+--                                    (user, date) -- cheap to read,
+--                                    recomputed on demand, never
+--                                    recalculated from raw history on
+--                                    every page load
+--   health_reconciliation_log    -- audit trail: why a number changed
+--
+-- Deliberately NOT storing full raw provider payloads in any of these --
+-- only the fields already normalized into real columns. Health data is
+-- sensitive; see the engine's own access-control comments.
+-- ============================================================
+
+-- One row per (user, provider). status tracks the REAL connection
+-- state -- never fabricated. access/refresh tokens are stored
+-- server-side only (never sent to the frontend) and should be treated
+-- as secrets at rest; this schema stores them as TEXT because this
+-- project has no column-level encryption primitive today -- see
+-- backend/src/services/health/providers/README (or the providers
+-- directory's own header comment) for the explicit follow-up this
+-- implies before any real production credentials are stored here.
+CREATE TABLE IF NOT EXISTS health_provider_connections (
+  id                 TEXT PRIMARY KEY,
+  user_id            TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id             TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider           TEXT NOT NULL CHECK (provider IN (
+                       'apple_health','health_connect','samsung_health',
+                       'whoop','oura','garmin','fitbit','polar','coros','ultrahuman'
+                     )),
+  status             TEXT NOT NULL DEFAULT 'disconnected' CHECK (status IN (
+                       'disconnected','pending','connected','error','revoked'
+                     )),
+  external_account_id TEXT,             -- provider's own user/account id, if returned
+  scopes_json        TEXT,              -- JSON array of granted scopes/permissions
+  capabilities_json  TEXT,              -- JSON snapshot of this connection's advertised capabilities (section 3)
+  access_token       TEXT,              -- server-side only -- never returned to the frontend
+  refresh_token      TEXT,
+  token_expires_at   TEXT,
+  oauth_state        TEXT,              -- transient CSRF state for an in-flight OAuth handshake
+  sync_cursor        TEXT,              -- provider-specific incremental-sync checkpoint
+  sync_status        TEXT NOT NULL DEFAULT 'idle' CHECK (sync_status IN ('idle','syncing','error')),
+  sync_error         TEXT,
+  connected_at       TEXT,
+  last_synced_at     TEXT,
+  disconnected_at    TEXT,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  UNIQUE (user_id, provider)
+);
+CREATE INDEX IF NOT EXISTS idx_health_conn_user ON health_provider_connections(user_id);
+-- Webhook delivery lookup: a provider pushes its OWN numeric/UUID user
+-- id (e.g. WHOOP's user_id), never our users.id, so the automatic-sync
+-- webhook handler resolves the connection via (provider, external_account_id)
+-- instead. Partial index -- most rows have a NULL external_account_id
+-- until a provider that populates it (WHOOP) actually connects.
+CREATE INDEX IF NOT EXISTS idx_health_conn_external ON health_provider_connections(provider, external_account_id) WHERE external_account_id IS NOT NULL;
+
+-- One canonical workout can be backed by several health_records (the
+-- "source graph" -- section 31): a SK OS-logged session, a wearable's
+-- auto-detected session, heart-rate samples, etc. all point back here.
+--
+-- Defined BEFORE health_records even though health_records is the more
+-- "primary" table -- health_records.canonical_workout_id has a foreign
+-- key INTO this table, and Postgres (unlike SQLite, which never
+-- validates a REFERENCES target at CREATE TABLE time) requires the
+-- referenced table to already exist. Caught live 2026-09-09 running
+-- 'npm run db:init' against real production Postgres: every test and
+-- every local SQLite run passed with the tables in the OTHER order,
+-- because SQLite silently allows a forward reference -- Postgres does
+-- not, and failed with "relation health_canonical_workouts does not
+-- exist" the first time this schema ever ran against a real Postgres
+-- database.
+CREATE TABLE IF NOT EXISTS health_canonical_workouts (
+  id                    TEXT PRIMARY KEY,
+  user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id                TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  skos_workout_id       TEXT REFERENCES workouts(id) ON DELETE SET NULL,
+  activity_type         TEXT,
+  start_time            TEXT NOT NULL,
+  end_time              TEXT NOT NULL,
+  duration_seconds      REAL,
+  primary_energy_source TEXT,   -- e.g. 'whoop' | 'oura' | 'apple_health' | 'skos_ml' | 'met_fallback'
+  active_kcal           REAL,
+  coverage_ratio        REAL,   -- 0..1 -- how much of the SK OS-logged duration has wearable evidence
+  confidence_score       REAL,  -- 0..1
+  confidence_level       TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+  match_score            REAL,  -- 0..1, from the WorkoutMatchingEngine
+  match_reason           TEXT,
+  auto_detected          INTEGER NOT NULL DEFAULT 0,
+  user_entered            INTEGER NOT NULL DEFAULT 0,
+  data_quality             TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+  matched_at                TEXT,
+  created_at                TEXT NOT NULL,
+  updated_at                TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_health_canon_user_time ON health_canonical_workouts(user_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_health_canon_skos_workout ON health_canonical_workouts(skos_workout_id);
+
+-- Every normalized health/activity record, from any source. A SK OS
+-- workout itself is represented here too (provider='skos',
+-- provider_record_id = the workouts.id it came from) so the
+-- reconciliation engine treats every source uniformly instead of
+-- special-casing "our own" data.
+CREATE TABLE IF NOT EXISTS health_records (
+  id                  TEXT PRIMARY KEY,
+  user_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider            TEXT NOT NULL,     -- 'skos' | one of health_provider_connections.provider's values
+  provider_record_id  TEXT,              -- provider's own stable id for this record, when it has one
+  connection_id       TEXT REFERENCES health_provider_connections(id) ON DELETE SET NULL,
+  data_type           TEXT NOT NULL CHECK (data_type IN (
+                        'workout','energy_sample','heart_rate','steps','distance',
+                        'sleep','recovery','hrv','resting_hr','respiratory_rate','spo2',
+                        'body_temperature','body_metrics','vo2max'
+                      )),
+  activity_type       TEXT,              -- e.g. 'strength_training','running','walking','cycling' -- free-text, normalized where known
+  start_time          TEXT NOT NULL,     -- UTC ISO-8601
+  end_time            TEXT,
+  duration_seconds    REAL,
+  active_kcal         REAL,              -- energy ABOVE resting for this record's interval, if reported
+  total_kcal          REAL,              -- active + resting for this record's interval, if reported -- NEVER conflated with active_kcal
+  resting_kcal        REAL,
+  heart_rate_avg      REAL,
+  heart_rate_min      REAL,
+  heart_rate_max      REAL,
+  steps               INTEGER,
+  distance_m          REAL,
+  hrv_ms              REAL,
+  resting_hr          REAL,
+  respiratory_rate    REAL,
+  spo2_pct            REAL,
+  body_temperature_c  REAL,
+  vo2max              REAL,
+  sleep_duration_seconds REAL,
+  sleep_stages_json   TEXT,              -- provider-native stage breakdown, kept as-is (section 40: don't pretend methodologies match)
+  source_score        REAL,              -- a provider's OWN proprietary score (e.g. WHOOP recovery/strain) -- see source_metric; NEVER renamed into an SK OS score
+  source_metric        TEXT,             -- what source_score actually is, e.g. 'recovery' | 'strain' | 'readiness'
+  auto_detected       INTEGER NOT NULL DEFAULT 0,
+  user_entered         INTEGER NOT NULL DEFAULT 0,
+  source_confidence    REAL,             -- the PROVIDER's own confidence, when it reports one -- distinct from SK OS's own confidence engine output
+  data_quality         TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+  data_quality_reason  TEXT,
+  canonical_workout_id TEXT REFERENCES health_canonical_workouts(id) ON DELETE SET NULL,
+  skos_workout_id      TEXT REFERENCES workouts(id) ON DELETE SET NULL,
+  deleted_at            TEXT,            -- provider reported this record removed/superseded -- soft-deleted, never hard-deleted (section 71 audit trail)
+  synced_at             TEXT NOT NULL,
+  created_at            TEXT NOT NULL,
+  updated_at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_health_records_user_time ON health_records(user_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_health_records_user_type ON health_records(user_id, data_type, start_time);
+CREATE INDEX IF NOT EXISTS idx_health_records_canonical ON health_records(canonical_workout_id);
+-- Idempotency (section 70): the SAME provider record must never be
+-- imported twice. Partial (WHERE provider_record_id IS NOT NULL) since
+-- plenty of data_types (steps samples, HR samples) may have no stable id.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_health_records_provider_dedup
+  ON health_records(user_id, provider, provider_record_id)
+  WHERE provider_record_id IS NOT NULL;
+
+-- The reconciled energy-per-interval primitive (section 58/59/60). A
+-- day is partitioned into non-overlapping intervals, each attributed to
+-- exactly ONE primary source -- this is what prevents double-counting.
+CREATE TABLE IF NOT EXISTS health_energy_intervals (
+  id                    TEXT PRIMARY KEY,
+  user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id                TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  date                  TEXT NOT NULL,   -- user's local calendar day (YYYY-MM-DD) -- section 93
+  start_time            TEXT NOT NULL,
+  end_time              TEXT NOT NULL,
+  active_kcal           REAL NOT NULL DEFAULT 0,
+  resting_kcal          REAL NOT NULL DEFAULT 0,
+  total_kcal            REAL NOT NULL DEFAULT 0,
+  source                TEXT NOT NULL,   -- 'whoop' | 'oura' | 'apple_health' | ... | 'skos_ml' | 'met_fallback'
+  source_record_id      TEXT REFERENCES health_records(id) ON DELETE SET NULL,
+  activity_type         TEXT,
+  confidence_score       REAL,
+  confidence_level       TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+  coverage               REAL,           -- 0..1, fraction of this interval with direct evidence (vs. estimated)
+  is_primary              INTEGER NOT NULL DEFAULT 1,
+  is_estimate              INTEGER NOT NULL DEFAULT 0,
+  model_name                TEXT,        -- e.g. 'skos-cal-v1' when is_estimate
+  model_version              TEXT,
+  canonical_workout_id        TEXT REFERENCES health_canonical_workouts(id) ON DELETE SET NULL,
+  created_at                   TEXT NOT NULL,
+  updated_at                   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_health_energy_user_date ON health_energy_intervals(user_id, date);
+
+-- Cached daily rollup -- the ONLY thing Home/Nutrition/Progress should
+-- ever read (section 80/81: one source of truth, never recalculated
+-- per-screen). Recomputed on demand by the DailyIntelligenceEngine, not
+-- on every request -- see that module's own caching comment.
+CREATE TABLE IF NOT EXISTS health_daily_summaries (
+  id                     TEXT PRIMARY KEY,
+  user_id                TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_id                 TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  date                   TEXT NOT NULL,
+  active_energy          REAL,
+  resting_energy         REAL,
+  total_energy           REAL,
+  steps                  INTEGER,
+  distance_m             REAL,
+  workout_minutes        REAL,
+  training_load          REAL,           -- SK OS-native metric, NOT WHOOP's 0-21 strain scale (section 38)
+  sleep_duration_seconds REAL,
+  sleep_score            REAL,           -- NULL when insufficient evidence -- never fabricated (section 37)
+  recovery_score         REAL,
+  readiness_score        REAL,
+  readiness_label        TEXT CHECK (readiness_label IN ('ready','moderate','recovery_recommended') OR readiness_label IS NULL),
+  data_quality            TEXT NOT NULL DEFAULT 'unknown' CHECK (data_quality IN ('complete','mostly_complete','partial','poor','unknown')),
+  confidence_score         REAL,
+  confidence_level         TEXT CHECK (confidence_level IN ('high','medium','low','very_low')),
+  reconciliation_status     TEXT NOT NULL DEFAULT 'ok' CHECK (reconciliation_status IN ('ok','warning')),
+  source_summary_json        TEXT,       -- JSON: which providers contributed what, for "how we calculated this"
+  insights_json                TEXT,     -- JSON array of generated insight strings (section 42)
+  computed_at                   TEXT NOT NULL,
+  created_at                     TEXT NOT NULL,
+  updated_at                     TEXT NOT NULL,
+  UNIQUE (user_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_health_daily_user_date ON health_daily_summaries(user_id, date);
+
+-- Audit trail (section 72): why did a number change. Append-only.
+CREATE TABLE IF NOT EXISTS health_reconciliation_log (
+  id                   TEXT PRIMARY KEY,
+  user_id              TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  canonical_workout_id TEXT REFERENCES health_canonical_workouts(id) ON DELETE SET NULL,
+  date                 TEXT,
+  previous_source       TEXT,
+  new_source             TEXT,
+  previous_kcal           REAL,
+  new_kcal                 REAL,
+  reason                    TEXT NOT NULL,
+  model_version              TEXT,
+  created_at                  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_health_reconlog_user ON health_reconciliation_log(user_id, created_at);

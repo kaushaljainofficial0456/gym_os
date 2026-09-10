@@ -158,7 +158,7 @@ export default function MuscleMap({ activeMuscles = [], selected = null, onSelec
       </svg>
 
       {/* view toggle */}
-      <div className="flex rounded-full border border-line bg-white/[.03] p-0.5 mt-1">
+      <div className="flex rounded-full border border-line bg-tint/[.03] p-0.5 mt-1">
         {['front', 'back'].map((v) => (
           <button
             key={v}

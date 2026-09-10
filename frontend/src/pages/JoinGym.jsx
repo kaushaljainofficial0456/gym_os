@@ -10,7 +10,7 @@ import { useAuth } from '../auth.jsx';
 import Icon from '../components/Icon.jsx';
 import QrScanner from '../components/QrScanner.jsx';
 import PaymentCheckout from '../components/PaymentCheckout.jsx';
-import { Card, Spinner } from '../components/UI.jsx';
+import { Card, Spinner, CheckIcon } from '../components/UI.jsx';
 
 export default function JoinGym() {
   const { user, refreshSession, logout } = useAuth();
@@ -81,7 +81,7 @@ export default function JoinGym() {
 
         {done ? (
           <Card className="p-8 text-center">
-            <div className="text-3xl mb-2">✓</div>
+            <div className="text-3xl mb-2"><CheckIcon /></div>
             <div className="font-grotesk font-bold">You're in!</div>
             <div className="text-xs mt-1" style={{ color: 'var(--mute)' }}>Taking you to your dashboard…</div>
           </Card>
@@ -102,8 +102,8 @@ export default function JoinGym() {
                 <div className="font-grotesk font-semibold">{preview.membershipPlan.name} — ₹{preview.membershipPlan.amount}/{preview.membershipPlan.period_days}d</div>
               </div>
             )}
-            {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
-            <button className="btn-primary w-full !py-3" disabled={busy} onClick={join}>
+            {err && <div role="alert" className="field-error ">{err}</div>}
+            <button className="btn-primary btn-lg btn-block" disabled={busy} onClick={join}>
               {busy ? 'Joining…' : user.role === 'CLIENT' ? 'Continue to payment' : 'Join this gym'}
             </button>
             <button className="btn-ghost w-full" onClick={() => { setPreview(null); setPayload(''); }}>Scan a different code</button>
@@ -115,8 +115,8 @@ export default function JoinGym() {
                 <div className="w-16 h-16 mx-auto rounded-2xl border grid place-items-center" style={{ borderColor: 'var(--line)', background: 'var(--bg2)' }}>
                   <Icon name="camera" size={28} />
                 </div>
-                {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
-                <button className="btn-primary w-full !py-3" onClick={() => setScanning(true)}>Scan QR code</button>
+                {err && <div role="alert" className="field-error ">{err}</div>}
+                <button className="btn-primary btn-lg btn-block" onClick={() => setScanning(true)}>Scan QR code</button>
               </>
             )}
           </Card>

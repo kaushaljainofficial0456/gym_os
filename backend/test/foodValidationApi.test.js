@@ -78,12 +78,29 @@ test('POST /me/foods rejects negative calories rather than saving a corrupt row'
   assert.equal(rows.length, 0, 'invalid food must never reach the database');
 });
 
-test('POST /me/foods rejects a physically impossible macro combination', async (t) => {
+test('POST /me/foods does NOT reject protein+carbs+fat summing past 100 -- that sum is not required to equal any reference weight', async (t) => {
   const { call, close } = await startApi();
   t.after(() => close());
-  // 60 + 30 + 30 = 120 g of protein+carb+fat claimed per 100 g of food.
-  const r = await call('POST', '/api/me/foods', { name: 'Impossible Food', calories: 500, protein: 60, carbs: 30, fat: 30 });
-  assert.equal(r.status, 400);
+  // 60 + 30 + 30 = 120g of protein+carb+fat. Whatever quantity these values
+  // describe (this route stores whatever the caller sends, at whatever
+  // basis the caller intends), macro grams are never required to sum to
+  // that quantity -- water/ash make up the rest of any real food's mass,
+  // and a Custom Macros entry for a small, concentrated serving can
+  // legitimately read this way once normalized. See foodValidation.js's
+  // own comment on the "impossible" check this used to enforce and why
+  // it was removed.
+  const r = await call('POST', '/api/me/foods', { name: 'Concentrated Food', calories: 780, protein: 60, carbs: 30, fat: 30 });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.id);
+});
+
+test('POST /me/foods accepts the 40g chapati Custom Macros example: protein+carbs+fat (23g) need not equal the 40g reference weight', async (t) => {
+  const { call, close } = await startApi();
+  t.after(() => close());
+  // protein 3*4 + carbs 18*4 + fat 2*9 = 12 + 72 + 18 = 102 kcal.
+  const r = await call('POST', '/api/me/foods', { name: 'Chapati', calories: 102, protein: 3, carbs: 18, fat: 2 });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.id);
 });
 
 test('POST /me/foods still requires a name (now enforced by schema validation, 422 -- the route\'s own manual check behind it is still there too, just never reached first)', async (t) => {

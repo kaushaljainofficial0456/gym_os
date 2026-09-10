@@ -124,7 +124,7 @@ if (nodeEnv === 'production') {
 
   if (razorpayRequested && missingPayment.length) {
     // Razorpay was explicitly ASKED FOR but is only half-configured. This
-    // is the genuinely dangerous state and still refuses to boot: a
+    // is the genuinely dangerous state and always refuses to boot: a
     // deployment that reports 'razorpay' while missing a key would create
     // real orders it can never verify or activate (see paymentProvider.js
     // -- providerName() ignores PAYMENT_PROVIDER without both API keys,
@@ -135,11 +135,31 @@ if (nodeEnv === 'production') {
   }
 
   if (!razorpayRequested) {
-    // No payment provider configured at all. This is a SUPPORTED state,
-    // not an error: the rest of the application has no dependency on
-    // payments, so refusing to boot here would take down an entire
-    // deployment over a feature the operator has not enabled yet.
+    // No payment provider requested at all. By default this is a
+    // SUPPORTED state, not an error: the rest of the application has no
+    // dependency on payments, so refusing to boot here would take down an
+    // entire deployment over a feature the operator hasn't enabled yet.
     //
+    // Merged from two branches that each independently hit and fixed the
+    // SAME production incident (this gate previously crashed the ENTIRE
+    // API on missing Razorpay config -- config.js throws at import time,
+    // so it took login down along with everything else, against a
+    // deployment with no Razorpay account configured yet). Three explicit
+    // states, all pinned by paymentProductionGate.test.js:
+    //   - ALLOW_MOCK_PAYMENTS_IN_PRODUCTION unset (the default) -> boots,
+    //     warns how to turn Razorpay on.
+    //   - ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true -> boots, warns that this
+    //     explicit escape hatch is what allowed it.
+    //   - set to anything else (e.g. 'false') -> refuses to boot, so an
+    //     operator can deliberately reinstate the strict "never boot
+    //     without a real gateway" posture later without having to delete
+    //     the variable outright.
+    const allowFlag = process.env.ALLOW_MOCK_PAYMENTS_IN_PRODUCTION;
+    if (allowFlag !== undefined && allowFlag !== 'true') {
+      console.error(`[sk-os] FATAL: production requires a fully configured live payment provider — missing: ${missingPayment.join(', ')}. The mock payment provider must never run in production. Set ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true to boot anyway while Razorpay isn't configured yet (checkout will stay disabled until it is), or unset it to use the default disabled-but-running state.`);
+      process.exit(1);
+    }
+
     // Critically this does NOT fall back to the mock provider -- that was
     // the original hazard this gate existed to prevent, since the mock
     // gateway mints its own valid-looking signatures and would let anyone
@@ -147,11 +167,14 @@ if (nodeEnv === 'production') {
     // returns 'none' in production instead: every provider operation
     // throws PaymentsNotConfiguredError (a controlled 503) and both
     // signature verifiers fail closed, so no payment can be created,
-    // activated, refunded or forged while unconfigured.
-    //
-    // Setting PAYMENT_PROVIDER=razorpay + the three Razorpay variables
-    // switches the existing, untouched integration on with no code change.
-    console.warn('[sk-os] WARN: no payment provider configured — payments are DISABLED in this production deployment. Payment endpoints return 503 payments_not_configured. Set PAYMENT_PROVIDER=razorpay plus RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET to enable Razorpay.');
+    // activated, refunded or forged while unconfigured. Setting
+    // PAYMENT_PROVIDER=razorpay + the three Razorpay variables switches
+    // the existing, untouched integration on with no code change.
+    if (allowFlag === 'true') {
+      console.warn('[sk-os] WARN: ALLOW_MOCK_PAYMENTS_IN_PRODUCTION=true -- booting without a live payment provider. Payment endpoints return 503 payments_not_configured; checkout will not complete (the mock endpoint stays disabled in production regardless). Set PAYMENT_PROVIDER=razorpay plus the three Razorpay variables to enable it, then remove this escape-hatch var.');
+    } else {
+      console.warn('[sk-os] WARN: no payment provider configured — payments are DISABLED in this production deployment. Payment endpoints return 503 payments_not_configured. Set PAYMENT_PROVIDER=razorpay plus RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and RAZORPAY_WEBHOOK_SECRET to enable Razorpay.');
+    }
   }
 }
 
@@ -216,5 +239,21 @@ export const config = {
   // itself never redirects here or trusts this for anything security-
   // relevant. Falls back to the same localhost dev origin api.js/vite
   // already assume elsewhere in this codebase.
-  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, ''),
+  // SK OS Health Intelligence Engine -- WHOOP/Oura OAuth app credentials.
+  // Same no-fail-fast pattern as foodDatabaseApiKey above: these are
+  // OPTIONAL. A missing client id/secret does not stop the server from
+  // starting -- backend/src/services/health/providers/{whoop,oura}Provider.js
+  // check for these at CALL time and throw ProviderNotConfiguredError
+  // rather than pretending to connect. No default values (unlike
+  // frontendUrl) -- there is no sane placeholder for an OAuth secret.
+  // Backend's OWN public URL, used to build the OAuth redirect_uri sent
+  // to WHOOP/Oura (e.g. `${healthApiBaseUrl}/api/health/providers/whoop/callback`)
+  // -- deliberately NOT frontendUrl, which is a different origin (the
+  // Vite app), and this callback is a backend route.
+  healthApiBaseUrl: (process.env.HEALTH_API_BASE_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/+$/, ''),
+  whoopClientId: process.env.WHOOP_CLIENT_ID || null,
+  whoopClientSecret: process.env.WHOOP_CLIENT_SECRET || null,
+  ouraClientId: process.env.OURA_CLIENT_ID || null,
+  ouraClientSecret: process.env.OURA_CLIENT_SECRET || null,
 };

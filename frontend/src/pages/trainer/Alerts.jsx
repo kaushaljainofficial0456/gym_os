@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, daysAgoLabel } from '../../utils.js';
-import { Card, Kicker, Spinner, ErrorState, Empty } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Empty, PageSkeleton } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 
 const SEV = {
   high: ['HIGH', 'text-bad border-bad/40 bg-bad/10'],
   medium: ['MED', 'text-warn border-warn/40 bg-warn/10'],
-  low: ['LOW', 'text-mute border-line bg-white/5']
+  low: ['LOW', 'text-mute border-line bg-tint/5']
 };
 
 const FILTERS = [
@@ -19,7 +19,7 @@ export default function Alerts() {
   const [filter, setFilter] = useState('all');
   const alerts = useFetch(() => api(`/alerts${filter === 'all' ? '' : `?status=${filter}`}`), [filter]);
 
-  if (alerts.loading) return <Spinner label="Loading alerts…" />;
+  if (alerts.loading) return <PageSkeleton variant="list" label="Loading alerts" />;
   if (alerts.error) return <ErrorState error={alerts.error} onRetry={alerts.reload} />;
 
   const action = async (id, act) => {
@@ -46,7 +46,7 @@ export default function Alerts() {
         <div className="chip border-bad/40 bg-bad/10 text-bad">{openCount} open</div>
       </div>
 
-      <div className="flex gap-1.5 bg-white/5 border border-line rounded-full p-1 overflow-x-auto">
+      <div className="flex gap-1.5 bg-tint/5 border border-line rounded-full p-1 overflow-x-auto">
         {FILTERS.map(([v, l]) => (
           <button key={v} className={`tab ${filter === v ? 'active' : ''}`} onClick={() => setFilter(v)}>{l}</button>
         ))}
@@ -58,8 +58,8 @@ export default function Alerts() {
           {rows.map((a) => {
             const sev = SEV[a.severity] || SEV.medium;
             return (
-              <div key={a.id} className={`rounded-2xl border p-3.5 flex flex-wrap items-center gap-3 transition-colors ${a.status === 'open' ? 'border-line bg-white/[.03]' : 'border-line bg-white/[.01] opacity-70'}`}>
-                <div className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${a.status === 'open' ? 'bg-gradient-to-br from-ember/30 to-gold/20 border border-line' : 'bg-white/5 border border-line'}`}>
+              <div key={a.id} className={`rounded-2xl border p-3.5 flex flex-wrap items-center gap-3 transition-colors ${a.status === 'open' ? 'border-line bg-tint/[.03]' : 'border-line bg-tint/[.01] opacity-70'}`}>
+                <div className={`w-9 h-9 rounded-full grid place-items-center shrink-0 ${a.status === 'open' ? 'bg-gradient-to-br from-ember/30 to-gold/20 border border-line' : 'bg-tint/5 border border-line'}`}>
                   {a.status === 'open' ? <Icon name="alert" size={14} /> : '✓'}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -74,9 +74,9 @@ export default function Alerts() {
                 </div>
                 {a.status === 'open' ? (
                   <div className="flex gap-1.5">
-                    <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => action(a.id, 'read')}>Mark read</button>
-                    <button className="btn !py-1.5 !px-3 !text-[11px]" onClick={() => action(a.id, 'follow_up')}>Follow up</button>
-                    <button className="btn !py-1.5 !px-3 !text-[11px] !text-mute" onClick={() => action(a.id, 'dismiss')}>Dismiss</button>
+                    <button className="btn btn-sm" onClick={() => action(a.id, 'read')}>Mark read</button>
+                    <button className="btn btn-sm" onClick={() => action(a.id, 'follow_up')}>Follow up</button>
+                    <button className="btn btn-sm !text-mute" onClick={() => action(a.id, 'dismiss')}>Dismiss</button>
                   </div>
                 ) : (
                   <span className="text-[10px] text-faint uppercase tracking-wider font-grotesk">{a.status === 'followed_up' ? 'Followed up' : a.status === 'dismissed' ? 'Dismissed' : 'Read'}</span>

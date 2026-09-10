@@ -49,10 +49,24 @@ test('absent fields are treated as "not measured", never as invalid or as zero',
   assert.equal(r.valid, true, 'missing protein/carb/fat must not fail validation');
 });
 
-test('macro grams alone exceeding 100 g per 100 g is physically impossible and rejected', () => {
-  const r = validateFoodRecord({ name: 'Impossible food', energy_kcal: 400, protein_g: 50, carb_g: 40, fat_g: 20 });
-  assert.equal(r.valid, false);
-  assert.ok(r.errors.some((e) => /100 ?g/.test(e)));
+test('macro grams summing past 100 is NOT rejected -- protein+carbs+fat is not required to equal any reference weight', () => {
+  // Regression test for the removed "impossible" check: this function has
+  // no way to know what quantity the caller's numbers describe (a Custom
+  // Macros entry for a 40g chapati legitimately has protein+carbs+fat far
+  // below 40; a converted-to-per-100g concentrated food can legitimately
+  // read well above 100 without being physically impossible). Never
+  // reinstate an equality/upper-bound check between macro grams and a
+  // serving/reference weight -- see foodValidation.js's own comment.
+  const r = validateFoodRecord({ name: 'Concentrated food', energy_kcal: 780, protein_g: 50, carb_g: 40, fat_g: 20 });
+  assert.equal(r.valid, true);
+  assert.deepEqual(r.errors, []);
+});
+
+test('the 40g chapati Custom Macros example is valid: protein+carbs+fat (23g) need not equal the 40g reference weight', () => {
+  // protein 3 * 4 + carbs 18 * 4 + fat 2 * 9 = 12 + 72 + 18 = 102 kcal.
+  const r = validateFoodRecord({ name: 'Chapati (custom)', energy_kcal: 102, protein_g: 3, carb_g: 18, fat_g: 2 });
+  assert.equal(r.valid, true);
+  assert.deepEqual(r.errors, []);
 });
 
 test('energy wildly inconsistent with its own macros is flagged as a warning, not silently accepted or auto-corrected', () => {

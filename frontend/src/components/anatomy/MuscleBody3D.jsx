@@ -49,7 +49,7 @@ export default function MuscleBody3D({ selectedGroup, onSelect, className = '', 
 
   return (
     <div className={className}>
-      <div className="rounded-2xl border border-line bg-white/[.02] overflow-hidden" style={{ height }}>
+      <div className="rounded-2xl border border-line bg-tint/[.02] overflow-hidden" style={{ height }}>
         {use3D ? (
           <Suspense fallback={<div className="w-full h-full grid place-items-center text-mute text-xs font-grotesk">Loading 3D model…</div>}>
             <Impl map={map} selectedGroup={selectedGroup} onSelect={onSelect} />
@@ -70,7 +70,7 @@ export default function MuscleBody3D({ selectedGroup, onSelect, className = '', 
             key={g.group}
             type="button"
             onClick={() => onSelect?.(g.group, g.id, g.displayName)}
-            className={`chip border transition-colors ${selectedGroup === g.group ? 'bg-gradient-to-r from-ember to-gold text-bg border-transparent' : 'border-line text-mute hover:text-ink hover:border-white/20'}`}
+            className={`chip border transition-colors ${selectedGroup === g.group ? 'bg-gradient-to-r from-ember to-gold text-bg border-transparent' : 'border-line text-mute hover:text-ink hover:border-tint/20'}`}
           >
             {g.displayName}
           </button>

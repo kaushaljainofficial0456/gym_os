@@ -1,13 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
-import { useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Bar, Ring } from '../../components/UI.jsx';
+import { useFetch, exerciseLabel } from '../../utils.js';
+import { ErrorState, Bar, Ring, CheckIcon, XIcon } from '../../components/UI.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
+import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
@@ -56,8 +58,19 @@ function ChipRow({ options, value, onChange, label }) {
  * Used by BOTH the "Build my workout" modal and the personal planner form so
  * they share the exact same alias-aware search (GET /workouts/exercises).
  * No text/filters => shows `fallback` (the cached full library).
+ *
+ * `onQuickAdd` (optional): when passed, each row splits into two controls
+ * -- tapping the name still opens the detail view via `onPick` (demo,
+ * muscle/equipment, form cues), but a separate "+" icon adds the exercise
+ * to the session immediately with sensible defaults (3×10, bodyweight --
+ * all editable afterward in the session list), without leaving this
+ * search screen. Matches the Add Cardio list's own quick-add pattern a
+ * few hundred lines down in this same file. Omitted entirely, this
+ * reverts to the original single-button row (the personal planner form's
+ * call site already adds on tap with no detail step, so it never needs
+ * a second control here).
  */
-function ExerciseSearchList({ fallback, addedIds, onPick, dense }) {
+function ExerciseSearchList({ fallback, addedIds, onPick, onQuickAdd, dense }) {
   const [q, setQ] = useState('');
   const [region, setRegion] = useState('');
   const [equip, setEquip] = useState('');
@@ -97,20 +110,227 @@ function ExerciseSearchList({ fallback, addedIds, onPick, dense }) {
         {!loading && !list.length && <div className="text-[11px] text-mute px-1 py-3 text-center">No exercises match — try fewer filters.</div>}
         {list.slice(0, 40).map((x) => {
           const added = addedIds?.has(x.id);
+          if (!onQuickAdd) {
+            return (
+              <button key={x.id} type="button" disabled={added} onClick={() => onPick(x)}
+                className={`w-full flex items-center justify-between gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
+                  <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
+                </span>
+                {added && <span className="text-[10px] text-good shrink-0"><CheckIcon /></span>}
+              </button>
+            );
+          }
           return (
-            <button key={x.id} type="button" disabled={added} onClick={() => onPick(x)}
-              className={`w-full flex items-center justify-between gap-2 rounded-xl border bg-white/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-grotesk font-semibold truncate">{x.name}</span>
+            <div key={x.id}
+              className={`flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 transition-all ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
+              <button type="button" className="flex-1 min-w-0 text-left" onClick={() => onPick(x)}>
+                <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
                 <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-              </span>
-              {added && <span className="text-[10px] text-good shrink-0">✓</span>}
-            </button>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); if (!added) onQuickAdd(x); }}
+                className="shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-all active:scale-90"
+                style={added
+                  ? { color: 'rgb(var(--good-rgb))' }
+                  : { color: 'var(--accent)', border: '1px solid rgb(var(--accent-rgb) / .4)', background: 'rgb(var(--accent-rgb) / .10)' }}
+                aria-label={added ? `${exerciseLabel(x.name)} added` : `Add ${exerciseLabel(x.name)}`}
+                disabled={added}>
+                {added ? <CheckIcon /> : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                )}
+              </button>
+            </div>
           );
         })}
       </div>
     </div>
   );
+}
+/* ── localStorage active-session marker ──────────────────────────────
+
+   The server's `started_at` can survive after a workout is completed or
+   abandoned, so it must NOT be the sole evidence that this browser has
+   an active session. A per-workout marker in localStorage is the local
+   proof-of-life: it is created when the user starts a session and
+   removed when they finish or dismiss it. */
+const ACTIVE_SESSION_KEY = 'activeWorkoutSession';
+
+function saveActiveSession(workoutId, startedAt) {
+  try {
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify({ workoutId, startedAt }));
+  } catch { /* localStorage full or blocked — non-fatal */ }
+}
+
+function getActiveSession() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.workoutId || !parsed.startedAt) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function clearActiveSession() {
+  try {
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+  } catch { /* non-fatal */ }
+}
+
+/* ── Cardio helpers ───────────────────────────────────────────────
+   MET values for common cardio exercises at different intensities.
+   Used for client-side calorie estimation: kcal = MET × 3.5 × weight_kg / 200 × duration_min
+   Based on Compendium of Physical Activities (Ainsworth et al.). */
+const CARDIO_MET = {
+  treadmill_run: { light: 6.0, moderate: 8.3, hard: 11.0 },
+  running:       { light: 6.0, moderate: 8.3, hard: 11.0 },
+  incline_walk:  { light: 3.5, moderate: 4.3, hard: 5.0 },
+  walking:       { light: 2.8, moderate: 3.5, hard: 4.3 },
+  cycling:       { light: 5.8, moderate: 7.5, hard: 10.0 },
+  rowing_machine:{ light: 4.8, moderate: 7.0, hard: 12.0 },
+  elliptical:    { light: 4.0, moderate: 5.0, hard: 7.0 },
+  stair_climber: { light: 5.0, moderate: 8.0, hard: 11.0 },
+  sprint_intervals:{ light: 8.0, moderate: 10.0, hard: 12.0 },
+  jump_rope:     { light: 8.0, moderate: 10.0, hard: 12.3 },
+  assault_bike:  { light: 7.0, moderate: 9.5, hard: 12.5 },
+  ski_erg:       { light: 5.5, moderate: 8.0, hard: 11.0 },
+  battle_ropes:  { light: 5.0, moderate: 8.0, hard: 10.5 },
+};
+const CARDIO_MET_DEFAULT = { light: 5.0, moderate: 7.0, hard: 10.0 };
+
+/** Increase MET slightly when speed/incline/resistance are above moderate defaults.
+    This gives a rough differentiation between light and moderate effort
+    without requiring the user to explicitly rate intensity. */
+function adjustedMet(cardioId, params) {
+  const metTable = CARDIO_MET[cardioId] || CARDIO_MET_DEFAULT;
+  const speed = Number(params?.speed) || 0;
+  const incline = Number(params?.incline) || 0;
+  const resistance = Number(params?.resistance) || 0;
+  const level = Number(params?.level) || 0;
+  // Simple heuristic: above-average values push toward hard tier
+  const effortScore = (incline * 2) + (speed > 12 ? 3 : speed > 8 ? 1 : 0) + resistance + level;
+  if (effortScore >= 14) return metTable.hard;
+  if (effortScore >= 6) return metTable.moderate;
+  return metTable.light;
+}
+
+/** Which parameters each cardio exercise type requires. */
+function cardioExerciseConfig(id) {
+  const configs = {
+    treadmill_run:  [{ key: 'incline', label: 'Incline', unit: '%', placeholder: '5', min: 0, max: 20 },
+                    { key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '8', min: 1, max: 25 }],
+    running:        [{ key: 'speed', label: 'Pace/Speed', unit: 'km/h', placeholder: '10', min: 1, max: 30 },
+                    { key: 'distance', label: 'Distance', unit: 'km', placeholder: '3', min: 0.1, max: 50 }],
+    incline_walk:   [{ key: 'incline', label: 'Incline', unit: '%', placeholder: '10', min: 0, max: 20 },
+                    { key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '5', min: 1, max: 15 }],
+    walking:        [{ key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '5', min: 1, max: 15 },
+                    { key: 'distance', label: 'Distance', unit: 'km', placeholder: '2', min: 0.1, max: 30 }],
+    cycling:        [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 25 },
+                    { key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '25', min: 5, max: 60 }],
+    rowing_machine: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '5', min: 1, max: 20 },
+                    { key: 'pace', label: 'Pace', unit: 'min/500m', placeholder: '2:30', min: 0 }],
+    elliptical:     [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '8', min: 1, max: 25 }],
+    stair_climber:  [{ key: 'level', label: 'Level', unit: '', placeholder: '10', min: 1, max: 25 }],
+    sprint_intervals:[{ key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '15', min: 5, max: 30 }],
+    jump_rope:      [{ key: 'speed', label: 'Speed', unit: 'RPM', placeholder: '120', min: 30, max: 200 }],
+    assault_bike:   [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 20 }],
+    ski_erg:        [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 10 }],
+    battle_ropes:   [{ key: 'speed', label: 'Speed', unit: 'slams/min', placeholder: '30', min: 10, max: 80 }],
+  };
+  return configs[id] || [{ key: 'speed', label: 'Intensity', unit: '', placeholder: '', min: 0, max: 999 }];
+}
+
+/** Calculate calorie burn for a single cardio item using MET formula. */
+function calcCardioCalories(cardioId, durationMin, bodyWeightKg) {
+  const metTable = CARDIO_MET[cardioId] || CARDIO_MET_DEFAULT;
+  const met = metTable.moderate;
+  const weight = Number(bodyWeightKg) || 70;
+  return Math.round(met * 3.5 * weight / 200 * durationMin);
+}
+
+/** Get the display name for a cardio exercise by its id. */
+function cardioName(id) {
+  const NAMES = {
+    treadmill_run: 'Treadmill Run', running: 'Running', incline_walk: 'Incline Walk',
+    walking: 'Walking', cycling: 'Cycling', rowing_machine: 'Rowing',
+    elliptical: 'Elliptical', stair_climber: 'Stair Climber',
+    sprint_intervals: 'Sprint Intervals', jump_rope: 'Jump Rope',
+    assault_bike: 'Assault Bike', ski_erg: 'Ski Erg', battle_ropes: 'Battle Ropes',
+  };
+  return NAMES[id] || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Format a cardio item's parameters as a summary string. */
+function cardioSummary(item) {
+  const params = item?.segments?.length ? item.segments[item.segments.length - 1]?.params : item?.params;
+  const parts = [];
+  if (params?.incline) parts.push(`Incline ${params.incline}%`);
+  if (params?.speed) parts.push(`${params.speed} km/h`);
+  if (params?.resistance) parts.push(`Res ${params.resistance}`);
+  if (params?.level) parts.push(`Level ${params.level}`);
+  if (params?.distance) parts.push(`${params.distance} km`);
+  if (params?.pace) parts.push(params.pace);
+  return parts.join(' · ') || '';
+}
+
+/** Format params for a segment (used in segment breakdowns). */
+function segmentParamsSummary(params) {
+  if (!params) return '';
+  const parts = [];
+  if (params.incline) parts.push(`Incline ${params.incline}%`);
+  if (params.speed) parts.push(`${params.speed} km/h`);
+  if (params.resistance) parts.push(`Res ${params.resistance}`);
+  if (params.level) parts.push(`Level ${params.level}`);
+  if (params.distance) parts.push(`${params.distance} km`);
+  if (params.pace) parts.push(params.pace);
+  return parts.join(' · ') || '';
+}
+
+/** Format a time in seconds as mm:ss. */
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** Calculate total calories for a completed cardio item from its segments.
+    Each segment uses its own params + duration for calorie calc.
+    The item must have segments[] with { durationSec, params }. */
+function calcCardioItemCalories(item, bodyWeightKg) {
+  if (!item?.segments?.length) return 0;
+  return item.segments.reduce((sum, seg) => {
+    const durMin = Math.max(0.1, (seg.durationSec || 0) / 60);
+    const met = adjustedMet(item.id, seg.params);
+    const weight = Number(bodyWeightKg) || 70;
+    return sum + Math.round(met * 3.5 * weight / 200 * durMin);
+  }, 0);
+}
+
+/** Calculate in-progress calories for a running segment. */
+function calcCurrentSegmentCalories(item, elapsedSec, bodyWeightKg) {
+  if (!item || elapsedSec <= 0) return 0;
+  const durMin = elapsedSec / 60;
+  const met = adjustedMet(item.id, item.currentParams);
+  const weight = Number(bodyWeightKg) || 70;
+  return Math.round(met * 3.5 * weight / 200 * durMin);
+}
+
+/** Calculate total calories for a cardio item (completed segments + in-progress). */
+function calcItemTotalCalories(item, elapsedSec, bodyWeightKg) {
+  const segCal = calcCardioItemCalories(item, bodyWeightKg);
+  const curCal = calcCurrentSegmentCalories(item, elapsedSec, bodyWeightKg);
+  return segCal + curCal;
+}
+
+/** Sum total cardio calories across all items. */
+function calcAllCardioCalories(items, activeItem, activeElapsed, bodyWeightKg) {
+  return items.reduce((sum, item) => {
+    const isActive = activeItem?.id === item.id;
+    return sum + calcItemTotalCalories(item, isActive ? activeElapsed : 0, bodyWeightKg);
+  }, 0);
 }
 
 export default function Workout() {
@@ -131,6 +351,11 @@ export default function Workout() {
   const [savingBuilder, setSavingBuilder] = useState(false);
   const [selectedLibEx, setSelectedLibEx] = useState(null); // exercise selected in Build Today detail view
   const [justAdded, setJustAdded] = useState(null); // exercise ID just added — triggers confirmation animation
+  // in-session add-exercise picker (only visible during execute mode)
+  const [addExOpen, setAddExOpen] = useState(false);
+  const [addExSearch, setAddExSearch] = useState('');
+  const [addExSelected, setAddExSelected] = useState(null); // library exercise selected in detail view
+  const [addExSaving, setAddExSaving] = useState(false);
   // personal workout planner — reusable workouts + weekly schedule (uses /me/planner)
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [planner, setPlanner] = useState(null); // { workouts, schedule }
@@ -155,6 +380,12 @@ export default function Workout() {
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
   const [intensity, setIntensity] = useState(null);
+  // SK OS Health Intelligence Engine -- best-effort, NEVER blocking. null
+  // until (and unless) a background check finds real wearable evidence
+  // for this exact session; the summary screen's own "Calories burned"
+  // card above already renders instantly off `burn` regardless of this.
+  // See checkWorkoutSource() below for why this is fire-and-forget.
+  const [burnSource, setBurnSource] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model
   // Workout link sharing (personal share, NOT community)
@@ -162,9 +393,26 @@ export default function Workout() {
   const [shareSheetData, setShareSheetData] = useState(null); // { workoutId, workoutName, exercises } (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
   const [burnLoading, setBurnLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
+  const [pausedAt, setPausedAt] = useState(0); // timestamp when pause began (0 = not paused)
+  const [accumulatedPausedMs, setAccumulatedPausedMs] = useState(0); // total paused time so far
   // this week preview
   const [weekDay, setWeekDay] = useState(null); // { label, name, focus, exercises }
   const [weekDayIdx, setWeekDayIdx] = useState(0);
+
+  // ── cardio state (segment-aware) ──
+  // items: [{ id, segments: [{ params, durationSec }], currentParams }]
+  // activeId: id of exercise currently running (null if not active)
+  // activeSegmentStart: Date.now() when the current segment started
+  const [cardioItems, setCardioItems] = useState([]);
+  const [cardioMode, setCardioMode] = useState('browse');      // browse | execute | summary
+  const [cardioOpen, setCardioOpen] = useState(false);
+  const [cardioSearch, setCardioSearch] = useState('');
+  const [cardioConfigItem, setCardioConfigItem] = useState(null);
+  const [cardioActiveId, setCardioActiveId] = useState(null);  // which exercise is currently running
+  const [cardioSegStart, setCardioSegStart] = useState(0);    // Date.now() when current segment started
+  const [cardioElapsed, setCardioElapsed] = useState(0);      // total elapsed seconds for the active exercise
+  const [cardioResult, setCardioResult] = useState(null);     // { totalCalories, items: [...] }
+  const [clientWeight, setClientWeight] = useState(null);     // fetched from /me/profile for calorie calc
 
   const session = today.data;
   const workout = session?.workout || null;
@@ -195,31 +443,84 @@ export default function Workout() {
      Debounced at 800 ms: ticking four sets in quick succession should cost
      one request, not four. Fire-and-forget on purpose -- a failed save must
      never interrupt someone mid-set, and the next tick retries implicitly
-     by sending the whole checklist rather than a delta. */
+     by sending the whole checklist rather than a delta.
+
+     Also persists accumulatedPausedMs so a page-refresh during a paused
+     session can restore the correct active-duration baseline. */
   useEffect(() => {
     if (mode !== 'execute' || !workout?.id) return undefined;
     const h = setTimeout(() => {
+      // paused_ms is stored inside the progress blob so it survives
+      // a page-refresh (the progress endpoint stores this as opaque JSON).
       api(`/workouts/${workout.id}/progress`, {
         method: 'PUT',
-        body: JSON.stringify({ progress: exSets }),
+        body: JSON.stringify({
+          progress: { ...exSets, __paused_ms: accumulatedPausedMs },
+        }),
       }).catch(() => {});
     }, 800);
     return () => clearTimeout(h);
-  }, [exSets, mode, workout?.id]);
+  }, [exSets, accumulatedPausedMs, mode, workout?.id]);
 
   // session elapsed timer — ticks every second during execute mode
+  // Paused time is excluded: the timer freezes visually and the
+  // authoritative `elapsed` value stops advancing while paused.
   useEffect(() => {
-    if (mode !== 'execute' || !startedAt) return;
-    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    if (mode !== 'execute' || !startedAt || pausedAt) return;
+    const tick = () => {
+      const now = Date.now();
+      const wallClockMs = now - startedAt;
+      setElapsed(Math.floor((wallClockMs - accumulatedPausedMs) / 1000));
+    };
     tick();
     const h = setInterval(tick, 1000);
     return () => clearInterval(h);
-  }, [mode, startedAt]);
+  }, [mode, startedAt, pausedAt, accumulatedPausedMs]);
+
+  // ── cardio timer — ticks every second while an exercise is active ──
+  useEffect(() => {
+    if (cardioMode !== 'execute' || !cardioActiveId || !cardioSegStart) return;
+    const tick = () => {
+      // Total elapsed = sum of completed segments + current segment time
+      const item = cardioItems.find((c) => c.id === cardioActiveId);
+      const segTotal = (item?.segments || []).reduce((s, seg) => s + (seg.durationSec || 0), 0);
+      const curSec = Math.floor((Date.now() - cardioSegStart) / 1000);
+      setCardioElapsed(segTotal + curSec);
+    };
+    tick();
+    const h = setInterval(tick, 1000);
+    return () => clearInterval(h);
+  }, [cardioMode, cardioActiveId, cardioSegStart, cardioItems.length]);
+
+  // ── fetch client weight for cardio calorie calculation ──
+  useEffect(() => {
+    api('/me/profile').then((r) => {
+      if (r.client?.current_weight) setClientWeight(Number(r.client.current_weight));
+    }).catch(() => {});
+  }, []);
 
   // ---- restore from started_at (refresh-while-active) ----
+  // Requires a valid LOCAL active-session marker (localStorage) that
+  // matches this specific workout. Without a marker, a stale server-side
+  // `started_at` must NOT resurrect an old session.
   useEffect(() => {
-    // Only restore if: still in browse mode, workout exists, has started_at, and is NOT completed
-    if (mode !== 'browse' || !workout?.started_at || workout?.status === 'completed') return;
+    if (mode !== 'browse' || !workout) return;
+    if (workout.status === 'completed') {
+      // CASE 6: completed workout — never restore, clean up any stale marker
+      clearActiveSession();
+      return;
+    }
+    if (!workout.started_at) return;
+
+    // Check for a valid local active-session marker
+    const session = getActiveSession();
+    if (!session || session.workoutId !== workout.id) {
+      // CASE 5: no local marker or different workout — do NOT restore
+      // CASE 7: marker is for a different workout — ignore it
+      clearActiveSession();
+      return;
+    }
+    // Valid local session found for this workout — proceed with restore
     // Workout was already started server-side but user refreshed — restore execution state
     /* Restore the SAVED ticks, not a blank checklist.
        started_at survives server-side, so before this the app happily
@@ -232,6 +533,10 @@ export default function Workout() {
     } catch {
       restored = null;   // corrupt draft: fall back to a fresh checklist
     }
+    // Extract accumulated pause time stored inside the progress blob.
+    // `restored` is a flat map: exercise IDs -> set arrays, plus the
+    // sentinel key __paused_ms that we stashed during autosave.
+    const restoredPausedMs = (restored?.__paused_ms || 0);
     const fresh = buildSets(state);
     // Merge rather than trust the draft wholesale: the plan may have been
     // edited since, so the prescribed set COUNT comes from the plan and only
@@ -243,11 +548,15 @@ export default function Workout() {
     setExSets(merged);
     const firstUnfinished = state.find((e) => (merged[e.id] || []).some((r) => !r.done));
     setOpenEx((firstUnfinished || state[0])?.id ?? null);
+    // Restore accumulated paused time from the persisted draft
+    setAccumulatedPausedMs(restoredPausedMs);
     setElapsed(0);
     // Reconstruct elapsed time from server started_at
-    setStartedAt(Date.parse(workout.started_at));
+    // Prefer the local session's startedAt (browser clock) over the server
+    // timestamp so the timer reflects actual wall-clock time in this tab.
+    setStartedAt(session.startedAt || Date.parse(workout.started_at));
     setMode('execute');
-  }, [workout?.started_at]); // intentionally runs once on mount when started_at exists
+  }, [workout?.started_at, workout?.status]); // re-run when status changes (e.g. completed) to prevent stale restore
 
   // ---- personal workout planner helpers ----
   const loadPlanner = async () => {
@@ -339,7 +648,40 @@ export default function Workout() {
   })();
   const weekRows = week.data?.week || [];
 
-  if (today.loading || week.loading || hist.loading || perms.loading) return <Spinner label="Loading your session…" />;
+  /* Shaped like the screen it becomes rather than a centred spinner — this
+     page is four stacked bands, so a spinner guarantees a hard layout jump
+     the moment any one of the four fetches lands. */
+  if (today.loading || week.loading || hist.loading || perms.loading) {
+    return (
+      <div className="space-y-5" aria-busy="true" aria-label="Loading your session">
+        <div className="card p-4">
+          <div className="skeleton-text" style={{ width: '45%' }} />
+          <div className="grid grid-cols-7 gap-1.5 mt-3">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 44, borderRadius: 'var(--r-md)' }} />
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 96, borderRadius: 'var(--r-lg)' }} />
+          ))}
+        </div>
+        <div>
+          <div className="skeleton-title" style={{ width: '55%' }} />
+          <div className="grid grid-cols-3 gap-2.5 mt-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 58, borderRadius: 'var(--r-lg)' }} />
+            ))}
+          </div>
+          <div className="skeleton mt-3" style={{ height: 40, borderRadius: 'var(--r-pill)' }} />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton-row" />)}
+        </div>
+      </div>
+    );
+  }
   if (today.error) return <ErrorState error={today.error} onRetry={today.reload} />;
 
   const toggleEx = async (ex) => {
@@ -375,9 +717,13 @@ export default function Workout() {
     setExSets(buildSets(state));
     setOpenEx(state[0]?.id ?? null);
     setElapsed(0);
-    setStartedAt(Date.now());
+    const now = Date.now();
+    setStartedAt(now);
+    setPausedAt(0);
+    setAccumulatedPausedMs(0);
     setMode('execute');
     setStarting(false);
+    saveActiveSession(workout.id, now);
   };
 
 
@@ -407,6 +753,96 @@ export default function Workout() {
     return next;
   });
 
+  // ---- remove exercise from active session ----
+  const removeExercise = (exId) => {
+    setExState((prev) => (prev || state).filter((e) => e.id !== exId));
+    setExSets((prev) => {
+      const next = { ...prev };
+      delete next[exId];
+      return next;
+    });
+    // If the removed exercise was the open accordion, close it
+    if (openEx === exId) setOpenEx(null);
+  };
+
+  // ---- add exercise during active session ----
+  const addExerciseToSession = async (libEx) => {
+    if (!workout?.id || addExSaving) return;
+    setAddExSaving(true);
+    try {
+      const res = await api(`/workouts/${workout.id}/exercises`, {
+        method: 'POST',
+        body: JSON.stringify({
+          exercise_id: libEx.id,
+          name: libEx.name,
+          sets: 3,
+          reps: '10',
+          weight: 'BW',
+        }),
+      });
+      const newEx = res.exercise;
+      // Add to state (exercises list)
+      setExState((prev) => [...(prev || state), newEx]);
+      // Seed sets in exSets
+      setExSets((prev) => ({
+        ...prev,
+        [newEx.id]: Array.from({ length: Math.max(1, Number(newEx.sets) || 3) }, () => ({
+          reps: parseFloat(newEx.reps) || 0,
+          weight: parseFloat(newEx.weight) || 0,
+          done: false,
+        })),
+      }));
+      // Open the new exercise so user can start editing immediately
+      setOpenEx(newEx.id);
+      // Close the picker
+      setAddExOpen(false);
+      setAddExSelected(null);
+      setAddExSearch('');
+      setToast(`${newEx.name} added`);
+    } catch (e) {
+      setToast(e.message || 'Could not add exercise');
+    }
+    setAddExSaving(false);
+  };
+
+  // ---- add set to an exercise ----
+  const addSet = (exId) => {
+    setExSets((prev) => {
+      const rows = [...(prev[exId] || [])];
+      if (!rows.length) return prev;
+      const lastRow = rows[rows.length - 1];
+      rows.push({
+        reps: lastRow.reps,
+        weight: lastRow.weight,
+        done: false,
+      });
+      return { ...prev, [exId]: rows };
+    });
+  };
+
+  // ---- remove a single set from an exercise ----
+  const removeSet = (exId, i) => {
+    setExSets((prev) => {
+      const rows = [...(prev[exId] || [])];
+      if (rows.length <= 1) return prev; // minimum 1 set
+      rows.splice(i, 1);
+      return { ...prev, [exId]: rows };
+    });
+  };
+
+  // ---- pause / resume active session ----
+  const pauseWorkout = () => {
+    if (pausedAt) return; // already paused
+    setPausedAt(Date.now());
+  };
+
+  const resumeWorkout = () => {
+    if (!pausedAt) return; // not paused
+    const pauseDuration = Date.now() - pausedAt;
+    setAccumulatedPausedMs((prev) => prev + pauseDuration);
+    setPausedAt(0);
+  };
+
 
   // Build per-set logs from actual captured inputs (what was entered when each set was completed).
   const finishWorkout = async () => {
@@ -433,15 +869,31 @@ export default function Workout() {
         // The API requires at least one logged set. Ending an empty session
         // should return to browse, not surface a validation error.
         setSubmitting(false);
+        clearActiveSession();
         setMode('browse');
         setToast('Session ended — no sets were logged');
         return;
       }
-      const res = await api(`/workouts/${workout.id}/complete`, { method: 'POST', body: JSON.stringify({ logs }) });
+      // Compute active duration: wall-clock elapsed minus total paused time.
+      // This ensures paused minutes never enter calorie calculations.
+      const finalPausedMs = pausedAt ? accumulatedPausedMs + (Date.now() - pausedAt) : accumulatedPausedMs;
+      const activeMs = Math.max(0, (Date.now() - startedAt) - finalPausedMs);
+      const activeDurationSec = Math.round(activeMs / 1000);
+      const res = await api(`/workouts/${workout.id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({
+          logs,
+          duration_seconds: activeDurationSec,
+          paused_ms: Math.round(finalPausedMs),
+        }),
+      });
       const volume = logs.reduce((s, l) => s + l.sets.reduce((a, st) => a + (st.actual_reps * st.actual_weight), 0), 0);
-      // duration_min is server-authoritative (completed_at − started_at).
-      // Fall back to local timer only if backend did not compute it.
-      const durationMin = res.duration_min ?? Math.max(1, Math.round((Date.now() - startedAt) / 60000));
+      // duration_min is server-authoritative (completed_at − started_at,
+      // minus paused time). Fall back to the local active duration --
+      // activeMs above, which already subtracts finalPausedMs -- only if
+      // the backend did not compute it; a raw Date.now()-startedAt fallback
+      // would overcount by however long the session was paused.
+      const durationMin = res.duration_min ?? Math.max(1, Math.round(activeMs / 60000));
       // name: workout.name is snapshotted HERE, not read live from
       // `workout` on the summary screen -- `workout` is derived from
       // `today.data`, and the `today.reload({ silent: true })` a few
@@ -494,7 +946,18 @@ export default function Workout() {
       setBurn(null);
       setIntensity(null);
       today.reload({ silent: true }); hist.reload({ silent: true });
+      // Clear local session state so the restore effect cannot
+      // re-enter execute mode for a now-completed workout.
+      // Clear local session marker and timer state on successful completion
+      clearActiveSession();
+      setStartedAt(0);
+      setPausedAt(0);
+      setAccumulatedPausedMs(0);
+      setElapsed(0);
+      setExState(null);
+
     } catch (e) {
+      clearActiveSession();
       setToast(e.message || 'Could not log workout');
       setMode('browse');
     }
@@ -515,11 +978,149 @@ export default function Workout() {
         body: JSON.stringify({ ...burnInput, intensity: tier }),
       });
       setBurn(res);
+      checkWorkoutSource(); // fire-and-forget -- see its own comment
     } catch {
       setBurn(null); // 422 = model declined; show nothing
     }
     setBurnLoading(false);
   };
+
+  // Best-effort source check (spec §45: "Detected automatically" /
+  // "Recorded from Apple Watch" / "Estimated by SK OS"). Deliberately
+  // NOT awaited by its one call site above -- the "Workout complete"
+  // summary already renders instantly off `burn` (see that card's own
+  // comment on why), and this must never make it wait on a
+  // reconciliation pass. Runs in the background; if it resolves with
+  // real wearable evidence for THIS exact session, upgrades the label
+  // from the (already honest) default. If it fails, is slow, or finds
+  // nothing better, the summary is unaffected -- no wearable is required
+  // for a complete result (spec §87).
+  const checkWorkoutSource = async () => {
+    try {
+      await api('/health/daily-intelligence?refresh=1');
+      const today = new Date().toISOString().slice(0, 10);
+      const { workouts: canon } = await api(`/health/workouts?date=${today}`);
+      const match = canon?.find((c) => c.skos_workout_id === workout?.id);
+      // Allowlist check (isWearableSource), not a denylist -- a
+      // canonical workout's primary_energy_source is either one of the
+      // ten real wearable provider keys, OR one of SK OS's OWN internal
+      // calorie-model provider names ('baseline' | 'ml' | 'mock' -- see
+      // calorieModel.js). A denylist of "not a wearable" names silently
+      // mislabels any internal name it doesn't already know about --
+      // caught live: 'baseline' briefly rendered as "baseline + SK OS"
+      // instead of falling through to the correct default below.
+      if (isWearableSource(match?.primary_energy_source)) {
+        setBurnSource(burnSourceLabel({ providers: [match.primary_energy_source] }));
+      }
+    } catch { /* best-effort only -- the summary already has a real estimate without this */ }
+  };
+
+  // ---- cardio: start a cardio session ----
+  const startCardio = () => {
+    if (!cardioItems.length) return;
+    const first = cardioItems[0];
+    // Initialize segments array if not present, start first segment
+    setCardioItems((prev) => prev.map((item, i) => {
+      if (i !== 0) return { ...item, segments: item.segments || [] };
+      return { ...item, segments: [], currentParams: { ...item.params } };
+    }));
+    setCardioActiveId(first.id);
+    setCardioSegStart(Date.now());
+    setCardioElapsed(0);
+    setCardioMode('execute');
+    setCardioResult(null);
+  };
+
+  // ---- cardio: adjust settings for active exercise ----
+  // Creates a new segment: closes the current one at elapsed time,
+  // starts a new segment with the updated params. Timer continues.
+  const adjustCardioSettings = (newParams) => {
+    if (!cardioActiveId) return;
+    const now = Date.now();
+    const segDurationSec = Math.floor((now - cardioSegStart) / 1000);
+    setCardioItems((prev) => prev.map((item) => {
+      if (item.id !== cardioActiveId) return item;
+      const currentSeg = {
+        params: { ...item.currentParams },
+        durationSec: segDurationSec,
+      };
+      return {
+        ...item,
+        segments: [...(item.segments || []), currentSeg],
+        currentParams: { ...newParams },
+      };
+    }));
+    setCardioSegStart(now); // new segment starts now; timer continues
+  };
+
+  // ---- cardio: finish the active exercise ----
+  const finishActiveCardioExercise = () => {
+    if (!cardioActiveId) return;
+    const now = Date.now();
+    const segDurationSec = Math.floor((now - cardioSegStart) / 1000);
+    // Close the final segment
+    setCardioItems((prev) => prev.map((item) => {
+      if (item.id !== cardioActiveId) return item;
+      const finalSeg = {
+        params: { ...item.currentParams },
+        durationSec: segDurationSec,
+      };
+      return { ...item, segments: [...(item.segments || []), finalSeg] };
+    }));
+    // Find next unperformed exercise
+    setCardioActiveId((activeId) => {
+      const idx = cardioItems.findIndex((c) => c.id === activeId);
+      const next = cardioItems[idx + 1];
+      if (next) {
+        // Start next exercise
+        setCardioItems((prev) => prev.map((item) => {
+          if (item.id !== next.id) return item;
+          return { ...item, segments: [], currentParams: { ...item.params } };
+        }));
+        setCardioSegStart(now);
+        return next.id;
+      }
+      return null; // no more exercises — will trigger summary
+    });
+  };
+
+  // ---- cardio: end the entire cardio session (all exercises done) ----
+  const endCardio = () => {
+    // Close any active segment first
+    if (cardioActiveId && cardioSegStart) {
+      const now = Date.now();
+      const segDurationSec = Math.floor((now - cardioSegStart) / 1000);
+      setCardioItems((prev) => prev.map((item) => {
+        if (item.id !== cardioActiveId) return item;
+        const finalSeg = { params: { ...item.currentParams }, durationSec: segDurationSec };
+        return { ...item, segments: [...(item.segments || []), finalSeg] };
+      }));
+    }
+    const totalCalories = calcAllCardioCalories(cardioItems, null, 0, clientWeight);
+    setCardioResult({
+      totalCalories,
+      items: cardioItems.map((item) => ({
+        ...item,
+        calories: calcCardioItemCalories(item, clientWeight),
+      })),
+    });
+    setCardioMode('summary');
+    setCardioActiveId(null);
+    setCardioSegStart(0);
+    setCardioElapsed(0);
+  };
+
+  // ---- cardio: dismiss summary ----
+  const dismissCardioSummary = () => {
+    setCardioMode('browse');
+    setCardioResult(null);
+    setCardioItems([]);
+  };
+
+  // ---- cardio: computed calories for active exercise ----
+  const activeCardioItem = cardioItems.find((c) => c.id === cardioActiveId);
+  const activeCardioCals = activeCardioItem ? calcItemTotalCalories(activeCardioItem, cardioElapsed - (activeCardioItem.segments || []).reduce((s, seg) => s + seg.durationSec, 0), clientWeight) : 0;
+  const totalCardioCals = calcAllCardioCalories(cardioItems, activeCardioItem, cardioElapsed - (activeCardioItem?.segments || []).reduce((s, seg) => s + seg.durationSec, 0), clientWeight);
 
   // ================= browse mode =================
   if (mode === 'browse') {
@@ -529,9 +1130,13 @@ export default function Workout() {
         {/* ── 1. THIS WEEK ── */}
         {weekRows.length > 0 && (
           <div className="card p-4 anim-fadeUp" style={{ animationDelay: '0ms' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">This week · {week.data?.program?.name || 'Your plan'}</div>
-              <span className="chip border-gold/30 text-gold !text-[9px]">{weekRows.filter((d) => d.name !== 'Rest').length} training days</span>
+            <div className="section-head">
+              <span className="t-micro truncate">This week · {week.data?.program?.name || 'Your plan'}</span>
+              {/* Was `border-gold/30 text-gold` — the bright amber (#FBBF24)
+                  from an earlier palette, still appearing on four elements
+                  in this file alone while the rest of the app had moved to
+                  the terracotta accent. */}
+              <span className="badge badge-accent shrink-0">{weekRows.filter((d) => d.name !== 'Rest').length} training days</span>
             </div>
             <div className="grid grid-cols-7 gap-1.5">
               {weekRows.map((d, i) => {
@@ -539,64 +1144,90 @@ export default function Workout() {
                 const isRest = d.name === 'Rest';
                 return (
                   <button key={d.day_of_week} onClick={() => { setWeekDay(d); setWeekDayIdx(i); }}
-                    // Was bg-white/[.02] (+hover:bg-white/[.05]): a wash this
+                    // Was bg-tint/[.02] (+hover:bg-tint/[.05]): a wash this
                     // faint is invisible against the .card it sits inside on
                     // the light theme (already solid white), so these pills
                     // had no visible tile boundary at all -- just floating
                     // text. --panel2 is a step up from --panel specifically
                     // for this kind of nesting (see theme.css).
-                    className={`rounded-xl border px-1 py-2 text-center transition-all active:scale-95 ${isToday ? 'border-gold/60 bg-gold/10 shadow-lg shadow-ember/10' : isRest ? 'border-line opacity-60' : 'border-line hover:brightness-95'}`}
-                    style={isToday ? undefined : { background: 'var(--panel2)' }}>
-                    <div className={`text-[8px] uppercase tracking-wider font-grotesk ${isToday ? 'text-gold' : 'text-mute'}`}>{d.label}</div>
-                    <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight truncate ${isToday ? 'text-gold' : isRest ? 'text-faint' : 'text-ink'}`}>
+                    aria-current={isToday ? 'date' : undefined}
+                    aria-label={`${d.label}: ${isRest ? 'Rest day' : d.name}`}
+                    className="rounded-xl border px-1 py-2 text-center transition-all active:scale-95"
+                    style={isToday
+                      ? { borderColor: 'rgb(var(--accent-rgb) / .55)', background: 'rgb(var(--accent-rgb) / .12)' }
+                      : { borderColor: 'var(--line)', background: 'var(--panel2)', opacity: isRest ? .6 : 1 }}>
+                    <div className="text-[8px] uppercase tracking-wider font-grotesk"
+                      style={{ color: isToday ? 'var(--accent)' : 'var(--mute)' }}>{d.label}</div>
+                    <div className="text-[9px] font-grotesk font-semibold mt-0.5 leading-tight truncate"
+                      style={{ color: isToday ? 'var(--accent)' : isRest ? 'var(--faint)' : 'var(--ink)' }}>
                       {isRest ? 'Rest' : d.name.split(' ').slice(0, 2).join(' ')}
                     </div>
                   </button>
                 );
               })}
             </div>
-            <div className="text-[10px] text-faint mt-2.5">Tap a day to preview its session.</div>
+            <div className="t-sub mt-2.5" style={{ fontSize: '.6875rem', color: 'var(--faint)' }}>Tap a day to preview its session.</div>
           </div>
         )}
 
         {/* ── 2. MY WORKOUT — 3 action cards ── */}
         <div className="anim-fadeUp" style={{ animationDelay: '60ms' }}>
-          <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">My workout</div>
+          <div className="t-micro mb-2.5">My workout</div>
+          {/* These three tiles used to wear three different colours —
+              gold, ember and good — for three peer actions with no
+              difference in kind between them. Colour that doesn't encode
+              anything is noise, and here it also implied "My PR" was a
+              success state. One accent treatment for all three; the icon
+              carries the distinction, which is its job.
+              Labels also had hard <br/> breaks mid-phrase ("My<br/>Workout"),
+              which forced a two-line ragged label at every width. */}
           <div className="grid grid-cols-3 gap-2.5">
-            {/* My Workouts (planner) */}
-            <button onClick={openPlanner}
-              className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-gold/10 border border-gold/25 grid place-items-center" style={{ color: 'var(--accent)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div>
-              <span className="font-grotesk text-[11px] font-semibold leading-tight">My<br/>Workout</span>
-            </button>
-            {/* Build Today */}
-            <button onClick={() => {
-              if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
-              setSelectedLibEx(null);
-              setBuilderOpen(true);
-            }}
-              className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-ember/10 border border-ember/25 grid place-items-center" style={{ color: 'var(--accent)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></div>
-              <span className="font-grotesk text-[11px] font-semibold leading-tight">Build<br/>Today</span>
-            </button>
-            {/* My PR */}
-            <button onClick={() => nav('/app/client/progress')}
-              className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-              <div className="w-11 h-11 rounded-2xl bg-good/10 border border-good/25 grid place-items-center" style={{ color: 'var(--good)' }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/></svg></div>
-              <span className="font-grotesk text-[11px] font-semibold leading-tight">My<br/>PR</span>
-            </button>
+            {[
+              { label: 'My workouts', onClick: openPlanner,
+                path: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></> },
+              { label: 'Build today',
+                onClick: () => {
+                  if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
+                  setSelectedLibEx(null);
+                  setBuilderOpen(true);
+                },
+                path: <path d="M12 5v14M5 12h14"/> },
+              { label: 'My PRs', onClick: () => nav('/app/client/progress'),
+                path: <path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/> },
+            ].map((t) => (
+              <button key={t.label} onClick={t.onClick}
+                className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
+                <div className="w-11 h-11 grid place-items-center"
+                  style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .10)', border: '1px solid rgb(var(--accent-rgb) / .22)', color: 'var(--accent)' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.path}</svg>
+                </div>
+                <span className="font-grotesk text-[11px] font-semibold leading-tight" style={{ color: 'var(--ink)' }}>{t.label}</span>
+              </button>
+            ))}
           </div>
           {locked && (
-            <div className="text-[10px] text-faint mt-2 font-grotesk">Your gym has locked workout creation — follow your coach's plan.</div>
+            <div className="t-sub mt-2" style={{ fontSize: '.6875rem', color: 'var(--faint)' }}>Your gym has locked workout creation — follow your coach&rsquo;s plan.</div>
           )}
         </div>
 
         {/* ── 3. TODAY'S TRAINING ── */}
         {workout ? (
           <div className="anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            <div className="mb-2">
-              <div className="kicker">Today's training</div>
-              <h1 className="font-grotesk font-bold text-2xl leading-tight">{workout.name}</h1>
+            {/* Share Workout — top-right icon */}
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="kicker">Today's training</div>
+                <h1 className="font-grotesk font-bold text-2xl leading-tight">{workout.name}</h1>
+              </div>
+              <button onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}
+                className="w-10 h-10 rounded-xl grid place-items-center transition-all active:scale-90"
+                style={{ background: 'var(--panel2, var(--panel))', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                aria-label="Share Workout">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                  <path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5" />
+                </svg>
+              </button>
             </div>
             <div className="grid grid-cols-3 gap-2.5 mt-3">
               {[
@@ -609,35 +1240,81 @@ export default function Workout() {
                    Estimated duration replaces it: also a prediction, but an
                    honest one, and the thing a user actually plans around. */
                 ['Exercises', meta.exerciseCount || exercises.length],
-                ['Total sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
-                ['Approx. time', meta.estMinutes ? `${meta.estMinutes} min` : '—']
+                ['Sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
+                /* Was "Approx. time" — at .08em tracking in a third of the
+                   screen it wrapped to two lines while its two siblings sat
+                   on one, so the row of three tiles had ragged heights and
+                   misaligned baselines. The value already reads "58 min";
+                   the label doesn't need to repeat the unit. */
+                ['Time', meta.estMinutes ? `${meta.estMinutes} min` : '—']
               ].map(([l, v]) => (
                 <div key={l} className="card !p-3 text-center">
-                  <div className="font-grotesk font-bold text-lg">{v}</div>
-                  <div className="text-[9px] uppercase tracking-wider text-mute font-grotesk mt-0.5">{l}</div>
+                  <div className="font-grotesk font-bold text-lg tabular-nums" style={{ color: 'var(--ink)' }}>{v}</div>
+                  <div className="t-micro mt-0.5 whitespace-nowrap">{l}</div>
                 </div>
               ))}
             </div>
-            {/* Share Workout + Start Session — side by side, both prominent */}
+            {/* Three actions now, not two: manavi-progress-enhancements-v2
+                added standalone cardio logging (Add Cardio opens a picker
+                independent of the lifting session below). Share stays
+                icon-only utility, Start session stays the dominant flex-1
+                action (see the comment this pass already left on why), Add
+                Cardio sits as a secondary action between them rather than
+                shouting at equal weight -- "+ ADD CARDIO" in all-caps was
+                the loudest label on the screen for a genuinely optional
+                action. */}
             <div className="flex gap-2.5 mt-3">
               <button onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}
-                className="btn flex-1 !py-2.5 !text-xs active:scale-95 flex items-center justify-center gap-1.5">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                className="btn btn-icon shrink-0" aria-label="Share this workout">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
                 </svg>
-                Share Workout
               </button>
-              <button data-start-workout className="btn-primary flex-1 !py-2.5 !text-xs active:scale-95" onClick={startWorkout} disabled={!exercises.length || starting}>
-                {starting ? 'Starting…' : 'START SESSION'}
+              <button
+                onClick={() => {
+                  setCardioOpen(true);
+                  setCardioSearch('');
+                  setCardioConfigItem(null);
+                }}
+                className="btn btn-icon shrink-0" aria-label="Add cardio">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+              </button>
+              <button data-start-workout className="btn-primary flex-1" data-loading={starting ? 'true' : undefined}
+                onClick={startWorkout} disabled={!exercises.length || starting}>
+                Start session
               </button>
             </div>
           </div>
         ) : (
-          <div className="card p-10 text-center anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            
-            <div className="font-grotesk font-bold text-lg">Rest day</div>
-            <div className="text-xs text-mute mt-1.5 max-w-xs mx-auto">No session scheduled for today. Recovery is training too — fuel well and sleep 8 hours.</div>
-            <div className="mt-4 text-[10px] uppercase tracking-widest text-gold font-grotesk">Next session appears here tomorrow</div>
+          <div className="card anim-fadeUp" style={{ animationDelay: '120ms' }}>
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                </svg>
+              </div>
+              <div className="empty-state-title">Rest day</div>
+              <p className="empty-state-body">
+                No session scheduled for today. Recovery is training too — fuel well and sleep eight hours.
+              </p>
+              {/* Cardio is standalone (its own picker/timer, see the Add
+                  Cardio button above on a training day) -- a rest day is
+                  exactly when someone might still want a walk or a bike
+                  ride logged, so the empty state offers the one action
+                  that's actually relevant here rather than nothing. */}
+              <button
+                onClick={() => {
+                  setCardioOpen(true);
+                  setCardioSearch('');
+                  setCardioConfigItem(null);
+                }}
+                className="btn btn-secondary btn-sm mt-4">
+                Add cardio
+              </button>
+              <div className="t-micro mt-4">Next session appears here tomorrow</div>
+            </div>
           </div>
         )}
 
@@ -660,9 +1337,9 @@ export default function Workout() {
                   <div className="p-3.5 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
+                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(ex.name)}</span>
                         {equipMap[ex.id]?.missing?.length > 0 && (
-                          <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}>⚠ equipment</span>
+                          <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>equipment</span>
                         )}
                       </div>
                       <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
@@ -670,7 +1347,7 @@ export default function Workout() {
                       </div>
                     </div>
                     <button
-                      aria-label={`About ${ex.name}`}
+                      aria-label={`About ${exerciseLabel(ex.name)}`}
                       aria-expanded={infoEx === ex.id}
                       onClick={() => setInfoEx(infoEx === ex.id ? null : ex.id)}
                       className="w-8 h-8 rounded-full border grid place-items-center shrink-0 transition-all active:scale-90"
@@ -718,24 +1395,214 @@ export default function Workout() {
           </div>
         )}
 
+        {/* ── 4b. CARDIO SESSION ── */}
+        {cardioMode === 'browse' && (
+          <div className="anim-fadeUp" style={{ animationDelay: '220ms' }}>
+            {/* Cardio items added */}
+            {cardioItems.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="kicker">Cardio session</div>
+                  <button
+                    onClick={() => {
+                      setCardioOpen(true);
+                      setCardioSearch('');
+                      setCardioConfigItem(null);
+                    }}
+                    className="text-[11px] font-grotesk font-semibold active:scale-95"
+                    style={{ color: 'var(--accent)' }}>
+                    + Add more
+                  </button>
+                </div>
+                {cardioItems.map((item, i) => (
+                  <div key={i} className="card !p-3.5 flex items-center gap-3 anim-fadeUp" style={{ animationDelay: `${230 + i * 30}ms` }}>
+                    <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{cardioName(item.id)}</div>
+                      <div className="text-[10px]" style={{ color: 'var(--mute)' }}>{cardioSummary(item)}</div>
+                    </div>
+                    <button
+                      onClick={() => setCardioItems((prev) => prev.filter((_, j) => j !== i))}
+                      className="w-7 h-7 rounded-lg grid place-items-center shrink-0 active:scale-90"
+                      style={{ color: 'var(--faint)' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={startCardio}
+                  className="w-full py-2.5 rounded-xl font-grotesk text-[12px] font-bold tracking-wide active:scale-[.97] transition-all"
+                  style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+                  START CARDIO
+                </button>
+              </div>
+            )}
+            {cardioItems.length === 0 && (
+              <button
+                onClick={() => {
+                  setCardioOpen(true);
+                  setCardioSearch('');
+                  setCardioConfigItem(null);
+                }}
+                className="w-full text-center py-3 text-[12px] font-grotesk font-semibold rounded-xl border border-dashed transition-all active:scale-[.98]"
+                style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
+                + Add Cardio
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Cardio summary (after completing) */}
+        {cardioMode === 'summary' && cardioResult && (
+          <div className="card p-4 anim-fadeUp" style={{ animationDelay: '0ms' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[10px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--faint)' }}>Cardio complete</div>
+              <div className="font-grotesk font-bold" style={{ color: 'var(--accent)' }}>{cardioResult.totalCalories} kcal</div>
+            </div>
+            <div className="space-y-3">
+              {cardioResult.items.map((item, i) => {
+                const totalDur = (item.segments || []).reduce((s, seg) => s + seg.durationSec, 0);
+                return (
+                  <div key={i} className="rounded-xl border border-line/40 p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-grotesk text-[12px] font-bold" style={{ color: 'var(--ink)' }}>{cardioName(item.id)}</span>
+                      <span className="font-grotesk text-[11px] font-bold" style={{ color: 'var(--accent)' }}>{item.calories} kcal · {Math.round(totalDur / 60)} min</span>
+                    </div>
+                    {(item.segments || []).length > 0 && (
+                      <div className="space-y-1 mt-1.5">
+                        {item.segments.map((seg, j) => (
+                          <div key={j} className="flex items-center justify-between text-[10px]" style={{ color: 'var(--faint)' }}>
+                            <span>Segment {j + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={dismissCardioSummary} className="btn w-full mt-3 !text-xs">Done</button>
+          </div>
+        )}
+
+        {/* ── 4c. ACTIVE CARDIO TIMER (visible in browse mode when cardio is running) ── */}
+        {cardioMode === 'execute' && cardioActiveId && activeCardioItem && (
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Cardio · {cardioName(cardioActiveId)}</div>
+                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
+                  {String(Math.floor(cardioElapsed / 60)).padStart(2, '0')}:{String(cardioElapsed % 60).padStart(2, '0')}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Est. burn</div>
+                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 18, color: 'var(--accent)' }}>
+                  ~{totalCardioCals} <span className="text-[11px]" style={{ color: 'var(--mute)' }}>kcal</span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
+              <div className="text-[10px] uppercase tracking-[.12em] mb-2" style={{ color: 'var(--faint)' }}>Current settings</div>
+              <div className="flex flex-wrap gap-2">
+                {cardioExerciseConfig(cardioActiveId).map((field) => (
+                  <div key={field.key} className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-grotesk" style={{ color: 'var(--mute)' }}>{field.label}:</span>
+                    <span className="text-[11px] font-grotesk font-bold" style={{ color: 'var(--ink)' }}>{activeCardioItem.currentParams?.[field.key] || '—'}</span>
+                    {field.unit && <span className="text-[9px]" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {(activeCardioItem.segments || []).length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Segments ({activeCardioItem.segments.length})</div>
+                {activeCardioItem.segments.map((seg, i) => (
+                  <div key={i} className="flex items-center justify-between text-[10px]" style={{ color: 'var(--faint)' }}>
+                    <span>Seg {i + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div id="cardioAdjustBrowse" className="rounded-xl border border-line p-3 space-y-2">
+              <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Adjust settings</div>
+              <div className="grid grid-cols-2 gap-2">
+                {cardioExerciseConfig(cardioActiveId).map((field) => (
+                  <div key={field.key} className="flex items-center gap-1.5">
+                    <label className="text-[10px] font-grotesk shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="input flex-1 !py-1 !text-[11px]"
+                      placeholder={field.placeholder}
+                      defaultValue={activeCardioItem.currentParams?.[field.key] || ''}
+                      id={`adjBrowse_${field.key}`}
+                    />
+                    {field.unit && <span className="text-[9px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const newParams = {};
+                  cardioExerciseConfig(cardioActiveId).forEach((field) => {
+                    const el = document.getElementById(`adjBrowse_${field.key}`);
+                    if (el && el.value) newParams[field.key] = el.value;
+                  });
+                  const cur = activeCardioItem.currentParams || {};
+                  const changed = Object.keys(newParams).some((k) => String(newParams[k]) !== String(cur[k]));
+                  if (changed) {
+                    adjustCardioSettings(newParams);
+                    setToast('Settings updated — new segment started');
+                  }
+                }}
+                className="w-full py-1.5 rounded-lg text-[10px] font-grotesk font-bold border transition-all active:scale-[.98]"
+                style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }}>
+                ADJUST SETTINGS
+              </button>
+            </div>
+            <button
+              onClick={endCardio}
+              className="w-full py-2.5 rounded-xl text-[12px] font-grotesk font-bold active:scale-[.97] transition-all"
+              style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+              END CARDIO · {Math.round(cardioElapsed / 60)} min
+            </button>
+          </div>
+        )}
+
         {/* ── 5. RECENT SESSIONS ── */}
         {!!hist.data?.workouts?.length && (
           <div className="card p-4 anim-fadeUp" style={{ animationDelay: '260ms' }}>
-            <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk mb-2.5">Recent sessions</div>
+            <div className="t-micro mb-2.5">Recent sessions</div>
             <div className="space-y-1.5">
               {hist.data.workouts.filter((w) => w.id !== workout?.id).slice(0, 5).map((w) => (
-                <div key={w.id} className="flex items-center justify-between text-xs border-b border-line/50 last:border-0 py-2">
+                <button key={w.id}
+                  onClick={() => nav(`/app/client/day/${w.scheduled_date}`)}
+                  className="w-full flex items-center justify-between text-xs border-b border-line/50 last:border-0 py-2 active:scale-[.98] transition-all text-left">
                   <span className="font-grotesk font-semibold truncate">{w.name}</span>
                   <span className="text-mute shrink-0 ml-2">{w.scheduled_date}</span>
                   <span className={`chip border shrink-0 ml-2 ${w.status === 'completed' ? 'text-good border-good/40 bg-good/10' : 'text-warn border-warn/40 bg-warn/10'}`}>{w.status === 'completed' ? 'DONE' : w.status.toUpperCase()}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
         )}
 
         {/* ═══════════ BUILD TODAY MODAL ═══════════ */}
-        {builderOpen && (
+        {/* Rendered via a portal straight to <body> -- same fix, same
+            reason, as FoodLogSheet.jsx's own portal (see its header
+            comment): this page's cards use `.anim-fadeUp`, whose
+            `animation-fill-mode: both` leaves a non-`none` transform on
+            its own element for as long as it exists, which becomes the
+            containing block for any `position: fixed` DESCENDANT of it --
+            so without a portal, this modal was fixed relative to that
+            ancestor's (much taller, scrolled) box instead of the true
+            viewport. Confirmed live: the modal rendered, but its
+            bounding rect landed hundreds of pixels above/below the
+            visible screen depending on scroll position. */}
+        {builderOpen && createPortal((
           <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
             <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
@@ -743,7 +1610,7 @@ export default function Workout() {
                   <div className="font-grotesk font-bold">Build my workout</div>
                   <div className="text-[10px] text-mute">Picks any exercises — saves as today's session</div>
                 </div>
-                <button className="text-mute hover:text-ink text-lg active:scale-90" onClick={() => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); }} aria-label="Close">✕</button>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); }} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 <input className="input" placeholder="Workout name (e.g. My Upper Day)" value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
@@ -751,31 +1618,66 @@ export default function Workout() {
                 {/* ── keyed wrapper for smooth content transitions ── */}
                 <div key={selectedLibEx?.id || '__library__'} className="anim-slideUp">
                 {selectedLibEx ? (
-                  /* ── exercise detail view with animation + muscle map ── */
+                  /* ── exercise detail view ── */
                   <div className="space-y-3">
-                    <button onClick={() => setSelectedLibEx(null)} className="btn !text-xs !py-1.5 active:scale-95">← Back to library</button>
+                    <button onClick={() => setSelectedLibEx(null)} className="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to library</button>
 
                     <div className="anim-slideUp" style={{ animationDelay: '50ms' }}>
                       <ExerciseAnim anim={selectedLibEx.animation_key || 'fallback'} muscle={selectedLibEx.primary_muscle} label="" />
                     </div>
 
-                    <div className="anim-slideUp" style={{ animationDelay: '100ms' }}>
-                      <div className="font-grotesk font-bold text-lg">{selectedLibEx.name}</div>
-                      <div className="flex items-center gap-2 text-[11px] text-mute flex-wrap mt-1">
-                        {selectedLibEx.primary_muscle && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.primary_muscle}</span>}
-                        {selectedLibEx.secondary_muscles && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.secondary_muscles}</span>}
-                        {selectedLibEx.equipment && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.equipment}</span>}
+                    {/* Exercise name + Add button -- top row. manavi-progress-
+                        enhancements-v2 restructured this into a flex row
+                        with the Add button beside the name (and the trailing
+                        unconditional markup right after this conflict block
+                        already assumes that wrapper exists, closing tags it
+                        opens) -- her shape is kept for that reason, but
+                        ExerciseAnim (the exercise demo visual, entirely
+                        absent from her branch) and exerciseLabel() (this
+                        pass's leg_press -> "Leg Press" title-casing) are
+                        both restored into it. */}
+                    <div className="flex items-start justify-between gap-3 anim-slideUp" style={{ animationDelay: '100ms' }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-grotesk font-bold text-lg leading-tight" style={{ color: 'var(--ink)' }}>{exerciseLabel(selectedLibEx.name)}</div>
+                        <div className="flex items-center gap-2 text-[11px] text-mute flex-wrap mt-1">
+                          {selectedLibEx.primary_muscle && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.primary_muscle}</span>}
+                          {selectedLibEx.secondary_muscles && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.secondary_muscles}</span>}
+                          {selectedLibEx.equipment && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.equipment}</span>}
+                        </div>
                       </div>
+                      <button
+                        className={`shrink-0 px-4 py-2 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95 ${justAdded === selectedLibEx.id ? 'anim-confirmPulse' : ''}`}
+                        style={builderExs.some((b) => b.exercise_id === selectedLibEx.id)
+                          ? { background: 'var(--good)', color: 'var(--bg)' }
+                          : { background: 'var(--accent)', color: 'var(--bg)' }}
+                        disabled={builderExs.some((b) => b.exercise_id === selectedLibEx.id)}
+                        onClick={() => {
+                          setJustAdded(selectedLibEx.id);
+                          setTimeout(() => setJustAdded(null), 500);
+                          setBuilderExs((b) => [...b, { exercise_id: selectedLibEx.id, name: selectedLibEx.name, muscle: selectedLibEx.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
+                          setTimeout(() => setSelectedLibEx(null), 350);
+                        }}>
+                        {builderExs.some((b) => b.exercise_id === selectedLibEx.id) ? '✓ Added' : '+ Add'}
+                      </button>
                     </div>
 
+                    {/* Short description */}
+                    <div className="anim-slideUp" style={{ animationDelay: '100ms' }}>
+                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--mute)' }}>
+                        {selectedLibEx.instructions
+                          || `${selectedLibEx.movement === 'compound' ? 'Compound' : 'Isolation'} ${selectedLibEx.movement?.replace(/_/g, ' ') || ''} movement targeting the ${(selectedLibEx.primary_muscle || '').replace(/_/g, ' ').toLowerCase()}${selectedLibEx.secondary_muscles ? `, also engaging the ${selectedLibEx.secondary_muscles.replace(/,/g, ' ').replace(/_/g, ' ').toLowerCase()}` : ''}.`}
+                      </p>
+                    </div>
+
+                    {/* Primary / Secondary / Equipment */}
                     <div className="grid grid-cols-3 gap-2 anim-slideUp" style={{ animationDelay: '150ms' }}>
                       {[
                         ['Primary', selectedLibEx.primary_muscle || '—'],
                         ['Secondary', (selectedLibEx.secondary_muscles || '—').replace(/,/g, ' · ')],
                         ['Equipment', selectedLibEx.equipment || '—']
                       ].map(([l, v]) => (
-                        <div key={l} className="rounded-xl bg-white/[.03] border border-line px-2 py-2 text-center">
-                          <div className="text-[8px] uppercase tracking-wider text-mute font-grotesk">{l}</div>
+                        <div key={l} className="rounded-xl bg-tint/[.03] border border-line px-2 py-2 text-center">
+                          <div className="t-micro" style={{ fontSize: '.5rem' }}>{l}</div>
                           <div className="text-[10px] font-grotesk font-semibold mt-0.5 leading-tight">{v}</div>
                         </div>
                       ))}
@@ -786,36 +1688,28 @@ export default function Workout() {
                         <span className="text-gold font-grotesk font-semibold mr-1.5">FORM CUE</span>{selectedLibEx.cues}
                       </div>
                     )}
-
-                    {/* Muscle map for selected exercise */}
-                    <div className="card p-3 flex justify-center anim-slideUp" style={{ animationDelay: '250ms' }}>
-                      <MuscleMap
-                        activeMuscles={[selectedLibEx.primary_muscle]}
-                        selected={selectedLibEx.primary_muscle}
-                        size={140}
-                      />
-                    </div>
-
-                    <div className="anim-slideUp" style={{ animationDelay: '300ms' }}>
-                      <button className={`btn-primary w-full active:scale-[.97] ${justAdded === selectedLibEx.id ? 'anim-confirmPulse' : ''}`}
-                        disabled={builderExs.some((b) => b.exercise_id === selectedLibEx.id)}
-                        onClick={() => {
-                          setJustAdded(selectedLibEx.id);
-                          setTimeout(() => setJustAdded(null), 500);
-                          setBuilderExs((b) => [...b, { exercise_id: selectedLibEx.id, name: selectedLibEx.name, muscle: selectedLibEx.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
-                          setTimeout(() => setSelectedLibEx(null), 350);
-                        }}>
-                        {builderExs.some((b) => b.exercise_id === selectedLibEx.id) ? 'Already added ✓' : '+ Add to today\'s workout'}
-                      </button>
-                    </div>
                   </div>
                 ) : (
-                  /* ── search + region/equipment chips + exercise library list ── */
+                  /* ── search + region/equipment chips + exercise library list ──
+                     origin/main added this component (real alias-aware
+                     server search + muscle/equipment chip filters) to
+                     replace the plain client-side filter this branch had
+                     here; kept as the strictly better implementation. */
                   <ExerciseSearchList
                     fallback={libList}
                     addedIds={new Set(builderExs.map((b) => b.exercise_id))}
                     onPick={(x) => setSelectedLibEx(x)}
+                    // Quick-add: identical object shape and justAdded
+                    // feedback as the detail view's own "+ Add" button
+                    // above -- this just skips having to open that view
+                    // first for someone who already knows what they want.
+                    onQuickAdd={(x) => {
+                      setJustAdded(x.id);
+                      setTimeout(() => setJustAdded(null), 500);
+                      setBuilderExs((b) => [...b, { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
+                    }}
                   />
+
                 )}
                 </div>
 
@@ -858,7 +1752,7 @@ export default function Workout() {
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
         {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
         {plannerOpen && (
@@ -869,7 +1763,7 @@ export default function Workout() {
                   <div className="font-grotesk font-bold">My workouts</div>
                   <div className="text-[10px] text-mute">Reusable sessions + your weekly plan</div>
                 </div>
-                <button className="text-mute hover:text-ink text-lg" onClick={() => setPlannerOpen(false)} aria-label="Close">✕</button>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setPlannerOpen(false)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* weekly schedule */}
@@ -883,8 +1777,8 @@ export default function Workout() {
                       const nextId = w ? null : (dayWorkouts.length ? dayWorkouts[(dayWorkouts.findIndex((x) => x.id === s?.workout_id) + 1) % dayWorkouts.length].id : null);
                       return (
                         <button key={dow} onClick={() => dayWorkouts.length && setDayWorkout(dow, nextId)}
-                          className={`rounded-xl border px-1 py-2 text-center transition-all ${w ? 'border-gold/40 bg-gold/10' : 'border-line bg-white/[.02]'}`}>
-                          <div className="text-[8px] uppercase tracking-wider text-mute font-grotesk">{d}</div>
+                          className={`rounded-xl border px-1 py-2 text-center transition-all ${w ? 'border-gold/40 bg-gold/10' : 'border-line bg-tint/[.02]'}`}>
+                          <div className="t-micro" style={{ fontSize: '.5rem' }}>{d}</div>
                           <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight ${w ? 'text-gold' : 'text-faint'}`}>
                             {w ? w.name.split(' ').slice(0, 2).join(' ') : 'Rest'}
                           </div>
@@ -899,7 +1793,7 @@ export default function Workout() {
                   <div className="rounded-xl border border-gold/30 bg-gold/5 p-3 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="text-[10px] text-gold font-grotesk uppercase tracking-wider">{planForm.id ? 'Edit workout' : 'New workout'}</div>
-                      <button className="text-[10px] text-mute" onClick={() => setPlanForm(null)}>← Back</button>
+                      <button className="section-head-action" style={{ color: 'var(--mute)' }} onClick={() => setPlanForm(null)}>Back</button>
                     </div>
                     <input className="input" placeholder="Workout name (e.g. Push A, Legs, My Upper Day)" value={planForm.name || ''} onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))} />
                     <ExerciseSearchList
@@ -923,13 +1817,13 @@ export default function Workout() {
                         <div className="text-[8px] text-faint mt-1 font-grotesk">sets · reps · weight · rest(s)</div>
                       </div>
                     ))}
-                    <button className="btn-primary w-full !py-2.5 !text-xs" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
+                    <button className="btn-primary btn-sm btn-block" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
                       {savingPlan ? 'Saving…' : (planForm.id ? 'Save changes' : 'Create workout')}
                     </button>
                   </div>
                 ) : (
                   <>
-                    <button className="btn-primary w-full !py-2.5 !text-xs" onClick={() => {
+                    <button className="btn-primary btn-sm btn-block" onClick={() => {
                       if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
                       setPlanForm({ id: null, name: '', exercises: [], search: '' });
                     }}>+ Create new workout</button>
@@ -938,24 +1832,24 @@ export default function Workout() {
                     <div className="space-y-2">
                       {planner?.workouts?.length === 0 && (
                         <div className="card !p-6 text-center">
-                          
+
                           <div className="text-xs text-mute">No saved workouts yet — create one, then assign it to your week.</div>
                         </div>
                       )}
                       {(planner?.workouts || []).map((w) => (
-                        <div key={w.id} className="rounded-xl border border-line bg-white/[.02] p-3">
+                        <div key={w.id} className="rounded-xl border border-line bg-tint/[.02] p-3">
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
                               <div className="font-grotesk text-[13px] font-semibold truncate">{w.name}</div>
                               <div className="text-[10px] text-mute">{(w.exercises || []).length} exercises · {((w.exercises || []).reduce((s, e) => s + (e.sets || 0), 0))} sets</div>
                             </div>
                             <div className="flex gap-1 shrink-0">
-                              <button className="btn !px-2 !py-1 !text-[10px]" onClick={() => { setPlanForm({ id: w.id, name: w.name, exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })), search: '' }); }}>Edit</button>
-                              <button className="btn !px-2 !py-1 !text-[10px]" onClick={() => duplicatePlan(w)}>Copy</button>
-                              <button className="btn !px-2 !py-1 !text-[10px] text-bad" onClick={() => deletePlan(w)}>Del</button>
+                              <button className="btn btn-sm" onClick={() => { setPlanForm({ id: w.id, name: w.name, exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })), search: '' }); }}>Edit</button>
+                              <button className="btn btn-sm" onClick={() => duplicatePlan(w)}>Copy</button>
+                              <button className="btn btn-sm text-bad" onClick={() => deletePlan(w)}>Del</button>
                             </div>
                           </div>
-                          <button className="btn w-full !py-1.5 !text-[10px] mt-2 border-gold/30 text-gold" onClick={() => startPlanToday(w)}>▶ Do today</button>
+                          <button className="btn btn-sm btn-block mt-2" onClick={() => startPlanToday(w)}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Do today</button>
                         </div>
                       ))}
                     </div>
@@ -976,13 +1870,13 @@ export default function Workout() {
                   <div className="font-grotesk font-bold text-lg leading-tight">{weekDay.name}</div>
                   {weekDay.focus && <div className="text-[10px] text-mute mt-1 font-grotesk">{weekDay.focus}</div>}
                 </div>
-                <button className="btn-ghost !text-mute shrink-0" onClick={() => setWeekDay(null)} aria-label="Close">✕</button>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setWeekDay(null)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {weekDay.exercises?.length ? weekDay.exercises.map((ex, i) => (
-                  <div key={i} className="rounded-xl border border-line bg-white/[.02] p-3">
+                  <div key={i} className="rounded-xl border border-line bg-tint/[.02] p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-grotesk text-[13px] font-semibold truncate">{ex.name}</span>
+                      <span className="font-grotesk text-[13px] font-semibold truncate">{exerciseLabel(ex.name)}</span>
                     </div>
                     <div className="text-[11px] text-mute mt-1">{ex.sets} × {ex.reps} · {ex.weight}</div>
                   </div>
@@ -1000,7 +1894,123 @@ export default function Workout() {
           </div>
         )}
 
-        {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+        {/* ────── CARDIO SELECTION MODAL ────── */}
+        {/* Same portal fix as the Build Today modal above -- identical
+            broken-containing-block bug, same cause, same reason. */}
+        {cardioOpen && createPortal((
+          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
+            <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+              <div className="p-4 border-b border-line/60 flex items-center justify-between">
+                <div>
+                  <div className="font-grotesk font-bold">Add Cardio</div>
+                  <div className="text-[10px] text-mute">Select a cardio exercise</div>
+                </div>
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); }} aria-label="Close"><XIcon /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {cardioConfigItem ? (
+                  /* ── cardio configuration view ── */
+                  <div className="space-y-3">
+                    <button onClick={() => setCardioConfigItem(null)} className="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to list</button>
+                    <div className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>{cardioName(cardioConfigItem)}</div>
+                    <div className="space-y-2.5">
+                      <div className="t-micro">Parameters</div>
+                      {cardioExerciseConfig(cardioConfigItem).map((field) => {
+                        const existing = cardioItems.find((c) => c.id === cardioConfigItem);
+                        return (
+                          <div key={field.key} className="flex items-center gap-3">
+                            <label className="text-[11px] font-grotesk font-semibold w-24 shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              className="input flex-1 !py-1.5 !text-xs"
+                              placeholder={field.placeholder}
+                              defaultValue={existing?.params?.[field.key] || ''}
+                              id={`cardio_${field.key}`}
+                            />
+                            {field.unit && <span className="text-[10px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      className="btn-primary btn-block active:scale-[.97]"
+                      onClick={() => {
+                        const params = {};
+                        cardioExerciseConfig(cardioConfigItem).forEach((field) => {
+                          const el = document.getElementById(`cardio_${field.key}`);
+                          if (el && el.value) params[field.key] = el.value;
+                        });
+                        setCardioItems((prev) => [...prev, { id: cardioConfigItem, params, segments: [], currentParams: { ...params } }]);
+                        setCardioConfigItem(null);
+                        setCardioOpen(false);
+                        setToast(`${cardioName(cardioConfigItem)} added`);
+                      }}>
+                      + Add to session
+                    </button>
+                  </div>
+                ) : (
+                  /* ── search + cardio exercise list ── */
+                  <div className="space-y-2.5">
+                    <input className="input" placeholder="Search cardio exercises…" value={cardioSearch} onChange={(e) => setCardioSearch(e.target.value)} autoFocus />
+                    <div className="space-y-1.5">
+                      {Object.keys(CARDIO_MET).filter((id) => !cardioSearch || cardioName(id).toLowerCase().includes(cardioSearch.toLowerCase())).map((id, i) => {
+                        const added = cardioItems.some((c) => c.id === id);
+                        return (
+                          <div key={id}
+                            className={`flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 transition-all anim-fadeUp ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}
+                            style={{ animationDelay: `${40 + i * 25}ms` }}>
+                            <button className="flex-1 min-w-0 text-left" onClick={() => setCardioConfigItem(id)}>
+                              <span className="block text-[13px] font-grotesk font-semibold truncate">{cardioName(id)}</span>
+                              <span className="text-[10px] text-mute">{cardioSummary(cardioItems.find((c) => c.id === id) || { params: {} }) || 'Configure parameters'}</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (added) return;
+                                // Quick-add: skip the parameter-configuration
+                                // screen entirely, using each field's own
+                                // placeholder as its default (the same
+                                // number that would already be pre-filled if
+                                // you opened that screen and accepted it
+                                // as-is). Tapping the row's NAME still opens
+                                // the full config screen for anyone who
+                                // wants to set real numbers first -- this
+                                // "+" is the immediate-add path, matching
+                                // how the food search list's own "+" works.
+                                // Stays open (no setCardioOpen(false)) so
+                                // more than one cardio exercise can be
+                                // quick-added in a row, same as a food
+                                // search list's quick-log.
+                                const params = {};
+                                cardioExerciseConfig(id).forEach((field) => {
+                                  if (field.placeholder) params[field.key] = field.placeholder;
+                                });
+                                setCardioItems((prev) => [...prev, { id, params, segments: [], currentParams: { ...params } }]);
+                                setToast(`${cardioName(id)} added`);
+                              }}
+                              className="shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-all active:scale-90"
+                              style={added
+                                ? { color: 'rgb(var(--good-rgb))' }
+                                : { color: 'var(--accent)', border: '1px solid rgb(var(--accent-rgb) / .4)', background: 'rgb(var(--accent-rgb) / .10)' }}
+                              aria-label={added ? `${cardioName(id)} added` : `Add ${cardioName(id)}`}
+                              disabled={added}>
+                              {added ? <CheckIcon /> : (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ), document.body)}
+
+        {toast && <div className="toast anim-toast">{toast}</div>}
         <ShareWorkoutSheet
           open={shareSheetOpen}
           onClose={() => setShareSheetOpen(false)}
@@ -1026,24 +2036,59 @@ export default function Workout() {
 
         {/* ── the ONE session clock ── */}
         <div className="card p-4 sticky top-2 z-20">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Session</div>
-              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
-                {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+          {pausedAt ? (
+            /* ── paused state ── */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Session paused</div>
+                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)', opacity: 0.5 }}>
+                    {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Sets done</div>
+                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 22, color: 'var(--accent)' }}>
+                    {doneSets}<span className="text-[13px]" style={{ color: 'var(--mute)' }}>/{totalSets}</span>
+                  </div>
+                </div>
               </div>
+              <button
+                onClick={resumeWorkout}
+                className="w-full py-2.5 rounded-xl text-[13px] font-grotesk font-bold tracking-wide active:scale-[.97] transition-all"
+                style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+                â–¶ RESUME
+              </button>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Sets done</div>
-              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 22, color: 'var(--accent)' }}>
-                {doneSets}<span className="text-[13px]" style={{ color: 'var(--mute)' }}>/{totalSets}</span>
+          ) : (
+            /* ── active state ── */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Session</div>
+                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
+                    {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Sets done</div>
+                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 22, color: 'var(--accent)' }}>
+                    {doneSets}<span className="text-[13px]" style={{ color: 'var(--mute)' }}>/{totalSets}</span>
+                  </div>
+                </div>
               </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+                <div className="h-full rounded-full transition-all duration-500"
+                     style={{ width: `${pct}%`, background: 'var(--accent-grad)' }} />
+              </div>
+              <button
+                onClick={pauseWorkout}
+                className="w-full py-2 rounded-xl text-[12px] font-grotesk font-semibold border transition-all active:scale-[.97]"
+                style={{ borderColor: 'var(--line)', color: 'var(--mute)' }}>
+                ⏸ PAUSE
+              </button>
             </div>
-          </div>
-          <div className="h-1.5 rounded-full overflow-hidden mt-3" style={{ background: 'var(--line)' }}>
-            <div className="h-full rounded-full transition-all duration-500"
-                 style={{ width: `${pct}%`, background: 'var(--accent-grad)' }} />
-          </div>
+          )}
         </div>
 
         {/* ── every exercise for today; tap to expand ── */}
@@ -1066,38 +2111,47 @@ export default function Workout() {
                    backgroundColor: 'rgb(var(--good-rgb) / .10)',
                    borderColor: 'rgb(var(--good-rgb) / .45)',
                  } : undefined}>
-              <button
-                onClick={() => setOpenEx(open ? null : ex.id)}
-                className="w-full flex items-center gap-3 p-3.5 text-left"
-                aria-expanded={open}>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
-                    {complete && (
-                      <span className="text-[9px] font-bold uppercase tracking-[.12em] px-1.5 py-0.5 rounded shrink-0"
-                            style={{ color: 'var(--good)', border: '1px solid rgb(var(--good-rgb) / .5)' }}>
-                        Completed
-                      </span>
-                    )}
+              <div className="w-full flex items-center gap-2 p-3.5">
+                <button
+                  onClick={() => setOpenEx(open ? null : ex.id)}
+                  className="flex-1 min-w-0 text-left"
+                  aria-expanded={open}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(ex.name)}</span>
+                      {complete && (
+                        <span className="text-[9px] font-bold uppercase tracking-[.12em] px-1.5 py-0.5 rounded shrink-0"
+                              style={{ color: 'var(--good)', border: '1px solid rgb(var(--good-rgb) / .5)' }}>
+                          Completed
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
+                      {doneCount}/{sets.length} sets{ex.reps ? ` · ${ex.reps} reps` : ''}
+                    </div>
                   </div>
-                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
-                    {doneCount}/{sets.length} sets{ex.reps ? ` · ${ex.reps} reps` : ''}
-                  </div>
-                </div>
-                <span className="text-[15px] leading-none shrink-0" style={{ color: 'var(--faint)' }}>
-                  {open ? '−' : '+'}
-                </span>
-              </button>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeExercise(ex.id); }}
+                  aria-label={`Remove ${exerciseLabel(ex.name)}`}
+                  className="w-8 h-8 rounded-lg border grid place-items-center shrink-0 transition-all active:scale-90"
+                  style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
 
               {open && (
                 <div className="px-3.5 pb-3.5 space-y-1.5">
-                  <div className="grid grid-cols-[26px_1fr_1fr_38px] gap-2 px-1 text-[9px] uppercase tracking-[.12em]"
+                  <div className="grid grid-cols-[26px_1fr_1fr_32px_32px] gap-2 px-1 text-[9px] uppercase tracking-[.12em]"
                        style={{ color: 'var(--faint)' }}>
-                    <span>Set</span><span>Reps</span><span>Kg</span><span className="text-right">Done</span>
+                    <span>Set</span><span>Reps</span><span>Kg</span><span className="text-right">Done</span><span></span>
                   </div>
                   {sets.map((st, i) => (
                     <div key={i}
-                         className="grid grid-cols-[26px_1fr_1fr_38px] gap-2 items-center rounded-lg px-1 py-1"
+                         className="grid grid-cols-[26px_1fr_1fr_32px_32px] gap-2 items-center rounded-lg px-1 py-1"
                          style={st.done ? { backgroundColor: 'rgb(var(--good-rgb) / .08)' } : undefined}>
                       <span className="text-[12px] tabular-nums" style={{ color: 'var(--mute)' }}>{i + 1}</span>
                       {/* Editable mid-workout: what was prescribed and what
@@ -1124,13 +2178,127 @@ export default function Workout() {
                           </svg>
                         )}
                       </button>
+                      <button
+                        onClick={() => removeSet(ex.id, i)}
+                        disabled={sets.length <= 1}
+                        aria-label={`Delete set ${i + 1}`}
+                        className="justify-self-end w-7 h-7 rounded-lg border grid place-items-center transition-all active:scale-90 disabled:opacity-30"
+                        style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
                     </div>
                   ))}
+                  <button
+                    onClick={() => addSet(ex.id)}
+                    className="w-full text-center py-1.5 text-[11px] font-grotesk font-semibold rounded-lg border border-dashed transition-all active:scale-[.98]"
+                    style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
+                    + Add Set
+                  </button>
                 </div>
               )}
             </div>
           );
         })}
+
+        {/* ── ACTIVE CARDIO (alongside strength workout) ── */}
+        {cardioMode === 'execute' && cardioActiveId && activeCardioItem && (
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Cardio · {cardioName(cardioActiveId)}</div>
+                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 26, color: 'var(--ink)' }}>
+                  {String(Math.floor(cardioElapsed / 60)).padStart(2, '0')}:{String(cardioElapsed % 60).padStart(2, '0')}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Est. burn</div>
+                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 16, color: 'var(--accent)' }}>
+                  ~{totalCardioCals} <span className="text-[10px]" style={{ color: 'var(--mute)' }}>kcal</span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl p-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
+              <div className="flex flex-wrap gap-2">
+                {cardioExerciseConfig(cardioActiveId).map((field) => (
+                  <div key={field.key} className="flex items-center gap-1">
+                    <span className="text-[10px] font-grotesk" style={{ color: 'var(--mute)' }}>{field.label}:</span>
+                    <span className="text-[10px] font-grotesk font-bold" style={{ color: 'var(--ink)' }}>{activeCardioItem.currentParams?.[field.key] || '—'}</span>
+                    {field.unit && <span className="text-[8px]" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {(activeCardioItem.segments || []).length > 0 && (
+              <div className="space-y-0.5">
+                <div className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Segments ({activeCardioItem.segments.length})</div>
+                {activeCardioItem.segments.map((seg, i) => (
+                  <div key={i} className="text-[9px]" style={{ color: 'var(--faint)' }}>
+                    Seg {i + 1}: {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div id="cardioAdjustExec" className="rounded-xl border border-line p-2.5 space-y-1.5">
+              <div className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Adjust settings</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {cardioExerciseConfig(cardioActiveId).map((field) => (
+                  <div key={field.key} className="flex items-center gap-1">
+                    <label className="text-[9px] font-grotesk shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="input flex-1 !py-0.5 !text-[10px]"
+                      placeholder={field.placeholder}
+                      defaultValue={activeCardioItem.currentParams?.[field.key] || ''}
+                      id={`adjExec_${field.key}`}
+                    />
+                    {field.unit && <span className="text-[8px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const newParams = {};
+                  cardioExerciseConfig(cardioActiveId).forEach((field) => {
+                    const el = document.getElementById(`adjExec_${field.key}`);
+                    if (el && el.value) newParams[field.key] = el.value;
+                  });
+                  const cur = activeCardioItem.currentParams || {};
+                  const changed = Object.keys(newParams).some((k) => String(newParams[k]) !== String(cur[k]));
+                  if (changed) {
+                    adjustCardioSettings(newParams);
+                    setToast('Settings updated — new segment started');
+                  }
+                }}
+                className="w-full py-1 rounded-lg text-[9px] font-grotesk font-bold border transition-all active:scale-[.98]"
+                style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }}>
+                ADJUST
+              </button>
+            </div>
+            <button
+              onClick={endCardio}
+              className="w-full py-2 rounded-xl text-[11px] font-grotesk font-bold active:scale-[.97] transition-all"
+              style={{ borderColor: 'var(--accent)', color: 'var(--accent)', border: '1px solid var(--accent)' }}>
+              END CARDIO · {Math.round(cardioElapsed / 60)} min
+            </button>
+          </div>
+        )}
+
+        {/* ── ADD EXERCISE ── */}
+        <button
+          onClick={() => {
+            if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load exercises'));
+            setAddExSelected(null);
+            setAddExSearch('');
+            setAddExOpen(true);
+          }}
+          className="w-full text-center py-3 text-[12px] font-grotesk font-semibold rounded-xl border border-dashed transition-all active:scale-[.98]"
+          style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
+          + Add Exercise
+        </button>
 
         {/* ── END SESSION ── */}
         <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3"
@@ -1138,15 +2306,172 @@ export default function Workout() {
           <Pressable
             onClick={() => finishWorkout()}
             disabled={submitting}
-            className="btn-primary w-full !py-4 text-[13px] font-bold tracking-[.02em]">
+            className="btn-primary btn-lg btn-block text-[13px] tracking-[.02em]">
             {submitting ? 'Saving…' : doneSets === 0 ? 'End session' : `End session · ${doneSets} sets`}
           </Pressable>
         </div>
+
+        {/* ═══════════ ADD EXERCISE PICKER (execute mode) ═══════════ */}
+        {addExOpen && (
+          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
+            <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+              <div className="p-4 border-b border-line/60 flex items-center justify-between">
+                <div>
+                  <div className="font-grotesk font-bold">Add exercise</div>
+                  <div className="text-[10px] text-mute">Search the exercise library</div>
+                </div>
+                <button className="text-mute hover:text-ink text-lg active:scale-90" onClick={() => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); }} aria-label="Close">✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {addExSelected ? (
+                  /* ── exercise detail view ── */
+                  <div className="space-y-3">
+                    <button onClick={() => setAddExSelected(null)} className="btn !text-xs !py-1.5 active:scale-95">← Back to library</button>
+                    <div className="font-grotesk font-bold text-lg">{addExSelected.name}</div>
+                    <div className="flex items-center gap-2 text-[11px] text-mute flex-wrap mt-1">
+                      {addExSelected.primary_muscle && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{addExSelected.primary_muscle}</span>}
+                      {addExSelected.equipment && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{addExSelected.equipment}</span>}
+                      {addExSelected.difficulty && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{addExSelected.difficulty}</span>}
+                    </div>
+                    {addExSelected.cues && (
+                      <div className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2.5 text-[11px] leading-relaxed">
+                        <span className="text-gold font-grotesk font-semibold mr-1.5">FORM CUE</span>{addExSelected.cues}
+                      </div>
+                    )}
+                    <button
+                      className={`btn-primary w-full active:scale-[.97] ${addExSaving ? 'opacity-60' : ''}`}
+                      disabled={addExSaving}
+                      onClick={() => addExerciseToSession(addExSelected)}>
+                      {addExSaving ? 'Adding…' : '+ Add to session'}
+                    </button>
+                  </div>
+                ) : (
+                  /* ── search + list ── */
+                  <div className="space-y-2.5">
+                    <input className="input" placeholder="Search exercises by name or muscle…" value={addExSearch} onChange={(e) => setAddExSearch(e.target.value)} autoFocus />
+                    <div className="space-y-1.5">
+                    {(libList || []).filter((x) => !addExSearch || (x.name + ' ' + (x.primary_muscle || '')).toLowerCase().includes(addExSearch.toLowerCase())).slice(0, 30).map((x, i) => (
+                      <button key={x.id}
+                        className="w-full flex items-center gap-2 rounded-xl border border-line bg-white/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] hover:border-gold/30 anim-fadeUp"
+                        style={{ animationDelay: `${40 + i * 25}ms` }}
+                        onClick={() => setAddExSelected(x)}>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-[13px] font-grotesk font-semibold truncate">{x.name}</span>
+                          <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
+                        </span>
+                      </button>
+                    ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     );
   }
 
+  // ================= cardio-only mode =================
+  // When the user has started cardio but NOT started a strength workout,
+  // mode is still 'browse'. We render the active cardio session here
+  // independently of the main workout mode.
+  if (cardioMode === 'execute' && cardioActiveId && activeCardioItem) {
+    return (
+      <div className="space-y-3 pb-28">
+        {/* ── CARDIO TIMER ── */}
+        <div className="card p-4 space-y-3">
+          {/* Timer + current exercise */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Cardio · {cardioName(cardioActiveId)}</div>
+              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
+                {String(Math.floor(cardioElapsed / 60)).padStart(2, '0')}:{String(cardioElapsed % 60).padStart(2, '0')}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Est. burn</div>
+              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 18, color: 'var(--accent)' }}>
+                ~{totalCardioCals} <span className="text-[11px]" style={{ color: 'var(--mute)' }}>kcal</span>
+              </div>
+            </div>
+          </div>
+          {/* Current settings display */}
+          <div className="rounded-xl p-3" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
+            <div className="text-[10px] uppercase tracking-[.12em] mb-2" style={{ color: 'var(--faint)' }}>Current settings</div>
+            <div className="flex flex-wrap gap-2">
+              {cardioExerciseConfig(cardioActiveId).map((field) => (
+                <div key={field.key} className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-grotesk" style={{ color: 'var(--mute)' }}>{field.label}:</span>
+                  <span className="text-[11px] font-grotesk font-bold" style={{ color: 'var(--ink)' }}>{activeCardioItem.currentParams?.[field.key] || '—'}</span>
+                  {field.unit && <span className="text-[9px]" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Segments so far */}
+          {(activeCardioItem.segments || []).length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Segments ({activeCardioItem.segments.length})</div>
+              {activeCardioItem.segments.map((seg, i) => (
+                <div key={i} className="flex items-center justify-between text-[10px]" style={{ color: 'var(--faint)' }}>
+                  <span>Seg {i + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* ADJUST SETTINGS — inline edit without stopping the timer */}
+          <div id="cardioAdjust" className="rounded-xl border border-line p-3 space-y-2">
+            <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Adjust settings</div>
+            <div className="grid grid-cols-2 gap-2">
+              {cardioExerciseConfig(cardioActiveId).map((field) => (
+                <div key={field.key} className="flex items-center gap-1.5">
+                  <label className="text-[10px] font-grotesk shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="input flex-1 !py-1 !text-[11px]"
+                    placeholder={field.placeholder}
+                    defaultValue={activeCardioItem.currentParams?.[field.key] || ''}
+                    id={`adj_${field.key}`}
+                  />
+                  {field.unit && <span className="text-[9px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                const newParams = {};
+                cardioExerciseConfig(cardioActiveId).forEach((field) => {
+                  const el = document.getElementById(`adj_${field.key}`);
+                  if (el && el.value) newParams[field.key] = el.value;
+                });
+                const cur = activeCardioItem.currentParams || {};
+                const changed = Object.keys(newParams).some((k) => String(newParams[k]) !== String(cur[k]));
+                if (changed) {
+                  adjustCardioSettings(newParams);
+                  setToast('Settings updated — new segment started');
+                }
+              }}
+              className="w-full py-1.5 rounded-lg text-[10px] font-grotesk font-bold border transition-all active:scale-[.98]"
+              style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }}>
+              ADJUST SETTINGS
+            </button>
+          </div>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={endCardio}
+              className="flex-1 py-2.5 rounded-xl text-[12px] font-grotesk font-bold active:scale-[.97] transition-all"
+              style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+              END CARDIO · {Math.round(cardioElapsed / 60)} min
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ================= summary =================
   return (
@@ -1195,7 +2520,7 @@ export default function Workout() {
             ].map(([l, v]) => (
               <div key={l} className="rounded-xl px-2 py-3"
                    style={{
-                     /* Was bg-white/[.04]: a white wash, which on the peach
+                     /* Was bg-tint/[.04]: a white wash, which on the peach
                         light theme reads as a grey smudge and gives the text
                         almost no separation from the animation behind it.
                         A panel-tinted tile with a real border sits correctly
@@ -1218,7 +2543,7 @@ export default function Workout() {
               <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>How intense was that session?</div>
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {[['light', 'Light'], ['moderate', 'Moderate'], ['hard', 'Hard']].map(([tier, label]) => (
-                  <button key={tier} className="btn !py-2.5 !text-[12px]" onClick={() => pickIntensity(tier)}>{label}</button>
+                  <button key={tier} className="btn btn-sm" onClick={() => pickIntensity(tier)}>{label}</button>
                 ))}
               </div>
             </div>
@@ -1252,6 +2577,13 @@ export default function Workout() {
               <div className="mt-0.5 text-[11px]" style={{ color: 'var(--mute)' }}>
                 best estimate ≈{burn.kcal} kcal
               </div>
+              {/* SK OS Health Intelligence Engine -- see checkWorkoutSource's
+                  own comment. Honest immediately (skos-cal-v1 is genuinely
+                  what produced the number above); upgrades in place if a
+                  connected wearable's own reading for this session arrives. */}
+              <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
+                Source: {burnSource || 'Estimated by SK OS'}
+              </div>
               {/* The model's own caveats, surfaced rather than swallowed. An
                   estimate it has flagged as shaky must not read as clean. */}
               {!!burn.notes?.length && (
@@ -1263,6 +2595,54 @@ export default function Workout() {
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+
+          {/* ── Cardio calories (if any) ── */}
+          {cardioResult && (
+            <div className="mt-3 rounded-xl border px-4 py-3 text-left"
+                 style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
+              <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Cardio calories</div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-black text-[22px] tabular-nums tracking-[-.02em]" style={{ color: 'var(--accent)' }}>
+                  {cardioResult.totalCalories}
+                </span>
+                <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
+              </div>
+              {cardioResult.items.map((item, i) => (
+                <div key={i} className="mt-2 rounded-lg border border-line/30 p-2">
+                  <div className="text-[11px] font-grotesk font-semibold" style={{ color: 'var(--ink)' }}>{cardioName(item.id)} · {item.calories} kcal</div>
+                  {(item.segments || []).map((seg, j) => (
+                    <div key={j} className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>
+                      Seg {j + 1}: {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Total calories (strength + cardio) ── */}
+          {cardioResult && (
+            <div className="mt-3 rounded-xl border px-4 py-3 text-left"
+                 style={{ borderColor: 'var(--line)', background: 'rgb(var(--panel-rgb) / .72)' }}>
+              <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Total calories burned</div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-black text-[26px] tabular-nums tracking-[-.02em]" style={{ color: 'var(--ink)' }}>
+                  {(burn?.kcal || 0) + (cardioResult.totalCalories || 0)}
+                </span>
+                <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {burn?.kcal && (
+                  <div className="text-[11px]" style={{ color: 'var(--mute)' }}>
+                    Strength training: <span className="font-semibold">≈{burn.kcal} kcal</span>
+                  </div>
+                )}
+                <div className="text-[11px]" style={{ color: 'var(--mute)' }}>
+                  Cardio: <span className="font-semibold">{cardioResult.totalCalories} kcal</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1327,12 +2707,12 @@ export default function Workout() {
               {sharing ? 'Sharing…' : 'Share to Community'}
             </button>
           )}
-          <button className="btn w-full mt-3" onClick={() => { setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setBurn(null); setBurnInput(null); setIntensity(null); setSharing(false); setShareToast(''); }}>Done</button>
+          <button className="btn w-full mt-3" onClick={() => { clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setBurn(null); setBurnInput(null); setIntensity(null); setBurnSource(null); setSharing(false); setShareToast(''); setCardioMode('browse'); setCardioResult(null); setCardioItems([]); setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0); }}>Done</button>
         </div>
       </div>
       {shareToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card anim-toast">
-          <span className="text-good mr-2">✓</span>{shareToast}
+        <div className="toast anim-toast">
+          <span className="text-good mr-2"><CheckIcon /></span>{shareToast}
         </div>
       )}
       <ShareWorkoutSheet

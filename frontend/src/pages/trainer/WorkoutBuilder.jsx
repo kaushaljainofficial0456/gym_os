@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, Spinner, ErrorState, Modal, Empty } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, Empty, ChevronRightIcon, XIcon, PageSkeleton, CheckIcon } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
@@ -39,12 +39,21 @@ function LibraryCombobox({ value, name, onSelect }) {
     <div className="relative flex-1">
       <input
         className="input !py-1.5 text-xs w-full"
-        placeholder="🔍 link from library (type to search)"
-        value={open ? q : (value && name ? `${name} ✓` : q)}
+        placeholder="Link from library (type to search)"
+        value={open ? q : (value && name ? name : q)}
         onFocus={() => { setOpen(true); setQ(''); }}
         onChange={(e) => setQ(e.target.value)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
       />
+      {/* The check now lives here, as a real icon next to the value
+          rather than concatenated INTO the text -- a glyph baked into a
+          string can't be positioned, sized, or coloured independently of
+          the name it's stuck to. */}
+      {value && !open && name && (
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'rgb(var(--good-rgb))' }}>
+          <CheckIcon />
+        </span>
+      )}
       {value && !open && (
         <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-mute hover:text-bad"
           onMouseDown={(e) => { e.preventDefault(); onSelect(null); }}>clear</button>
@@ -55,7 +64,7 @@ function LibraryCombobox({ value, name, onSelect }) {
           {!loading && !rows.length && <div className="px-3 py-2 text-[10px] text-mute">No matches</div>}
           {rows.map((x) => (
             <button key={x.id} type="button"
-              className="w-full text-left px-3 py-2 hover:bg-white/[.05] border-b border-line/40 last:border-0"
+              className="w-full text-left px-3 py-2 hover:bg-tint/[.08] border-b border-line/40 last:border-0"
               onMouseDown={(e) => { e.preventDefault(); onSelect(x); setOpen(false); setQ(''); }}>
               <span className="block text-[12px] font-grotesk font-semibold truncate">{x.name}</span>
               <span className="text-[9px] text-mute">{x.primary_muscle}{x.equipment ? ` · ${x.equipment}` : ''}</span>
@@ -241,8 +250,10 @@ export default function WorkoutBuilder() {
   }, [toast]);
 
   // lib.loading is intentionally excluded: it only feeds the muscle-picker
-  // modal (opened on demand, see pickerEverOpened above), not the main page.
-  if (tpl.loading || clients.loading) return <Spinner label="Loading workout builder…" />;
+  // modal (opened on demand, see pickerEverOpened above), not the main page
+  // -- including it here would reintroduce exactly the eager-load cost that
+  // gating the fetch on pickerEverOpened was meant to remove.
+  if (tpl.loading || clients.loading) return <PageSkeleton variant="split" label="Loading workout builder" />;
   if (tpl.error) return <ErrorState error={tpl.error} onRetry={tpl.reload} />;
 
   const startNew = () => {
@@ -362,17 +373,17 @@ export default function WorkoutBuilder() {
           <Kicker>Your templates</Kicker>
           <div className="space-y-1.5">
             {templates.map((t) => (
-              <div key={t.id} className={`rounded-xl border transition-colors ${selectedId === t.id ? 'border-gold/50 bg-white/[.05]' : 'border-line bg-white/[.02]'}`}>
+              <div key={t.id} className={`rounded-xl border transition-colors ${selectedId === t.id ? 'border-gold/50 bg-tint/[.05]' : 'border-line bg-tint/[.02]'}`}>
                 <button className="w-full text-left px-3.5 py-3 flex items-center gap-3" onClick={() => openTemplate(t)}>
                   <div className="flex-1 min-w-0">
                     <div className="font-grotesk text-sm font-semibold truncate">{t.name}</div>
                     <div className="text-[11px] text-mute">{t.type} · {t.exercise_count || 0} exercises</div>
                   </div>
-                  <span className="text-mute">›</span>
+                  <span className="text-mute"><ChevronRightIcon /></span>
                 </button>
                 <div className="px-3.5 pb-2.5 flex gap-1.5">
-                  <button className="btn !py-1 !px-2.5 !text-[10px]" onClick={() => duplicate(t.id)}>⧉ Duplicate</button>
-                  <button className="btn !py-1 !px-2.5 !text-[10px]" onClick={() => { openTemplate(t); setAssignOpen(true); }}>✉ Assign</button>
+                  <button className="btn btn-sm" onClick={() => duplicate(t.id)}>⧉ Duplicate</button>
+                  <button className="btn btn-sm" onClick={() => { openTemplate(t); setAssignOpen(true); }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg> Assign</button>
                 </div>
               </div>
             ))}
@@ -402,14 +413,14 @@ export default function WorkoutBuilder() {
 
               <div className="space-y-2">
                 {editing.exercises.map((ex, i) => (
-                  <div key={i} className="rounded-xl border border-line bg-white/[.02] p-3 space-y-2">
+                  <div key={i} className="rounded-xl border border-line bg-tint/[.02] p-3 space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-white/5 border border-line grid place-items-center font-grotesk text-[10px] text-mute shrink-0">{i + 1}</span>
+                      <span className="w-5 h-5 rounded-md bg-tint/5 border border-line grid place-items-center font-grotesk text-[10px] text-mute shrink-0">{i + 1}</span>
                       <input className="input !py-2 flex-1" value={ex.name} onChange={(e) => patchEx(i, 'name', e.target.value)} placeholder="Exercise name" />
                       <div className="flex gap-1">
-                        <button className="btn !px-2 !py-1.5 !text-xs" disabled={i === 0} onClick={() => moveEx(i, -1)} aria-label="Move up">↑</button>
-                        <button className="btn !px-2 !py-1.5 !text-xs" disabled={i === editing.exercises.length - 1} onClick={() => moveEx(i, 1)} aria-label="Move down">↓</button>
-                        <button className="btn !px-2 !py-1.5 !text-xs !text-bad" onClick={() => removeEx(i)} aria-label="Remove">✕</button>
+                        <button className="btn btn-sm" disabled={i === 0} onClick={() => moveEx(i, -1)} aria-label="Move up">↑</button>
+                        <button className="btn btn-sm" disabled={i === editing.exercises.length - 1} onClick={() => moveEx(i, 1)} aria-label="Move down">↓</button>
+                        <button className="btn btn-sm !text-bad" onClick={() => removeEx(i)} aria-label="Remove"><XIcon /></button>
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
@@ -431,6 +442,12 @@ export default function WorkoutBuilder() {
                       </label>
                     </div>
                     <div className="flex gap-2 items-end">
+                      {/* origin/main replaced the plain <select> (287
+                          exercises in one flat dropdown) with a real
+                          searchable combobox -- kept as the strictly
+                          better implementation; the button-size override
+                          is collapsed onto .btn-sm to match this pass's
+                          button sweep. */}
                       <LibraryCombobox
                         value={ex.exercise_id}
                         name={ex.name}
@@ -439,7 +456,7 @@ export default function WorkoutBuilder() {
                           if (x?.name) patchEx(i, 'name', x.name);
                         }}
                       />
-                      <button className="btn !py-1.5 !px-3 !text-[11px] shrink-0" onClick={() => setAddOpen(true)}>+ New</button>
+                      <button className="btn btn-sm shrink-0" onClick={() => setAddOpen(true)}>+ New</button>
                     </div>
                   </div>
                 ))}
@@ -452,7 +469,7 @@ export default function WorkoutBuilder() {
               <div className="flex flex-wrap gap-2 pt-1">
                 <button className="btn-primary" onClick={saveTemplate} disabled={saving}>{saving ? 'Saving…' : 'Save template'}</button>
                 <button className="btn" onClick={() => setAssignOpen(true)}>Assign to client…</button>
-                <button className="btn-ghost !text-mute" onClick={() => setEditing(null)}>Cancel</button>
+                <button className="btn-ghost btn-sm !text-mute" onClick={() => setEditing(null)}>Cancel</button>
               </div>
             </div>
           ) : (
@@ -480,7 +497,7 @@ export default function WorkoutBuilder() {
               {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
             </select>
           </div>
-          <div className="rounded-xl border border-line bg-white/[.02] p-4">
+          <div className="rounded-xl border border-line bg-tint/[.02] p-4">
             {!progClient ? (
               <div className="text-center text-mute text-sm py-6">Select a client to see their current program.</div>
             ) : currentProg === null ? (
@@ -538,7 +555,7 @@ export default function WorkoutBuilder() {
 
             <div className="grid sm:grid-cols-2 gap-2">
               {progForm.days.map((d, i) => (
-                <div key={d.dow} className={`rounded-xl border p-2.5 transition-colors ${d.enabled ? 'border-gold/30 bg-gold/[.04]' : 'border-line bg-white/[.01] opacity-70'}`}>
+                <div key={d.dow} className={`rounded-xl border p-2.5 transition-colors ${d.enabled ? 'border-gold/30 bg-gold/[.04]' : 'border-line bg-tint/[.01] opacity-70'}`}>
                   <div className="flex items-center gap-2">
                     <input type="checkbox" checked={d.enabled} onChange={(e) => setProgForm((f) => ({ ...f, days: f.days.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x) }))} className="accent-ember" aria-label={`${DOW_LABEL[d.dow]} enabled`} />
                     <span className="w-9 text-[9px] font-grotesk font-bold text-mute">{DOW_LABEL[d.dow]}</span>
@@ -596,7 +613,7 @@ export default function WorkoutBuilder() {
               {lib.loading && <div className="text-center py-8 text-mute text-sm">Loading exercise library…</div>}
               {!lib.loading && pickMatches.map((ex) => (
                 <button key={ex.id} type="button" onClick={() => addFromPicker(ex)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-white/[.02] hover:bg-white/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
+                  className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-tint/[.02] hover:bg-tint/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
                   <span className="min-w-0">
                     <span className="block font-grotesk text-sm font-semibold truncate">{ex.name}</span>
                     <span className="block text-[10px] text-mute">{ex.primary_muscle} · {ex.equipment}</span>
@@ -654,7 +671,7 @@ export default function WorkoutBuilder() {
         </div>
       </Modal>
 
-      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
+      {toast && <div className="toast anim-toast">{toast}</div>}
     </div>
   );
 }

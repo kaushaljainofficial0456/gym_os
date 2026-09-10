@@ -12,6 +12,7 @@
  * with an enrollment QR payload.
  */
 import { useEffect, useRef, useState } from 'react';
+import { XIcon } from './UI.jsx';
 
 const supportsDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
@@ -83,7 +84,7 @@ export default function QrScanner({ open, onClose, onScanned }) {
       <div className="card w-full max-w-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Scan gym QR code</div>
-          <button onClick={() => { stop(); onClose(); }} aria-label="Close scanner" style={{ color: 'var(--mute)' }}>✕</button>
+          <button onClick={() => { stop(); onClose(); }} aria-label="Close scanner" style={{ color: 'var(--mute)' }}><XIcon /></button>
         </div>
 
         {supportsDetector && (
@@ -105,7 +106,7 @@ export default function QrScanner({ open, onClose, onScanned }) {
                    aria-label="QR code payload"
                    className="input flex-1 !py-2 text-[12px]" />
             <button onClick={() => manual && (stop(), onScanned(manual))} disabled={!manual}
-                    className="btn-primary !px-4 !py-2 text-[12px] font-bold">
+                    className="btn-primary btn-sm text-[12px]">
               Join
             </button>
           </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, cls } from '../../utils.js';
-import { Spinner, ErrorState, Empty, Seg, Kpi, Bar } from '../../components/UI.jsx';
+import { ErrorState, Empty, Seg, Kpi, Bar, PageSkeleton } from '../../components/UI.jsx';
 import { WeekBars, TrendChart } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -98,7 +98,7 @@ export default function NutritionTracker() {
   // than during the previous render").
   const histDates = useMemo(() => (histFrom <= histTo ? enumerateDates(histFrom, histTo) : []), [histFrom, histTo]);
 
-  if (home.loading) return <Spinner label="Loading your nutrition history…" />;
+  if (home.loading) return <PageSkeleton variant="dashboard" label="Loading your nutrition history" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
   if (!clientId) return <ErrorState error={{ message: 'No client profile linked to this account' }} onRetry={home.reload} />;
 
@@ -185,7 +185,7 @@ export default function NutritionTracker() {
               <>
                 <div className="grid grid-cols-7 gap-1 mb-1">
                   {WEEKDAY_SHORT.map((w, i) => (
-                    <div key={i} className="text-center text-[9px] uppercase tracking-wider text-faint font-grotesk py-1">{w}</div>
+                    <div key={i} className="t-micro text-center py-1">{w}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-1">
@@ -241,7 +241,7 @@ export default function NutritionTracker() {
 
             {target && (
               <div className="space-y-2.5 mb-4 p-3 rounded-xl" style={{ background: 'var(--panel2)', border: '1px solid var(--line)' }}>
-                <div className="text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">Target vs actual</div>
+                <div className="t-micro">Target vs actual</div>
                 <Bar label="Calories" value={selectedDay.calories} max={target.calories || 1} right={`${Math.round(selectedDay.calories)} / ${target.calories} kcal`} />
                 <Bar label="Protein" value={selectedDay.protein} max={target.protein || 1} right={`${Math.round(selectedDay.protein)} / ${target.protein} g`} height="h-1.5" />
                 <Bar label="Carbs" value={selectedDay.carbs} max={target.carbs || 1} right={`${Math.round(selectedDay.carbs)} / ${target.carbs} g`} height="h-1.5" />
@@ -300,7 +300,7 @@ export default function NutritionTracker() {
               <Kpi label="Avg protein" value={loggedCount ? Math.round(sums.protein / loggedCount) : 0} suffix="g" />
             </div>
 
-            <div className="mb-1 text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">Daily calories</div>
+            <div className="t-micro mb-1">Daily calories</div>
             {Number(range) <= 7 && range !== 'custom' ? (
               <WeekBars days={chartRows} valueKey="value" max={chartMax} color="var(--accent)" />
             ) : (

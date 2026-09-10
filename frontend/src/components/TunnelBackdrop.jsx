@@ -242,7 +242,7 @@ export default function TunnelBackdrop() {
         aria-hidden="true"
         style={{
           background:
-            'radial-gradient(70% 90% at 50% 115%, rgba(18,184,176,.22), transparent 62%), radial-gradient(55% 70% at 50% -10%, rgba(8,127,123,.14), transparent 60%)',
+            'radial-gradient(70% 90% at 50% 115%, rgb(var(--accent-rgb) / .22), transparent 62%), radial-gradient(55% 70% at 50% -10%, rgba(8,127,123,.14), transparent 60%)',
         }}
       />
     );

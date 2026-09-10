@@ -106,6 +106,21 @@ ALTER TABLE messages           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages           FORCE ROW LEVEL SECURITY;
 ALTER TABLE notifications      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications      FORCE ROW LEVEL SECURITY;
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_preferences FORCE ROW LEVEL SECURITY;
+ALTER TABLE health_provider_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_provider_connections FORCE ROW LEVEL SECURITY;
+ALTER TABLE health_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_records FORCE ROW LEVEL SECURITY;
+ALTER TABLE health_canonical_workouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_canonical_workouts FORCE ROW LEVEL SECURITY;
+ALTER TABLE health_energy_intervals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_energy_intervals FORCE ROW LEVEL SECURITY;
+ALTER TABLE health_daily_summaries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_daily_summaries FORCE ROW LEVEL SECURITY;
+-- health_reconciliation_log intentionally NOT enabled here -- it has no
+-- org_id column (pure per-user audit trail, spec §72) and is exempted
+-- below the same way payment_events/support_messages etc. are.
 ALTER TABLE events             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events             FORCE ROW LEVEL SECURITY;
 ALTER TABLE ai_memory          ENABLE ROW LEVEL SECURITY;
@@ -195,9 +210,12 @@ BEGIN
     'nutrition_plans','nutrition_balance_adjustments','nutrition_balance_prompts',
     'intelligence_events','gym_settings','custom_metrics','metric_entries',
     'client_meal_templates','client_workouts','attendance_events','alerts','coach_insights',
-    'packages','subscriptions','payments','attendance','messages','notifications','events',
+    'packages','subscriptions','payments','attendance','messages','notifications',
+    'notification_preferences','events',
     'ai_memory','ai_feedback',
-    'community_members','community_workout_shares','shared_workouts'
+    'community_members','community_workout_shares','shared_workouts',
+    'health_provider_connections','health_records','health_canonical_workouts',
+    'health_energy_intervals','health_daily_summaries'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (

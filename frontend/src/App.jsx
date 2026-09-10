@@ -48,6 +48,8 @@ const Settings = lazy(() => import('./pages/client/Settings.jsx'));
 const Help = lazy(() => import('./pages/client/Help.jsx'));
 const Community = lazy(() => import('./pages/client/Community.jsx'));
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
+const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
+const HealthDevices = lazy(() => import('./pages/client/HealthDevices.jsx'));
 // Design-system showcase — same treatment it already had.
 const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
@@ -210,6 +212,8 @@ export default function App() {
         <Route path="settings" element={page(Settings)} />
         <Route path="community" element={page(Community)} />
         <Route path="help" element={page(Help)} />
+        <Route path="day/:date" element={page(DailyHistory)} />
+        <Route path="health" element={page(HealthDevices)} />
       </Route>
       <Route path="*" element={<Navigate to={authed ? authedHome(needsTerms, pendingGym, isTrainer) : '/login'} replace />} />
     </Routes>
