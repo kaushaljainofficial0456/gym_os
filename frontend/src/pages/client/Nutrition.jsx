@@ -242,16 +242,38 @@ function TodaysEatenList({ meals, editing, onToggle, onEditQty, onDelete, t }) {
   return (
     <div className="space-y-2.5">
       {meals.map((m) => {
-        const isCustomLog = !m.meal_id && m.id && !m.id.startsWith('plan_');
+        // Was `!m.meal_id && m.id && !m.id.startsWith('plan_')` -- checked
+        // for a `meal_id` FIELD that plan meals never carry in the first
+        // place (they're a spread of the `meals` table row, which has no
+        // meal_id column -- that's a meal_logs column) and for an id
+        // prefix ('plan_') this codebase never actually generates (plan
+        // meals use 'mea_', custom logs use 'mlg_' -- see ids.js). Net
+        // effect: isCustomLog was true for EVERY row, plan meals included.
+        // Found live: "Edit Quantity" on a genuine plan meal (Masala Egg
+        // Omelette) sent PUT /me/meal-logs/mea_xxx -- a meals-table id
+        // against an endpoint that only ever looks in meal_logs -- a
+        // guaranteed 404, and the same was true of Remove/DELETE, which
+        // had no isCustomLog gate at all. Checking the actual id prefix is
+        // the reliable signal both PUT/DELETE /me/meal-logs/:logId (which
+        // only ever match meal_logs rows) require.
+        const isCustomLog = !!m.id && m.id.startsWith('mlg_');
         return (
           <div key={m.id} className="flex gap-3 items-start group transition-all">
             {editing ? (
-              <button
-                onClick={() => onDelete(m)}
-                aria-label={`Remove ${m.name}`}
-                className="mt-3 w-6 h-6 rounded-md grid place-items-center shrink-0 text-sm font-bold transition-transform active:scale-90"
-                style={{ background: `${t.danger}12`, color: t.danger, border: `1px solid ${t.danger}30` }}
-              >−</button>
+              isCustomLog ? (
+                <button
+                  onClick={() => onDelete(m)}
+                  aria-label={`Remove ${m.name}`}
+                  className="mt-3 w-6 h-6 rounded-md grid place-items-center shrink-0 text-sm font-bold transition-transform active:scale-90"
+                  style={{ background: `${t.danger}12`, color: t.danger, border: `1px solid ${t.danger}30` }}
+                >−</button>
+              ) : (
+                // Plan meals aren't removable here (they're the trainer's
+                // prescribed plan, not something this control deletes) --
+                // an empty same-size placeholder keeps row alignment
+                // instead of a button whose only possible outcome is a 404.
+                <div className="mt-3 w-6 h-6 shrink-0" aria-hidden="true" />
+              )
             ) : (
               <button
                 type="button" role="checkbox" aria-checked={!!m.eaten}

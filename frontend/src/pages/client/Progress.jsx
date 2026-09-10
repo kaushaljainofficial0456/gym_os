@@ -25,8 +25,17 @@ export default function Progress() {
   const photos = p.data?.photos || [];
 
   const logWeight = async () => {
-    const w = parseFloat(weightInput);
-    if (!w || w <= 0) return;
+    // Was a silent `return` for every invalid case (blank, 0, negative,
+    // non-numeric) -- clicking Log just did nothing with zero feedback,
+    // which reads as a dead button rather than a validated one. Mirrors
+    // the backend's own bound (schemas.weightLog: positive, max 500) so
+    // the common cases surface immediately instead of round-tripping to
+    // the server first.
+    const raw = weightInput.trim();
+    if (!raw) { setToast('Enter a weight first'); return; }
+    const w = parseFloat(raw);
+    if (!Number.isFinite(w) || w <= 0) { setToast('Enter a valid weight greater than 0'); return; }
+    if (w > 500) { setToast('That weight looks too high — double-check it'); return; }
     setSaving(true);
     try {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });

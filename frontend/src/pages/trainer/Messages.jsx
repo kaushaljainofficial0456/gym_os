@@ -16,12 +16,19 @@ export default function Messages() {
   const [type, setType] = useState('message');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [toast, setToast] = useState('');
   const thread = useFetch(() => (clientId ? api(`/messages?client_id=${clientId}`) : Promise.resolve({ messages: [] })), [clientId]);
   const endRef = useRef(null);
 
   useEffect(() => {
     if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [thread.data, clientId]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const h = setTimeout(() => setToast(''), 2600);
+    return () => clearTimeout(h);
+  }, [toast]);
 
   if (clients.loading) return <Spinner label="Loading messages…" />;
   if (clients.error) return <ErrorState error={clients.error} onRetry={clients.reload} />;
@@ -33,7 +40,13 @@ export default function Messages() {
       await api('/messages', { method: 'POST', body: JSON.stringify({ client_id: clientId, type, body }) });
       setBody('');
       thread.reload({ silent: true });
-    } catch (e) { /* keep body */ }
+    } catch (e) {
+      // Was `catch (e) { /* keep body */ }` -- a failed send (network
+      // error, a client no longer assigned to this trainer, etc.) left no
+      // trace: the input just sat there with no indication anything went
+      // wrong. Same fix as the client-side thread in Profile.jsx.
+      setToast(e.message || 'Could not send message');
+    }
     setSending(false);
   };
 
@@ -86,6 +99,7 @@ export default function Messages() {
           </div>
         </div>
       </Card>
+      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
     </div>
   );
 }

@@ -139,9 +139,31 @@ export default function adminRoutes(db) {
     // pattern already used in clients.js's client-creation route for the
     // identical class of bug (a users row committed with no clients row).
     await db.tx(async (tx) => {
+      // /admin/members' own query assumes at most one active subscription
+      // per client (`LEFT JOIN subscriptions s ON s.client_id = c.id AND
+      // s.status = 'active'`) -- without this, creating a subscription for
+      // a client who already has one active produces TWO matching rows,
+      // and that LEFT JOIN returns one output row per match: the client
+      // silently appears TWICE in the Members table. Retiring any prior
+      // active subscription first (same idea as membershipLifecycle.js's
+      // CANCELLED terminal state) keeps that invariant true instead of
+      // relying on every caller to never violate it.
       await tx.run(
-        `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, renewal_date, status, payment_status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid')`,
+        `UPDATE subscriptions SET status = 'cancelled', lifecycle_status = 'CANCELLED' WHERE client_id = ? AND status = 'active'`,
+        [req.body.client_id]);
+      // lifecycle_status: was omitted here -- enrollment.js's own
+      // subscription-INSERT (the other place a subscription gets created)
+      // sets it to 'ACTIVE' on creation; this route never did, so a
+      // subscription created via "+ New subscription" stayed NULL until
+      // init-db.js's startup backfill next ran (guarded by `WHERE
+      // lifecycle_status IS NULL`, so it never fires between restarts) --
+      // in a production server that's up for days, `MembershipActions` in
+      // Business.jsx has no Suspend/Resume/Cancel button for that row the
+      // whole time, since it only matches lifecycle_status 'ACTIVE' /
+      // 'SUSPENDED' / 'PAUSED', never NULL.
+      await tx.run(
+        `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, renewal_date, status, payment_status, lifecycle_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid', 'ACTIVE')`,
         [subId, req.orgId, req.body.client_id, pkg.id, pkg.name, pkg.amount, pkg.currency, start, end, end]);
       await tx.run(
         `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
@@ -218,7 +240,24 @@ export default function adminRoutes(db) {
     if (!toStatus) return res.status(400).json({ error: 'Unknown membership action' });
     const client = await requireOrgClient(req, res, req.params.clientId);
     if (!client) return;
-    const subscription = await db.q1('SELECT * FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    // `ORDER BY end_date DESC` alone picks whichever subscription happens
+    // to expire furthest in the future -- for a client with an old
+    // CANCELLED row and a new ACTIVE one on the same period length (same
+    // end_date), that's a tie with no tiebreaker, and even without a tie
+    // a longer-period cancelled plan could out-rank a shorter active one.
+    // Found live: right after fixing POST /subscriptions to retire a
+    // client's prior active subscription (a few lines up) instead of
+    // leaving both rows around, suspend/resume on the NEW subscription
+    // started failing with "invalid_transition, from: CANCELLED" -- this
+    // was operating on the OLD, just-cancelled row. Preferring an
+    // active/non-terminal row first, before falling back to recency, is
+    // what every caller of this endpoint actually means by "this
+    // client's membership".
+    const subscription = await db.q1(
+      `SELECT * FROM subscriptions WHERE client_id = ?
+        ORDER BY CASE WHEN lifecycle_status IN ('CANCELLED','EXPIRED','REFUNDED','TRANSFERRED') OR status IN ('cancelled','expired') THEN 1 ELSE 0 END,
+                 end_date DESC LIMIT 1`,
+      [client.id]);
     if (!subscription) return res.status(404).json({ error: 'No membership found for this client' });
     const result = await transitionMembership(db, {
       subscriptionId: subscription.id, orgId: req.orgId, toStatus, reason: req.body.reason || null, changedBy: req.user.sub,
@@ -265,7 +304,13 @@ export default function adminRoutes(db) {
   r.get('/members/:clientId/membership/history', async (req, res) => {
     const client = await requireOrgClient(req, res, req.params.clientId);
     if (!client) return;
-    const subscription = await db.q1('SELECT id FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
+    // Same fix as the membership-action route above: prefer this client's
+    // active subscription over a cancelled one with a later end_date.
+    const subscription = await db.q1(
+      `SELECT id FROM subscriptions WHERE client_id = ?
+        ORDER BY CASE WHEN lifecycle_status IN ('CANCELLED','EXPIRED','REFUNDED','TRANSFERRED') OR status IN ('cancelled','expired') THEN 1 ELSE 0 END,
+                 end_date DESC LIMIT 1`,
+      [client.id]);
     if (!subscription) return res.json({ history: [] });
     const history = await db.q('SELECT * FROM membership_status_history WHERE subscription_id = ? AND org_id = ? ORDER BY created_at DESC', [subscription.id, req.orgId]);
     res.json({ history });

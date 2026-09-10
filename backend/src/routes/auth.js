@@ -665,7 +665,7 @@ export default function authRoutes(db) {
 
   r.get('/me', requireAuth, async (req, res) => {
     const user = await db.q1(
-      `SELECT u.id, u.name, u.email, u.role, u.org_id, u.avatar,
+      `SELECT u.id, u.name, u.email, u.role, u.org_id, u.avatar, u.phone,
               u.terms_accepted_at, u.terms_version,
               o.name AS org_name, o.slug AS org_slug
          FROM users u LEFT JOIN organizations o ON o.id = u.org_id

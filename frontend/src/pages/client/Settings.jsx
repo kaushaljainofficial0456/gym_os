@@ -32,7 +32,10 @@ export default function Settings() {
   const [formState, setFormState] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    phone: '',
+    // Was hardcoded to '' -- /auth/me now returns phone (see auth.js), so
+    // an existing number actually shows here instead of looking cleared
+    // every time this page loads.
+    phone: user?.phone || '',
   });
 
   const [busy, setBusy] = useState(false);
@@ -41,7 +44,12 @@ export default function Settings() {
     if (section === 'Account Information') {
       setBusy(true);
       try {
-        await api('/me/profile', { method: 'PUT', body: JSON.stringify({ name: formState.name }) });
+        // Was only ever sending `name` -- the Phone Number field accepted
+        // typing and showed "saved ✓" on submit, but the value was never
+        // included in the request body, so it silently went nowhere (see
+        // PUT /me/profile in me.js, which likewise never read `phone`
+        // until now).
+        await api('/me/profile', { method: 'PUT', body: JSON.stringify({ name: formState.name, phone: formState.phone }) });
         setToast('Account information saved ✓');
       } catch (e) { setToast(e.message || 'Save failed'); }
       setBusy(false);

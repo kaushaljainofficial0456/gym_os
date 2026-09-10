@@ -257,7 +257,14 @@ export default function Profile() {
       const res = await api('/messages', { method: 'POST', body: JSON.stringify({ client_id: clientId, type: 'message', body }) });
       setMsgs((m) => [...(m || []), { id: res.id, body, from_name: c.name, type: 'message', created_at: new Date().toISOString(), mine: true }]);
       setBody('');
-    } catch { /* keep body */ }
+    } catch (e) {
+      // Was `catch { /* keep body */ }` -- the input text was preserved
+      // (good), but nothing ever told the user the send failed, so a
+      // network hiccup or a validation error looked identical to a
+      // successful send that just... didn't appear. Real errors now
+      // surface instead of vanishing silently.
+      setToast(e.message || 'Could not send message');
+    }
     setSending(false);
   };
 
