@@ -246,6 +246,67 @@ export function splitItems(text) {
     .filter(Boolean);
 }
 
+/**
+ * "A with B" -> ["A", "B"], but ONLY when both halves are independently real
+ * foods.
+ *
+ * `with` is treated as a noise WORD rather than a separator (unlike "and"),
+ * which is right for "rice with ghee" as a dish name and wrong for the far
+ * more common "<food> with <food>" log entry. The consequence was a SILENT
+ * loss -- the fragment resolved, so nothing was reported unresolved, and the
+ * meal total was simply missing a food:
+ *   "150g grilled chicken with 100g rice"  -> the rice vanished
+ *   "one bowl chicken curry with rice"     -> the rice vanished
+ *   "coffee with milk and 2 biscuits"      -> the milk vanished
+ *   "a plate of noodles with chicken"      -> the chicken vanished
+ * Eight of the benchmark's multi-item cases lost food this way, and silent
+ * drops are the one failure class the release gate treats as non-negotiable.
+ *
+ * The guard against over-splitting a genuine compound dish is that BOTH
+ * halves must name something the catalogue actually knows: "toast with
+ * butter" splits because toast and butter are both real foods, while a
+ * fragment whose second half resolves to nothing is left exactly as it was.
+ * Returns null when the fragment should not be split.
+ */
+function splitWithConjunction(fragment, search) {
+  const raw = String(fragment || '');
+  if (!/\bwith\b/i.test(raw)) return null;
+  const idx = raw.search(/\bwith\b/i);
+  const before = raw.slice(0, idx).trim();
+  const after = raw.slice(idx).replace(/^with\b/i, '').trim();
+  if (!before || !after) return null;
+
+  /* THE WHOLE PHRASE MAY ITSELF BE A CATALOGUED DISH. "Poha with curd (Poha
+     aur dahi)" and "Curd with potatoes (Dahi aloo)" are single measured INDB
+     rows, and splitting them replaces one measured dish with two guessed
+     components -- which is how V2's composite kcal-in-range rate fell 3 pp.
+     An `exact_name`/`alias_exact` hit on the FULL fragment is the catalogue
+     stating that this exact dish exists under this exact name, which is much
+     stronger evidence than the incidental token overlap behind "toast with
+     butter" -> "Fast foods, breakfast, french toast with butter" (all_tokens)
+     or "chicken with rice" -> "Chicken with rice and vegetable, diet frozen"
+     (name_prefix). Only the strong form blocks the split. */
+  // Searched as "<before> with <after>", NOT through parseFragment, because
+  // parseFragment strips `with` as a noise word -- it would look up "poha
+  // curd", which is not the name of anything, and the dish would never be
+  // recognised.
+  const wholePhrase = `${before} with ${after}`;
+  const whole = search.search(wholePhrase, { limit: 1 })[0];
+  if (whole && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact')) return null;
+
+  // Each half must parse to a named food AND that name must retrieve
+  // something. Anything less and the split would trade one honest answer for
+  // a guess plus a miss.
+  const halves = [before, after];
+  for (const half of halves) {
+    const p = parseFragment(half);
+    if (!p || !p.name) return null;
+    const hits = search.search(p.name, { limit: 1 });
+    if (!hits.length || hits[0].trustworthy === false) return null;
+  }
+  return halves;
+}
+
 /** Pull a leading quantity off a fragment: "2.5 bowls dal" -> 2.5. */
 function parseQuantity(tokens) {
   if (!tokens.length) return { qty: null, rest: tokens };
@@ -339,7 +400,18 @@ export function parseFragment(fragment) {
     }
   }
 
-  let name = tokens.filter((t) => !NOISE.has(t)).join(' ').trim();
+  /* A MEASUREMENT IS NOT A FOOD NAME. parseQuantity only consumes a LEADING
+     quantity, so one written anywhere else ("xyyzqq nonfoodterm 500g",
+     "1 packet potato chips (52g)") stayed in the name and became a search
+     term. Packaged products carry their pack size in their titles, so those
+     tokens match them and nothing else -- "xyyzqq nonfoodterm 500g" returned
+     "BRITANNIA bourbon 500g" at 494 kcal, a confident number for a food that
+     does not exist. Only number+unit tokens are dropped, never bare numerals,
+     because those can be part of a real name ("chicken 65"). */
+  let name = tokens
+    .filter((t) => !NOISE.has(t))
+    .filter((t) => !/^\d+(?:\.\d+)?(?:g|gm|gms|kg|ml|l|oz|lb|lbs)$/.test(t))
+    .join(' ').trim();
 
   // COUNTABLE FOODS ARE THEIR OWN UNIT. "2 rotis", "3 eggs", "2 idli" --
   // roti/egg/idli are entries in the portion catalogue, so the unit-parsing
@@ -515,9 +587,31 @@ function ambiguousAlternatives(hits) {
  * contract fields (schema_version, tier, confidence, unresolved)
  * alongside. Per CONTRACT_skos-food-v1.md that is the migration shape.
  */
+/**
+ * THE definition of "what counts as one logged item" in a sentence:
+ * splitItems, then "<food> with <food>" expanded once the catalogue confirms
+ * both halves are real foods.
+ *
+ * Exported because every engine has to agree on it. When only V1 expanded,
+ * V3 kept iterating the UNEXPANDED fragments, found no item tagged with the
+ * whole "paneer bhurji with 2 rotis" (V1 had already filed them under each
+ * half), and re-split it -- appending a second copy of both foods, for
+ * 934 kcal instead of 467. Two engines disagreeing about where one item ends
+ * is precisely the drift this file's single-implementation rule exists to
+ * prevent.
+ *
+ * Kept out of splitItems itself, which is a pure string function used in
+ * places where no search index exists.
+ */
+export function expandFragments(text, search = getFoodSearch()) {
+  const fragments = splitItems(text);
+  if (!search) return fragments;
+  return fragments.flatMap((f) => splitWithConjunction(f, search) || [f]);
+}
+
 export function estimateFood(text) {
   const search = getFoodSearch();
-  const fragments = splitItems(text);
+  const fragments = expandFragments(text, search);
 
   if (!search) {
     return {

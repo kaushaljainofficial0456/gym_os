@@ -4,107 +4,107 @@
     "engine_label": "current production engine (foodEstimator.js / skos-food-v1, deterministic Tier 1)",
     "dataset_version": "v1",
     "n_cases": 324,
-    "run_at": "2026-09-10T14:01:21.742Z"
+    "run_at": "2026-09-10T15:12:58.594Z"
   },
-  "weighted_overall": 0.662,
-  "unweighted_overall": 0.67,
+  "weighted_overall": 0.733,
+  "unweighted_overall": 0.727,
   "metrics": {
-    "1_food_identity_accuracy": 0.811,
-    "1b_food_identity_graded": 0.801,
-    "2_food_class_accuracy": 0.557,
+    "1_food_identity_accuracy": 0.901,
+    "1b_food_identity_graded": 0.898,
+    "2_food_class_accuracy": 0.594,
     "2_note": "V1 has no class output — computed from a heuristic proxy over the matched row",
-    "3_prep_state_accuracy": 0.679,
-    "3b_prep_state_graded": 0.642,
-    "4_portion_accuracy": 0.708,
-    "4b_portion_graded": 0.873,
+    "3_prep_state_accuracy": 0.67,
+    "3b_prep_state_graded": 0.634,
+    "4_portion_accuracy": 0.713,
+    "4b_portion_graded": 0.874,
     "5_composite_decomposition": {
       "decomposition_attempt_rate": 0,
-      "kcal_total_in_range_rate": 0.588,
-      "category_case_score": 0.64
+      "kcal_total_in_range_rate": 0.603,
+      "category_case_score": 0.646
     },
     "6_kcal": {
       "n_cases_declared": 306,
-      "resolution_rate": 0.951,
-      "in_range_rate": 0.567,
-      "mae_resolved": 108.1,
-      "mae_all": 116.3,
+      "resolution_rate": 0.944,
+      "in_range_rate": 0.612,
+      "mae_resolved": 101.8,
+      "mae_all": 113.5,
       "mape_edge_resolved_median": 0,
       "mape_edge_all_median": 0,
-      "mape_edge_all_mean": 0.877,
-      "mape_mid_resolved_median": 0.3,
-      "mape_mid_all_median": 0.358,
-      "mape_mid_all_mean": 1.096
+      "mape_edge_all_mean": 0.795,
+      "mape_mid_resolved_median": 0.252,
+      "mape_mid_all_median": 0.288,
+      "mape_mid_all_mean": 1.002
     },
     "7_protein": {
       "n_cases_declared": 305,
-      "resolution_rate": 0.954,
-      "in_range_rate": 0.612,
-      "mae_resolved": 3.7,
-      "mae_all": 4,
+      "resolution_rate": 0.948,
+      "in_range_rate": 0.678,
+      "mae_resolved": 2.7,
+      "mae_all": 3.3,
       "mape_edge_resolved_median": 0,
       "mape_edge_all_median": 0,
-      "mape_edge_all_mean": 0.758,
-      "mape_mid_resolved_median": 0.333,
-      "mape_mid_all_median": 0.37,
-      "mape_mid_all_mean": 1.023
+      "mape_edge_all_mean": 0.534,
+      "mape_mid_resolved_median": 0.254,
+      "mape_mid_all_median": 0.28,
+      "mape_mid_all_mean": 0.78
     },
     "8_carb": {
       "n_cases_declared": 297,
-      "resolution_rate": 0.953,
-      "in_range_rate": 0.565,
-      "mae_resolved": 10.1,
-      "mae_all": 11,
+      "resolution_rate": 0.946,
+      "in_range_rate": 0.616,
+      "mae_resolved": 9.3,
+      "mae_all": 10.4,
       "mape_edge_resolved_median": 0,
       "mape_edge_all_median": 0,
-      "mape_edge_all_mean": 1.134,
-      "mape_mid_resolved_median": 0.431,
-      "mape_mid_all_median": 0.469,
-      "mape_mid_all_mean": 1.423
+      "mape_edge_all_mean": 0.76,
+      "mape_mid_resolved_median": 0.368,
+      "mape_mid_all_median": 0.411,
+      "mape_mid_all_mean": 1.027
     },
     "9_fat": {
       "n_cases_declared": 305,
-      "resolution_rate": 0.954,
-      "in_range_rate": 0.584,
-      "mae_resolved": 7.7,
-      "mae_all": 8,
+      "resolution_rate": 0.948,
+      "in_range_rate": 0.623,
+      "mae_resolved": 7.4,
+      "mae_all": 7.9,
       "mape_edge_resolved_median": 0,
       "mape_edge_all_median": 0,
-      "mape_edge_all_mean": 2.184,
-      "mape_mid_resolved_median": 0.471,
-      "mape_mid_all_median": 0.5,
-      "mape_mid_all_mean": 2.501
+      "mape_edge_all_mean": 1.876,
+      "mape_mid_resolved_median": 0.438,
+      "mape_mid_all_median": 0.467,
+      "mape_mid_all_mean": 2.182
     },
     "10_plausibility_false_positive": {
-      "rate": 0.021,
-      "count": 6,
-      "eligible": 291
+      "rate": 0.024,
+      "count": 7,
+      "eligible": 289
     },
     "11_plausibility_false_negative": {
-      "rate": 0.108,
-      "count": 32,
-      "eligible": 297
+      "rate": 0.099,
+      "count": 29,
+      "eligible": 292
     },
-    "12_unresolved_rate": 0.052,
+    "12_unresolved_rate": 0.061,
     "13_fabrication_rate": 0.003,
     "13b_fabrication_count": 1,
     "13c_nonfood_resolved_low_conf": 3,
-    "13d_silent_drop_rate_multi_food": 0.45,
+    "13d_silent_drop_rate_multi_food": 0.1,
     "14_confidence_calibration": {
-      "ece": 0.2,
+      "ece": 0.198,
       "table": {
         "high": {
-          "n": 145,
-          "observed_accuracy": 0.586,
+          "n": 147,
+          "observed_accuracy": 0.633,
           "nominal": 0.9
         },
         "medium": {
-          "n": 84,
-          "observed_accuracy": 0.512,
+          "n": 90,
+          "observed_accuracy": 0.5,
           "nominal": 0.65
         },
         "low": {
-          "n": 68,
-          "observed_accuracy": 0.368,
+          "n": 55,
+          "observed_accuracy": 0.491,
           "nominal": 0.4
         },
         "unreliable": {
@@ -115,18 +115,18 @@
       }
     },
     "15_brand_generic_accuracy": {
-      "n": 292,
-      "overall": 0.87,
-      "branded": 0.692,
-      "generic": 0.878
+      "n": 290,
+      "overall": 0.859,
+      "branded": 0.615,
+      "generic": 0.87
     },
     "16_latency": {
-      "mean_ms": 31.7,
-      "p50_ms": 23.4,
-      "p90_ms": 59.5,
-      "p95_ms": 80.3,
-      "max_ms": 138.8,
-      "total_wall_ms": 10397.4
+      "mean_ms": 36.7,
+      "p50_ms": 21.8,
+      "p90_ms": 66.9,
+      "p95_ms": 105.8,
+      "max_ms": 262.8,
+      "total_wall_ms": 11994.7
     },
     "17_llm_escalation_rate": 0,
     "18_est_cost_usd_per_estimate": 0
@@ -136,70 +136,70 @@
       "n": 90,
       "weight": 0.17,
       "label": "Single ingredient",
-      "case_score": 0.732,
-      "identity_accuracy": 0.844,
+      "case_score": 0.79,
+      "identity_accuracy": 0.933,
       "kcal_mape_mid_median": 0.123,
-      "kcal_in_range_rate": 0.659,
+      "kcal_in_range_rate": 0.682,
       "unresolved_rate": 0,
-      "confident_wrong": 17,
+      "confident_wrong": 14,
       "fabrication": 1
     },
     "prepared_food": {
       "n": 43,
       "weight": 0.17,
       "label": "Prepared food",
-      "case_score": 0.618,
-      "identity_accuracy": 0.667,
-      "kcal_mape_mid_median": 0.368,
-      "kcal_in_range_rate": 0.476,
+      "case_score": 0.758,
+      "identity_accuracy": 0.881,
+      "kcal_mape_mid_median": 0.253,
+      "kcal_in_range_rate": 0.595,
       "unresolved_rate": 0.023,
-      "confident_wrong": 13,
+      "confident_wrong": 7,
       "fabrication": 0
     },
     "composite_dish": {
       "n": 95,
       "weight": 0.22,
       "label": "Composite dish",
-      "case_score": 0.64,
-      "identity_accuracy": 0.768,
-      "kcal_mape_mid_median": 0.381,
-      "kcal_in_range_rate": 0.588,
-      "unresolved_rate": 0.138,
-      "confident_wrong": 15,
+      "case_score": 0.646,
+      "identity_accuracy": 0.795,
+      "kcal_mape_mid_median": 0.371,
+      "kcal_in_range_rate": 0.603,
+      "unresolved_rate": 0.17,
+      "confident_wrong": 13,
       "fabrication": 0
     },
     "meal": {
       "n": 20,
       "weight": 0.12,
       "label": "Meal (multi-food)",
-      "case_score": 0.691,
-      "identity_accuracy": 0.947,
-      "kcal_mape_mid_median": 0.419,
-      "kcal_in_range_rate": 0.444,
+      "case_score": 0.91,
+      "identity_accuracy": 1,
+      "kcal_mape_mid_median": 0.193,
+      "kcal_in_range_rate": 0.778,
       "unresolved_rate": 0,
-      "confident_wrong": 1,
+      "confident_wrong": 0,
       "fabrication": 0
     },
     "beverage": {
       "n": 24,
       "weight": 0.1,
       "label": "Beverage",
-      "case_score": 0.703,
-      "identity_accuracy": 0.792,
-      "kcal_mape_mid_median": 0.591,
+      "case_score": 0.769,
+      "identity_accuracy": 0.917,
+      "kcal_mape_mid_median": 0.608,
       "kcal_in_range_rate": 0.417,
       "unresolved_rate": 0,
-      "confident_wrong": 4,
+      "confident_wrong": 3,
       "fabrication": 0
     },
     "snack": {
       "n": 17,
       "weight": 0.08,
       "label": "Snack",
-      "case_score": 0.652,
-      "identity_accuracy": 0.882,
-      "kcal_mape_mid_median": 0.213,
-      "kcal_in_range_rate": 0.625,
+      "case_score": 0.675,
+      "identity_accuracy": 1,
+      "kcal_mape_mid_median": 0.326,
+      "kcal_in_range_rate": 0.563,
       "unresolved_rate": 0,
       "confident_wrong": 3,
       "fabrication": 0
@@ -208,9 +208,9 @@
       "n": 13,
       "weight": 0.06,
       "label": "Dessert",
-      "case_score": 0.483,
-      "identity_accuracy": 0.909,
-      "kcal_mape_mid_median": 0.573,
+      "case_score": 0.511,
+      "identity_accuracy": 1,
+      "kcal_mape_mid_median": 0.647,
       "kcal_in_range_rate": 0.182,
       "unresolved_rate": 0.154,
       "confident_wrong": 4,
@@ -245,61 +245,61 @@
     "cuisine": {
       "indian": {
         "n": 81,
-        "case_score": 0.639,
-        "identity_accuracy": 0.808,
-        "kcal_mape_mid_median": 0.376,
-        "confident_wrong": 19,
-        "plaus_fn": 7,
+        "case_score": 0.683,
+        "identity_accuracy": 0.887,
+        "kcal_mape_mid_median": 0.219,
+        "confident_wrong": 15,
+        "plaus_fn": 5,
         "fabrication": 0
       },
       "south_asian": {
         "n": 19,
-        "case_score": 0.761,
-        "identity_accuracy": 0.789,
-        "kcal_mape_mid_median": 0.235,
-        "confident_wrong": 3,
+        "case_score": 0.828,
+        "identity_accuracy": 0.895,
+        "kcal_mape_mid_median": 0.244,
+        "confident_wrong": 2,
         "plaus_fn": 3,
         "fabrication": 0
       },
       "east_asian": {
         "n": 24,
-        "case_score": 0.601,
-        "identity_accuracy": 0.762,
-        "kcal_mape_mid_median": 0.472,
+        "case_score": 0.65,
+        "identity_accuracy": 0.773,
+        "kcal_mape_mid_median": 0.333,
         "confident_wrong": 6,
         "plaus_fn": 2,
         "fabrication": 0
       },
       "middle_eastern": {
         "n": 10,
-        "case_score": 0.655,
-        "identity_accuracy": 0.875,
-        "kcal_mape_mid_median": 0.121,
+        "case_score": 0.653,
+        "identity_accuracy": 1,
+        "kcal_mape_mid_median": 0.032,
         "confident_wrong": 1,
         "plaus_fn": 2,
         "fabrication": 0
       },
       "european": {
         "n": 22,
-        "case_score": 0.642,
-        "identity_accuracy": 0.81,
-        "kcal_mape_mid_median": 0.208,
-        "confident_wrong": 6,
+        "case_score": 0.714,
+        "identity_accuracy": 0.952,
+        "kcal_mape_mid_median": 0.354,
+        "confident_wrong": 4,
         "plaus_fn": 4,
         "fabrication": 0
       },
       "american": {
         "n": 32,
-        "case_score": 0.646,
-        "identity_accuracy": 0.875,
-        "kcal_mape_mid_median": 0.515,
-        "confident_wrong": 5,
+        "case_score": 0.721,
+        "identity_accuracy": 0.938,
+        "kcal_mape_mid_median": 0.496,
+        "confident_wrong": 4,
         "plaus_fn": 3,
         "fabrication": 0
       },
       "latin_american": {
         "n": 10,
-        "case_score": 0.701,
+        "case_score": 0.692,
         "identity_accuracy": 0.6,
         "kcal_mape_mid_median": 0.102,
         "confident_wrong": 0,
@@ -308,28 +308,28 @@
       },
       "african": {
         "n": 5,
-        "case_score": 0.53,
-        "identity_accuracy": 0.667,
-        "kcal_mape_mid_median": 0.509,
-        "confident_wrong": 0,
+        "case_score": 0.423,
+        "identity_accuracy": 0.25,
+        "kcal_mape_mid_median": 0.356,
+        "confident_wrong": 1,
         "plaus_fn": 0,
         "fabrication": 0
       },
       "mediterranean": {
         "n": 14,
-        "case_score": 0.596,
-        "identity_accuracy": 0.643,
-        "kcal_mape_mid_median": 0.426,
-        "confident_wrong": 4,
-        "plaus_fn": 4,
+        "case_score": 0.728,
+        "identity_accuracy": 0.846,
+        "kcal_mape_mid_median": 0.333,
+        "confident_wrong": 2,
+        "plaus_fn": 3,
         "fabrication": 0
       },
       "global": {
         "n": 97,
-        "case_score": 0.719,
-        "identity_accuracy": 0.854,
-        "kcal_mape_mid_median": 0.231,
-        "confident_wrong": 16,
+        "case_score": 0.794,
+        "identity_accuracy": 0.978,
+        "kcal_mape_mid_median": 0.194,
+        "confident_wrong": 12,
         "plaus_fn": 6,
         "fabrication": 1
       }
@@ -337,138 +337,138 @@
     "prep": {
       "raw": {
         "n": 111,
-        "case_score": 0.735,
-        "identity_accuracy": 0.873,
+        "case_score": 0.788,
+        "identity_accuracy": 0.964,
         "kcal_mape_mid_median": 0.194,
-        "confident_wrong": 18,
+        "confident_wrong": 15,
         "plaus_fn": 11,
         "fabrication": 1
       },
       "boiled": {
         "n": 27,
-        "case_score": 0.693,
-        "identity_accuracy": 0.731,
+        "case_score": 0.753,
+        "identity_accuracy": 0.846,
         "kcal_mape_mid_median": 0.092,
-        "confident_wrong": 5,
+        "confident_wrong": 4,
         "plaus_fn": 0,
         "fabrication": 0
       },
       "steamed": {
         "n": 4,
-        "case_score": 0.514,
+        "case_score": 0.513,
         "identity_accuracy": 0.5,
-        "kcal_mape_mid_median": 1.931,
+        "kcal_mape_mid_median": 0.181,
         "confident_wrong": 2,
-        "plaus_fn": 1,
+        "plaus_fn": 2,
         "fabrication": 0
       },
       "grilled": {
         "n": 12,
-        "case_score": 0.403,
-        "identity_accuracy": 0.417,
-        "kcal_mape_mid_median": 0.487,
-        "confident_wrong": 6,
-        "plaus_fn": 0,
+        "case_score": 0.655,
+        "identity_accuracy": 0.818,
+        "kcal_mape_mid_median": 0.333,
+        "confident_wrong": 2,
+        "plaus_fn": 1,
         "fabrication": 0
       },
       "roasted": {
         "n": 6,
-        "case_score": 0.649,
-        "identity_accuracy": 0.667,
-        "kcal_mape_mid_median": 0.35,
-        "confident_wrong": 2,
-        "plaus_fn": 3,
+        "case_score": 0.794,
+        "identity_accuracy": 0.833,
+        "kcal_mape_mid_median": 0.08,
+        "confident_wrong": 1,
+        "plaus_fn": 1,
         "fabrication": 0
       },
       "baked": {
         "n": 22,
-        "case_score": 0.521,
-        "identity_accuracy": 0.818,
-        "kcal_mape_mid_median": 0.763,
-        "confident_wrong": 7,
-        "plaus_fn": 3,
+        "case_score": 0.564,
+        "identity_accuracy": 0.905,
+        "kcal_mape_mid_median": 0.796,
+        "confident_wrong": 5,
+        "plaus_fn": 1,
         "fabrication": 0
       },
       "fried": {
         "n": 30,
-        "case_score": 0.517,
-        "identity_accuracy": 0.63,
-        "kcal_mape_mid_median": 0.225,
-        "confident_wrong": 7,
+        "case_score": 0.596,
+        "identity_accuracy": 0.808,
+        "kcal_mape_mid_median": 0.226,
+        "confident_wrong": 6,
         "plaus_fn": 3,
         "fabrication": 0
       },
       "cooked_wet": {
         "n": 55,
-        "case_score": 0.674,
-        "identity_accuracy": 0.889,
-        "kcal_mape_mid_median": 0.396,
-        "confident_wrong": 7,
+        "case_score": 0.685,
+        "identity_accuracy": 0.87,
+        "kcal_mape_mid_median": 0.381,
+        "confident_wrong": 8,
         "plaus_fn": 3,
         "fabrication": 0
       },
       "cooked_dry": {
         "n": 22,
-        "case_score": 0.676,
-        "identity_accuracy": 0.818,
+        "case_score": 0.727,
+        "identity_accuracy": 0.864,
         "kcal_mape_mid_median": 0.374,
-        "confident_wrong": 5,
-        "plaus_fn": 6,
+        "confident_wrong": 4,
+        "plaus_fn": 5,
         "fabrication": 0
       }
     },
     "namespace": {
       "branded": {
         "n": 13,
-        "case_score": 0.499,
-        "identity_accuracy": 0.846,
-        "kcal_mape_mid_median": 0.707,
+        "case_score": 0.554,
+        "identity_accuracy": 1,
+        "kcal_mape_mid_median": 0.675,
         "confident_wrong": 4,
         "plaus_fn": 3,
         "fabrication": 0
       },
       "generic": {
         "n": 293,
-        "case_score": 0.672,
-        "identity_accuracy": 0.806,
-        "kcal_mape_mid_median": 0.279,
-        "confident_wrong": 56,
-        "plaus_fn": 29,
+        "case_score": 0.734,
+        "identity_accuracy": 0.895,
+        "kcal_mape_mid_median": 0.226,
+        "confident_wrong": 43,
+        "plaus_fn": 26,
         "fabrication": 1
       }
     },
     "portion_style": {
       "explicit_grams": {
         "n": 129,
-        "case_score": 0.725,
-        "identity_accuracy": 0.806,
-        "kcal_mape_mid_median": 0.108,
-        "confident_wrong": 22,
-        "plaus_fn": 7,
+        "case_score": 0.781,
+        "identity_accuracy": 0.894,
+        "kcal_mape_mid_median": 0.086,
+        "confident_wrong": 14,
+        "plaus_fn": 6,
         "fabrication": 0
       },
       "count_portion": {
         "n": 70,
-        "case_score": 0.587,
-        "identity_accuracy": 0.788,
-        "kcal_mape_mid_median": 0.415,
-        "confident_wrong": 14,
-        "plaus_fn": 10,
+        "case_score": 0.645,
+        "identity_accuracy": 0.908,
+        "kcal_mape_mid_median": 0.412,
+        "confident_wrong": 13,
+        "plaus_fn": 9,
         "fabrication": 1
       },
       "volume_portion": {
         "n": 58,
-        "case_score": 0.683,
-        "identity_accuracy": 0.891,
-        "kcal_mape_mid_median": 0.382,
-        "confident_wrong": 12,
+        "case_score": 0.699,
+        "identity_accuracy": 0.893,
+        "kcal_mape_mid_median": 0.369,
+        "confident_wrong": 13,
         "plaus_fn": 9,
         "fabrication": 0
       },
       "nl_quantity": {
         "n": 5,
-        "case_score": 0.855,
-        "identity_accuracy": 0.8,
+        "case_score": 0.954,
+        "identity_accuracy": 1,
         "kcal_mape_mid_median": 0.219,
         "confident_wrong": 0,
         "plaus_fn": 0,
@@ -476,11 +476,11 @@
       },
       "no_quantity": {
         "n": 43,
-        "case_score": 0.563,
-        "identity_accuracy": 0.707,
-        "kcal_mape_mid_median": 0.553,
-        "confident_wrong": 12,
-        "plaus_fn": 6,
+        "case_score": 0.714,
+        "identity_accuracy": 0.897,
+        "kcal_mape_mid_median": 0.484,
+        "confident_wrong": 7,
+        "plaus_fn": 4,
         "fabrication": 0
       }
     },
@@ -496,11 +496,11 @@
       },
       "transliteration": {
         "n": 39,
-        "case_score": 0.583,
-        "identity_accuracy": 0.818,
-        "kcal_mape_mid_median": 0.417,
-        "confident_wrong": 10,
-        "plaus_fn": 4,
+        "case_score": 0.613,
+        "identity_accuracy": 0.906,
+        "kcal_mape_mid_median": 0.403,
+        "confident_wrong": 8,
+        "plaus_fn": 2,
         "fabrication": 0
       },
       "spelling_variant": {
@@ -514,8 +514,8 @@
       },
       "ambiguous": {
         "n": 20,
-        "case_score": 0.807,
-        "identity_accuracy": 0.889,
+        "case_score": 0.817,
+        "identity_accuracy": 0.875,
         "kcal_mape_mid_median": 0.263,
         "confident_wrong": 3,
         "plaus_fn": 1,
@@ -525,18 +525,18 @@
     "structure": {
       "multi_food": {
         "n": 18,
-        "case_score": 0.668,
-        "identity_accuracy": 0.944,
-        "kcal_mape_mid_median": 0.419,
-        "confident_wrong": 1,
+        "case_score": 0.9,
+        "identity_accuracy": 1,
+        "kcal_mape_mid_median": 0.193,
+        "confident_wrong": 0,
         "plaus_fn": 2,
         "fabrication": 0
       },
       "stuffed": {
         "n": 11,
-        "case_score": 0.666,
-        "identity_accuracy": 0.8,
-        "kcal_mape_mid_median": 0.32,
+        "case_score": 0.66,
+        "identity_accuracy": 0.889,
+        "kcal_mape_mid_median": 0.362,
         "confident_wrong": 1,
         "plaus_fn": 3,
         "fabrication": 0
@@ -552,10 +552,10 @@
       },
       "combo": {
         "n": 20,
-        "case_score": 0.613,
-        "identity_accuracy": 0.8,
-        "kcal_mape_mid_median": 0.513,
-        "confident_wrong": 3,
+        "case_score": 0.7,
+        "identity_accuracy": 0.833,
+        "kcal_mape_mid_median": 0.425,
+        "confident_wrong": 2,
         "plaus_fn": 3,
         "fabrication": 0
       }
@@ -563,7 +563,7 @@
     "difficulty": {
       "hard": {
         "n": 8,
-        "case_score": 0.801,
+        "case_score": 0.738,
         "identity_accuracy": 1,
         "kcal_mape_mid_median": 0,
         "confident_wrong": 0,
@@ -574,7 +574,7 @@
     "expectation": {
       "low_confidence_expected": {
         "n": 8,
-        "case_score": 0.801,
+        "case_score": 0.738,
         "identity_accuracy": 1,
         "kcal_mape_mid_median": 0,
         "confident_wrong": 0,
@@ -595,29 +595,29 @@
   "difficulty_slices": {
     "easy": {
       "n": 143,
-      "case_score": 0.731,
-      "identity_accuracy": 0.873,
+      "case_score": 0.785,
+      "identity_accuracy": 0.963,
       "kcal_mape_mid_median": 0.193,
-      "confident_wrong": 22,
-      "plaus_fn": 9,
+      "confident_wrong": 17,
+      "plaus_fn": 11,
       "fabrication": 0
     },
     "medium": {
       "n": 132,
-      "case_score": 0.639,
-      "identity_accuracy": 0.772,
-      "kcal_mape_mid_median": 0.35,
-      "confident_wrong": 30,
-      "plaus_fn": 19,
+      "case_score": 0.715,
+      "identity_accuracy": 0.878,
+      "kcal_mape_mid_median": 0.252,
+      "confident_wrong": 22,
+      "plaus_fn": 15,
       "fabrication": 1
     },
     "hard": {
       "n": 49,
-      "case_score": 0.572,
-      "identity_accuracy": 0.725,
-      "kcal_mape_mid_median": 0.549,
+      "case_score": 0.589,
+      "identity_accuracy": 0.743,
+      "kcal_mape_mid_median": 0.548,
       "confident_wrong": 8,
-      "plaus_fn": 4,
+      "plaus_fn": 3,
       "fabrication": 0
     }
   },
@@ -636,32 +636,6 @@
       ]
     },
     {
-      "id": "bev-004",
-      "primary": "beverage",
-      "score": 0.035,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": false,
-      "notes": [
-        "no identity match (\"Black berry (Rubus sp.)\" vs /coffee/)",
-        "grams 100 outside 180–260",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
-      "id": "sng-015",
-      "primary": "single_ingredient",
-      "score": 0.035,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": true,
-      "notes": [
-        "matched reject pattern in \"Flour, soy, full-fat\"",
-        "plausibility FN: judge-implausible answer at medium confidence (protein density 38.6/100g outside 0–35)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
       "id": "bev-008",
       "primary": "beverage",
       "score": 0.036,
@@ -671,19 +645,6 @@
       "notes": [
         "no identity match (\"Masala munch\" vs /tea|chai/)",
         "plausibility FN: judge-implausible answer at medium confidence (kcal density 558/100g outside 0–160)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
-      "id": "mel-008",
-      "primary": "meal",
-      "score": 0.039,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": true,
-      "notes": [
-        "silent drop: paneer bhurji|bhurji|scrambled paneer, chapati|roti|phulka neither matched nor reported unresolved",
-        "plausibility FN: judge-implausible answer at high confidence (carb density 0.0/100g outside 2–45)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -739,18 +700,6 @@
       ]
     },
     {
-      "id": "x-prp-014",
-      "primary": "prepared_food",
-      "score": 0.058,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": false,
-      "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /zucchini|courgette/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
       "id": "cmp-007",
       "primary": "composite_dish",
       "score": 0.059,
@@ -760,56 +709,6 @@
       "notes": [
         "no identity match (\"Chickpeas curry (Safed channa curry)\" vs /chole bhatur|bhatur|chana.*bhatur|chole.*bhatur/)",
         "grams 119.9 outside 350–700",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
-      "id": "sng-018",
-      "primary": "single_ingredient",
-      "score": 0.059,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": false,
-      "notes": [
-        "no identity match (\"Cabbage rolls (dry) ((Pattagobhi rolls) (dry))\" vs /oat/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
-      "id": "cmp-035",
-      "primary": "composite_dish",
-      "score": 0.062,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": true,
-      "notes": [
-        "no identity match (\"Cookie, oatmeal (with raisins), commercial, less than 5g fat/serving\" vs /moussaka/)",
-        "grams 28.4 outside 250–450",
-        "plausibility FN: judge-implausible answer at high confidence (kcal density 437/100g outside 30–340)"
-      ]
-    },
-    {
-      "id": "cmp-084",
-      "primary": "composite_dish",
-      "score": 0.064,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": true,
-      "notes": [
-        "no identity match (\"Cookie, oatmeal (with raisins), commercial, less than 5g fat/serving\" vs /lasagn/)",
-        "grams 28.4 outside 250–450",
-        "plausibility FN: judge-implausible answer at high confidence (kcal density 437/100g outside 30–340)"
-      ]
-    },
-    {
-      "id": "x-amb-010",
-      "primary": "composite_dish",
-      "score": 0.065,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": false,
-      "notes": [
-        "matched reject pattern in \"Rasam powder (Rasam masala)\"",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -826,40 +725,14 @@
       ]
     },
     {
-      "id": "prp-006",
-      "primary": "prepared_food",
-      "score": 0.068,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": true,
-      "notes": [
-        "no identity match (\"Roasted chana\" vs /sweet potato/)",
-        "plausibility FN: judge-implausible answer at medium confidence (carb density 61.0/100g outside 0–55)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
-    },
-    {
-      "id": "x-amb-002",
-      "primary": "composite_dish",
-      "score": 0.069,
-      "confident_wrong": true,
-      "fabrication": false,
-      "plaus_fn": true,
-      "notes": [
-        "no identity match (\"Jeera\" vs /jeera rice|cumin rice|rice.*jeera|rice.*cumin/)",
-        "grams 100 outside 120–300",
-        "plausibility FN: judge-implausible answer at high confidence (protein density 0.0/100g outside 1–22)"
-      ]
-    },
-    {
       "id": "sng-045",
       "primary": "prepared_food",
-      "score": 0.07,
+      "score": 0.069,
       "confident_wrong": true,
       "fabrication": false,
       "plaus_fn": false,
       "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /prawn|shrimp|jhinga/)",
+        "matched reject pattern in \"Prawns, big (Macrobrachium rosenbergii)\"",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -877,27 +750,15 @@
       ]
     },
     {
-      "id": "bev-006",
-      "primary": "beverage",
-      "score": 0.072,
-      "confident_wrong": false,
-      "fabrication": false,
-      "plaus_fn": false,
-      "notes": [
-        "no identity match (\"Ice cream cone, scooped, vanilla\" vs /whey|protein.*shake|protein.*powder|protein drink/)",
-        "grams 100 outside 28–45"
-      ]
-    },
-    {
-      "id": "x-prp-007",
+      "id": "prp-007",
       "primary": "prepared_food",
-      "score": 0.077,
+      "score": 0.078,
       "confident_wrong": true,
       "fabrication": false,
       "plaus_fn": true,
       "notes": [
-        "no identity match (\"Roasted chana\" vs /roasted vegetable|vegetable.*roasted|grilled vegetable/)",
-        "plausibility FN: judge-implausible answer at medium confidence (carb density 61.0/100g outside 0–55)",
+        "matched reject pattern in \"Broccoli, raw\"",
+        "plausibility FN: judge-implausible answer at medium confidence (kcal density 34/100g outside 40–380)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -927,14 +788,145 @@
       ]
     },
     {
-      "id": "prp-007",
-      "primary": "prepared_food",
-      "score": 0.084,
+      "id": "x-cmp-011",
+      "primary": "composite_dish",
+      "score": 0.085,
       "confident_wrong": true,
       "fabrication": false,
       "plaus_fn": false,
       "notes": [
-        "no identity match (\"Caramel custard (steamed)\" vs /broccoli/)",
+        "no identity match (\"Tofu\" vs /mapo tofu|ma po tofu|mapo doufu/)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "x-des-003",
+      "primary": "dessert",
+      "score": 0.09,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "grams 100 outside 12–45",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "x-prp-007",
+      "primary": "prepared_food",
+      "score": 0.094,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "no identity match (\"Vegetables, pickled\" vs /roasted vegetable|vegetable.*roasted|grilled vegetable/)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "x-snk-002",
+      "primary": "snack",
+      "score": 0.097,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "grams 100 outside 7–15",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "x-cmp-004",
+      "primary": "composite_dish",
+      "score": 0.098,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "no identity match (\"Rice, fried, with chicken\" vs /fried rice/)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "non-005",
+      "primary": "nonfood_or_malformed",
+      "score": 0.1,
+      "confident_wrong": false,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "resolved a non-food input at low confidence (should be unresolved)"
+      ]
+    },
+    {
+      "id": "non-006",
+      "primary": "nonfood_or_malformed",
+      "score": 0.1,
+      "confident_wrong": false,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "resolved a non-food input at low confidence (should be unresolved)"
+      ]
+    },
+    {
+      "id": "non-007",
+      "primary": "nonfood_or_malformed",
+      "score": 0.1,
+      "confident_wrong": false,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "resolved a non-food input at medium confidence (should be unresolved)"
+      ]
+    },
+    {
+      "id": "des-006",
+      "primary": "dessert",
+      "score": 0.101,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": true,
+      "notes": [
+        "grams 200 outside 50–120",
+        "plausibility FN: judge-implausible answer at high confidence (serving 880 kcal outside 40–700)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "sng-023",
+      "primary": "single_ingredient",
+      "score": 0.102,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "grams 100 outside 22–40",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "cmp-020",
+      "primary": "composite_dish",
+      "score": 0.104,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": false,
+      "notes": [
+        "no identity match (\"Rice, fried, with chicken\" vs /fried rice/)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+      ]
+    },
+    {
+      "id": "des-001",
+      "primary": "dessert",
+      "score": 0.104,
+      "confident_wrong": true,
+      "fabrication": false,
+      "plaus_fn": true,
+      "notes": [
+        "grams 200 outside 60–140",
+        "plausibility FN: judge-implausible answer at high confidence (serving 840 kcal outside 40–700)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     }
@@ -964,7 +956,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 32.7,
+      "latency_ms": 26.3,
       "notes": []
     },
     {
@@ -992,7 +984,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 30,
+      "latency_ms": 28.8,
       "notes": []
     },
     {
@@ -1019,7 +1011,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.8,
+      "latency_ms": 19.4,
       "notes": []
     },
     {
@@ -1033,23 +1025,22 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.262,
-      "identity_ok": 0,
+      "case_score": 0.957,
+      "identity_ok": 1,
       "class_ok": 1,
-      "prep_ok": 0,
-      "portion_ok": 0.56,
-      "confidence_band": "low",
+      "prep_ok": 1,
+      "portion_ok": 0.8,
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.126,
+      "kcal_err_pct": 0.084,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 49.3,
+      "latency_ms": 82.3,
       "notes": [
-        "no identity match (\"Beef, ground, medium, baked\" vs /\\bapple/)",
-        "grams 52 outside 140–200"
+        "grams 100 outside 140–200"
       ]
     },
     {
@@ -1076,7 +1067,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 29.2,
+      "latency_ms": 29.7,
       "notes": []
     },
     {
@@ -1103,7 +1094,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 32.2,
+      "latency_ms": 23.1,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -1132,7 +1123,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.1,
+      "latency_ms": 19.9,
       "notes": []
     },
     {
@@ -1159,7 +1150,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 32.9,
+      "latency_ms": 31,
       "notes": []
     },
     {
@@ -1187,7 +1178,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 30,
+      "latency_ms": 28.9,
       "notes": []
     },
     {
@@ -1214,7 +1205,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.9,
+      "latency_ms": 19.6,
       "notes": []
     },
     {
@@ -1241,7 +1232,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 50.5,
+      "latency_ms": 66.8,
       "notes": []
     },
     {
@@ -1268,7 +1259,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.5,
+      "latency_ms": 19.7,
       "notes": []
     },
     {
@@ -1295,7 +1286,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18,
+      "latency_ms": 21.2,
       "notes": [
         "grams 240 outside 150–200",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -1325,7 +1316,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.8,
+      "latency_ms": 16.3,
       "notes": []
     },
     {
@@ -1339,25 +1330,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.035,
-      "identity_ok": 0,
-      "class_ok": 0,
+      "case_score": 0.739,
+      "identity_ok": 1,
+      "class_ok": 1,
       "prep_ok": null,
       "portion_ok": 1,
-      "confidence_band": "medium",
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 6.21,
-      "plaus_fn": true,
+      "kcal_err_pct": 2.685,
+      "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 41.7,
-      "notes": [
-        "matched reject pattern in \"Flour, soy, full-fat\"",
-        "plausibility FN: judge-implausible answer at medium confidence (protein density 38.6/100g outside 0–35)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 51.6,
+      "notes": []
     },
     {
       "id": "sng-016",
@@ -1383,7 +1370,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.9,
+      "latency_ms": 20.1,
       "notes": []
     },
     {
@@ -1410,7 +1397,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18,
+      "latency_ms": 20,
       "notes": []
     },
     {
@@ -1424,24 +1411,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.059,
-      "identity_ok": 0,
+      "case_score": 0.81,
+      "identity_ok": 1,
       "class_ok": 0,
-      "prep_ok": 0,
+      "prep_ok": 0.5,
       "portion_ok": 1,
       "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.444,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 75,
-      "notes": [
-        "no identity match (\"Cabbage rolls (dry) ((Pattagobhi rolls) (dry))\" vs /oat/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 57.2,
+      "notes": []
     },
     {
       "id": "sng-019",
@@ -1468,7 +1452,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 51.5,
+      "latency_ms": 61.8,
       "notes": [
         "grams 342.3 outside 90–160"
       ]
@@ -1497,7 +1481,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 36.3,
+      "latency_ms": 64.7,
       "notes": [
         "grams 300 outside 8–18",
         "plausibility FN: judge-implausible answer at high confidence (serving 2014 kcal outside 5–900)",
@@ -1528,7 +1512,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.8,
+      "latency_ms": 15.2,
       "notes": []
     },
     {
@@ -1556,7 +1540,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.9,
+      "latency_ms": 19.9,
       "notes": []
     },
     {
@@ -1583,7 +1567,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.4,
+      "latency_ms": 15.1,
       "notes": [
         "grams 100 outside 22–40",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -1613,7 +1597,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.9,
+      "latency_ms": 23.1,
       "notes": []
     },
     {
@@ -1641,7 +1625,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.4,
+      "latency_ms": 19,
       "notes": []
     },
     {
@@ -1668,7 +1652,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.7,
+      "latency_ms": 19.7,
       "notes": [
         "no identity match (\"Beans, kidney, red, mature seeds, cooked, boiled, without salt\" vs /kidney bean|rajma|rajmah/)"
       ]
@@ -1698,7 +1682,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.2,
+      "latency_ms": 13.3,
       "notes": []
     },
     {
@@ -1725,7 +1709,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 12.3,
+      "latency_ms": 14.5,
       "notes": []
     },
     {
@@ -1752,7 +1736,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.1,
+      "latency_ms": 21.3,
       "notes": []
     },
     {
@@ -1779,7 +1763,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.3,
+      "latency_ms": 19.6,
       "notes": []
     },
     {
@@ -1806,7 +1790,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.8,
+      "latency_ms": 19.5,
       "notes": [
         "grams 151 outside 44–60"
       ]
@@ -1835,7 +1819,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.1,
+      "latency_ms": 17.5,
       "notes": []
     },
     {
@@ -1862,7 +1846,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 26.7,
+      "latency_ms": 23.4,
       "notes": []
     },
     {
@@ -1889,7 +1873,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.5,
+      "latency_ms": 20,
       "notes": [
         "plausibility FN: judge-implausible answer at high confidence (fat density 3.5/100g outside 4–45)"
       ]
@@ -1918,7 +1902,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.4,
+      "latency_ms": 17.2,
       "notes": []
     },
     {
@@ -1932,25 +1916,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.068,
-      "identity_ok": 0,
-      "class_ok": 0,
-      "prep_ok": 1,
+      "case_score": 0.92,
+      "identity_ok": 1,
+      "class_ok": 0.5,
+      "prep_ok": 0.8,
       "portion_ok": 1,
       "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 1.978,
-      "plaus_fn": true,
+      "kcal_err_pct": 0,
+      "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 66.8,
-      "notes": [
-        "no identity match (\"Roasted chana\" vs /sweet potato/)",
-        "plausibility FN: judge-implausible answer at medium confidence (carb density 61.0/100g outside 0–55)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 56.6,
+      "notes": []
     },
     {
       "id": "prp-007",
@@ -1963,22 +1943,23 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.084,
+      "case_score": 0.078,
       "identity_ok": 0,
-      "class_ok": 0.7,
-      "prep_ok": 1,
+      "class_ok": 0.5,
+      "prep_ok": 0,
       "portion_ok": 1,
-      "confidence_band": "high",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 3.56,
-      "plaus_fn": false,
+      "kcal_err_pct": 0.06,
+      "plaus_fn": true,
       "plaus_fp": false,
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 41.5,
+      "latency_ms": 56.2,
       "notes": [
-        "no identity match (\"Caramel custard (steamed)\" vs /broccoli/)",
+        "matched reject pattern in \"Broccoli, raw\"",
+        "plausibility FN: judge-implausible answer at medium confidence (kcal density 34/100g outside 40–380)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -2007,7 +1988,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.4,
+      "latency_ms": 19.4,
       "notes": []
     },
     {
@@ -2034,7 +2015,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18,
+      "latency_ms": 15.7,
       "notes": [
         "grams 36.1 outside 60–120",
         "plausibility FN: judge-implausible answer at high confidence (carb density 64.0/100g outside 0–55)"
@@ -2065,7 +2046,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.2,
+      "latency_ms": 13.3,
       "notes": []
     },
     {
@@ -2093,7 +2074,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.2,
+      "latency_ms": 21.1,
       "notes": []
     },
     {
@@ -2120,7 +2101,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.4,
+      "latency_ms": 16.9,
       "notes": []
     },
     {
@@ -2147,7 +2128,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.7,
+      "latency_ms": 27.8,
       "notes": [
         "grams 523.5 outside 130–300",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -2177,7 +2158,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17,
+      "latency_ms": 22.8,
       "notes": [
         "plausibility FP: answer within case range but judge rejects (kcal density 599/100g outside 40–380)",
         "plausibility FN: judge-implausible answer at high confidence (kcal density 599/100g outside 40–380)"
@@ -2194,22 +2175,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.1,
-      "identity_ok": 0,
+      "case_score": 0.156,
+      "identity_ok": 1,
       "class_ok": 0.5,
       "prep_ok": 1,
       "portion_ok": 1,
-      "confidence_band": "medium",
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.235,
+      "kcal_err_pct": 0.716,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 39.4,
+      "latency_ms": 63,
       "notes": [
-        "no identity match (\"Pork, ground, lean, pan-fried\" vs /salmon/)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -2237,7 +2217,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.4,
+      "latency_ms": 19.8,
       "notes": []
     },
     {
@@ -2264,7 +2244,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.3,
+      "latency_ms": 17.5,
       "notes": []
     },
     {
@@ -2305,24 +2285,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.111,
-      "identity_ok": 0,
-      "class_ok": 1,
-      "prep_ok": 0.8,
+      "case_score": 0.839,
+      "identity_ok": 1,
+      "class_ok": 0,
+      "prep_ok": 0.6,
       "portion_ok": 1,
-      "confidence_band": "high",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.214,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 73.7,
-      "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /paneer tikka|tikka.*paneer/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 65,
+      "notes": []
     },
     {
       "id": "prp-020",
@@ -2348,7 +2325,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.6,
+      "latency_ms": 27.1,
       "notes": [
         "grams 100 outside 20–34"
       ]
@@ -2378,7 +2355,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.5,
+      "latency_ms": 18,
       "notes": []
     },
     {
@@ -2406,7 +2383,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.8,
+      "latency_ms": 21.7,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -2435,7 +2412,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.1,
+      "latency_ms": 17.9,
       "notes": []
     },
     {
@@ -2464,7 +2441,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.4,
+      "latency_ms": 14.9,
       "notes": []
     },
     {
@@ -2492,7 +2469,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.8,
+      "latency_ms": 16.7,
       "notes": []
     },
     {
@@ -2522,7 +2499,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.6,
+      "latency_ms": 20,
       "notes": [
         "matched reject pattern in \"Quinoa Puffs - Dahi Papdi Chaat\"",
         "plausibility FN: judge-implausible answer at medium confidence (kcal density 423/100g outside 30–340)",
@@ -2554,7 +2531,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 41.9,
+      "latency_ms": 55.1,
       "notes": [
         "no identity match (\"Chickpeas curry (Safed channa curry)\" vs /chole bhatur|bhatur|chana.*bhatur|chole.*bhatur/)",
         "grams 119.9 outside 350–700",
@@ -2587,7 +2564,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 37.4,
+      "latency_ms": 52,
       "notes": [
         "grams 100 outside 250–500"
       ]
@@ -2616,7 +2593,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17,
+      "latency_ms": 15.1,
       "notes": []
     },
     {
@@ -2643,7 +2620,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.3,
+      "latency_ms": 21.8,
       "notes": []
     },
     {
@@ -2671,7 +2648,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.8,
+      "latency_ms": 21.7,
       "notes": []
     },
     {
@@ -2698,7 +2675,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.4,
+      "latency_ms": 16.2,
       "notes": [
         "plausibility FN: judge-implausible answer at high confidence (kcal density 480/100g outside 30–340)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -2728,7 +2705,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.7,
+      "latency_ms": 20.9,
       "notes": []
     },
     {
@@ -2755,7 +2732,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.4,
+      "latency_ms": 20.2,
       "notes": [
         "no identity match (\"Rice, fried, with chicken\" vs /fried rice/)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -2786,7 +2763,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.6,
+      "latency_ms": 15.9,
       "notes": [
         "grams 250 outside 400–800"
       ]
@@ -2815,7 +2792,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.2,
+      "latency_ms": 21.2,
       "notes": []
     },
     {
@@ -2843,7 +2820,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 47.2,
+      "latency_ms": 59.1,
       "notes": [
         "no identity match (\"Animal fat, lard (pork)\" vs /dumpling|gyoza|momo|potsticker|jiaozi/)",
         "grams 325.6 outside 80–180",
@@ -2875,7 +2852,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.3,
+      "latency_ms": 14.1,
       "notes": [
         "grams 250 outside 400–800"
       ]
@@ -2904,7 +2881,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 82.3,
+      "latency_ms": 96.9,
       "notes": [
         "grams 100 outside 140–220"
       ]
@@ -2933,7 +2910,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.1,
+      "latency_ms": 17.6,
       "notes": []
     },
     {
@@ -2962,7 +2939,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 33.9,
+      "latency_ms": 72.7,
       "notes": [
         "grams 100 outside 250–450",
         "plausibility FN: judge-implausible answer at high confidence (kcal density 514/100g outside 120–420)"
@@ -2992,7 +2969,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 32.2,
+      "latency_ms": 32.4,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -3008,24 +2985,23 @@
         "combo"
       ],
       "difficulty": "hard",
-      "resolved": true,
-      "case_score": 0.316,
-      "identity_ok": 0,
-      "class_ok": 0,
-      "prep_ok": 0.6,
-      "portion_ok": 0.625,
-      "confidence_band": "low",
+      "resolved": false,
+      "case_score": 0.3,
+      "identity_ok": null,
+      "class_ok": null,
+      "prep_ok": null,
+      "portion_ok": null,
+      "confidence_band": null,
       "confidence_ok": null,
-      "kcal_err_pct": 0.477,
+      "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 68.3,
+      "latency_ms": 80.6,
       "notes": [
-        "no identity match (\"Chicken, ground, lean, cooked\" vs /shawarma|shwarma|gyro|doner/)",
-        "grams 75 outside 300–600"
+        "honest miss — should have resolved"
       ]
     },
     {
@@ -3053,7 +3029,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.5,
+      "latency_ms": 25.9,
       "notes": []
     },
     {
@@ -3066,26 +3042,23 @@
         "no_quantity"
       ],
       "difficulty": "hard",
-      "resolved": true,
-      "case_score": 0.062,
-      "identity_ok": 0,
-      "class_ok": 0,
-      "prep_ok": 0.6,
-      "portion_ok": 0.508,
-      "confidence_band": "high",
+      "resolved": false,
+      "case_score": 0.3,
+      "identity_ok": null,
+      "class_ok": null,
+      "prep_ok": null,
+      "portion_ok": null,
+      "confidence_band": null,
       "confidence_ok": null,
-      "kcal_err_pct": 0.411,
-      "plaus_fn": true,
+      "kcal_err_pct": null,
+      "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.6,
+      "latency_ms": 65.4,
       "notes": [
-        "no identity match (\"Cookie, oatmeal (with raisins), commercial, less than 5g fat/serving\" vs /moussaka/)",
-        "grams 28.4 outside 250–450",
-        "plausibility FN: judge-implausible answer at high confidence (kcal density 437/100g outside 30–340)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "honest miss — should have resolved"
       ]
     },
     {
@@ -3112,7 +3085,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.8,
+      "latency_ms": 27.6,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -3143,7 +3116,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.5,
+      "latency_ms": 41.9,
       "notes": [
         "grams 100 outside 150–320"
       ]
@@ -3173,7 +3146,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.7,
+      "latency_ms": 26.7,
       "notes": []
     },
     {
@@ -3200,7 +3173,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 43.1,
+      "latency_ms": 55.7,
       "notes": [
         "no identity match (\"Big Mac (McDonalds)\" vs /mac.*cheese|macaroni.*cheese|cheese.*macaroni/)"
       ]
@@ -3229,7 +3202,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.2,
+      "latency_ms": 23.5,
       "notes": [
         "grams 128.7 outside 220–400"
       ]
@@ -3259,7 +3232,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.2,
+      "latency_ms": 19.4,
       "notes": [
         "grams 65.4 outside 200–400"
       ]
@@ -3290,7 +3263,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.5,
+      "latency_ms": 30.9,
       "notes": [
         "grams 100 outside 300–650",
         "plausibility FN: judge-implausible answer at high confidence (carb density 0.3/100g outside 1–55)"
@@ -3321,7 +3294,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 45.4,
+      "latency_ms": 81,
       "notes": [
         "no identity match (\"Chicken, ground, lean, cooked\" vs /\\btaco/)"
       ]
@@ -3350,7 +3323,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17,
+      "latency_ms": 15,
       "notes": []
     },
     {
@@ -3363,23 +3336,23 @@
         "count_portion"
       ],
       "difficulty": "hard",
-      "resolved": false,
-      "case_score": 0.3,
-      "identity_ok": null,
-      "class_ok": null,
-      "prep_ok": null,
-      "portion_ok": null,
-      "confidence_band": null,
+      "resolved": true,
+      "case_score": 0.481,
+      "identity_ok": 0,
+      "class_ok": 0,
+      "prep_ok": 0.85,
+      "portion_ok": 1,
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": null,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 49.7,
+      "latency_ms": 50.8,
       "notes": [
-        "honest miss — should have resolved"
+        "no identity match (\"Rice, cooked, NFS\" vs /jollof/)"
       ]
     },
     {
@@ -3406,7 +3379,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 56.2,
+      "latency_ms": 42,
       "notes": [
         "no identity match (\"Cereals ready-to-eat, MALT-O-MEAL, TOOTIE FRUITIES\" vs /bobotie/)"
       ]
@@ -3421,23 +3394,24 @@
         "volume_portion"
       ],
       "difficulty": "hard",
-      "resolved": false,
-      "case_score": 0.3,
-      "identity_ok": null,
-      "class_ok": null,
-      "prep_ok": null,
-      "portion_ok": null,
-      "confidence_band": null,
+      "resolved": true,
+      "case_score": 0.114,
+      "identity_ok": 0,
+      "class_ok": 1,
+      "prep_ok": 1,
+      "portion_ok": 1,
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": null,
+      "kcal_err_pct": 0.264,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": false,
+      "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 44.7,
+      "latency_ms": 49.7,
       "notes": [
-        "honest miss — should have resolved"
+        "no identity match (\"Soup, bean\" vs /egusi/)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
     {
@@ -3466,7 +3440,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.4,
+      "latency_ms": 14.5,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -3484,24 +3458,23 @@
         "transliteration"
       ],
       "difficulty": "hard",
-      "resolved": true,
-      "case_score": 0.282,
-      "identity_ok": 0,
-      "class_ok": 0,
-      "prep_ok": 0.4,
-      "portion_ok": 0,
-      "confidence_band": "low",
+      "resolved": false,
+      "case_score": 0.3,
+      "identity_ok": null,
+      "class_ok": null,
+      "prep_ok": null,
+      "portion_ok": null,
+      "confidence_band": null,
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 33.3,
+      "latency_ms": 54.6,
       "notes": [
-        "no identity match (\"Cumin infused water (Jeere/Zeere ka pani)\" vs /pani puri|golgappa|puchka|gol gappa|pani.?puri/)",
-        "grams 1355.6 outside 80–200"
+        "honest miss — should have resolved"
       ]
     },
     {
@@ -3530,7 +3503,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.6,
+      "latency_ms": 11.5,
       "notes": []
     },
     {
@@ -3558,7 +3531,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.1,
+      "latency_ms": 16.5,
       "notes": [
         "grams 300 outside 60–180"
       ]
@@ -3589,7 +3562,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 39.2,
+      "latency_ms": 35.5,
       "notes": [
         "no identity match (\"Vada\" vs /vada pav|vada pao|wada pav/)",
         "grams 60 outside 120–250",
@@ -3620,7 +3593,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 15.5,
+      "latency_ms": 20.2,
       "notes": [
         "grams 54.6 outside 120–280"
       ]
@@ -3649,7 +3622,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18,
+      "latency_ms": 12.2,
       "notes": []
     },
     {
@@ -3676,7 +3649,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.3,
+      "latency_ms": 24.2,
       "notes": []
     },
     {
@@ -3704,7 +3677,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.5,
+      "latency_ms": 17.9,
       "notes": []
     },
     {
@@ -3731,7 +3704,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24,
+      "latency_ms": 17.6,
       "notes": []
     },
     {
@@ -3758,7 +3731,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.5,
+      "latency_ms": 18.1,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -3788,7 +3761,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 98.5,
+      "latency_ms": 48.7,
       "notes": []
     },
     {
@@ -3816,7 +3789,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 63.7,
+      "latency_ms": 226.6,
       "notes": []
     },
     {
@@ -3845,7 +3818,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 90.8,
+      "latency_ms": 66.9,
       "notes": []
     },
     {
@@ -3860,23 +3833,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.435,
-      "identity_ok": 0.6666666666666666,
+      "case_score": 0.995,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
       "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.14,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 99.6,
-      "notes": [
-        "silent drop: rice neither matched nor reported unresolved"
-      ]
+      "silent_drop": false,
+      "latency_ms": 228.9,
+      "notes": []
     },
     {
       "id": "mel-005",
@@ -3891,23 +3862,21 @@
       ],
       "difficulty": "hard",
       "resolved": true,
-      "case_score": 0.384,
-      "identity_ok": 0.5,
+      "case_score": 0.988,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
-      "confidence_band": "high",
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.183,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 24.3,
-      "notes": [
-        "silent drop: rice neither matched nor reported unresolved"
-      ]
+      "silent_drop": false,
+      "latency_ms": 199.6,
+      "notes": []
     },
     {
       "id": "mel-006",
@@ -3921,23 +3890,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.311,
-      "identity_ok": 0.6666666666666666,
+      "case_score": 0.849,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
-      "confidence_band": "low",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.737,
+      "kcal_err_pct": 0.326,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 44.4,
-      "notes": [
-        "silent drop: banana neither matched nor reported unresolved"
-      ]
+      "silent_drop": false,
+      "latency_ms": 105.9,
+      "notes": []
     },
     {
       "id": "mel-007",
@@ -3951,23 +3918,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.398,
-      "identity_ok": 0.6666666666666666,
+      "case_score": 0.719,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
       "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.527,
+      "kcal_err_pct": 2.179,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 37,
-      "notes": [
-        "silent drop: butter neither matched nor reported unresolved"
-      ]
+      "silent_drop": false,
+      "latency_ms": 182.6,
+      "notes": []
     },
     {
       "id": "mel-008",
@@ -3982,24 +3947,22 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.039,
-      "identity_ok": 0,
+      "case_score": 0.411,
+      "identity_ok": 0.5,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
       "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.086,
-      "plaus_fn": true,
+      "kcal_err_pct": 0,
+      "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": true,
-      "latency_ms": 87.9,
+      "latency_ms": 262.8,
       "notes": [
-        "silent drop: paneer bhurji|bhurji|scrambled paneer, chapati|roti|phulka neither matched nor reported unresolved",
-        "plausibility FN: judge-implausible answer at high confidence (carb density 0.0/100g outside 2–45)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "silent drop: paneer bhurji|bhurji|scrambled paneer neither matched nor reported unresolved"
       ]
     },
     {
@@ -4015,23 +3978,21 @@
       ],
       "difficulty": "hard",
       "resolved": true,
-      "case_score": 0.381,
-      "identity_ok": 0.5,
+      "case_score": 1,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
       "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.174,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 17.7,
-      "notes": [
-        "silent drop: chicken neither matched nor reported unresolved"
-      ]
+      "silent_drop": false,
+      "latency_ms": 132.6,
+      "notes": []
     },
     {
       "id": "mel-010",
@@ -4045,8 +4006,8 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.479,
-      "identity_ok": 0.6666666666666666,
+      "case_score": 1,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
@@ -4057,11 +4018,9 @@
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 35.6,
-      "notes": [
-        "silent drop: \\bmilk neither matched nor reported unresolved"
-      ]
+      "silent_drop": false,
+      "latency_ms": 123.4,
+      "notes": []
     },
     {
       "id": "bev-001",
@@ -4087,7 +4046,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.2,
+      "latency_ms": 22.7,
       "notes": []
     },
     {
@@ -4114,7 +4073,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.4,
+      "latency_ms": 20.3,
       "notes": [
         "grams 339.9 outside 200–280"
       ]
@@ -4143,7 +4102,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.6,
+      "latency_ms": 18.3,
       "notes": [
         "grams 100 outside 330–360"
       ]
@@ -4159,24 +4118,23 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.035,
-      "identity_ok": 0,
-      "class_ok": 0,
+      "case_score": 0.753,
+      "identity_ok": 1,
+      "class_ok": 1,
       "prep_ok": null,
-      "portion_ok": 0.692,
-      "confidence_band": "medium",
+      "portion_ok": 0.35,
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 5.2,
-      "plaus_fn": false,
+      "kcal_err_pct": 0.933,
+      "plaus_fn": true,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 43.1,
+      "latency_ms": 66.5,
       "notes": [
-        "no identity match (\"Black berry (Rubus sp.)\" vs /coffee/)",
-        "grams 100 outside 180–260",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "grams 11.1 outside 180–260",
+        "plausibility FN: judge-implausible answer at high confidence (kcal density 198/100g outside 0–160)"
       ]
     },
     {
@@ -4204,7 +4162,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.9,
+      "latency_ms": 32.2,
       "notes": [
         "grams 330 outside 200–320"
       ]
@@ -4220,22 +4178,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.072,
-      "identity_ok": 0,
-      "class_ok": 0,
+      "case_score": 0.619,
+      "identity_ok": 1,
+      "class_ok": 1,
       "prep_ok": null,
       "portion_ok": 0,
       "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.333,
+      "kcal_err_pct": 1.948,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 92.6,
+      "latency_ms": 62.4,
       "notes": [
-        "no identity match (\"Ice cream cone, scooped, vanilla\" vs /whey|protein.*shake|protein.*powder|protein drink/)",
         "grams 100 outside 28–45"
       ]
     },
@@ -4263,7 +4220,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.9,
+      "latency_ms": 19.6,
       "notes": [
         "plausibility FP: answer within case range but judge rejects (Atwater ratio 2.69 (kcal vs 4P+4C+9F))",
         "plausibility FN: judge-implausible answer at high confidence (Atwater ratio 2.69 (kcal vs 4P+4C+9F))"
@@ -4293,7 +4250,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.8,
+      "latency_ms": 45.6,
       "notes": [
         "no identity match (\"Masala munch\" vs /tea|chai/)",
         "plausibility FN: judge-implausible answer at medium confidence (kcal density 558/100g outside 0–160)",
@@ -4324,7 +4281,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.4,
+      "latency_ms": 19.5,
       "notes": []
     },
     {
@@ -4351,7 +4308,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.6,
+      "latency_ms": 24.8,
       "notes": []
     },
     {
@@ -4365,22 +4322,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.152,
-      "identity_ok": 0,
+      "case_score": 0.55,
+      "identity_ok": 1,
       "class_ok": 0,
       "prep_ok": 0,
       "portion_ok": 0.214,
-      "confidence_band": "low",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.082,
+      "kcal_err_pct": 0.532,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 80.6,
+      "latency_ms": 58.3,
       "notes": [
-        "no identity match (\"Yellow rice with seasoning, dry packet mix, unprepared\" vs /potato chip|crisps|chips.*potato/)",
         "grams 100 outside 50–56"
       ]
     },
@@ -4408,7 +4364,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.2,
+      "latency_ms": 15.5,
       "notes": []
     },
     {
@@ -4422,21 +4378,23 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.839,
+      "case_score": 0.448,
       "identity_ok": 1,
       "class_ok": 0,
       "prep_ok": 0.6,
-      "portion_ok": 1,
+      "portion_ok": 0,
       "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": 3.163,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 39.5,
-      "notes": []
+      "latency_ms": 54.7,
+      "notes": [
+        "grams 200 outside 24–40"
+      ]
     },
     {
       "id": "snk-004",
@@ -4463,7 +4421,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.7,
+      "latency_ms": 13,
       "notes": []
     },
     {
@@ -4490,7 +4448,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.7,
+      "latency_ms": 18.5,
       "notes": [
         "grams 240 outside 6–20",
         "plausibility FN: judge-implausible answer at high confidence (serving 1342 kcal outside 40–700)",
@@ -4521,7 +4479,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.2,
+      "latency_ms": 20.3,
       "notes": []
     },
     {
@@ -4548,7 +4506,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.4,
+      "latency_ms": 23.7,
       "notes": [
         "grams 23 outside 30–50"
       ]
@@ -4578,7 +4536,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.1,
+      "latency_ms": 19.7,
       "notes": []
     },
     {
@@ -4606,7 +4564,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.8,
+      "latency_ms": 20.5,
       "notes": [
         "grams 200 outside 60–140",
         "plausibility FN: judge-implausible answer at high confidence (serving 840 kcal outside 40–700)",
@@ -4624,20 +4582,20 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.732,
+      "case_score": 0.715,
       "identity_ok": 1,
       "class_ok": 0,
       "prep_ok": null,
       "portion_ok": 0.75,
-      "confidence_band": "low",
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.353,
+      "kcal_err_pct": 0.427,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 92.6,
+      "latency_ms": 53.5,
       "notes": [
         "grams 100 outside 55–80"
       ]
@@ -4666,7 +4624,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.1,
+      "latency_ms": 14.3,
       "notes": [
         "grams 100 outside 40–90"
       ]
@@ -4696,7 +4654,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 27.1,
+      "latency_ms": 15.3,
       "notes": [
         "grams 401.1 outside 120–260",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -4726,7 +4684,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.2,
+      "latency_ms": 15.7,
       "notes": [
         "grams 57 outside 80–170"
       ]
@@ -4756,7 +4714,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23,
+      "latency_ms": 19.5,
       "notes": [
         "grams 200 outside 50–120",
         "plausibility FN: judge-implausible answer at high confidence (serving 880 kcal outside 40–700)",
@@ -4788,7 +4746,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 13.2,
+      "latency_ms": 19.6,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -4818,7 +4776,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.3,
+      "latency_ms": 12,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -4847,7 +4805,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.9,
+      "latency_ms": 16.4,
       "notes": []
     },
     {
@@ -4874,7 +4832,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 53,
+      "latency_ms": 17.6,
       "notes": [
         "plausibility FN: judge-implausible answer at high confidence (kcal density 773/100g outside 10–700)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -4904,7 +4862,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.5,
+      "latency_ms": 22.4,
       "notes": []
     },
     {
@@ -4932,7 +4890,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.9,
+      "latency_ms": 22.3,
       "notes": []
     },
     {
@@ -4959,7 +4917,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.5,
+      "latency_ms": 15.7,
       "notes": []
     },
     {
@@ -4986,7 +4944,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.3,
+      "latency_ms": 19.4,
       "notes": [
         "plausibility FP: answer within case range but judge rejects (kcal density 899/100g outside 10–700)",
         "plausibility FN: judge-implausible answer at high confidence (kcal density 899/100g outside 10–700)"
@@ -5016,7 +4974,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.1,
+      "latency_ms": 23.9,
       "notes": [
         "grams 13.7 outside 14–20"
       ]
@@ -5045,7 +5003,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.8,
+      "latency_ms": 22.9,
       "notes": []
     },
     {
@@ -5070,7 +5028,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 91.5,
+      "latency_ms": 87.9,
       "notes": []
     },
     {
@@ -5095,7 +5053,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.2,
+      "latency_ms": 15.4,
       "notes": []
     },
     {
@@ -5120,7 +5078,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 0,
+      "latency_ms": 0.4,
       "notes": []
     },
     {
@@ -5146,7 +5104,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.9,
+      "latency_ms": 21.4,
       "notes": []
     },
     {
@@ -5171,7 +5129,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 46.8,
+      "latency_ms": 57.9,
       "notes": [
         "resolved a non-food input at low confidence (should be unresolved)"
       ]
@@ -5198,7 +5156,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 53.4,
+      "latency_ms": 41.5,
       "notes": [
         "resolved a non-food input at low confidence (should be unresolved)"
       ]
@@ -5226,7 +5184,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.4,
+      "latency_ms": 19.8,
       "notes": [
         "resolved a non-food input at medium confidence (should be unresolved)"
       ]
@@ -5253,7 +5211,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 138.8,
+      "latency_ms": 136.1,
       "notes": []
     },
     {
@@ -5278,7 +5236,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 61.8,
+      "latency_ms": 76.6,
       "notes": []
     },
     {
@@ -5304,7 +5262,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 99.2,
+      "latency_ms": 116.6,
       "notes": []
     },
     {
@@ -5331,7 +5289,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 109.3,
+      "latency_ms": 118.3,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -5346,21 +5304,21 @@
         "hard"
       ],
       "difficulty": "hard",
-      "resolved": true,
+      "resolved": false,
       "case_score": 1,
-      "identity_ok": 1,
+      "identity_ok": null,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
-      "confidence_band": "low",
-      "confidence_ok": true,
+      "confidence_band": null,
+      "confidence_ok": null,
       "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 106.5,
+      "latency_ms": 132.6,
       "notes": []
     },
     {
@@ -5372,22 +5330,24 @@
         "hard"
       ],
       "difficulty": "hard",
-      "resolved": true,
-      "case_score": 1,
-      "identity_ok": 1,
+      "resolved": false,
+      "case_score": 0.3,
+      "identity_ok": null,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
-      "confidence_band": "low",
-      "confidence_ok": true,
+      "confidence_band": null,
+      "confidence_ok": null,
       "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 78.3,
-      "notes": []
+      "latency_ms": 60.9,
+      "notes": [
+        "honest miss — should have resolved"
+      ]
     },
     {
       "id": "lcf-004",
@@ -5413,7 +5373,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 92.1,
+      "latency_ms": 105.4,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -5443,7 +5403,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 15,
+      "latency_ms": 18.9,
       "notes": []
     },
     {
@@ -5457,21 +5417,21 @@
         "hard"
       ],
       "difficulty": "hard",
-      "resolved": true,
-      "case_score": 0.81,
-      "identity_ok": 1,
+      "resolved": false,
+      "case_score": 1,
+      "identity_ok": null,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
-      "confidence_band": "medium",
-      "confidence_ok": false,
+      "confidence_band": null,
+      "confidence_ok": null,
       "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 38.5,
+      "latency_ms": 23.2,
       "notes": []
     },
     {
@@ -5498,7 +5458,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 48.8,
+      "latency_ms": 57.1,
       "notes": []
     },
     {
@@ -5526,7 +5486,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 85.8,
+      "latency_ms": 104.7,
       "notes": []
     },
     {
@@ -5554,7 +5514,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24,
+      "latency_ms": 20.7,
       "notes": []
     },
     {
@@ -5582,7 +5542,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.5,
+      "latency_ms": 29.5,
       "notes": [
         "grams 75 outside 80–200"
       ]
@@ -5613,7 +5573,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.3,
+      "latency_ms": 26.4,
       "notes": []
     },
     {
@@ -5642,7 +5602,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.6,
+      "latency_ms": 21.8,
       "notes": [
         "matched reject pattern in \"Chana Chor\"",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -5675,7 +5635,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.3,
+      "latency_ms": 22.5,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -5706,7 +5666,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 13.5,
+      "latency_ms": 14.6,
       "notes": []
     },
     {
@@ -5735,7 +5695,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20,
+      "latency_ms": 11.9,
       "notes": []
     },
     {
@@ -5764,7 +5724,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 26,
+      "latency_ms": 18,
       "notes": []
     },
     {
@@ -5793,7 +5753,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.4,
+      "latency_ms": 21.5,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -5824,7 +5784,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.4,
+      "latency_ms": 24.1,
       "notes": []
     },
     {
@@ -5853,7 +5813,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.8,
+      "latency_ms": 21.7,
       "notes": [
         "matched reject pattern in \"Curd rice (Dahi bhaat/Dahi chawal/ Perugu annam/Daddojanam/Thayir saadam)\"",
         "grams 216.2 outside 80–200",
@@ -5887,7 +5847,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.4,
+      "latency_ms": 14.8,
       "notes": []
     },
     {
@@ -5914,7 +5874,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21,
+      "latency_ms": 25.7,
       "notes": []
     },
     {
@@ -5941,7 +5901,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.4,
+      "latency_ms": 15.7,
       "notes": []
     },
     {
@@ -5968,7 +5928,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.7,
+      "latency_ms": 29.3,
       "notes": []
     },
     {
@@ -5995,7 +5955,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19,
+      "latency_ms": 21.4,
       "notes": []
     },
     {
@@ -6052,7 +6012,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.1,
+      "latency_ms": 23.2,
       "notes": []
     },
     {
@@ -6079,7 +6039,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.7,
+      "latency_ms": 15.1,
       "notes": [
         "grams 408 outside 280–380"
       ]
@@ -6096,22 +6056,21 @@
       ],
       "difficulty": "hard",
       "resolved": true,
-      "case_score": 0.418,
-      "identity_ok": 0,
+      "case_score": 0.914,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": 0.5,
       "portion_ok": 0.944,
-      "confidence_band": "low",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.141,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 34.7,
+      "latency_ms": 43.6,
       "notes": [
-        "no identity match (\"Cup noodles Rogan  josh\" vs /almond/)",
         "grams 50 outside 55–90"
       ]
     },
@@ -6139,7 +6098,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.8,
+      "latency_ms": 19,
       "notes": []
     },
     {
@@ -6167,7 +6126,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 27.3,
+      "latency_ms": 22.6,
       "notes": []
     },
     {
@@ -6194,7 +6153,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.5,
+      "latency_ms": 20.7,
       "notes": []
     },
     {
@@ -6221,7 +6180,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.8,
+      "latency_ms": 24.4,
       "notes": []
     },
     {
@@ -6248,7 +6207,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.3,
+      "latency_ms": 17.7,
       "notes": []
     },
     {
@@ -6262,23 +6221,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.51,
-      "identity_ok": 0,
+      "case_score": 0.87,
+      "identity_ok": 1,
       "class_ok": null,
-      "prep_ok": 0.8,
+      "prep_ok": 0.7,
       "portion_ok": 1,
-      "confidence_band": "low",
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.024,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 80.6,
-      "notes": [
-        "no identity match (\"Cooked Sweet Corn Kernels\" vs /oat|porridge|oatmeal/)"
-      ]
+      "latency_ms": 64.7,
+      "notes": []
     },
     {
       "id": "rcv-005",
@@ -6304,7 +6261,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.3,
+      "latency_ms": 21.4,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -6320,24 +6277,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.097,
-      "identity_ok": 0,
+      "case_score": 0.984,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": 1,
       "portion_ok": 1,
-      "confidence_band": "medium",
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": 0.007,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.8,
-      "notes": [
-        "no identity match (\"Soybean curd, deep fried\" vs /potato|fries/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 51.9,
+      "notes": []
     },
     {
       "id": "bnd-001",
@@ -6363,7 +6317,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.4,
+      "latency_ms": 19.2,
       "notes": [
         "plausibility FP: answer within case range but judge rejects (kcal density 384/100g outside 30–340)",
         "plausibility FN: judge-implausible answer at high confidence (kcal density 384/100g outside 30–340)"
@@ -6393,7 +6347,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.1,
+      "latency_ms": 19.8,
       "notes": [
         "grams 100 outside 5–20",
         "plausibility FN: judge-implausible answer at high confidence (serving 724 kcal outside 3–300)",
@@ -6424,7 +6378,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 46.7,
+      "latency_ms": 21.3,
       "notes": [
         "grams 100 outside 490–520"
       ]
@@ -6453,7 +6407,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.9,
+      "latency_ms": 20.5,
       "notes": [
         "grams 100 outside 20–80"
       ]
@@ -6482,7 +6436,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.3,
+      "latency_ms": 22.1,
       "notes": [
         "grams 100 outside 150–300"
       ]
@@ -6498,22 +6452,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.18,
-      "identity_ok": 0,
+      "case_score": 0.559,
+      "identity_ok": 1,
       "class_ok": 0,
       "prep_ok": 0,
       "portion_ok": 0.333,
-      "confidence_band": "low",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.545,
+      "kcal_err_pct": 0.677,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 78.8,
+      "latency_ms": 62.8,
       "notes": [
-        "no identity match (\"Water, bottled, generic\" vs /potato chip|crisps/)",
         "grams 100 outside 25–60"
       ]
     },
@@ -6541,7 +6494,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.9,
+      "latency_ms": 22.7,
       "notes": [
         "grams 100 outside 10–40",
         "plausibility FN: judge-implausible answer at high confidence (serving 539 kcal outside 3–300)",
@@ -6559,24 +6512,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.155,
-      "identity_ok": 0,
-      "class_ok": 0,
-      "prep_ok": 0.6,
-      "portion_ok": 0.218,
-      "confidence_band": "low",
+      "case_score": 0.974,
+      "identity_ok": 1,
+      "class_ok": 1,
+      "prep_ok": 0.8,
+      "portion_ok": 1,
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.852,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 53.8,
-      "notes": [
-        "no identity match (\"Beans, baked, homemade\" vs /chapati|roti|phulka/)",
-        "grams 106.9 outside 25–60"
-      ]
+      "latency_ms": 33.2,
+      "notes": []
     },
     {
       "id": "cmp-080",
@@ -6602,7 +6552,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.5,
+      "latency_ms": 13.8,
       "notes": []
     },
     {
@@ -6629,7 +6579,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 27.6,
+      "latency_ms": 19.5,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -6658,7 +6608,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 69.4,
+      "latency_ms": 55.1,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -6687,7 +6637,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.5,
+      "latency_ms": 14.3,
       "notes": []
     },
     {
@@ -6701,25 +6651,22 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.064,
-      "identity_ok": 0,
-      "class_ok": 0,
+      "case_score": 0.83,
+      "identity_ok": 1,
+      "class_ok": 1,
       "prep_ok": 0.6,
-      "portion_ok": 0.508,
-      "confidence_band": "high",
+      "portion_ok": 0.667,
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.352,
-      "plaus_fn": true,
+      "kcal_err_pct": 0.34,
+      "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 59.8,
+      "latency_ms": 42.6,
       "notes": [
-        "no identity match (\"Cookie, oatmeal (with raisins), commercial, less than 5g fat/serving\" vs /lasagn/)",
-        "grams 28.4 outside 250–450",
-        "plausibility FN: judge-implausible answer at high confidence (kcal density 437/100g outside 30–340)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "grams 100 outside 250–450"
       ]
     },
     {
@@ -6732,23 +6679,23 @@
         "explicit_grams"
       ],
       "difficulty": "medium",
-      "resolved": true,
-      "case_score": 0.452,
-      "identity_ok": 0,
-      "class_ok": 0,
-      "prep_ok": 0.85,
-      "portion_ok": 1,
-      "confidence_band": "low",
+      "resolved": false,
+      "case_score": 0.3,
+      "identity_ok": null,
+      "class_ok": null,
+      "prep_ok": null,
+      "portion_ok": null,
+      "confidence_band": null,
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 91.3,
+      "latency_ms": 58.2,
       "notes": [
-        "no identity match (\"Chicken, ground, lean, cooked\" vs /tikka masala|chicken.*tikka.*masala/)"
+        "honest miss — should have resolved"
       ]
     },
     {
@@ -6763,20 +6710,20 @@
       ],
       "difficulty": "hard",
       "resolved": true,
-      "case_score": 0.793,
+      "case_score": 0.703,
       "identity_ok": 1,
       "class_ok": 0,
       "prep_ok": 0.35,
       "portion_ok": 0.923,
-      "confidence_band": "medium",
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": 0.124,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 62.8,
+      "latency_ms": 164.8,
       "notes": [
         "grams 100 outside 120–260"
       ]
@@ -6805,7 +6752,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 32.9,
+      "latency_ms": 40.2,
       "notes": [
         "no identity match (\"Feijoa, raw\" vs /feijoada/)",
         "grams 50 outside 250–450"
@@ -6822,22 +6769,24 @@
         "combo"
       ],
       "difficulty": "hard",
-      "resolved": true,
-      "case_score": 0.828,
-      "identity_ok": 1,
-      "class_ok": 0,
-      "prep_ok": 0.85,
-      "portion_ok": 1,
-      "confidence_band": "low",
+      "resolved": false,
+      "case_score": 0.3,
+      "identity_ok": null,
+      "class_ok": null,
+      "prep_ok": null,
+      "portion_ok": null,
+      "confidence_band": null,
       "confidence_ok": null,
-      "kcal_err_pct": 0.141,
+      "kcal_err_pct": null,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 63.2,
-      "notes": []
+      "latency_ms": 259.2,
+      "notes": [
+        "honest miss — should have resolved"
+      ]
     },
     {
       "id": "cmp-089",
@@ -6863,7 +6812,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.7,
+      "latency_ms": 25.8,
       "notes": [
         "grams 250 outside 300–500"
       ]
@@ -6892,7 +6841,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 15.8,
+      "latency_ms": 16.8,
       "notes": []
     },
     {
@@ -6919,7 +6868,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.6,
+      "latency_ms": 23.7,
       "notes": []
     },
     {
@@ -6946,7 +6895,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.3,
+      "latency_ms": 20.4,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -6975,7 +6924,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.6,
+      "latency_ms": 18.8,
       "notes": []
     },
     {
@@ -7002,7 +6951,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22,
+      "latency_ms": 15,
       "notes": []
     },
     {
@@ -7029,7 +6978,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.3,
+      "latency_ms": 24.2,
       "notes": []
     },
     {
@@ -7043,22 +6992,22 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.07,
+      "case_score": 0.069,
       "identity_ok": 0,
       "class_ok": null,
-      "prep_ok": 0.8,
+      "prep_ok": 0,
       "portion_ok": 1,
-      "confidence_band": "high",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.639,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 46.5,
+      "latency_ms": 56.3,
       "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /prawn|shrimp|jhinga/)",
+        "matched reject pattern in \"Prawns, big (Macrobrachium rosenbergii)\"",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -7073,23 +7022,22 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.175,
-      "identity_ok": 0,
+      "case_score": 0.983,
+      "identity_ok": 1,
       "class_ok": null,
-      "prep_ok": 0,
-      "portion_ok": 0.66,
-      "confidence_band": "low",
+      "prep_ok": 1,
+      "portion_ok": 0.9,
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0.441,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 42.4,
+      "latency_ms": 43.6,
       "notes": [
-        "no identity match (\"Beef, ground, medium, baked\" vs /orange/)",
-        "grams 52 outside 120–200"
+        "grams 100 outside 120–200"
       ]
     },
     {
@@ -7116,7 +7064,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.5,
+      "latency_ms": 19.4,
       "notes": []
     },
     {
@@ -7143,7 +7091,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.5,
+      "latency_ms": 18.5,
       "notes": [
         "no identity match (\"Beans, black, mature seeds, cooked, boiled, without salt\" vs /black bean/)"
       ]
@@ -7172,7 +7120,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22,
+      "latency_ms": 15.2,
       "notes": []
     },
     {
@@ -7199,7 +7147,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.6,
+      "latency_ms": 24.4,
       "notes": []
     },
     {
@@ -7226,7 +7174,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.4,
+      "latency_ms": 20.7,
       "notes": []
     },
     {
@@ -7253,7 +7201,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.7,
+      "latency_ms": 23.3,
       "notes": []
     },
     {
@@ -7280,7 +7228,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 28.3,
+      "latency_ms": 15.1,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -7309,7 +7257,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.6,
+      "latency_ms": 21.9,
       "notes": []
     },
     {
@@ -7336,7 +7284,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 27.3,
+      "latency_ms": 21.5,
       "notes": []
     },
     {
@@ -7363,7 +7311,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.9,
+      "latency_ms": 20.4,
       "notes": []
     },
     {
@@ -7390,7 +7338,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.5,
+      "latency_ms": 21.8,
       "notes": []
     },
     {
@@ -7417,7 +7365,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.8,
+      "latency_ms": 13.4,
       "notes": []
     },
     {
@@ -7444,7 +7392,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.3,
+      "latency_ms": 19.1,
       "notes": []
     },
     {
@@ -7471,7 +7419,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23,
+      "latency_ms": 23.9,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -7500,7 +7448,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.1,
+      "latency_ms": 24.2,
       "notes": []
     },
     {
@@ -7527,7 +7475,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.3,
+      "latency_ms": 20.5,
       "notes": []
     },
     {
@@ -7554,7 +7502,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.3,
+      "latency_ms": 22.6,
       "notes": []
     },
     {
@@ -7581,7 +7529,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.3,
+      "latency_ms": 23,
       "notes": []
     },
     {
@@ -7608,7 +7556,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.6,
+      "latency_ms": 13.3,
       "notes": []
     },
     {
@@ -7635,7 +7583,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.9,
+      "latency_ms": 23.6,
       "notes": []
     },
     {
@@ -7649,24 +7597,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.09,
-      "identity_ok": 0,
+      "case_score": 0.857,
+      "identity_ok": 1,
       "class_ok": null,
-      "prep_ok": 0.8,
+      "prep_ok": 0.3,
       "portion_ok": 1,
       "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": 0.197,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 43.3,
-      "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /tofu/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 61.6,
+      "notes": []
     },
     {
       "id": "x-sng-018",
@@ -7692,7 +7637,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.5,
+      "latency_ms": 21.7,
       "notes": [
         "no identity match (\"Beans, kidney, red, mature seeds, cooked, boiled, without salt\" vs /kidney bean|rajma/)"
       ]
@@ -7721,7 +7666,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.4,
+      "latency_ms": 20.9,
       "notes": []
     },
     {
@@ -7748,7 +7693,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.3,
+      "latency_ms": 16.4,
       "notes": []
     },
     {
@@ -7775,7 +7720,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.9,
+      "latency_ms": 21.4,
       "notes": []
     },
     {
@@ -7803,7 +7748,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.8,
+      "latency_ms": 22.4,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -7832,7 +7777,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.1,
+      "latency_ms": 57.6,
       "notes": [
         "no identity match (\"Tomato sandwich (grilled)\" vs /halloumi|haloumi|cheese/)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -7862,7 +7807,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 42.8,
+      "latency_ms": 60.8,
       "notes": []
     },
     {
@@ -7889,7 +7834,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.1,
+      "latency_ms": 23.8,
       "notes": []
     },
     {
@@ -7916,7 +7861,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.3,
+      "latency_ms": 21.1,
       "notes": []
     },
     {
@@ -7930,23 +7875,22 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.077,
+      "case_score": 0.094,
       "identity_ok": 0,
       "class_ok": null,
-      "prep_ok": 1,
+      "prep_ok": 0.3,
       "portion_ok": 1,
       "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 2.443,
-      "plaus_fn": true,
+      "kcal_err_pct": 0,
+      "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 53.5,
+      "latency_ms": 63.7,
       "notes": [
-        "no identity match (\"Roasted chana\" vs /roasted vegetable|vegetable.*roasted|grilled vegetable/)",
-        "plausibility FN: judge-implausible answer at medium confidence (carb density 61.0/100g outside 0–55)",
+        "no identity match (\"Vegetables, pickled\" vs /roasted vegetable|vegetable.*roasted|grilled vegetable/)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
@@ -7974,7 +7918,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 16.2,
+      "latency_ms": 17.4,
       "notes": []
     },
     {
@@ -7988,24 +7932,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.104,
-      "identity_ok": 0,
+      "case_score": 0.944,
+      "identity_ok": 1,
       "class_ok": null,
-      "prep_ok": 1,
+      "prep_ok": 0.8,
       "portion_ok": 1,
       "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": 0.008,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 43.5,
-      "notes": [
-        "no identity match (\"Boiled rice (Uble chawal)\" vs /pasta|spaghetti|macaroni|penne/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 70.3,
+      "notes": []
     },
     {
       "id": "x-prp-010",
@@ -8031,7 +7972,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.9,
+      "latency_ms": 14.3,
       "notes": [
         "grams 100 outside 40–90"
       ]
@@ -8060,7 +8001,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.3,
+      "latency_ms": 19.6,
       "notes": []
     },
     {
@@ -8087,7 +8028,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.4,
+      "latency_ms": 21.9,
       "notes": []
     },
     {
@@ -8114,7 +8055,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22,
+      "latency_ms": 20.2,
       "notes": []
     },
     {
@@ -8141,7 +8082,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.9,
+      "latency_ms": 23.5,
       "notes": [
         "no identity match (\"Rice, fried, with chicken\" vs /fried rice/)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -8171,7 +8112,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.1,
+      "latency_ms": 15.9,
       "notes": []
     },
     {
@@ -8199,7 +8140,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.7,
+      "latency_ms": 19.1,
       "notes": []
     },
     {
@@ -8226,7 +8167,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23,
+      "latency_ms": 23.1,
       "notes": []
     },
     {
@@ -8253,7 +8194,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 14.6,
+      "latency_ms": 19.3,
       "notes": [
         "plausibility FP: answer within case range but judge rejects (kcal density 26/100g outside 30–420)",
         "plausibility FN: judge-implausible answer at medium confidence (kcal density 26/100g outside 30–420)"
@@ -8284,7 +8225,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 14.2,
+      "latency_ms": 10.5,
       "notes": []
     },
     {
@@ -8313,7 +8254,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.2,
+      "latency_ms": 20.5,
       "notes": [
         "grams 100 outside 250–450"
       ]
@@ -8328,23 +8269,24 @@
         "explicit_grams"
       ],
       "difficulty": "medium",
-      "resolved": false,
-      "case_score": 0.3,
-      "identity_ok": null,
-      "class_ok": null,
-      "prep_ok": null,
-      "portion_ok": null,
-      "confidence_band": null,
+      "resolved": true,
+      "case_score": 0.085,
+      "identity_ok": 0,
+      "class_ok": 0,
+      "prep_ok": 0.35,
+      "portion_ok": 1,
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": null,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": false,
+      "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 63.3,
+      "latency_ms": 53.3,
       "notes": [
-        "honest miss — should have resolved"
+        "no identity match (\"Tofu\" vs /mapo tofu|ma po tofu|mapo doufu/)",
+        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
     },
     {
@@ -8371,7 +8313,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18,
+      "latency_ms": 21.7,
       "notes": [
         "no identity match (\"Green gram whole with baghar (Sabut moong dal with tadka)\" vs /dal tadka|tadka dal|dal fry|toor dal|arhar dal|yellow dal/)",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -8401,7 +8343,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.8,
+      "latency_ms": 20.5,
       "notes": [
         "plausibility FN: judge-implausible answer at high confidence (fat density 0.3/100g outside 0.5–28)"
       ]
@@ -8431,7 +8373,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.1,
+      "latency_ms": 17.9,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -8460,7 +8402,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 44.6,
+      "latency_ms": 60.6,
       "notes": [
         "no identity match (\"Chicken, ground, lean, cooked\" vs /chicken 65|chicken sixty five/)"
       ]
@@ -8490,7 +8432,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.7,
+      "latency_ms": 21.8,
       "notes": [
         "grams 100 outside 120–300"
       ]
@@ -8519,7 +8461,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.6,
+      "latency_ms": 14,
       "notes": [
         "plausibility FN: judge-implausible answer at high confidence (protein density 0.8/100g outside 1–22)"
       ]
@@ -8548,7 +8490,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 25.9,
+      "latency_ms": 16.1,
       "notes": []
     },
     {
@@ -8576,7 +8518,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.5,
+      "latency_ms": 21.4,
       "notes": []
     },
     {
@@ -8604,7 +8546,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.5,
+      "latency_ms": 23.6,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -8633,7 +8575,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.4,
+      "latency_ms": 15.4,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -8662,7 +8604,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.4,
+      "latency_ms": 19.2,
       "notes": []
     },
     {
@@ -8690,7 +8632,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18,
+      "latency_ms": 23,
       "notes": [
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
       ]
@@ -8719,7 +8661,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 16.9,
+      "latency_ms": 14.9,
       "notes": [
         "grams 100 outside 200–400"
       ]
@@ -8748,7 +8690,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.7,
+      "latency_ms": 19.2,
       "notes": [
         "no identity match (\"Tea, iced, brewed, black, pre-sweetened with sugar\" vs /iced tea|ice tea|sweet tea/)",
         "grams 280.5 outside 320–350"
@@ -8778,7 +8720,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 42.9,
+      "latency_ms": 63.1,
       "notes": [
         "grams 330 outside 200–320"
       ]
@@ -8807,7 +8749,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 13,
+      "latency_ms": 20.7,
       "notes": []
     },
     {
@@ -8821,22 +8763,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.414,
-      "identity_ok": 0,
-      "class_ok": 1,
+      "case_score": 0.736,
+      "identity_ok": 1,
+      "class_ok": 0,
       "prep_ok": null,
       "portion_ok": 0.462,
-      "confidence_band": "low",
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.485,
+      "kcal_err_pct": 0.338,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 76.8,
+      "latency_ms": 73.9,
       "notes": [
-        "no identity match (\"Mirinda can 330ml\" vs /energy drink|red bull|monster|sting/)",
         "grams 100 outside 240–260"
       ]
     },
@@ -8864,7 +8805,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.4,
+      "latency_ms": 17.2,
       "notes": []
     },
     {
@@ -8891,7 +8832,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 24.2,
+      "latency_ms": 15.5,
       "notes": []
     },
     {
@@ -8918,7 +8859,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 16.2,
+      "latency_ms": 15.1,
       "notes": []
     },
     {
@@ -8945,7 +8886,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.8,
+      "latency_ms": 21.6,
       "notes": [
         "grams 100 outside 7–15",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -8976,7 +8917,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 15.7,
+      "latency_ms": 24.5,
       "notes": []
     },
     {
@@ -9003,7 +8944,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.3,
+      "latency_ms": 20.7,
       "notes": []
     },
     {
@@ -9030,7 +8971,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 45.9,
+      "latency_ms": 67.2,
       "notes": []
     },
     {
@@ -9057,7 +8998,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.8,
+      "latency_ms": 15.6,
       "notes": []
     },
     {
@@ -9085,7 +9026,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 23.4,
+      "latency_ms": 19,
       "notes": []
     },
     {
@@ -9112,7 +9053,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 27.8,
+      "latency_ms": 23.7,
       "notes": [
         "grams 100 outside 12–45",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -9130,12 +9071,12 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.431,
-      "identity_ok": 0,
-      "class_ok": 0,
+      "case_score": 0.815,
+      "identity_ok": 1,
+      "class_ok": 1,
       "prep_ok": null,
-      "portion_ok": 0.889,
-      "confidence_band": "low",
+      "portion_ok": 0,
+      "confidence_band": "high",
       "confidence_ok": null,
       "kcal_err_pct": 0,
       "plaus_fn": false,
@@ -9143,10 +9084,9 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 51,
+      "latency_ms": 60.4,
       "notes": [
-        "no identity match (\"Ice cream cone, scooped, vanilla\" vs /kulfi|malai kulfi/)",
-        "grams 100 outside 40–90"
+        "grams 270.1 outside 40–90"
       ]
     },
     {
@@ -9173,7 +9113,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 17.3,
+      "latency_ms": 19,
       "notes": [
         "grams 100 outside 40–90"
       ]
@@ -9190,22 +9130,22 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.365,
-      "identity_ok": 0.5,
+      "case_score": 0.979,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
-      "confidence_band": "low",
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.297,
-      "plaus_fn": false,
+      "kcal_err_pct": 0,
+      "plaus_fn": true,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
-      "silent_drop": true,
-      "latency_ms": 62.2,
+      "silent_drop": false,
+      "latency_ms": 78.4,
       "notes": [
-        "silent drop: chip|crisp neither matched nor reported unresolved"
+        "plausibility FN: judge-implausible answer at high confidence (kcal density 439/100g outside 40–320)"
       ]
     },
     {
@@ -9233,7 +9173,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 60.3,
+      "latency_ms": 112.5,
       "notes": []
     },
     {
@@ -9261,7 +9201,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 38.6,
+      "latency_ms": 38.9,
       "notes": []
     },
     {
@@ -9276,22 +9216,22 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.44,
+      "case_score": 0.479,
       "identity_ok": 0.6666666666666666,
       "class_ok": null,
       "prep_ok": null,
       "portion_ok": null,
       "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.157,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": true,
-      "latency_ms": 58.7,
+      "latency_ms": 150.5,
       "notes": [
-        "silent drop: rajma|rajmah|kidney bean neither matched nor reported unresolved"
+        "silent drop: rice neither matched nor reported unresolved"
       ]
     },
     {
@@ -9319,7 +9259,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 38.7,
+      "latency_ms": 42.8,
       "notes": [
         "plausibility FN: judge-implausible answer at medium confidence (fat density 0.4/100g outside 0.5–26)"
       ]
@@ -9349,7 +9289,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.6,
+      "latency_ms": 41.5,
       "notes": []
     },
     {
@@ -9377,7 +9317,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 34.9,
+      "latency_ms": 33.4,
       "notes": []
     },
     {
@@ -9405,7 +9345,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 55.6,
+      "latency_ms": 107.1,
       "notes": []
     },
     {
@@ -9432,7 +9372,7 @@
       "confident_wrong": true,
       "fabrication": true,
       "silent_drop": false,
-      "latency_ms": 21.8,
+      "latency_ms": 23.1,
       "notes": [
         "grams 1200 outside 12–20",
         "plausibility FN: judge-implausible answer at medium confidence (serving 7212 kcal outside 5–900)",
@@ -9464,7 +9404,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 15.2,
+      "latency_ms": 13,
       "notes": [
         "grams 60 outside 20–45"
       ]
@@ -9493,7 +9433,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 28,
+      "latency_ms": 29.7,
       "notes": [
         "grams 400 outside 40–90"
       ]
@@ -9522,7 +9462,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 26.8,
+      "latency_ms": 28.5,
       "notes": []
     },
     {
@@ -9550,7 +9490,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 27.7,
+      "latency_ms": 25.4,
       "notes": []
     },
     {
@@ -9577,7 +9517,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.1,
+      "latency_ms": 17.3,
       "notes": [
         "grams 200 outside 96–108"
       ]
@@ -9606,7 +9546,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.5,
+      "latency_ms": 19.1,
       "notes": []
     },
     {
@@ -9633,7 +9573,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.1,
+      "latency_ms": 20,
       "notes": [
         "grams 255 outside 270–340"
       ]
@@ -9664,7 +9604,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 16.6,
+      "latency_ms": 25.4,
       "notes": [
         "grams 151 outside 40–120"
       ]
@@ -9682,25 +9622,23 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.069,
+      "case_score": 0.461,
       "identity_ok": 0,
       "class_ok": 0,
-      "prep_ok": 0.35,
+      "prep_ok": 0.8,
       "portion_ok": 0.933,
-      "confidence_band": "high",
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 0.351,
-      "plaus_fn": true,
+      "kcal_err_pct": 0.074,
+      "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 38.9,
+      "latency_ms": 63.6,
       "notes": [
-        "no identity match (\"Jeera\" vs /jeera rice|cumin rice|rice.*jeera|rice.*cumin/)",
-        "grams 100 outside 120–300",
-        "plausibility FN: judge-implausible answer at high confidence (protein density 0.0/100g outside 1–22)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "no identity match (\"Rice, cooked, NFS\" vs /jeera rice|cumin rice|rice.*jeera|rice.*cumin/)",
+        "grams 100 outside 120–300"
       ]
     },
     {
@@ -9729,7 +9667,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.4,
+      "latency_ms": 21.8,
       "notes": []
     },
     {
@@ -9758,7 +9696,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 18.2,
+      "latency_ms": 25,
       "notes": [
         "matched reject pattern in \"Semolina halwa (Suji ka halwa)\"",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -9790,7 +9728,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19,
+      "latency_ms": 18.6,
       "notes": []
     },
     {
@@ -9819,7 +9757,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 21.6,
+      "latency_ms": 14.7,
       "notes": []
     },
     {
@@ -9847,7 +9785,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 14.1,
+      "latency_ms": 16.1,
       "notes": []
     },
     {
@@ -9875,7 +9813,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.9,
+      "latency_ms": 21.2,
       "notes": [
         "honest miss — should have resolved"
       ]
@@ -9905,7 +9843,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.8,
+      "latency_ms": 19.3,
       "notes": []
     },
     {
@@ -9919,23 +9857,23 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.065,
-      "identity_ok": 0,
+      "case_score": 0.946,
+      "identity_ok": 1,
       "class_ok": null,
       "prep_ok": 1,
-      "portion_ok": 1,
-      "confidence_band": "medium",
+      "portion_ok": 0.685,
+      "confidence_band": "low",
       "confidence_ok": null,
-      "kcal_err_pct": 2.193,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
-      "plaus_fp": false,
-      "confident_wrong": true,
+      "plaus_fp": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 22.7,
+      "latency_ms": 14.3,
       "notes": [
-        "matched reject pattern in \"Rasam powder (Rasam masala)\"",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "grams 394.4 outside 100–300",
+        "plausibility FP: answer within case range but judge rejects (kcal density 24/100g outside 30–340)"
       ]
     },
     {
@@ -9962,7 +9900,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 43.3,
+      "latency_ms": 72.6,
       "notes": [
         "grams 100 outside 15–25",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -9979,23 +9917,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.534,
-      "identity_ok": 0,
+      "case_score": 0.962,
+      "identity_ok": 1,
       "class_ok": 1,
-      "prep_ok": 0.4,
+      "prep_ok": 0.8,
       "portion_ok": 1,
-      "confidence_band": "low",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 0,
+      "kcal_err_pct": 0.104,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.8,
-      "notes": [
-        "no identity match (\"Cornmeal, white, self-rising, bolted, plain, enriched\" vs /rice, white|white rice/)"
-      ]
+      "latency_ms": 55.2,
+      "notes": []
     },
     {
       "id": "x-bnd-003",
@@ -10021,7 +9957,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 19.8,
+      "latency_ms": 21.5,
       "notes": [
         "grams 100 outside 25–60",
         "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
@@ -10038,23 +9974,21 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.358,
-      "identity_ok": 0,
+      "case_score": 0.875,
+      "identity_ok": 1,
       "class_ok": 0,
       "prep_ok": null,
       "portion_ok": 1,
-      "confidence_band": "low",
+      "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.4,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 58.5,
-      "notes": [
-        "no identity match (\"Water, bottled, generic\" vs /yogh?urt|curd|dahi/)"
-      ]
+      "latency_ms": 67.6,
+      "notes": []
     },
     {
       "id": "x-bnd-005",
@@ -10082,7 +10016,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 20.2,
+      "latency_ms": 18.1,
       "notes": [
         "grams 100 outside 200–260"
       ]
@@ -10098,24 +10032,21 @@
       ],
       "difficulty": "medium",
       "resolved": true,
-      "case_score": 0.093,
-      "identity_ok": 0,
+      "case_score": 0.854,
+      "identity_ok": 1,
       "class_ok": null,
-      "prep_ok": 0.8,
+      "prep_ok": 0,
       "portion_ok": 1,
       "confidence_band": "high",
       "confidence_ok": null,
-      "kcal_err_pct": 0.158,
+      "kcal_err_pct": 0,
       "plaus_fn": false,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 47.6,
-      "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /paneer/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
-      ]
+      "latency_ms": 56.8,
+      "notes": []
     },
     {
       "id": "x-prp-012",
@@ -10141,7 +10072,7 @@
       "confident_wrong": true,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 28,
+      "latency_ms": 24.6,
       "notes": [
         "matched reject pattern in \"Corn, sweet, yellow, on or off the cob, boiled, drained\"",
         "grams 89 outside 90–200",
@@ -10172,7 +10103,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 26,
+      "latency_ms": 23.2,
       "notes": []
     },
     {
@@ -10186,23 +10117,22 @@
       ],
       "difficulty": "easy",
       "resolved": true,
-      "case_score": 0.058,
-      "identity_ok": 0,
+      "case_score": 0.851,
+      "identity_ok": 1,
       "class_ok": null,
-      "prep_ok": 0.8,
+      "prep_ok": 0,
       "portion_ok": 1,
-      "confidence_band": "high",
+      "confidence_band": "medium",
       "confidence_ok": null,
-      "kcal_err_pct": 11.367,
-      "plaus_fn": false,
+      "kcal_err_pct": 0.033,
+      "plaus_fn": true,
       "plaus_fp": false,
-      "confident_wrong": true,
+      "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 40.7,
+      "latency_ms": 52,
       "notes": [
-        "no identity match (\"Tomato sandwich (grilled)\" vs /zucchini|courgette/)",
-        "confident-wrong: wrong food and/or >50% off, at high/medium confidence"
+        "plausibility FN: judge-implausible answer at medium confidence (kcal density 20/100g outside 40–380)"
       ]
     },
     {
@@ -10229,7 +10159,7 @@
       "confident_wrong": false,
       "fabrication": false,
       "silent_drop": false,
-      "latency_ms": 43.1,
+      "latency_ms": 59.3,
       "notes": [
         "grams 100 outside 120–220"
       ]

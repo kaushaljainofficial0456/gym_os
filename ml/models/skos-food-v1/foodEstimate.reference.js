@@ -232,6 +232,12 @@ const PREP_WORDS = new Set(['creamed', 'deviled', 'benedict', 'fried', 'scramble
   // IFCT2017 spelling of the 'omelet' already listed (their row is "Egg,
   // poultry, omlet"), so the existing entry never actually matched it.
   'poached', 'omlet',
+  // An INGREDIENT OR AID used to make a dish is not the dish. "rasam"
+  // returned "Rasam powder (Rasam masala)" -- a spice mix -- ahead of the
+  // actual "Rasam with lemon"/"Rasam with tamarind" rows that sit just below
+  // it. Penalised only when the user did not ask for it, so "rasam powder"
+  // and "tomato paste" still rank their own product first.
+  'powder', 'paste', 'concentrate', 'essence', 'seasoning', 'premix',
   'omelet', 'battered', 'breaded', 'stuffed', 'candied', 'pickled', 'smoked',
   'sauce', 'salad', 'soup', 'stew', 'curry', 'casserole', 'sandwich', 'burger',
   'pie', 'cake', 'cookie', 'chips', 'kebab', 'roll', 'wrap', 'pizza', 'juice',
@@ -249,6 +255,33 @@ const STOPWORDS = new Set(['raw', 'fresh', 'whole', 'the', 'and', 'with', 'witho
 // Above this many targets an "alias" is a bulk-extraction artefact, not a
 // synonym, and does not earn the exact-alias score floor. See _searchExact.
 const MAX_SPECIFIC_ALIAS_TARGETS = 12;
+
+/**
+ * Words that describe a container, a category or a manner of preparation but
+ * never name a food, and so must not be the token a relaxed query is anchored
+ * on. Backoff discards part of what the user typed; what remains has to carry
+ * the identity of an actual food, or the "match" is just whichever rows happen
+ * to use the same packaging word.
+ *
+ * Deliberately an explicit list rather than a frequency cutoff: corpus
+ * frequency does NOT separate these ("food" appears in 1.26% of rows, which
+ * sits between "chips" at 1.26% and "broccoli" at 1.40%), so an IDF threshold
+ * would have to discard real foods to catch them.
+ */
+const NON_ANCHOR_TOKENS = new Set([
+  'food', 'foods', 'item', 'items', 'meal', 'meals', 'dish', 'dishes',
+  'recipe', 'product', 'products', 'packet', 'pack', 'packed', 'packaged',
+  'plate', 'bowl', 'cup', 'glass', 'serving', 'servings', 'portion',
+  'piece', 'pieces', 'slice', 'slices', 'homemade', 'generic', 'style',
+  'mix', 'assorted', 'mixed', 'other', 'misc', 'miscellaneous',
+  // Negations, sizes and grades. These qualify a food, they never name one,
+  // and a sub-query made only of them describes nothing: "zzzq-not-a-food"
+  // relaxed to the pair "not food" and matched "...skin NOT eaten, from fast
+  // FOOD / restaurant". Listing them costs nothing elsewhere, because this
+  // set only blocks a sub-query in which EVERY token is one of them.
+  'not', 'no', 'none', 'free', 'less', 'more', 'low', 'high', 'extra',
+  'light', 'regular', 'small', 'medium', 'large', 'big', 'mini', 'jumbo',
+]);
 
 /**
  * Does `qNorm` occur in `normName` as a WORD, rather than buried inside a
@@ -272,7 +305,15 @@ function nameContainsQuery(normName, qNorm) {
   if (!normName || !qNorm) return false;
   if (!normName.includes(qNorm)) return false;
   if (qNorm.includes(' ')) return true;
-  return normName.split(' ').some((t) => t.startsWith(qNorm) && t.length <= qNorm.length + 3);
+  /* How much longer the containing token may be, SCALED to the query. A flat
+     +3 is far too generous for a short word -- it lets a 3-letter query match
+     a 6-letter one, i.e. doubling its length -- which is how "car tyre"
+     reached "CARrot" and "plastic bag" reached "BAGel". Half the query length,
+     capped at 3, admits the inflections this exists for ("egg"->"eggs",
+     "curd"->"curds", "tomato"->"tomatoes") while refusing to grow a stem into
+     an unrelated word. */
+  const slack = Math.min(3, Math.max(1, Math.floor(qNorm.length / 2)));
+  return normName.split(' ').some((t) => t.startsWith(qNorm) && t.length <= qNorm.length + slack);
 }
 
 // A COMPONENT of a food is not the food. Caught by comparing model output to
@@ -515,21 +556,87 @@ class FoodSearch {
     let out = this._searchExact(qNorm, qTokens, limit, cuisine);
     if (out.length) return out;
 
-    // Progressive backoff: every query token must normally match, which
-    // returns NOTHING for "apple big" when the DB holds "Apples, raw".
-    // Measured as the largest single cause of unresolved queries.
+    /* Progressive backoff: every query token must normally match, which
+       returns NOTHING for "apple big" when the DB holds "Apples, raw".
+       Measured as the largest single cause of unresolved queries.
+
+       DIRECTION MATTERS, and dropping only from the END had it backwards.
+       In "medium apple", "grilled tofu", "black coffee", "masala chai",
+       "potato chips" the HEAD NOUN -- the actual food -- is the LAST token
+       and the modifier is the first. Discarding the tail therefore threw away
+       the food and searched on the modifier alone, which reliably matched
+       something unrelated that merely shared that adjective:
+         "1 medium apple"          -> Beef, ground, MEDIUM, baked
+         "120g grilled tofu"       -> Tomato sandwich (GRILLED)
+         "black coffee"            -> BLACK berry (Rubus sp.)
+         "1 cup masala chai"       -> MASALA munch
+         "100g cooked oatmeal"     -> COOKED Sweet Corn Kernels
+         "generic potato chips"    -> Water, bottled, GENERIC
+       Every one of those head nouns resolves correctly on its own, so the
+       right answer was one token away the whole time. This was the single
+       largest group of identity failures in the 324-case benchmark.
+
+       Which end to keep is NOT fixed, though, because the convention is not
+       universal: Indian dish names frequently lead with the head noun ("dal
+       makhani", "rajma chawal", "paneer tikka"). Blindly preferring the tail
+       merely moved the failure -- "rajma chawal" then matched `chawal` and
+       returned "Curd rice (Dahi bhaat/Dahi chawal/...)" instead of rajma.
+
+       So both forms are tried AT EACH DEPTH and the one whose best hit SCORES
+       HIGHER wins: the scorer already knows an exact/alias match (900-1000)
+       from an incidental token match (~200), and that is exactly the judgement
+       needed here. Depth still takes precedence over score -- fewer dropped
+       tokens first -- because a shorter query trivially scores higher (fewer
+       extra-token penalties, likelier exact hit), so ranking purely on score
+       would always discard as much of the user's query as possible. */
+    /* AT MOST HALF THE QUERY MAY BE DISCARDED. Backoff used to be allowed to
+       strip everything but a single token, so a four-word phrase could be
+       "matched" on 25% of itself -- which is how "zzqxvv-not-a-real-
+       ingredient" found a row by anchoring on "real", and how any long phrase
+       could latch onto one incidental word. Keeping at least half of what the
+       user typed bounds the concession to something defensible; below that,
+       reporting the miss is the honest answer. Two-token queries are
+       unaffected ("medium apple" -> "apple"), which is where backoff does its
+       real work. */
     if (allowBackoff && qTokens.length >= 2) {
-      for (let drop = 1; drop < qTokens.length; drop += 1) {
-        const sub = qTokens.slice(0, qTokens.length - drop);
-        if (!sub.length) break;
-        out = this._searchExact(sub.join(' '), sub, limit, cuisine);
-        if (out.length) {
-          for (const r of out) {
+      const maxDrop = Math.floor(qTokens.length / 2);
+      for (let drop = 1; drop <= maxDrop; drop += 1) {
+        const subs = [
+          qTokens.slice(drop),                      // keep the tail (head noun last)
+          qTokens.slice(0, qTokens.length - drop),  // keep the head (head noun first)
+        ];
+        let best = null;
+        for (const sub of subs) {
+          if (!sub.length) continue;
+          // What survives the drop must still name a food. Anchoring on a
+          // container/category word instead matched whatever rows shared that
+          // packaging term: "zzqxvv-fixture-food-a" relaxed to the bare token
+          // "food" and confidently returned a real row for a food that does
+          // not exist.
+          if (!sub.some((t) => !NON_ANCHOR_TOKENS.has(t))) continue;
+          const hits = this._searchExact(sub.join(' '), sub, limit, cuisine);
+          if (!hits.length) continue;
+          const top = typeof hits[0]._score === 'number' ? hits[0]._score : -Infinity;
+          /* A NON-POSITIVE SCORE IS NOT A MATCH. Dropping query tokens is
+             already a concession, so the remainder has to earn its answer:
+             at <= 0 every quality signal in score() has outweighed whatever
+             lexical overlap remained, which is the profile of a coincidence,
+             not a food. Without this, "xyyzqq nonfoodterm 500g" backed off to
+             the token "500g" and returned "BRITANNIA bourbon 500g" (score
+             -60) as a confident 494 kcal. The full-query path is deliberately
+             NOT held to this: there the match is anchored to everything the
+             user actually typed. */
+          if (top <= 0) continue;
+          if (!best || top > best.top) best = { hits, sub, top };
+        }
+        if (best) {
+          const kept = new Set(best.sub);
+          for (const r of best.hits) {
             r.query_relaxed = true;
-            r.matched_on = sub.join(' ');
-            r.unmatched_query_terms = qTokens.slice(qTokens.length - drop);
+            r.matched_on = best.sub.join(' ');
+            r.unmatched_query_terms = qTokens.filter((t) => !kept.has(t));
           }
-          return out;
+          return best.hits;
         }
       }
     }

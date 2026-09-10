@@ -518,3 +518,124 @@ test('quantity: "-s" plurals and singulars still resolve identically', { skip },
     assert.equal(p.source_id, s.source_id);
   }
 });
+
+/* ------------------------------------------------------------------ *
+ *  BUG 9 — progressive backoff discarded the HEAD NOUN and matched    *
+ *          on the modifier                                            *
+ * ------------------------------------------------------------------ */
+
+test('backoff: a "<modifier> <food>" query resolves the FOOD, not the modifier', { skip }, () => {
+  // Backoff dropped tokens from the END, but in these phrasings the food is
+  // the LAST word, so it threw the food away and searched the adjective.
+  // Measured before: "1 medium apple" -> "Beef, ground, MEDIUM, baked";
+  // "120g grilled tofu" -> "Tomato sandwich (GRILLED)"; "black coffee" ->
+  // "BLACK berry"; "generic potato chips" -> "Water, bottled, GENERIC".
+  const CASES = [
+    ['1 medium apple', /apple/i],
+    ['120g grilled tofu', /tofu/i],
+    ['black coffee', /coffee/i],
+    ['150g grilled prawns', /prawn/i],
+    ['200g steamed broccoli', /broccoli/i],
+    ['generic potato chips', /potato|chip/i],
+    ['homemade chapati', /chapati|roti/i],
+    ['80g dry rolled oats', /oat/i],
+  ];
+  for (const [input, want] of CASES) {
+    const item = estimateFood(input).items[0];
+    assert.ok(item, `"${input}" must resolve`);
+    assert.match(item.name, want, `"${input}" resolved to "${item.name}"`);
+  }
+});
+
+test('backoff: a head-noun-FIRST query still resolves on its head noun', { skip }, () => {
+  // The direction is chosen by score, not hardcoded, because Indian dish
+  // names commonly lead with the head noun. Preferring the tail outright made
+  // "rajma chawal" match `chawal` and return "Curd rice (Dahi bhaat/...)".
+  const rajma = estimateFood('rajma chawal').items[0];
+  assert.ok(rajma);
+  assert.match(rajma.name, /rajma|kidney bean/i, `resolved to "${rajma.name}"`);
+});
+
+test('backoff: never invents a match for a food that does not exist', { skip }, () => {
+  // Relaxing the query must not become a licence to match anything. Each of
+  // these anchored on a token that names no food -- a pack size, a category
+  // word, a negation -- and returned a confident number for a non-food.
+  const NONFOOD = [
+    'xyyzqq nonfoodterm 500g',   // anchored on the pack size "500g"
+    'zzqxvv-not-a-real-ingredient', // anchored on "real"
+    'zzzq-not-a-food',           // anchored on "not food"
+    'plastic bag',               // "bag" grown into "bagel"
+  ];
+  for (const input of NONFOOD) {
+    const r = estimateFood(input);
+    assert.equal(r.items.length, 0, `"${input}" resolved to "${r.items[0]?.name}"`);
+    assert.equal(r.total.calories, 0);
+    assert.ok(r.unresolved.length >= 1, 'the miss must be reported, not silently dropped');
+  }
+});
+
+test('backoff: at most half the query may be discarded', { skip }, () => {
+  // A four-word phrase must not be "matched" on one incidental word.
+  const r = estimateFood('zzqxvv fixture food alpha');
+  assert.equal(r.items.length, 0);
+  assert.ok(r.unresolved.length >= 1);
+});
+
+/* ------------------------------------------------------------------ *
+ *  BUG 10 — "<food> with <food>" silently lost the second food        *
+ * ------------------------------------------------------------------ */
+
+test('with-conjunction: both foods are resolved, nothing is dropped', { skip }, () => {
+  // `with` is a noise WORD, not a separator, so these arrived as one fragment
+  // that resolved to a single food -- silently, since nothing was reported
+  // unresolved and the total was simply short. Eight of the benchmark's
+  // multi-item cases lost food this way.
+  const CASES = [
+    ['150g grilled chicken with 100g rice', [/chicken/i, /rice/i]],
+    ['one bowl chicken curry with rice', [/chicken/i, /rice/i]],
+    ['a plate of noodles with chicken', [/noodle/i, /chicken/i]],
+    ['paneer bhurji with 2 rotis', [/paneer/i, /roti|chapati/i]],
+  ];
+  for (const [input, wants] of CASES) {
+    const r = estimateFood(input);
+    assert.equal(r.items.length, wants.length,
+      `"${input}" -> ${JSON.stringify(r.items.map((i) => i.name))}`);
+    for (const w of wants) {
+      assert.ok(r.items.some((i) => w.test(i.name)), `"${input}" is missing ${w}`);
+    }
+    // The total rounds the sum; each item rounds its own figure. Those can
+    // differ by a kcal (480.4 + 141.6 rounds to 622 item-wise but 621 as a
+    // sum) -- that is rounding, not a lost or double-counted food, which is
+    // what this is actually checking.
+    const summed = r.items.reduce((s, i) => s + i.calories, 0);
+    assert.ok(Math.abs(r.total.calories - summed) <= 1,
+      `"${input}": total ${r.total.calories} vs items ${summed}`);
+  }
+});
+
+test('with-conjunction: a fragment whose other half is not a food is left alone', { skip }, () => {
+  // The guard against over-splitting a compound dish: both halves must name
+  // something the catalogue actually knows.
+  const r = estimateFood('rice with xyzzyqq');
+  assert.equal(r.items.length, 1, `expected one item, got ${JSON.stringify(r.items.map((i) => i.name))}`);
+});
+
+test('with-conjunction: V1 and V3 agree, and neither double-counts', { skip }, async () => {
+  // V3 re-split fragments V1 had already split, appending a second copy of
+  // every food: "paneer bhurji with 2 rotis" came back as paneer + roti +
+  // paneer + roti at 934 kcal instead of 467.
+  const { estimateMeal } = await import('../src/services/food/index.js');
+  for (const input of ['paneer bhurji with 2 rotis', 'dosa with sambar and chutney']) {
+    const v1 = estimateFood(input);
+    const v3 = estimateMeal(input, { engine: 'v3' });
+    // Compared as SETS: V3 rebuilds the list while refining it, so item order
+    // is not meaningful. What must hold is the same foods, the same total, and
+    // each food exactly once.
+    assert.deepEqual(v3.items.map((i) => i.name).sort(), v1.items.map((i) => i.name).sort(), input);
+    assert.equal(v3.total.calories, v1.total.calories, input);
+    for (const items of [v1.items, v3.items]) {
+      const names = items.map((i) => i.name);
+      assert.equal(new Set(names).size, names.length, `"${input}" contains a duplicate item`);
+    }
+  }
+});

@@ -488,7 +488,12 @@ function tryHeadNounFallback(raw, parsed, existingItem) {
 
 export function applyPhase3(base, originalText) {
   if (!base || !Array.isArray(base.items) || !originalText) return base;
-  const rawFragments = impl.splitItems(originalText);
+  // The SAME fragment definition V1 resolved against (splitItems plus the
+  // catalogue-confirmed "<food> with <food>" expansion). Using the narrower
+  // splitItems here made Phase 3 re-split a fragment V1 had already split and
+  // append a duplicate of every food in it -- "paneer bhurji with 2 rotis"
+  // came back as paneer, roti, paneer, roti at 934 kcal.
+  const rawFragments = impl.expandFragments(originalText);
   if (!rawFragments.length) return base;
 
   const items = [...base.items];
