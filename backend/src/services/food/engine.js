@@ -562,7 +562,17 @@ export function applyPhase3(base, originalText) {
       // un-split phrase. Anything less is no improvement; leave V1's
       // original outcome alone rather than trade one guess for a worse one.
       if (subItems.length < 2) continue;
-      if (itemIdx >= 0) items.splice(itemIdx, 1); else if (unresolvedIdx >= 0) unresolved.splice(unresolvedIdx, 1);
+      /* Remove EVERY item this fragment already produced, not just the first.
+         V1 can now return two items for one fragment on its own ("two rotis
+         with dal" -> rotis + dal), and splicing a single index left the
+         others behind while the re-resolved halves were pushed on top:
+         "dosa with sambar and chutney" came back with Sambar twice and its
+         249 kcal counted twice. Any item still tagged with this fragment is
+         superseded by the split that is about to replace it. */
+      for (let k = items.length - 1; k >= 0; k -= 1) {
+        if (items[k].matched_from === raw) items.splice(k, 1);
+      }
+      if (unresolvedIdx >= 0) unresolved.splice(unresolvedIdx, 1);
       items.push(...subItems);
       unresolved.push(...subUnresolved);
       changed = true;
@@ -581,9 +591,24 @@ export function applyPhase3(base, originalText) {
     // against its OWN class's bounds, never "is this the right class for
     // the query" — that's this classifier's job, per plausibility.js's own
     // docstring).
+    // ...and neither does a match the SEARCH ENGINE ITSELF rated `low`.
+    // "branded" was standing in for "this match is bad", which only worked
+    // while branded rows happened to win these queries. With brand-aware
+    // ranking they no longer do, and the failure resurfaced in a form the
+    // brand test could not see: "4 pani puri" (a dish with NO row of its own
+    // anywhere in the 21,353) matched "Cumin infused water (Jeere/Zeere ka
+    // pani)" on the single token `pani`, scoring 28 out of ~1000. That row is
+    // unbranded, trustworthy, and — being water — entirely plausible for its
+    // own class, so it satisfied every existing C1 condition and suppressed
+    // the decomposition that had been rescuing the query, answering "4 pani
+    // puri" with 1,355 g of cumin water. Low search confidence is the direct
+    // statement of the thing `branded` was proxying for. Scoped to queries the
+    // curated composite_map already recognises as a real dish, so this can
+    // only ever route a KNOWN dish to its own template, never invent one.
     const existingIsGoodC1 = existingItem
       && existingItem.trustworthy !== false
       && existingItem.plausibility?.verdict !== 'hard_fail'
+      && existingItem.confidence !== 'low'
       && coarseClassOf(existingItem, rowFor(existingItem.source_id)) !== 'branded_product';
     if (existingIsGoodC1) continue;
 
