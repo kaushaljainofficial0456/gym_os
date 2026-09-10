@@ -207,3 +207,25 @@ test('a DEAD refresh grant reports reconnect-required and marks the connection r
   assert.equal(conn.status, 'revoked', 'a dead grant is revoked, not merely error');
   assert.match(conn.sync_error, /reconnect/i);
 });
+
+test('a connection with NO refresh token at all reports reconnect-required instead of a bare 401', async (t) => {
+  withConfig(t);
+  const db = await memDb();
+  // A connection made before the 'offline' scope was requested: a valid-
+  // looking access token, but nothing to renew it with.
+  await seed(db, { expiresAt: new Date(Date.now() + 3600_000).toISOString(), refreshToken: null });
+  const { sync, close } = await startApp(db);
+  t.after(() => close());
+  mockWhoop(t, {
+    validAccessToken: 'some-other-token', // the seeded token will 401
+    onRefresh: () => { throw new Error('must never attempt a refresh without a refresh token'); },
+  });
+
+  const res = await sync();
+  const result = res.json.results[0];
+  assert.equal(result.ok, false);
+  assert.equal(result.reconnectRequired, true, 'the user needs to be told to reconnect, not shown a 401');
+
+  const conn = await db.q1('SELECT * FROM health_provider_connections WHERE id = ?', ['hconn1']);
+  assert.equal(conn.status, 'revoked');
+});

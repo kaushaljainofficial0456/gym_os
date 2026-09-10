@@ -108,8 +108,17 @@ export default function HealthDevices() {
             {d.status !== 'connected' && d.availability === 'architected_only' && (
               <div className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>Not yet available</div>
             )}
-            {d.status !== 'connected' && d.availability === 'available' && (
+            {d.status !== 'connected' && d.status !== 'revoked' && d.availability === 'available' && (
               <div className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>Not connected</div>
+            )}
+            {/* 'revoked' means the provider grant itself died (an expired or
+                rotated-away refresh token). It is not a transient sync error
+                and retrying achieves nothing -- the one useful action is
+                reconnecting, so say exactly that. */}
+            {d.status === 'revoked' && (
+              <div className="text-[10px] mt-0.5" style={{ color: 'var(--warn)' }}>
+                Connection expired — reconnect to resume syncing
+              </div>
             )}
             {d.status === 'error' && d.syncError && (
               <div className="text-[10px] mt-0.5" style={{ color: 'var(--bad)' }}>{d.syncError}</div>
@@ -121,7 +130,7 @@ export default function HealthDevices() {
             </button>
           ) : d.availability === 'available' ? (
             <button className="btn-primary btn-sm" disabled={busyProvider === d.provider} onClick={() => connect(d.provider)}>
-              {busyProvider === d.provider ? '…' : 'Connect'}
+              {busyProvider === d.provider ? '…' : (d.status === 'revoked' ? 'Reconnect' : 'Connect')}
             </button>
           ) : (
             <button className="btn btn-sm opacity-40 cursor-not-allowed" disabled aria-disabled="true">Connect</button>

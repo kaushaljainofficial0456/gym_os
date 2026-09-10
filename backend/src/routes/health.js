@@ -61,7 +61,20 @@ class ReconnectRequiredError extends Error {
  *  the new one bricks the connection on the NEXT refresh instead of this
  *  one (see whoopProvider.js's refreshAccessToken). */
 async function ensureFreshToken(db, provider, conn, { force = false } = {}) {
-  if (!provider.refreshAccessToken || !conn.refresh_token) return conn;
+  if (!provider.refreshAccessToken) return conn;
+  if (!conn.refresh_token) {
+    // No refresh token was ever stored (a connection made before the
+    // 'offline' scope was requested, or a provider that issues none). The
+    // access token cannot be renewed, so once it is rejected the only
+    // real fix is reconnecting -- say that, rather than surfacing a bare
+    // 401 the user cannot act on. Only escalates on `force`, i.e. after a
+    // request has actually been rejected: an unexpired token still works.
+    if (!force) return conn;
+    await db.run(
+      'UPDATE health_provider_connections SET status = ?, sync_status = ?, sync_error = ?, updated_at = ? WHERE id = ?',
+      ['revoked', 'error', 'Connection expired — reconnect to resume syncing', now(), conn.id]);
+    throw new ReconnectRequiredError(conn.provider);
+  }
   if (!force) {
     const expiresAt = conn.token_expires_at ? Date.parse(conn.token_expires_at) : NaN;
     // No/unparseable expiry -> fall through and refresh, rather than
