@@ -6,6 +6,7 @@ import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import Icon from '../components/Icon.jsx';
+import SiteFooter from '../components/SiteFooter.jsx';
 import './../components/BorderGlow.css';
 
 // The three top-level paths onto SK OS. Each is a genuinely different
@@ -138,7 +139,12 @@ export default function Login() {
       {showWelcome && <MotivationalWelcome onComplete={handleWelcomeComplete} />}
       <SplashCursorLazy />
 
-      <div className="min-h-screen grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
+      {/* Flex column wrapper so the public legal footer sits at the very
+          bottom of the page in normal flow — below the fold on desktop,
+          never overlapping the login form or the SplashCursor/ambient
+          animations. The grid itself is unchanged. */}
+      <div className="min-h-screen flex flex-col">
+      <div className="flex-1 grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
         {/* brand side */}
         <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ borderRight: '1px solid var(--line)' }}>
           <div className="absolute -top-32 -left-24 w-96 h-96 rounded-full blur-[110px] anim-fadeIn" style={{ background: 'var(--accent-soft)' }} />
@@ -270,6 +276,9 @@ export default function Login() {
             )}
           </div>
         </div>
+      </div>
+
+      <SiteFooter />
       </div>
     </>
   );

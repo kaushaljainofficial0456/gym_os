@@ -54,6 +54,15 @@ const DesignSystem = lazy(() => import('./pages/DesignSystem.jsx'));
 const SharedMeal = lazy(() => import('./pages/public/SharedMeal.jsx'));
 const LegalConsent = lazy(() => import('./pages/LegalConsent.jsx'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy.jsx'));
+// Public legal/compliance pages (Razorpay website review). All unauthenticated
+// on purpose: an external reviewer must be able to open them without an
+// account. See pages/legal/ and components/SiteFooter.jsx.
+const About = lazy(() => import('./pages/legal/About.jsx'));
+const Contact = lazy(() => import('./pages/legal/Contact.jsx'));
+const Terms = lazy(() => import('./pages/legal/Terms.jsx'));
+const Privacy = lazy(() => import('./pages/legal/Privacy.jsx'));
+const RefundPolicy = lazy(() => import('./pages/legal/RefundPolicy.jsx'));
+const ShippingPolicy = lazy(() => import('./pages/legal/ShippingPolicy.jsx'));
 // Dev-only: onboarding wizard preview for testing scroll-wheel selectors.
 // Gated on import.meta.env.DEV so it tree-shakes out of production builds.
 const DevOnboardingPreview = import.meta.env.DEV
@@ -142,6 +151,15 @@ export default function App() {
         </Require>
       } />
       <Route path="/privacy-policy" element={page(PrivacyPolicy)} />
+      {/* Public legal/compliance pages — no auth gate, matching
+          /privacy-policy above. /privacy-policy and /privacy render the
+          same policy (the former is kept so existing links don't break). */}
+      <Route path="/about" element={page(About)} />
+      <Route path="/contact" element={page(Contact)} />
+      <Route path="/terms" element={page(Terms)} />
+      <Route path="/privacy" element={page(Privacy)} />
+      <Route path="/refund-policy" element={page(RefundPolicy)} />
+      <Route path="/shipping-policy" element={page(ShippingPolicy)} />
       {/* Dev-only onboarding preview — gated by Vite's import.meta.env.DEV.
           Does NOT exist in production builds (tree-shaken away). */}
       {import.meta.env.DEV && (
