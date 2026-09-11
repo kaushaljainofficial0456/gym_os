@@ -30,6 +30,7 @@
 // ============================================================
 
 import crypto from 'node:crypto';
+import { config } from '../../config.js';
 
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
@@ -63,9 +64,49 @@ const REQUESTED_PROVIDER = (process.env.PAYMENT_PROVIDER || 'mock').toLowerCase(
 const MOCK_CHECKOUT_SECRET = crypto.randomBytes(32).toString('hex');
 const MOCK_WEBHOOK_SECRET = crypto.randomBytes(32).toString('hex');
 
+/** Thrown by every provider operation when no payment provider is
+ *  configured ('none'). Carries an HTTP status + stable code so the
+ *  global error handler can turn it into a controlled 503 instead of a
+ *  generic 500 -- see index.js. */
+export class PaymentsNotConfiguredError extends Error {
+  constructor() {
+    super('Payments are not configured on this deployment.');
+    this.name = 'PaymentsNotConfiguredError';
+    this.status = 503;
+    this.code = 'payments_not_configured';
+  }
+}
+
+// Three states, not two. 'mock' is a DEVELOPMENT convenience that can
+// mint its own valid-looking signatures in-process; letting it answer
+// real production traffic would mean anyone with an account could forge
+// a payment (see config.js's gate comment and paymentsDev.js). But
+// requiring live Razorpay credentials just to BOOT is the opposite
+// failure: a deployment with no payment provider yet cannot run at all,
+// even though nothing else in the app depends on payments.
+//
+// 'none' resolves that: in production without a configured live
+// provider, there is no payment provider at all. Every provider
+// operation throws PaymentsNotConfiguredError (-> controlled 503) and
+// both signature verifiers fail closed, so no payment can be created,
+// activated, refunded or forged. Outside production 'mock' still
+// applies exactly as before, so dev and the test suite are unchanged.
+//
+// Configuring PAYMENT_PROVIDER=razorpay + the Razorpay keys switches
+// this to 'razorpay' with no code change -- the integration below is
+// untouched and stays ready for that.
 export function providerName() {
   if (REQUESTED_PROVIDER === 'razorpay' && RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) return 'razorpay';
+  if (config.nodeEnv === 'production') return 'none';
   return 'mock';
+}
+
+/** True when payments are unavailable on this deployment (production
+ *  with no live provider configured). Callers that want to degrade
+ *  gracefully -- hide a "Pay" button, skip a checkout step -- can ask
+ *  this instead of catching the thrown error. */
+export function paymentsDisabled() {
+  return providerName() === 'none';
 }
 
 export function isLiveProviderConfigured() {
@@ -254,7 +295,9 @@ function mockRefundPayment({ providerPaymentId }) {
  *  a verified webhook/checkout-signature does that; see
  *  paymentActivation.js's own header comment on why). */
 export async function fetchProviderOrderStatus(providerOrderId) {
-  return providerName() === 'razorpay' ? razorpayFetchOrderStatus(providerOrderId) : mockFetchOrderStatus(providerOrderId);
+  const provider = providerName();
+  if (provider === 'none') throw new PaymentsNotConfiguredError();
+  return provider === 'razorpay' ? razorpayFetchOrderStatus(providerOrderId) : mockFetchOrderStatus(providerOrderId);
 }
 
 /** Issues a refund against a captured payment at the gateway. `amount`
@@ -262,7 +305,9 @@ export async function fetchProviderOrderStatus(providerOrderId) {
  *  every other amount in this file) -- omit for a full refund of
  *  whatever remains captured. Returns { providerRefundId, status }. */
 export async function refundProviderPayment({ providerPaymentId, amount, notes }) {
-  return providerName() === 'razorpay' ? razorpayRefundPayment({ providerPaymentId, amount, notes }) : mockRefundPayment({ providerPaymentId, amount });
+  const provider = providerName();
+  if (provider === 'none') throw new PaymentsNotConfiguredError();
+  return provider === 'razorpay' ? razorpayRefundPayment({ providerPaymentId, amount, notes }) : mockRefundPayment({ providerPaymentId, amount });
 }
 
 /** Creates a gateway order. Caller MUST have already resolved amount/
@@ -271,6 +316,7 @@ export async function refundProviderPayment({ providerPaymentId, amount, notes }
  *  amounts. */
 export async function createProviderOrder({ amount, currency, receipt, notes }) {
   const provider = providerName();
+  if (provider === 'none') throw new PaymentsNotConfiguredError();
   if (provider === 'razorpay') return { provider, ...(await razorpayCreateOrder({ amount, currency, receipt, notes })) };
   return { provider, ...(await mockCreateOrder({ amount, currency, receipt })) };
 }
@@ -289,7 +335,9 @@ export async function createProviderOrder({ amount, currency, receipt, notes }) 
  *  before activating anything (spec: "NEVER activate the package based
  *  solely on frontend success"). */
 export function verifyCheckoutSignature({ providerOrderId, providerPaymentId, signature }) {
-  const secret = providerName() === 'razorpay' ? RAZORPAY_KEY_SECRET : MOCK_CHECKOUT_SECRET;
+  const provider = providerName();
+  if (provider === 'none') return false; // payments unconfigured -- nothing can be verified, fail closed
+  const secret = provider === 'razorpay' ? RAZORPAY_KEY_SECRET : MOCK_CHECKOUT_SECRET;
   if (!secret) return false; // fail closed -- never verify against an empty/missing key
   const expected = crypto.createHmac('sha256', secret).update(`${providerOrderId}|${providerPaymentId}`).digest('hex');
   if (expected.length !== String(signature || '').length) return false;
@@ -313,7 +361,9 @@ export function verifyCheckoutSignature({ providerOrderId, providerPaymentId, si
  *  MOCK_WEBHOOK_SECRET (mock mode, see its own comment above) -- an empty
  *  string from either source refuses to verify, full stop. */
 export function verifyWebhookSignature(rawBody, signature) {
-  const secret = providerName() === 'razorpay' ? RAZORPAY_WEBHOOK_SECRET : MOCK_WEBHOOK_SECRET;
+  const provider = providerName();
+  if (provider === 'none') return false; // payments unconfigured -- nothing can be verified, fail closed
+  const secret = provider === 'razorpay' ? RAZORPAY_WEBHOOK_SECRET : MOCK_WEBHOOK_SECRET;
   if (!secret) return false; // fail closed -- missing/empty RAZORPAY_WEBHOOK_SECRET must never fall back to a guessable default
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   if (expected.length !== String(signature || '').length) return false;

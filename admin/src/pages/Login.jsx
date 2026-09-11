@@ -35,7 +35,7 @@ export default function Login() {
       <video className="login-video" src={LOGIN_VIDEO_URL} autoPlay muted loop playsInline aria-hidden="true" />
       <div className="login-scrim" aria-hidden="true" />
       <div className="login-box anim-scaleIn">
-        <h1>SK OS Admin Console</h1>
+        <h1>Barbell Admin Console</h1>
         <p className="login-sub">Platform operator access only.</p>
         <form onSubmit={submit}>
           <div className="field">

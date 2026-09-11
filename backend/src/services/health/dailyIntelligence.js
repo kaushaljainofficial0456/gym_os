@@ -495,7 +495,7 @@ export async function getBurnBreakdown(db, { userId, date }) {
     entries.push({
       type: 'workout',
       label: activityLabel(w.activity_type),
-      sublabel: w.skos_workout_id ? 'Logged in SK OS' : 'Detected by wearable',
+      sublabel: w.skos_workout_id ? 'Logged in Barbell' : 'Detected by wearable',
       kcal: w.active_kcal,
       startTime: w.start_time,
       endTime: w.end_time,

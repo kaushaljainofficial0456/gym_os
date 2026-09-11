@@ -19,15 +19,15 @@ import PDFDocument from 'pdfkit';
  *  PDF -- the invoice's own stored amount/currency are what legally
  *  matter, this is just descriptive text. */
 async function resolveLineItem(db, order) {
-  if (!order) return { description: 'SK OS payment', detail: null };
+  if (!order) return { description: 'Barbell payment', detail: null };
   if (order.subject_type === 'ORG_PACKAGE') {
     const sub = await db.q1('SELECT * FROM org_subscriptions WHERE id = ?', [order.subject_id]);
     const pkg = sub?.package_id ? await db.q1('SELECT name FROM sk_packages WHERE id = ?', [sub.package_id]) : null;
-    return { description: pkg?.name ? `SK OS package -- ${pkg.name}` : 'SK OS package subscription', detail: sub ? `${sub.client_capacity} client capacity` : null };
+    return { description: pkg?.name ? `Barbell package -- ${pkg.name}` : 'Barbell package subscription', detail: sub ? `${sub.client_capacity} client capacity` : null };
   }
   if (order.subject_type === 'ORG_CAPACITY_ADDON') {
     const purchase = await db.q1('SELECT increment FROM org_capacity_purchases WHERE id = ?', [order.subject_id]);
-    return { description: 'SK OS capacity add-on', detail: purchase ? `+${purchase.increment} client capacity` : null };
+    return { description: 'Barbell capacity add-on', detail: purchase ? `+${purchase.increment} client capacity` : null };
   }
   // CLIENT_MEMBERSHIP -- subject_id is an enrollment_tokens.id for a
   // fresh join, or a subscriptions.id directly for a renewal (see
@@ -187,7 +187,7 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   // ---- header: "Invoice" + brand/number ----
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(34).text('Invoice', margin, margin);
   doc.font('Helvetica').fontSize(9).fillColor(MUTED)
-    .text('SK OS', margin, margin, { width: rightEdge - margin, align: 'right' });
+    .text('Barbell', margin, margin, { width: rightEdge - margin, align: 'right' });
   doc.text(`No. ${invoice.invoice_number}`, margin, margin + 13, { width: rightEdge - margin, align: 'right' });
 
   let y = margin + 56;
@@ -212,7 +212,7 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
 
   label('From', y); y += labelGap;
   doc.font('Helvetica-Bold').fontSize(11).fillColor(INK);
-  y = drawLine('SK OS', y, { gap: 4 });
+  y = drawLine('Barbell', y, { gap: 4 });
   doc.font('Helvetica').fontSize(9).fillColor(MUTED);
   for (const line of SK_OS_ADDRESS) y = drawLine(line, y, { gap: 0 });
   y += blockGap;

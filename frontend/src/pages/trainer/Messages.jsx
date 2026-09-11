@@ -16,7 +16,7 @@ export default function Messages() {
   const [type, setType] = useState('message');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState('');
+  const [toast, setToast] = useState('');
   const thread = useFetch(() => (clientId ? api(`/messages?client_id=${clientId}`) : Promise.resolve({ messages: [] })), [clientId]);
   const endRef = useRef(null);
 
@@ -24,24 +24,32 @@ export default function Messages() {
     if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [thread.data, clientId]);
 
+  // Auto-dismiss, same pattern used everywhere else in the app -- without
+  // it the toast (including the send-failure error a few lines below)
+  // sits on screen for the rest of the session.
+  useEffect(() => {
+    if (!toast) return;
+    const h = setTimeout(() => setToast(''), 2600);
+    return () => clearTimeout(h);
+  }, [toast]);
+
   if (clients.loading) return <PageSkeleton variant="split" label="Loading messages" />;
   if (clients.error) return <ErrorState error={clients.error} onRetry={clients.reload} />;
 
   const send = async () => {
     if (!body.trim() || !clientId) return;
     setSending(true);
-    setSendError('');
     try {
       await api('/messages', { method: 'POST', body: JSON.stringify({ client_id: clientId, type, body }) });
       setBody('');
       thread.reload({ silent: true });
     } catch (e) {
-      /* A swallowed failure is the worst outcome here. The catch kept the
-         typed text and said NOTHING, so the message simply did not appear
-         in the thread and the trainer was left to guess whether it sent.
-         The same rule the attendance card follows: never let a refused
-         write look like a successful one. */
-      setSendError(e.message || 'Could not send — the message was not delivered.');
+      /* Was `catch (e) { /* keep body *\/ }` -- a failed send (network
+         error, a client no longer assigned to this trainer) left no
+         trace: the input just sat there and the trainer was left to guess
+         whether it sent. Never let a refused write look like a successful
+         one, the same rule the attendance card follows. */
+      setToast(e.message || 'Could not send — the message was not delivered.');
     }
     setSending(false);
   };
@@ -122,9 +130,6 @@ export default function Messages() {
               <button key={v} className={`tab !px-3 !py-1.5 !text-[11px] ${type === v ? 'active' : ''}`} onClick={() => setType(v)}>{l}</button>
             ))}
           </div>
-          {sendError && (
-            <div className="text-[11.5px]" role="alert" style={{ color: 'var(--bad)' }}>{sendError}</div>
-          )}
           <div className="flex gap-2">
             <input className="input flex-1" placeholder={clientId ? `Message ${clientName}…` : 'Pick a client first'} disabled={!clientId}
               value={body} onChange={(e) => setBody(e.target.value)}
@@ -133,6 +138,7 @@ export default function Messages() {
           </div>
         </div>
       </Card>
+      {toast && <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-panel border border-gold/40 font-grotesk text-xs shadow-card">{toast}</div>}
     </div>
   );
 }

@@ -126,7 +126,7 @@ export default function EnterpriseOnboarding() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <PageHeader title="Set up your gym on SK OS" sub="A few questions, then pick a plan — you'll only see this once." />
+      <PageHeader title="Set up your gym on Barbell" sub="A few questions, then pick a plan — you'll only see this once." />
 
       <div className="flex gap-2">
         {['wizard', 'package', 'checkout'].map((s, i) => (

@@ -152,16 +152,25 @@ test('decomposed item never claims high confidence', () => {
 // ---------------------------------------------------------------------
 
 test('REGRESSION (silent-drop bug): "X with Y" combo with no curated template splits into standalone foods', () => {
+  // This began as a Phase-3-only rescue, and asserted that V1 still LOST the
+  // roti so the V3 fix had something to prove. The "<food> with <food>" split
+  // has since moved into V1 itself (silent drops are a release-gate metric, so
+  // the default engine could not keep losing food), which makes the old
+  // pre-fix assertion obsolete -- V1 must now get this right on its own, and
+  // V3 must not double-count what V1 already split.
   const v1 = legacy.estimateFood('paneer bhurji with 2 rotis');
-  assert.equal(v1.items.length, 1, 'confirms V1 silently collapsed this into one wrong match');
-  assert.equal(v1.items[0].name, 'Paneer', 'confirms the roti component was silently dropped entirely');
+  assert.equal(v1.items.length, 2, 'V1 must now resolve both foods itself');
+  assert.ok(v1.items.some((i) => /roti|chapati/i.test(i.name)), 'the roti must no longer be silently dropped');
 
   const v3 = estimateMeal('paneer bhurji with 2 rotis', { engine: 'v3' });
-  assert.equal(v3.items.length, 2, 'both the paneer dish and the roti must now be present');
+  assert.equal(v3.items.length, 2, 'both the paneer dish and the roti must be present, exactly once each');
   assert.ok(v3.items.some((i) => /roti|chapati/i.test(i.name)), 'the roti must no longer be silently dropped');
   assert.equal(v3.unresolved.length, 0);
   assert.ok(v3.total.calories >= 350 && v3.total.calories <= 700, `${v3.total.calories} kcal should fit paneer bhurji + 2 roti`);
-  assert.ok(v3.v3.conjunction_splits >= 1);
+  // V1 and V3 must agree: a fragment already split upstream must not be split
+  // a second time (that produced paneer + roti + paneer + roti, 934 kcal).
+  assert.deepEqual(v3.items.map((i) => i.name), v1.items.map((i) => i.name));
+  assert.equal(v3.total.calories, v1.total.calories);
 });
 
 test('"dosa with sambar and chutney" resolves as 3 separate items, matching the benchmark ground truth', () => {
@@ -224,13 +233,20 @@ test('a rejected sub-match from splitting is reported as unresolved, never silen
 // ---------------------------------------------------------------------
 
 test('REGRESSION (identity bug): "black coffee" no longer resolves to an unrelated "Black X" row', () => {
+  // Originally this asserted V1 still returned "Black berry (Rubus sp.)" as
+  // the precondition for the Phase-3 head-noun rescue. That premise is gone:
+  // V1's progressive backoff used to discard the TAIL of a query, throwing
+  // away the head noun and keeping the modifier ("black"), and it now keeps
+  // whichever end scores better. So V1 must reach a coffee row by itself, and
+  // V3 -- which still refines the choice -- must not make it worse.
   const v1 = legacy.estimateFood('black coffee');
-  assert.equal(v1.items[0].name, 'Black berry (Rubus sp.)', 'confirms the known V1 bug is still reproducible pre-fix');
+  assert.equal(v1.items.length, 1);
+  assert.match(v1.items[0].name, /coffee/i,
+    `V1 must resolve the head noun, got "${v1.items[0].name}"`);
 
   const v3 = estimateMeal('black coffee', { engine: 'v3' });
   assert.equal(v3.items.length, 1);
-  assert.match(v3.items[0].name, /coffee/i, 'the head noun "coffee" must now actually appear in the match');
-  assert.equal(v3.items[0].match_kind, 'head_noun_fallback');
+  assert.match(v3.items[0].name, /coffee/i, 'the head noun "coffee" must actually appear in the match');
   assert.ok(v3.items[0].calories < 60, `black coffee should be a near-zero-calorie beverage, got ${v3.items[0].calories}`);
 });
 

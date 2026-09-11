@@ -55,9 +55,9 @@ export default function Layout() {
 
       <aside className={`sidebar ${navOpen ? 'open' : ''}`} role="navigation" aria-label="Admin console">
         <div className="brand">
-          <span className="mark">SK</span>
+          <span className="mark">B</span>
           <span className="brand-text">
-            SK OS
+            Barbell
             <small>Admin Console</small>
           </span>
           {navOpen && (

@@ -27,6 +27,12 @@ async function memDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema);
+  // lifecycle_status is an ADDITIVE column applied via init-db.js's guarded
+  // migration at runtime, not part of the base schema.sql -- every other
+  // test file that exercises subscription creation already applies it the
+  // same way (see e.g. hardeningPass2.test.js, refunds.test.js). Needed
+  // here since admin.js's POST /subscriptions now sets it on insert.
+  db.exec(`ALTER TABLE subscriptions ADD COLUMN lifecycle_status TEXT CHECK (lifecycle_status IN ('PENDING_PAYMENT','ACTIVE','PAUSED','SUSPENDED','EXPIRED','CANCELLED','REFUND_PENDING','REFUNDED','TRANSFERRED'))`);
   const mk = () => ({
     driver: 'sqlite',
     async q(sql, params = []) { const stmt = db.prepare(sql); return params.length ? stmt.all(...params) : stmt.all(); },
@@ -105,6 +111,78 @@ test('POST /business/subscriptions succeeds for a same-org client_id (regression
   assert.equal(r.status, 201, 'legitimate same-org subscription must still work');
   const rows = await db.q('SELECT * FROM subscriptions WHERE client_id = ?', ['c1']);
   assert.equal(rows.length, 1);
+});
+
+/* ------------------------------------------------------------------ */
+/*  Regression tests for the audit-session fixes below:                 */
+/*   1. POST /subscriptions now sets lifecycle_status = 'ACTIVE' on     */
+/*      insert (was NULL until init-db.js's next server-restart         */
+/*      backfill -- see that route's own comment).                     */
+/*   2. POST /subscriptions now retires any OTHER active subscription   */
+/*      for the same client first, so GET /members' own                */
+/*      `LEFT JOIN subscriptions ON status = 'active'` can never match  */
+/*      two rows for one client (which showed the client TWICE).       */
+/*   3. The membership-action and -history routes' subscription lookup  */
+/*      now prefers an active/non-terminal row over a cancelled one     */
+/*      with a later (or tied) end_date.                               */
+/* ------------------------------------------------------------------ */
+
+test('POST /business/subscriptions sets lifecycle_status=ACTIVE on insert (not NULL)', async (t) => {
+  const { db, call, close } = await startAdminApi();
+  t.after(() => close());
+  const r = await call('POST', '/api/business/subscriptions', { client_id: 'c1', package_id: 'pkg1' });
+  assert.equal(r.status, 201);
+  const sub = await db.q1('SELECT * FROM subscriptions WHERE id = ?', [r.json.id]);
+  assert.equal(sub.lifecycle_status, 'ACTIVE', 'must be ACTIVE immediately, not left NULL until a server restart backfills it');
+});
+
+test('POST /business/subscriptions retires a client\'s prior active subscription instead of stacking it', async (t) => {
+  const { db, call, close } = await startAdminApi();
+  t.after(() => close());
+  const first = await call('POST', '/api/business/subscriptions', { client_id: 'c1', package_id: 'pkg1' });
+  const second = await call('POST', '/api/business/subscriptions', { client_id: 'c1', package_id: 'pkg1' });
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+
+  const active = await db.q(`SELECT * FROM subscriptions WHERE client_id = 'c1' AND status = 'active'`);
+  assert.equal(active.length, 1, 'only the newest subscription may still be active -- otherwise GET /members\' LEFT JOIN ... status=active matches both and the client appears twice');
+  assert.equal(active[0].id, second.json.id);
+
+  const firstRow = await db.q1('SELECT * FROM subscriptions WHERE id = ?', [first.json.id]);
+  assert.equal(firstRow.status, 'cancelled');
+  assert.equal(firstRow.lifecycle_status, 'CANCELLED');
+
+  const members = await call('GET', '/api/business/members');
+  const rows = members.json.members.filter((m) => m.id === 'c1');
+  assert.equal(rows.length, 1, 'client must appear exactly once in the members list');
+  assert.equal(rows[0].subscription_id, second.json.id, 'must show the newest (active) subscription, not the retired one');
+});
+
+test('membership suspend/resume act on the active subscription, not a cancelled one with a later end_date', async (t) => {
+  const { db, call, close } = await startAdminApi();
+  t.after(() => close());
+  // A cancelled subscription with an end_date far in the future, created
+  // BEFORE the active one -- reproduces the exact scenario found live:
+  // a plain `ORDER BY end_date DESC LIMIT 1` picks this row over the
+  // genuinely active one below.
+  await db.run(
+    `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, status, payment_status, lifecycle_status)
+     VALUES ('sub_old','o1','c1','pkg1','Old Plan',2000,'INR','2026-01-01','2099-01-01','cancelled','paid','CANCELLED')`);
+  const created = await call('POST', '/api/business/subscriptions', { client_id: 'c1', package_id: 'pkg1' });
+  assert.equal(created.status, 201);
+
+  const suspend = await call('POST', `/api/business/members/c1/membership/suspend`, {});
+  assert.equal(suspend.status, 200, JSON.stringify(suspend.json));
+  assert.equal(suspend.json.subscription.id, created.json.id, 'must act on the ACTIVE subscription, not the old cancelled one');
+  assert.equal(suspend.json.subscription.lifecycle_status, 'SUSPENDED');
+
+  const resume = await call('POST', `/api/business/members/c1/membership/resume`, {});
+  assert.equal(resume.status, 200);
+  assert.equal(resume.json.subscription.lifecycle_status, 'ACTIVE');
+
+  const history = await call('GET', `/api/business/members/c1/membership/history`);
+  assert.equal(history.status, 200);
+  assert.ok(history.json.history.every((h) => h.subscription_id === created.json.id), 'history must belong to the active subscription, not the stale one');
 });
 
 test('POST /business/payments rejects a client_id from another org', async (t) => {

@@ -33,7 +33,7 @@ export default function Reconciliation() {
     <div>
       <div className="page-header">
         <h1>Reconciliation</h1>
-        <p>Detected mismatches between SK OS's records and the payment provider's -- never auto-corrected, only flagged for review.</p>
+        <p>Detected mismatches between Barbell's records and the payment provider's -- never auto-corrected, only flagged for review.</p>
       </div>
 
       <div className="card">

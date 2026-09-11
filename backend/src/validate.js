@@ -36,6 +36,17 @@ export const schemas = {
     name: z.string().min(1).max(100),
     type: z.string().max(30).optional(),
     notes: z.string().max(500).optional(),
+    // Were missing here -- validate()'s `req.body = parsed.data` replaces
+    // the body wholesale with the parsed result, so any field a caller
+    // sends that isn't declared on this schema is silently stripped, not
+    // just ignored-but-harmless. POST /workouts/clients/:id/assign reads
+    // req.body.scheduled_date and req.body.day_label directly (see
+    // workouts.js) and WorkoutBuilder.jsx's assign() genuinely sends a
+    // trainer-picked date -- found live: assigning a workout for a future
+    // date always silently scheduled it for TODAY instead, no error, the
+    // date picker's value just never survived validation.
+    scheduled_date: z.string().max(10).optional(),
+    day_label: z.string().max(60).optional(),
     exercises: z.array(z.object({
       exercise_id: z.string().optional(),
       name: z.string().min(1).max(100),

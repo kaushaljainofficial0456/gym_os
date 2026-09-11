@@ -30,7 +30,7 @@ export function isWearableSource(key) {
  *  raw provider keys or "AI calculated" (spec §51). */
 export function burnSourceLabel(sourceSummary) {
   const providers = (sourceSummary?.providers || []).filter(isWearableSource);
-  if (!providers.length) return 'SK OS estimate';
+  if (!providers.length) return 'Barbell estimate';
   const labels = [...new Set(providers.map((p) => PROVIDER_LABEL[p]))];
-  return labels.length > 1 ? `${labels.join(' + ')} + SK OS` : `${labels[0]} + SK OS`;
+  return labels.length > 1 ? `${labels.join(' + ')} + Barbell` : `${labels[0]} + Barbell`;
 }

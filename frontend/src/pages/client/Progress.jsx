@@ -730,7 +730,7 @@ function PersonalRecords({ intel, sectionRef }) {
         <Card className="p-5 text-center">
           <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Your first PR will appear here</div>
           <div className="mt-1 text-[11.5px]" style={{ color: 'var(--faint)' }}>
-            Log a workout with weight and reps, and SK OS records your bests automatically.
+            Log a workout with weight and reps, and Barbell records your bests automatically.
           </div>
         </Card>
       </Section>
@@ -1225,8 +1225,21 @@ function LogWeight({ clientId, current, onLogged }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    const w = parseFloat(value);
-    if (!w || w <= 0) { setMsg({ text: 'Enter a weight in kilograms', tone: 'bad' }); return; }
+    // Was `if (!w || w <= 0)` -- silently wrong for the exact cases that
+    // matter most for a number typed on a phone keyboard: a raw NaN (e.g.
+    // stray punctuation) fails `!w` correctly by accident, but Infinity
+    // (some browsers parseFloat an over-long digit string to it) is neither
+    // falsy nor <= 0, so it would have submitted. Mirrors the backend's own
+    // bound (schemas.weightLog: positive, max 500) so an over-500 typo is
+    // caught here instead of round-tripping to the server first. Same fix
+    // already applied once to this page's own inline handler before this
+    // component existed -- reapplied here since the extraction didn't carry
+    // it forward.
+    const raw = value.trim();
+    if (!raw) { setMsg({ text: 'Enter a weight first', tone: 'bad' }); return; }
+    const w = parseFloat(raw);
+    if (!Number.isFinite(w) || w <= 0) { setMsg({ text: 'Enter a valid weight greater than 0', tone: 'bad' }); return; }
+    if (w > 500) { setMsg({ text: 'That weight looks too high — double-check it', tone: 'bad' }); return; }
     setSaving(true);
     try {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });

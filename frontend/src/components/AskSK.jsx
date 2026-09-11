@@ -246,7 +246,7 @@ export default function AskSK({ onLogged }) {
         className="card w-full !p-3.5 flex items-center gap-3 text-left transition-all hover:border-gold/40 group">
         <span className="w-9 h-9 rounded-xl grid place-items-center text-base border transition-shadow group-hover:shadow-glow" style={{ background: 'rgb(var(--accent-rgb) / .16)', borderColor: 'rgb(var(--accent-rgb) / .3)', color: 'var(--accent)' }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg></span>
         <span className="flex-1 min-w-0">
-          <span className="block font-grotesk text-sm font-semibold">Ask SK OS</span>
+          <span className="block font-grotesk text-sm font-semibold">Ask Barbell</span>
           <span className="text-[11px] text-mute truncate">Type food, workouts or questions — “220g paneer” · “Bench press 60x8” · “4 day hypertrophy”</span>
         </span>
         <span className="chip border-gold/40 text-gold shrink-0">Try it</span>
@@ -258,7 +258,7 @@ export default function AskSK({ onLogged }) {
             {/* header */}
             <div className="p-4 border-b border-line/60 flex items-center justify-between">
               <div>
-                <div className="font-grotesk font-bold flex items-center gap-2"><span className="inline-flex items-center gap-1.5"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg> Ask SK OS</span>
+                <div className="font-grotesk font-bold flex items-center gap-2"><span className="inline-flex items-center gap-1.5"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg> Ask Barbell</span>
                   <span className="chip border-line !px-1.5 !py-0 text-[8px] text-mute">intelligence</span>
                 </div>
                 <div className="text-[10px] text-mute mt-0.5">Type it, or scan a nutrition label — nothing is saved without your confirmation.</div>
@@ -407,7 +407,7 @@ export default function AskSK({ onLogged }) {
                           </div>
                         ))}
                       </div>
-                      <div className="text-[9px] text-faint">Built only from exercises in the SK OS database matching your equipment — it's a starting structure, not a prescription.</div>
+                      <div className="text-[9px] text-faint">Built only from exercises in the Barbell database matching your equipment — it's a starting structure, not a prescription.</div>
                     </div>
                   )}
 

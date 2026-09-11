@@ -1495,7 +1495,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               )}
 
               <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
-                Private to you — saved as one of your own foods, never added to the shared SK OS database. It'll show up first the next time you search for it.
+                Private to you — saved as one of your own foods, never added to the shared Barbell database. It'll show up first the next time you search for it.
               </div>
               {customErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{customErr}</div>}
 
@@ -1565,7 +1565,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               {!searching && !searchErr && q.trim().length >= 2 && !results.length && (
                 <div className="py-3 space-y-2">
                   <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
-                    No close match found in SK OS for “{q.trim()}”.
+                    No close match found in Barbell for “{q.trim()}”.
                   </div>
 
                   {/* Tier 3 -- free, instant, no AI call. Offered first since
@@ -1713,7 +1713,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       the CACHED value -- a completely different concept
                       from a Tier-1/3 search-match percentage, never labelled
                       the same way. */}
-                  {aiResult.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ SK OS Estimated' : '✨ AI Estimated'}
+                  {aiResult.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ Barbell Estimated' : '✨ AI Estimated'}
                 </span>
               </div>
 

@@ -226,15 +226,95 @@ const BRAND_PENALTIES = [
 ];
 
 const PREP_WORDS = new Set(['creamed', 'deviled', 'benedict', 'fried', 'scrambled',
+  // 'poached' was missing from a list that already held every other egg
+  // preparation, so a bare "egg" answered with "Egg, chicken, whole, cooked,
+  // POACHED" -- a specific preparation nobody asked for. 'omlet' is the
+  // IFCT2017 spelling of the 'omelet' already listed (their row is "Egg,
+  // poultry, omlet"), so the existing entry never actually matched it.
+  'poached', 'omlet',
+  // An INGREDIENT OR AID used to make a dish is not the dish. "rasam"
+  // returned "Rasam powder (Rasam masala)" -- a spice mix -- ahead of the
+  // actual "Rasam with lemon"/"Rasam with tamarind" rows that sit just below
+  // it. Penalised only when the user did not ask for it, so "rasam powder"
+  // and "tomato paste" still rank their own product first.
+  'powder', 'paste', 'concentrate', 'essence', 'seasoning', 'premix',
   'omelet', 'battered', 'breaded', 'stuffed', 'candied', 'pickled', 'smoked',
   'sauce', 'salad', 'soup', 'stew', 'curry', 'casserole', 'sandwich', 'burger',
   'pie', 'cake', 'cookie', 'chips', 'kebab', 'roll', 'wrap', 'pizza', 'juice',
   'drink', 'shake', 'smoothie', 'dessert', 'pudding', 'canned', 'frozen', 'instant']);
 
-const UNCOMMON = new Set(['duck', 'quail', 'goose', 'emu', 'ostrich', 'turkey',
+// 'quial' is IFCT2017's misspelling of quail in its own row names ("Egg,
+// quial, whole, raw"), so the 'quail' entry never matched them and a bare
+// "egg" query resolved to a QUAIL egg. Matching the data as it is actually
+// spelled is cheaper and safer than editing 21,353 source rows.
+const UNCOMMON = new Set(['duck', 'quail', 'quial', 'goose', 'emu', 'ostrich', 'turkey',
   'capon', 'venison', 'bison', 'elk', 'rabbit', 'navajo', 'alaska', 'apache']);
 
 const STOPWORDS = new Set(['raw', 'fresh', 'whole', 'the', 'and', 'with', 'without', 'of', 'in', 'a']);
+
+// Above this many targets an "alias" is a bulk-extraction artefact, not a
+// synonym, and does not earn the exact-alias score floor. See _searchExact.
+const MAX_SPECIFIC_ALIAS_TARGETS = 12;
+
+/**
+ * Words that describe a container, a category or a manner of preparation but
+ * never name a food, and so must not be the token a relaxed query is anchored
+ * on. Backoff discards part of what the user typed; what remains has to carry
+ * the identity of an actual food, or the "match" is just whichever rows happen
+ * to use the same packaging word.
+ *
+ * Deliberately an explicit list rather than a frequency cutoff: corpus
+ * frequency does NOT separate these ("food" appears in 1.26% of rows, which
+ * sits between "chips" at 1.26% and "broccoli" at 1.40%), so an IDF threshold
+ * would have to discard real foods to catch them.
+ */
+const NON_ANCHOR_TOKENS = new Set([
+  'food', 'foods', 'item', 'items', 'meal', 'meals', 'dish', 'dishes',
+  'recipe', 'product', 'products', 'packet', 'pack', 'packed', 'packaged',
+  'plate', 'bowl', 'cup', 'glass', 'serving', 'servings', 'portion',
+  'piece', 'pieces', 'slice', 'slices', 'homemade', 'generic', 'style',
+  'mix', 'assorted', 'mixed', 'other', 'misc', 'miscellaneous',
+  // Negations, sizes and grades. These qualify a food, they never name one,
+  // and a sub-query made only of them describes nothing: "zzzq-not-a-food"
+  // relaxed to the pair "not food" and matched "...skin NOT eaten, from fast
+  // FOOD / restaurant". Listing them costs nothing elsewhere, because this
+  // set only blocks a sub-query in which EVERY token is one of them.
+  'not', 'no', 'none', 'free', 'less', 'more', 'low', 'high', 'extra',
+  'light', 'regular', 'small', 'medium', 'large', 'big', 'mini', 'jumbo',
+]);
+
+/**
+ * Does `qNorm` occur in `normName` as a WORD, rather than buried inside a
+ * longer unrelated one?
+ *
+ * The single implementation of that question. A plain `includes` says yes to
+ * "chole" inside "cholesterol", which is how a search for one of the most
+ * common Indian dishes returned "Mayonnaise dressing, no cholesterol". The
+ * rule: a single-word query must line up with the START of some token and be
+ * within 3 characters of that token's length -- close enough to admit real
+ * inflections ("curd"->"curds", "tomato"->"tomatoes"), far enough to reject a
+ * coincidental prefix of a much longer word. A multi-word query keeps plain
+ * phrase-contains, since a space already implies a real boundary.
+ *
+ * Exported because the ranked scorer and the type-ahead's separate
+ * "contains" pass BOTH need it and must not answer it differently -- fixing
+ * only the scorer left the picker still offering seven cholesterol products
+ * for "chole".
+ */
+function nameContainsQuery(normName, qNorm) {
+  if (!normName || !qNorm) return false;
+  if (!normName.includes(qNorm)) return false;
+  if (qNorm.includes(' ')) return true;
+  /* How much longer the containing token may be, SCALED to the query. A flat
+     +3 is far too generous for a short word -- it lets a 3-letter query match
+     a 6-letter one, i.e. doubling its length -- which is how "car tyre"
+     reached "CARrot" and "plastic bag" reached "BAGel". Half the query length,
+     capped at 3, admits the inflections this exists for ("egg"->"eggs",
+     "curd"->"curds", "tomato"->"tomatoes") while refusing to grow a stem into
+     an unrelated word. */
+  const slack = Math.min(3, Math.max(1, Math.floor(qNorm.length / 2)));
+  return normName.split(' ').some((t) => t.startsWith(qNorm) && t.length <= qNorm.length + slack);
+}
 
 // A COMPONENT of a food is not the food. Caught by comparing model output to
 // lab values: "egg" returned "Egg, chicken, YOLK, cooked" at 351 kcal against
@@ -260,7 +340,19 @@ class FoodSearch {
         _tokens: norm.split(' ').filter(Boolean),
         _head: normalize(String(f.food_name || '').split(',')[0]),
         _penalty: BRAND_PENALTIES.reduce((s, [rx, p]) => s + (rx.test(f.food_name || '') ? p : 0), 0),
-        _aliasTokens: new Set()
+        _aliasTokens: new Set(),
+        // The `brand` COLUMN was never searchable: `_norm`/`_tokens` are built
+        // from food_name alone, so "amul curd" could not reach the row stored
+        // as { food_name: 'Curd', brand: 'Amul' } -- every query token has to
+        // match, 'amul' matched nothing, and the row was filtered out. Indexing
+        // brand tokens here is what makes an explicitly branded query resolvable
+        // at all (and, in score(), what tells a generic query it is looking at a
+        // branded product). All 1,922 branded rows are OPEN_FOOD_FACTS.
+        _brandTokens: new Set(normalize(f.brand || '').split(' ').filter(Boolean)),
+        // Cheap data-completeness count, precomputed once, used ONLY as a
+        // deterministic tie-break between otherwise equal-scoring rows.
+        _filled: NUTRIENT_FIELDS.reduce((n, k) => n + (f[k] === null || f[k] === undefined ? 0 : 1), 0)
+          + (Number(f.serving_grams) > 0 ? 1 : 0),
       };
     });
     this.bySourceId = new Map(this.foods.map((f) => [f.source_id, f]));
@@ -284,7 +376,20 @@ class FoodSearch {
     }
   }
 
-  score(food, qNorm, qTokens) {
+  /**
+   * @param aliasBase  when this row is an EXACT-ALIAS target for the query
+   *   ("dahi" -> curd), the base tier score that alias earns. It used to be
+   *   applied in _searchExact INSTEAD of calling this method, which meant an
+   *   alias hit skipped every penalty below it -- brand, prep-word, extra-
+   *   token, component-part, moisture. That is how the query "yogurt" started
+   *   returning "Yogourt (yogurt), TOFU" and "Yogourt (yogurt), SOY": the
+   *   alias file bulk-maps 86 ids (down to babyfood and yogurt-covered
+   *   candy) onto that one word, and a flat boost let every one of them
+   *   outrank a plain yogurt. Passing it THROUGH the scorer keeps the alias
+   *   as a floor on the match tier while the ordinary quality penalties still
+   *   decide which of the alias targets is actually the best answer.
+   */
+  score(food, qNorm, qTokens, aliasBase = null) {
     const name = food._norm;
     if (!name) return null;
     const tokens = food._tokens;
@@ -307,22 +412,49 @@ class FoodSearch {
     } else {
       const matched = qTokens.filter((t) => tokens.includes(t)).length;
       const aliasMatched = qTokens.filter((t) => food._aliasTokens.has(t)).length;
+      // Same tiers and same numbers as before; expressed as a value so that a
+      // "nothing matched lexically" verdict can fall back to the alias floor
+      // instead of returning out of the whole scorer.
+      let lexical = null;
       if (matched === 0 && aliasMatched === 0) {
-        if (!name.includes(qNorm)) return null;
-        score += 40;
-        food._matchKind = 'substring';
+        /* A bare `includes` matches the MIDDLE of an unrelated longer word:
+           "chole" is inside "cholesterol", so searching for chole returned
+           "Mayonnaise dressing, no cholesterol" and "Cheese, cheddar,
+           imitation, low cholesterol". Require the query to line up with the
+           START of a token and to be within 3 characters of that token's
+           length -- which still admits genuine inflections ("curd"->"curds",
+           "tomato"->"tomatoes") while rejecting a coincidental prefix of a
+           much longer, unrelated word. Multi-word queries keep the plain
+           phrase-contains behaviour: a space already implies a real boundary. */
+        if (nameContainsQuery(name, qNorm)) lexical = { add: 40, kind: 'substring' };
       } else if (matched >= aliasMatched) {
-        if (matched < qTokens.length) return null;
-        score += 200;
-        food._matchKind = 'all_tokens';
-        const first = Math.min(...qTokens.filter((t) => tokens.includes(t)).map((t) => tokens.indexOf(t)));
-        score -= first * 12;
+        if (matched >= qTokens.length) {
+          const first = Math.min(...qTokens.filter((t) => tokens.includes(t)).map((t) => tokens.indexOf(t)));
+          lexical = { add: 200 - first * 12, kind: 'all_tokens' };
+        }
       } else {
         const covered = qTokens.filter((t) => tokens.includes(t) || food._aliasTokens.has(t)).length;
-        if (covered < qTokens.length) return null;
-        score += 180;
-        food._matchKind = 'regional_alias_tokens';
+        if (covered >= qTokens.length) lexical = { add: 180, kind: 'regional_alias_tokens' };
       }
+
+      if (lexical) {
+        score += lexical.add;
+        food._matchKind = lexical.kind;
+      } else if (aliasBase === null) {
+        // Nothing matched lexically and there is no alias floor to fall back
+        // on -- not a candidate. (An alias target legitimately need not match
+        // lexically at all; that is the entire point of an alias.)
+        return null;
+      } else {
+        food._matchKind = 'alias_exact';
+      }
+    }
+
+    // The alias floor: an exact-alias target can never score BELOW what the
+    // alias itself is worth, but everything after this point still applies.
+    if (aliasBase !== null && aliasBase > score) {
+      score = aliasBase;
+      food._matchKind = 'alias_exact';
     }
 
     /* Extra-token penalty, weighted by how specific the QUERY was.
@@ -336,6 +468,36 @@ class FoodSearch {
     score -= extraTokens * extraPenalty;
 
     const qSet = new Set(qTokens);
+
+    /* BRANDED PRODUCT vs GENERIC FOOD.
+       A branded row stores only the product half of its identity in
+       `food_name`: the Amul carton is { food_name: 'Milk', brand: 'Amul' },
+       so it scored the full exact-name 1000 for the query "milk" and beat
+       IFCT's lab-measured "Milk, whole, Cow". That is not an exact match --
+       the food's real name is "Amul Milk", and the user typing a bare
+       generic term did not ask for one brand's product.
+
+       Both directions matter, and they are the two halves of the same signal:
+         * query names the brand ("amul curd")  -> that product is exactly
+           what was asked for: boost it.
+         * query names no brand ("curd")        -> a specific commercial
+           product is a WORSE answer than a generic/measured row: demote it,
+           by enough to fall behind a genuine generic head-noun match (800)
+           without ever suppressing it entirely, since when a branded row is
+           the only match it must still be returned.
+       Deliberately not a data edit: the branded rows stay, they just stop
+       impersonating the generic food. */
+    if (food._brandTokens.size) {
+      // Iterated, not spread: this runs for every one of the 21,353 rows on
+      // every query, and `[...set].some()` allocated an array each time.
+      let queryNamesBrand = false;
+      for (const t of food._brandTokens) {
+        if (qSet.has(t)) { queryNamesBrand = true; break; }
+      }
+      score += queryNamesBrand ? 120 : -180;
+      if (queryNamesBrand) food._matchKind = 'brand_match';
+    }
+
     score -= tokens.filter((t) => PREP_WORDS.has(t) && !qSet.has(t)).length * 45;
     score -= tokens.filter((t) => UNCOMMON.has(t) && !qSet.has(t)).length * 40;
     score -= tokens.filter((t) => COMPONENT_PARTS.has(t) && !qSet.has(t)).length * 90;
@@ -369,7 +531,19 @@ class FoodSearch {
     score -= food._penalty;
     score -= (SOURCE_RANK[food.source] ?? 5) * 4;
     if (food.serving_grams) score += 8;
-    if (food.data_quality_flag) score -= 150;
+    /* A QUARANTINED ROW IS UNUSABLE, NOT MERELY WORSE. estimateFood refuses
+       to let `trustworthy === false` contribute a number at all -- the item
+       comes back unresolved -- so ranking one above a usable row does not
+       trade some accuracy for some other quality, it trades an answer for NO
+       answer. At -150 this penalty was smaller than the -180 a branded row
+       now pays, which inverted exactly that comparison: "150g butter chicken"
+       put INDB's quarantined "Butter chicken" (frying-bath contamination)
+       above the perfectly usable branded row and returned nothing at all
+       where it had previously returned 128 kcal/100g. The penalty has to
+       exceed every penalty a USABLE row can accumulate, so a quarantined row
+       is only ever the answer when it is the sole candidate -- which is still
+       reported honestly rather than silently dropped. */
+    if (food.data_quality_flag) score -= 400;
     return score;
   }
 
@@ -382,21 +556,87 @@ class FoodSearch {
     let out = this._searchExact(qNorm, qTokens, limit, cuisine);
     if (out.length) return out;
 
-    // Progressive backoff: every query token must normally match, which
-    // returns NOTHING for "apple big" when the DB holds "Apples, raw".
-    // Measured as the largest single cause of unresolved queries.
+    /* Progressive backoff: every query token must normally match, which
+       returns NOTHING for "apple big" when the DB holds "Apples, raw".
+       Measured as the largest single cause of unresolved queries.
+
+       DIRECTION MATTERS, and dropping only from the END had it backwards.
+       In "medium apple", "grilled tofu", "black coffee", "masala chai",
+       "potato chips" the HEAD NOUN -- the actual food -- is the LAST token
+       and the modifier is the first. Discarding the tail therefore threw away
+       the food and searched on the modifier alone, which reliably matched
+       something unrelated that merely shared that adjective:
+         "1 medium apple"          -> Beef, ground, MEDIUM, baked
+         "120g grilled tofu"       -> Tomato sandwich (GRILLED)
+         "black coffee"            -> BLACK berry (Rubus sp.)
+         "1 cup masala chai"       -> MASALA munch
+         "100g cooked oatmeal"     -> COOKED Sweet Corn Kernels
+         "generic potato chips"    -> Water, bottled, GENERIC
+       Every one of those head nouns resolves correctly on its own, so the
+       right answer was one token away the whole time. This was the single
+       largest group of identity failures in the 324-case benchmark.
+
+       Which end to keep is NOT fixed, though, because the convention is not
+       universal: Indian dish names frequently lead with the head noun ("dal
+       makhani", "rajma chawal", "paneer tikka"). Blindly preferring the tail
+       merely moved the failure -- "rajma chawal" then matched `chawal` and
+       returned "Curd rice (Dahi bhaat/Dahi chawal/...)" instead of rajma.
+
+       So both forms are tried AT EACH DEPTH and the one whose best hit SCORES
+       HIGHER wins: the scorer already knows an exact/alias match (900-1000)
+       from an incidental token match (~200), and that is exactly the judgement
+       needed here. Depth still takes precedence over score -- fewer dropped
+       tokens first -- because a shorter query trivially scores higher (fewer
+       extra-token penalties, likelier exact hit), so ranking purely on score
+       would always discard as much of the user's query as possible. */
+    /* AT MOST HALF THE QUERY MAY BE DISCARDED. Backoff used to be allowed to
+       strip everything but a single token, so a four-word phrase could be
+       "matched" on 25% of itself -- which is how "zzqxvv-not-a-real-
+       ingredient" found a row by anchoring on "real", and how any long phrase
+       could latch onto one incidental word. Keeping at least half of what the
+       user typed bounds the concession to something defensible; below that,
+       reporting the miss is the honest answer. Two-token queries are
+       unaffected ("medium apple" -> "apple"), which is where backoff does its
+       real work. */
     if (allowBackoff && qTokens.length >= 2) {
-      for (let drop = 1; drop < qTokens.length; drop += 1) {
-        const sub = qTokens.slice(0, qTokens.length - drop);
-        if (!sub.length) break;
-        out = this._searchExact(sub.join(' '), sub, limit, cuisine);
-        if (out.length) {
-          for (const r of out) {
+      const maxDrop = Math.floor(qTokens.length / 2);
+      for (let drop = 1; drop <= maxDrop; drop += 1) {
+        const subs = [
+          qTokens.slice(drop),                      // keep the tail (head noun last)
+          qTokens.slice(0, qTokens.length - drop),  // keep the head (head noun first)
+        ];
+        let best = null;
+        for (const sub of subs) {
+          if (!sub.length) continue;
+          // What survives the drop must still name a food. Anchoring on a
+          // container/category word instead matched whatever rows shared that
+          // packaging term: "zzqxvv-fixture-food-a" relaxed to the bare token
+          // "food" and confidently returned a real row for a food that does
+          // not exist.
+          if (!sub.some((t) => !NON_ANCHOR_TOKENS.has(t))) continue;
+          const hits = this._searchExact(sub.join(' '), sub, limit, cuisine);
+          if (!hits.length) continue;
+          const top = typeof hits[0]._score === 'number' ? hits[0]._score : -Infinity;
+          /* A NON-POSITIVE SCORE IS NOT A MATCH. Dropping query tokens is
+             already a concession, so the remainder has to earn its answer:
+             at <= 0 every quality signal in score() has outweighed whatever
+             lexical overlap remained, which is the profile of a coincidence,
+             not a food. Without this, "xyyzqq nonfoodterm 500g" backed off to
+             the token "500g" and returned "BRITANNIA bourbon 500g" (score
+             -60) as a confident 494 kcal. The full-query path is deliberately
+             NOT held to this: there the match is anchored to everything the
+             user actually typed. */
+          if (top <= 0) continue;
+          if (!best || top > best.top) best = { hits, sub, top };
+        }
+        if (best) {
+          const kept = new Set(best.sub);
+          for (const r of best.hits) {
             r.query_relaxed = true;
-            r.matched_on = sub.join(' ');
-            r.unmatched_query_terms = qTokens.slice(qTokens.length - drop);
+            r.matched_on = best.sub.join(' ');
+            r.unmatched_query_terms = qTokens.filter((t) => !kept.has(t));
           }
-          return out;
+          return best.hits;
         }
       }
     }
@@ -415,23 +655,58 @@ class FoodSearch {
   }
 
   _searchExact(qNorm, qTokens, limit, cuisine) {
-    const aliasBoost = new Map();
-    for (const id of (this.aliases[qNorm] || [])) aliasBoost.set(id, 900);
+    /* ALIAS SPECIFICITY. An alias that resolves to ONE food is a synonym
+       ("dahi" -> curd). An alias that resolves to 86 is not a synonym at all,
+       it is an artefact of bulk extraction, and giving each of those 86 rows
+       a 900-point floor lets junk outrank the real food. The distribution in
+       food_aliases.json makes the cut obvious rather than arbitrary: of 4,006
+       aliases, 3,482 point at exactly one row and 3,971 (99.1%) at twelve or
+       fewer. The nine broadest are self-evidently not synonyms -- "alaska
+       native" (108), "yogurt" (86), "dahi" (85), "chops" (54), and, literally,
+       "includes foods for usda s food distribution program" (54), which is a
+       dataset disclaimer that was scraped in as a food name.
+
+       Measured effect: with a flat boost, searching "yogurt" returned
+       "Yogourt (yogurt), tofu" and "Yogourt (yogurt), soy, plain" ahead of
+       plain yogurt, because all three were alias targets and the floor
+       ignored every quality signal.
+
+       Over-broad aliases are NOT discarded -- their tokens still feed the
+       `regional_alias_tokens` tier inside score(), which is the honest weight
+       for a weak hint. Nothing is deleted from the alias file. */
+    const aliasIds = this.aliases[qNorm] || [];
+    const aliasBase = aliasIds.length && aliasIds.length <= MAX_SPECIFIC_ALIAS_TARGETS ? 900 : null;
+    const aliasSet = aliasBase === null ? null : new Set(aliasIds);
 
     const scored = [];
     for (const f of this.foods) {
       if (cuisine && f.cuisine !== cuisine) continue;
       f._matchKind = null;
-      let s = this.score(f, qNorm, qTokens);
-      let kind = f._matchKind;
-      const boost = aliasBoost.get(f.source_id);
-      if (boost !== undefined) {
-        const relaxed = boost - f._penalty - (SOURCE_RANK[f.source] ?? 5) * 4;
-        if (relaxed >= (s ?? 0)) { s = relaxed; kind = 'alias_exact'; }
-      }
+      // The alias floor now goes THROUGH the scorer rather than around it, so
+      // an alias target is still subject to the brand / prep-word / extra-token
+      // / source-quality penalties every other candidate pays.
+      const s = this.score(f, qNorm, qTokens, aliasSet && aliasSet.has(f.source_id) ? aliasBase : null);
+      const kind = f._matchKind;
       if (s !== null && s !== undefined) scored.push({ s, f, kind });
     }
-    scored.sort((a, b) => (b.s - a.s) || (a.f._norm.length - b.f._norm.length));
+    /* TIE-BREAK, IN ORDER: score, then shorter (more generic) name, then the
+       better-sourced row, then the more completely measured row, then
+       source_id purely so the order is total and stable.
+
+       Ties are not a corner case here: "curd" returns FIVE rows all named
+       exactly "Curd" (HATSUN 65, Milky Mist 61, Heritage 46.3, Muralya 43.5,
+       Country Delight 77 kcal/100g) with identical scores and identical name
+       lengths, so the winner was decided by their arbitrary position in the
+       source JSON -- i.e. the user's curd calories depended on the database's
+       insertion order, and a 77%-wide spread of answers sat behind that.
+       Sorting on source quality and measurement completeness makes the pick
+       deterministic AND defensible; `_score` ties that remain genuinely
+       equivalent are surfaced to the user as alternatives (see estimateFood). */
+    scored.sort((a, b) => (b.s - a.s)
+      || (a.f._norm.length - b.f._norm.length)
+      || ((SOURCE_RANK[a.f.source] ?? 5) - (SOURCE_RANK[b.f.source] ?? 5))
+      || (b.f._filled - a.f._filled)
+      || String(a.f.source_id).localeCompare(String(b.f.source_id)));
 
     return scored.slice(0, limit).map(({ s, f, kind }) => {
       const mTokens = new Set([...f._tokens, ...f._aliasTokens]);
@@ -759,5 +1034,5 @@ module.exports = {
   listPortions, portionToGrams, canonicalPortion, effectiveDensity,
   OIL_LEVELS, OIL_FATTY_ACID_PROFILE, KCAL_PER_G_OIL, MAX_PLAUSIBLE_KCAL,
   VOLUME_PORTIONS, COUNT_PORTIONS, OBSERVED_SPREAD,
-  SOURCE_RANK
+  SOURCE_RANK, nameContainsQuery
 };

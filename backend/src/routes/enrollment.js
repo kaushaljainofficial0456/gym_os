@@ -176,7 +176,7 @@ export default function enrollmentRoutes(db) {
     const plan = await db.q1('SELECT * FROM packages WHERE id = ? AND org_id = ?', [req.body.membershipPlanId, req.orgId]);
     if (!plan) return res.status(404).json({ error: 'Membership plan not found' });
     const snapshot = await getOrgBillingSnapshot(db, req.orgId);
-    if (snapshot.status !== 'ACTIVE') return res.status(409).json({ error: 'Your SK OS package is not active yet' });
+    if (snapshot.status !== 'ACTIVE') return res.status(409).json({ error: 'Your Barbell package is not active yet' });
     if (snapshot.availableCapacity <= 0) return res.status(409).json({ error: 'No client capacity remaining', availableCapacity: 0 });
     const issued = await issueEnrollmentToken(db, { orgId: req.orgId, createdBy: req.user.sub, purpose: 'CLIENT', membershipPlanId: plan.id });
     await track(db, { type: 'client_qr_generated', orgId: req.orgId, userId: req.user.sub, data: { tokenId: issued.id, membershipPlanId: plan.id } }).catch(() => {});

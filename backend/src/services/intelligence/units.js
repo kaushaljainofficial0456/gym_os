@@ -70,9 +70,16 @@ function fromUnit(qty, unitRaw) {
 }
 
 // Rough grams-per-unit defaults — clearly estimates, never presented as exact.
+/* Keyed by the unit word EXACTLY as the user typed it (fromUnit passes the
+   raw word through for food-words), so singular and plural both need an
+   entry: "chapati", "rotis" and "phulkas" were missing while their
+   counterparts were present, and each silently fell back to the generic
+   50 g piece -- a 43% overstatement on a roti, one of the most-logged
+   foods in the app. */
 export const perPieceDefaults = {
-  piece: 50, slice: 20, slices: 20, egg: 52, eggs: 52, roti: 35, chapatis: 35,
-  phulka: 35, handful: 15, tbsp: 15, tsp: 5, scoop: 33, cup: 150, bowl: 250, serving: 100
+  piece: 50, slice: 20, slices: 20, egg: 52, eggs: 52,
+  roti: 35, rotis: 35, chapati: 35, chapatis: 35, phulka: 35, phulkas: 35,
+  handful: 15, tbsp: 15, tsp: 5, scoop: 33, cup: 150, bowl: 250, serving: 100
 };
 
 // ------------------------------------------------------------------
@@ -164,8 +171,20 @@ export function multiplierFor(parsed, food) {
     };
   }
 
-  // gram/ml input against a piece base: divide by grams-per-piece
-  if ((t === 'gram' || t === 'ml') && ['piece', 'slice', 'scoop'].includes(baseT)) {
+  /* gram/ml input against a HOUSEHOLD-MEASURE base: divide by grams-per-unit.
+     This list used to be only piece/slice/scoop, which left every food whose
+     `serving` column is a serving/cup/bowl/spoon measure with no matching
+     branch at all -- so "100g" of a food served by the bowl fell through to
+     the last resort below and was COUNTED AS 100 SERVINGS:
+       100 g of a 120 kcal/bowl dal  -> 12,000 kcal (qtyGrams 10,000)
+       100 g of a 52 kcal apple      ->  5,200 kcal
+     A 100x error on the most ordinary input there is (a weight in grams),
+     reachable from the live /intelligence food routes. Every household base
+     unit already has a grams-per-unit figure available -- the food's own
+     `piece_g` when it has one, else the generic default -- so the conversion
+     these foods needed was there all along, just unreachable. */
+  if ((t === 'gram' || t === 'ml')
+      && ['piece', 'slice', 'scoop', 'serving', 'cup', 'bowl', 'handful', 'tbsp', 'tsp'].includes(baseT)) {
     const gramsPerUnit = f.gramsPerUnit || perPieceDefaults[baseT] || perPieceDefaults.piece;
     const pieces = parsed.qty / gramsPerUnit;
     return {

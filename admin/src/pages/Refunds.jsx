@@ -24,7 +24,7 @@ export default function Refunds() {
     <div>
       <div className="page-header">
         <h1>Refunds</h1>
-        <p>Every SK OS package refund issued to a gym, platform-wide, newest first.</p>
+        <p>Every Barbell package refund issued to a gym, platform-wide, newest first.</p>
       </div>
 
       <div className="search-row" style={{ justifyContent: 'space-between' }}>

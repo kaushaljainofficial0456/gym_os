@@ -46,9 +46,16 @@ async function seedSummary(db, { date, restingWritten, active = 0 }) {
     ['hds1', 'u1', 'o1', date, restingWritten, active, restingWritten + active, JSON.stringify({ bmrPerDay: BMR }), ts, ts, ts]);
 }
 
+// UTC, because every case below asks the service for `tz: 'UTC'`. Built
+// from LOCAL date parts this disagreed with the service's own day key for
+// any machine ahead of UTC -- in IST, between local midnight and 05:30 the
+// local date is already tomorrow in UTC terms, so the service correctly
+// treated the row as a PAST day and served it unprorated while the
+// assertion below expected a NEGATIVE number of elapsed hours. That made
+// the suite fail for 5.5 hours every night on a passing service.
 const todayKey = () => {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 };
 
 test("today's resting energy is recomputed from elapsed time, not served frozen from cache", async () => {

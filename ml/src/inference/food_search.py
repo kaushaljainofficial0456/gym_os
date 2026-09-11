@@ -83,7 +83,10 @@ BRANDY_PENALTIES = [
 # duck or quail egg -- all correct data, but not what the word means to
 # almost any user. Only penalised when the user did not name the species.
 UNCOMMON_VARIANTS = {
-    "duck", "quail", "goose", "emu", "ostrich", "turkey", "guinea", "pigeon",
+    # "quial" is IFCT2017's own misspelling of quail in its row names
+    # ("Egg, quial, whole, raw"), so the correctly-spelled entry never
+    # matched them and a bare "egg" query resolved to a QUAIL egg.
+    "duck", "quail", "quial", "goose", "emu", "ostrich", "turkey", "guinea", "pigeon",
     "capon", "capons", "stewing", "venison", "bison", "elk", "moose", "rabbit",
     "squirrel", "raccoon", "opossum", "beaver", "seal", "whale", "caribou",
     "navajo", "alaska", "apache", "shoshone", "hopi",
@@ -115,6 +118,15 @@ STOPWORDS = {"raw", "fresh", "whole", "the", "and", "with", "without", "of", "in
 # recipe built from it. Only applied when the qualifier is NOT in the
 # query, so searching "fried egg" still ranks fried egg first.
 PREP_WORDS = {
+    # "poached" was the one egg preparation missing from a list holding every
+    # other, so a bare "egg" answered with "Egg, chicken, whole, cooked,
+    # POACHED". "omlet" is IFCT2017's spelling of the "omelet" already listed.
+    "poached", "omlet",
+    # An INGREDIENT OR AID used to make a dish is not the dish: "rasam"
+    # returned "Rasam powder (Rasam masala)" -- a spice mix -- ahead of the
+    # real rasam rows just below it. Penalised only when not asked for, so
+    # "rasam powder" and "tomato paste" still rank their own product first.
+    "powder", "paste", "concentrate", "essence", "seasoning", "premix",
     "creamed", "deviled", "benedict", "fried", "scrambled", "omelet", "omelette",
     "battered", "breaded", "stuffed", "glazed", "candied", "pickled", "smoked",
     "sauce", "salad", "soup", "stew", "curry", "casserole", "sandwich", "burger",
@@ -122,6 +134,62 @@ PREP_WORDS = {
     "juice", "drink", "shake", "smoothie", "dessert", "pudding", "custard",
     "creamy", "seasoned", "marinated", "canned", "frozen", "instant",
 }
+
+
+# Above this many targets an "alias" is a bulk-extraction artefact rather than
+# a synonym and does not earn the exact-alias score floor. Of 4,006 aliases in
+# food_aliases.json, 3,482 point at exactly one row and 3,971 (99.1%) at twelve
+# or fewer; the nine broadest -- "alaska native" (108), "yogurt" (86), "dahi"
+# (85), and literally "includes foods for usda s food distribution program"
+# (54) -- are self-evidently not synonyms. A flat boost let all 86 of the
+# "yogurt" targets (down to babyfood and yogurt-covered candy) outrank plain
+# yogurt. Their tokens still feed the weaker regional_alias_tokens tier.
+MAX_SPECIFIC_ALIAS_TARGETS = 12
+
+# Words describing a container, category, size or negation but never naming a
+# food. A relaxed query anchored only on these matches whatever rows share the
+# packaging word: "zzzq-not-a-food" relaxed to "not food" and matched
+# "...skin NOT eaten, from fast FOOD / restaurant". Only blocks a sub-query in
+# which EVERY token is one of these. Explicit rather than an IDF cutoff --
+# corpus frequency does not separate them ("food" 1.26% of rows sits between
+# "chips" 1.26% and "broccoli" 1.40%).
+NON_ANCHOR_TOKENS = {
+    "food", "foods", "item", "items", "meal", "meals", "dish", "dishes",
+    "recipe", "product", "products", "packet", "pack", "packed", "packaged",
+    "plate", "bowl", "cup", "glass", "serving", "servings", "portion",
+    "piece", "pieces", "slice", "slices", "homemade", "generic", "style",
+    "mix", "assorted", "mixed", "other", "misc", "miscellaneous",
+    "not", "no", "none", "free", "less", "more", "low", "high", "extra",
+    "light", "regular", "small", "medium", "large", "big", "mini", "jumbo",
+}
+
+# Fields counted for the data-completeness tie-break.
+COMPLETENESS_FIELDS = ("energy_kcal", "protein_g", "fat_g", "carb_g",
+                       "fiber_g", "sugar_g", "sodium_mg")
+
+
+def name_contains_query(norm_name, q_norm):
+    """Does q_norm occur in norm_name as a WORD rather than buried inside a
+    longer unrelated one?
+
+    A plain `in` test says yes to "chole" inside "cholesterol", which returned
+    "Mayonnaise dressing, no cholesterol" for one of the most common Indian
+    dishes. A single-word query must line up with the START of some token and
+    stay within a length slack scaled to the query -- half its length, capped
+    at 3 -- which admits real inflections ("egg"->"eggs", "curd"->"curds",
+    "tomato"->"tomatoes") while refusing to grow a short stem into an unrelated
+    word ("car"->"carrot", "bag"->"bagel"). A multi-word query keeps plain
+    phrase-contains: a space already implies a boundary.
+    """
+    if not norm_name or not q_norm:
+        return False
+    if q_norm not in norm_name:
+        return False
+    if " " in q_norm:
+        return True
+    slack = min(3, max(1, len(q_norm) // 2))
+    return any(t.startswith(q_norm) and len(t) <= len(q_norm) + slack
+               for t in norm_name.split())
 
 
 def normalize(text):
@@ -141,6 +209,16 @@ class FoodSearch:
             f["_tokens"] = f["_norm"].split()
             f["_penalty"] = self._name_penalty(f["food_name"])
             f["_head"] = self._head_noun(f["food_name"])
+            # The `brand` COLUMN was never searchable: _norm/_tokens come from
+            # food_name alone, so "amul curd" could not reach a row stored as
+            # {food_name: "Curd", brand: "Amul"} -- every query token must
+            # match and "amul" matched nothing. Indexing brand tokens is what
+            # makes an explicitly branded query resolvable at all, and (in
+            # score) what tells a generic query it is looking at a product.
+            f["_brand_tokens"] = set(normalize(f.get("brand") or "").split())
+            # Cheap completeness count for a deterministic tie-break.
+            f["_filled"] = sum(1 for k in COMPLETENESS_FIELDS if f.get(k) is not None) \
+                + (1 if (f.get("serving_grams") or 0) > 0 else 0)
 
         # alias -> [source_id]. Lets "baingan bharta" reach a row stored as
         # "Brinjal bhartha (Baingan ka bhartha)", and "laddu" reach "ladoo".
@@ -182,7 +260,15 @@ class FoodSearch:
     def _name_penalty(name):
         return sum(pen for rx, pen in BRANDY_PENALTIES if rx.search(name or ""))
 
-    def score(self, food, q_norm, q_tokens):
+    def score(self, food, q_norm, q_tokens, alias_base=None):
+        """alias_base: when this row is an EXACT-ALIAS target for the query,
+        the base tier score that alias earns. It used to be applied in
+        _search_exact_tokens INSTEAD of calling this method, so an alias hit
+        skipped every penalty below -- brand, prep-word, extra-token,
+        component-part, moisture. Passing it THROUGH keeps the alias as a floor
+        on the match tier while the ordinary quality penalties still decide
+        which alias target is actually the best answer.
+        """
         name = food["_norm"]
         tokens = food["_tokens"]
         if not name:
@@ -215,37 +301,68 @@ class FoodSearch:
             matched = sum(1 for t in q_tokens if t in tokens)
             alias_toks = food.get("_alias_tokens") or ()
             alias_matched = sum(1 for t in q_tokens if t in alias_toks)
+            # Same tiers and numbers as before, expressed as a value so a
+            # "nothing matched lexically" verdict can fall back to the alias
+            # floor instead of returning out of the whole scorer.
+            lexical = None
             if matched == 0 and alias_matched == 0:
-                # allow substring only as a weak last resort
-                if q_norm not in name:
-                    return None
-                score += 40
-                self._last_match_kind = "substring"
+                # substring, but only at a word boundary -- see
+                # name_contains_query ("chole" vs "cholesterol")
+                if name_contains_query(name, q_norm):
+                    lexical = (40, "substring")
             elif matched >= alias_matched:
-                if matched < len(q_tokens):
-                    # every query token must appear for multi-word queries
-                    return None
-                score += 200
-                self._last_match_kind = "all_tokens"
-                # earlier position = more likely the head noun
-                first = min(tokens.index(t) for t in q_tokens if t in tokens)
-                score -= first * 12
+                # every query token must appear for multi-word queries
+                if matched >= len(q_tokens):
+                    # earlier position = more likely the head noun
+                    first = min(tokens.index(t) for t in q_tokens if t in tokens)
+                    lexical = (200 - first * 12, "all_tokens")
             else:
                 # matched via regional-name tokens only. Every query token
                 # must still be accounted for by name OR alias, so a
                 # 2-word query cannot match on one word alone.
                 covered = sum(1 for t in q_tokens if t in tokens or t in alias_toks)
-                if covered < len(q_tokens):
-                    return None
-                score += 180
-                self._last_match_kind = "regional_alias_tokens"
+                if covered >= len(q_tokens):
+                    lexical = (180, "regional_alias_tokens")
 
-        # generic-ness: each extra qualifier token past the query costs a little
+            if lexical is not None:
+                score += lexical[0]
+                self._last_match_kind = lexical[1]
+            elif alias_base is None:
+                # nothing lexical and no alias floor -- not a candidate
+                return None
+            else:
+                self._last_match_kind = "alias_exact"
+
+        # The alias floor: an exact-alias target can never score BELOW what the
+        # alias itself is worth, but everything after this point still applies.
+        if alias_base is not None and alias_base > score:
+            score = float(alias_base)
+            self._last_match_kind = "alias_exact"
+
+        # generic-ness: each extra qualifier token past the query costs a
+        # little. Weighted by how specific the QUERY was: a one-word query is a
+        # strong signal the user wants the plain food ("egg" should not land on
+        # "Egg, chicken, whole, cooked, poached"), while multi-word queries are
+        # already specific and keep the gentler penalty.
         extra = max(0, len(tokens) - len(q_tokens))
-        score -= extra * 6
+        score -= extra * (20 if len(q_tokens) == 1 else 6)
+
+        q_set = set(q_tokens)
+
+        # BRANDED PRODUCT vs GENERIC FOOD. A branded row stores only the
+        # product half of its identity in food_name -- the Amul carton is
+        # {food_name: "Milk", brand: "Amul"} -- so it took the full exact-name
+        # 1000 for the query "milk" and beat IFCT's lab-measured "Milk, whole,
+        # Cow". Naming the brand boosts that product; not naming one demotes
+        # it, by enough to fall behind a genuine generic head-noun match (800)
+        # without ever suppressing it when it is the only candidate.
+        if food["_brand_tokens"]:
+            query_names_brand = any(t in q_set for t in food["_brand_tokens"])
+            score += 120 if query_names_brand else -180
+            if query_names_brand:
+                self._last_match_kind = "brand_match"
 
         # preparation qualifiers the user did not ask for
-        q_set = set(q_tokens)
         prep_hits = sum(1 for t in tokens if t in PREP_WORDS and t not in q_set)
         score -= prep_hits * 45
 
@@ -306,9 +423,15 @@ class FoodSearch:
         # a dish entry with a real serving size is more useful for logging
         if food.get("serving_grams"):
             score += 8
-        # never surface rows we know are internally inconsistent
+        # A QUARANTINED ROW IS UNUSABLE, NOT MERELY WORSE. The estimator
+        # refuses to let an untrustworthy row contribute a number at all, so
+        # ranking one above a usable row does not trade accuracy for some other
+        # quality -- it trades an answer for NO answer. At -150 this was
+        # smaller than the -180 a branded row now pays, which inverted exactly
+        # that comparison. The penalty has to exceed every penalty a USABLE row
+        # can accumulate.
         if food.get("data_quality_flag"):
-            score -= 150
+            score -= 400
         return score
 
     def search(self, query, limit=8, cuisine=None, _allow_backoff=True):
@@ -325,20 +448,49 @@ class FoodSearch:
         # which is right for precision but returns NOTHING for a query like
         # "apple big" when the database holds "Apples, raw". The benchmark
         # measured this as the single largest cause of unresolved queries.
-        # So drop trailing qualifier tokens one at a time -- the head noun
-        # is the food's identity and is dropped last -- and mark the result
-        # as relaxed so the caller knows the qualifier went unmatched.
-        for drop in range(1, len(q_tokens)):
-            sub = q_tokens[:-drop]
-            if not sub:
-                break
-            results = self._search_exact_tokens(" ".join(sub), sub, limit, cuisine)
-            if results:
-                for r in results:
+        #
+        # WHICH END TO KEEP IS NOT FIXED. Dropping only trailing tokens had it
+        # backwards for the commonest phrasing: in "medium apple", "grilled
+        # tofu", "black coffee", "masala chai" the HEAD NOUN is LAST, so
+        # discarding the tail threw away the food and searched on the modifier,
+        # which reliably matched something unrelated sharing that adjective
+        # ("1 medium apple" -> "Beef, ground, MEDIUM, baked"). But the
+        # convention is not universal either -- Indian dish names often lead
+        # with the head noun ("rajma chawal") -- so both forms are tried at
+        # each depth and the one whose best hit SCORES HIGHER wins. Depth still
+        # takes precedence over score, because a shorter query trivially scores
+        # higher and ranking purely on score would discard as much of the
+        # user's query as possible.
+        #
+        # At most HALF the query may be discarded, and what remains must still
+        # name a food (NON_ANCHOR_TOKENS) and earn a positive score --
+        # otherwise "zzqxvv-not-a-real-ingredient" "matches" by anchoring on
+        # "real", and "xyyzqq nonfoodterm 500g" on the pack size "500g".
+        max_drop = len(q_tokens) // 2
+        for drop in range(1, max_drop + 1):
+            subs = (q_tokens[drop:], q_tokens[:-drop])   # keep tail, keep head
+            best = None
+            for sub in subs:
+                if not sub:
+                    continue
+                if all(t in NON_ANCHOR_TOKENS for t in sub):
+                    continue
+                hits = self._search_exact_tokens(" ".join(sub), sub, limit, cuisine)
+                if not hits:
+                    continue
+                top = hits[0].get("_score")
+                if top is None or top <= 0:
+                    continue
+                if best is None or top > best[0]:
+                    best = (top, hits, sub)
+            if best is not None:
+                _, hits, sub = best
+                kept = set(sub)
+                for r in hits:
                     r["matched_on"] = " ".join(sub)
                     r["query_relaxed"] = True
-                    r["unmatched_query_terms"] = q_tokens[-drop:]
-                return results
+                    r["unmatched_query_terms"] = [t for t in q_tokens if t not in kept]
+                return hits
         return []
 
     def _search_exact_tokens(self, q_norm, q_tokens, limit, cuisine):
@@ -347,35 +499,47 @@ class FoodSearch:
         # an alias IS the food's name in another language/romanisation --
         # "baingan bharta" is not a fuzzy guess at "Brinjal bhartha", it is
         # the same dish written the way the user actually says it.
+        # Only a SPECIFIC alias earns the floor -- see
+        # MAX_SPECIFIC_ALIAS_TARGETS. An over-broad alias is not discarded:
+        # its tokens still feed the regional_alias_tokens tier in score().
         alias_boost = {}
-        for sid in self.aliases.get(q_norm, []):
-            alias_boost[sid] = 900
+        direct = self.aliases.get(q_norm, [])
+        if direct and len(direct) <= MAX_SPECIFIC_ALIAS_TARGETS:
+            for sid in direct:
+                alias_boost[sid] = 900
         if not alias_boost:
             # multi-word query: try the alias table on the token-sorted form
             key = " ".join(sorted(q_tokens))
             for a, ids in self.aliases.items():
                 if " ".join(sorted(a.split())) == key:
-                    for sid in ids:
-                        alias_boost[sid] = 850
+                    if len(ids) <= MAX_SPECIFIC_ALIAS_TARGETS:
+                        for sid in ids:
+                            alias_boost[sid] = 850
                     break
 
         scored = []
         for f in self.foods:
             if cuisine and f.get("cuisine") != cuisine:
                 continue
-            s = self.score(f, q_norm, q_tokens)
+            # The alias floor goes THROUGH the scorer rather than around it, so
+            # an alias target still pays the brand / prep-word / extra-token /
+            # source-quality penalties every other candidate pays.
+            s = self.score(f, q_norm, q_tokens,
+                           alias_base=alias_boost.get(f.get("source_id")))
             kind = self._last_match_kind
-            boost = alias_boost.get(f.get("source_id"))
-            if boost is not None:
-                base = s if s is not None else 0.0
-                relaxed = boost - f["_penalty"] - SOURCE_RANK.get(f.get("source"), 5) * 4
-                if relaxed >= base:
-                    s, kind = relaxed, "alias_exact"
-                else:
-                    s = base
             if s is not None:
                 scored.append((s, f, kind))
-        scored.sort(key=lambda x: (-x[0], len(x[1]["_norm"])))
+        # TIE-BREAK, IN ORDER: score, shorter (more generic) name, better
+        # source, more completely measured, then source_id for a total, stable
+        # order. Ties are not a corner case: "curd" returns five rows named
+        # exactly "Curd" (43.5-77 kcal/100 g) with identical scores AND
+        # identical name lengths, so the winner was decided by their position
+        # in the source JSON -- a 77%-wide spread of answers behind an
+        # arbitrary ordering.
+        scored.sort(key=lambda x: (-x[0], len(x[1]["_norm"]),
+                                   SOURCE_RANK.get(x[1].get("source"), 5),
+                                   -x[1]["_filled"],
+                                   str(x[1].get("source_id"))))
 
         out = []
         for s, f, match_kind in scored[:limit]:

@@ -99,6 +99,37 @@ test('regression gate wiring: V1-vs-itself is a PASS with no blocking regression
   assert.ok(Object.keys(GATES).length >= 12, 'the gate must cover the headline metrics');
 });
 
+test('gate boundary: a regression of EXACTLY the tolerance passes; anything beyond it fails', () => {
+  // The gate rule is "strictly greater than the tolerance fails", so a
+  // regression of exactly the tolerance must pass. Comparing with a bare `>`
+  // could not express that: neither operand is exactly representable in binary
+  // floating point, so a metric moving 0.603 -> 0.573 -- a regression of
+  // exactly 0.030 against a 0.030 tolerance -- subtracts to
+  // 0.030000000000000027 and blocked the V2 rollout on 2.7e-17 of
+  // representation error. This pins BOTH halves: the boundary passes, and the
+  // gate is not thereby loosened -- a regression 0.0001 past the tolerance
+  // still fails.
+  const KEY = '5_composite_decomposition.kcal_total_in_range_rate';
+  const tol = GATES[KEY].tol;
+  const mk = (v) => ({
+    weighted_overall: 0.7,
+    categories: {},
+    metrics: { '5_composite_decomposition': { kcal_total_in_range_rate: v } },
+  });
+  const blocked = (was, now) =>
+    compareToBaseline(mk(now), mk(was)).blocking.some((b) => b.metric === KEY);
+
+  // The real case: 0.603 - 0.573 is 0.030000000000000027 in IEEE-754.
+  assert.ok((0.603 - 0.573) > tol, 'precondition: the raw subtraction really does exceed the tolerance');
+  assert.equal(blocked(0.603, 0.573), false, 'a regression of exactly the tolerance must NOT block');
+
+  // ...and the gate still bites immediately past it.
+  assert.equal(blocked(0.603, 0.5729), true, 'a regression past the tolerance must still block');
+  assert.equal(blocked(0.603, 0.572), true, 'a clear regression must still block');
+  assert.equal(blocked(0.603, 0.500), true, 'a large regression must still block');
+  assert.equal(blocked(0.573, 0.603), false, 'an improvement must never block');
+});
+
 test('V2 adapter is live (Phase 2) — runs, no LLM, no cost, shapes an EvalResult', () => {
   const v2 = getAdapter('v2');
   assert.equal(v2.id, 'v2');

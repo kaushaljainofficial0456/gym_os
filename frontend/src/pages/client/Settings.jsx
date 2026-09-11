@@ -36,7 +36,10 @@ export default function Settings() {
   const [formState, setFormState] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    phone: '',
+    // Was hardcoded to '' -- /auth/me now returns phone (see auth.js), so
+    // an existing number actually shows here instead of looking cleared
+    // every time this page loads.
+    phone: user?.phone || '',
   });
 
   const [busy, setBusy] = useState(false);
@@ -45,7 +48,12 @@ export default function Settings() {
     if (section === 'Account Information') {
       setBusy(true);
       try {
-        await api('/me/profile', { method: 'PUT', body: JSON.stringify({ name: formState.name }) });
+        // Was only ever sending `name` -- the Phone Number field accepted
+        // typing and showed "saved ✓" on submit, but the value was never
+        // included in the request body, so it silently went nowhere (see
+        // PUT /me/profile in me.js, which likewise never read `phone`
+        // until now).
+        await api('/me/profile', { method: 'PUT', body: JSON.stringify({ name: formState.name, phone: formState.phone }) });
         setToast('Account information saved ✓');
       } catch (e) { setToast(e.message || 'Save failed'); }
       setBusy(false);
@@ -162,7 +170,7 @@ export default function Settings() {
           <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Health Intelligence</span>
         </div>
         <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
-          Connect a wearable so SK OS can combine it with your logged workouts for a more complete burn estimate.
+          Connect a wearable so Barbell can combine it with your logged workouts for a more complete burn estimate.
         </p>
         <button className="btn w-full" onClick={() => nav('/app/client/health')}>Connected devices</button>
       </div>

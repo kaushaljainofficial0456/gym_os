@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
+import Logo from '../components/Logo.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import './../components/BorderGlow.css';
 import { PasswordInput } from '../components/UI.jsx';
@@ -46,9 +47,9 @@ export default function TrainerSignUp() {
         <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ borderRight: '1px solid var(--line)' }}>
           <div className="absolute -top-32 -left-24 w-96 h-96 rounded-full blur-[110px] anim-fadeIn" style={{ background: 'var(--accent-soft)' }} />
           <div className="flex items-center gap-4 relative">
-            <img src="/logo.png" alt="SK OS" className="w-14 h-14 rounded-2xl shadow-glow" />
+            <Logo className="w-14 h-14 rounded-2xl shadow-glow" />
             <div>
-              <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>SK OS</div>
+              <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
               <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
             </div>
           </div>
@@ -67,8 +68,8 @@ export default function TrainerSignUp() {
         <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-sm anim-fadeUp">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/logo.png" alt="SK OS" className="w-11 h-11 rounded-xl" />
-              <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>SK OS</div>
+              <Logo className="w-11 h-11 rounded-xl" />
+              <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>Barbell</div>
             </div>
             <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Create your trainer account</h2>
             <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>You'll join a gym next by scanning their QR code.</p>

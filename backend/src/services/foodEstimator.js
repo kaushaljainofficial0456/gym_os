@@ -56,8 +56,24 @@ const PROC = path.join(ML, 'data', 'processed');
 
 const {
   FoodSearch, toGrams, scaleNutrition, portionToGrams, canonicalPortion,
-  listPortions, adjustOil, OIL_LEVELS, normalize, SOURCE_RANK,
+  listPortions, adjustOil, OIL_LEVELS, normalize, SOURCE_RANK, nameContainsQuery,
+  COUNT_PORTIONS,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'foodEstimate.reference.js'));
+
+/**
+ * Is this unit word a FOOD in its own right ("roti", "egg", "idli"), as
+ * opposed to a generic container ("piece", "slice")?
+ *
+ * The catalogue already draws exactly this line: a countable entry that
+ * publishes its own per-piece `grams` is a specific food, while `piece` and
+ * `slice` carry none because they describe a shape, not a thing. Read from
+ * the catalogue rather than restated as a second hand-maintained list, so a
+ * food added there is automatically understood here.
+ */
+function isCountableFood(unit) {
+  const p = COUNT_PORTIONS[unit];
+  return !!(p && Number(p.grams) > 0);
+}
 
 // Re-exported for food/pipeline.js (Phase 1 canonical core). The `normalize`
 // stage and the source-preference ordering are the SAME primitives the one
@@ -230,6 +246,67 @@ export function splitItems(text) {
     .filter(Boolean);
 }
 
+/**
+ * "A with B" -> ["A", "B"], but ONLY when both halves are independently real
+ * foods.
+ *
+ * `with` is treated as a noise WORD rather than a separator (unlike "and"),
+ * which is right for "rice with ghee" as a dish name and wrong for the far
+ * more common "<food> with <food>" log entry. The consequence was a SILENT
+ * loss -- the fragment resolved, so nothing was reported unresolved, and the
+ * meal total was simply missing a food:
+ *   "150g grilled chicken with 100g rice"  -> the rice vanished
+ *   "one bowl chicken curry with rice"     -> the rice vanished
+ *   "coffee with milk and 2 biscuits"      -> the milk vanished
+ *   "a plate of noodles with chicken"      -> the chicken vanished
+ * Eight of the benchmark's multi-item cases lost food this way, and silent
+ * drops are the one failure class the release gate treats as non-negotiable.
+ *
+ * The guard against over-splitting a genuine compound dish is that BOTH
+ * halves must name something the catalogue actually knows: "toast with
+ * butter" splits because toast and butter are both real foods, while a
+ * fragment whose second half resolves to nothing is left exactly as it was.
+ * Returns null when the fragment should not be split.
+ */
+function splitWithConjunction(fragment, search) {
+  const raw = String(fragment || '');
+  if (!/\bwith\b/i.test(raw)) return null;
+  const idx = raw.search(/\bwith\b/i);
+  const before = raw.slice(0, idx).trim();
+  const after = raw.slice(idx).replace(/^with\b/i, '').trim();
+  if (!before || !after) return null;
+
+  /* THE WHOLE PHRASE MAY ITSELF BE A CATALOGUED DISH. "Poha with curd (Poha
+     aur dahi)" and "Curd with potatoes (Dahi aloo)" are single measured INDB
+     rows, and splitting them replaces one measured dish with two guessed
+     components -- which is how V2's composite kcal-in-range rate fell 3 pp.
+     An `exact_name`/`alias_exact` hit on the FULL fragment is the catalogue
+     stating that this exact dish exists under this exact name, which is much
+     stronger evidence than the incidental token overlap behind "toast with
+     butter" -> "Fast foods, breakfast, french toast with butter" (all_tokens)
+     or "chicken with rice" -> "Chicken with rice and vegetable, diet frozen"
+     (name_prefix). Only the strong form blocks the split. */
+  // Searched as "<before> with <after>", NOT through parseFragment, because
+  // parseFragment strips `with` as a noise word -- it would look up "poha
+  // curd", which is not the name of anything, and the dish would never be
+  // recognised.
+  const wholePhrase = `${before} with ${after}`;
+  const whole = search.search(wholePhrase, { limit: 1 })[0];
+  if (whole && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact')) return null;
+
+  // Each half must parse to a named food AND that name must retrieve
+  // something. Anything less and the split would trade one honest answer for
+  // a guess plus a miss.
+  const halves = [before, after];
+  for (const half of halves) {
+    const p = parseFragment(half);
+    if (!p || !p.name) return null;
+    const hits = search.search(p.name, { limit: 1 });
+    if (!hits.length || hits[0].trustworthy === false) return null;
+  }
+  return halves;
+}
+
 /** Pull a leading quantity off a fragment: "2.5 bowls dal" -> 2.5. */
 function parseQuantity(tokens) {
   if (!tokens.length) return { qty: null, rest: tokens };
@@ -274,24 +351,67 @@ export function parseFragment(fragment) {
   if (!cleaned) return null;
 
   let tokens = cleaned.split(' ');
+
+  /* LEADING NARRATION BLOCKS THE QUANTITY PARSER.
+     parseQuantity only ever inspects tokens[0], so a fragment that opens
+     with narration ("i ate 200g curd", "had 2 rotis") found no quantity at
+     all. The damage was not just a missing amount: the number token stayed
+     in the food NAME (NOISE filtering below drops "i"/"ate" but not
+     "200g"), so the search ran on "200g curd" and token-matched PRODUCTS
+     WITH NUMBERS IN THEIR NAMES. Measured, before this fix:
+       "I ate 200g curd" -> Parle Hide &seek 200g(30)   474 kcal
+       "had 2 rotis"     -> 2-Minute noodles            384 kcal
+       "ate 100g rice"   -> Britannia bourbon 100g      494 kcal
+     -- each also silently sized at the assumed 100 g. Dropping leading
+     noise first makes "i ate 200g curd" parse identically to "200g curd".
+
+     `a`/`an` are in NOISE *and* in WORD_NUMBERS ("a banana" = 1 banana), so
+     they are deliberately kept for parseQuantity rather than stripped. The
+     length guard keeps a fragment that is nothing but noise intact, so it
+     still reports as unresolved instead of becoming empty. */
+  while (tokens.length > 1 && NOISE.has(tokens[0]) && WORD_NUMBERS[tokens[0]] === undefined) {
+    tokens = tokens.slice(1);
+  }
+
   const { qty, rest } = parseQuantity(tokens);
   tokens = rest;
 
   let unit = null;
   if (tokens.length) {
-    // Singularise so "bowls"/"rotis" hit the same catalogue entry.
+    /* Singularise so "bowls"/"rotis" hit the same catalogue entry.
+       Candidate forms, most literal first. A single `/(?:es|s)$/` rule was
+       wrong for -es plurals: the alternation matches "es" before it can match
+       "s", so "pieces" became "piec" and "apples" became "appl". Neither
+       matched any unit, so the plural stayed in the FOOD NAME and corrupted
+       the search -- "2 pieces paneer" looked up "pieces paneer" and returned
+       "Snacks, fruit leather, pieces" (12 g, 43 kcal) instead of paneer. */
     const head = tokens[0];
-    const singular = head.replace(/(?:es|s)$/, '');
-    if (MASS_VOLUME.test(head) || MASS_VOLUME.test(singular)) {
-      unit = MASS_VOLUME.test(head) ? head : singular;
+    const forms = [head, head.replace(/s$/, ''), head.replace(/es$/, '')];
+    const mass = forms.find((f) => MASS_VOLUME.test(f));
+    if (mass) {
+      unit = mass;
       tokens = tokens.slice(1);
-    } else if (canonicalPortion(head) || canonicalPortion(singular)) {
-      unit = canonicalPortion(head) || canonicalPortion(singular);
-      tokens = tokens.slice(1);
+    } else {
+      const portion = forms.map((f) => canonicalPortion(f)).find(Boolean);
+      if (portion) {
+        unit = portion;
+        tokens = tokens.slice(1);
+      }
     }
   }
 
-  let name = tokens.filter((t) => !NOISE.has(t)).join(' ').trim();
+  /* A MEASUREMENT IS NOT A FOOD NAME. parseQuantity only consumes a LEADING
+     quantity, so one written anywhere else ("xyyzqq nonfoodterm 500g",
+     "1 packet potato chips (52g)") stayed in the name and became a search
+     term. Packaged products carry their pack size in their titles, so those
+     tokens match them and nothing else -- "xyyzqq nonfoodterm 500g" returned
+     "BRITANNIA bourbon 500g" at 494 kcal, a confident number for a food that
+     does not exist. Only number+unit tokens are dropped, never bare numerals,
+     because those can be part of a real name ("chicken 65"). */
+  let name = tokens
+    .filter((t) => !NOISE.has(t))
+    .filter((t) => !/^\d+(?:\.\d+)?(?:g|gm|gms|kg|ml|l|oz|lb|lbs)$/.test(t))
+    .join(' ').trim();
 
   // COUNTABLE FOODS ARE THEIR OWN UNIT. "2 rotis", "3 eggs", "2 idli" --
   // roti/egg/idli are entries in the portion catalogue, so the unit-parsing
@@ -304,6 +424,26 @@ export function parseFragment(fragment) {
   // Keep both: the name resolves the food, the unit gives the per-piece
   // weight for it.
   if (!name && unit) name = unit;
+
+  /* TWO FOODS IN ONE FRAGMENT: "two rotis with dal".
+     `with` is a NOISE word, not a separator (unlike "and"), so this arrives
+     as a single fragment. The unit-parsing step above then consumed "rotis"
+     as the UNIT and left "dal" as the NAME, producing "2 roti-weights of
+     dal" -- which both prices the dal by a roti's weight AND loses the rotis
+     entirely. It was a SILENT loss: the fragment resolved, so nothing was
+     reported unresolved, and the meal total was simply missing a food.
+
+     When the unit is itself a food and a DIFFERENT food name remains, the
+     fragment names both. The count belongs to the food it was counting --
+     "two" counts rotis, not dal -- so the quantity stays with the unit-food
+     and the trailing name is emitted as a companion with no quantity of its
+     own, which lets it fall through to its own measured serving. */
+  if (name && unit && name !== unit && isCountableFood(unit)) {
+    return {
+      qty, unit, name: unit, raw: fragment,
+      companion: { qty: null, unit: null, name, raw: fragment },
+    };
+  }
 
   // A fragment that names no food even after that ("2 bowls" alone) is
   // genuinely ambiguous. Report it rather than guessing.
@@ -383,6 +523,62 @@ function resolveGrams(parsed, food) {
 /*  Public API                                                         */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Ambiguity — several equally good answers that disagree on nutrition */
+/* ------------------------------------------------------------------ */
+
+/** Within this fraction of the top score, a candidate is "equally good". */
+const AMBIGUITY_SCORE_BAND = 0.06;
+/** Below this relative energy spread the choice does not change the answer. */
+const AMBIGUITY_KCAL_SPREAD = 0.25;
+
+/**
+ * Decide whether the top hit was a genuine winner or a coin-flip, and if it
+ * was a coin-flip, say what it was flipping between.
+ *
+ * WHY: a query like "curd" matches five rows named exactly "Curd" whose
+ * energy runs 43.5–77 kcal/100 g (a 77% spread) and which historically
+ * scored IDENTICALLY, so which one the user's day was costed against came
+ * down to their order in the source JSON. Ranking now picks a defensible
+ * one deterministically, but "defensible" is not "certain": when the runners
+ * up are just as good a lexical match AND would give a materially different
+ * number, the honest thing is to say so rather than present one figure as
+ * settled. Nothing is blocked and no flow changes -- the top hit is still
+ * used, exactly as before -- this only ATTACHES the runners-up so the UI can
+ * offer them (CONTRACT: report, never silently decide).
+ *
+ * Returns [] when the top hit wins clearly, or when the alternatives agree
+ * closely enough on nutrition that choosing between them is not worth a
+ * question.
+ */
+function ambiguousAlternatives(hits) {
+  const top = hits[0];
+  if (!top || hits.length < 2) return [];
+  const topScore = typeof top._score === 'number' ? top._score : null;
+  if (topScore === null || topScore <= 0) return [];
+  const topKcal = Number(top.energy_kcal);
+  if (!(topKcal > 0)) return [];
+
+  const rivals = hits.slice(1).filter((h) => {
+    if (h.trustworthy === false) return false;            // never offer a quarantined row
+    if (typeof h._score !== 'number') return false;
+    if ((topScore - h._score) / topScore > AMBIGUITY_SCORE_BAND) return false; // clearly beaten
+    const kcal = Number(h.energy_kcal);
+    if (!(kcal > 0)) return false;
+    return Math.abs(kcal - topKcal) / topKcal >= AMBIGUITY_KCAL_SPREAD;        // would change the answer
+  });
+
+  return rivals.slice(0, 3).map((h) => ({
+    source_id: h.source_id,
+    name: h.food_name,
+    brand: h.brand || null,
+    energy_kcal_per_100g: h.energy_kcal ?? null,
+    protein_g_per_100g: h.protein_g ?? null,
+    source: h.source,
+    confidence: h.confidence,
+  }));
+}
+
 /**
  * Estimate a whole logged meal from free text.
  *
@@ -391,9 +587,31 @@ function resolveGrams(parsed, food) {
  * contract fields (schema_version, tier, confidence, unresolved)
  * alongside. Per CONTRACT_skos-food-v1.md that is the migration shape.
  */
+/**
+ * THE definition of "what counts as one logged item" in a sentence:
+ * splitItems, then "<food> with <food>" expanded once the catalogue confirms
+ * both halves are real foods.
+ *
+ * Exported because every engine has to agree on it. When only V1 expanded,
+ * V3 kept iterating the UNEXPANDED fragments, found no item tagged with the
+ * whole "paneer bhurji with 2 rotis" (V1 had already filed them under each
+ * half), and re-split it -- appending a second copy of both foods, for
+ * 934 kcal instead of 467. Two engines disagreeing about where one item ends
+ * is precisely the drift this file's single-implementation rule exists to
+ * prevent.
+ *
+ * Kept out of splitItems itself, which is a pure string function used in
+ * places where no search index exists.
+ */
+export function expandFragments(text, search = getFoodSearch()) {
+  const fragments = splitItems(text);
+  if (!search) return fragments;
+  return fragments.flatMap((f) => splitWithConjunction(f, search) || [f]);
+}
+
 export function estimateFood(text) {
   const search = getFoodSearch();
-  const fragments = splitItems(text);
+  const fragments = expandFragments(text, search);
 
   if (!search) {
     return {
@@ -415,19 +633,34 @@ export function estimateFood(text) {
   const RANK = { high: 0, medium: 1, low: 2, unreliable: 3 };
 
   for (const fragment of fragments) {
-    const parsed = parseFragment(fragment);
-    if (!parsed) continue;
+    const first = parseFragment(fragment);
+    if (!first) {
+      // `continue` here was a silent drop: a fragment that would not parse
+      // vanished from BOTH items and unresolved, so the total quietly omitted
+      // it. Nothing may leave this loop unaccounted for.
+      unresolved.push({ fragment, reason: 'could not read this part' });
+      continue;
+    }
+    // A fragment can name two foods ("two rotis with dal") -- see parseFragment.
+    const parsedItems = first.companion ? [first, first.companion] : [first];
+
+    for (const parsed of parsedItems) {
     if (!parsed.name) {
       unresolved.push({ fragment, reason: 'no food named in this part' });
       continue;
     }
 
-    const hits = search.search(parsed.name, { limit: 1 });
+    /* limit 4, not 1, to see whether the top hit was a CLEAR winner or one of
+       several equally good answers. This costs nothing: FoodSearch already
+       scores all 21,353 rows on every query and `limit` only slices the
+       result, so nothing extra is computed and no second search runs. */
+    const hits = search.search(parsed.name, { limit: 4 });
     if (!hits.length) {
       unresolved.push({ fragment, reason: `no match for "${parsed.name}"` });
       continue;
     }
     const food = hits[0];
+    const alternatives = ambiguousAlternatives(hits);
 
     // A row flagged unreliable must not contribute a NUMBER to a total the
     // user will trust -- see CONTRACT §5. It is reported, not silently
@@ -475,6 +708,14 @@ export function estimateFood(text) {
       match_kind: food.match_kind || null,
       cooking_state: food.cooking_state,
       matched_from: fragment,
+      /* Runners-up that matched this fragment just as well but would give a
+         materially different number (see ambiguousAlternatives). Empty for
+         the overwhelming majority of items. The chosen food, the totals and
+         every existing field are unchanged whether or not this is populated:
+         it is strictly additional information for the UI to offer a
+         "did you mean?" switch, never a change to what was logged. */
+      ambiguous: alternatives.length > 0,
+      alternatives,
       // null means NOT MEASURED. Passed through as null on purpose so the
       // UI can render "—" instead of a fabricated 0.
       fiber_g: t.fiber_g,
@@ -486,6 +727,7 @@ export function estimateFood(text) {
     total.protein += t.protein_g ?? 0;
     total.carbs += t.carb_g ?? 0;
     total.fat += t.fat_g ?? 0;
+    }
   }
 
   return {
@@ -551,7 +793,12 @@ export function searchFoods(query, { limit = 8, withPortions = true } = {}) {
   if (ranked.length < limit) {
     const norm = (x) => (x._norm || String(x.food_name || '').toLowerCase());
     extra = search.foods
-      .filter((f) => !seen.has(f.source_id) && norm(f).includes(q))
+      // Same word-boundary rule the ranked scorer uses -- `includes` alone put
+      // seven cholesterol products ("Mayonnaise dressing, no cholesterol",
+      // "Cheese, cheddar, imitation, low cholesterol", ...) into the picker for
+      // the query "chole". Fixing this only in score() left the type-ahead,
+      // which is what users actually look at, still showing them.
+      .filter((f) => !seen.has(f.source_id) && nameContainsQuery(norm(f), q))
       .sort((a, b) => {
         const as = norm(a).startsWith(q) ? 0 : 1;
         const bs = norm(b).startsWith(q) ? 0 : 1;
@@ -642,7 +889,16 @@ export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLev
     const p = portionToGrams(portionKey, n, {
       foodName: food.food_name,
       cookingState: food.cooking_state,
-      servingGrams: food.serving_grams,
+      // `foodServingGrams`, NOT `servingGrams` -- portionToGrams destructures
+      // that exact name, so the misspelled key silently disabled the "the
+      // food's OWN measured serving beats the generic volume figure"
+      // override for bowl/katori/plate/piece/medium_bowl. The identical bug
+      // was found and fixed in resolveGrams above; this second call site was
+      // missed, which meant the two paths disagreed on the SAME food and
+      // portion: "1 bowl Arhar dal aur palak" resolved to 403.3 g through
+      // the text estimator (measured_serving) but 250 g here (generic
+      // volume) -- a 61% divergence between the picker and the parser.
+      foodServingGrams: food.serving_grams,
     });
     if (p && p.grams > 0) {
       g = p.grams;
