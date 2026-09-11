@@ -89,7 +89,15 @@ async function activateRenewal(db, order, tx) {
  * a fresh join's payment_order always has client_id NULL because the
  * clients row doesn't exist until THIS handler creates it.
  */
-registerActivationHandler('CLIENT_MEMBERSHIP', async (db, order, tx) => {
+/**
+ * Turns a paid-for (or free -- see below) enrollment into a real client.
+ *
+ * Named and exported rather than an inline lambda because a FREE
+ * membership has to run exactly this, and a second copy of "create the
+ * client, the subscription, the payment row and the notifications" is how
+ * the two paths would silently drift apart.
+ */
+export async function activateClientMembership(db, order, tx) {
   if (order.client_id) return activateRenewal(db, order, tx);
   const enrollmentToken = await tx.q1('SELECT * FROM enrollment_tokens WHERE id = ?', [order.subject_id]);
   if (!enrollmentToken || !enrollmentToken.consumed_by) return; // defensive -- should be unreachable
@@ -137,7 +145,9 @@ registerActivationHandler('CLIENT_MEMBERSHIP', async (db, order, tx) => {
   await notify(db, { orgId, userId, type: 'membership_activated', title: `Welcome! Your ${plan?.name || 'membership'} is active`, data: { subscriptionId: subId } });
   await notifyOwners(db, orgId, { type: 'client_joined', title: 'New client joined', body: plan?.name ? `via ${plan.name} membership` : undefined, data: { clientId } });
   await track(db, { type: 'client_enrolled', orgId, userId, data: { clientId, tokenId: enrollmentToken.id } }).catch(() => {});
-});
+}
+
+registerActivationHandler('CLIENT_MEMBERSHIP', activateClientMembership);
 
 export default function enrollmentRoutes(db) {
   const r = Router();
@@ -269,11 +279,70 @@ export default function enrollmentRoutes(db) {
     if (!reserved) return res.status(409).json({ error: 'capacity_exhausted' });
 
     const plan = consumed.token.membership_plan_id ? await db.q1('SELECT * FROM packages WHERE id = ?', [consumed.token.membership_plan_id]) : null;
+
+    // FREE MEMBERSHIPS (amount 0, or a QR with no plan attached).
+    //
+    // createPaymentOrder rejects a non-positive amount outright -- and it
+    // is right to: a zero-rupee "payment" is not a payment, and letting
+    // one through the payment tables would mean an order that can never
+    // be verified, a provider order for nothing, and a membership stuck
+    // PENDING_PAYMENT forever. So a free join does not create an order at
+    // all; it runs the SAME activation a successful payment would, in one
+    // transaction, and releases the capacity reservation the same way the
+    // release handler does on the paid path.
+    //
+    // This is what makes a comped/beta/free-tier membership possible:
+    // scan the QR, and you are a member.
+    const amount = Number(plan?.amount) || 0;
+    if (amount <= 0) {
+      try {
+        await db.tx(async (tx) => {
+          await activateClientMembership(db, {
+            // Shaped like the payment_orders row the handler normally
+            // receives. No id/provider: there was no payment, and
+            // inventing a fake order id would put a phantom row in the
+            // gym's revenue view.
+            subject_id: consumed.token.id,
+            client_id: null,
+            org_id: consumed.token.org_id,
+            amount: 0,
+            currency: plan?.currency || 'INR',
+            provider: 'none',
+            id: null,
+          }, tx);
+          // The paid path releases this via registerReleaseHandler once
+          // the order resolves; with no order there is nothing to resolve,
+          // so it is released here, inside the same transaction.
+          await releaseCapacitySlot(tx, consumed.token.org_id);
+        });
+      } catch (e) {
+        await releaseCapacitySlot(db, consumed.token.org_id);
+        throw e;
+      }
+      // Fresh token, for the same reason the TRAINER join issues one:
+      // this activation is synchronous, so gym membership is real by the
+      // time the response goes out and the caller's old token (org: null)
+      // is already stale. Without this the client is enrolled in the
+      // database but their session still believes they have no gym.
+      const freshUser = await db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]);
+      const token = signToken({
+        id: freshUser.id, org_id: freshUser.org_id, role: freshUser.role,
+        name: freshUser.name, email: freshUser.email,
+      });
+      setAuthCookie(res, token);
+      return res.json({
+        free: true,
+        gym: { id: org.id, name: org.name },
+        membershipPlan: plan,
+        token,
+      });
+    }
+
     let order;
     try {
       order = await createPaymentOrder(db, {
         subjectType: 'CLIENT_MEMBERSHIP', subjectId: consumed.token.id, orgId: consumed.token.org_id,
-        amount: plan?.amount || 0, currency: plan?.currency || 'INR', idempotencyKey: `client-mem-${consumed.token.id}`,
+        amount, currency: plan?.currency || 'INR', idempotencyKey: `client-mem-${consumed.token.id}`,
       });
     } catch (e) {
       // The slot was already claimed above -- if order creation itself

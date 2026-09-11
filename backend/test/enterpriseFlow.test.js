@@ -376,3 +376,61 @@ test('RACE: two different clients scanning QR codes for the LAST remaining capac
   assert.equal(finalStatus.json.activeClients, 75, 'exactly 74 fillers + the 1 race winner, never 76');
   assert.equal(finalStatus.json.availableCapacity, 0);
 });
+
+test('a FREE (0 amount) membership plan enrolls straight from the QR, with no payment order at all', async () => {
+  // createPaymentOrder rejects a non-positive amount, so a zero-rupee plan
+  // used to throw inside /client/join and the scan simply failed. A free
+  // membership is a real product need (comped, beta, free tier), so it now
+  // runs the same activation a paid join would and skips payment entirely.
+  const db = await memDb();
+  await seedPricing(db);
+  const api = await startApp(db);
+  try {
+    // Owner + active gym.
+    const signup = await api.call('POST', '/api/auth/setup-org', {
+      orgName: 'Free Gym', ownerName: 'Free Owner', email: 'freeowner@test.in', password: 'ownerpass1',
+      contactPhone: '9999900000', country: 'India', city: 'Delhi', address: '1 Free Street',
+    });
+    assert.equal(signup.status, 201, JSON.stringify(signup.json));
+    const ownerToken = signup.json.token;
+    const orgId = signup.json.user.orgId;
+    const nowIso = new Date().toISOString();
+    await db.run(`INSERT INTO org_subscriptions (id, org_id, package_id, client_capacity, price, currency, status, start_date, created_at, updated_at) VALUES (?,?,?,?,?,?,'ACTIVE',?,?,?)`,
+      ['osub_free', orgId, 'p75', 25, 0, 'INR', nowIso, nowIso, nowIso]);
+    await db.run(`INSERT INTO org_billing_state (org_id, status, updated_at) VALUES (?,'ACTIVE',?) ON CONFLICT (org_id) DO UPDATE SET status='ACTIVE'`, [orgId, nowIso]);
+
+    // A ZERO-rupee plan, and a QR for it.
+    await db.run(`INSERT INTO packages (id, org_id, name, amount, currency, period_days) VALUES (?,?,?,?,?,?)`,
+      ['plan_free', orgId, 'Beta Access', 0, 'INR', 365]);
+    const qr = await api.call('POST', '/api/enrollment/qr/client', { membershipPlanId: 'plan_free' }, ownerToken);
+    assert.equal(qr.status, 200, JSON.stringify(qr.json));
+
+    // Client scans it.
+    const tester = await api.call('POST', '/api/auth/register', { name: 'Beta Tester', email: 'beta@test.in', password: 'clientpass1' });
+    const clientToken = tester.json.token;
+    const join = await api.call('POST', '/api/enrollment/client/join', { payload: qr.json.payload }, clientToken);
+
+    assert.equal(join.status, 200, JSON.stringify(join.json));
+    assert.equal(join.json.free, true, 'a free join reports itself as free');
+    assert.equal(join.json.order, undefined, 'and creates no payment order');
+
+    // They are a REAL client now -- not pending anything.
+    const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [tester.json.user.id]);
+    assert.ok(client, 'the clients row exists');
+    assert.equal(client.org_id, orgId);
+    const sub = await db.q1('SELECT * FROM subscriptions WHERE client_id = ?', [client.id]);
+    assert.equal(sub.lifecycle_status, 'ACTIVE', 'membership is active immediately');
+    assert.equal(sub.amount, 0);
+
+    // No phantom revenue: a zero payment row is fine (it records the
+    // membership) but there must be no payment_orders row, since nothing
+    // was ever owed.
+    const orders = await db.q('SELECT * FROM payment_orders WHERE org_id = ?', [orgId]);
+    assert.equal(orders.length, 0, 'no order is created for a free membership');
+
+    // The capacity reservation must be released, not leaked -- otherwise
+    // every free join would permanently eat a slot.
+    const billing = await db.q1('SELECT reserved_slots FROM org_billing_state WHERE org_id = ?', [orgId]);
+    assert.equal(billing.reserved_slots, 0, 'the provisional slot reservation is released');
+  } finally { await api.close(); }
+});

@@ -8,6 +8,7 @@
     "db:init": "node backend/scripts/init-db.js",
     "db:check": "node backend/scripts/db-check.js",
     "db:seed": "node backend/scripts/seed.js",
+    "seed:beta-gym": "node backend/scripts/seed-beta-gym.js",
     "db:expand-exercises": "node backend/scripts/expand-exercise-library.js",
     "db:reset": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js",
     "db:reset:clean": "node backend/scripts/init-db.js --force && node backend/scripts/seed.js --no-demo",
