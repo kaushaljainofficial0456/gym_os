@@ -3,11 +3,22 @@ import { z } from 'zod';
 import { requireAuth, orgScope } from '../auth.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
+import { isIndependentOrg } from '../services/orgKind.js';
 import {
   getMembership, setMembership, getCommunitySettings,
   leaderboards, feed, shareWorkout, unshareWorkout, copyWorkout,
   resolveMembers,
 } from '../services/community.js';
+import {
+  communityOverview, memberDirectory, recentPRs,
+  followMember, unfollowMember, followState, getPreferences, setPreferences,
+} from '../services/communityIntel.js';
+import {
+  REACTIONS, isValidReaction, isValidTarget, targetExists,
+  toggleReaction, reactionsFor, addComment, listComments, deleteComment,
+  commentCountsFor, activeChallenges, createChallenge, deleteChallenge,
+} from '../services/communitySocial.js';
+import { todayKey } from '../utils/time.js';
 
 export default function communityRoutes(db) {
   const r = Router();
@@ -35,9 +46,17 @@ export default function communityRoutes(db) {
     const membership = await getMembership(db, client.id);
     const settings = await getCommunitySettings(db, req.orgId);
     const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [req.orgId]);
+    // The community is a GYM community -- there is no gym, and no fellow
+    // members, for an independent client, so it is reported as
+    // unavailable rather than as an empty community they can join.
+    // (The independent org's gym_settings row never set community_enabled,
+    // so it inherited the schema default of 1 and these users were being
+    // offered a community that cannot exist -- see services/orgKind.js.)
+    const independent = await isIndependentOrg(db, req.orgId);
     res.json({
       membership: membership || { client_id: client.id, enabled: 0 },
-      settings,
+      settings: independent ? { ...settings, community_enabled: false, leaderboard_enabled: false } : settings,
+      available: !independent,
       gym: { id: req.orgId, name: org?.name || 'Your Gym' },
     });
   });
@@ -119,13 +138,26 @@ export default function communityRoutes(db) {
     const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 30, 100));
     const rawOffset = parseInt(req.query.offset, 10);
     const offset = Math.max(0, Number.isFinite(rawOffset) ? rawOffset : 0);
-    const result = await feed(db, req.orgId, { limit, offset });
-    res.json(result);
+    // Same viewer context the PR feed uses, so one scope choice governs
+    // the whole Activity tab rather than shares and records disagreeing.
+    let viewerClientId = null;
+    let scope = 'all';
+    if (req.user.role === 'CLIENT') {
+      const c = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+      viewerClientId = c?.id || null;
+      const prefs = viewerClientId ? await getPreferences(db, viewerClientId) : null;
+      scope = ['all', 'following'].includes(req.query.scope) ? req.query.scope : (prefs?.feedScope || 'all');
+    }
+    const result = await feed(db, req.orgId, { limit, offset, viewerClientId, scope });
+    res.json({ ...result, scope });
   });
 
   // ---- Share ----
 
-  r.post('/shares', writeLimit, validate(z.object({ workout_id: z.string().min(1) })), async (req, res) => {
+  r.post('/shares', writeLimit, validate(z.object({
+    workout_id: z.string().min(1),
+    visibility: z.enum(['everyone', 'followers']).optional(),
+  })), async (req, res) => {
     const client = await getClient(req, res);
     if (!client) return;
 
@@ -143,6 +175,7 @@ export default function communityRoutes(db) {
       clientId: client.id,
       orgId: req.orgId,
       workoutId: req.body.workout_id,
+      visibility: req.body.visibility || 'everyone',
     });
 
     if (!result) {
@@ -202,6 +235,302 @@ export default function communityRoutes(db) {
     }
 
     res.status(201).json({ ok: true, id: result.id, name: result.name, exerciseCount: result.exerciseCount });
+  });
+
+  // ---- Overview (pulse, position, activity, PRs, recap) ----
+  //
+  // One request rather than six. Beyond the round trips, it keeps the
+  // page INTERNALLY CONSISTENT: six independent calls can straddle
+  // midnight or a workout being logged, and the pulse then contradicts
+  // the position rendered beside it.
+  r.get('/overview', async (req, res) => {
+    let clientId = null;
+    if (req.user.role === 'CLIENT') {
+      const client = await getClient(req, res);
+      if (!client) return;
+      const membership = await getMembership(db, client.id);
+      if (!membership || !membership.enabled) {
+        return res.status(403).json({ error: 'Join the community to view it' });
+      }
+      clientId = client.id;
+    }
+    const period = ['day', 'week', 'month'].includes(req.query.period) ? req.query.period : 'week';
+    const data = await communityOverview(db, { orgId: req.orgId, clientId, period, tz: req.tz });
+    const org = await db.q1('SELECT name FROM organizations WHERE id = ?', [req.orgId]);
+    res.json({ gym: { id: req.orgId, name: org?.name || 'Your Gym' }, ...data });
+  });
+
+  // ---- Members ----
+  r.get('/members', async (req, res) => {
+    if (req.user.role === 'CLIENT') {
+      const client = await getClient(req, res);
+      if (!client) return;
+      const membership = await getMembership(db, client.id);
+      if (!membership || !membership.enabled) {
+        return res.status(403).json({ error: 'Join the community to see members' });
+      }
+    }
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 60, 200));
+    const search = req.query.q ? String(req.query.q).slice(0, 60) : null;
+    const members = await memberDirectory(db, req.orgId, req.tz, { limit, search });
+    // The follow set travels with the list so each card can render its
+    // own button state without a request per member.
+    let follows = { following: [] };
+    let you = null;
+    if (req.user.role === 'CLIENT') {
+      const c = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+      you = c?.id || null;
+      if (you) follows = await followState(db, { orgId: req.orgId, clientId: you });
+    }
+    res.json({ members, you, following: follows.following });
+  });
+
+  // ---- PR activity ----
+  r.get('/prs', async (req, res) => {
+    if (req.user.role === 'CLIENT') {
+      const client = await getClient(req, res);
+      if (!client) return;
+      const membership = await getMembership(db, client.id);
+      if (!membership || !membership.enabled) {
+        return res.status(403).json({ error: 'Join the community to view PR activity' });
+      }
+    }
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 20, 50));
+    // Visibility is enforced HERE, not in the client. A member who set
+    // their records to followers-only must not have them travel over the
+    // wire to someone who would merely hide them.
+    let viewerClientId = null;
+    let scope = 'all';
+    if (req.user.role === 'CLIENT') {
+      const c = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+      viewerClientId = c?.id || null;
+      const prefs = viewerClientId ? await getPreferences(db, viewerClientId) : null;
+      scope = ['all', 'following'].includes(req.query.scope) ? req.query.scope : (prefs?.feedScope || 'all');
+    }
+    const prs = await recentPRs(db, req.orgId, { limit, viewerClientId, scope });
+    res.json({ prs, scope });
+  });
+
+  // ---- Follows ----
+  r.get('/follows', async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    res.json(await followState(db, { orgId: req.orgId, clientId: client.id }));
+  });
+
+  r.post('/follows/:clientId', writeLimit, async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const membership = await getMembership(db, client.id);
+    if (!membership || !membership.enabled) {
+      return res.status(403).json({ error: 'Join the community first' });
+    }
+    const out = await followMember(db, {
+      orgId: req.orgId, followerId: client.id, followingId: req.params.clientId,
+    });
+    if (!out.ok) {
+      return res.status(out.reason === 'self' ? 422 : 404)
+        .json({ error: out.reason === 'self' ? 'You already see your own activity' : 'Member not found' });
+    }
+    res.json(out);
+  });
+
+  r.delete('/follows/:clientId', writeLimit, async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    res.json(await unfollowMember(db, { followerId: client.id, followingId: req.params.clientId }));
+  });
+
+  // ---- Preferences ----
+  r.get('/preferences', async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    res.json(await getPreferences(db, client.id));
+  });
+
+  r.put('/preferences', writeLimit, validate(z.object({
+    pr_visibility: z.enum(['everyone', 'followers', 'nobody']).optional(),
+    feed_scope: z.enum(['all', 'following']).optional(),
+  })), async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const out = await setPreferences(db, client.id, {
+      prVisibility: req.body.pr_visibility,
+      feedScope: req.body.feed_scope,
+    });
+    res.json(out);
+  });
+
+  // ---- Reactions ----
+  //
+  // Membership is re-checked on every write. A member who left the
+  // community keeps a valid JWT until it expires, so the token alone is
+  // not evidence they may still post into it.
+  r.post('/reactions', writeLimit, validate(z.object({
+    target_type: z.string().min(1).max(20),
+    target_id: z.string().min(1).max(60),
+    emoji: z.string().min(1).max(20),
+  })), async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const membership = await getMembership(db, client.id);
+    if (!membership || !membership.enabled) {
+      return res.status(403).json({ error: 'Join the community first' });
+    }
+    const { target_type: targetType, target_id: targetId, emoji } = req.body;
+    if (!isValidTarget(targetType)) return res.status(422).json({ error: 'Unknown target type' });
+    if (!isValidReaction(emoji)) {
+      return res.status(422).json({ error: 'Reaction must be one of: ' + REACTIONS.join(', ') });
+    }
+    // Never attach to something that does not exist in THIS org -- see
+    // targetExists for the cross-org leak it closes.
+    if (!(await targetExists(db, req.orgId, targetType, targetId))) {
+      return res.status(404).json({ error: 'That post no longer exists' });
+    }
+    const out = await toggleReaction(db, {
+      orgId: req.orgId, clientId: client.id, targetType, targetId, emoji,
+    });
+    res.json({ ok: true, ...out });
+  });
+
+  // ---- Comments ----
+  r.get('/comments', async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const membership = await getMembership(db, client.id);
+    if (!membership || !membership.enabled) {
+      return res.status(403).json({ error: 'Join the community first' });
+    }
+    const targetType = String(req.query.target_type || '');
+    const targetId = String(req.query.target_id || '');
+    if (!isValidTarget(targetType) || !targetId) {
+      return res.status(422).json({ error: 'target_type and target_id are required' });
+    }
+    const comments = await listComments(db, { orgId: req.orgId, targetType, targetId });
+    res.json({ comments, you: client.id });
+  });
+
+  r.post('/comments', writeLimit, validate(z.object({
+    target_type: z.string().min(1).max(20),
+    target_id: z.string().min(1).max(60),
+    body: z.string().min(1).max(500),
+  })), async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const membership = await getMembership(db, client.id);
+    if (!membership || !membership.enabled) {
+      return res.status(403).json({ error: 'Join the community first' });
+    }
+    const { target_type: targetType, target_id: targetId, body } = req.body;
+    if (!isValidTarget(targetType)) return res.status(422).json({ error: 'Unknown target type' });
+    if (!String(body).trim()) return res.status(422).json({ error: 'Write something first' });
+    if (!(await targetExists(db, req.orgId, targetType, targetId))) {
+      return res.status(404).json({ error: 'That post no longer exists' });
+    }
+    const out = await addComment(db, {
+      orgId: req.orgId, clientId: client.id, targetType, targetId, body,
+    });
+    res.status(201).json({ ok: true, ...out });
+  });
+
+  r.delete('/comments/:id', writeLimit, async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const removed = await deleteComment(db, {
+      orgId: req.orgId, clientId: client.id, commentId: req.params.id,
+    });
+    // Same 404 whether the comment is missing or belongs to someone else:
+    // distinguishing them would confirm another member's comment id.
+    if (!removed) return res.status(404).json({ error: 'Comment not found' });
+    res.json({ ok: true });
+  });
+
+  // ---- Social counts for a page of feed items ----
+  //
+  // The feed asks for its reaction/comment counts in ONE request for the
+  // whole page instead of one per card, so the cost does not grow with
+  // the length of the feed.
+  r.post('/social', validate(z.object({
+    targets: z.array(z.object({
+      type: z.string().min(1).max(20),
+      id: z.string().min(1).max(60),
+    })).max(100),
+  })), async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const membership = await getMembership(db, client.id);
+    if (!membership || !membership.enabled) {
+      return res.status(403).json({ error: 'Join the community first' });
+    }
+    const targets = req.body.targets.filter((t) => isValidTarget(t.type));
+    const [reactions, comments] = await Promise.all([
+      reactionsFor(db, { orgId: req.orgId, clientId: client.id, targets }),
+      commentCountsFor(db, { orgId: req.orgId, targets }),
+    ]);
+    const out = {};
+    for (const t of targets) {
+      const key = t.type + ':' + t.id;
+      out[key] = {
+        ...(reactions.get(key) || { counts: {}, mine: [], total: 0 }),
+        comments: comments.get(key) || 0,
+      };
+    }
+    res.json({ social: out, reactions: REACTIONS });
+  });
+
+  // ---- Challenges ----
+  r.get('/challenges', async (req, res) => {
+    let clientId = null;
+    if (req.user.role === 'CLIENT') {
+      const client = await getClient(req, res);
+      if (!client) return;
+      const membership = await getMembership(db, client.id);
+      if (!membership || !membership.enabled) {
+        return res.status(403).json({ error: 'Join the community first' });
+      }
+      clientId = client.id;
+    }
+    const challenges = await activeChallenges(db, {
+      orgId: req.orgId, clientId, today: todayKey(req.tz),
+    });
+    res.json({ challenges });
+  });
+
+  // Staff only: a challenge is a gym-wide object, so a member cannot
+  // create one for everyone else.
+  r.post('/challenges', writeLimit, validate(z.object({
+    name: z.string().min(1).max(80),
+    description: z.string().max(300).optional(),
+    metric: z.enum(['workouts', 'volume', 'prs']),
+    goal: z.number().positive().max(10000000),
+    scope: z.enum(['member', 'community']).optional(),
+    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })), async (req, res) => {
+    if (!['GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only gym staff can create challenges' });
+    }
+    const b = req.body;
+    if (b.end_date < b.start_date) {
+      return res.status(422).json({ error: 'The challenge cannot end before it starts' });
+    }
+    const out = await createChallenge(db, {
+      orgId: req.orgId, name: b.name, description: b.description, metric: b.metric,
+      goal: b.goal, scope: b.scope, startDate: b.start_date, endDate: b.end_date,
+      createdBy: req.user.sub,
+    });
+    res.status(201).json({ ok: true, ...out });
+  });
+
+  r.delete('/challenges/:id', writeLimit, async (req, res) => {
+    if (!['GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only gym staff can remove challenges' });
+    }
+    const removed = await deleteChallenge(db, { orgId: req.orgId, challengeId: req.params.id });
+    if (!removed) return res.status(404).json({ error: 'Challenge not found' });
+    res.json({ ok: true });
   });
 
   return r;

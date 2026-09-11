@@ -122,17 +122,23 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   // then add IT to the meal via the ordinary food_id path -- so it lands
   // as a real, correctly-sourced ('database') item, not something faked
   // up as an AI estimate just to fit that shape.
-  const addCustomFoodItem = async ({ name: foodName, servingGrams, ...nums }) => {
+  const addCustomFoodItem = async ({ name: foodName, servingGrams, itemQuantity, ...nums }) => {
     if (!name.trim()) throw new Error('Name your meal first');
     const created = await api('/me/foods', { method: 'POST', body: JSON.stringify({ name: foodName, ...nums }) });
     const id = await ensureMeal();
     // POST /me/meals/:id/items multiplies quantity directly against the
-    // food's own stored (per-100g) macros -- quantity:1 always flat here
-    // used to mean "100 g regardless of what was actually typed" once
-    // MealFoodRow started converting Custom Macros to per-100g (a real
-    // bug this closes). servingGrams/100 is the multiplier that gets
-    // back to the real entered amount -- e.g. a 250g bowl -> 2.5.
-    const quantity = servingGrams > 0 ? servingGrams / 100 : 1;
+    // food's own stored macros, so this is "how many of that food's own
+    // serving is in this meal".
+    //
+    // The row computes it, because only the row knows what basis it just
+    // stored the food on: a weighed food is per 100 g (a 250 g entry ->
+    // 2.5), a countable one is per serving (a "1 bowl" entry -> 1). The
+    // servingGrams/100 fallback is what older callers relied on and stays
+    // correct for them -- but applying it to a per-bowl food would add
+    // 1/100th of a bowl to the meal.
+    const quantity = Number.isFinite(itemQuantity) && itemQuantity > 0
+      ? itemQuantity
+      : (servingGrams > 0 ? servingGrams / 100 : 1);
     await api(`/me/meals/${id}/items`, { method: 'POST', body: JSON.stringify({ food_id: created.id, name: foodName, quantity }) });
     await refreshItems(id);
     toast(`+ ${foodName} added`);

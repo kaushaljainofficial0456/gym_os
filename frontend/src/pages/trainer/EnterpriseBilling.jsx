@@ -199,7 +199,7 @@ export default function EnterpriseBilling() {
 
   return (
     <div className="space-y-6">
-      <Toast message={toast} tone={toast.toLowerCase?.().includes('complete') ? 'success' : 'error'} />
+      <Toast message={toast} onDone={() => setToast('')} tone={toast.toLowerCase?.().includes('complete') ? 'success' : 'error'} />
       <PageHeader title="Billing" sub="Package, capacity, and invoices for your own Barbell subscription." />
 
       <Card className="p-5">

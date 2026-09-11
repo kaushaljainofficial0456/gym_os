@@ -93,13 +93,17 @@ export async function getCachedEstimate(db, key) {
       nutrition: safeParse(row.nutrition_json, null),
       uncertainty: safeParse(row.uncertainty_json, null),
       assumptions: safeParse(row.assumptions_json, []),
+      // null for rows cached before these columns existed -- callers must
+      // treat a missing serving as "unknown", never as a zero-weight one.
+      serving: safeParse(row.serving_json, null),
+      is_branded_or_restaurant: !!row.is_branded_or_restaurant,
     };
   } catch {
     return null; // cache is an optimization, never a hard dependency
   }
 }
 
-export async function saveCachedEstimate(db, key, displayName, { nutrition, uncertainty, componentTemplate, assumptions, source, aiProvider, aiModel, confidence, cuisine }) {
+export async function saveCachedEstimate(db, key, displayName, { nutrition, uncertainty, componentTemplate, assumptions, source, aiProvider, aiModel, confidence, cuisine, serving, isBrandedOrRestaurant }) {
   if (!key) return;
   const nowIso = now();
   try {
@@ -107,8 +111,9 @@ export async function saveCachedEstimate(db, key, displayName, { nutrition, unce
       `INSERT INTO ai_food_estimates
          (id, canonical_key, canonical_name, cuisine, component_template_json, nutrition_json,
           uncertainty_json, assumptions_json, source, ai_provider, ai_model, confidence,
+          serving_json, is_branded_or_restaurant,
           times_used, user_confirmation_count, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
        ON CONFLICT (canonical_key) DO UPDATE SET
          nutrition_json = excluded.nutrition_json,
          uncertainty_json = excluded.uncertainty_json,
@@ -117,11 +122,14 @@ export async function saveCachedEstimate(db, key, displayName, { nutrition, unce
          confidence = excluded.confidence,
          ai_provider = excluded.ai_provider,
          ai_model = excluded.ai_model,
+         serving_json = excluded.serving_json,
+         is_branded_or_restaurant = excluded.is_branded_or_restaurant,
          updated_at = excluded.updated_at`,
       [id('afe'), key, displayName, cuisine || null,
        JSON.stringify(componentTemplate || []), JSON.stringify(nutrition || {}),
        JSON.stringify(uncertainty || {}), JSON.stringify(assumptions || []),
        source || 'ai_estimated', aiProvider || null, aiModel || null, confidence || 'low',
+       serving ? JSON.stringify(serving) : null, isBrandedOrRestaurant ? 1 : 0,
        nowIso, nowIso]);
   } catch {
     // Cache write failure must never fail the food estimate itself.

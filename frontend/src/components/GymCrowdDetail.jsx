@@ -5,7 +5,7 @@ const CROWD_STYLE = {
   // information at all. Tokens, and genuinely distinct.
   LOW: { label: 'Quiet', color: 'var(--good)' },
   MODERATE: { label: 'Moderate', color: 'var(--accent)' },
-  HIGH: { label: 'BUSY', color: 'var(--orange, #FA541C)' },
+  HIGH: { label: 'BUSY', color: 'var(--warn)' },
   VERY_HIGH: { label: 'PACKED', color: 'var(--bad, #F87171)' }
 };
 

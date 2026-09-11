@@ -100,14 +100,17 @@ function CalorieRing({ value, max, t }) {
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <div className="absolute inset-0 pointer-events-none" style={{
-        background: `radial-gradient(circle at 50% 50%, ${overTarget ? 'rgba(255,107,107,0.08)' : t.accentDim}, transparent 65%)`,
+        background: `radial-gradient(circle at 50% 50%, ${overTarget ? 'rgb(var(--bad-rgb) / .08)' : t.accentDim}, transparent 65%)`,
       }} />
       <svg width={size} height={size} className="-rotate-90 relative z-10">
         <defs>
           <linearGradient id={`${uid}_grad`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={overTarget ? '#FF6B6B' : t.accent} />
-            <stop offset="50%" stopColor={overTarget ? '#FF9A7A' : t.accent} />
-            <stop offset="100%" stopColor={overTarget ? '#FFB88C' : t.accent} />
+            {/* Over-target is a WARNING, so it reads from the semantic
+                token rather than three hardcoded oranges that no theme
+                could reach. */}
+            <stop offset="0%" stopColor={overTarget ? 'var(--bad)' : t.accent} />
+            <stop offset="50%" stopColor={overTarget ? 'rgb(var(--bad-rgb) / .85)' : t.accent} />
+            <stop offset="100%" stopColor={overTarget ? 'rgb(var(--bad-rgb) / .7)' : t.accent} />
           </linearGradient>
           <filter id={`${uid}_glow`}>
             <feGaussianBlur stdDeviation="4" result="blur" />
@@ -609,16 +612,49 @@ export default function Nutrition() {
     }
   };
 
+  // Which sources mean "these numbers are an ESTIMATE, not a measured
+  // food". Derived from `source` in one place rather than asked of each
+  // caller: meal_logs.estimate exists precisely to mark AI-estimated
+  // nutrition, and every caller that forgot to set it wrote a row claiming
+  // its numbers were measured. Nothing reads the column today, which is
+  // exactly why it was silently wrong -- the first feature to show an
+  // "estimated" badge would have inherited the bad data.
+  const ESTIMATED_SOURCES = new Set(['ai', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']);
+
   const logEntry = async (entry) => {
+    const source = entry.source || 'manual';
+    // Round ONCE, here, at the only point every food log passes through.
+    // Callers scale macros by arbitrary factors (1.5 bowls, 3 servings,
+    // 245/100 g), so binary floating point routinely produced values like
+    // 98.10000000000001 g of protein. Every screen rounds for DISPLAY, so
+    // this was invisible in the app while the stored row, the API response
+    // and any export carried the noise. Grams to 0.1 (finer than any
+    // kitchen scale or food label), calories to whole numbers.
+    const r1v = (n) => (n == null ? undefined : Math.round(Number(n) * 10) / 10);
     await api(`/nutrition/clients/${clientId}/meals/log`, {
       method: 'POST',
       body: JSON.stringify({
         name: entry.name, slot: 'Snack',
-        calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
-        source: entry.source || 'manual', eaten: true,
+        calories: Math.round(Number(entry.calories) || 0),
+        protein: r1v(entry.protein), carbs: r1v(entry.carbs), fat: r1v(entry.fat),
+        source, eaten: true,
+        estimate: ESTIMATED_SOURCES.has(source),
         ai_provider: entry.ai_provider || undefined,
         ai_model: entry.ai_model || undefined,
         ai_confidence: entry.ai_confidence || undefined,
+        // The amount actually eaten, forwarded exactly as the caller
+        // measured it (245 + 'g' for a resolved portion, 1.5 + 'bowl' for
+        // a countable Custom Macros entry). This used to be dropped here
+        // even though every caller supplies it and the route has always
+        // stored it -- which quietly broke "Edit Quantity" later:
+        // PUT /me/meal-logs/:id scales by newQty / (log.quantity || 100),
+        // so a NULL quantity made it assume the entry was 100 g. Editing
+        // a 1.5-bowl log to 2 bowls scaled by 2/100 and turned 52.5 g of
+        // protein into 1.05 g. Send it, and the edit scales from the real
+        // baseline. `?? undefined` so a genuinely absent quantity stays
+        // absent rather than becoming 0.
+        quantity: entry.quantity ?? undefined,
+        unit: entry.unit ?? undefined,
       }),
     });
     home.reload({ silent: true });

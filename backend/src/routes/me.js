@@ -31,6 +31,8 @@ import {
 import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
 import { submitFeedback } from '../services/intelligence/foodFeedback.js';
 import { listActiveAnnouncements } from '../services/platform/announcements.js';
+import { mifflinStJeorBmr } from '../services/intelligence/restingEnergy.js';
+import { isIndependentOrg } from '../services/orgKind.js';
 import {
   BALANCE_CONFIG, calculateFlexibleCaloriePlan, getBaseTargets, getActivePlan,
   baseTargetChanged, checkSurplusPrompt, reconcileActivePlan, applyFlexibleCaloriePlan,
@@ -208,13 +210,11 @@ export default function meRoutes(db) {
       });
     }
 
-    // Mifflin-St Jeor BMR
-    let bmr;
-    if (sex === 'MALE') {
-      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-    } else {
-      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
-    }
+    // Mifflin-St Jeor BMR -- shared with the daily burn breakdown's
+    // resting-energy line (services/intelligence/restingEnergy.js) so the
+    // two can never drift apart. Behaviour is unchanged for the MALE/
+    // FEMALE values this app's UI actually writes.
+    const bmr = mifflinStJeorBmr({ weightKg: weight, heightCm: height, age, sex });
 
     // Activity multiplier from experience
     const activityMap = { BEGINNER: 1.375, INTERMEDIATE: 1.55, ADVANCED: 1.725 };
@@ -835,9 +835,12 @@ export default function meRoutes(db) {
     // Reject invalid macro values outright (negative, impossible combos) --
     // never silently clamp or drop them, since the client would see a
     // "saved" food that quietly logs the wrong number every time it's used.
-    // fiber/sugar/sodium are optional (Part 14) but still validated when
-    // present -- e.g. fiber folds into the same "can't exceed 100g per
-    // 100g" sanity check as protein/carbs/fat.
+    // fiber/sugar/sodium are optional (Part 14); when present they get the
+    // same finite/non-negative check as protein/carbs/fat. Note there is
+    // deliberately NO check that the macro grams sum to (or stay under) the
+    // serving weight -- see foodValidation.js's own note on why that check
+    // was removed and must not come back. It would reject every countable
+    // serving this form can now save ("1 bowl" at 35P/55C/18F).
     const check = validateFoodRecord({ name, energy_kcal: calories, protein_g: protein, carb_g: carbs, fat_g: fat, fiber_g: fiber, sugar_g: sugar, sodium_mg: sodium });
     if (!check.valid) return res.status(400).json({ error: 'Invalid food data', details: check.errors });
     const fId = id('food');
@@ -1055,13 +1058,30 @@ export default function meRoutes(db) {
     let newCarbs = log.carbs;
     let newFat = log.fat;
 
-    // If the original quantity is known, scale proportionally
-    const origQty = Number(log.quantity) || 100;
-    const scale = newQty / origQty;
-    newCalories = Math.round(log.calories * scale * 10) / 10;
-    newProtein = Math.round(log.protein * scale * 10) / 10;
-    newCarbs = Math.round(log.carbs * scale * 10) / 10;
-    newFat = Math.round(log.fat * scale * 10) / 10;
+    // Scale proportionally -- but ONLY when the original quantity is
+    // actually known. The previous `Number(log.quantity) || 100` fallback
+    // silently assumed any row without a stored quantity was 100 g, which
+    // is not a conservative default, it is a destructive one: an entry
+    // logged as 1.5 bowls (52.5 g protein) edited to 2 bowls scaled by
+    // 2/100 and became 1.05 g. Rows predating the client fix that started
+    // sending `quantity` all have NULL here, so this was reachable with
+    // real data, not a hypothetical.
+    //
+    // When the baseline is unknown there is no honest scale factor to
+    // apply -- the macros could describe 40 g or 400. So record the
+    // quantity the user is now stating and leave the nutrition numbers
+    // exactly as they are, rather than inventing a ratio. That makes the
+    // first edit a no-op on macros and establishes the baseline; any
+    // later edit (2 bowls -> 3) then scales correctly from it.
+    const origQty = Number(log.quantity);
+    const haveBaseline = Number.isFinite(origQty) && origQty > 0;
+    if (haveBaseline) {
+      const scale = newQty / origQty;
+      newCalories = Math.round(log.calories * scale * 10) / 10;
+      newProtein = Math.round(log.protein * scale * 10) / 10;
+      newCarbs = Math.round(log.carbs * scale * 10) / 10;
+      newFat = Math.round(log.fat * scale * 10) / 10;
+    }
 
     await db.run(
       'UPDATE meal_logs SET quantity = ?, unit = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ? AND client_id = ?',
@@ -1075,29 +1095,76 @@ export default function meRoutes(db) {
   });
 
   // ---------------- my custom workouts ----------------
+  // A retroactively logged workout is a first-class workout (spec Part 28):
+  // it belongs in history, Progress, PRs and volume exactly like a live one.
+  // Filtering this list on source = 'client_custom' alone would have made
+  // every retroactive session invisible here.
   r.get('/workouts', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const ws = await db.q(
       `SELECT w.*, (SELECT COUNT(*) FROM workout_exercises we WHERE we.workout_id = w.id) exercise_count,
               (SELECT COUNT(*) FROM workout_logs wl WHERE wl.workout_id = w.id) log_count
-         FROM workouts w WHERE w.client_id = ? AND w.source = 'client_custom' ORDER BY w.scheduled_date DESC`, [c.id]);
+         FROM workouts w WHERE w.client_id = ? AND w.source IN ('client_custom', 'manual_retroactive')
+        ORDER BY w.scheduled_date DESC`, [c.id]);
     res.json({ workouts: ws });
   });
 
   // Build a client's own workout for today (becomes "today's session" via /me/today).
+  // ---- retroactive logging: is there already a session around this time? ----
+  //
+  // Silently creating a second workout for a session the user already
+  // logged is how volume, streaks and PR history quietly become wrong.
+  // This reports overlaps so the UI can ask rather than assume; it never
+  // blocks, because two genuine sessions in one evening are legitimate.
+  r.get('/workouts/overlapping', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const { date, started_at: startedAt, duration_min: durMin } = req.query;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    }
+    const rows = await db.q(
+      `SELECT id, name, scheduled_date, started_at, completed_at, duration_min, status, source
+         FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'completed'
+        ORDER BY started_at`, [c.id, String(date)]);
+
+    const startMs = startedAt ? Date.parse(String(startedAt)) : NaN;
+    const endMs = Number.isFinite(startMs) && durMin ? startMs + Number(durMin) * 60000 : NaN;
+    const overlapping = !Number.isFinite(startMs) ? rows : rows.filter((w) => {
+      const ws = w.started_at ? Date.parse(w.started_at) : NaN;
+      const we = w.completed_at ? Date.parse(w.completed_at) : NaN;
+      // No timestamps on the existing row -- same DAY is the only signal
+      // available, so treat it as a possible clash rather than pretending
+      // to know it isn't one.
+      if (!Number.isFinite(ws) || !Number.isFinite(we)) return true;
+      return ws < (Number.isFinite(endMs) ? endMs : startMs) && we > startMs;
+    });
+    res.json({ overlapping });
+  });
+
   r.post('/workouts', workoutWriteLimit, validate(schemas.clientWorkoutCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { name, exercises } = req.body || {};
+    const { name, exercises, date, started_at: startedAtIn, source: sourceIn } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Workout name is required' });
     if (!Array.isArray(exercises) || exercises.length === 0) return res.status(400).json({ error: 'Add at least one exercise' });
     if (exercises.length > 20) return res.status(400).json({ error: 'Too many exercises (max 20)' });
     const tz = req.tz || 'Asia/Kolkata';
-    const d = dayKey(new Date(), tz);
+    const today = dayKey(new Date(), tz);
+    // RETROACTIVE: a workout the user already did but forgot to start in
+    // the app. Same row, same pipeline -- only the date differs, so this
+    // takes an optional one rather than there being a second kind of
+    // workout. Future dates are refused: this app has no scheduled-workout
+    // concept here, and a future row would pollute streaks and trends.
+    const d = date || today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    if (d > today) return res.status(422).json({ error: 'A workout cannot be logged in the future' });
+    const retroactive = d !== today || !!startedAtIn;
+    const source = retroactive ? 'manual_retroactive' : (sourceIn === 'client_custom' ? 'client_custom' : 'client_custom');
     const wId = id('wko');
     await db.run(
-      `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, source, created_at)
-       VALUES (?,?,?,?,?,?,'assigned', 'client_custom', ?)`,
-      [wId, c.org_id, c.id, String(name).trim().slice(0, 80), String(name).trim().slice(0, 40), d, now()]);
+      `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, started_at, source, created_at)
+       VALUES (?,?,?,?,?,?,'assigned', ?, ?, ?)`,
+      [wId, c.org_id, c.id, String(name).trim().slice(0, 80), String(name).trim().slice(0, 40), d,
+       startedAtIn || null, source, now()]);
     let added = 0;
     for (const [i, ex] of exercises.entries()) {
       // scoped: only GLOBAL exercises or this gym's own — never another org's
@@ -1119,7 +1186,14 @@ export default function meRoutes(db) {
       `DELETE FROM workouts WHERE client_id = ? AND source = 'client_custom' AND status = 'assigned' AND scheduled_date = ? AND id != ?
          AND NOT EXISTS (SELECT 1 FROM workout_logs wl WHERE wl.workout_id = workouts.id)`, [c.id, d, wId]);
     track(db, 'custom_workout_created', req.user.org, req.user.sub, { client_id: c.id });
-    res.json({ id: wId, scheduled_date: d });
+    // The created exercise rows come back with the workout: completing a
+    // session needs workout_exercises ids, and without them a caller that
+    // just built this workout would have to go looking for them through a
+    // second round trip. Matters most for retroactive logging, where
+    // create-then-complete happens back to back.
+    const createdExercises = await db.q(
+      'SELECT id, exercise_id, name, sets, reps, weight, rest_sec FROM workout_exercises WHERE workout_id = ? ORDER BY position', [wId]);
+    res.json({ id: wId, scheduled_date: d, source, exercises: createdExercises });
   });
 
   r.delete('/workouts/:id', workoutWriteLimit, async (req, res) => {
@@ -1150,6 +1224,13 @@ export default function meRoutes(db) {
   // ---------------- live gym crowd (occupancy engine) ----------------
   r.get('/crowd', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
+    // Independent clients have no physical gym, so there is no crowd to
+    // report. Returning enabled:false (rather than an empty snapshot)
+    // is what makes the Home card disappear instead of rendering a
+    // permanently-empty '0 / 150' gauge.
+    if (await isIndependentOrg(db, c.org_id)) {
+      return res.json({ enabled: false, reason: 'no_gym' });
+    }
     const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
     const snapshot = await computeOccupancy(db, c.org_id, req.tz, settings);
     res.json(snapshot);

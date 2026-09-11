@@ -46,7 +46,7 @@
     var(--gradient-five) border-box,
     var(--gradient-six) border-box,
     var(--gradient-seven) border-box,
-    var(--gradient-base, linear-gradient(var(--accent, #E07A63) 0 100%)) border-box;
+    var(--gradient-base, linear-gradient(var(--accent, #B4C2CE) 0 100%)) border-box;
 
   opacity: calc((var(--edge-proximity) - var(--color-sensitivity)) / (100 - var(--color-sensitivity)));
 
@@ -71,7 +71,7 @@
     var(--gradient-five) padding-box,
     var(--gradient-six) padding-box,
     var(--gradient-seven) padding-box,
-    var(--gradient-base, linear-gradient(var(--accent, #E07A63) 0 100%)) padding-box;
+    var(--gradient-base, linear-gradient(var(--accent, #B4C2CE) 0 100%)) padding-box;
 
   mask-image:
     linear-gradient(to bottom, black, black),

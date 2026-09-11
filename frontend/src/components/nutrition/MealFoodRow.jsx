@@ -6,7 +6,13 @@ import { calculateCaloriesFromMacros } from '../../nutritionCalc.js';
 // servingGrams defaults to '100' -- same convention as FoodLogSheet.jsx's
 // own Custom Macros form (see its EMPTY_CUSTOM comment for the real bug
 // this closes).
-const EMPTY_CUSTOM = { name: '', servingGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// The same unit vocabulary the Log Food sheet's Custom Macros form offers,
+// kept identical on purpose: a food defined as "1 bowl" from one screen and
+// "1 bowl" from the other has to mean the same thing, because both write to
+// the same `foods` rows.
+const SERVING_UNITS = ['g', 'ml', 'serving', 'bowl', 'plate', 'piece', 'slice', 'scoop', 'cup', 'roti'];
+const isMeasuredUnit = (u) => u === 'g' || u === 'ml';
+const EMPTY_CUSTOM = { name: '', servingGrams: '100', servingUnit: 'g', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
 // Required for a valid submission (Part 14); fiber/sugar/sodium are
 // optional extras, tucked behind a disclosure so the primary 4-field
 // flow stays uncluttered. calories is NOT required input -- it's
@@ -132,7 +138,8 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
     const foodName = cf.name.trim();
     if (!foodName) { setCustomErr('Name this food first'); return; }
     const servingG = Number(cf.servingGrams);
-    if (!(servingG > 0)) { setCustomErr('Enter a valid, positive serving size in grams'); return; }
+    const unit = cf.servingUnit || 'g';
+    if (!(servingG > 0)) { setCustomErr(`Enter a valid, positive serving size in ${unit}`); return; }
     const calculatedCalories = calculateCaloriesFromMacros({ protein: Number(cf.protein), carbs: Number(cf.carbs), fat: Number(cf.fat) });
     const entered = {
       calories: customCalorieOverride && cf.calories !== '' ? Number(cf.calories) : calculatedCalories,
@@ -169,9 +176,28 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
       // the right quantity (servingGrams/100) against the now-per-100g
       // food, instead of a flat "1" that would silently mean "100 g"
       // regardless of what was entered.
-      const factor = 100 / servingG;
+      //
+      // A COUNTABLE unit is stored as itself. Converting "1 bowl" to a
+      // per-100g basis needs a bowl weight nobody supplied, and a guessed
+      // one would be indistinguishable from a measured value in every
+      // future log of this food (spec Part 13).
+      const measured = isMeasuredUnit(unit);
+      const factor = measured ? 100 / servingG : 1;
       const nums = Object.fromEntries(Object.entries(entered).map(([k, v]) => [k, v * factor]));
-      await onAddCustom({ name: foodName, serving: '100 g', servingGrams: servingG, ...nums });
+      // How many of the food's OWN stored serving this row adds to the
+      // meal: a 250 g entry against a per-100g row is 2.5, while a
+      // "1 bowl" entry against a per-bowl row is exactly 1. Sending
+      // servingGrams alone made the parent assume a 100 basis, which is
+      // only true for weighed foods.
+      const itemQuantity = measured ? servingG / 100 : 1;
+      await onAddCustom({
+        name: foodName,
+        serving: measured ? `100 ${unit}` : `${servingG} ${unit}`,
+        unit,
+        servingGrams: servingG,
+        itemQuantity,
+        ...nums,
+      });
       setCustomForm(EMPTY_CUSTOM); setCustomDuplicate(null); setShowMoreMacros(false); setCustomCalorieOverride(false); onAdded?.();
     }
     catch (e) { setCustomErr(e.message || 'Could not add that food'); }
@@ -243,12 +269,33 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
               Macros form -- see its handleAddCustom comment for the bug
               this closes (a real serving's totals tripping the
               per-100g physical-plausibility check). */}
-          <input type="number" min="1" step="any" value={customForm.servingGrams}
-                 onChange={(e) => setCustomField('servingGrams', e.target.value)}
-                 placeholder="Serving size (g)" aria-label="Serving size in grams"
-                 className="input w-full !py-1.5 text-[11px] tabular-nums" />
+          <div className="flex items-center gap-1.5">
+            <input type="number" min="0.01" step="any" value={customForm.servingGrams}
+                   onChange={(e) => setCustomField('servingGrams', e.target.value)}
+                   placeholder="Serving size" aria-label={`Serving size in ${customForm.servingUnit || 'g'}`}
+                   className="input flex-1 !py-1.5 text-[11px] tabular-nums" />
+            <select value={customForm.servingUnit || 'g'}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      // Moving between a weight and a count changes what a
+                      // sensible amount even is -- 100 g vs 1 bowl -- so the
+                      // amount follows the unit instead of leaving "100
+                      // bowls" sitting in the field.
+                      setCustomForm((f) => {
+                        const wasMeasured = isMeasuredUnit(f.servingUnit || 'g');
+                        const nowMeasured = isMeasuredUnit(next);
+                        if (wasMeasured === nowMeasured) return { ...f, servingUnit: next };
+                        return { ...f, servingUnit: next, servingGrams: nowMeasured ? '100' : '1' };
+                      });
+                    }}
+                    aria-label="Serving unit"
+                    className="input !py-1.5 text-[11px] shrink-0" style={{ width: 84 }}>
+              {SERVING_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
           <div className="text-[9px]" style={{ color: t.faint }}>
-            Macros below are for <b>that serving</b>, not per 100 g.
+            Macros below are for <b>that serving</b>
+            {isMeasuredUnit(customForm.servingUnit || 'g') ? ', not per 100 g.' : '.'}
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             {[['protein', 'Protein (g)'], ['carbs', 'Carbs (g)'], ['fat', 'Fat (g)']].map(([key, label]) => (

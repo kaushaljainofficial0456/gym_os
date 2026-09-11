@@ -37,8 +37,13 @@ function runServerProbe(nodeEnv, extraEnv) {
     const headers = {};
     for (const [k, v] of res.headers) headers[k] = v;
     console.log('RESULT_JSON:' + JSON.stringify(headers));
-    server.close();
-    process.exit(0);
+    // Close the server and let the process exit on its own. An explicit
+    // process.exit(0) here tripped a libuv assertion on Windows
+    // (!(handle->flags & UV_HANDLE_CLOSING), src/win/async.c) AFTER all the
+    // work and output were done, so the child died with 0xC0000409 and
+    // every assertion on its exit status failed against a product that was
+    // behaving correctly.
+    await new Promise((r) => server.close(r));
   `;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { env, encoding: 'utf8', timeout: 15000 });
   const line = (child.stdout || '').split('\n').find((l) => l.startsWith('RESULT_JSON:'));

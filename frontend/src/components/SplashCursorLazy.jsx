@@ -27,9 +27,9 @@ function useReducedMotion() {
 }
 
 function readAccentColor() {
-  if (typeof document === 'undefined') return '#E07A63';
+  if (typeof document === 'undefined') return '#B4C2CE';
   const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  return v || '#E07A63';
+  return v || '#B4C2CE';
 }
 
 /** @param {boolean} enabled  desktop-only by default -- pass explicitly to override */

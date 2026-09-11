@@ -4,12 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
 import { ErrorState, Bar, Ring, CheckIcon, XIcon } from '../../components/UI.jsx';
+import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
+import LogPastWorkout from './LogPastWorkout.jsx';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
@@ -358,9 +360,12 @@ export default function Workout() {
   const [addExSaving, setAddExSaving] = useState(false);
   // personal workout planner — reusable workouts + weekly schedule (uses /me/planner)
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [logPastOpen, setLogPastOpen] = useState(false);
   const [planner, setPlanner] = useState(null); // { workouts, schedule }
   const [planForm, setPlanForm] = useState(null); // { id: null|workoutId, name, notes, exercises } when creating/editing
   const [savingPlan, setSavingPlan] = useState(false);
+  // Which weekday the assignment picker is open for (0=Sun..6=Sat), or null.
+  const [assignDow, setAssignDow] = useState(null);
   const [mode, setMode] = useState('browse'); // browse | execute | summary
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -602,10 +607,18 @@ export default function Workout() {
     } catch (e) { setToast(e.message); }
   };
 
+  /** Assigns an EXPLICIT workout (or null for a rest day) to a weekday.
+   *
+   *  It used to take whatever the caller had pre-computed as "the next
+   *  one", and the grid computed that as `workouts[0]` for any unassigned
+   *  day -- findIndex returned -1 on an empty slot and (-1 + 1) % len is
+   *  0. So a day could only ever become Rest or the FIRST saved workout:
+   *  with six saved, five of them could not be put on any day at all,
+   *  under a label that read "tap a day to assign". The caller now passes
+   *  the id it actually means. */
   const setDayWorkout = async (dow, wid) => {
     const sched = planner?.schedule || [];
-    const cur = sched.find((s) => s.day_of_week === dow);
-    const next = wid === cur?.workout_id ? null : wid;
+    const next = wid || null;
     try {
       const map = {};
       for (let d = 0; d <= 6; d++) {
@@ -1181,7 +1194,7 @@ export default function Workout() {
               carries the distinction, which is its job.
               Labels also had hard <br/> breaks mid-phrase ("My<br/>Workout"),
               which forced a two-line ragged label at every width. */}
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-4">
             {[
               { label: 'My workouts', onClick: openPlanner,
                 path: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></> },
@@ -1192,8 +1205,12 @@ export default function Workout() {
                   setBuilderOpen(true);
                 },
                 path: <path d="M12 5v14M5 12h14"/> },
-              { label: 'My PRs', onClick: () => nav('/app/client/progress'),
+              { label: 'My PRs', onClick: () => nav('/app/client/progress?section=prs'),
                 path: <path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/> },
+              // Trained but forgot to hit start -- by far the most common
+              // reason a real session never makes it into the app.
+              { label: 'Log past', onClick: () => setLogPastOpen(true),
+                path: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></> },
             ].map((t) => (
               <button key={t.label} onClick={t.onClick}
                 className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
@@ -1572,19 +1589,29 @@ export default function Workout() {
           </div>
         )}
 
-        {/* ── 5. RECENT SESSIONS ── */}
+        {/* ── 5. RECENT SESSIONS ──
+            Was three flex children with no fixed widths, so the raw ISO
+            date landed wherever the (truncated, variable-length) name
+            happened to end -- a different horizontal position on every
+            row. SessionRow gives the date a fixed right-aligned column and
+            replaces the bare date with what the session actually was.
+            "View all" exists because this list stopped at five with no
+            route to anything older. */}
         {!!hist.data?.workouts?.length && (
           <div className="card p-4 anim-fadeUp" style={{ animationDelay: '260ms' }}>
-            <div className="t-micro mb-2.5">Recent sessions</div>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="t-micro">Recent sessions</div>
+              <button
+                onClick={() => nav('/app/client/history')}
+                className="text-[11px] font-semibold rounded-lg px-2"
+                style={{ minHeight: 30, color: 'var(--accent)' }}
+              >
+                View all →
+              </button>
+            </div>
             <div className="space-y-1.5">
               {hist.data.workouts.filter((w) => w.id !== workout?.id).slice(0, 5).map((w) => (
-                <button key={w.id}
-                  onClick={() => nav(`/app/client/day/${w.scheduled_date}`)}
-                  className="w-full flex items-center justify-between text-xs border-b border-line/50 last:border-0 py-2 active:scale-[.98] transition-all text-left">
-                  <span className="font-grotesk font-semibold truncate">{w.name}</span>
-                  <span className="text-mute shrink-0 ml-2">{w.scheduled_date}</span>
-                  <span className={`chip border shrink-0 ml-2 ${w.status === 'completed' ? 'text-good border-good/40 bg-good/10' : 'text-warn border-warn/40 bg-warn/10'}`}>{w.status === 'completed' ? 'DONE' : w.status.toUpperCase()}</span>
-                </button>
+                <SessionRow key={w.id} w={w} compact onOpen={() => nav(`/app/client/day/${w.scheduled_date}`)} />
               ))}
             </div>
           </div>
@@ -1754,6 +1781,15 @@ export default function Workout() {
           </div>
         ), document.body)}
 
+        <LogPastWorkout
+          open={logPastOpen}
+          onClose={() => setLogPastOpen(false)}
+          libList={libList}
+          loadLib={() => api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'))}
+          toast={setToast}
+          onSaved={() => { today.reload({ silent: true }); hist.reload({ silent: true }); }}
+        />
+
         {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
         {plannerOpen && (
           <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
@@ -1766,27 +1802,109 @@ export default function Workout() {
                 <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setPlannerOpen(false)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* weekly schedule */}
+                {/* ── WEEKLY SCHEDULE ──
+                    Two bugs lived here.
+
+                    (1) DAY INDEXING. This grid mapped ['Mon','Tue',...]
+                    onto 0..6, i.e. Mon=0. Everything else in this file and
+                    in the API uses the JavaScript convention (Sun=0,
+                    Mon=1..Sat=6) -- todayDow says exactly that in its own
+                    comment. So every assignment rendered one day late, and
+                    tapping what looked like Wednesday wrote to Thursday.
+                    The row still READS Monday-first, because that is how a
+                    training week is read, but each cell now carries its
+                    real day_of_week instead of its position in the row.
+
+                    (2) IT COULD NOT ASSIGN. See setDayWorkout above.
+                    Tapping a day now opens a picker containing every saved
+                    workout, rather than toggling between the first one and
+                    Rest. ── */}
                 <div>
-                  <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mb-2">MY WEEK — tap a day to assign</div>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">My week</div>
+                    <div className="text-[10px] text-faint">
+                      {(planner?.schedule || []).filter((x) => x.workout_id).length} training days
+                    </div>
+                  </div>
                   <div className="grid grid-cols-7 gap-1.5">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, dow) => {
-                      const s = (planner?.schedule || []).find((x) => x.day_of_week === dow);
-                      const w = planner?.workouts?.find((x) => x.id === s?.workout_id);
-                      const dayWorkouts = planner?.workouts || [];
-                      const nextId = w ? null : (dayWorkouts.length ? dayWorkouts[(dayWorkouts.findIndex((x) => x.id === s?.workout_id) + 1) % dayWorkouts.length].id : null);
+                    {[{ d: 'Mon', dow: 1 }, { d: 'Tue', dow: 2 }, { d: 'Wed', dow: 3 }, { d: 'Thu', dow: 4 },
+                      { d: 'Fri', dow: 5 }, { d: 'Sat', dow: 6 }, { d: 'Sun', dow: 0 }].map(({ d, dow }) => {
+                      const sch = (planner?.schedule || []).find((x) => x.day_of_week === dow);
+                      const w = planner?.workouts?.find((x) => x.id === sch?.workout_id);
+                      const isToday = dow === todayDow;
                       return (
-                        <button key={dow} onClick={() => dayWorkouts.length && setDayWorkout(dow, nextId)}
-                          className={`rounded-xl border px-1 py-2 text-center transition-all ${w ? 'border-gold/40 bg-gold/10' : 'border-line bg-tint/[.02]'}`}>
+                        <button
+                          key={dow}
+                          onClick={() => setAssignDow(dow)}
+                          aria-label={`${d}: ${w ? w.name : 'rest day'}. Tap to change.`}
+                          className="rounded-xl border px-1 py-2 text-center transition-all"
+                          style={{
+                            minHeight: 56,
+                            borderColor: w ? 'var(--accent)' : 'var(--line)',
+                            background: w ? 'rgb(var(--accent-rgb) / .10)' : 'transparent',
+                            // Today is outlined rather than filled, so "is
+                            // today" and "has a workout" stay separately
+                            // readable instead of one hiding the other.
+                            boxShadow: isToday ? 'inset 0 0 0 1.5px var(--accent)' : 'none',
+                          }}
+                        >
                           <div className="t-micro" style={{ fontSize: '.5rem' }}>{d}</div>
-                          <div className={`text-[9px] font-grotesk font-semibold mt-0.5 leading-tight ${w ? 'text-gold' : 'text-faint'}`}>
+                          <div
+                            className="text-[9px] font-grotesk font-semibold mt-0.5 leading-tight"
+                            style={{ color: w ? 'var(--accent)' : 'var(--faint)' }}
+                          >
                             {w ? w.name.split(' ').slice(0, 2).join(' ') : 'Rest'}
                           </div>
                         </button>
                       );
                     })}
                   </div>
+                  <div className="text-[9.5px] text-faint mt-1.5">Tap any day to assign a workout or make it a rest day.</div>
                 </div>
+
+                {/* ── DAY ASSIGNMENT PICKER ── */}
+                {assignDow != null && (
+                  <div className="rounded-xl border p-3 space-y-1.5" style={{ borderColor: 'var(--accent)', background: 'rgb(var(--accent-rgb) / .06)' }}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] font-grotesk uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignDow]}
+                      </div>
+                      <button className="section-head-action" style={{ color: 'var(--mute)' }} onClick={() => setAssignDow(null)}>Cancel</button>
+                    </div>
+
+                    {(planner?.workouts || []).map((w) => {
+                      const current = (planner?.schedule || []).find((x) => x.day_of_week === assignDow)?.workout_id === w.id;
+                      return (
+                        <button
+                          key={w.id}
+                          className="w-full rounded-lg border px-3 py-2 text-left flex items-center justify-between gap-2"
+                          style={{ minHeight: 44, borderColor: current ? 'var(--accent)' : 'var(--line)', background: 'var(--bg)' }}
+                          onClick={async () => { await setDayWorkout(assignDow, w.id); setAssignDow(null); }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block font-grotesk text-[12.5px] font-semibold truncate">{w.name}</span>
+                            <span className="block text-[10px] text-mute">
+                              {(w.exercises || []).length} exercises · {(w.exercises || []).reduce((a, e) => a + (Number(e.sets) || 0), 0)} sets
+                            </span>
+                          </span>
+                          {current && <span className="text-[10px] font-bold shrink-0" style={{ color: 'var(--accent)' }}>Assigned</span>}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      className="w-full rounded-lg border px-3 py-2 text-left font-grotesk text-[12.5px]"
+                      style={{ minHeight: 44, borderColor: 'var(--line)', background: 'var(--bg)', color: 'var(--mute)' }}
+                      onClick={async () => { await setDayWorkout(assignDow, null); setAssignDow(null); }}
+                    >
+                      Rest day
+                    </button>
+
+                    {!(planner?.workouts || []).length && (
+                      <div className="text-[11px] text-faint py-2">Create a workout first, then you can put it on a day.</div>
+                    )}
+                  </div>
+                )}
 
                 {/* plan form (create / edit) */}
                 {planForm ? (
@@ -1823,35 +1941,90 @@ export default function Workout() {
                   </div>
                 ) : (
                   <>
-                    <button className="btn-primary btn-sm btn-block" onClick={() => {
+                    <button className="btn-primary btn-sm btn-touch btn-block" onClick={() => {
                       if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
                       setPlanForm({ id: null, name: '', exercises: [], search: '' });
                     }}>+ Create new workout</button>
 
-                    {/* my reusable workouts */}
+                    {/* ── MY REUSABLE WORKOUTS ──
+                        Each row used to say only "5 exercises · 15 sets",
+                        which tells you the SIZE of a workout but not what
+                        it is. "Push A" and "Pull A" are indistinguishable
+                        by that line, so choosing between them meant opening
+                        Edit on each in turn. The exercise names are the
+                        thing you actually pick by, so they are on the card.
+
+                        Each row also now shows which days it is on, which
+                        closes the loop with the week grid above: you can
+                        see at a glance that a workout is scheduled twice,
+                        or never. ── */}
                     <div className="space-y-2">
                       {planner?.workouts?.length === 0 && (
                         <div className="card !p-6 text-center">
-
                           <div className="text-xs text-mute">No saved workouts yet — create one, then assign it to your week.</div>
                         </div>
                       )}
-                      {(planner?.workouts || []).map((w) => (
-                        <div key={w.id} className="rounded-xl border border-line bg-tint/[.02] p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="font-grotesk text-[13px] font-semibold truncate">{w.name}</div>
-                              <div className="text-[10px] text-mute">{(w.exercises || []).length} exercises · {((w.exercises || []).reduce((s, e) => s + (e.sets || 0), 0))} sets</div>
+                      {(planner?.workouts || []).map((w) => {
+                        const exs = w.exercises || [];
+                        const sets = exs.reduce((a, e) => a + (Number(e.sets) || 0), 0);
+                        const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                        const onDays = (planner?.schedule || [])
+                          .filter((x) => x.workout_id === w.id)
+                          .map((x) => DAY_ABBR[x.day_of_week])
+                          .filter(Boolean);
+                        return (
+                          <div key={w.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-grotesk text-[13px] font-semibold truncate">{w.name}</div>
+                                <div className="text-[10px] text-mute mt-0.5">
+                                  {exs.length} exercises · {sets} sets
+                                  {onDays.length > 0 && (
+                                    <span style={{ color: 'var(--accent)' }}> · {onDays.join(', ')}</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex gap-1 shrink-0">
-                              <button className="btn btn-sm" onClick={() => { setPlanForm({ id: w.id, name: w.name, exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })), search: '' }); }}>Edit</button>
-                              <button className="btn btn-sm" onClick={() => duplicatePlan(w)}>Copy</button>
-                              <button className="btn btn-sm text-bad" onClick={() => deletePlan(w)}>Del</button>
+
+                            {/* What is actually in it. Truncated at four, with
+                                a count for the rest -- enough to recognise the
+                                session without turning the card into a list. */}
+                            {exs.length > 0 && (
+                              <div className="text-[10.5px] text-faint mt-1.5 leading-snug">
+                                {exs.slice(0, 4).map((e) => e.name).filter(Boolean).join(' · ')}
+                                {exs.length > 4 && ` +${exs.length - 4} more`}
+                              </div>
+                            )}
+
+                            <div className="flex gap-1.5 mt-2.5">
+                              <button
+                                className="btn-primary btn-sm btn-touch flex-1"
+                                onClick={() => startPlanToday(w)}
+                              >
+                                Do today
+                              </button>
+                              <button
+                                className="btn btn-sm btn-touch"
+                                onClick={() => {
+                                  setPlanForm({
+                                    id: w.id,
+                                    name: w.name,
+                                    exercises: exs.map((e) => ({
+                                      exercise_id: e.exercise_id, name: e.name, sets: e.sets,
+                                      reps: e.reps, weight: e.weight, rest_sec: e.rest_sec,
+                                    })),
+                                    search: '',
+                                  });
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button className="btn btn-sm btn-touch" onClick={() => duplicatePlan(w)} aria-label={`Duplicate ${w.name}`}>Copy</button>
+                              <button className="btn btn-sm btn-touch text-bad" onClick={() => deletePlan(w)} aria-label={`Delete ${w.name}`}>Del</button>
                             </div>
                           </div>
-                          <button className="btn btn-sm btn-block mt-2" onClick={() => startPlanToday(w)}><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Do today</button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </>
                 )}

@@ -7,6 +7,7 @@ import { computeAdherence } from '../services/adherence.js';
 import { generateCoachMessage } from '../services/aiCoach.js';
 import { todaySession, getActiveProgram, getProgramDays } from '../services/trainingProgram.js';
 import { track } from '../services/events.js';
+import { getProgressIntel, exerciseHistory } from '../services/progress/progressIntel.js';
 
 export default function trackingRoutes(db) {
   const r = Router();
@@ -78,8 +79,26 @@ export default function trackingRoutes(db) {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
     const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
-    const workouts = await db.q(
-      'SELECT * FROM workouts WHERE client_id = ? ORDER BY scheduled_date DESC LIMIT 20', [client.id]);
+    /* Paginated, because "recent sessions" and "my whole training history"
+       are the same data at different depths, and a hard LIMIT 20 meant the
+       history simply stopped there with no way to reach anything older.
+
+       limit+1 is fetched so `hasMore` reflects the rows that actually
+       exist rather than a second COUNT that could disagree with them.
+       scheduled_date DESC alone is not a total order -- several sessions
+       share a date -- so id breaks the tie and a row can never appear on
+       two pages or be skipped between them. */
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 20, 100));
+    const rawOffset = parseInt(req.query.offset, 10);
+    const offset = Math.max(0, Number.isFinite(rawOffset) ? rawOffset : 0);
+
+    const page = await db.q(
+      `SELECT * FROM workouts WHERE client_id = ?
+        ORDER BY scheduled_date DESC, id DESC
+        LIMIT ? OFFSET ?`, [client.id, limit + 1, offset]);
+    const hasMore = page.length > limit;
+    const workouts = hasMore ? page.slice(0, limit) : page;
     // Batched instead of one exercises query per workout (was up to 21
     // queries for this endpoint; same IN(...) pattern already used above,
     // e.g. /me/schedule).
@@ -96,8 +115,37 @@ export default function trackingRoutes(db) {
       if (!exByWorkout.has(ex.workout_id)) exByWorkout.set(ex.workout_id, []);
       exByWorkout.get(ex.workout_id).push(ex);
     }
-    const withEx = workouts.map((w) => ({ ...w, exercises: exByWorkout.get(w.id) || [] }));
-    res.json({ workouts: withEx });
+    /* Volume and completed-set counts, batched the same way the exercises
+       are. A history row that shows only a name and a date gives a person
+       no reason to tap it; what makes a past session worth revisiting is
+       how much work it actually was. One query for the page, not one per
+       workout. */
+    const volRows = wIds.length
+      ? await db.q(
+        `SELECT wl.workout_id,
+                COUNT(*) AS sets,
+                COALESCE(SUM(CASE WHEN esl.actual_reps > 0 AND esl.actual_weight >= 0
+                                  THEN esl.actual_reps * esl.actual_weight ELSE 0 END), 0) AS volume
+           FROM exercise_set_logs esl
+           JOIN workout_logs wl ON wl.id = esl.workout_log_id
+          WHERE wl.workout_id IN (${wIds.map(() => '?').join(',')}) AND esl.completed = 1
+          GROUP BY wl.workout_id`, wIds)
+      : [];
+    // Postgres returns COUNT/SUM as strings; a raw value here would reach
+    // the UI as "0" and sort/format as text.
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const volByWorkout = new Map(volRows.map((r) => [r.workout_id, r]));
+
+    const withEx = workouts.map((w) => {
+      const v = volByWorkout.get(w.id);
+      return {
+        ...w,
+        exercises: exByWorkout.get(w.id) || [],
+        completed_sets: Math.round(num(v?.sets)),
+        volume_kg: Math.round(num(v?.volume)),
+      };
+    });
+    res.json({ workouts: withEx, hasMore, limit, offset });
   });
 
   // ---- daily history detail for a specific date ----
@@ -213,6 +261,29 @@ export default function trackingRoutes(db) {
       db.q('SELECT * FROM supplements WHERE client_id = ? AND active = 1', [client.id])
     ]);
     res.json({ weights, adherence: adherence.reverse(), measurements, photos, supplements });
+  });
+
+  // ---- Progress intelligence (Progress 2.0) ----
+  // ONE round trip for the whole Progress screen: capabilities, weight,
+  // training, nutrition, PRs, health summaries and ranked insights. The
+  // trend/insight maths lives in services/progress/* so it has a single
+  // implementation rather than being re-derived in the client.
+  r.get('/me/progress/intel', async (req, res) => {
+    if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
+    const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.status(404).json({ error: 'Client profile not found' });
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 90, 7), 730);
+    const intel = await getProgressIntel(db, { userId: req.user.sub, clientId: client.id, days });
+    res.json(intel);
+  });
+
+  // ---- one exercise's full logged history (PR progression chart) ----
+  r.get('/me/progress/exercise/:exerciseId', async (req, res) => {
+    if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
+    const client = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.status(404).json({ error: 'Client profile not found' });
+    const history = await exerciseHistory(db, { clientId: client.id, exerciseId: req.params.exerciseId });
+    res.json({ history });
   });
 
   // ---- client home bundle (client portal) ----

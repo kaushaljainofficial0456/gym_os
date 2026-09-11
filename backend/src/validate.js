@@ -478,7 +478,12 @@ export const schemas = {
       reps: z.union([z.number(), z.string()]).optional(),
       weight: z.union([z.number(), z.string()]).optional(),
       rest_sec: z.union([z.number(), z.string()]).optional()
-    })).min(1).max(20)
+    })).min(1).max(20),
+    // Retroactive logging: when the session actually happened. Absent means
+    // today, which is every pre-existing caller's behaviour unchanged.
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    started_at: z.string().datetime().optional(),
+    source: z.string().max(30).optional()
   }),
   plannerWorkoutCreate: z.object({
     name: z.string().min(1).max(80),

@@ -21,20 +21,128 @@ import { rateLimit } from '../rateLimit.js';
 import { getProvider, listProviders } from '../services/health/providers/registry.js';
 import { ProviderNotConfiguredError, RequiresNativeAppError } from '../services/health/providers/baseProvider.js';
 import { upsertHealthRecord } from '../services/health/dedup.js';
-import { reconcileUserDay, getDailyIntelligence } from '../services/health/dailyIntelligence.js';
+import { reconcileUserDay, getDailyIntelligence, getBurnBreakdown } from '../services/health/dailyIntelligence.js';
 
-/** Syncs ONE provider connection: fetch incremental records, upsert them
- *  (idempotent -- see dedup.js, so a redundant call from a duplicate
- *  webhook delivery is harmless), and update the connection's own sync
- *  state. Shared by POST /sync (loops over every connection for the
- *  calling user) and the webhook handler below (exactly one connection,
- *  pushed by the provider itself) -- same sync logic either way, only
- *  who triggers it differs. Never throws -- a webhook delivery needs to
- *  ack fast regardless of whether the provider-side fetch itself failed. */
+// Refresh a token this many ms BEFORE it actually expires, so a sync
+// that takes a few seconds can't have the token die mid-flight.
+const TOKEN_REFRESH_SKEW_MS = 120_000;
+
+/** Thrown when the refresh GRANT itself is dead (revoked at the provider,
+ *  or a rotated refresh token was lost). Distinct from a transient sync
+ *  failure: no amount of retrying fixes it -- only the user reconnecting. */
+class ReconnectRequiredError extends Error {
+  constructor(provider) {
+    super('This connection expired. Reconnect to resume syncing.');
+    this.code = 'reconnect_required';
+    this.provider = provider;
+  }
+}
+
+/** Returns a connection whose access token is valid RIGHT NOW, refreshing
+ *  it first if it has expired (or is about to).
+ *
+ *  Caught live: provider.refreshAccessToken existed in every OAuth
+ *  provider adapter but nothing ever called it -- syncOneConnection used
+ *  conn.access_token raw. WHOOP access tokens last ~1 hour, so every
+ *  connection worked for an hour and then failed every subsequent sync
+ *  with "sync failed" forever, with no way to recover short of
+ *  disconnecting and reconnecting by hand. This is the third instance of
+ *  the same class of bug in this feature (see whoopProvider.js's
+ *  incrementalSync and normalizeRecovery/normalizeSleep): written,
+ *  correct, and never wired up.
+ *
+ *  `force` skips the expiry check -- used when a sync gets a 401 despite
+ *  a token_expires_at that claims it is still valid (clock skew, a
+ *  provider-side revocation, or a connection created before this existed
+ *  and therefore carrying no expiry at all).
+ *
+ *  Persists the ROTATED refresh token, not just the new access token --
+ *  WHOOP invalidates the old refresh token on every refresh, so dropping
+ *  the new one bricks the connection on the NEXT refresh instead of this
+ *  one (see whoopProvider.js's refreshAccessToken). */
+async function ensureFreshToken(db, provider, conn, { force = false } = {}) {
+  if (!provider.refreshAccessToken) return conn;
+  if (!conn.refresh_token) {
+    // No refresh token was ever stored (a connection made before the
+    // 'offline' scope was requested, or a provider that issues none). The
+    // access token cannot be renewed, so once it is rejected the only
+    // real fix is reconnecting -- say that, rather than surfacing a bare
+    // 401 the user cannot act on. Only escalates on `force`, i.e. after a
+    // request has actually been rejected: an unexpired token still works.
+    if (!force) return conn;
+    await db.run(
+      'UPDATE health_provider_connections SET status = ?, sync_status = ?, sync_error = ?, updated_at = ? WHERE id = ?',
+      ['revoked', 'error', 'Connection expired — reconnect to resume syncing', now(), conn.id]);
+    throw new ReconnectRequiredError(conn.provider);
+  }
+  if (!force) {
+    const expiresAt = conn.token_expires_at ? Date.parse(conn.token_expires_at) : NaN;
+    // No/unparseable expiry -> fall through and refresh, rather than
+    // optimistically using a token whose validity we cannot reason about.
+    if (Number.isFinite(expiresAt) && expiresAt - Date.now() > TOKEN_REFRESH_SKEW_MS) return conn;
+  }
+  let tokens;
+  try {
+    tokens = await provider.refreshAccessToken(conn.refresh_token);
+  } catch (e) {
+    // The grant is gone -- surface it as "reconnect", never as a generic
+    // sync failure the user can only stare at.
+    console.error(`[health] ${conn.provider} token refresh failed:`, e.message || e);
+    await db.run(
+      'UPDATE health_provider_connections SET status = ?, sync_status = ?, sync_error = ?, updated_at = ? WHERE id = ?',
+      ['revoked', 'error', 'Connection expired — reconnect to resume syncing', now(), conn.id]);
+    throw new ReconnectRequiredError(conn.provider);
+  }
+  const accessToken = tokens.accessToken ?? null;
+  const refreshToken = tokens.refreshToken ?? conn.refresh_token;
+  const tokenExpiresAt = tokens.expiresAt ?? null;
+  await db.run(
+    'UPDATE health_provider_connections SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE id = ?',
+    [accessToken, refreshToken, tokenExpiresAt, now(), conn.id]);
+  return { ...conn, access_token: accessToken, refresh_token: refreshToken, token_expires_at: tokenExpiresAt };
+}
+
+/** Our provider adapters format transport failures as
+ *  `<Provider> sync failed (<path>): <status>` -- match the status as a
+ *  whole token so a 401 appearing inside a longer number cannot
+ *  masquerade as an auth failure. */
+function isAuthFailure(err) {
+  const re = new RegExp('(?:^|[^0-9])(401|403)(?:[^0-9]|$)');
+  return re.test(String((err && err.message) || ''));
+}
+
+/** Syncs ONE provider connection: refresh the access token if needed,
+ *  fetch incremental records, upsert them (idempotent -- see dedup.js, so
+ *  a redundant call from a duplicate webhook delivery is harmless), and
+ *  update the connection's own sync state. Shared by POST /sync (loops
+ *  over every connection for the calling user) and the webhook handler
+ *  below (exactly one connection, pushed by the provider itself) -- same
+ *  sync logic either way, only who triggers it differs. Never throws -- a
+ *  webhook delivery needs to ack fast regardless of whether the
+ *  provider-side fetch itself failed. */
+/** Where a sync starts reading from: the last successful sync, or -- on a
+ *  first sync -- far enough back to actually populate the user's history
+ *  rather than just the provider's default page. */
+function syncSince(conn) {
+  if (conn.last_synced_at) return conn.last_synced_at;
+  return new Date(Date.now() - INITIAL_BACKFILL_DAYS * 86400000).toISOString();
+}
+
 async function syncOneConnection(db, provider, conn) {
   await db.run('UPDATE health_provider_connections SET sync_status = ?, updated_at = ? WHERE id = ?', ['syncing', now(), conn.id]);
   try {
-    const { records, nextCursor } = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: conn.last_synced_at });
+    conn = await ensureFreshToken(db, provider, conn);
+    let result;
+    try {
+      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: syncSince(conn) });
+    } catch (e) {
+      // A 401 despite a token we believed was valid: force one refresh and
+      // retry exactly once. Anything else (or a second failure) propagates.
+      if (!isAuthFailure(e)) throw e;
+      conn = await ensureFreshToken(db, provider, conn, { force: true });
+      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: syncSince(conn) });
+    }
+    const { records, nextCursor } = result;
     let inserted = 0;
     for (const rec of records) {
       const { inserted: wasInserted } = await upsertHealthRecord(db, { userId: conn.user_id, orgId: conn.org_id, connectionId: conn.id }, rec);
@@ -44,9 +152,93 @@ async function syncOneConnection(db, provider, conn) {
       ['idle', nextCursor, now(), now(), conn.id]);
     return { provider: conn.provider, ok: true, recordsSynced: records.length, recordsInserted: inserted };
   } catch (e) {
+    // ensureFreshToken already wrote status='revoked' + its own message for
+    // this case -- don't overwrite it with a generic sync error.
+    if (e instanceof ReconnectRequiredError) {
+      return { provider: conn.provider, ok: false, error: e.message, code: e.code, reconnectRequired: true };
+    }
     await db.run('UPDATE health_provider_connections SET sync_status = ?, sync_error = ?, updated_at = ? WHERE id = ?', ['error', e.message, now(), conn.id]);
     return { provider: conn.provider, ok: false, error: e.message };
   }
+}
+
+// How stale a connection may be before simply OPENING the app refreshes it.
+// 15 minutes is short enough that a workout finished before you put the
+// phone down is there when you look, and long enough that flicking between
+// tabs does not hammer the provider.
+const AUTO_SYNC_STALE_MS = 15 * 60 * 1000;
+
+// How far back the FIRST sync reaches. Without this, `since` is null on a
+// first sync, providers return only their default page (WHOOP: 10
+// records), and a user who connects today finds every previous day empty
+// -- their history exists on the provider's side and was simply never
+// asked for. 90 days matches the longest window Progress can display.
+const INITIAL_BACKFILL_DAYS = 90;
+
+/**
+ * Syncs any connected provider that has gone stale, triggered by a normal
+ * read rather than by the user pressing anything.
+ *
+ * WHY THIS EXISTS ALONGSIDE THE WEBHOOK: the webhook is the fast path, but
+ * it only fires once the user has registered a webhook URL in the
+ * provider's own dashboard, and it can silently stop (revoked app, changed
+ * URL, provider outage) with no signal on our side. Relying on it alone is
+ * what left the app needing a manual 'Sync now' tap to show anything.
+ * This is the floor: worst case the data is AUTO_SYNC_STALE_MS old, with
+ * no configuration required at all.
+ *
+ * Never throws and never blocks the response on a provider failure -- a
+ * wearable being unreachable must not stop the page rendering the data
+ * already stored.
+ */
+async function autoSyncStaleConnections(db, { userId }) {
+  try {
+    const connections = await db.q(
+      'SELECT * FROM health_provider_connections WHERE user_id = ? AND status = ?', [userId, 'connected']);
+    const now = Date.now();
+    const stale = connections.filter((c) => {
+      if (c.sync_status === 'syncing') return false;       // one already in flight
+      if (!c.last_synced_at) return true;                  // never synced
+      const last = Date.parse(c.last_synced_at);
+      return !Number.isFinite(last) || now - last > AUTO_SYNC_STALE_MS;
+    });
+    if (!stale.length) return [];
+    const results = [];
+    for (const conn of stale) {
+      let provider;
+      try { provider = getProvider(conn.provider); } catch { continue; }
+      results.push(await syncOneConnection(db, provider, conn));
+    }
+    return results;
+  } catch (e) {
+    console.error('[health] auto-sync failed:', e.message || e);
+    return [];
+  }
+}
+
+/**
+ * Has wearable data for `date` arrived SINCE that day was last reconciled?
+ *
+ * Caught live: connect a wearable today and yesterday's burn screen still
+ * shows SK OS figures only. Yesterday was reconciled before the wearable
+ * existed, the cached summary was therefore complete and correct AT THE
+ * TIME, and every later read served it -- so a workout WHOOP delivered
+ * afterwards for that day never appeared. Reconciliation only ever ran
+ * when a day had NO summary at all, which is the one case this isn't.
+ *
+ * Compares the newest health_record touching the day against when the
+ * summary was computed. Cheap (one indexed max) and precise: it triggers
+ * a recompute exactly when new evidence exists and never otherwise.
+ */
+async function hasNewerHealthData(db, { userId, date, computedAt }) {
+  if (!computedAt) return true;
+  const row = await db.q1(
+    `SELECT MAX(synced_at) AS newest FROM health_records
+      WHERE user_id = ? AND deleted_at IS NULL
+        AND start_time >= ? AND start_time < ?`,
+    [userId, `${date}T00:00:00Z`, `${date}T23:59:59Z`]);
+  if (!row?.newest) return false;
+  return Date.parse(row.newest) > Date.parse(computedAt);
 }
 
 export default function healthRoutes(db) {
@@ -271,11 +463,24 @@ export default function healthRoutes(db) {
     const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
-    if (!forceRefresh) {
+
+    // Opening the app IS the sync trigger. Anything new on the provider's
+    // side lands before the day is reconciled below, so the figures the
+    // user sees already include it -- no 'Sync now' tap required.
+    const autoSynced = await autoSyncStaleConnections(db, { userId: req.user.sub });
+    const gotNewData = autoSynced.some((r) => r.ok && r.recordsInserted > 0);
+    if (!forceRefresh && !gotNewData) {
       const cached = await getDailyIntelligence(db, { userId: req.user.sub, date });
-      if (cached) return res.json({ intelligence: cached, cached: true });
+      // Same staleness rule as the burn breakdown: a cached day whose
+      // wearable data arrived later is not actually up to date.
+      if (cached && !(await hasNewerHealthData(db, { userId: req.user.sub, date, computedAt: cached.computed_at }))) {
+        return res.json({ intelligence: cached, cached: true });
+      }
     }
-    const summary = await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date });
+    // Without tz, reconciliation buckets the day in the SERVER's default
+    // timezone, which is a different day's worth of records for a user in
+    // another one -- same class of bug as the UTC-bounds query below.
+    const summary = await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date, tz: req.tz || DEFAULT_TZ });
     res.json({ intelligence: summary, cached: false });
   });
 
@@ -283,10 +488,45 @@ export default function healthRoutes(db) {
   r.get('/workouts', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
+    // Wide UTC window + exact local-day filter -- the naive
+    // `date+T00:00Z .. date+T23:59Z` form this used to have silently drops
+    // evening sessions for any user east of UTC (see getBurnBreakdown's
+    // own comment, where the same defect was caught live).
+    const tz = req.tz || DEFAULT_TZ;
+    const wideStart = new Date(Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000).toISOString();
+    const wideEnd = new Date(Date.parse(`${date}T00:00:00Z`) + 48 * 3600 * 1000).toISOString();
     const rows = await db.q(
-      `SELECT * FROM health_canonical_workouts WHERE user_id = ? AND start_time >= ? AND start_time < ? ORDER BY start_time`,
-      [req.user.sub, `${date}T00:00:00Z`, `${date}T23:59:59Z`]);
-    res.json({ workouts: rows });
+      `SELECT * FROM health_canonical_workouts WHERE user_id = ? AND start_time >= ? AND start_time <= ? ORDER BY start_time`,
+      [req.user.sub, wideStart, wideEnd]);
+    res.json({ workouts: rows.filter((w) => dayKey(new Date(w.start_time), tz) === date) });
+  });
+
+  // ---- GET /health/burn-breakdown?date=YYYY-MM-DD -- the itemized day ----
+  // Powers the burn-detail screen: total burn split into resting (BMR),
+  // each workout with its real timestamps and winning source, and
+  // everyday movement from steps. Reads only already-reconciled rows;
+  // reconciliation itself happens on /daily-intelligence, so opening this
+  // screen never triggers a recompute.
+  r.get('/burn-breakdown', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    const tz = req.tz || DEFAULT_TZ;
+    // Syncing first means a day opened right after connecting a wearable
+    // already has that wearable's records to reconcile against.
+    await autoSyncStaleConnections(db, { userId: req.user.sub });
+
+    let breakdown = await getBurnBreakdown(db, { userId: req.user.sub, date });
+    // Recompute when there is no summary at all, OR when wearable data for
+    // this day landed after the summary was built (see hasNewerHealthData).
+    const stale = breakdown
+      ? await hasNewerHealthData(db, { userId: req.user.sub, date, computedAt: breakdown.computed_at })
+      : true;
+    if (stale) {
+      await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date, tz });
+      breakdown = await getBurnBreakdown(db, { userId: req.user.sub, date });
+    }
+    res.json({ breakdown });
   });
 
   // ---- GET /health/trends?days=7 -- Progress screen (spec §82) ----

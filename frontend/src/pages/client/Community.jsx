@@ -1,542 +1,583 @@
 /**
- * GYM COMMUNITY — leaderboards, activity feed, workout sharing
- * Opt-in participation. Org-scoped. Privacy-first (default OFF).
+ * SK OS COMMUNITY
+ *
+ * Not a leaderboard page. This screen answers three questions in order:
+ * what is happening here, where do I stand, and who am I training with.
+ * Progress already answers "how am I doing" -- keeping those separate is
+ * why this page leads with the gym and not with the member.
+ *
+ * WHAT THIS PAGE WILL NOT DO
+ *
+ *  - It will not invent activity. Every number and every row comes from
+ *    the API; a quiet gym renders as a quiet gym with honest empty states.
+ *  - It will not show a section it has no data for. Sections return null
+ *    rather than rendering a card full of dashes, so the page is short
+ *    when the community is small and grows as the community does.
+ *  - It will not rank anyone publicly by how little they did. The board
+ *    shows the top and then the viewer's own row; there is no descending
+ *    tail of least-active members.
+ *  - It will not expose anything a member did not opt into. Membership is
+ *    enforced server-side; this file never assumes it.
  */
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { ErrorState, Avatar, Empty, Toast, Skeleton, XIcon, PageSkeleton } from '../../components/UI.jsx';
-import Icon from '../../components/Icon.jsx';
+import { ErrorState, Toast, PageSkeleton, Avatar } from '../../components/UI.jsx';
+import {
+  CommunityPulse, YourPosition, ConsistencyRing, ActivityChart,
+  ChallengeCard, StreakBoard, WeeklyRecap, YouVsYou, CommunityMoment,
+  SectionTitle, fmt,
+} from '../../components/community/CommunityPieces.jsx';
+import Leaderboard from '../../components/community/Leaderboard.jsx';
+import CommunityFeed, { mergeFeed, CommentsSheet } from '../../components/community/CommunityFeed.jsx';
+import ShareWorkoutSheet from '../../components/community/ShareWorkoutSheet.jsx';
+import CommunityMembers, { MemberSheet } from '../../components/community/CommunityMembers.jsx';
 
-// Page size for the activity feed. The API caps limit at 100 and defaults to
-// 30; 10 keeps the first paint small on a phone, where this page lives.
-const FEED_PAGE_SIZE = 10;
-
-const MEDAL = ['🥇', '🥈', '🥉'];
-const MEDAL_TONE = ['var(--gold, #C4A06A)', '#C0C0C0', '#CD7F32'];
+const FEED_PAGE = 10;
+// The weekly target the consistency ring measures against. Stated as a
+// constant rather than implied: the ring must never suggest a member
+// "should" be training 7 days a week.
+const WEEKLY_TARGET = 4;
 
 export default function Community() {
   const nav = useNavigate();
-  const membershipFetch = useFetch(() => api('/community/membership'));
   const [period, setPeriod] = useState('week');
-
-  /* Both of these are gated on membership.
-     They used to fire unconditionally on mount, in parallel with the
-     membership check — so every visit by a client who has NOT joined the
-     community made two requests the server correctly answered 403, on a
-     page that then rendered the join prompt and never used either result.
-     Two wasted round trips per visit, and a console full of red for anyone
-     debugging something else on this screen.
-     `Promise.resolve(null)` rather than a conditional hook, matching the
-     pattern Dashboard.jsx already uses for its trainer/owner split — hooks
-     cannot be called conditionally, but the work inside them can be. */
-  const joined = !!membershipFetch.data?.membership?.enabled;
-  const lbFetch = useFetch(
-    () => (joined ? api(`/community/leaderboards?period=${period}`) : Promise.resolve(null)),
-    [period, joined]
-  );
-  // Page 1 stays on useFetch so it keeps the shared loading/error/Retry
-  // semantics, and so the reload() calls after share/unshare/copy below
-  // reset pagination for free. Later pages are appended separately.
-  const feedFetch = useFetch(
-    () => (joined ? api(`/community/feed?limit=${FEED_PAGE_SIZE}&offset=0`) : Promise.resolve(null)),
-    [joined]
-  );
-  const [extraShares, setExtraShares] = useState([]);
-  const [moreLoading, setMoreLoading] = useState(false);
-  const [moreError, setMoreError] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
-  // Bumped whenever page 1 is refetched. A "load more" that was already in
-  // flight compares this before committing, so a slow older response can
-  // never append onto a newer feed (or resurrect a share that was just
-  // unshared).
-  const feedSeq = useRef(0);
+  const [metric, setMetric] = useState('completedWorkouts');
+  const [tab, setTab] = useState('community');
   const [toast, setToast] = useState('');
-  const toastTimer = useRef(null);
-  const showToast = (msg) => {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(''), 3000);
-  };
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const [filter, setFilter] = useState('all');
+  const [commentTarget, setCommentTarget] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [memberSheet, setMemberSheet] = useState(null);
+  // Whose activity the viewer wants. Persisted server-side so the
+  // choice follows them between devices rather than resetting.
+  const [scope, setScope] = useState('all');
+  const [prVisibility, setPrVisibility] = useState('everyone');
+  const [followingCount, setFollowingCount] = useState(0);
 
-  // These two live up here with the other hooks, ABOVE the early returns
-  // further down (loading / community-disabled / not-a-member all return
-  // before the member view). A hook placed after a conditional return is only
-  // called on some renders, which React rejects with "Rendered more hooks
-  // than during the previous render" -- it crashed the whole page into the
-  // error boundary until they were moved here.
-  //
-  // A fresh page 1 (initial load, Retry, or reload() after share/unshare/copy)
-  // discards every appended page and invalidates in-flight ones.
+  const membershipFetch = useFetch(() => api('/community/membership'));
+  const joined = !!membershipFetch.data?.membership?.enabled;
+  const available = membershipFetch.data?.available !== false;
+
+  // Every community request is gated on membership, so a client who has
+  // not joined does not fire a burst of requests the server will
+  // correctly refuse.
+  const overviewFetch = useFetch(
+    () => (joined ? api(`/community/overview?period=${period}`) : Promise.resolve(null)),
+    [joined, period]);
+  const boardsFetch = useFetch(
+    () => (joined ? api(`/community/leaderboards?period=${period}`) : Promise.resolve(null)),
+    [joined, period]);
+  const challengesFetch = useFetch(
+    () => (joined ? api('/community/challenges') : Promise.resolve(null)),
+    [joined]);
+
+  const [shares, setShares] = useState([]);
+  const [feedOffset, setFeedOffset] = useState(0);
+  const [feedHasMore, setFeedHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [social, setSocial] = useState({});
+
+  const overview = overviewFetch.data;
+
+  // The server is the source of truth for both preferences; the overview
+  // already carries them, so there is no extra round trip on load.
   useEffect(() => {
-    feedSeq.current += 1;
-    setExtraShares([]);
-    setMoreError(null);
-    setMoreLoading(false);
-    setHasMore(!!feedFetch.data?.hasMore);
-  }, [feedFetch.data]);
+    const prefs = overview?.preferences;
+    if (!prefs) return;
+    setScope(prefs.feedScope || 'all');
+    setPrVisibility(prefs.prVisibility || 'everyone');
+  }, [overview?.preferences?.feedScope, overview?.preferences?.prVisibility]);
 
-  // Deduplicated by id: offset paging can still repeat a row if a share is
-  // deleted between two page requests and shifts everything down one slot.
-  const shares = useMemo(() => {
-    const page1 = feedFetch.data?.shares || [];
-    const seen = new Set(page1.map((s) => s.id));
-    const rest = [];
-    for (const s of extraShares) {
-      if (!seen.has(s.id)) { seen.add(s.id); rest.push(s); }
-    }
-    return page1.concat(rest);
-  }, [feedFetch.data, extraShares]);
-  const [sharing, setSharing] = useState(null); // workout_id being shared
-  const [copyModal, setCopyModal] = useState(null); // share object
-  const [copyForm, setCopyForm] = useState({ name: '', exercises: [] });
-  const [copying, setCopying] = useState(false);
-
-  const membership = membershipFetch.data?.membership;
-  const settings = membershipFetch.data?.settings;
-  const gym = membershipFetch.data?.gym;
-  const isMember = !!membership?.enabled;
-  const communityEnabled = settings?.community_enabled !== false;
-
-  const toggleMembership = async () => {
+  const loadFollows = useCallback(async () => {
     try {
-      const res = await api('/community/membership', {
-        method: 'PUT',
-        body: JSON.stringify({ enabled: !isMember }),
-      });
-      // silent: true -- this page gates its whole render on
-      // `membershipFetch.loading` (below); a bare reload() would unmount
-      // everything for the duration of the refetch, same class of bug
-      // already fixed for Nutrition.jsx (see useFetch's own comment).
-      membershipFetch.reload({ silent: true });
-      lbFetch.reload({ silent: true });
-      feedFetch.reload({ silent: true });
-      showToast(isMember ? 'Left community' : 'Welcome to the community!');
-    } catch (e) {
-      showToast(e.message || 'Could not update membership');
-    }
-  };
+      const f = await api('/community/follows');
+      setFollowingCount(f.followingCount || 0);
+    } catch { /* the count is decoration; the feed still works without it */ }
+  }, []);
+  useEffect(() => { if (joined) loadFollows(); }, [joined, loadFollows]);
+  /* Who the viewer IS. This was gated on `overview.position` being
+     truthy, so until the overview resolved `you` was null -- and for that
+     window every card in the feed rendered as somebody else's: no "You"
+     label, and a Copy button offered on your own posts. Identity comes
+     from the membership record, which is loaded first and has nothing to
+     do with whether you happen to be ranked this week. */
+  const you = membershipFetch.data?.membership?.client_id || null;
+  // PRs come from the overview, which is computed against the SAVED
+  // scope. A local scope change refetches it so records and shares are
+  // filtered by the same rule at the same moment.
+  const prs = overview?.recentPRs || [];
 
-  const shareWorkout = async (workoutId) => {
-    setSharing(workoutId);
+  /* ---------- feed ---------- */
+
+  const loadShares = useCallback(async (offset) => {
+    const res = await api(`/community/feed?limit=${FEED_PAGE}&offset=${offset}&scope=${scope}`);
+    return res;
+  }, [scope]);
+
+  useEffect(() => {
+    if (!joined) return;
+    let alive = true;
+    loadShares(0).then((res) => {
+      if (!alive) return;
+      setShares(res.shares || []);
+      setFeedHasMore(!!res.hasMore);
+      setFeedOffset(res.shares?.length || 0);
+    }).catch(() => { /* the feed section renders its own empty state */ });
+    return () => { alive = false; };
+  }, [joined, loadShares]);
+
+  const items = useMemo(() => {
+    const merged = mergeFeed(shares, prs);
+    if (filter === 'all') return merged;
+    return merged.filter((i) => i.kind === filter);
+  }, [shares, prs, filter]);
+
+  /* Reaction and comment counts for the WHOLE visible page in one
+     request -- one call per card would grow with the feed and only start
+     hurting once a gym is actually busy. */
+  const refreshSocial = useCallback(async (list) => {
+    const targets = list.map((i) => ({ type: i.targetType, id: i.id }));
+    if (!targets.length) { setSocial({}); return; }
     try {
-      await api('/community/shares', {
+      const res = await api('/community/social', {
         method: 'POST',
-        body: JSON.stringify({ workout_id: workoutId }),
+        body: JSON.stringify({ targets: targets.slice(0, 100) }),
       });
-      showToast('Workout shared with your gym!');
-      feedFetch.reload({ silent: true });
-    } catch (e) {
-      showToast(e.message || 'Could not share workout');
-    }
-    setSharing(null);
-  };
+      setSocial(res.social || {});
+    } catch { /* counts are additive detail; the feed still reads without them */ }
+  }, []);
 
-  const unshare = async (shareId) => {
-    try {
-      await api(`/community/shares/${shareId}`, { method: 'DELETE' });
-      showToast('Share removed');
-      feedFetch.reload({ silent: true });
-    } catch (e) {
-      showToast(e.message || 'Could not remove share');
-    }
-  };
-
-  const openCopy = (share) => {
-    setCopyModal(share);
-    setCopyForm({
-      name: share.workoutName,
-      exercises: (share.payload || []).map(e => ({
-        ...e,
-        exercise_id: e.exercise_id || null,
-      })),
-    });
-  };
-
-  const doCopy = async () => {
-    if (!copyModal) return;
-    setCopying(true);
-    try {
-      const res = await api(`/community/shares/${copyModal.id}/copy`, {
-        method: 'POST',
-        body: JSON.stringify({ name: copyForm.name, exercises: copyForm.exercises }),
-      });
-      showToast('Workout added to your library!');
-      setCopyModal(null);
-    } catch (e) {
-      showToast(e.message || 'Could not copy workout');
-    }
-    setCopying(false);
-  };
-
-  if (membershipFetch.loading) return <PageSkeleton variant="split" label="Loading community" />;
-  if (membershipFetch.error) return <ErrorState error={membershipFetch.error} onRetry={membershipFetch.reload} />;
-
-  // Community not enabled by gym
-  if (!communityEnabled) {
-    return (
-      <div className="space-y-4 pb-28">
-        <div className="card p-8 text-center">
-          <Icon name="lock" size={40} className="mx-auto mb-3" style={{ color: 'var(--faint)' }} />
-          <h2 className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>Community not available</h2>
-          <p className="text-sm mt-2" style={{ color: 'var(--mute)' }}>
-            Your gym hasn't enabled the community feature yet.
-          </p>
-        </div>
-        {toast && <Toast message={toast} />}
-      </div>
-    );
-  }
-
-  // Not a member yet — show join prompt
-  if (!isMember) {
-    return (
-      <div className="space-y-4 pb-28">
-        <div className="card p-8 text-center">
-          <div className="w-14 h-14 mx-auto rounded-2xl border grid place-items-center mb-4"
-               style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
-            <Icon name="trending" size={28} style={{ color: 'var(--accent)' }} />
-          </div>
-          <h2 className="font-grotesk font-bold text-xl" style={{ color: 'var(--ink)' }}>
-            Join {gym?.name || 'your gym'}'s community
-          </h2>
-          <p className="text-sm mt-2 max-w-xs mx-auto" style={{ color: 'var(--mute)' }}>
-            See leaderboards, compare progress, and share workouts with your gym friends.
-            You control what's visible — participation is always optional.
-          </p>
-          <div className="mt-6 space-y-3">
-            <button className="btn-primary btn-lg btn-block" onClick={toggleMembership}>
-              Join Community
-            </button>
-            <button className="btn w-full" onClick={() => nav(-1)}>Maybe later</button>
-          </div>
-        </div>
-        {toast && <Toast message={toast} />}
-      </div>
-    );
-  }
-
-  // ---- Member view ----
-  const lb = lbFetch.data?.leaderboards || { streak: [], volume: [], completedWorkouts: [] };
+  useEffect(() => {
+    if (!joined || !items.length) return;
+    refreshSocial(items);
+  }, [joined, items, refreshSocial]);
 
   const loadMore = async () => {
-    if (moreLoading || !hasMore) return;   // no double-fire, no request past the end
-    const seq = feedSeq.current;
-    setMoreLoading(true);
-    setMoreError(null);
+    setLoadingMore(true);
     try {
-      const res = await api(`/community/feed?limit=${FEED_PAGE_SIZE}&offset=${shares.length}`);
-      if (seq !== feedSeq.current) return; // page 1 reloaded underneath us — drop it
-      setExtraShares((prev) => prev.concat(res.shares || []));
-      setHasMore(!!res.hasMore);
+      const res = await loadShares(feedOffset);
+      // Guard against a duplicate arriving if something was inserted
+      // between pages -- offset pagination can otherwise repeat a row.
+      setShares((prev) => {
+        const seen = new Set(prev.map((s) => s.id));
+        return [...prev, ...(res.shares || []).filter((s) => !seen.has(s.id))];
+      });
+      setFeedHasMore(!!res.hasMore);
+      setFeedOffset((o) => o + (res.shares?.length || 0));
     } catch (e) {
-      if (seq !== feedSeq.current) return;
-      setMoreError(e);
-    } finally {
-      if (seq === feedSeq.current) setMoreLoading(false);
+      setToast(e.message || 'Could not load more');
+    }
+    setLoadingMore(false);
+  };
+
+  /* ---------- reactions ---------- */
+
+  const react = async (targetType, targetId, emoji) => {
+    const key = `${targetType}:${targetId}`;
+    const before = social[key] || { counts: {}, mine: [], total: 0, comments: 0 };
+    const had = before.mine.includes(emoji);
+    // Optimistic: a reaction should feel instant. Reverted below if the
+    // server disagrees.
+    setSocial((s) => ({
+      ...s,
+      [key]: {
+        ...before,
+        mine: had ? before.mine.filter((m) => m !== emoji) : [...before.mine, emoji],
+        counts: { ...before.counts, [emoji]: Math.max(0, (before.counts[emoji] || 0) + (had ? -1 : 1)) },
+      },
+    }));
+    try {
+      await api('/community/reactions', {
+        method: 'POST',
+        body: JSON.stringify({ target_type: targetType, target_id: targetId, emoji }),
+      });
+    } catch (e) {
+      setSocial((s) => ({ ...s, [key]: before }));
+      setToast(e.message || 'Could not save that reaction');
     }
   };
-  const periods = [
-    { value: 'day', label: 'Today' },
-    { value: 'week', label: 'This Week' },
-    { value: 'month', label: 'This Month' },
-  ];
 
-  return (
-    <div className="space-y-5 pb-28">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-grotesk font-bold text-xl" style={{ color: 'var(--ink)' }}>
-            {gym?.name || 'Community'}
-          </h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--mute)' }}>
-            Member leaderboards &amp; workout sharing
-          </p>
-        </div>
-        <button className="btn btn-sm" onClick={toggleMembership}>Leave</button>
-      </div>
+  /* ---------- share / copy ----------
+     These three actions existed before this redesign and are carried
+     forward deliberately: sharing is the only route into the feed, and
+     copying is what makes another member's session useful to you rather
+     than just visible. */
 
-      {/* Period tabs */}
-      <div className="flex gap-1.5 border rounded-full p-1 overflow-x-auto"
-           style={{ background: 'rgba(128,128,128,.06)', borderColor: 'var(--line)' }}>
-        {periods.map(p => (
-          <button key={p.value}
-            className={`flex-1 text-center py-2 px-3 rounded-full text-xs font-grotesk font-semibold transition-all
-              ${period === p.value
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--mute)] hover:text-[var(--ink)]'}`}
-            onClick={() => setPeriod(p.value)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+  const reloadFeed = useCallback(async () => {
+    try {
+      const res = await loadShares(0);
+      setShares(res.shares || []);
+      setFeedHasMore(!!res.hasMore);
+      setFeedOffset(res.shares?.length || 0);
+    } catch { /* keep whatever is already on screen */ }
+  }, [loadShares]);
 
-      {/* ---- LEADERBOARDS ---- */}
-      {lbFetch.loading ? (
-        <Skeleton lines={6} />
-      ) : lbFetch.error ? (
-        <div className="card p-4 text-center">
-          <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load leaderboards</p>
-          <button className="btn btn-sm" onClick={lbFetch.reload}>Retry</button>
-        </div>
-      ) : (
-        <>
-          <LeaderboardSection
-            title="Top Streaks"
-            subtitle="Consecutive training days"
-            entries={lb.streak}
-            valueLabel={(v) => v === 1 ? '1 day' : `${v} days`}
-          />
-          <LeaderboardSection
-            title="Workout Volume"
-            subtitle="Total weight lifted (kg)"
-            entries={lb.volume}
-            valueLabel={(v) => `${Number(v).toLocaleString()} kg`}
-          />
-          <LeaderboardSection
-            title="Most Workouts"
-            subtitle="Sessions completed"
-            entries={lb.completedWorkouts}
-            valueLabel={(v) => v === 1 ? '1 workout' : `${v} workouts`}
-          />
-        </>
-      )}
+  const copyShare = async (share) => {
+    try {
+      const res = await api(`/community/shares/${share.id}/copy`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: share.workoutName,
+          exercises: (share.payload || []).map((e) => ({ ...e, exercise_id: e.exercise_id || null })),
+        }),
+      });
+      // Say WHERE it went. "Added to your workouts" left people with no
+      // idea whether anything had happened, because the copy lands in the
+      // planner on a different screen -- which is why a working feature
+      // read as a dead button.
+      const n = res?.exerciseCount || 0;
+      setToast(`Saved to My Workout${n ? ` · ${n} ${n === 1 ? 'exercise' : 'exercises'}` : ''}`);
+    } catch (e) {
+      setToast(e.message || 'Could not copy that workout');
+    }
+  };
 
-      {/* ---- COMMUNITY ACTIVITY ---- */}
-      <div>
-        <div className="text-[10px] uppercase tracking-[.14em] font-grotesk font-semibold mb-3"
-             style={{ color: 'var(--mute)' }}>
-          Community Activity
-        </div>
-        {feedFetch.loading ? (
-          <Skeleton lines={3} />
-        ) : feedFetch.error ? (
-          <div className="card p-4 text-center">
-            <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load activity feed</p>
-            <button className="btn btn-sm" onClick={feedFetch.reload}>Retry</button>
-          </div>
-        ) : shares.length === 0 ? (
-          <Empty title="No shared workouts yet" hint="Complete a workout and share it with your gym friends!" icon="trending" />
-        ) : (
-          <div className="space-y-3">
-            {shares.map(share => (
-              <div key={share.id} className="card p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <Avatar name={share.authorName} size="w-8 h-8" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-grotesk text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>
-                      {share.authorName}
-                    </div>
-                    <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
-                      {share.workoutName} · {new Date(share.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </div>
-                  </div>
-                </div>
+  const unshare = async (share) => {
+    try {
+      await api(`/community/shares/${share.id}`, { method: 'DELETE' });
+      setToast('Removed from the feed');
+      reloadFeed();
+    } catch (e) {
+      setToast(e.message || 'Could not remove that share');
+    }
+  };
 
-                {/* Exercise preview */}
-                <div className="space-y-1 mb-3">
-                  {(share.payload || []).slice(0, 4).map((ex, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span style={{ color: 'var(--ink)' }}>{ex.name}</span>
-                      <span style={{ color: 'var(--mute)' }}>{ex.sets} × {ex.reps} · {ex.weight}</span>
-                    </div>
-                  ))}
-                  {(share.payload || []).length > 4 && (
-                    <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
-                      +{share.payload.length - 4} more exercises
-                    </div>
-                  )}
-                </div>
+  /* ---------- preferences ---------- */
 
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button className="btn-primary btn-sm flex-1"
-                    onClick={() => openCopy(share)}>
-                    Copy Workout
-                  </button>
-                  {share.clientId === membership?.client_id && (
-                    <button className="btn btn-sm"
-                      onClick={() => unshare(share.id)}>
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+  const changeScope = async (next) => {
+    setScope(next);               // optimistic: the control must feel instant
+    try {
+      await api('/community/preferences', {
+        method: 'PUT', body: JSON.stringify({ feed_scope: next }),
+      });
+      // Both halves of the feed depend on scope, so both are refreshed.
+      overviewFetch.reload();
+      const res = await api(`/community/feed?limit=${FEED_PAGE}&offset=0&scope=${next}`);
+      setShares(res.shares || []);
+      setFeedHasMore(!!res.hasMore);
+      setFeedOffset(res.shares?.length || 0);
+    } catch (e) {
+      setToast(e.message || 'Could not change that');
+    }
+  };
 
-            {/* Pagination: load-more, its own error, and an explicit end. */}
-            {moreError ? (
-              <div className="card p-4 text-center">
-                <p className="text-xs mb-2" style={{ color: 'var(--faint)' }}>Could not load more activity</p>
-                <button className="btn btn-sm" onClick={loadMore}>Retry</button>
-              </div>
-            ) : hasMore ? (
-              <button
-                className="btn btn-sm btn-block"
-                onClick={loadMore}
-                disabled={moreLoading}
-                aria-busy={moreLoading}>
-                {moreLoading ? 'Loading…' : 'Load more'}
-              </button>
-            ) : (
-              <p className="text-center text-[10px] py-1" style={{ color: 'var(--faint)' }}>
-                You&rsquo;re all caught up
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+  const changePrVisibility = async (next) => {
+    const before = prVisibility;
+    setPrVisibility(next);
+    try {
+      await api('/community/preferences', {
+        method: 'PUT', body: JSON.stringify({ pr_visibility: next }),
+      });
+      setToast(next === 'everyone' ? 'Your records are visible to the gym'
+        : next === 'followers' ? 'Only your followers see your records'
+        : 'Your records are private');
+    } catch (e) {
+      setPrVisibility(before);
+      setToast(e.message || 'Could not change that');
+    }
+  };
 
-      {/* Copy modal */}
-      {copyModal && (
-        <div className="fixed inset-0 z-50 bg-[var(--bg)]/80 backdrop-blur-sm flex items-center justify-center p-4"
-             onClick={() => setCopyModal(null)}>
-          <div className="card w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden"
-               onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b flex items-center justify-between"
-                 style={{ borderColor: 'var(--line)' }}>
-              <div>
-                <div className="font-grotesk font-bold">Copy Workout</div>
-                <div className="text-[10px]" style={{ color: 'var(--mute)' }}>Edit and add to your library</div>
-              </div>
-              <button className="text-lg" style={{ color: 'var(--mute)' }} onClick={() => setCopyModal(null)}><XIcon /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              <input className="input" placeholder="Workout name" value={copyForm.name}
-                onChange={e => setCopyForm(f => ({ ...f, name: e.target.value }))} />
-              {copyForm.exercises.map((ex, i) => (
-                <div key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--line)', background: 'var(--panel2)' }}>
-                  <div className="font-grotesk text-[13px] font-semibold mb-2" style={{ color: 'var(--ink)' }}>
-                    {i + 1}. {ex.name}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Sets</label>
-                      <input type="number" className="input !py-1 !text-xs" value={ex.sets}
-                        onChange={e => setCopyForm(f => ({
-                          ...f,
-                          exercises: f.exercises.map((x, j) => j === i ? { ...x, sets: parseInt(e.target.value) || 3 } : x),
-                        }))} />
-                    </div>
-                    <div>
-                      <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Reps</label>
-                      <input className="input !py-1 !text-xs" value={ex.reps}
-                        onChange={e => setCopyForm(f => ({
-                          ...f,
-                          exercises: f.exercises.map((x, j) => j === i ? { ...x, reps: e.target.value } : x),
-                        }))} />
-                    </div>
-                    <div>
-                      <label className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Weight</label>
-                      <input className="input !py-1 !text-xs" value={ex.weight}
-                        onChange={e => setCopyForm(f => ({
-                          ...f,
-                          exercises: f.exercises.map((x, j) => j === i ? { ...x, weight: e.target.value } : x),
-                        }))} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-4 border-t" style={{ borderColor: 'var(--line)' }}>
-              <button className="btn-primary w-full"
-                disabled={copying || !copyForm.name.trim() || !copyForm.exercises.length}
-                onClick={doCopy}>
-                {copying ? 'Copying…' : 'Add to My Workouts'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  /* ---------- membership ---------- */
 
-      {toast && <Toast message={toast} />}
-    </div>
-  );
-}
+  const setJoined = async (enabled) => {
+    try {
+      await api('/community/membership', { method: 'PUT', body: JSON.stringify({ enabled }) });
+      membershipFetch.reload();
+      setToast(enabled ? 'You joined the community' : 'You left the community');
+    } catch (e) {
+      setToast(e.message || 'Could not update membership');
+    }
+  };
 
-// ---- Leaderboard section component ----
+  /* ---------- render ---------- */
 
-function LeaderboardSection({ title, subtitle, entries, valueLabel }) {
-  if (!entries || entries.length === 0) {
+  if (membershipFetch.loading) return <PageSkeleton />;
+  if (membershipFetch.error) {
+    return <ErrorState message={membershipFetch.error} onRetry={membershipFetch.reload} />;
+  }
+
+  const gymName = overview?.gym?.name || membershipFetch.data?.gym?.name || 'Your Gym';
+
+  if (!available) {
     return (
-      <div>
-        <div className="text-[10px] uppercase tracking-[.14em] font-grotesk font-semibold mb-2"
-             style={{ color: 'var(--mute)' }}>{title}</div>
-        <div className="card p-4 text-center text-xs" style={{ color: 'var(--faint)' }}>
-          No data yet
+      <div className="pb-24">
+        <h1 className="font-black text-[24px] mb-2" style={{ color: 'var(--ink)' }}>Community</h1>
+        <div className="rounded-2xl p-5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+          <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
+            Community is a gym feature
+          </div>
+          <div className="text-[12px] mt-1.5 leading-relaxed" style={{ color: 'var(--mute)' }}>
+            You are training independently, so there is no gym community to join yet.
+          </div>
         </div>
       </div>
     );
   }
 
-  const top3 = entries.slice(0, 3);
-  const rest = entries.slice(3);
+  if (!joined) {
+    return (
+      <div className="pb-24">
+        <h1 className="font-black text-[24px]" style={{ color: 'var(--ink)' }}>{gymName}</h1>
+        <div className="rounded-2xl p-5 mt-4" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+          <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>Join your gym community</div>
+          <div className="text-[12.5px] mt-2 leading-relaxed" style={{ color: 'var(--mute)' }}>
+            See what your gym is training, where you stand, and celebrate other members'
+            personal records. Your workouts stay private unless you choose to share them,
+            and you can leave at any time.
+          </div>
+          <button
+            type="button"
+            onClick={() => setJoined(true)}
+            className="mt-4 w-full rounded-xl font-semibold text-[13px]"
+            style={{ minHeight: 46, background: 'var(--accent)', color: 'var(--accent-contrast)' }}
+          >
+            Join community
+          </button>
+        </div>
+        {toast && <Toast message={toast} onDone={() => setToast('')} />}
+      </div>
+    );
+  }
+
+  const pulse = overview?.pulse;
+  const position = overview?.position;
+  const streaks = boardsFetch.data?.leaderboards?.streak || [];
+  const yourStreak = streaks.find((s) => s.clientId === you)?.value || 0;
+  const challenges = challengesFetch.data?.challenges || [];
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between mb-2">
-        <div>
-          <div className="text-[10px] uppercase tracking-[.14em] font-grotesk font-semibold"
-               style={{ color: 'var(--mute)' }}>{title}</div>
-          {subtitle && <div className="text-[9px] mt-0.5" style={{ color: 'var(--faint)' }}>{subtitle}</div>}
+    <div className="pb-24">
+      {/* ── header ── */}
+      <header className="mb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="font-black leading-tight" style={{ fontSize: 24, color: 'var(--ink)' }}>
+              {gymName}
+            </h1>
+            {pulse && (
+              <div className="text-[12px] mt-1" style={{ color: 'var(--mute)' }}>
+                {fmt(pulse.members)} {pulse.members === 1 ? 'member' : 'members'}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setJoined(false)}
+            className="text-[11.5px] rounded-lg px-3 shrink-0"
+            style={{ minHeight: 36, border: '1px solid var(--line)', color: 'var(--mute)' }}
+          >
+            Leave
+          </button>
         </div>
+
+        <CommunityMoment pulse={pulse} busiestWeekday={overview?.busiestWeekday} />
+      </header>
+
+      {/* ── section tabs ── */}
+      <div className="flex gap-1.5 mb-4 flex-wrap" role="tablist" aria-label="Community sections">
+        {[['community', 'Community'], ['leaderboard', 'Leaderboard'], ['activity', 'Activity'], ['members', 'Members']].map(([key, label]) => {
+          const on = tab === key;
+          return (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(key)}
+              className="flex-1 rounded-xl text-[12px] font-semibold transition-colors whitespace-nowrap"
+              style={{
+                minHeight: 40,
+                minWidth: 84,
+                background: on ? 'var(--accent-soft)' : 'transparent',
+                border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                color: on ? 'var(--accent)' : 'var(--mute)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Top 3 podium */}
-      {top3.length > 0 && (
-        <div className="card p-4 mb-2">
-          <div className="flex items-end justify-center gap-4">
-            {/* 2nd place (left) */}
-            {top3[1] && <PodiumSpot entry={top3[1]} medal={1} />}
-            {/* 1st place (center, tallest) */}
-            {top3[0] && <PodiumSpot entry={top3[0]} medal={0} tall />}
-            {/* 3rd place (right) */}
-            {top3[2] && <PodiumSpot entry={top3[2]} medal={2} />}
-          </div>
-        </div>
+      {overviewFetch.loading && !overview && <PageSkeleton />}
+      {overviewFetch.error && (
+        <ErrorState message={overviewFetch.error} onRetry={overviewFetch.reload} />
       )}
 
-      {/* Rest of list */}
-      {rest.map((entry, i) => (
-        <div key={entry.clientId}
-          className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0"
-          style={{ borderColor: 'var(--line)' }}>
-          <span className="text-xs font-grotesk w-6 text-center" style={{ color: 'var(--faint)' }}>
-            {entry.rank}
-          </span>
-          <Avatar name={entry.name} size="w-7 h-7" />
-          <span className="flex-1 min-w-0 font-grotesk text-sm font-semibold truncate"
-                style={{ color: 'var(--ink)' }}>{entry.name}</span>
-          <span className="text-xs font-grotesk tabular-nums" style={{ color: 'var(--mute)' }}>
-            {valueLabel(entry.value)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
+      {/* On a wide screen the page becomes two columns rather than one
+          stretched phone layout. */}
+      <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-5 xl:items-start">
+        <div className="space-y-4 min-w-0">
+          {tab === 'community' && (
+            <>
+              <CommunityPulse
+                pulse={pulse}
+                onOpenPRs={() => { setTab('activity'); setFilter('pr'); }}
+                onOpenMembers={() => setTab('members')}
+              />
+              <YourPosition position={position} streak={yourStreak} />
+              {position && (
+                <ConsistencyRing workouts={position.workouts} target={WEEKLY_TARGET} />
+              )}
+              {challenges.length > 0 && (
+                <div>
+                  <SectionTitle>Challenges</SectionTitle>
+                  <div className="space-y-2">
+                    {challenges.map((c) => <ChallengeCard key={c.id} challenge={c} />)}
+                  </div>
+                </div>
+              )}
+              <ActivityChart series={overview?.activity} todayKey={pulse?.week?.end} />
+              <YouVsYou trend={overview?.trend} />
+              <WeeklyRecap recap={overview?.recap} you={you} />
 
-function PodiumSpot({ entry, medal, tall }) {
-  const heights = tall ? 'h-20' : medal === 1 ? 'h-16' : 'h-14';
-  return (
-    // min-w-0 is load-bearing: a flex item defaults to min-width:auto, which
-    // refuses to shrink below its content, so a long member name widened this
-    // column past the card and `truncate` never engaged (a 51-character name
-    // pushed the page from 375px to 499px on a phone). users.name allows up
-    // to 80 characters, so this is reachable with a real display name. Same
-    // min-w-0 + truncate pairing the rest-of-list rows above already use.
-    <div className="flex flex-col items-center gap-1.5 min-w-0" style={{ flex: 1 }}>
-      <div className="text-2xl">{MEDAL[medal]}</div>
-      <Avatar name={entry.name} size={tall ? 'w-11 h-11' : 'w-9 h-9'} />
-      <div className="font-grotesk text-[11px] font-semibold text-center truncate max-w-full w-full"
-           style={{ color: 'var(--ink)' }}>{entry.name}</div>
-      <div className="font-grotesk text-xs font-bold tabular-nums truncate max-w-full w-full text-center"
-           style={{ color: MEDAL_TONE[medal] }}>{entry.value}</div>
-      <div className={`w-full rounded-t-lg ${heights}`}
-           style={{ background: `linear-gradient(to top, ${MEDAL_TONE[medal]}22, transparent)` }} />
+              {/* Who sees YOUR records. Deliberately on the main tab
+                  rather than buried in settings: a member should meet the
+                  control in the same place they see their own activity
+                  being published. */}
+              <div className="rounded-2xl p-3.5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+                <SectionTitle>Your personal records</SectionTitle>
+                <div className="text-[11.5px] mb-2.5" style={{ color: 'var(--mute)' }}>
+                  Who sees a record when you set one.
+                </div>
+                <div className="flex gap-1.5" role="radiogroup" aria-label="Who can see your personal records">
+                  {[['everyone', 'Everyone'], ['followers', 'Followers'], ['nobody', 'Only me']].map(([key, label]) => {
+                    const on = prVisibility === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => changePrVisibility(key)}
+                        className="flex-1 rounded-xl text-[11.5px] font-semibold"
+                        style={{
+                          minHeight: 40,
+                          background: on ? 'var(--accent-soft)' : 'transparent',
+                          border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                          color: on ? 'var(--accent)' : 'var(--mute)',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === 'leaderboard' && (
+            <>
+              <div className="flex gap-1.5" role="tablist" aria-label="Leaderboard period">
+                {[['day', 'Today'], ['week', 'This week'], ['month', 'This month']].map(([key, label]) => {
+                  const on = period === key;
+                  return (
+                    <button
+                      key={key}
+                      role="tab"
+                      aria-selected={on}
+                      onClick={() => setPeriod(key)}
+                      className="flex-1 rounded-lg text-[11.5px] font-semibold"
+                      style={{
+                        minHeight: 36,
+                        background: on ? 'var(--accent-soft)' : 'transparent',
+                        border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                        color: on ? 'var(--accent)' : 'var(--mute)',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <Leaderboard
+                boards={boardsFetch.data?.leaderboards || {}}
+                metric={metric}
+                onMetricChange={setMetric}
+                period={period}
+                you={you}
+              />
+              <StreakBoard streaks={streaks} you={you} yourStreak={yourStreak} />
+            </>
+          )}
+
+          {tab === 'activity' && (
+            <>
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="w-full mb-2 rounded-xl text-[12.5px] font-semibold"
+                style={{ minHeight: 44, background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--accent)' }}
+              >
+                Share a workout
+              </button>
+            )}
+            <CommunityFeed
+              items={items}
+              social={social}
+              you={you}
+              onReact={react}
+              onOpenComments={setCommentTarget}
+              onShare={() => setShareOpen(true)}
+              onCopy={copyShare}
+              onUnshare={unshare}
+              filter={filter}
+              onFilterChange={setFilter}
+              hasMore={feedHasMore}
+              onLoadMore={loadMore}
+              loadingMore={loadingMore}
+              scope={scope}
+              onScopeChange={changeScope}
+              followingCount={followingCount}
+            />
+            </>
+          )}
+
+          {tab === 'members' && (
+            <CommunityMembers you={you} onSelect={setMemberSheet} onFollowChange={loadFollows} />
+          )}
+        </div>
+
+        {/* Desktop sidebar: context BESIDE the main column, never a second
+            copy of it. Streaks already render inside the Leaderboard tab
+            and the recap inside the Community tab, so each is shown here
+            only when the current tab is not already showing it ---
+            otherwise a wide screen displayed the same card twice. */}
+        <aside className="hidden xl:block space-y-4 min-w-0">
+          {tab !== 'leaderboard' && (
+            <StreakBoard streaks={streaks} you={you} yourStreak={yourStreak} />
+          )}
+          {tab !== 'community' && <WeeklyRecap recap={overview?.recap} you={you} />}
+        </aside>
+      </div>
+
+      {shareOpen && (
+        <ShareWorkoutSheet
+          onClose={() => setShareOpen(false)}
+          onShared={reloadFeed}
+          alreadyShared={new Set(shares.filter((sh) => sh.clientId === you).map((sh) => sh.workoutId))}
+          toast={setToast}
+        />
+      )}
+      {memberSheet && (
+        <MemberSheet
+          member={memberSheet}
+          isYou={memberSheet.clientId === you}
+          onClose={() => setMemberSheet(null)}
+        />
+      )}
+      {commentTarget && (
+        <CommentsSheet
+          target={commentTarget}
+          you={you}
+          onClose={() => { setCommentTarget(null); refreshSocial(items); }}
+          toast={setToast}
+        />
+      )}
+      {toast && <Toast message={toast} onDone={() => setToast('')} />}
     </div>
   );
 }

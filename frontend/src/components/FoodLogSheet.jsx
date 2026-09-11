@@ -68,7 +68,25 @@ const EMPTY_MANUAL = {
 // protein+carbs+fat are never required to sum to either of these
 // quantities -- they are a subset of a food's total mass (water/ash make
 // up the rest), not all of it.
-const EMPTY_CUSTOM = { name: '', servingGrams: '100', eatenGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
+// The nutrition reference now carries a UNIT, not just a number.
+//
+// Grams-only forced every serving-based food through a made-up weight: to
+// save "1 burrito bowl = 35P/55C/18F" you first had to decide the bowl
+// weighs 250 g, a number most people do not know and the app never needed
+// -- the macros describe the bowl either way. Scaling is a plain ratio
+// (eaten / reference), which is unit-agnostic: 2 bowls is 2x 1 bowl for
+// exactly the same reason 200 g is 2x 100 g. So the unit only has to
+// travel with the number, not change any maths.
+//
+// 'g' stays the default, so typing per-100g values still works with no
+// extra steps and every existing flow is unchanged.
+const SERVING_UNITS = ['g', 'ml', 'serving', 'bowl', 'plate', 'piece', 'slice', 'scoop', 'cup', 'roti'];
+// A weight/volume unit scales as a measurement; the rest are countable
+// things, which only changes the sensible default amount (1 bowl, not
+// 100 bowls) and how the field is labelled.
+const isMeasuredUnit = (u) => u === 'g' || u === 'ml';
+
+const EMPTY_CUSTOM = { name: '', servingGrams: '100', servingUnit: 'g', eatenGrams: '100', calories: '', protein: '', carbs: '', fat: '', fiber: '', sugar: '', sodium: '' };
 // Same convention as MyDietCard.jsx's own parseServing / me.js's
 // baseServingAmount -- the leading number in a "123 g"-style serving
 // string, defaulting to 100 for anything else (blank, "1 serving", a
@@ -76,7 +94,24 @@ const EMPTY_CUSTOM = { name: '', servingGrams: '100', eatenGrams: '100', calorie
 const baseServingGrams = (serving) => {
   const s = String(serving || '100').trim();
   const m = s.match(/^([\d.]+)/);
-  return m && Number(m[1]) > 0 ? Number(m[1]) : 100;
+  if (m && Number(m[1]) > 0) return Number(m[1]);
+  // NO leading number at all ("bowl") means ONE bowl, not 100 of them.
+  // MyDietCard's parseServing() has always made this distinction; the two
+  // readers disagreeing by 100x on the same stored string is exactly how a
+  // quantity silently changes meaning depending on which screen logged it.
+  // A present-but-invalid number ("0 g") keeps the old 100 fallback -- that
+  // string is malformed either way, and this is not the place to change
+  // what it means.
+  if (!m && s) return 1;
+  return 100;
+};
+/** The UNIT half of a stored `serving` ("100 g" -> "g", "1 bowl" -> "bowl").
+ *  Needed wherever a saved food is logged: the amount and the unit have to
+ *  travel together, or a row reads "1.5 g" for a food measured in bowls. */
+const baseServingUnit = (serving) => {
+  const m = String(serving || '').trim().match(/^[\d.]*\s*(.*)$/);
+  const suffix = (m && m[1] || '').trim();
+  return suffix || 'g';
 };
 // Calories is deliberately NOT in this list -- it's calculated from
 // protein/carbs/fat via the canonical 4/4/9 rule (nutritionCalc.js),
@@ -235,6 +270,20 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   const [aiEdits, setAiEdits] = useState([]);
   const [aiAdjusted, setAiAdjusted] = useState(null);
   const [aiAdjusting, setAiAdjusting] = useState(false);
+  // How many of the dish were eaten. This is a MULTIPLIER that sits on top
+  // of the component list, deliberately kept separate from aiEdits: the
+  // components describe what ONE serving contains, and this says how many
+  // of those were eaten. Keeping the two apart is what makes a manual
+  // override survive a quantity change -- correcting the rice to 250 g and
+  // then saying "I had two plates" gives 500 g of rice, not the AI's
+  // original guess doubled. Folding servings into the component grams
+  // instead would mean every quantity change either discarded the user's
+  // correction or re-scaled an already-scaled number.
+  //
+  // Before this existed, eating two plates meant hand-editing every
+  // ingredient one at a time -- which also made each edit look like a
+  // correction of the AI's recipe when it was nothing of the sort.
+  const [aiServings, setAiServings] = useState('1');
   const inputRef = useRef(null);
 
   // ── barcode scan state ──
@@ -458,6 +507,23 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       return sum + (Number(shown.estimated_weight_g) || 0);
     }, 0);
   }, [aiResult, aiAdjusted, aiEdits]);
+
+  // The servings multiplier, sanitised once. A blank or half-typed field
+  // ("", "1.", "-") must not blank out the totals or log zero calories, so
+  // anything that isn't a positive number reads as 1 for CALCULATION while
+  // the input keeps showing exactly what the user typed.
+  const aiServingsNum = useMemo(() => {
+    const n = Number(aiServings);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  }, [aiServings]);
+
+  // What one serving of the dish contains: the AI's own numbers until the
+  // user edits a component, then the deterministic recompute. Everything
+  // shown to the user is this multiplied by aiServingsNum -- the per-
+  // serving figures are never overwritten, which is what lets the user
+  // change their mind about the quantity without losing their edits.
+  const aiPerServing = aiAdjusted || aiResult;
+  const aiEatenGrams = aiTotalGrams * aiServingsNum;
 
   // ONE derived value for "which top-level screen is showing" (Part 24:
   // "a clean state/navigation model, not random boolean states"). The
@@ -728,6 +794,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     // error). See foodValidation.js's own comment on the "impossible"
     // check this app used to (wrongly) enforce and why it was removed.
     const servingG = Number(cf.servingGrams);
+    const unit = cf.servingUnit || 'g';
     if (!(servingG > 0)) { setCustomErr('Enter a valid, positive quantity for "what quantity are these nutrition details for?"'); return; }
     const eatenG = Number(cf.eatenGrams);
     if (!(eatenG > 0)) { setCustomErr('Enter a valid, positive quantity for "how much did you eat?"'); return; }
@@ -781,9 +848,29 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       // future resolve: baseServingAmount() would divide by (say) 400 on
       // top of numbers that are already per-100g, quietly quartering
       // every later quantity this food is logged at.
-      const factor100 = 100 / servingG;
-      const nums = Object.fromEntries(Object.entries(reference).map(([k, v]) => [k, v * factor100]));
-      await api('/me/foods', { method: 'POST', body: JSON.stringify({ name, serving: '100 g', ...nums }) });
+      // A COUNTABLE unit is stored as itself, not converted to grams.
+      //
+      // The per-100g conversion above is right for a weight or volume,
+      // where 100 g is a real, comparable quantity. It is meaningless for
+      // "1 bowl": there is no gram figure, and inventing one (guessing the
+      // bowl weighs 250 g) would bake a fabricated number into the food's
+      // stored definition and into every future log of it. So a countable
+      // food stores `serving` as "1 bowl" with the macros exactly as
+      // typed, and the app's existing serving parsing (MyDietCard's
+      // parseServing, me.js's baseServingAmount) already scales by the
+      // leading number whatever the unit is -- 2 bowls is 2x 1 bowl the
+      // same way 200 g is 2x 100 g.
+      const measured = isMeasuredUnit(unit);
+      let nums; let servingString;
+      if (measured) {
+        const factor100 = 100 / servingG;
+        nums = Object.fromEntries(Object.entries(reference).map(([k, v]) => [k, v * factor100]));
+        servingString = `100 ${unit}`;
+      } else {
+        nums = { ...reference };
+        servingString = `${servingG} ${unit}`;
+      }
+      await api('/me/foods', { method: 'POST', body: JSON.stringify({ name, serving: servingString, unit, ...nums }) });
       // Log the ACTUAL eaten amount -- reference values scaled by
       // eatenG/servingG, never assumed equal to the reference quantity.
       // scale === 1 whenever eatenGrams still mirrors servingGrams (the
@@ -800,7 +887,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       // scale proportionally from an actual baseline (see
       // PUT /me/meal-logs/:id's own comment on the bug this pattern
       // closes elsewhere).
-      await onAdd({ name, calories: Math.round(logged.calories), protein: logged.protein, carbs: logged.carbs, fat: logged.fat, source: 'manual', quantity: eatenG, unit: 'g' }, { keepOpen: true });
+      await onAdd({ name, calories: Math.round(logged.calories), protein: logged.protein, carbs: logged.carbs, fat: logged.fat, source: 'manual', quantity: eatenG, unit }, { keepOpen: true });
       setCustomForm(EMPTY_CUSTOM);
       setCustomEatenTouched(false);
       setCustomDuplicate(null);
@@ -835,7 +922,10 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       await onAdd({
         name: customDuplicate.name, calories: Math.round((customDuplicate.calories || 0) * scale),
         protein: (customDuplicate.protein || 0) * scale, carbs: (customDuplicate.carbs || 0) * scale, fat: (customDuplicate.fat || 0) * scale,
-        source: 'manual', quantity: logG, unit: 'g',
+        // The saved food's OWN unit, not a hardcoded 'g'. Logging 1.5 of a
+        // per-bowl food as "1.5 g" mislabels the row and gives a later
+        // "Edit Quantity" the wrong unit to scale in.
+        source: 'manual', quantity: logG, unit: baseServingUnit(customDuplicate.serving),
       }, { keepOpen: true });
       setCustomForm(EMPTY_CUSTOM);
       setCustomEatenTouched(false);
@@ -875,7 +965,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   const estimateWithAI = async () => {
     const query = q.trim();
     if (!query) return;
-    setAiEstimating(true); setAiErr(''); setAiResult(null); setAiEdits([]); setAiAdjusted(null);
+    setAiEstimating(true); setAiErr(''); setAiResult(null); setAiEdits([]); setAiAdjusted(null); setAiServings('1');
     try {
       const res = await api('/me/foods/ai-estimate', { method: 'POST', body: JSON.stringify({ query }) });
       if (!res.ok) { setAiErr(res.reason || 'Could not produce an AI estimate.'); return; }
@@ -938,8 +1028,28 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
 
   const commitAI = async () => {
     if (!aiResult) return;
-    const adjusted = !!aiAdjusted;
-    const totals = adjusted ? aiAdjusted.totals : aiResult.totals;
+    // TWO different questions, deliberately not the same boolean:
+    //
+    //   componentsEdited  did the user correct the DISH itself (changed an
+    //                     ingredient's weight, removed one)? Only this is
+    //                     worth teaching the shared cache.
+    //   userAdjusted      are the numbers being logged different from what
+    //                     the AI produced? Eating two plates makes them
+    //                     different, so provenance must say so -- but it
+    //                     tells us nothing about what a plate contains.
+    //
+    // Collapsing these into one flag sends "a plate of biryani is 900 g" to
+    // the learning pipeline every time someone eats two.
+    const componentsEdited = !!aiAdjusted;
+    const servings = aiServingsNum;
+    const userAdjusted = componentsEdited || servings !== 1;
+    const perServing = componentsEdited ? aiAdjusted.totals : aiResult.totals;
+    const totals = {
+      calories: (perServing.calories ?? 0) * servings,
+      protein: (perServing.protein ?? 0) * servings,
+      carbs: (perServing.carbs ?? 0) * servings,
+      fat: (perServing.fat ?? 0) * servings,
+    };
     setAiLogging(true);
     try {
       // AI estimate -> log -> back to the search screen (Part 12) --
@@ -947,33 +1057,41 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       // usable for the next food immediately.
       await onAdd({
         name: aiResult.food_name,
-        calories: Math.round(totals.calories ?? 0),
-        protein: totals.protein ?? 0,
-        carbs: totals.carbs ?? 0,
-        fat: totals.fat ?? 0,
+        calories: Math.round(totals.calories),
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
         // Provenance: never "measured", never plain "manual" -- see the
         // source enum in backend/src/validate.js. Nutrition.jsx's onAdd
         // must pass these through rather than hardcoding source: 'manual'.
         // A user-edited quantity gets its own source value so it's visibly
         // distinct from an unmodified AI estimate, per the adjustment-flow
         // provenance rule.
-        source: adjusted ? 'ai_estimated_user_adjusted' : 'ai_estimated',
+        source: userAdjusted ? 'ai_estimated_user_adjusted' : 'ai_estimated',
         ai_provider: aiResult.ai?.provider || null,
         ai_model: aiResult.ai?.model || null,
-        ai_confidence: adjusted ? aiAdjusted.confidence : aiResult.confidence,
-        quantity: aiTotalGrams > 0 ? aiTotalGrams : undefined,
-        unit: aiTotalGrams > 0 ? 'g' : undefined,
+        // Confidence describes the ESTIMATE of the dish, so it comes from
+        // the per-serving figures -- eating more of something does not make
+        // the estimate of it any more or less certain.
+        ai_confidence: componentsEdited ? aiAdjusted.confidence : aiResult.confidence,
+        // The real eaten weight (one serving's grams x how many), so a
+        // later "Edit Quantity" scales from what was actually logged.
+        quantity: aiEatenGrams > 0 ? aiEatenGrams : undefined,
+        unit: aiEatenGrams > 0 ? 'g' : undefined,
       }, { keepOpen: true });
       // A user who edited the AI's numbers is telling us something --
       // record it as ONE feedback observation toward the shared cache,
       // never an immediate overwrite (see backend/.../foodFeedback.js).
       // Best-effort: never blocks or fails the actual food log above.
-      if (adjusted) {
+      if (componentsEdited) {
         // original/adjusted can legitimately be different TOTAL weights
         // (the user may have changed overall quantity, not just
         // proportions) -- each side is normalized against its OWN actual
         // weight, never a single shared grams figure, or the comparison
         // itself would be wrong before it even reaches the server.
+        // PER SERVING on both sides, never multiplied by `servings`. This
+        // teaches the cache what one plate of this dish is; how many plates
+        // this particular person ate is not a property of the dish.
         const originalGrams = aiResult.serving?.estimated_weight_g || aiTotalGrams;
         api('/me/food-feedback', {
           method: 'POST',
@@ -986,15 +1104,15 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               carbs_g: aiResult.totals.carbs, fat_g: aiResult.totals.fat,
             },
             adjusted: {
-              calories: totals.calories, protein_g: totals.protein,
-              carbs_g: totals.carbs, fat_g: totals.fat,
+              calories: perServing.calories, protein_g: perServing.protein,
+              carbs_g: perServing.carbs, fat_g: perServing.fat,
             },
             ai_provider: aiResult.ai?.provider || undefined,
             ai_model: aiResult.ai?.model || undefined,
           }),
         }).catch(() => {}); // feedback collection must never surface as a user-facing error
       }
-      setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); setQ('');
+      setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); setAiServings('1'); setQ('');
     } catch (e) {
       setAiErr(e.message || 'Could not add that food');
     }
@@ -1143,6 +1261,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   const customReferenceCalories = customCalorieOverride && customForm.calories !== ''
     ? Number(customForm.calories)
     : calculateCaloriesFromMacros({ protein: Number(customForm.protein), carbs: Number(customForm.carbs), fat: Number(customForm.fat) });
+  const customUnit = customForm.servingUnit || 'g';
   const customServingG = Number(customForm.servingGrams);
   const customEatenG = Number(customForm.eatenGrams);
   const customPreviewValid = customServingG > 0 && customEatenG > 0 && Number.isFinite(customReferenceCalories);
@@ -1255,15 +1374,39 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               <label className="block">
                 <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>What quantity are these nutrition details for? *</span>
                 <div className="flex items-center gap-2 mt-1">
-                  <input type="number" min="1" step="any" value={customForm.servingGrams}
+                  <input type="number" min="0.01" step="any" value={customForm.servingGrams}
                          onChange={(e) => setCustomServingGrams(e.target.value)}
-                         placeholder="e.g. 250 for one bowl"
-                         className="input w-full !py-2 tabular-nums" aria-label="Nutrition reference quantity, in grams" />
-                  <span className="text-[11px] shrink-0" style={{ color: 'var(--faint)' }}>g</span>
+                         placeholder={isMeasuredUnit(customUnit) ? 'e.g. 100' : 'e.g. 1'}
+                         className="input w-full !py-2 tabular-nums"
+                         aria-label={`Nutrition reference quantity, in ${customUnit}`} />
+                  {/* Choosing a countable unit also moves the amount to 1:
+                      "100 bowls" is never what someone meant, and leaving
+                      the grams default behind turns the macros into
+                      nonsense a hundredfold. */}
+                  <select
+                    value={customUnit}
+                    onChange={(e) => {
+                      const unit = e.target.value;
+                      setCustomForm((f) => {
+                        const wasMeasured = isMeasuredUnit(f.servingUnit || 'g');
+                        const nowMeasured = isMeasuredUnit(unit);
+                        const amount = wasMeasured === nowMeasured ? f.servingGrams : (nowMeasured ? '100' : '1');
+                        return {
+                          ...f, servingUnit: unit, servingGrams: amount,
+                          eatenGrams: customEatenTouched ? f.eatenGrams : amount,
+                        };
+                      });
+                    }}
+                    aria-label="Nutrition reference unit"
+                    className="input !py-2 shrink-0" style={{ minHeight: 44, width: 96 }}
+                  >
+                    {SERVING_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
                 </div>
               </label>
               <div className="text-[10px]" style={{ color: 'var(--mute)' }}>
-                Nutrition for {Number.isFinite(customServingG) && customServingG > 0 ? customServingG : '—'}&nbsp;g — protein, carbs and fat don't need to add up to this number.
+                Nutrition for {Number.isFinite(customServingG) && customServingG > 0 ? customServingG : '—'}&nbsp;{customUnit}
+                {isMeasuredUnit(customUnit) ? " — protein, carbs and fat don't need to add up to this number." : ' — describe one of these, then say how many you ate.'}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[['protein', 'Protein (g) *'], ['carbs', 'Carbs (g) *'], ['fat', 'Fat (g) *']].map(([key, label]) => (
@@ -1328,10 +1471,11 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               <div className="text-[9px] uppercase tracking-[.16em] font-bold pt-1" style={{ color: 'var(--accent)' }}>How much did you eat?</div>
               <label className="block">
                 <div className="flex items-center gap-2 mt-1">
-                  <input type="number" min="1" step="any" value={customForm.eatenGrams}
+                  <input type="number" min="0.01" step="any" value={customForm.eatenGrams}
                          onChange={(e) => setCustomEatenGrams(e.target.value)}
-                         className="input w-full !py-2 tabular-nums" aria-label="Amount you ate, in grams" />
-                  <span className="text-[11px] shrink-0" style={{ color: 'var(--faint)' }}>g</span>
+                         className="input w-full !py-2 tabular-nums"
+                         aria-label={`Amount you ate, in ${customUnit}`} />
+                  <span className="text-[11px] shrink-0" style={{ color: 'var(--faint)' }}>{customUnit}</span>
                 </div>
               </label>
               {/* Live preview -- the exact scaled values submitCustomFood
@@ -1340,7 +1484,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                   gets saved, never an approximation of it. */}
               {customPreviewValid && (
                 <div className="rounded-xl px-3 py-2.5 space-y-1.5" style={{ border: '1px solid var(--line)', background: 'var(--accent-soft)' }}>
-                  <div className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Your logged nutrition — for {customEatenG}&nbsp;g</div>
+                  <div className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Your logged nutrition — for {customEatenG}&nbsp;{customUnit}</div>
                   <div className="flex items-center justify-between text-[11px] tabular-nums" style={{ color: 'var(--ink)' }}>
                     <span>Protein {r1(customPreviewLogged.protein)} g</span>
                     <span>Carbs {r1(customPreviewLogged.carbs)} g</span>
@@ -1575,6 +1719,67 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
 
               <div className="text-[11px] leading-relaxed" style={{ color: 'var(--mute)' }}>{aiResult.disclaimer}</div>
 
+              {/* HOW MANY did you eat (Parts 7-10). Separate from the
+                  ingredient list below on purpose: this multiplies the
+                  dish, the list describes one of them. Presets cover the
+                  amounts people actually eat; the field takes anything
+                  else. */}
+              <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--panel, rgba(128,128,128,.05))', border: '1px solid var(--line)' }}>
+                {/* flex-wrap, not a fixed row: the label is nowrap and the
+                    field group is shrink-0, so on a narrow phone the group
+                    drops to its own line instead of the unit word ("2
+                    servings" is wider than "1 serving") being clipped off
+                    the edge of the card. Both earlier attempts failed the
+                    other way -- a wrapped two-line label squeezing the
+                    field, then a clipped unit. */}
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                  <label htmlFor="ai-servings" className="text-[11px] font-semibold whitespace-nowrap" style={{ color: 'var(--ink)' }}>
+                    How many did you eat?
+                  </label>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      id="ai-servings" type="number" min="0" step="0.5" inputMode="decimal"
+                      value={aiServings}
+                      onChange={(e) => setAiServings(e.target.value)}
+                      aria-label="How many servings you ate"
+                      className="w-16 text-right text-[13px] font-bold rounded-lg px-2 py-1.5 tabular-nums"
+                      style={{ background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                    />
+                    <span className="text-[11px]" style={{ color: 'var(--mute)' }}>
+                      {aiServingsNum === 1 ? 'serving' : 'servings'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  {[0.5, 1, 1.5, 2, 3].map((n) => {
+                    const on = aiServingsNum === n && aiServings !== '';
+                    return (
+                      <button
+                        key={n} type="button" onClick={() => setAiServings(String(n))}
+                        aria-pressed={on}
+                        className="flex-1 py-1 rounded-lg text-[11px] font-semibold tabular-nums"
+                        style={{
+                          background: on ? 'var(--accent-soft)' : 'transparent',
+                          border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                          color: on ? 'var(--accent)' : 'var(--mute)',
+                        }}
+                      >{n}</button>
+                    );
+                  })}
+                </div>
+                {/* What ONE serving actually is, in the AI's own words plus
+                    the weight the ingredient list currently adds up to.
+                    "1 plate" alone never said how heavy the plate was, and
+                    the weight moves as soon as an ingredient is corrected. */}
+                <div className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--faint)' }}>
+                  One serving = {aiResult.serving?.description || 'this dish'}
+                  {aiTotalGrams > 0 && <span> · {Math.round(aiTotalGrams)}g</span>}
+                  <br />
+                  Correct the ingredients below if the recipe is off — your corrections are kept
+                  when you change this number.
+                </div>
+              </div>
+
               {/* Totals + uncertainty range -- never a bare confident number.
                   Once the user edits a component, these are the DETERMINISTIC
                   recompute, not the AI's original total -- never blindly
@@ -1582,17 +1787,19 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)' }}>
                 <div className="flex items-baseline justify-between">
                   <span className="font-black text-[22px] tabular-nums" style={{ color: 'var(--ink)' }}>
-                    ~{Math.round((aiAdjusted || aiResult).totals.calories)}
+                    ~{Math.round(aiPerServing.totals.calories * aiServingsNum)}
                   </span>
                   <span className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
-                    likely {Math.round((aiAdjusted || aiResult).uncertainty.calories_low)}–{Math.round((aiAdjusted || aiResult).uncertainty.calories_high)} kcal
+                    likely {Math.round(aiPerServing.uncertainty.calories_low * aiServingsNum)}–{Math.round(aiPerServing.uncertainty.calories_high * aiServingsNum)} kcal
                   </span>
                 </div>
                 <div className="text-[10px] mt-1" style={{ color: 'var(--mute)' }}>
-                  P {r1((aiAdjusted || aiResult).totals.protein)} · C {r1((aiAdjusted || aiResult).totals.carbs)} · F {r1((aiAdjusted || aiResult).totals.fat)}
+                  P {r1(aiPerServing.totals.protein * aiServingsNum)} · C {r1(aiPerServing.totals.carbs * aiServingsNum)} · F {r1(aiPerServing.totals.fat * aiServingsNum)}
                   {' · '}
-                  <span className="font-semibold" style={{ color: 'var(--ink)' }}>{Math.round(aiTotalGrams)}g total</span>
-                  {aiResult.serving?.description ? ` (${aiResult.serving.description})` : ''}
+                  <span className="font-semibold" style={{ color: 'var(--ink)' }}>{Math.round(aiEatenGrams)}g total</span>
+                  {aiServingsNum !== 1 && (
+                    <span style={{ color: 'var(--faint)' }}>{` (${r1(aiServingsNum)} x ${Math.round(aiTotalGrams)}g)`}</span>
+                  )}
                 </div>
                 {aiAdjusted && (
                   <div className="flex items-center justify-between mt-1.5">
@@ -1659,7 +1866,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
               {aiErr && <div className="text-[11px]" style={{ color: 'var(--bad)' }}>{aiErr}</div>}
 
               <div className="flex gap-2">
-                <button onClick={() => { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); }}
+                <button onClick={() => { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); setAiServings('1'); }}
                         className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold" style={{ border: '1px solid var(--line)', color: 'var(--mute)' }}>
                   Close
                 </button>

@@ -19,6 +19,20 @@ import samsungHealth from '../src/services/health/providers/samsungHealthProvide
 import { getProvider, listProviders } from '../src/services/health/providers/registry.js';
 import { ProviderNotConfiguredError, RequiresNativeAppError } from '../src/services/health/providers/baseProvider.js';
 import { PROVIDERS } from '../src/services/health/types.js';
+import { config } from '../src/config.js';
+
+/** Run `fn` with the named config credentials forced absent, then put
+ *  them back. The two "not configured" tests below used to rely on the
+ *  developer's machine simply never having had WHOOP/Oura set up: the
+ *  provider reads config at call time, so once real credentials landed in
+ *  backend/.env the provider correctly returned a URL and the test failed
+ *  -- reporting a broken build for a working feature. The precondition is
+ *  now stated explicitly instead of assumed. */
+function withoutCredentials(keys, fn) {
+  const saved = keys.map((k) => [k, config[k]]);
+  for (const k of keys) config[k] = null;
+  try { fn(); } finally { for (const [k, v] of saved) config[k] = v; }
+}
 
 test('registry lists all ten architected providers', () => {
   const keys = listProviders().map((p) => p.key).sort();
@@ -30,7 +44,9 @@ test('getProvider throws on an unknown key rather than returning undefined', () 
 });
 
 test('WHOOP: connect() without credentials throws ProviderNotConfiguredError, never a fake URL', () => {
-  assert.throws(() => whoop.getAuthorizeUrl('state', 'https://example.test/callback'), ProviderNotConfiguredError);
+  withoutCredentials(['whoopClientId', 'whoopClientSecret'], () => {
+    assert.throws(() => whoop.getAuthorizeUrl('state', 'https://example.test/callback'), ProviderNotConfiguredError);
+  });
 });
 
 test('WHOOP: normalizeWorkout converts kilojoules to kcal and keeps source_score/source_metric distinct (never renamed)', () => {
@@ -103,7 +119,9 @@ test('Oura: normalizeReadiness stores Oura\'s own readiness score as source_scor
 });
 
 test('Oura: connect() without credentials throws ProviderNotConfiguredError', () => {
-  assert.throws(() => oura.getAuthorizeUrl('state', 'https://example.test/callback'), ProviderNotConfiguredError);
+  withoutCredentials(['ouraClientId', 'ouraClientSecret'], () => {
+    assert.throws(() => oura.getAuthorizeUrl('state', 'https://example.test/callback'), ProviderNotConfiguredError);
+  });
 });
 
 test('Apple Health: nativeOnly provider always throws RequiresNativeAppError on connect, never fakes success', () => {

@@ -120,10 +120,21 @@
      in the last contrast pass, just recoloured from ink's old RGB to
      blush's. accent/accent-contrast are untouched -- terracotta stays
      the brand accent, this only changes canvas + highlight. */
-  --bg: #000000;
-  --bg2: #0D0D0D;
-  --panel: #161616;
-  --panel2: #202020;
+  /* DARK CANVAS (Progress 2.0 pass): was pure #000 with near-neutral greys.
+     Pure black is a default, not a choice -- it crushes the surface
+     hierarchy (every elevation has to fight an absolute floor) and reads
+     as an OLED test card rather than as a designed ground. These are
+     near-blacks carrying a faint warm bias toward the blush ink and
+     terracotta accent, so the neutrals look chosen rather than inherited,
+     and each step up is a legible surface level:
+       --bg      page ground
+       --bg2     recessed / inset areas
+       --panel   card surface
+       --panel2  elevated surface (sheets, popovers) */
+  --bg: #0A0909;
+  --bg2: #121011;
+  --panel: #1A1717;
+  --panel2: #241F20;
   --line: rgba(255,223,221,.08);
   --ink: #FFDFDD;                      /* blush -- was warm off-white */
   --mute: rgba(255,223,221,.68);
@@ -135,10 +146,22 @@
      clears 4.5:1 on the worst surface of either theme (light 4.51,
      dark 5.90) while staying visibly quieter than --mute. */
   --faint: rgba(255,223,221,.60);
-  /* Primary accent: terracotta */
-  --accent: #E07A63;
-  --accent-deep: #C15C4C;
-  --accent-soft: rgba(224,122,99,.12);
+  /* Primary accent: PLATINUM BLUE, not terracotta.
+     Dark mode is deliberately free of orange. Terracotta at #E07A63 is a
+     hot, high-chroma colour: on a near-black ground every active state,
+     border, ring and filled button lit up at once and the interface read
+     as warning-coloured rather than composed. Desaturating it (the
+     earlier 205 134 112 attempt) reduced the intensity but kept the hue,
+     so it still read as orange.
+     This is a cool, light, low-chroma blue-grey. It complements the warm
+     near-black ground by contrast rather than competing with it, stays
+     legible as text (~9:1 on --bg), and is distinct from every metric hue
+     in the chart palette so an accent can never be mistaken for data.
+     LIGHT MODE IS UNCHANGED -- terracotta on a warm paper ground is doing
+     none of the harm it did on black. */
+  --accent: #B4C2CE;
+  --accent-deep: #8FA1B2;
+  --accent-soft: rgba(180,194,206,.12);
   /* Secondary colors */
   --secondary: #FB7185;               /* pink/red */
   --secondary-deep: #F43F5E;
@@ -164,11 +187,22 @@
   --card-gradient: linear-gradient(168deg, rgba(255,223,221,.03), rgba(255,223,221,.008) 62%);
 
   /* Channel tokens */
-  --accent-rgb: 224 122 99;
-  --accent-deep-rgb: 193 92 76;
-  --accent-contrast: #2B120A;          /* dark ink ON terracotta */
-  --bg-rgb: 0 0 0;
-  --bg2-rgb: 13 13 13;
+  /* Softened from 224 122 99. The old value was a hot, fully-saturated
+     coral: on a near-black ground it read as a warning colour, and with
+     the accent used for every active state at once the interface looked
+     lit up rather than composed. This is the same hue with the saturation
+     pulled back, so it still reads as the brand and still clears contrast
+     for text (~6.9:1 on --bg), without shouting. Filled surfaces do not
+     use it at all any more -- see --cta-solid. */
+  --accent-rgb: 180 194 206;
+  --accent-deep-rgb: 143 161 178;
+  /* Ink ON the light accent. The accent is now a LIGHT colour, so
+     anything filled with it needs dark text -- the previous value was a
+     near-black brown chosen to sit on terracotta and would read as a
+     smudge on this. */
+  --accent-contrast: #10151A;
+  --bg-rgb: 10 9 9;
+  --bg2-rgb: 18 16 17;
   --panel-rgb: 22 22 22;
   --panel2-rgb: 32 32 32;
   --ink-rgb: 255 223 221;
@@ -199,9 +233,78 @@
 
   --tint-rgb: 255 223 221;             /* blush -- was white; drives .btn/.chip/.navlink hover washes */
 
-  --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
+  /* PRIMARY CTA — a tinted ELEVATED SURFACE, not a coloured slab.
+
+     Two rejected attempts got us here. Saturated terracotta was the
+     loudest object on a near-black screen and out-shouted the content it
+     was meant to serve. A near-white cream fill fixed the shouting but
+     read as a bright cut-out pasted ON the interface rather than part of
+     it -- on a #0A0909 ground a #FBF2ED pill is a ~19:1 luminance jump,
+     which is a spotlight, not a button.
+
+     What actually belongs in a dark UI is a surface a few steps above the
+     card it sits on, carrying the theme's own warm bias, with CREAM TEXT
+     doing the legibility work. The button then reads as the same material
+     as everything around it -- lit, not painted. This is the pattern
+     Apple's dark mode uses for prominent actions, and it keeps terracotta
+     free to mean something (chart lines, active states, PR highlights)
+     instead of being a paint bucket. */
+  --accent-grad: linear-gradient(135deg, #1F2429, #272E34);
+  --accent-grad-shadow: 0 1px 0 rgba(255,223,221,.06) inset, 0 6px 18px -10px rgba(0,0,0,.85);
+  --accent-grad-shadow-hover: 0 1px 0 rgba(255,223,221,.10) inset, 0 8px 22px -10px rgba(0,0,0,.9);
+  /* Cream INK, not a cream fill -- this is the half of the earlier idea
+     that was right. ~12:1 on the fill above. */
+  --cta-ink: #E8EEF3;
+  /* Flat fill for small filled controls (segmented controls, chips). A
+     gradient on a 34px chip is noise; the CTA gradient is reserved for
+     full-width buttons where it reads as depth rather than banding. */
+  --cta-solid: #262D33;
+  /* Hairline that separates the CTA from the card beneath it -- with a
+     low-contrast fill, the edge is what makes it read as pressable. */
+  --cta-edge: rgba(226,238,247,.15);
+
+  /* ─────────────────────────────────────────────
+     METRIC HUES — a calm multi-hue system.
+
+     Progress was monochrome: every chart, ring and active state was the
+     same terracotta, so six different KINDS of information looked like one
+     kind. Giving each metric family its own hue lets the eye sort the page
+     before reading a word of it.
+
+     The discipline that keeps it calm rather than a fruit salad:
+      - hues are LOW SATURATION and share a common warmth, so they read as
+        one family rather than six unrelated brand colours;
+      - the tinted SURFACE is barely there (a wash, not a fill) -- colour
+        identifies, it never shouts;
+      - saturation lives in the small marks (icon, ring, chart line) where
+        it carries meaning, not in large areas.
+
+     Dark mode cannot reuse light mode's pastels: a pastel that is gentle on
+     off-white turns chalky and low-contrast over near-black. So dark gets
+     LIGHTER, slightly desaturated hues for the marks and a very low-alpha
+     wash of the same hue for the surface.
+     ───────────────────────────────────────────── */
+  --m-body: #7FB894;          /* sage — body, weight */
+  --m-body-bg: rgba(127,184,148,.10);
+  --m-training: #9B93E0;      /* periwinkle — volume, sets */
+  --m-training-bg: rgba(155,147,224,.10);
+  /* These three were honey, coral and bronze -- the warm end of the
+     palette, inherited from when the brand hue was terracotta. With the
+     dark accent moved to platinum they were the last orange left on the
+     screen, and they sat in the largest areas (pulse tiles, chart fills),
+     so they read as THE colour of the app.
+     Replaced with hues that stay mutually distinguishable and keep each
+     metric's meaning: rose for food, a warm red for effort, and a low
+     chroma champagne for records -- a medal tone that is metallic rather
+     than orange. Green / violet / cyan below are untouched. */
+  --m-nutrition: #DE9AAE;     /* rose — food */
+  --m-nutrition-bg: rgba(222,154,174,.10);
+  --m-energy: #D97B84;        /* warm red — burn, effort */
+  --m-energy-bg: rgba(217,123,132,.10);
+  --m-recovery: #6FB2C9;      /* slate blue — sleep, recovery */
+  --m-recovery-bg: rgba(111,178,201,.10);
+  --m-strength: #CFC5B4;      /* champagne — records */
+  --m-strength-bg: rgba(207,197,180,.10);
 
   /* ─────────────────────────────────────────────
      SHAPE, SPACE, ELEVATION, MOTION
@@ -308,9 +411,31 @@
 
   --tint-rgb: 138 66 50;
 
+  /* Light mode keeps the terracotta CTA: on a pale ground the deep
+     terracotta is the RESTRAINED choice, and a cream button would vanish. */
   --accent-grad: linear-gradient(135deg, #8E3D30, #B0503F);
   --accent-grad-shadow: 0 4px 14px -4px rgba(176,80,63,.28);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(176,80,63,.38);
+  --cta-ink: #FFF6F3;
+  --cta-solid: #A04A3B;
+  --cta-edge: rgba(43,18,10,.18);
+
+  /* Metric hues, light mode: deeper and more saturated than the dark-mode
+     set, because these sit on an off-white ground where a light tint would
+     disappear. Surfaces stay near-white washes for the same reason the dark
+     ones stay near-black ones -- the colour identifies, the number reads. */
+  --m-body: #4E8C68;
+  --m-body-bg: rgba(78,140,104,.09);
+  --m-training: #6A5FC4;
+  --m-training-bg: rgba(106,95,196,.08);
+  --m-nutrition: #A8446A;
+  --m-nutrition-bg: rgba(168,68,106,.09);
+  --m-energy: #B1434F;
+  --m-energy-bg: rgba(177,67,79,.08);
+  --m-recovery: #3B7F99;
+  --m-recovery-bg: rgba(59,127,153,.09);
+  --m-strength: #6E6350;
+  --m-strength-bg: rgba(110,99,80,.09);
 
   /* Status, restrained — see the :root block for the reasoning.
      Darkened in the contrast pass: as TEXT on a white panel the previous
@@ -692,7 +817,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     animation: so-spin .6s linear infinite;
   }
   .btn-primary[data-loading="true"]::after,
-  .btn-danger[data-loading="true"]::after { color: var(--accent-contrast); }
+  .btn-danger[data-loading="true"]::after { color: var(--cta-ink); }
 
   /* Size modifiers — compose with any variant: `btn-primary btn-lg`.
      `!` on every declaration because these rules are DEFINED BEFORE the
@@ -719,7 +844,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     @apply btn-base overflow-hidden;
     background: var(--accent-grad);
     box-shadow: var(--accent-grad-shadow);
-    color: var(--accent-contrast);
+    border: 1px solid var(--cta-edge);
+    color: var(--cta-ink);
     font-weight: 700;
   }
   .btn-primary::after {
@@ -1197,3 +1323,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
      'smooth'}) jump instead. */
   html, body, * { scroll-behavior: auto !important; }
 }
+
+/* ─────────────────────────────────────────────
+   METRIC CHART — the line draws itself in on first paint.
+
+   The path is dashed with its own length and the offset animates to zero,
+   which is the only way to "draw" an arbitrary SVG path. pathLength is NOT
+   hardcoded: 1000 is a normalised unit set on the element, so one rule
+   works for every series length.
+
+   Motion here is doing a job rather than decorating: it walks the eye left
+   to right along the time axis, which is the direction the data is meant
+   to be read in. Under prefers-reduced-motion the line is simply present.
+   ───────────────────────────────────────────── */
+.metric-chart-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: metric-draw .9s cubic-bezier(.22,.61,.36,1) forwards;
+}
+@keyframes metric-draw { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-chart-line {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Touch-size override for small buttons.
+
+   .btn-sm sets `min-height: 32px !important` (it has to -- it is defined
+   before the colour variants and would otherwise lose to .btn's own
+   padding). That !important also beats React inline styles, so a row of
+   .btn-sm actions cannot be raised to a comfortable tap target by styling
+   the element. This class is the sanctioned way to ask for one: same
+   compact type and padding, a hand-sized hit area. */
+.btn-touch { min-height: 44px !important; }

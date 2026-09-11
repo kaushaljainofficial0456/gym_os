@@ -147,8 +147,31 @@ export default function ClientLayout() {
     nav(item.to);
   }, [nav]);
 
+  // WIDTH IS PER-ROUTE, and only widens on a genuinely large screen.
+  //
+  // Every client page is a single centred 512px column, which is right for
+  // a phone-first product and right for Home/Workout/Nutrition at any
+  // size -- they are task screens, not dashboards. Progress is the one
+  // exception: it is an analytics surface with charts that gain real
+  // information density from width, and squeezing 11 sections into 512px
+  // on a 27" monitor wastes the screen it is being read on.
+  //
+  // A first attempt put a fixed side rail INSIDE the 512px column, which
+  // collapsed the main column to ~180px and stacked the hero's stat
+  // labels on top of each other. The container has to widen first; the
+  // two-column layout is then the page's own business.
+  //
+  // Community is the second such surface, and it reproduced that exact
+  // bug: its xl sidebar was added without adding the route here, so
+  // `1fr + 360px` was asked to fit inside 512px and the main column
+  // collapsed to ~130px -- rank, streak and volume all overlapping. If a
+  // page grows an xl side column, its route belongs in this list, or it
+  // will scramble the same way.
+  const WIDE_ROUTES = ['/app/client/progress', '/app/client/community'];
+  const wide = WIDE_ROUTES.some((r) => loc.pathname.startsWith(r));
+
   return (
-    <div className="min-h-screen max-w-lg mx-auto px-4 pb-28 pt-0">
+    <div className={`min-h-screen mx-auto px-4 pb-28 pt-0 ${wide ? 'max-w-lg xl:max-w-6xl' : 'max-w-lg'}`}>
       {/* ── TOP HEADER ── */}
       <header className="app-header px-1">
         <div className="flex items-center justify-between gap-2">
@@ -225,29 +248,19 @@ export default function ClientLayout() {
             <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>Barbell</span>
           </div>
 
-          {/* RIGHT: notification center + Coach brief. Two bell-shaped
-              icons side by side reads oddly at a glance, but they're
-              genuinely different features (this app's own established
-              glyph for "notification-shaped thing", same as Settings.jsx's
-              NotificationSettingsCard) -- the "Coach" text label plus this
-              one's own unread-count badge keep them distinguishable. */}
+          {/* RIGHT: ONE bell. It previously sat beside a second,
+              identical-looking bell for the Coach brief -- the comment
+              that used to live here argued they were distinguishable by a
+              text label, which is an argument about the markup rather
+              than about a person scanning a header. The brief is now the
+              pinned first item inside this panel, where its difference
+              from a gym update can actually be stated. */}
           <div className="flex items-center gap-1.5">
-            <NotificationBell />
-            <button
-              onClick={() => setCoachOpen(true)}
-              className="chrome-btn relative gap-1.5 py-1.5 px-2.5"
-              aria-label={hasBrief && briefPriority ? 'Coach brief — new' : 'Coach brief'}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
-              </svg>
-              <span className="hidden sm:block font-grotesk text-[11px] font-medium">Coach</span>
-              {hasBrief && briefPriority && (
-                <span aria-hidden="true" className="absolute top-0.5 right-1 w-2 h-2 rounded-full anim-pulse-soft"
-                  style={{ background: 'var(--accent)', boxShadow: '0 0 0 2px rgb(var(--bg-rgb))' }} />
-              )}
-            </button>
+            <NotificationBell
+              hasBrief={hasBrief}
+              briefPriority={briefPriority}
+              onOpenCoach={() => setCoachOpen(true)}
+            />
           </div>
         </div>
       </header>

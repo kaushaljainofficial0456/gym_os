@@ -380,15 +380,42 @@ export default function workoutRoutes(db) {
     if (!Array.isArray(req.body.logs) || req.body.logs.length === 0) {
       return res.status(400).json({ error: 'logs required — log at least one set' });
     }
-    const d = dayKey();
-    const completedAt = now();
+    // Historical values when supplied, otherwise "now" exactly as before.
+    // Validated here rather than trusted: a future-dated workout would
+    // corrupt streaks, trends and the calorie model's day lookup.
+    // CLIENT-SUPPLIED TIMES ARE HONOURED ONLY FOR A RETROACTIVE WORKOUT.
+    //
+    // For a live session started through POST /:id/start, started_at is
+    // deliberately server-authoritative: a client that could claim its own
+    // start time could claim a three-hour session for a twenty-minute one
+    // and inflate the calorie estimate with it. That rule stays exactly as
+    // it was (see workoutCalorie.test.js, which asserts a bogus client
+    // claim is ignored).
+    //
+    // A retroactive workout has no server observation to protect -- the
+    // whole point is that the app was not running at the time -- so the
+    // user's own account of when they trained is the only source there is,
+    // and the row is labelled manual_retroactive so it is never mistaken
+    // for a measured one.
+    const isRetroactive = w.source === 'manual_retroactive';
+    const tzForDay = req.tz || undefined;
+    const todayKey = dayKey(new Date(), tzForDay);
+    const d = (isRetroactive && req.body.performed_date) || todayKey;
+    if (d > todayKey) return res.status(422).json({ error: 'A workout cannot be logged in the future' });
+    const completedAt = (isRetroactive && req.body.completed_at) || now();
+    if (Date.parse(completedAt) > Date.now() + 60_000) {
+      return res.status(422).json({ error: 'A workout cannot end in the future' });
+    }
     // Duration calculation:
     //   1. If the client supplies duration_seconds (active time excluding
     //      pauses), use it — the frontend tracks pause/resume timestamps
     //      and sends only the active portion.
     //   2. Otherwise fall back to server-authoritative completed_at −
     //      started_at (legacy behaviour).
-    const startedAt = w.started_at || null;
+    const startedAt = (isRetroactive && req.body.started_at) || w.started_at || null;
+    if (startedAt && Date.parse(startedAt) > Date.parse(completedAt)) {
+      return res.status(422).json({ error: 'The workout cannot start after it ended' });
+    }
     let durationMin = null;
     if (req.body.duration_seconds != null && Number.isFinite(req.body.duration_seconds)) {
       durationMin = Math.round((req.body.duration_seconds / 60) * 10) / 10;
@@ -465,8 +492,14 @@ export default function workoutRoutes(db) {
       }
 
       await tx.run(
-        `UPDATE workouts SET status = 'completed', completed_at = ?, duration_min = ? WHERE id = ?`,
-        [completedAt, durationMin, w.id]);
+        // started_at is written too: for a retroactive log the row was
+        // created without one, and the energy reconciliation engine matches
+        // wearable workouts on the real time window (see
+        // services/health/matching.js) -- a missing or "now" start time
+        // would stop a WHOOP session from ever matching the session it
+        // actually was.
+        `UPDATE workouts SET status = 'completed', started_at = ?, completed_at = ?, duration_min = ? WHERE id = ?`,
+        [startedAt, completedAt, durationMin, w.id]);
 
       // Calorie estimate from ACTUAL completed sets — never planned workload
       // (skipped exercises contribute 0 sets / 0 reps / 0 workload).
@@ -565,6 +598,16 @@ function z_workoutComplete() {
     // naive completed_at − started_at so that paused time never enters
     // calorie calculations.  Capped at 12 h to reject obviously bad input.
     duration_seconds: z.number().min(0).max(43200).optional(),
+    // RETROACTIVE LOGGING. A workout performed earlier (the user forgot to
+    // start the timer) is the SAME workout -- it just happened in the past
+    // -- so rather than a parallel "log a past workout" pipeline with its
+    // own PR/calorie/logging logic to drift out of sync, this route accepts
+    // when it happened. Everything downstream (workout_logs dates,
+    // evaluatePRs, the calorie model's body-weight lookup) already keys off
+    // those values.
+    performed_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    started_at: z.string().datetime().optional(),
+    completed_at: z.string().datetime().optional(),
     // Accumulated paused time in milliseconds — stored for analytics but
     // does NOT influence duration_min or calorie calculation when
     // duration_seconds is supplied.

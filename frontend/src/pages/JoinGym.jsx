@@ -44,6 +44,17 @@ export default function JoinGym() {
     try {
       if (user.role === 'CLIENT') {
         const res = await api('/enrollment/client/join', { method: 'POST', body: JSON.stringify({ payload }) });
+        // A FREE membership has no payment step at all -- the server has
+        // already enrolled them. Without this branch setOrder(undefined)
+        // left the screen sitting on the join prompt showing neither a
+        // payment sheet nor a success state, so a member who WAS enrolled
+        // looked like a failed scan.
+        if (res.free) {
+          if (res.token) await refreshSession(res.token);
+          setDone(true);
+          setTimeout(() => nav('/app/client', { replace: true }), 1200);
+          return;
+        }
         setOrder(res.order);
       } else {
         const res = await api('/enrollment/trainer/join', { method: 'POST', body: JSON.stringify({ payload }) });

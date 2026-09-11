@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useCookieConsent } from '../../components/CookieConsent.jsx';
 import { api } from '../../api.js';
+import { Toast } from '../../components/UI.jsx';
 
 const SETTINGS_SECTIONS = [
   {
@@ -191,118 +192,232 @@ function NotificationSettingsCard() {
 
   const update = async (key, value) => {
     setSaving(true);
+    // Optimistic, so a toggle responds under the finger instead of after a
+    // round trip. Reverted from the server's own response either way.
+    setPrefs((p) => ({ ...p, [key]: value }));
     try {
       const d = await api('/notifications/preferences', {
         method: 'PATCH',
         body: JSON.stringify({ [key]: value }),
       });
       setPrefs(d?.preferences);
-      setToast('Saved ✓');
-      setTimeout(() => setToast(''), 2000);
-    } catch (e) { setToast('Failed to save'); setTimeout(() => setToast(''), 2000); }
+      setToast('Saved');
+    } catch {
+      setToast("Couldn't save that");
+      try {
+        const d = await api('/notifications/preferences');
+        setPrefs(d?.preferences);
+      } catch { /* leave the optimistic value rather than blanking the form */ }
+    }
     setSaving(false);
   };
 
   if (!prefs) return null;
 
-  const Toggle = ({ label, checked, onChange }) => (
-    <div className="flex items-center justify-between py-1.5">
-      <span className="text-sm" style={{ color: 'var(--ink)' }}>{label}</span>
-      <button
-        onClick={() => onChange(!checked)}
-        className="relative w-10 h-[22px] rounded-full transition-colors"
-        style={{ background: checked ? 'var(--accent)' : 'var(--line)' }}
-        disabled={saving}
-      >
-        <span
-          className="absolute top-[3px] w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
-          style={{ transform: checked ? 'translateX(22px)' : 'translateX(3px)' }}
-        />
-      </button>
-    </div>
-  );
+  /* GROUPED, and every row says what it actually does.
+     The previous version was nine identically-weighted toggles with no
+     explanation: "Incomplete workout" and "Tomorrow's workout" are not
+     self-describing, and a flat list gives no clue which of them matter.
+     Three groups matching the parts of the product a person already
+     knows, one sentence each. */
+  const GROUPS = [
+    {
+      title: 'Training',
+      items: [
+        ['workout_reminders', 'Workout reminder', 'On days you have a session scheduled.'],
+        ['tomorrow_workout', "Tomorrow's session", 'An evening heads-up about what is next.'],
+        ['incomplete_workout', 'Unfinished session', 'If you start a workout and never finish it.'],
+        ['rest_day_reminders', 'Rest days', 'A nudge to actually rest when one is scheduled.'],
+      ],
+    },
+    {
+      title: 'Nutrition',
+      items: [
+        ['nutrition_reminders', 'Meal logging', 'If the day is going by with nothing logged.'],
+        ['water_reminders', 'Water', 'Through the day, at the spacing you choose.'],
+      ],
+    },
+    {
+      title: 'Summary',
+      items: [
+        ['daily_summary', 'Daily recap', 'One message at the end of the day with how it went.'],
+      ],
+    },
+  ];
 
   return (
     <div className="card p-5">
-      {toast && (
-        <div className="text-[10px] text-center mb-2 font-medium" style={{ color: 'var(--good)' }}>{toast}</div>
-      )}
-      <div className="flex items-center gap-2.5 mb-3">
-        {/* Same bell path ClientLayout.jsx's Coach button already uses --
-            one bell shape for "notification" across the app rather than
-            a 🔔 emoji here and an SVG there. */}
+      <div className="flex items-center gap-2.5 mb-1">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
         <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Notifications</span>
       </div>
 
-      <div className="space-y-0.5">
-        <Toggle label="All notifications" checked={!!prefs.enabled} onChange={(v) => update('enabled', v ? 1 : 0)} />
-
-        {prefs.enabled ? (
-          <>
-            <div className="my-2" style={{ borderTop: '1px solid var(--line)' }} />
-            <Toggle label="Workout reminders" checked={!!prefs.workout_reminders} onChange={(v) => update('workout_reminders', v ? 1 : 0)} />
-            <Toggle label="Water reminders" checked={!!prefs.water_reminders} onChange={(v) => update('water_reminders', v ? 1 : 0)} />
-            {prefs.water_reminders ? (
-              <div className="flex items-center justify-between py-1.5 pl-4">
-                <span className="text-xs" style={{ color: 'var(--faint)' }}>Every</span>
-                <select
-                  className="input !py-1 !px-2 text-xs w-24"
-                  value={prefs.water_interval_h || 2}
-                  onChange={(e) => update('water_interval_h', parseFloat(e.target.value))}
-                  disabled={saving}
-                >
-                  <option value={1}>1 hour</option>
-                  <option value={2}>2 hours</option>
-                  <option value={3}>3 hours</option>
-                </select>
-              </div>
-            ) : null}
-            <Toggle label="Nutrition reminders" checked={!!prefs.nutrition_reminders} onChange={(v) => update('nutrition_reminders', v ? 1 : 0)} />
-            <Toggle label="Daily summary" checked={!!prefs.daily_summary} onChange={(v) => update('daily_summary', v ? 1 : 0)} />
-            {prefs.daily_summary ? (
-              <div className="flex items-center justify-between py-1.5 pl-4">
-                <span className="text-xs" style={{ color: 'var(--faint)' }}>At</span>
-                <input
-                  type="time"
-                  className="input !py-1 !px-2 text-xs w-24"
-                  value={prefs.daily_summary_time || '23:30'}
-                  onChange={(e) => update('daily_summary_time', e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            ) : null}
-            <Toggle label="Tomorrow's workout" checked={!!prefs.tomorrow_workout} onChange={(v) => update('tomorrow_workout', v ? 1 : 0)} />
-            <Toggle label="Rest-day reminders" checked={!!prefs.rest_day_reminders} onChange={(v) => update('rest_day_reminders', v ? 1 : 0)} />
-            <Toggle label="Incomplete workout" checked={!!prefs.incomplete_workout} onChange={(v) => update('incomplete_workout', v ? 1 : 0)} />
-
-            <div className="my-2" style={{ borderTop: '1px solid var(--line)' }} />
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-sm" style={{ color: 'var(--ink)' }}>Quiet hours</span>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="time"
-                  className="input !py-1 !px-1.5 text-[10px] w-20"
-                  value={prefs.quiet_hours_start || '23:45'}
-                  onChange={(e) => update('quiet_hours_start', e.target.value)}
-                  disabled={saving}
-                />
-                <span className="text-[10px]" style={{ color: 'var(--faint)' }}>to</span>
-                <input
-                  type="time"
-                  className="input !py-1 !px-1.5 text-[10px] w-20"
-                  value={prefs.quiet_hours_end || '07:00'}
-                  onChange={(e) => update('quiet_hours_end', e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            </div>
-          </>
-        ) : null}
+      {/* HONEST ABOUT DELIVERY. None of the reminders below are actually
+          sent: this codebase has no scheduler and no push/email provider
+          (see backend/src/routes/notifications.js's own header). Letting
+          someone tune nine switches that produce silence, and then wonder
+          why nothing arrives, is a worse experience than a cluttered
+          screen. The preferences are real and are stored, so they apply
+          the day delivery ships -- which is exactly what this says. */}
+      <div
+        className="rounded-xl px-3 py-2.5 mb-4 mt-2.5 text-[11.5px] leading-relaxed"
+        style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)', color: 'var(--mute)' }}
+      >
+        Scheduled reminders are not being sent yet. Your choices here are saved and will
+        apply as soon as they are. Updates from your coach and your gym already appear in
+        the bell at the top of the screen.
       </div>
+
+      <ToggleRow
+        label="All notifications"
+        hint={prefs.enabled ? 'Reminders are on.' : 'Everything below is paused.'}
+        checked={!!prefs.enabled}
+        onChange={(v) => update('enabled', v ? 1 : 0)}
+        disabled={saving}
+        emphasis
+      />
+
+      {/* !! matters: prefs.enabled is the NUMBER 0 or 1, and `0 && x`
+          evaluates to 0 -- which React renders as a literal "0" on the
+          page rather than nothing. */}
+      {!!prefs.enabled && (
+        <div className="mt-1">
+          {GROUPS.map((g) => (
+            <div key={g.title} className="mt-3.5">
+              <div className="text-[10px] uppercase tracking-[.14em] font-semibold mb-1" style={{ color: 'var(--faint)' }}>
+                {g.title}
+              </div>
+              {g.items.map(([key, label, hint]) => (
+                <div key={key}>
+                  <ToggleRow
+                    label={label}
+                    hint={hint}
+                    checked={!!prefs[key]}
+                    onChange={(v) => update(key, v ? 1 : 0)}
+                    disabled={saving}
+                  />
+                  {/* The dependent control sits INSIDE its own row's block
+                      and only when its parent is on, so enabling a toggle
+                      does not shuffle unrelated rows down the page. */}
+                  {key === 'water_reminders' && prefs.water_reminders ? (
+                    <div className="flex items-center justify-between pb-2.5 pl-1">
+                      <span className="text-[11.5px]" style={{ color: 'var(--mute)' }}>Remind me every</span>
+                      <select
+                        className="input !py-1.5 !px-2 text-[12px]"
+                        style={{ width: 104, minHeight: 38 }}
+                        value={prefs.water_interval_h || 2}
+                        onChange={(e) => update('water_interval_h', parseFloat(e.target.value))}
+                        disabled={saving}
+                        aria-label="Water reminder interval"
+                      >
+                        <option value={1}>1 hour</option>
+                        <option value={2}>2 hours</option>
+                        <option value={3}>3 hours</option>
+                      </select>
+                    </div>
+                  ) : null}
+                  {key === 'daily_summary' && prefs.daily_summary ? (
+                    <div className="flex items-center justify-between pb-2.5 pl-1">
+                      <span className="text-[11.5px]" style={{ color: 'var(--mute)' }}>Send it at</span>
+                      <input
+                        type="time"
+                        className="input !py-1.5 !px-2 text-[12px]"
+                        style={{ width: 104, minHeight: 38 }}
+                        value={prefs.daily_summary_time || '23:30'}
+                        onChange={(e) => update('daily_summary_time', e.target.value)}
+                        disabled={saving}
+                        aria-label="Daily recap time"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ))}
+
+          <div className="mt-4 pt-3.5" style={{ borderTop: '1px solid var(--line)' }}>
+            <div className="text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5" style={{ color: 'var(--faint)' }}>
+              Quiet hours
+            </div>
+            <div className="text-[11.5px] mb-2" style={{ color: 'var(--mute)' }}>
+              Nothing is sent between these times, whatever is switched on above.
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="time"
+                className="input !py-1.5 !px-2 text-[12px] flex-1"
+                style={{ minHeight: 42 }}
+                value={prefs.quiet_hours_start || '23:45'}
+                onChange={(e) => update('quiet_hours_start', e.target.value)}
+                disabled={saving}
+                aria-label="Quiet hours start"
+              />
+              <span className="text-[11px] shrink-0" style={{ color: 'var(--faint)' }}>to</span>
+              <input
+                type="time"
+                className="input !py-1.5 !px-2 text-[12px] flex-1"
+                style={{ minHeight: 42 }}
+                value={prefs.quiet_hours_end || '07:00'}
+                onChange={(e) => update('quiet_hours_end', e.target.value)}
+                disabled={saving}
+                aria-label="Quiet hours end"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Toast message={toast} onDone={() => setToast('')} />
     </div>
+  );
+}
+
+/** A settings row: label, one line of plain English, and a switch that is
+ *  a real 44px target. The old switch was 22px tall -- half the minimum
+ *  for a finger, on the one control on the screen that exists to be
+ *  tapped. */
+function ToggleRow({ label, hint, checked, onChange, disabled, emphasis = false }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      disabled={disabled}
+      role="switch"
+      aria-checked={checked}
+      className="w-full flex items-center justify-between gap-3 text-left"
+      style={{ minHeight: 46, paddingTop: 4, paddingBottom: 4 }}
+    >
+      <span className="min-w-0 flex-1">
+        <span
+          className="block truncate"
+          style={{ fontSize: emphasis ? 14 : 13, fontWeight: emphasis ? 700 : 550, color: 'var(--ink)' }}
+        >
+          {label}
+        </span>
+        {hint && (
+          <span className="block text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--mute)' }}>
+            {hint}
+          </span>
+        )}
+      </span>
+      <span
+        aria-hidden="true"
+        className="relative shrink-0 rounded-full transition-colors"
+        style={{ width: 42, height: 24, background: checked ? 'var(--accent)' : 'var(--line)' }}
+      >
+        <span
+          className="absolute rounded-full transition-transform"
+          style={{
+            top: 3, left: 3, width: 18, height: 18,
+            background: checked ? 'var(--accent-contrast)' : 'var(--panel)',
+            transform: checked ? 'translateX(18px)' : 'translateX(0)',
+            boxShadow: '0 1px 2px rgba(0,0,0,.3)',
+          }}
+        />
+      </span>
+    </button>
   );
 }
 

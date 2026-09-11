@@ -36,6 +36,7 @@ import { ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
 import { sumEatenTotals } from '../../nutritionCalc.js';
 import { burnSourceLabel } from '../../healthProviderLabels.js';
+import ActivityRings from '../../components/ActivityRings.jsx';
 import {
   AmbientBackdrop, Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
 } from '../../design/index.js';
@@ -139,6 +140,7 @@ export default function Home() {
   // Already fetched once by the persistent ClientLayout — reuse it instead
   // of re-fetching /tracking/me/home on every mount (see ClientLayout.jsx).
   const home = useOutletContext();
+  const nav = useNavigate();
   const crowdFetch = useFetch(() => api('/me/crowd'));
   const [crowdOpen, setCrowdOpen] = useState(false);
   // SK OS Health Intelligence Engine -- a SEPARATE, independent fetch from
@@ -359,28 +361,73 @@ export default function Home() {
           reflected today's calorie expenditure, wearable-informed or
           not (spec §79/§88 -- a non-wearable user still gets a real
           answer, from SK OS's own model). */}
-      {!health.loading && health.data?.intelligence && (health.data.intelligence.active_energy > 0 || health.data.intelligence.workout_minutes > 0) && (
+      {/* Shows whenever the day has ANY real figure. Was gated on active
+          energy alone, which hid the card -- and with it the only route to
+          the burn breakdown -- on every rest day. Resting energy is a real,
+          always-available number for a complete profile, so the rings now
+          have something honest to show every day. */}
+      {!health.loading && health.data?.intelligence && (health.data.intelligence.active_energy > 0 || health.data.intelligence.workout_minutes > 0 || health.data.intelligence.total_energy > 0) && (
         <Reveal delay={110}>
           <Tilt max={4}>
-            <div className="card p-5">
+            <button
+              type="button"
+              onClick={() => nav('/app/client/burn')}
+              className="card p-5 w-full text-left"
+              aria-label="Open today's burn breakdown"
+            >
               <div className="section-head !mb-0">
                 <span className="t-micro">Today's burn</span>
-                {health.data.intelligence.confidence_level && (
-                  <span className="text-[10.5px] capitalize" style={{ color: 'var(--faint)' }}>
-                    {health.data.intelligence.confidence_level.replace('_', ' ')} confidence
-                  </span>
-                )}
+                <span className="text-[10.5px]" style={{ color: 'var(--faint)' }}>Breakdown ›</span>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="font-black text-[28px] tracking-[-.02em] tabular-nums" style={{ color: 'var(--ink)' }}>
-                  <AnimatedNumber value={Math.round(health.data.intelligence.active_energy || 0)} />
-                </span>
-                <span className="text-[12px] font-medium" style={{ color: 'var(--mute)' }}>kcal active</span>
+
+              <div className="mt-3 flex items-center gap-4">
+                {/* The rings carry the glance; the numbers carry the detail. */}
+                <ActivityRings
+                  size={92}
+                  showLegend={false}
+                  values={{
+                    move: { value: health.data.intelligence.active_energy ?? null, goal: 500 },
+                    exercise: { value: health.data.intelligence.workout_minutes || null, goal: 30 },
+                    steps: { value: health.data.intelligence.steps ?? null, goal: 10000 },
+                  }}
+                />
+
+                <div className="min-w-0 flex-1">
+                  {/* TOTAL is the headline now (resting + active), with active
+                      underneath -- 'active only' was being read as a whole-day
+                      figure, which it never was. */}
+                  {health.data.intelligence.total_energy != null ? (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-black text-[28px] tracking-[-.02em] tabular-nums" style={{ color: 'var(--ink)' }}>
+                          <AnimatedNumber value={Math.round(health.data.intelligence.total_energy)} />
+                        </span>
+                        <span className="text-[12px] font-medium" style={{ color: 'var(--mute)' }}>kcal total</span>
+                      </div>
+                      <div className="mt-0.5 text-[11px] tabular-nums" style={{ color: 'var(--faint)' }}>
+                        {Math.round(health.data.intelligence.active_energy || 0)} active ·{' '}
+                        {Math.round(health.data.intelligence.resting_energy || 0)} resting
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-black text-[28px] tracking-[-.02em] tabular-nums" style={{ color: 'var(--ink)' }}>
+                          <AnimatedNumber value={Math.round(health.data.intelligence.active_energy || 0)} />
+                        </span>
+                        <span className="text-[12px] font-medium" style={{ color: 'var(--mute)' }}>kcal active</span>
+                      </div>
+                      <div className="mt-0.5 text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                        Complete your profile for a full-day total
+                      </div>
+                    </>
+                  )}
+                  <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                    {burnSourceLabel(health.data.intelligence.source_summary)}
+                  </div>
+                </div>
               </div>
-              <div className="mt-2 text-[10.5px]" style={{ color: 'var(--faint)' }}>
-                {burnSourceLabel(health.data.intelligence.source_summary)}
-              </div>
-            </div>
+            </button>
           </Tilt>
         </Reveal>
       )}

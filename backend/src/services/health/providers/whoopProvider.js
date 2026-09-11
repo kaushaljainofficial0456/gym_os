@@ -118,6 +118,22 @@ function verifyWebhookSignature(rawBody, signature, timestamp) {
   catch { return false; } // malformed signature -- never a match
 }
 
+/** Exchanges a refresh token for a fresh access token.
+ *
+ *  TWO WHOOP-SPECIFIC DETAILS, both confirmed against
+ *  developer.whoop.com/docs/developing/oauth:
+ *
+ *  1. `scope: 'offline'` is part of WHOOP's own documented refresh
+ *     payload -- without it a refresh can come back WITHOUT a new
+ *     refresh_token, which (given rotation, below) permanently kills the
+ *     connection on the following refresh.
+ *  2. Refresh tokens ROTATE: "the refresh token from the refresh
+ *     response is now the valid refresh token, and your app must use the
+ *     new refresh token on the subsequent refresh request". The caller
+ *     MUST persist the returned refreshToken -- storing only the new
+ *     access token and keeping the old refresh token means the next
+ *     refresh fails with an invalid_grant and the user has to reconnect
+ *     by hand. See health.js's ensureFreshToken, which does persist it. */
 async function refreshAccessToken(refreshToken) {
   requireCredentials();
   const res = await fetch(TOKEN_URL, {
@@ -128,9 +144,10 @@ async function refreshAccessToken(refreshToken) {
       refresh_token: refreshToken,
       client_id: config.whoopClientId,
       client_secret: config.whoopClientSecret,
+      scope: 'offline',
     }),
   });
-  if (!res.ok) throw new Error(`WHOOP token refresh failed: ${res.status}`);
+  if (!res.ok) throw new Error(`WHOOP token refresh failed: ${res.status} ${await res.text().catch(() => '')}`);
   const body = await res.json();
   return {
     accessToken: body.access_token,
