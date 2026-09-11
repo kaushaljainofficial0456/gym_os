@@ -35,7 +35,7 @@ function readAccentHex() {
     const raw = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
     if (/^#[0-9a-f]{3,8}$/i.test(raw)) return raw;
   } catch { /* fall through to the default below */ }
-  return '#E07A63';
+  return '#B4C2CE';
 }
 
 let razorpayScriptPromise = null;

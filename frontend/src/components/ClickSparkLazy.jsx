@@ -21,8 +21,8 @@ function useReducedMotion() {
 }
 
 function readAccentColor() {
-  if (typeof document === 'undefined') return '#E07A63';
-  return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E07A63';
+  if (typeof document === 'undefined') return '#B4C2CE';
+  return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#B4C2CE';
 }
 
 export default function ClickSparkLazy({ children }) {

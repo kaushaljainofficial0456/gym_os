@@ -72,7 +72,10 @@ const BorderGlow = ({
   glowIntensity = 1.0,
   coneSpread = 25,
   animated = false,
-  colors = ['#E07A63', '#C15C4C', '#F0A08C'],
+  // Reads the theme's accent instead of baking terracotta in -- a
+  // decorative glow must never be the one thing on screen that ignores
+  // the theme.
+  colors = ['var(--accent)', 'var(--accent-deep)', 'var(--accent-soft)'],
   fillOpacity = 0.35,
 }) => {
   const cardRef = useRef(null);

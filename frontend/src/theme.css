@@ -146,10 +146,22 @@
      clears 4.5:1 on the worst surface of either theme (light 4.51,
      dark 5.90) while staying visibly quieter than --mute. */
   --faint: rgba(255,223,221,.60);
-  /* Primary accent: terracotta */
-  --accent: #E07A63;
-  --accent-deep: #C15C4C;
-  --accent-soft: rgba(224,122,99,.12);
+  /* Primary accent: PLATINUM BLUE, not terracotta.
+     Dark mode is deliberately free of orange. Terracotta at #E07A63 is a
+     hot, high-chroma colour: on a near-black ground every active state,
+     border, ring and filled button lit up at once and the interface read
+     as warning-coloured rather than composed. Desaturating it (the
+     earlier 205 134 112 attempt) reduced the intensity but kept the hue,
+     so it still read as orange.
+     This is a cool, light, low-chroma blue-grey. It complements the warm
+     near-black ground by contrast rather than competing with it, stays
+     legible as text (~9:1 on --bg), and is distinct from every metric hue
+     in the chart palette so an accent can never be mistaken for data.
+     LIGHT MODE IS UNCHANGED -- terracotta on a warm paper ground is doing
+     none of the harm it did on black. */
+  --accent: #B4C2CE;
+  --accent-deep: #8FA1B2;
+  --accent-soft: rgba(180,194,206,.12);
   /* Secondary colors */
   --secondary: #FB7185;               /* pink/red */
   --secondary-deep: #F43F5E;
@@ -182,9 +194,13 @@
      pulled back, so it still reads as the brand and still clears contrast
      for text (~6.9:1 on --bg), without shouting. Filled surfaces do not
      use it at all any more -- see --cta-solid. */
-  --accent-rgb: 205 134 112;
-  --accent-deep-rgb: 193 92 76;
-  --accent-contrast: #2B120A;          /* dark ink ON terracotta */
+  --accent-rgb: 180 194 206;
+  --accent-deep-rgb: 143 161 178;
+  /* Ink ON the light accent. The accent is now a LIGHT colour, so
+     anything filled with it needs dark text -- the previous value was a
+     near-black brown chosen to sit on terracotta and would read as a
+     smudge on this. */
+  --accent-contrast: #10151A;
   --bg-rgb: 10 9 9;
   --bg2-rgb: 18 16 17;
   --panel-rgb: 22 22 22;
@@ -233,19 +249,19 @@
      Apple's dark mode uses for prominent actions, and it keeps terracotta
      free to mean something (chart lines, active states, PR highlights)
      instead of being a paint bucket. */
-  --accent-grad: linear-gradient(135deg, #262020, #302825);
+  --accent-grad: linear-gradient(135deg, #1F2429, #272E34);
   --accent-grad-shadow: 0 1px 0 rgba(255,223,221,.06) inset, 0 6px 18px -10px rgba(0,0,0,.85);
   --accent-grad-shadow-hover: 0 1px 0 rgba(255,223,221,.10) inset, 0 8px 22px -10px rgba(0,0,0,.9);
   /* Cream INK, not a cream fill -- this is the half of the earlier idea
      that was right. ~12:1 on the fill above. */
-  --cta-ink: #F4E9E4;
+  --cta-ink: #E8EEF3;
   /* Flat fill for small filled controls (segmented controls, chips). A
      gradient on a 34px chip is noise; the CTA gradient is reserved for
      full-width buttons where it reads as depth rather than banding. */
-  --cta-solid: #2E2624;
+  --cta-solid: #262D33;
   /* Hairline that separates the CTA from the card beneath it -- with a
      low-contrast fill, the edge is what makes it read as pressable. */
-  --cta-edge: rgba(255,223,221,.14);
+  --cta-edge: rgba(226,238,247,.15);
 
   /* ─────────────────────────────────────────────
      METRIC HUES — a calm multi-hue system.
@@ -272,14 +288,23 @@
   --m-body-bg: rgba(127,184,148,.10);
   --m-training: #9B93E0;      /* periwinkle — volume, sets */
   --m-training-bg: rgba(155,147,224,.10);
-  --m-nutrition: #E0B173;     /* honey — food */
-  --m-nutrition-bg: rgba(224,177,115,.10);
-  --m-energy: #E58C6F;        /* coral — burn (the brand hue's own family) */
-  --m-energy-bg: rgba(229,140,111,.10);
+  /* These three were honey, coral and bronze -- the warm end of the
+     palette, inherited from when the brand hue was terracotta. With the
+     dark accent moved to platinum they were the last orange left on the
+     screen, and they sat in the largest areas (pulse tiles, chart fills),
+     so they read as THE colour of the app.
+     Replaced with hues that stay mutually distinguishable and keep each
+     metric's meaning: rose for food, a warm red for effort, and a low
+     chroma champagne for records -- a medal tone that is metallic rather
+     than orange. Green / violet / cyan below are untouched. */
+  --m-nutrition: #DE9AAE;     /* rose — food */
+  --m-nutrition-bg: rgba(222,154,174,.10);
+  --m-energy: #D97B84;        /* warm red — burn, effort */
+  --m-energy-bg: rgba(217,123,132,.10);
   --m-recovery: #6FB2C9;      /* slate blue — sleep, recovery */
   --m-recovery-bg: rgba(111,178,201,.10);
-  --m-strength: #D9A868;      /* bronze — records */
-  --m-strength-bg: rgba(217,168,104,.10);
+  --m-strength: #CFC5B4;      /* champagne — records */
+  --m-strength-bg: rgba(207,197,180,.10);
 
   /* ─────────────────────────────────────────────
      SHAPE, SPACE, ELEVATION, MOTION
@@ -403,14 +428,14 @@
   --m-body-bg: rgba(78,140,104,.09);
   --m-training: #6A5FC4;
   --m-training-bg: rgba(106,95,196,.08);
-  --m-nutrition: #B3812F;
-  --m-nutrition-bg: rgba(179,129,47,.09);
-  --m-energy: #C15C4C;
-  --m-energy-bg: rgba(193,92,76,.08);
+  --m-nutrition: #A8446A;
+  --m-nutrition-bg: rgba(168,68,106,.09);
+  --m-energy: #B1434F;
+  --m-energy-bg: rgba(177,67,79,.08);
   --m-recovery: #3B7F99;
   --m-recovery-bg: rgba(59,127,153,.09);
-  --m-strength: #9A6D16;
-  --m-strength-bg: rgba(154,109,22,.09);
+  --m-strength: #6E6350;
+  --m-strength-bg: rgba(110,99,80,.09);
 
   /* Status, restrained — see the :root block for the reasoning.
      Darkened in the contrast pass: as TEXT on a white panel the previous

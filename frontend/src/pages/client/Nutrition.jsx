@@ -100,14 +100,17 @@ function CalorieRing({ value, max, t }) {
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <div className="absolute inset-0 pointer-events-none" style={{
-        background: `radial-gradient(circle at 50% 50%, ${overTarget ? 'rgba(255,107,107,0.08)' : t.accentDim}, transparent 65%)`,
+        background: `radial-gradient(circle at 50% 50%, ${overTarget ? 'rgb(var(--bad-rgb) / .08)' : t.accentDim}, transparent 65%)`,
       }} />
       <svg width={size} height={size} className="-rotate-90 relative z-10">
         <defs>
           <linearGradient id={`${uid}_grad`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={overTarget ? '#FF6B6B' : t.accent} />
-            <stop offset="50%" stopColor={overTarget ? '#FF9A7A' : t.accent} />
-            <stop offset="100%" stopColor={overTarget ? '#FFB88C' : t.accent} />
+            {/* Over-target is a WARNING, so it reads from the semantic
+                token rather than three hardcoded oranges that no theme
+                could reach. */}
+            <stop offset="0%" stopColor={overTarget ? 'var(--bad)' : t.accent} />
+            <stop offset="50%" stopColor={overTarget ? 'rgb(var(--bad-rgb) / .85)' : t.accent} />
+            <stop offset="100%" stopColor={overTarget ? 'rgb(var(--bad-rgb) / .7)' : t.accent} />
           </linearGradient>
           <filter id={`${uid}_glow`}>
             <feGaussianBlur stdDeviation="4" result="blur" />
