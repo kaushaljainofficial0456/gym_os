@@ -1325,3 +1325,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     stroke-dashoffset: 0;
   }
 }
+
+/* Touch-size override for small buttons.
+
+   .btn-sm sets `min-height: 32px !important` (it has to -- it is defined
+   before the colour variants and would otherwise lose to .btn's own
+   padding). That !important also beats React inline styles, so a row of
+   .btn-sm actions cannot be raised to a comfortable tap target by styling
+   the element. This class is the sanctioned way to ask for one: same
+   compact type and padding, a hand-sized hit area. */
+.btn-touch { min-height: 44px !important; }
