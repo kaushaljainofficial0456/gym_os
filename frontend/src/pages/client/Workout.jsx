@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
 import { ErrorState, Bar, Ring, CheckIcon, XIcon } from '../../components/UI.jsx';
+import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
@@ -1567,19 +1568,29 @@ export default function Workout() {
           </div>
         )}
 
-        {/* ── 5. RECENT SESSIONS ── */}
+        {/* ── 5. RECENT SESSIONS ──
+            Was three flex children with no fixed widths, so the raw ISO
+            date landed wherever the (truncated, variable-length) name
+            happened to end -- a different horizontal position on every
+            row. SessionRow gives the date a fixed right-aligned column and
+            replaces the bare date with what the session actually was.
+            "View all" exists because this list stopped at five with no
+            route to anything older. */}
         {!!hist.data?.workouts?.length && (
           <div className="card p-4 anim-fadeUp" style={{ animationDelay: '260ms' }}>
-            <div className="t-micro mb-2.5">Recent sessions</div>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="t-micro">Recent sessions</div>
+              <button
+                onClick={() => nav('/app/client/history')}
+                className="text-[11px] font-semibold rounded-lg px-2"
+                style={{ minHeight: 30, color: 'var(--accent)' }}
+              >
+                View all →
+              </button>
+            </div>
             <div className="space-y-1.5">
               {hist.data.workouts.filter((w) => w.id !== workout?.id).slice(0, 5).map((w) => (
-                <button key={w.id}
-                  onClick={() => nav(`/app/client/day/${w.scheduled_date}`)}
-                  className="w-full flex items-center justify-between text-xs border-b border-line/50 last:border-0 py-2 active:scale-[.98] transition-all text-left">
-                  <span className="font-grotesk font-semibold truncate">{w.name}</span>
-                  <span className="text-mute shrink-0 ml-2">{w.scheduled_date}</span>
-                  <span className={`chip border shrink-0 ml-2 ${w.status === 'completed' ? 'text-good border-good/40 bg-good/10' : 'text-warn border-warn/40 bg-warn/10'}`}>{w.status === 'completed' ? 'DONE' : w.status.toUpperCase()}</span>
-                </button>
+                <SessionRow key={w.id} w={w} compact onOpen={() => nav(`/app/client/day/${w.scheduled_date}`)} />
               ))}
             </div>
           </div>

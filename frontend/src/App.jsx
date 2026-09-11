@@ -49,6 +49,7 @@ const Help = lazy(() => import('./pages/client/Help.jsx'));
 const Community = lazy(() => import('./pages/client/Community.jsx'));
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
+const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
 const HealthDevices = lazy(() => import('./pages/client/HealthDevices.jsx'));
 const BurnDetail = lazy(() => import('./pages/client/BurnDetail.jsx'));
 // Design-system showcase — same treatment it already had.
@@ -191,6 +192,7 @@ export default function App() {
         <Route path="community" element={page(Community)} />
         <Route path="help" element={page(Help)} />
         <Route path="day/:date" element={page(DailyHistory)} />
+        <Route path="history" element={page(SessionHistory)} />
         <Route path="health" element={page(HealthDevices)} />
         <Route path="burn" element={page(BurnDetail)} />
       </Route>

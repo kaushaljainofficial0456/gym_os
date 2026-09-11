@@ -263,7 +263,29 @@ export function Spinner({ label = 'Loading…' }) {
   );
 }
 
-export function Toast({ message, tone = 'success' }) {
+/**
+ * Toast — self-dismissing.
+ *
+ * It previously had NO dismissal of any kind: it rendered for as long as
+ * `message` was truthy and provided no way to clear it, while every call
+ * site assumed it would go away on its own. So "Shared with your gym"
+ * simply stayed on screen until the page was navigated away from and
+ * back. It also silently ignored an `onDone` prop that callers were
+ * already passing.
+ *
+ * The timer lives HERE rather than in each caller because there were four
+ * call sites and none of them had one -- a component that appears and
+ * never leaves is the component's bug, not the caller's.
+ */
+export function Toast({ message, tone = 'success', onDone, duration = 2600 }) {
+  useEffect(() => {
+    if (!message) return undefined;
+    // Re-armed per message, so a second toast gets its own full duration
+    // instead of inheriting the remainder of the first one's.
+    const id = setTimeout(() => { onDone?.(); }, duration);
+    return () => clearTimeout(id);
+  }, [message, duration, onDone]);
+
   if (!message) return null;
   const meta = {
     success: ['rgb(var(--good-rgb))', 'M20 6 9 17l-5-5'],

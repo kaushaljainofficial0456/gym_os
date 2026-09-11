@@ -79,7 +79,7 @@ export default function EnterpriseQR() {
 
   return (
     <div className="space-y-6">
-      <Toast message={toast} tone={toast?.toLowerCase().includes('revoked') || toast === 'Copied' ? 'success' : 'error'} />
+      <Toast message={toast} onDone={() => setToast('')} tone={toast?.toLowerCase().includes('revoked') || toast === 'Copied' ? 'success' : 'error'} />
       <PageHeader title="QR onboarding" sub="Generate a one-time code for a new client or trainer to scan." />
 
       <Seg value={purpose} onChange={(v) => { setPurpose(v); setIssued(null); }} options={[{ value: 'CLIENT', label: 'Client' }, { value: 'TRAINER', label: 'Trainer' }]} />
