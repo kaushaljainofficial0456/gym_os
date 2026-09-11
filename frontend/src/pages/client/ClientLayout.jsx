@@ -158,8 +158,16 @@ export default function ClientLayout() {
   // A first attempt put a fixed side rail INSIDE the 512px column, which
   // collapsed the main column to ~180px and stacked the hero's stat
   // labels on top of each other. The container has to widen first; the
-  // two-column layout is then Progress's own business.
-  const wide = loc.pathname.startsWith('/app/client/progress');
+  // two-column layout is then the page's own business.
+  //
+  // Community is the second such surface, and it reproduced that exact
+  // bug: its xl sidebar was added without adding the route here, so
+  // `1fr + 360px` was asked to fit inside 512px and the main column
+  // collapsed to ~130px -- rank, streak and volume all overlapping. If a
+  // page grows an xl side column, its route belongs in this list, or it
+  // will scramble the same way.
+  const WIDE_ROUTES = ['/app/client/progress', '/app/client/community'];
+  const wide = WIDE_ROUTES.some((r) => loc.pathname.startsWith(r));
 
   return (
     <div className={`min-h-screen mx-auto px-4 pb-28 pt-0 ${wide ? 'max-w-lg xl:max-w-6xl' : 'max-w-lg'}`}>

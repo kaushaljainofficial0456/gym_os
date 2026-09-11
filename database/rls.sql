@@ -133,6 +133,19 @@ ALTER TABLE community_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_members FORCE ROW LEVEL SECURITY;
 ALTER TABLE community_workout_shares ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_workout_shares FORCE ROW LEVEL SECURITY;
+-- Community social layer (reactions, comments, challenges). Each carries a
+-- NOT NULL org_id written from the acting member's own org, so the plain
+-- direct-org_id policy applies with no NULL branch. Without these a
+-- reaction or comment row would be readable across tenants by any query
+-- that runs inside db.tx() with app.org_id set to a different gym --
+-- which is precisely the gap prodreadiness.test.js's schema sweep exists
+-- to catch, and it caught these.
+ALTER TABLE community_reactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_reactions FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_comments FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_challenges FORCE ROW LEVEL SECURITY;
 -- Share-link snapshots (routes/workoutShare.js, me.js's workout-share
 -- endpoints). org_id is always populated from the sharing client's own
 -- org at INSERT (me.js passes c.org_id), so the plain direct-org_id
@@ -214,6 +227,7 @@ BEGIN
     'notification_preferences','events',
     'ai_memory','ai_feedback',
     'community_members','community_workout_shares','shared_workouts',
+    'community_reactions','community_comments','community_challenges',
     'health_provider_connections','health_records','health_canonical_workouts',
     'health_energy_intervals','health_daily_summaries'
   ] LOOP

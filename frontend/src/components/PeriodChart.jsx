@@ -45,6 +45,12 @@ export default function PeriodChart({
   formatValue,
   todayKey = null,          // highlight this date's column
   ariaLabel,
+  /** Optional: called with the selected point's index, or null when the
+   *  selection is cleared. Lets a caller render its own richer detail for
+   *  the chosen day (Community shows workouts + PRs + members) without
+   *  this component needing to know about those fields. Existing callers
+   *  pass nothing and behave exactly as before. */
+  onSelect = null,
 }) {
   const gid = useId().replace(/:/g, '');
   const [active, setActive] = useState(null);
@@ -121,7 +127,11 @@ export default function PeriodChart({
             <button
               key={p.date}
               type="button"
-              onClick={() => setActive(active === i ? null : i)}
+              onClick={() => {
+                const next = active === i ? null : i;
+                setActive(next);
+                onSelect?.(next);
+              }}
               className="relative flex min-w-0 flex-1 shrink-0 flex-col items-center justify-end"
               style={{
                 height,

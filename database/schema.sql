@@ -1014,6 +1014,70 @@ CREATE INDEX IF NOT EXISTS idx_cws_org_feed ON community_workout_shares(org_id, 
 CREATE INDEX IF NOT EXISTS idx_cws_client ON community_workout_shares(client_id);
 
 -- ============================================================
+-- COMMUNITY SOCIAL LAYER — reactions, comments, challenges
+--
+-- Reactions and comments attach to a (target_type, target_id) PAIR rather
+-- than to a share id. A community event is not always a share: a personal
+-- record is a first-class thing to celebrate and lives in
+-- personal_records, with no share row to hang a foreign key from. The
+-- pair keeps one reaction table serving every event kind, and leaves room
+-- for future kinds without a migration per kind.
+--
+-- The cost of that flexibility is that no FK can enforce the target
+-- exists, so readers MUST join to the real target table and drop
+-- orphans -- a reaction whose workout was deleted must vanish from the
+-- feed rather than render against nothing.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS community_reactions (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,          -- share | pr
+  target_id   TEXT NOT NULL,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  emoji       TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  -- One member, one of each reaction, per target. Tapping twice removes
+  -- rather than stacking -- without this a held button writes a hundred
+  -- rows and the count becomes a measure of impatience.
+  UNIQUE (target_type, target_id, client_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_cr_target ON community_reactions(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_cr_org ON community_reactions(org_id, created_at);
+
+CREATE TABLE IF NOT EXISTS community_comments (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,
+  target_id   TEXT NOT NULL,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  body        TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cc_target ON community_comments(target_type, target_id, created_at);
+
+-- A challenge stores only its DEFINITION. Progress is computed at read
+-- time from workouts/personal_records, never written here: a stored
+-- counter is a second source of truth that silently drifts the first time
+-- a workout is edited or deleted, and "do not fake challenge progress"
+-- means the number has to be derived from the same rows the leaderboard
+-- reads. metric names which existing measure to run, so a challenge can
+-- never be created for something the backend cannot actually count.
+CREATE TABLE IF NOT EXISTS community_challenges (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  description TEXT,
+  metric      TEXT NOT NULL CHECK (metric IN ('workouts','volume','prs')),
+  goal        REAL NOT NULL,
+  scope       TEXT NOT NULL DEFAULT 'member' CHECK (scope IN ('member','community')),
+  start_date  TEXT NOT NULL,
+  end_date    TEXT NOT NULL,
+  created_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chal_org ON community_challenges(org_id, start_date, end_date);
+
+-- ============================================================
 -- WORKOUT SHARING — cross-account shareable workout link
 -- Analogous to shared_meals: an immutable snapshot of a workout and its
 -- exercises, packaged into one shareable link. The sender's original
