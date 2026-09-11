@@ -26,6 +26,20 @@ import { analyzeSeries, comparePeriods, streak, goalProgress, normalizeSeries } 
 
 const round = (v, d = 1) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
 
+// PostgreSQL returns SUM()/COUNT() over integers as BIGINT, and node-pg
+// hands BIGINT back as a STRING to avoid silent precision loss. SQLite
+// returns a JS number for the same query, so an un-coerced aggregate
+// works perfectly in local dev and breaks only in production -- which is
+// exactly how it shipped: `sets` arrived as "17", the UI's
+// `total + row.sets` concatenated instead of adding, and a sets total
+// rendered as 1,71,71,71,73,13,13,... Every aggregate below goes through
+// this on the way out.
+const int = (v) => {
+  if (v == null) return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : 0;
+};
+
 /** Local calendar day N days back, as YYYY-MM-DD. */
 function daysAgoKey(n) {
   return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
@@ -65,12 +79,12 @@ async function detectCapabilities(db, { userId, clientId }) {
 
   return {
     // Universally available SK OS data
-    weight: { available: (weightRow?.n || 0) > 0, count: weightRow?.n || 0, source: 'manual' },
-    measurements: { available: (measureRow?.n || 0) > 0, count: measureRow?.n || 0, source: 'manual' },
-    progressPhotos: { available: (photoRow?.n || 0) > 0, count: photoRow?.n || 0, source: 'manual' },
-    workouts: { available: (workoutRow?.n || 0) > 0, count: workoutRow?.n || 0, source: 'skos' },
-    nutrition: { available: (mealRow?.n || 0) > 0, count: mealRow?.n || 0, source: 'skos' },
-    prs: { available: (prRow?.n || 0) > 0, count: prRow?.n || 0, source: 'skos' },
+    weight: { available: int(weightRow?.n) > 0, count: int(weightRow?.n), source: 'manual' },
+    measurements: { available: int(measureRow?.n) > 0, count: int(measureRow?.n), source: 'manual' },
+    progressPhotos: { available: int(photoRow?.n) > 0, count: int(photoRow?.n), source: 'manual' },
+    workouts: { available: int(workoutRow?.n) > 0, count: int(workoutRow?.n), source: 'skos' },
+    nutrition: { available: int(mealRow?.n) > 0, count: int(mealRow?.n), source: 'skos' },
+    prs: { available: int(prRow?.n) > 0, count: int(prRow?.n), source: 'skos' },
     // Health-data dependent -- each gated on real values existing
     sleep: { available: anyHealth('sleep_duration_seconds'), source: wearableSource },
     recovery: { available: anyHealth('recovery_score'), source: wearableSource },
@@ -214,9 +228,9 @@ async function loadTraining(db, clientId, since) {
   }
   const mapped = sessions.map((s) => {
     const seconds = secondsByDate.get(s.date) || 0;
-    const qualifies = (s.sets || 0) >= MIN_SETS_FOR_TRAINING_DAY || seconds >= MIN_SECONDS_FOR_TRAINING_DAY;
+    const qualifies = int(s.sets) >= MIN_SETS_FOR_TRAINING_DAY || seconds >= MIN_SECONDS_FOR_TRAINING_DAY;
     return {
-      date: s.date, volume: round(s.volume, 0), sets: s.sets, reps: s.reps, exercises: s.exercises,
+      date: s.date, volume: round(s.volume, 0), sets: int(s.sets), reps: int(s.reps), exercises: int(s.exercises),
       seconds: seconds || null, qualifies,
     };
   });
@@ -228,7 +242,7 @@ async function loadTraining(db, clientId, since) {
     sessions: mapped,
     qualifyingDays: mapped.filter((m) => m.qualifies).map((m) => m.date),
     skippedDays: mapped.filter((m) => !m.qualifies).length,
-    byMuscle: muscle.map((m) => ({ muscle: m.muscle, sets: m.sets, volume: round(m.volume, 0) })),
+    byMuscle: muscle.map((m) => ({ muscle: m.muscle, sets: int(m.sets), volume: round(m.volume, 0) })),
   };
 }
 
@@ -244,7 +258,7 @@ async function loadNutrition(db, clientId, since) {
   return {
     days: days.map((d) => ({
       date: d.date, calories: round(d.calories, 0), protein: round(d.protein, 0),
-      carbs: round(d.carbs, 0), fat: round(d.fat, 0), entries: d.entries,
+      carbs: round(d.carbs, 0), fat: round(d.fat, 0), entries: int(d.entries),
     })),
     targets: plan ? { calories: plan.calories, protein: plan.protein, carbs: plan.carbs, fat: plan.fat } : null,
   };

@@ -36,6 +36,7 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
+import { WeekSection, MeasurementsSection, AchievementsSection } from './ProgressSections.jsx';
 import Icon from '../../components/Icon.jsx';
 
 const PERIODS = [
@@ -125,7 +126,7 @@ function ChipRow({ options, value, onChange, ariaLabel }) {
               minHeight: 34,
               background: on ? 'var(--accent)' : 'transparent',
               color: on ? 'var(--accent-contrast)' : 'var(--mute)',
-              border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+              border: `1px solid ${on ? 'var(--cta-edge)' : 'var(--line)'}`,
             }}
           >
             {o.label}
@@ -724,7 +725,7 @@ function ConsistencySection({ intel }) {
           <Stat label="Current streak" value={c.streak?.current ?? 0} unit="d"
             tone={c.streak?.current ? 'var(--accent)' : undefined} />
           <Stat label="Best streak" value={c.streak?.best ?? 0} unit="d" />
-          <Stat label="Training days" value={trained.size || 0} sub="qualifying, 12 weeks" />
+          <Stat label="Training days" value={trained.size || 0} sub="12 weeks" />
         </div>
 
         <div className="flex gap-[3px] overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -1048,7 +1049,7 @@ export default function Progress() {
                   minHeight: 34,
                   background: on ? 'var(--accent)' : 'transparent',
                   color: on ? 'var(--accent-contrast)' : 'var(--faint)',
-                  border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                  border: `1px solid ${on ? 'var(--cta-edge)' : 'var(--line)'}`,
                 }}
               >
                 {p.label}
@@ -1068,9 +1069,15 @@ export default function Progress() {
 
       <NutritionSection intel={intel} />
 
+      <MeasurementsSection measurements={intel.measurements} Section={Section} ChipRow={ChipRow} NeedMore={NeedMore} />
+
+      <WeekSection week={intel.week} Section={Section} Stat={Stat} />
+
       <GoalSection intel={intel} />
 
       <ConsistencySection intel={intel} />
+
+      <AchievementsSection intel={intel} Section={Section} />
 
       <PhotosSection photos={legacy.data?.photos} />
 

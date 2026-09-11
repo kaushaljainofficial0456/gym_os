@@ -210,9 +210,35 @@
 
   --tint-rgb: 255 223 221;             /* blush -- was white; drives .btn/.chip/.navlink hover washes */
 
-  --accent-grad: linear-gradient(135deg, #C15C4C, #E07A63);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(193,92,76,.4);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(193,92,76,.55);
+  /* PRIMARY CTA — a tinted ELEVATED SURFACE, not a coloured slab.
+
+     Two rejected attempts got us here. Saturated terracotta was the
+     loudest object on a near-black screen and out-shouted the content it
+     was meant to serve. A near-white cream fill fixed the shouting but
+     read as a bright cut-out pasted ON the interface rather than part of
+     it -- on a #0A0909 ground a #FBF2ED pill is a ~19:1 luminance jump,
+     which is a spotlight, not a button.
+
+     What actually belongs in a dark UI is a surface a few steps above the
+     card it sits on, carrying the theme's own warm bias, with CREAM TEXT
+     doing the legibility work. The button then reads as the same material
+     as everything around it -- lit, not painted. This is the pattern
+     Apple's dark mode uses for prominent actions, and it keeps terracotta
+     free to mean something (chart lines, active states, PR highlights)
+     instead of being a paint bucket. */
+  --accent-grad: linear-gradient(135deg, #262020, #302825);
+  --accent-grad-shadow: 0 1px 0 rgba(255,223,221,.06) inset, 0 6px 18px -10px rgba(0,0,0,.85);
+  --accent-grad-shadow-hover: 0 1px 0 rgba(255,223,221,.10) inset, 0 8px 22px -10px rgba(0,0,0,.9);
+  /* Cream INK, not a cream fill -- this is the half of the earlier idea
+     that was right. ~12:1 on the fill above. */
+  --cta-ink: #F4E9E4;
+  /* Flat fill for small filled controls (segmented controls, chips). A
+     gradient on a 34px chip is noise; the CTA gradient is reserved for
+     full-width buttons where it reads as depth rather than banding. */
+  --cta-solid: #2E2624;
+  /* Hairline that separates the CTA from the card beneath it -- with a
+     low-contrast fill, the edge is what makes it read as pressable. */
+  --cta-edge: rgba(255,223,221,.14);
 
   /* ─────────────────────────────────────────────
      SHAPE, SPACE, ELEVATION, MOTION
@@ -319,9 +345,14 @@
 
   --tint-rgb: 138 66 50;
 
+  /* Light mode keeps the terracotta CTA: on a pale ground the deep
+     terracotta is the RESTRAINED choice, and a cream button would vanish. */
   --accent-grad: linear-gradient(135deg, #8E3D30, #B0503F);
   --accent-grad-shadow: 0 4px 14px -4px rgba(176,80,63,.28);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(176,80,63,.38);
+  --cta-ink: #FFF6F3;
+  --cta-solid: #A04A3B;
+  --cta-edge: rgba(43,18,10,.18);
 
   /* Status, restrained — see the :root block for the reasoning.
      Darkened in the contrast pass: as TEXT on a white panel the previous
@@ -703,7 +734,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     animation: so-spin .6s linear infinite;
   }
   .btn-primary[data-loading="true"]::after,
-  .btn-danger[data-loading="true"]::after { color: var(--accent-contrast); }
+  .btn-danger[data-loading="true"]::after { color: var(--cta-ink); }
 
   /* Size modifiers — compose with any variant: `btn-primary btn-lg`.
      `!` on every declaration because these rules are DEFINED BEFORE the
@@ -730,7 +761,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     @apply btn-base overflow-hidden;
     background: var(--accent-grad);
     box-shadow: var(--accent-grad-shadow);
-    color: var(--accent-contrast);
+    border: 1px solid var(--cta-edge);
+    color: var(--cta-ink);
     font-weight: 700;
   }
   .btn-primary::after {

@@ -267,3 +267,46 @@ test('out-of-order and duplicate rows do not corrupt the series', async () => {
   assert.equal(new Set(dates).size, dates.length, 'one point per day');
   assert.equal(dates.length, 3);
 });
+
+test('aggregates are NUMBERS even when the driver returns bigint as a string (PG behaviour)', async () => {
+  // PostgreSQL returns SUM()/COUNT() over integers as BIGINT, and node-pg
+  // hands BIGINT back as a STRING. SQLite returns a JS number for the same
+  // query, so this class of bug passes every local test and only breaks in
+  // production -- which is exactly what happened: `sets` arrived as "17",
+  // the UI added it with `total + row.sets`, and a sets total rendered as
+  // 1,71,71,71,73,13,13,...
+  const db = await memDb();
+  const ids = await seedClient(db);
+  const realQ = db.q.bind(db);
+  // Wrap the driver so every aggregate column comes back as a string,
+  // reproducing node-pg's bigint handling against the real code path.
+  db.q = async (sql, params) => {
+    const rows = await realQ(sql, params);
+    return rows.map((r) => {
+      const out = { ...r };
+      for (const k of ['sets', 'reps', 'exercises', 'entries', 'n', 'volume']) {
+        if (out[k] != null && typeof out[k] === 'number') out[k] = String(out[k]);
+      }
+      return out;
+    });
+  };
+  const ts = new Date().toISOString();
+  await db.run('INSERT INTO exercise_library (id, org_id, name, primary_muscle, equipment, movement, ex_type, is_global) VALUES (?,NULL,?,?,?,?,?,1)',
+    ['ex1', 'Bench Press', 'chest', 'barbell', 'horizontal_push', 'compound']);
+  for (let i = 0; i < 3; i++) {
+    await db.run('INSERT INTO workout_logs (id, client_id, exercise_id, date, sets_done, reps, weight, created_at) VALUES (?,?,?,?,?,?,?,?)',
+      [`wl${i}`, 'c1', 'ex1', dayKey(i + 1), 4, 10, 60, ts]);
+  }
+
+  const intel = await getProgressIntel(db, { userId: ids.userId, clientId: ids.clientId, days: 90 });
+  for (const session of intel.training.sessions) {
+    assert.equal(typeof session.sets, 'number', 'sets must be a number, never a string');
+    assert.equal(typeof session.reps, 'number');
+    assert.equal(typeof session.exercises, 'number');
+  }
+  // The actual regression: summing must ADD, not concatenate.
+  const total = intel.training.sessions.reduce((acc, x) => acc + x.sets, 0);
+  assert.equal(total, 12, `three sessions of 4 sets must total 12, got ${total}`);
+  for (const m of intel.training.byMuscle) assert.equal(typeof m.sets, 'number');
+  assert.equal(typeof intel.capabilities.workouts.count, 'number');
+});
