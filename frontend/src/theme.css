@@ -241,6 +241,40 @@
   --cta-edge: rgba(255,223,221,.14);
 
   /* ─────────────────────────────────────────────
+     METRIC HUES — a calm multi-hue system.
+
+     Progress was monochrome: every chart, ring and active state was the
+     same terracotta, so six different KINDS of information looked like one
+     kind. Giving each metric family its own hue lets the eye sort the page
+     before reading a word of it.
+
+     The discipline that keeps it calm rather than a fruit salad:
+      - hues are LOW SATURATION and share a common warmth, so they read as
+        one family rather than six unrelated brand colours;
+      - the tinted SURFACE is barely there (a wash, not a fill) -- colour
+        identifies, it never shouts;
+      - saturation lives in the small marks (icon, ring, chart line) where
+        it carries meaning, not in large areas.
+
+     Dark mode cannot reuse light mode's pastels: a pastel that is gentle on
+     off-white turns chalky and low-contrast over near-black. So dark gets
+     LIGHTER, slightly desaturated hues for the marks and a very low-alpha
+     wash of the same hue for the surface.
+     ───────────────────────────────────────────── */
+  --m-body: #7FB894;          /* sage — body, weight */
+  --m-body-bg: rgba(127,184,148,.10);
+  --m-training: #9B93E0;      /* periwinkle — volume, sets */
+  --m-training-bg: rgba(155,147,224,.10);
+  --m-nutrition: #E0B173;     /* honey — food */
+  --m-nutrition-bg: rgba(224,177,115,.10);
+  --m-energy: #E58C6F;        /* coral — burn (the brand hue's own family) */
+  --m-energy-bg: rgba(229,140,111,.10);
+  --m-recovery: #6FB2C9;      /* slate blue — sleep, recovery */
+  --m-recovery-bg: rgba(111,178,201,.10);
+  --m-strength: #D9A868;      /* bronze — records */
+  --m-strength-bg: rgba(217,168,104,.10);
+
+  /* ─────────────────────────────────────────────
      SHAPE, SPACE, ELEVATION, MOTION
 
      One scale each, so a card, a sheet and a button can never drift to
@@ -353,6 +387,23 @@
   --cta-ink: #FFF6F3;
   --cta-solid: #A04A3B;
   --cta-edge: rgba(43,18,10,.18);
+
+  /* Metric hues, light mode: deeper and more saturated than the dark-mode
+     set, because these sit on an off-white ground where a light tint would
+     disappear. Surfaces stay near-white washes for the same reason the dark
+     ones stay near-black ones -- the colour identifies, the number reads. */
+  --m-body: #4E8C68;
+  --m-body-bg: rgba(78,140,104,.09);
+  --m-training: #6A5FC4;
+  --m-training-bg: rgba(106,95,196,.08);
+  --m-nutrition: #B3812F;
+  --m-nutrition-bg: rgba(179,129,47,.09);
+  --m-energy: #C15C4C;
+  --m-energy-bg: rgba(193,92,76,.08);
+  --m-recovery: #3B7F99;
+  --m-recovery-bg: rgba(59,127,153,.09);
+  --m-strength: #9A6D16;
+  --m-strength-bg: rgba(154,109,22,.09);
 
   /* Status, restrained — see the :root block for the reasoning.
      Darkened in the contrast pass: as TEXT on a white panel the previous

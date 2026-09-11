@@ -38,6 +38,7 @@ import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 import { WeekSection, MeasurementsSection, AchievementsSection, StrengthProgressSection } from './ProgressSections.jsx';
 import Icon from '../../components/Icon.jsx';
+import Ring from '../../components/Ring.jsx';
 
 const PERIODS = [
   { key: 7, label: '7D' },
@@ -179,24 +180,59 @@ function Hero({ intel, period }) {
         )}
       </div>
 
-      <Card className="p-3.5">
-        {/* Two-up below 360px, four-up above. "ADHERENCE" is a single
-            unbreakable word that needs ~62px; in a four-across row on a
-            narrow phone it overran its column and collided with the next
-            label. Splitting the row is better than abbreviating the word. */}
-        <div className="grid grid-cols-2 gap-x-2 gap-y-3 min-[360px]:grid-cols-4 min-[360px]:gap-y-2">
-          <Stat
-            label="Weight"
-            value={w && !w.insufficient && w.change != null ? `${w.change > 0 ? '+' : ''}${n1(w.change)}` : (w?.current != null ? n1(w.current) : null)}
-            unit="kg"
-            tone={w && w.change < 0 ? 'var(--good)' : undefined}
-            sub={w && !w.insufficient ? `${period}d` : 'current'}
-          />
-          <Stat label="Sessions" value={workouts || null} sub={`${period}d`} />
-          <Stat label="Adherence" value={adherence != null ? adherence : null} unit="%" />
-          <Stat label="PRs" value={prCount || null} sub="30d" tone={prCount ? 'var(--accent)' : undefined} />
-        </div>
-      </Card>
+      {/* TILES, not a flat row of numbers. Each metric family carries its
+          own hue (see theme.css's metric-hue block) so six different KINDS
+          of information stop looking like one kind. The tint is a wash and
+          the saturation lives in the icon and ring, which is what keeps a
+          six-colour page calm instead of loud.
+
+          Two-up below 360px, four-up above: "ADHERENCE" is a single
+          unbreakable word that overran its column in a four-across row on
+          a narrow phone. */}
+      <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
+        <MetricTile
+          label="Weight" hue="body" icon="trending"
+          value={w && !w.insufficient && w.change != null ? `${w.change > 0 ? '+' : ''}${n1(w.change)}` : (w?.current != null ? n1(w.current) : null)}
+          unit="kg" sub={w && !w.insufficient ? `${period}d` : 'current'}
+        />
+        <MetricTile label="Sessions" hue="training" icon="strength" value={workouts || null} sub={`${period}d`} />
+        {/* Adherence is a true percentage, so it earns a ring. Open-ended
+            counts deliberately do not get one -- a ring implies a ceiling. */}
+        <MetricTile
+          label="Adherence" hue="nutrition" icon="target"
+          value={adherence != null ? adherence : null} unit="%"
+          ring={adherence != null ? adherence / 100 : null}
+        />
+        <MetricTile label="PRs" hue="strength" icon="bulb" value={prCount || null} sub="30d" />
+      </div>
+    </div>
+  );
+}
+
+/** One tinted metric tile. `hue` selects a metric family; `ring` is only
+ *  passed for values that genuinely run 0..1. */
+function MetricTile({ label, value, unit, sub, hue = 'energy', icon, ring = null }) {
+  const color = `var(--m-${hue})`;
+  return (
+    <div className="rounded-[var(--r-lg)] p-2.5" style={{ background: `var(--m-${hue}-bg)`, border: '1px solid var(--line)' }}>
+      <div className="flex items-start justify-between gap-1">
+        <span className="inline-flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: `var(--m-${hue}-bg)`, color }}>
+          <Icon name={icon} size={13} />
+        </span>
+        {ring != null && (
+          <Ring value={ring} size={26} stroke={3} color={color} label={`${label} ${Math.round(ring * 100)} percent`} />
+        )}
+      </div>
+      <div className="mt-1.5 text-[9.5px] font-semibold uppercase leading-tight tracking-[.06em]" style={{ color: 'var(--faint)' }}>
+        {label}
+      </div>
+      <div className="mt-0.5 flex items-baseline gap-1">
+        <span className="text-[19px] font-black leading-none tabular-nums tracking-[-.02em]" style={{ color: 'var(--ink)' }}>
+          {value ?? '—'}
+        </span>
+        {unit && value != null && <span className="text-[10px] font-medium" style={{ color: 'var(--faint)' }}>{unit}</span>}
+      </div>
+      {sub && <div className="mt-0.5 text-[9.5px] truncate" style={{ color: 'var(--faint)' }}>{sub}</div>}
     </div>
   );
 }
@@ -223,11 +259,11 @@ function useMetrics(intel) {
     if (t.length) {
       out.push({
         key: 'volume', label: 'Volume', category: 'training', unit: 'kg', decimals: 0,
-        series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--good)',
+        series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--m-training)',
       });
       out.push({
         key: 'sets', label: 'Sets', category: 'training', unit: '', decimals: 0,
-        series: t.map((s) => ({ date: s.date, value: s.sets })), color: 'var(--good)',
+        series: t.map((s) => ({ date: s.date, value: s.sets })), color: 'var(--m-training)',
       });
     }
     const nu = intel.nutrition?.days || [];
@@ -235,12 +271,12 @@ function useMetrics(intel) {
       out.push({
         key: 'calories', label: 'Calories', category: 'nutrition', unit: 'kcal', decimals: 0,
         series: nu.map((d) => ({ date: d.date, value: d.calories })),
-        goal: intel.nutrition.targets?.calories ?? null, color: 'var(--warn)',
+        goal: intel.nutrition.targets?.calories ?? null, color: 'var(--m-nutrition)',
       });
       out.push({
         key: 'protein', label: 'Protein', category: 'nutrition', unit: 'g', decimals: 0,
         series: nu.map((d) => ({ date: d.date, value: d.protein })),
-        goal: intel.nutrition.targets?.protein ?? null, color: 'var(--warn)',
+        goal: intel.nutrition.targets?.protein ?? null, color: 'var(--m-nutrition)',
       });
     }
     const h = intel.health?.days || [];
@@ -609,7 +645,7 @@ function TrainingSection({ intel, period }) {
                 <div key={m.muscle} className="flex items-center gap-2.5">
                   <span className="w-16 shrink-0 truncate text-[10.5px] capitalize" style={{ color: 'var(--mute)' }}>{m.muscle}</span>
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
-                    <span className="block h-full rounded-full" style={{ width: `${(m.sets / maxSets) * 100}%`, background: 'var(--accent)' }} />
+                    <span className="block h-full rounded-full" style={{ width: `${(m.sets / maxSets) * 100}%`, background: 'var(--m-training)' }} />
                   </span>
                   <span className="w-8 shrink-0 text-right text-[10.5px] font-semibold tabular-nums" style={{ color: 'var(--ink)' }}>{m.sets}</span>
                 </div>
@@ -769,7 +805,7 @@ function GoalSection({ intel }) {
         {pct != null && (
           <div className="mt-3">
             <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
-              <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${pct}%`, background: 'var(--accent)' }} />
+              <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${pct}%`, background: 'var(--m-body)' }} />
             </div>
             <div className="mt-1 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>{Math.round(pct)}% of the way from where you started</div>
           </div>

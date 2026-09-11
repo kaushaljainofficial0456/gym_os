@@ -136,7 +136,7 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore }
           <div className="mt-2">
             <MetricChart
               points={series}
-              color="var(--good)"
+              color="var(--m-body)"
               unit="cm"
               decimals={1}
               height={150}
