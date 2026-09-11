@@ -996,6 +996,18 @@ CREATE TABLE IF NOT EXISTS community_members (
   client_id   TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
   org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   enabled     INTEGER NOT NULL DEFAULT 0,
+  -- Who may see MY personal records. 'everyone' is the default because it
+  -- is what every member who opted in before this column existed had
+  -- already agreed to -- defaulting to 'followers' would silently hide
+  -- activity people had chosen to share.
+  pr_visibility TEXT NOT NULL DEFAULT 'everyone'
+                CHECK (pr_visibility IN ('everyone','followers','nobody')),
+  -- Whose records I want in MY feed. Separate from the above on purpose:
+  -- how much you broadcast and how much you consume are different
+  -- decisions, and tying them together forces people who want a quiet
+  -- feed to also go quiet themselves.
+  feed_scope    TEXT NOT NULL DEFAULT 'all'
+                CHECK (feed_scope IN ('all','following')),
   updated_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_community_members_org ON community_members(org_id, enabled);
@@ -1008,6 +1020,13 @@ CREATE TABLE IF NOT EXISTS community_workout_shares (
   workout_id   TEXT NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
   workout_name TEXT NOT NULL,
   payload      TEXT NOT NULL,
+  -- Audience chosen AT THE MOMENT OF SHARING, and stored on the share
+  -- rather than read from the member's current setting. A share is a
+  -- decision about one session: someone who later goes followers-only
+  -- should not have last month's public posts retroactively withdrawn,
+  -- and someone who opens up should not have old private ones exposed.
+  visibility   TEXT NOT NULL DEFAULT 'everyone'
+               CHECK (visibility IN ('everyone','followers')),
   created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cws_org_feed ON community_workout_shares(org_id, created_at);
@@ -1076,6 +1095,29 @@ CREATE TABLE IF NOT EXISTS community_challenges (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chal_org ON community_challenges(org_id, start_date, end_date);
+
+-- ============================================================
+-- COMMUNITY FOLLOWS — a directed "I want to see this person"
+-- edge, not a mutual friendship.
+--
+-- Directed on purpose. Mutual friendship needs an invitation, an accept,
+-- and a rejection path, and it makes the quiet member who never accepts
+-- anything invisible. Following is one tap, needs no permission from the
+-- other side for a PUBLIC profile, and matches what the feature is
+-- actually for: choosing whose activity fills your feed.
+--
+-- The pair is the primary key, so following twice is a no-op rather than
+-- a duplicate row inflating someone's follower count.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS community_follows (
+  follower_id  TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  following_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  org_id       TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (follower_id, following_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cf_follower ON community_follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_cf_following ON community_follows(following_id);
 
 -- ============================================================
 -- WORKOUT SHARING — cross-account shareable workout link

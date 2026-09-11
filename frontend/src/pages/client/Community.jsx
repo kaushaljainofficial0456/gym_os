@@ -50,6 +50,11 @@ export default function Community() {
   const [commentTarget, setCommentTarget] = useState(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [memberSheet, setMemberSheet] = useState(null);
+  // Whose activity the viewer wants. Persisted server-side so the
+  // choice follows them between devices rather than resetting.
+  const [scope, setScope] = useState('all');
+  const [prVisibility, setPrVisibility] = useState('everyone');
+  const [followingCount, setFollowingCount] = useState(0);
 
   const membershipFetch = useFetch(() => api('/community/membership'));
   const joined = !!membershipFetch.data?.membership?.enabled;
@@ -75,15 +80,41 @@ export default function Community() {
   const [social, setSocial] = useState({});
 
   const overview = overviewFetch.data;
-  const you = overview?.position ? membershipFetch.data?.membership?.client_id : null;
+
+  // The server is the source of truth for both preferences; the overview
+  // already carries them, so there is no extra round trip on load.
+  useEffect(() => {
+    const prefs = overview?.preferences;
+    if (!prefs) return;
+    setScope(prefs.feedScope || 'all');
+    setPrVisibility(prefs.prVisibility || 'everyone');
+  }, [overview?.preferences?.feedScope, overview?.preferences?.prVisibility]);
+
+  const loadFollows = useCallback(async () => {
+    try {
+      const f = await api('/community/follows');
+      setFollowingCount(f.followingCount || 0);
+    } catch { /* the count is decoration; the feed still works without it */ }
+  }, []);
+  useEffect(() => { if (joined) loadFollows(); }, [joined, loadFollows]);
+  /* Who the viewer IS. This was gated on `overview.position` being
+     truthy, so until the overview resolved `you` was null -- and for that
+     window every card in the feed rendered as somebody else's: no "You"
+     label, and a Copy button offered on your own posts. Identity comes
+     from the membership record, which is loaded first and has nothing to
+     do with whether you happen to be ranked this week. */
+  const you = membershipFetch.data?.membership?.client_id || null;
+  // PRs come from the overview, which is computed against the SAVED
+  // scope. A local scope change refetches it so records and shares are
+  // filtered by the same rule at the same moment.
   const prs = overview?.recentPRs || [];
 
   /* ---------- feed ---------- */
 
   const loadShares = useCallback(async (offset) => {
-    const res = await api(`/community/feed?limit=${FEED_PAGE}&offset=${offset}`);
+    const res = await api(`/community/feed?limit=${FEED_PAGE}&offset=${offset}&scope=${scope}`);
     return res;
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     if (!joined) return;
@@ -185,14 +216,19 @@ export default function Community() {
 
   const copyShare = async (share) => {
     try {
-      await api(`/community/shares/${share.id}/copy`, {
+      const res = await api(`/community/shares/${share.id}/copy`, {
         method: 'POST',
         body: JSON.stringify({
           name: share.workoutName,
           exercises: (share.payload || []).map((e) => ({ ...e, exercise_id: e.exercise_id || null })),
         }),
       });
-      setToast('Added to your workouts');
+      // Say WHERE it went. "Added to your workouts" left people with no
+      // idea whether anything had happened, because the copy lands in the
+      // planner on a different screen -- which is why a working feature
+      // read as a dead button.
+      const n = res?.exerciseCount || 0;
+      setToast(`Saved to My Workout${n ? ` · ${n} ${n === 1 ? 'exercise' : 'exercises'}` : ''}`);
     } catch (e) {
       setToast(e.message || 'Could not copy that workout');
     }
@@ -205,6 +241,41 @@ export default function Community() {
       reloadFeed();
     } catch (e) {
       setToast(e.message || 'Could not remove that share');
+    }
+  };
+
+  /* ---------- preferences ---------- */
+
+  const changeScope = async (next) => {
+    setScope(next);               // optimistic: the control must feel instant
+    try {
+      await api('/community/preferences', {
+        method: 'PUT', body: JSON.stringify({ feed_scope: next }),
+      });
+      // Both halves of the feed depend on scope, so both are refreshed.
+      overviewFetch.reload();
+      const res = await api(`/community/feed?limit=${FEED_PAGE}&offset=0&scope=${next}`);
+      setShares(res.shares || []);
+      setFeedHasMore(!!res.hasMore);
+      setFeedOffset(res.shares?.length || 0);
+    } catch (e) {
+      setToast(e.message || 'Could not change that');
+    }
+  };
+
+  const changePrVisibility = async (next) => {
+    const before = prVisibility;
+    setPrVisibility(next);
+    try {
+      await api('/community/preferences', {
+        method: 'PUT', body: JSON.stringify({ pr_visibility: next }),
+      });
+      setToast(next === 'everyone' ? 'Your records are visible to the gym'
+        : next === 'followers' ? 'Only your followers see your records'
+        : 'Your records are private');
+    } catch (e) {
+      setPrVisibility(before);
+      setToast(e.message || 'Could not change that');
     }
   };
 
@@ -360,6 +431,40 @@ export default function Community() {
               <ActivityChart series={overview?.activity} todayKey={pulse?.week?.end} />
               <YouVsYou trend={overview?.trend} />
               <WeeklyRecap recap={overview?.recap} you={you} />
+
+              {/* Who sees YOUR records. Deliberately on the main tab
+                  rather than buried in settings: a member should meet the
+                  control in the same place they see their own activity
+                  being published. */}
+              <div className="rounded-2xl p-3.5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+                <SectionTitle>Your personal records</SectionTitle>
+                <div className="text-[11.5px] mb-2.5" style={{ color: 'var(--mute)' }}>
+                  Who sees a record when you set one.
+                </div>
+                <div className="flex gap-1.5" role="radiogroup" aria-label="Who can see your personal records">
+                  {[['everyone', 'Everyone'], ['followers', 'Followers'], ['nobody', 'Only me']].map(([key, label]) => {
+                    const on = prVisibility === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => changePrVisibility(key)}
+                        className="flex-1 rounded-xl text-[11.5px] font-semibold"
+                        style={{
+                          minHeight: 40,
+                          background: on ? 'var(--accent-soft)' : 'transparent',
+                          border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                          color: on ? 'var(--accent)' : 'var(--mute)',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           )}
 
@@ -424,12 +529,15 @@ export default function Community() {
               hasMore={feedHasMore}
               onLoadMore={loadMore}
               loadingMore={loadingMore}
+              scope={scope}
+              onScopeChange={changeScope}
+              followingCount={followingCount}
             />
             </>
           )}
 
           {tab === 'members' && (
-            <CommunityMembers you={you} onSelect={setMemberSheet} />
+            <CommunityMembers you={you} onSelect={setMemberSheet} onFollowChange={loadFollows} />
           )}
         </div>
 

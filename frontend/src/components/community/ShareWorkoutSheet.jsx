@@ -17,6 +17,11 @@ export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, to
   const [workouts, setWorkouts] = useState(null);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState('');
+  // Audience is chosen per share, not inherited from a profile
+  // setting: 'I'll post this one to everyone but keep the rest to my
+  // followers' is a normal thing to want, and the stored value is what
+  // the feed reads later.
+  const [audience, setAudience] = useState('everyone');
 
   useEffect(() => {
     let alive = true;
@@ -35,7 +40,7 @@ export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, to
     try {
       await api('/community/shares', {
         method: 'POST',
-        body: JSON.stringify({ workout_id: w.id }),
+        body: JSON.stringify({ workout_id: w.id, visibility: audience }),
       });
       toast?.('Shared with your gym');
       onShared?.();
@@ -68,8 +73,40 @@ export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, to
           </button>
         </div>
         <p className="text-[11.5px] mb-3" style={{ color: 'var(--mute)' }}>
-          Only the session you pick becomes visible to your gym. You can remove it later.
+          Only the session you pick becomes visible. You can remove it later.
         </p>
+
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-[.13em] font-semibold mb-1.5" style={{ color: 'var(--faint)' }}>
+            Who can see it
+          </div>
+          <div className="flex gap-1.5" role="radiogroup" aria-label="Who can see this workout">
+            {[
+              ['everyone', 'Everyone in the gym'],
+              ['followers', 'Only my followers'],
+            ].map(([key, label]) => {
+              const on = audience === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setAudience(key)}
+                  className="flex-1 rounded-xl text-[11.5px] font-semibold px-2"
+                  style={{
+                    minHeight: 42,
+                    background: on ? 'var(--accent-soft)' : 'transparent',
+                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                    color: on ? 'var(--accent)' : 'var(--mute)',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {workouts === null && (
           <div className="text-[12px] py-4" style={{ color: 'var(--mute)' }}>Loading your workouts…</div>

@@ -30,6 +30,13 @@ if (process.argv.includes('--force')) {
 // dropped or rewritten — new columns only.
 // ============================================================
 const MIGRATIONS = [
+  // --- Community: who sees my PRs, and whose PRs I see ---
+  // Defaults preserve exactly today's behaviour: 'everyone' is what every
+  // existing member already agreed to when they opted in, so this
+  // migration changes nobody's visibility on the day it runs.
+  ['community_workout_shares', 'visibility', `visibility TEXT NOT NULL DEFAULT 'everyone'`],
+  ['community_members', 'pr_visibility', `pr_visibility TEXT NOT NULL DEFAULT 'everyone'`],
+  ['community_members', 'feed_scope', `feed_scope TEXT NOT NULL DEFAULT 'all'`],
   // --- AI food estimate cache: fields the cached response used to drop ---
   // A cached estimate must be indistinguishable from a fresh one. These two
   // were only ever on the fresh path, so the second person to look up a

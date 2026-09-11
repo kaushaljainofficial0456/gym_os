@@ -280,7 +280,7 @@ export async function resolveMembers(db, clientIds) {
 
 // ---- Feed ----
 
-export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
+export async function feed(db, orgId, { limit = 30, offset = 0, viewerClientId = null, scope = 'all' } = {}) {
   const settings = await getCommunitySettings(db, orgId);
   if (!settings.community_enabled) {
     return { settings, shares: [], hasMore: false, limit, offset };
@@ -302,6 +302,19 @@ export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
   // 2. hasMore. Ask for one row MORE than the caller wants: if it comes back,
   //    another page exists. That avoids a second COUNT(*) query per page and
   //    can't disagree with the rows actually returned.
+  /* Audience and scope are applied IN SQL, not after the fact, so a
+     followers-only share never travels to someone who would merely hide
+     it -- and so LIMIT/OFFSET still count the rows the viewer can
+     actually see. Filtering a fetched page in JS would silently shorten
+     pages and eventually skip rows entirely.
+
+       visibility 'everyone'            -> anyone in the community
+       visibility 'followers'           -> only people who follow the author
+       author is the viewer             -> always visible
+       scope 'following'                -> viewer's own extra narrowing
+
+     COALESCE covers rows written before the column existed. */
+  const following = scope === 'following';
   const rows = await db.q(
     `SELECT cws.*, u.name AS author_name, u.avatar AS author_avatar
        FROM community_workout_shares cws
@@ -309,9 +322,23 @@ export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
        JOIN users u ON u.id = c.user_id
        JOIN community_members cm ON cm.client_id = cws.client_id AND cm.enabled = 1
      WHERE cws.org_id = ?
+       AND (
+         COALESCE(cws.visibility, 'everyone') = 'everyone'
+         OR cws.client_id = ?
+         OR EXISTS (SELECT 1 FROM community_follows cf
+                     WHERE cf.follower_id = ? AND cf.following_id = cws.client_id)
+       )
+       AND (
+         ? = 0
+         OR cws.client_id = ?
+         OR EXISTS (SELECT 1 FROM community_follows cf2
+                     WHERE cf2.follower_id = ? AND cf2.following_id = cws.client_id)
+       )
      ORDER BY cws.created_at DESC, cws.id DESC
      LIMIT ? OFFSET ?`,
-    [orgId, limit + 1, offset]);
+    [orgId, viewerClientId, viewerClientId,
+     following ? 1 : 0, viewerClientId, viewerClientId,
+     limit + 1, offset]);
 
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
@@ -329,6 +356,7 @@ export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
       workoutId: r.workout_id,
       workoutName: r.workout_name,
       payload: safePayload(r.payload),
+      visibility: r.visibility || 'everyone',
       createdAt: r.created_at,
     })),
   };
@@ -336,7 +364,7 @@ export async function feed(db, orgId, { limit = 30, offset = 0 } = {}) {
 
 // ---- Share a completed workout ----
 
-export async function shareWorkout(db, { clientId, orgId, workoutId }) {
+export async function shareWorkout(db, { clientId, orgId, workoutId, visibility = 'everyone' }) {
   // Fetch workout + exercises
   const workout = await db.q1(
     'SELECT * FROM workouts WHERE id = ? AND client_id = ? AND status = ?',
@@ -355,9 +383,10 @@ export async function shareWorkout(db, { clientId, orgId, workoutId }) {
 
   const shareId = id('cs');
   await db.run(
-    `INSERT INTO community_workout_shares (id, org_id, client_id, workout_id, workout_name, payload, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [shareId, orgId, clientId, workoutId, workout.name, payload, now()]);
+    `INSERT INTO community_workout_shares (id, org_id, client_id, workout_id, workout_name, payload, visibility, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [shareId, orgId, clientId, workoutId, workout.name, payload,
+     visibility === 'followers' ? 'followers' : 'everyone', now()]);
 
   await track(db, { orgId, userId: null, type: 'workout_shared', data: { clientId, shareId, workoutId } });
 

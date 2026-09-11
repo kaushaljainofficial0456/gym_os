@@ -32,17 +32,49 @@ const FILTERS = [
  *  just a mystery button. */
 const ACTIVE_DAYS = 7;
 
-export default function CommunityMembers({ you, onSelect }) {
+export default function CommunityMembers({ you, onSelect, onFollowChange }) {
   const [members, setMembers] = useState(null);
+  const [following, setFollowing] = useState(new Set());
+  const [busy, setBusy] = useState(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [err, setErr] = useState('');
+
+  /* Optimistic, because following is a one-tap gesture that should feel
+     instant; reverted if the server refuses. */
+  const toggleFollow = async (m) => {
+    const on = following.has(m.clientId);
+    setBusy(m.clientId);
+    setFollowing((prev) => {
+      const next = new Set(prev);
+      if (on) next.delete(m.clientId); else next.add(m.clientId);
+      return next;
+    });
+    try {
+      await api(`/community/follows/${m.clientId}`, { method: on ? 'DELETE' : 'POST' });
+      onFollowChange?.();
+    } catch (e) {
+      setFollowing((prev) => {
+        const next = new Set(prev);
+        if (on) next.add(m.clientId); else next.delete(m.clientId);
+        return next;
+      });
+      setErr(e.message || 'Could not update that');
+    }
+    setBusy(null);
+  };
 
   useEffect(() => {
     let alive = true;
     setErr('');
     api('/community/members?limit=200')
-      .then((res) => { if (alive) setMembers(res.members || []); })
+      .then((res) => {
+        if (!alive) return;
+        setMembers(res.members || []);
+        // The follow set arrives WITH the list -- one request, not one per
+        // member card.
+        setFollowing(new Set(res.following || []));
+      })
       .catch((e) => { if (alive) { setErr(e.message || 'Could not load members'); setMembers([]); } });
     return () => { alive = false; };
   }, []);
@@ -118,7 +150,15 @@ export default function CommunityMembers({ you, onSelect }) {
           </SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {shown.map((m) => (
-              <MemberCard key={m.clientId} member={m} isYou={m.clientId === you} onClick={() => onSelect?.(m)} />
+              <MemberCard
+                key={m.clientId}
+                member={m}
+                isYou={m.clientId === you}
+                isFollowing={following.has(m.clientId)}
+                busy={busy === m.clientId}
+                onToggleFollow={() => toggleFollow(m)}
+                onClick={() => onSelect?.(m)}
+              />
             ))}
           </div>
         </>
@@ -127,18 +167,24 @@ export default function CommunityMembers({ you, onSelect }) {
   );
 }
 
-function MemberCard({ member: m, isYou, onClick }) {
+function MemberCard({ member: m, isYou, isFollowing, busy, onToggleFollow, onClick }) {
+  // A div, not a button: the card contains its own Follow button, and a
+  // button inside a button is invalid and breaks keyboard activation.
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-transform active:scale-[.99]"
+    <div
+      className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left"
       style={{
         minHeight: 64,
         background: isYou ? HUE.active.bg : 'var(--panel)',
         border: `1px solid ${isYou ? HUE.active.fg : 'var(--line)'}`,
       }}
     >
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-3 min-w-0 flex-1 text-left"
+        aria-label={`View ${m.name}'s profile`}
+      >
       <Avatar name={m.name} size={38} />
       <div className="min-w-0 flex-1">
         <div className="text-[12.5px] font-semibold truncate" style={{ color: 'var(--ink)' }}>
@@ -161,7 +207,29 @@ function MemberCard({ member: m, isYou, onClick }) {
           {m.workoutsThisMonth === 0 && m.prsThisMonth === 0 && <span>No sessions this month</span>}
         </div>
       </div>
-    </button>
+      </button>
+
+      {/* Following is a one-way "show me this person's activity", so the
+          button state is a fact about the viewer, never a pending request
+          needing the other person's approval. */}
+      {!isYou && (
+        <button
+          type="button"
+          onClick={onToggleFollow}
+          disabled={busy}
+          aria-pressed={isFollowing}
+          className="shrink-0 rounded-xl px-3 text-[11.5px] font-semibold transition-colors"
+          style={{
+            minHeight: 36,
+            background: isFollowing ? 'transparent' : 'var(--accent-soft)',
+            border: `1px solid ${isFollowing ? 'var(--line)' : 'var(--accent)'}`,
+            color: isFollowing ? 'var(--mute)' : 'var(--accent)',
+          }}
+        >
+          {isFollowing ? 'Following' : 'Follow'}
+        </button>
+      )}
+    </div>
   );
 }
 

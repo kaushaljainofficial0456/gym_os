@@ -11,6 +11,7 @@ import {
 } from '../services/community.js';
 import {
   communityOverview, memberDirectory, recentPRs,
+  followMember, unfollowMember, followState, getPreferences, setPreferences,
 } from '../services/communityIntel.js';
 import {
   REACTIONS, isValidReaction, isValidTarget, targetExists,
@@ -137,13 +138,26 @@ export default function communityRoutes(db) {
     const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 30, 100));
     const rawOffset = parseInt(req.query.offset, 10);
     const offset = Math.max(0, Number.isFinite(rawOffset) ? rawOffset : 0);
-    const result = await feed(db, req.orgId, { limit, offset });
-    res.json(result);
+    // Same viewer context the PR feed uses, so one scope choice governs
+    // the whole Activity tab rather than shares and records disagreeing.
+    let viewerClientId = null;
+    let scope = 'all';
+    if (req.user.role === 'CLIENT') {
+      const c = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+      viewerClientId = c?.id || null;
+      const prefs = viewerClientId ? await getPreferences(db, viewerClientId) : null;
+      scope = ['all', 'following'].includes(req.query.scope) ? req.query.scope : (prefs?.feedScope || 'all');
+    }
+    const result = await feed(db, req.orgId, { limit, offset, viewerClientId, scope });
+    res.json({ ...result, scope });
   });
 
   // ---- Share ----
 
-  r.post('/shares', writeLimit, validate(z.object({ workout_id: z.string().min(1) })), async (req, res) => {
+  r.post('/shares', writeLimit, validate(z.object({
+    workout_id: z.string().min(1),
+    visibility: z.enum(['everyone', 'followers']).optional(),
+  })), async (req, res) => {
     const client = await getClient(req, res);
     if (!client) return;
 
@@ -161,6 +175,7 @@ export default function communityRoutes(db) {
       clientId: client.id,
       orgId: req.orgId,
       workoutId: req.body.workout_id,
+      visibility: req.body.visibility || 'everyone',
     });
 
     if (!result) {
@@ -259,7 +274,16 @@ export default function communityRoutes(db) {
     const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 60, 200));
     const search = req.query.q ? String(req.query.q).slice(0, 60) : null;
     const members = await memberDirectory(db, req.orgId, req.tz, { limit, search });
-    res.json({ members });
+    // The follow set travels with the list so each card can render its
+    // own button state without a request per member.
+    let follows = { following: [] };
+    let you = null;
+    if (req.user.role === 'CLIENT') {
+      const c = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+      you = c?.id || null;
+      if (you) follows = await followState(db, { orgId: req.orgId, clientId: you });
+    }
+    res.json({ members, you, following: follows.following });
   });
 
   // ---- PR activity ----
@@ -274,8 +298,69 @@ export default function communityRoutes(db) {
     }
     const rawLimit = parseInt(req.query.limit, 10);
     const limit = Math.max(1, Math.min(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 20, 50));
-    const prs = await recentPRs(db, req.orgId, { limit });
-    res.json({ prs });
+    // Visibility is enforced HERE, not in the client. A member who set
+    // their records to followers-only must not have them travel over the
+    // wire to someone who would merely hide them.
+    let viewerClientId = null;
+    let scope = 'all';
+    if (req.user.role === 'CLIENT') {
+      const c = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+      viewerClientId = c?.id || null;
+      const prefs = viewerClientId ? await getPreferences(db, viewerClientId) : null;
+      scope = ['all', 'following'].includes(req.query.scope) ? req.query.scope : (prefs?.feedScope || 'all');
+    }
+    const prs = await recentPRs(db, req.orgId, { limit, viewerClientId, scope });
+    res.json({ prs, scope });
+  });
+
+  // ---- Follows ----
+  r.get('/follows', async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    res.json(await followState(db, { orgId: req.orgId, clientId: client.id }));
+  });
+
+  r.post('/follows/:clientId', writeLimit, async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const membership = await getMembership(db, client.id);
+    if (!membership || !membership.enabled) {
+      return res.status(403).json({ error: 'Join the community first' });
+    }
+    const out = await followMember(db, {
+      orgId: req.orgId, followerId: client.id, followingId: req.params.clientId,
+    });
+    if (!out.ok) {
+      return res.status(out.reason === 'self' ? 422 : 404)
+        .json({ error: out.reason === 'self' ? 'You already see your own activity' : 'Member not found' });
+    }
+    res.json(out);
+  });
+
+  r.delete('/follows/:clientId', writeLimit, async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    res.json(await unfollowMember(db, { followerId: client.id, followingId: req.params.clientId }));
+  });
+
+  // ---- Preferences ----
+  r.get('/preferences', async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    res.json(await getPreferences(db, client.id));
+  });
+
+  r.put('/preferences', writeLimit, validate(z.object({
+    pr_visibility: z.enum(['everyone', 'followers', 'nobody']).optional(),
+    feed_scope: z.enum(['all', 'following']).optional(),
+  })), async (req, res) => {
+    const client = await getClient(req, res);
+    if (!client) return;
+    const out = await setPreferences(db, client.id, {
+      prVisibility: req.body.pr_visibility,
+      feedScope: req.body.feed_scope,
+    });
+    res.json(out);
   });
 
   // ---- Reactions ----

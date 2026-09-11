@@ -67,12 +67,20 @@ export function mergeFeed(shares, prs) {
     })),
     ...(prs || []).map((p) => ({
       kind: 'pr',
+      // A GROUP id (prg_<client>_<date>), not a record id: the backend now
+      // returns one entry per person per session rather than one per
+      // record. Reactions and comments therefore attach to the session,
+      // which is also the thing a person would actually congratulate.
       id: p.id,
       targetType: 'pr',
-      // personal_records keeps the DAY it happened plus the row's own
-      // created_at; created_at is the finer instant and is what orders
-      // the feed correctly when several PRs land on one date.
-      at: p.createdAt || `${p.date}T12:00:00Z`,
+      // created_at is the finer instant and is right for a record set
+      // today ("2h ago"). But it is the moment the ROW was written, which
+      // for backfilled or imported history can be days after the session
+      // -- and then "7h ago" is simply false for a record set last week.
+      // Trust it only when it falls on the day the record belongs to.
+      at: (p.createdAt && String(p.createdAt).slice(0, 10) === p.date)
+        ? p.createdAt
+        : `${p.date}T12:00:00Z`,
       clientId: p.clientId,
       name: p.memberName,
       data: p,
@@ -88,18 +96,57 @@ export function mergeFeed(shares, prs) {
 export default function CommunityFeed({
   items, social, you, onReact, onOpenComments, onShare, onCopy, onUnshare,
   filter, onFilterChange, hasMore, onLoadMore, loadingMore,
+  scope, onScopeChange, followingCount = 0,
 }) {
   const kinds = new Set(items.map((i) => i.kind));
   const showFilters = items.length >= 5 && kinds.size > 1;
 
+  /* WHOSE activity, then WHAT KIND of activity -- two different questions,
+     so they are two controls rather than one merged list of five chips
+     that mixes people with content types. */
+  const scopeControl = onScopeChange ? (
+    <div className="flex gap-1.5" role="tablist" aria-label="Whose activity to show">
+      {[['all', 'Everyone'], ['following', 'People I follow']].map(([key, label]) => {
+        const on = scope === key;
+        return (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={on}
+            onClick={() => onScopeChange(key)}
+            className="flex-1 rounded-xl text-[11.5px] font-semibold transition-colors"
+            style={{
+              minHeight: 38,
+              background: on ? 'var(--accent-soft)' : 'transparent',
+              border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+              color: on ? 'var(--accent)' : 'var(--mute)',
+            }}
+          >
+            {label}
+            {key === 'following' && followingCount > 0 && (
+              <span className="tabular-nums opacity-70"> · {followingCount}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
   if (!items.length) {
+    // An empty "People I follow" feed is not an empty community -- saying
+    // so would be wrong, and would hide the one action that fixes it.
+    const emptyBecauseScope = scope === 'following';
     return (
+      <div className="space-y-2">
+      {scopeControl}
       <div className="rounded-2xl p-6 text-center" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
         <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>
-          Your community is just getting started
+          {emptyBecauseScope ? 'Nothing from the people you follow' : 'Your community is just getting started'}
         </div>
         <div className="text-[12px] mt-1.5 leading-relaxed" style={{ color: 'var(--mute)' }}>
-          Workouts and personal records show up here when members share them.
+          {emptyBecauseScope
+            ? 'Follow a few more members, or switch to Everyone to see the whole gym.'
+            : 'Workouts and personal records show up here when members share them.'}
         </div>
         {onShare && (
           <button
@@ -112,11 +159,13 @@ export default function CommunityFeed({
           </button>
         )}
       </div>
+      </div>
     );
   }
 
   return (
     <div className="space-y-2">
+      {scopeControl}
       {showFilters && (
         <div className="flex gap-1.5" role="tablist" aria-label="Filter activity">
           {[['all', 'All'], ['share', 'Workouts'], ['pr', 'PRs']].map(([key, label]) => {
@@ -187,7 +236,9 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
               {isYou ? 'You' : item.name}
             </span>
             <span className="text-[11.5px]" style={{ color: 'var(--mute)' }}>
-              {isPR ? 'set a personal record' : 'shared a workout'}
+              {isPR
+                ? (item.data.recordCount > 1 ? 'set personal records' : 'set a personal record')
+                : 'shared a workout'}
             </span>
           </div>
           <div className="text-[10.5px] mt-0.5" style={{ color: 'var(--faint)' }}>{ago(item.at)}</div>
@@ -196,6 +247,14 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
 
       <div className="mt-2.5 ml-[44px]">
         {isPR ? <PRBody pr={item.data} /> : <ShareBody share={item.data} />}
+        {/* Only the author needs to know the audience of their own post --
+            telling everyone else would be announcing who is in a
+            restricted group. */}
+        {!isPR && isYou && item.data.visibility === 'followers' && (
+          <div className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: 'var(--faint)' }}>
+            <span aria-hidden="true">🔒</span> Visible to your followers
+          </div>
+        )}
       </div>
 
       {/* Actions sit on one compact row rather than a block of buttons. */}
@@ -246,10 +305,15 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
           <button
             type="button"
             onClick={() => onCopy(item.data)}
-            className="rounded-full px-2.5 text-[11.5px] font-semibold"
-            style={{ minHeight: 32, border: '1px solid var(--line)', color: 'var(--accent)' }}
+            className="rounded-full px-3 text-[11.5px] font-semibold ml-auto"
+            style={{
+              minHeight: 32,
+              background: 'var(--accent-soft)',
+              border: '1px solid var(--accent)',
+              color: 'var(--accent)',
+            }}
           >
-            Copy workout
+            Save to my workouts
           </button>
         )}
         {!isPR && isYou && onUnshare && (
@@ -268,38 +332,78 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
 }
 
 function PRBody({ pr }) {
-  // Each PR type means a different thing, so each states its own number.
-  // Rendering them all as "weight x reps" was actively misleading: for an
-  // estimated 1RM that shows the SOURCE SET rather than the estimate, and
-  // for a volume record it printed a bare figure with no unit at all.
-  const detail = (() => {
-    if (pr.type === 'est_1rm') return `${fmt(pr.value)} kg est. 1RM`;
-    if (pr.type === 'best_volume') return `${fmtVolume(pr.value)} kg volume`;
-    if (pr.weight != null && pr.reps != null) {
-      return pr.type === 'best_reps'
-        ? `${fmt(pr.reps)} reps @ ${fmt(pr.weight)} kg`
-        : `${fmt(pr.weight)} kg × ${fmt(pr.reps)}`;
+  // `pr` is a SESSION's worth of records. Rendering each record as its own
+  // feed card is what turned one leg session into eight posts, and what a
+  // 200-member gym would have turned into ~1,600 posts a day.
+  const records = pr.records || [];
+
+  // Group by exercise, because four record types on one lift is still one
+  // lift. "Leg Extension — heaviest weight, best volume, est. 1RM" is one
+  // line a person can read; four cards is not.
+  const byExercise = [];
+  const index = new Map();
+  for (const r of records) {
+    if (!index.has(r.exercise)) {
+      index.set(r.exercise, { exercise: r.exercise, types: [], best: r });
+      byExercise.push(index.get(r.exercise));
     }
-    return fmt(pr.value);
-  })();
+    const g = index.get(r.exercise);
+    g.types.push(r.type);
+    // The headline figure per exercise: a weight the person actually
+    // lifted beats a derived estimate.
+    if (r.type === 'heaviest_weight') g.best = r;
+  }
+
+  const SHOWN = 3;
+  const shown = byExercise.slice(0, SHOWN);
+  const more = byExercise.length - shown.length;
+
   return (
     <div
       className="rounded-xl px-3 py-2.5"
-      // Records are bronze everywhere in the product -- the same hue the
-      // PR tile in the pulse uses, so the two read as one concept.
       style={{ background: HUE.prs.bg, border: `1px solid ${HUE.prs.fg}` }}
     >
       <div className="text-[9.5px] uppercase tracking-[.14em] font-bold" style={{ color: HUE.prs.fg }}>
-        {PR_LABEL[pr.type] || 'Personal record'}
+        {records.length === 1
+          ? 'Personal record'
+          : `${records.length} personal records`}
       </div>
-      <div className="flex items-baseline gap-2 mt-1">
-        <span className="font-bold text-[13.5px]" style={{ color: 'var(--ink)' }}>{pr.exercise}</span>
+
+      <div className="mt-1.5 space-y-1.5">
+        {shown.map((g) => (
+          <div key={g.exercise} className="flex items-baseline justify-between gap-3">
+            <span className="text-[12.5px] font-bold truncate" style={{ color: 'var(--ink)' }}>
+              {g.exercise}
+            </span>
+            <span className="text-[12.5px] font-black tabular-nums shrink-0" style={{ color: HUE.prs.fg }}>
+              {headlineFor(g.best)}
+            </span>
+          </div>
+        ))}
       </div>
-      <div className="font-black tabular-nums mt-0.5" style={{ fontSize: 19, color: HUE.prs.fg }}>
-        {detail}
-      </div>
+
+      {more > 0 && (
+        <div className="text-[10.5px] mt-1.5" style={{ color: 'var(--mute)' }}>
+          and {more} more {more === 1 ? 'exercise' : 'exercises'}
+        </div>
+      )}
     </div>
   );
+}
+
+/** The one figure that best states a record, per type. Rendering them all
+ *  as "weight x reps" misreported an estimated 1RM as its source set and
+ *  printed a volume record with no unit at all. */
+function headlineFor(r) {
+  if (!r) return '';
+  if (r.type === 'est_1rm') return `${fmt(r.value)} kg 1RM`;
+  if (r.type === 'best_volume') return `${fmtVolume(r.value)} kg`;
+  if (r.weight != null && r.reps != null) {
+    return r.type === 'best_reps'
+      ? `${fmt(r.reps)} x ${fmt(r.weight)} kg`
+      : `${fmt(r.weight)} kg x ${fmt(r.reps)}`;
+  }
+  return fmt(r.value);
 }
 
 function ShareBody({ share }) {
@@ -313,16 +417,38 @@ function ShareBody({ share }) {
     sets > 0 ? `${sets} sets` : null,
   ].filter(Boolean);
 
+  const SHOWN = 4;
+  const shown = ex.slice(0, SHOWN);
+  const more = ex.length - shown.length;
+
   return (
     <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}>
-      <div className="font-bold text-[13.5px]" style={{ color: 'var(--ink)' }}>{share.workoutName}</div>
-      {bits.length > 0 && (
-        <div className="text-[11.5px] mt-0.5" style={{ color: 'var(--mute)' }}>{bits.join(' · ')}</div>
-      )}
-      {ex.length > 0 && (
-        <div className="text-[11px] mt-1.5 truncate" style={{ color: 'var(--faint)' }}>
-          {ex.slice(0, 3).map((e) => e.name).filter(Boolean).join(', ')}
-          {ex.length > 3 ? ` +${ex.length - 3}` : ''}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-bold text-[13.5px] truncate" style={{ color: 'var(--ink)' }}>{share.workoutName}</span>
+        {bits.length > 0 && (
+          <span className="text-[10.5px] shrink-0 tabular-nums" style={{ color: 'var(--mute)' }}>{bits.join(' · ')}</span>
+        )}
+      </div>
+
+      {/* The actual prescription, not a truncated comma list. A shared
+          workout is only worth copying if you can see what you would be
+          copying -- one run-on line of names read as decorative text. */}
+      {shown.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {shown.map((e, i) => (
+            <div key={`${e.name}-${i}`} className="flex items-baseline justify-between gap-3 text-[11.5px]">
+              <span className="truncate" style={{ color: 'var(--ink)' }}>{e.name}</span>
+              <span className="shrink-0 tabular-nums" style={{ color: 'var(--mute)' }}>
+                {[e.sets ? `${e.sets}x${e.reps ?? ''}` : null, e.weight && e.weight !== 'BW' ? `${e.weight}` : null]
+                  .filter(Boolean).join(' · ') || '—'}
+              </span>
+            </div>
+          ))}
+          {more > 0 && (
+            <div className="text-[10.5px] pt-0.5" style={{ color: 'var(--faint)' }}>
+              and {more} more
+            </div>
+          )}
         </div>
       )}
     </div>

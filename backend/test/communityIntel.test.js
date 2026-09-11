@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import {
   communityPulse, memberPosition, activitySeries, recentPRs,
   weeklyRecap, memberDirectory, memberCount, previousRange,
+  followMember, unfollowMember, followState, getPreferences, setPreferences,
 } from '../src/services/communityIntel.js';
 import {
   toggleReaction, reactionsFor, addComment, listComments, deleteComment,
@@ -115,6 +116,23 @@ async function makePR(db, clientId, exName, date, value) {
     `INSERT INTO personal_records (id, client_id, exercise_id, type, value, weight, reps, date, created_at)
      VALUES (?,?,?,'heaviest_weight',?,?,5,?,?)`,
     [prId, clientId, ex.id, value, value, date, ts]);
+  return prId;
+}
+
+async function makePRTyped(db, clientId, exName, date, value, type) {
+  let ex = await db.q1('SELECT id FROM exercise_library WHERE name = ?', [exName]);
+  if (!ex) {
+    const exId = uid('lib');
+    await db.run(
+      `INSERT INTO exercise_library (id, name, primary_muscle, equipment, movement, ex_type, is_global)
+       VALUES (?,?,'CHEST','BARBELL','horizontal_push','compound',1)`, [exId, exName]);
+    ex = { id: exId };
+  }
+  const prId = uid('pr');
+  await db.run(
+    `INSERT INTO personal_records (id, client_id, exercise_id, type, value, weight, reps, date, created_at)
+     VALUES (?,?,?,?,?,?,5,?,?)`,
+    [prId, clientId, ex.id, type, value, value, date, ts]);
   return prId;
 }
 
@@ -442,4 +460,174 @@ test('comments from members who left stop being shown', async () => {
   await db.run('UPDATE community_members SET enabled = 0 WHERE client_id = ?', [b.clientId]);
   assert.equal((await listComments(db, { orgId: 'o1', targetType: 'pr', targetId: prId })).length, 0,
     'leaving the community withdraws your posts from it');
+});
+
+
+// ---------------- PR feed: grouping, visibility, scope ----------------
+//
+// The failure that motivated all three: personal_records holds FOUR record
+// types per exercise, so one good set writes up to four rows. Rendered one
+// card per row, a single member's leg session filled the feed with eight
+// cards -- and a 200-member gym would produce roughly 1,600 in a day.
+// Grouping fixes the volume; visibility and scope decide whose records
+// arrive at all.
+
+test('a session that sets many records is ONE feed card, not one per record', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const m = await makeMember(db, 'o1', 'Lifter');
+  const d = today();
+
+  // Exactly the shape from the report: one exercise, four record types,
+  // plus a second exercise.
+  for (const type of ['heaviest_weight', 'best_reps', 'est_1rm', 'best_volume']) {
+    await makePRTyped(db, m.clientId, 'Leg Extension', d, 100, type);
+  }
+  await makePRTyped(db, m.clientId, 'Leg Press', d, 200, 'heaviest_weight');
+
+  const feed = await recentPRs(db, 'o1', { viewerClientId: m.clientId });
+  assert.equal(feed.length, 1, 'five records on one day collapse into a single card');
+  assert.equal(feed[0].recordCount, 5);
+  assert.equal(feed[0].exerciseCount, 2, 'four ways of measuring one lift is still one exercise');
+  assert.equal(feed[0].memberName, 'Lifter');
+});
+
+test('separate days stay separate cards', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const m = await makeMember(db, 'o1', 'Lifter');
+  await makePRTyped(db, m.clientId, 'Bench Press', today(), 100, 'heaviest_weight');
+  await makePRTyped(db, m.clientId, 'Squat', '2026-01-05', 140, 'heaviest_weight');
+
+  const feed = await recentPRs(db, 'o1', { viewerClientId: m.clientId });
+  assert.equal(feed.length, 2, 'grouping is per person PER DAY, not per person');
+});
+
+test('followers-only records reach followers and nobody else', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const author = await makeMember(db, 'o1', 'Author');
+  const fan = await makeMember(db, 'o1', 'Fan');
+  const stranger = await makeMember(db, 'o1', 'Stranger');
+
+  await makePRTyped(db, author.clientId, 'Bench Press', today(), 100, 'heaviest_weight');
+  await setPreferences(db, author.clientId, { prVisibility: 'followers' });
+  await followMember(db, { orgId: 'o1', followerId: fan.clientId, followingId: author.clientId });
+
+  const seenByFan = await recentPRs(db, 'o1', { viewerClientId: fan.clientId });
+  assert.equal(seenByFan.length, 1, 'a follower sees them');
+
+  const seenByStranger = await recentPRs(db, 'o1', { viewerClientId: stranger.clientId });
+  assert.equal(seenByStranger.length, 0, 'someone who does not follow does not');
+
+  // The rule is enforced where the rows are read, so a restricted record
+  // never travels to a client that would merely hide it.
+  const seenByAuthor = await recentPRs(db, 'o1', { viewerClientId: author.clientId });
+  assert.equal(seenByAuthor.length, 1, 'you always see your own');
+});
+
+test("'nobody' hides records from everyone except their owner", async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const author = await makeMember(db, 'o1', 'Private');
+  const fan = await makeMember(db, 'o1', 'Fan');
+  await makePRTyped(db, author.clientId, 'Squat', today(), 150, 'heaviest_weight');
+  await setPreferences(db, author.clientId, { prVisibility: 'nobody' });
+  // Following someone is not a way around their choice.
+  await followMember(db, { orgId: 'o1', followerId: fan.clientId, followingId: author.clientId });
+
+  assert.equal((await recentPRs(db, 'o1', { viewerClientId: fan.clientId })).length, 0,
+    'following does not override "nobody"');
+  assert.equal((await recentPRs(db, 'o1', { viewerClientId: author.clientId })).length, 1);
+});
+
+test("scope 'following' narrows the feed without changing what others share", async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const viewer = await makeMember(db, 'o1', 'Viewer');
+  const followed = await makeMember(db, 'o1', 'Followed');
+  const other = await makeMember(db, 'o1', 'Other');
+
+  await makePRTyped(db, followed.clientId, 'Bench Press', today(), 100, 'heaviest_weight');
+  await makePRTyped(db, other.clientId, 'Squat', today(), 140, 'heaviest_weight');
+  await makePRTyped(db, viewer.clientId, 'Deadlift', today(), 180, 'heaviest_weight');
+  await followMember(db, { orgId: 'o1', followerId: viewer.clientId, followingId: followed.clientId });
+
+  const all = await recentPRs(db, 'o1', { viewerClientId: viewer.clientId, scope: 'all' });
+  assert.equal(all.length, 3, 'everything public is available');
+
+  const narrowed = await recentPRs(db, 'o1', { viewerClientId: viewer.clientId, scope: 'following' });
+  const names = narrowed.map((g) => g.memberName).sort();
+  assert.deepEqual(names, ['Followed', 'Viewer'], 'only people you follow, plus yourself');
+  // Scope is the VIEWER's filter -- it must not alter what anyone shares.
+  assert.equal((await recentPRs(db, 'o1', { viewerClientId: other.clientId, scope: 'all' })).length, 3);
+});
+
+test('following is idempotent, refuses self, and can be undone', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const a = await makeMember(db, 'o1', 'A');
+  const b = await makeMember(db, 'o1', 'B');
+
+  await followMember(db, { orgId: 'o1', followerId: a.clientId, followingId: b.clientId });
+  await followMember(db, { orgId: 'o1', followerId: a.clientId, followingId: b.clientId });
+  let state = await followState(db, { orgId: 'o1', clientId: a.clientId });
+  assert.equal(state.followingCount, 1, 'a second tap does not create a second edge');
+
+  const self = await followMember(db, { orgId: 'o1', followerId: a.clientId, followingId: a.clientId });
+  assert.equal(self.ok, false, 'you cannot follow yourself');
+
+  const bState = await followState(db, { orgId: 'o1', clientId: b.clientId });
+  assert.equal(bState.followerCount, 1, 'and B can see they have a follower');
+
+  await unfollowMember(db, { followerId: a.clientId, followingId: b.clientId });
+  state = await followState(db, { orgId: 'o1', clientId: a.clientId });
+  assert.equal(state.followingCount, 0);
+});
+
+test('you cannot follow a non-member, or someone in another gym', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  await makeOrg(db, 'o2');
+  const a = await makeMember(db, 'o1', 'A');
+  const lurker = await makeMember(db, 'o1', 'Lurker', { joined: false });
+  const foreign = await makeMember(db, 'o2', 'Foreign');
+
+  assert.equal((await followMember(db, { orgId: 'o1', followerId: a.clientId, followingId: lurker.clientId })).ok, false);
+  assert.equal((await followMember(db, { orgId: 'o1', followerId: a.clientId, followingId: foreign.clientId })).ok, false,
+    "another gym's member is not followable, and the refusal does not confirm they exist");
+  assert.equal((await followMember(db, { orgId: 'o1', followerId: a.clientId, followingId: 'cli_nope' })).ok, false);
+});
+
+test('preferences default to sharing, so the migration hides nobody', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const m = await makeMember(db, 'o1', 'Existing');
+
+  // makeMember inserts community_members WITHOUT naming these columns --
+  // exactly what `ALTER TABLE ... ADD COLUMN ... NOT NULL DEFAULT` leaves
+  // on every row that existed before the migration. The defaults must
+  // reproduce the behaviour those members already agreed to; defaulting
+  // to 'followers' would silently un-share everyone on deploy day.
+  const prefs = await getPreferences(db, m.clientId);
+  assert.equal(prefs.prVisibility, 'everyone');
+  assert.equal(prefs.feedScope, 'all');
+
+  // And a client with no membership row at all still resolves rather than
+  // throwing -- the feed must not 500 for someone mid-join.
+  const none = await getPreferences(db, 'cli_does_not_exist');
+  assert.equal(none.prVisibility, 'everyone');
+  assert.equal(none.feedScope, 'all');
+});
+
+test('the database refuses a visibility value the API would never send', async () => {
+  const db = await memDb();
+  await makeOrg(db, 'o1');
+  const m = await makeMember(db, 'o1', 'A');
+  // Zod guards the route, but the CHECK constraint is the backstop: a
+  // bad value reaching the column would make canSee() fall through to
+  // "visible" and quietly publish someone.
+  await assert.rejects(
+    () => db.run("UPDATE community_members SET pr_visibility = 'public' WHERE client_id = ?", [m.clientId]),
+    'an unknown visibility is rejected at the column, not silently stored');
 });

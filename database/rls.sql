@@ -146,6 +146,12 @@ ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_comments FORCE ROW LEVEL SECURITY;
 ALTER TABLE community_challenges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_challenges FORCE ROW LEVEL SECURITY;
+-- Follows carry a NOT NULL org_id written from the follower's own org.
+-- Without a policy, one gym's follow graph would be readable from another
+-- inside any transaction that sets app.org_id -- and a follow graph is a
+-- social map of who pays attention to whom.
+ALTER TABLE community_follows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_follows FORCE ROW LEVEL SECURITY;
 -- Share-link snapshots (routes/workoutShare.js, me.js's workout-share
 -- endpoints). org_id is always populated from the sharing client's own
 -- org at INSERT (me.js passes c.org_id), so the plain direct-org_id
@@ -227,7 +233,7 @@ BEGIN
     'notification_preferences','events',
     'ai_memory','ai_feedback',
     'community_members','community_workout_shares','shared_workouts',
-    'community_reactions','community_comments','community_challenges',
+    'community_reactions','community_comments','community_challenges','community_follows',
     'health_provider_connections','health_records','health_canonical_workouts',
     'health_energy_intervals','health_daily_summaries'
   ] LOOP

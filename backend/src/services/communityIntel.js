@@ -36,6 +36,7 @@
 // be fabricating events that were never recorded.
 // ============================================================
 import { dayKey, todayKey } from '../utils/time.js';
+import { now } from '../ids.js';
 import { periodRange, getCommunitySettings } from './community.js';
 
 /** Postgres returns COUNT/SUM as a STRING (bigint), SQLite as a number.
@@ -322,15 +323,22 @@ export async function memberTrend(db, clientId, tz, weeks = 4) {
  * and a second opinion on it is exactly the duplicate-business-logic
  * failure this design forbids.
  */
-export async function recentPRs(db, orgId, { limit = 20, since = null } = {}) {
+export async function recentPRs(db, orgId, { limit = 20, since = null, viewerClientId = null, scope = 'all' } = {}) {
   const params = [orgId];
   let dateFilter = '';
   if (since) { dateFilter = 'AND pr.date >= ?'; params.push(since); }
-  params.push(limit);
+
+  // Over-fetch rows, because the grouping below collapses many rows into
+  // far fewer cards: `limit` is a number of CARDS, and asking the database
+  // for `limit` rows would return a couple of sessions' worth. Capped so a
+  // pathological day cannot pull an unbounded result set.
+  const rowBudget = Math.min(limit * 12, 400);
+  params.push(rowBudget);
 
   const rows = await db.q(
     `SELECT pr.id, pr.client_id, pr.type, pr.value, pr.weight, pr.reps, pr.date, pr.created_at,
-            el.name AS exercise_name, u.name AS member_name
+            el.name AS exercise_name, u.name AS member_name,
+            cm.pr_visibility AS visibility
        FROM personal_records pr
        JOIN community_members cm ON cm.client_id = pr.client_id AND cm.enabled = 1
        JOIN clients c ON c.id = pr.client_id
@@ -341,18 +349,154 @@ export async function recentPRs(db, orgId, { limit = 20, since = null } = {}) {
       LIMIT ?`,
     params);
 
-  return rows.map((r) => ({
-    id: r.id,
-    clientId: r.client_id,
-    memberName: r.member_name,
-    exercise: r.exercise_name,
-    type: r.type,
-    value: num(r.value),
-    weight: r.weight == null ? null : num(r.weight),
-    reps: r.reps == null ? null : num(r.reps),
-    date: r.date,
-    createdAt: r.created_at,
+  // Who the viewer follows -- needed both for 'followers' visibility and
+  // for a 'following' scope. One query, not one per row.
+  let following = new Set();
+  if (viewerClientId) {
+    const f = await db.q(
+      'SELECT following_id FROM community_follows WHERE follower_id = ?', [viewerClientId]);
+    following = new Set(f.map((r) => r.following_id));
+  }
+
+  const canSee = (r) => {
+    if (viewerClientId && r.client_id === viewerClientId) return true; // always your own
+    const v = r.visibility || 'everyone';
+    if (v === 'nobody') return false;
+    if (v === 'followers') return following.has(r.client_id);
+    return true;
+  };
+  const inScope = (r) => {
+    if (scope !== 'following') return true;
+    if (!viewerClientId) return true;
+    return r.client_id === viewerClientId || following.has(r.client_id);
+  };
+
+  const visible = rows.filter((r) => canSee(r) && inScope(r));
+
+  /* ---- GROUPING ----
+     This is the fix for the real complaint. personal_records stores FOUR
+     record TYPES per exercise (heaviest weight, most reps, estimated 1RM,
+     best volume), so a single good set on a single exercise writes up to
+     four rows -- and the feed rendered each as its own card. One person's
+     leg session produced eight cards; a 200-member gym would produce
+     roughly 1,600 in a day, which is not a feed, it is a wall.
+
+     One card per PERSON PER DAY, with the records nested inside it. That
+     is also how a human would say it out loud: "Sambhav set four records
+     today", not four separate announcements. */
+  const byDay = new Map();
+  for (const r of visible) {
+    const key = `${r.client_id}:${r.date}`;
+    if (!byDay.has(key)) {
+      byDay.set(key, {
+        id: `prg_${r.client_id}_${r.date}`,
+        clientId: r.client_id,
+        memberName: r.member_name,
+        date: r.date,
+        createdAt: r.created_at,
+        records: [],
+      });
+    }
+    const g = byDay.get(key);
+    // The newest row in the group is the group's timestamp, so a session
+    // finished at 9pm does not sort by whichever record happened to be
+    // written first.
+    if (r.created_at && r.created_at > g.createdAt) g.createdAt = r.created_at;
+    g.records.push({
+      id: r.id,
+      exercise: r.exercise_name,
+      type: r.type,
+      value: num(r.value),
+      weight: r.weight == null ? null : num(r.weight),
+      reps: r.reps == null ? null : num(r.reps),
+    });
+  }
+
+  const groups = [...byDay.values()].sort((a, b) => {
+    const d = String(b.createdAt || b.date).localeCompare(String(a.createdAt || a.date));
+    return d !== 0 ? d : String(b.id).localeCompare(String(a.id));
+  });
+
+  return groups.slice(0, limit).map((g) => ({
+    ...g,
+    // Distinct exercises reads better than "8 records" when four of those
+    // records are the same lift measured four ways.
+    exerciseCount: new Set(g.records.map((r) => r.exercise)).size,
+    recordCount: g.records.length,
   }));
+}
+
+// ---- FOLLOWS ----
+
+/** Follow is idempotent: the pair is the primary key, so a double tap
+ *  cannot inflate a follower count. Self-follows are rejected outright --
+ *  they would make "people you follow" include you twice, since your own
+ *  activity is always included regardless. */
+export async function followMember(db, { orgId, followerId, followingId }) {
+  if (followerId === followingId) return { ok: false, reason: 'self' };
+  const target = await db.q1(
+    `SELECT cm.client_id FROM community_members cm
+      WHERE cm.client_id = ? AND cm.org_id = ? AND cm.enabled = 1`,
+    [followingId, orgId]);
+  // Following someone who is not a member of this community would create
+  // an edge that survives them never joining -- and leaks that the id is
+  // real. Refused the same way an unknown id is.
+  if (!target) return { ok: false, reason: 'not_found' };
+  try {
+    await db.run(
+      `INSERT INTO community_follows (follower_id, following_id, org_id, created_at)
+       VALUES (?,?,?,?)`,
+      [followerId, followingId, orgId, now()]);
+  } catch {
+    /* already following -- the PK did its job */
+  }
+  return { ok: true, following: true };
+}
+
+export async function unfollowMember(db, { followerId, followingId }) {
+  await db.run(
+    'DELETE FROM community_follows WHERE follower_id = ? AND following_id = ?',
+    [followerId, followingId]);
+  return { ok: true, following: false };
+}
+
+/** Everyone this client follows, plus counts for both directions. */
+export async function followState(db, { orgId, clientId }) {
+  const [following, followers] = await Promise.all([
+    db.q(`SELECT cf.following_id FROM community_follows cf
+            JOIN community_members cm ON cm.client_id = cf.following_id AND cm.enabled = 1
+           WHERE cf.follower_id = ? AND cf.org_id = ?`, [clientId, orgId]),
+    db.q1(`SELECT COUNT(*) AS n FROM community_follows cf
+             JOIN community_members cm ON cm.client_id = cf.follower_id AND cm.enabled = 1
+            WHERE cf.following_id = ? AND cf.org_id = ?`, [clientId, orgId]),
+  ]);
+  return {
+    following: following.map((r) => r.following_id),
+    followingCount: following.length,
+    followerCount: int(followers?.n),
+  };
+}
+
+/** The viewer's own community preferences, with defaults for a row that
+ *  predates these columns. */
+export async function getPreferences(db, clientId) {
+  const r = await db.q1(
+    'SELECT pr_visibility, feed_scope FROM community_members WHERE client_id = ?', [clientId]);
+  return {
+    prVisibility: r?.pr_visibility || 'everyone',
+    feedScope: r?.feed_scope || 'all',
+  };
+}
+
+export async function setPreferences(db, clientId, { prVisibility, feedScope }) {
+  const sets = []; const params = [];
+  if (prVisibility) { sets.push('pr_visibility = ?'); params.push(prVisibility); }
+  if (feedScope) { sets.push('feed_scope = ?'); params.push(feedScope); }
+  if (!sets.length) return getPreferences(db, clientId);
+  sets.push('updated_at = ?'); params.push(now());
+  params.push(clientId);
+  await db.run(`UPDATE community_members SET ${sets.join(', ')} WHERE client_id = ?`, params);
+  return getPreferences(db, clientId);
 }
 
 // ---- WEEKLY RECAP ----
@@ -492,10 +636,15 @@ export async function communityOverview(db, { orgId, clientId, period = 'week', 
     return { settings, available: false };
   }
 
+  // The viewer's saved feed scope decides whose records reach them, so
+  // the overview and the Activity tab agree without the client having to
+  // pass the preference back on every request.
+  const prefs = clientId ? await getPreferences(db, clientId) : { feedScope: 'all' };
+
   const [pulse, series, prs, recap, position, trend] = await Promise.all([
     communityPulse(db, orgId, tz),
     activitySeries(db, orgId, tz, 28),
-    recentPRs(db, orgId, { limit: 10 }),
+    recentPRs(db, orgId, { limit: 10, viewerClientId: clientId, scope: prefs.feedScope }),
     weeklyRecap(db, orgId, tz),
     clientId ? memberPosition(db, orgId, clientId, period, tz) : null,
     clientId ? memberTrend(db, clientId, tz, 4) : null,
@@ -504,6 +653,7 @@ export async function communityOverview(db, { orgId, clientId, period = 'week', 
   return {
     settings,
     available: true,
+    preferences: prefs,
     pulse,
     activity: series,
     busiestWeekday: busiestWeekday(series),
