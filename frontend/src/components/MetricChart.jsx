@@ -215,6 +215,9 @@ export default function MetricChart({
         <path
           d={geom.line} fill="none" stroke={color} strokeWidth="2"
           vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"
+          // pathLength normalises every series to the same 1000 units so one
+          // CSS draw rule works regardless of how long the real path is.
+          pathLength="1000"
           className="metric-chart-line"
         />
 
