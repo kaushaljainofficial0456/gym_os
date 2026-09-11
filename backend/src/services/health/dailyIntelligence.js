@@ -532,6 +532,10 @@ export async function getBurnBreakdown(db, { userId, date }) {
 
   return {
     date,
+    // When this day was last reconciled. The caller uses it to decide
+    // whether wearable data has arrived SINCE, and it is the honest "as
+    // of" stamp for figures that were computed rather than measured.
+    computed_at: summary.computed_at ?? null,
     totals: {
       total: summary.total_energy ?? null,
       resting: summary.resting_energy ?? null,

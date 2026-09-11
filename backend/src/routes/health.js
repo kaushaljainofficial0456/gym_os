@@ -120,19 +120,27 @@ function isAuthFailure(err) {
  *  sync logic either way, only who triggers it differs. Never throws -- a
  *  webhook delivery needs to ack fast regardless of whether the
  *  provider-side fetch itself failed. */
+/** Where a sync starts reading from: the last successful sync, or -- on a
+ *  first sync -- far enough back to actually populate the user's history
+ *  rather than just the provider's default page. */
+function syncSince(conn) {
+  if (conn.last_synced_at) return conn.last_synced_at;
+  return new Date(Date.now() - INITIAL_BACKFILL_DAYS * 86400000).toISOString();
+}
+
 async function syncOneConnection(db, provider, conn) {
   await db.run('UPDATE health_provider_connections SET sync_status = ?, updated_at = ? WHERE id = ?', ['syncing', now(), conn.id]);
   try {
     conn = await ensureFreshToken(db, provider, conn);
     let result;
     try {
-      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: conn.last_synced_at });
+      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: syncSince(conn) });
     } catch (e) {
       // A 401 despite a token we believed was valid: force one refresh and
       // retry exactly once. Anything else (or a second failure) propagates.
       if (!isAuthFailure(e)) throw e;
       conn = await ensureFreshToken(db, provider, conn, { force: true });
-      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: conn.last_synced_at });
+      result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: syncSince(conn) });
     }
     const { records, nextCursor } = result;
     let inserted = 0;
@@ -159,6 +167,13 @@ async function syncOneConnection(db, provider, conn) {
 // phone down is there when you look, and long enough that flicking between
 // tabs does not hammer the provider.
 const AUTO_SYNC_STALE_MS = 15 * 60 * 1000;
+
+// How far back the FIRST sync reaches. Without this, `since` is null on a
+// first sync, providers return only their default page (WHOOP: 10
+// records), and a user who connects today finds every previous day empty
+// -- their history exists on the provider's side and was simply never
+// asked for. 90 days matches the longest window Progress can display.
+const INITIAL_BACKFILL_DAYS = 90;
 
 /**
  * Syncs any connected provider that has gone stale, triggered by a normal
@@ -199,6 +214,31 @@ async function autoSyncStaleConnections(db, { userId }) {
     console.error('[health] auto-sync failed:', e.message || e);
     return [];
   }
+}
+
+/**
+ * Has wearable data for `date` arrived SINCE that day was last reconciled?
+ *
+ * Caught live: connect a wearable today and yesterday's burn screen still
+ * shows SK OS figures only. Yesterday was reconciled before the wearable
+ * existed, the cached summary was therefore complete and correct AT THE
+ * TIME, and every later read served it -- so a workout WHOOP delivered
+ * afterwards for that day never appeared. Reconciliation only ever ran
+ * when a day had NO summary at all, which is the one case this isn't.
+ *
+ * Compares the newest health_record touching the day against when the
+ * summary was computed. Cheap (one indexed max) and precise: it triggers
+ * a recompute exactly when new evidence exists and never otherwise.
+ */
+async function hasNewerHealthData(db, { userId, date, computedAt }) {
+  if (!computedAt) return true;
+  const row = await db.q1(
+    `SELECT MAX(synced_at) AS newest FROM health_records
+      WHERE user_id = ? AND deleted_at IS NULL
+        AND start_time >= ? AND start_time < ?`,
+    [userId, `${date}T00:00:00Z`, `${date}T23:59:59Z`]);
+  if (!row?.newest) return false;
+  return Date.parse(row.newest) > Date.parse(computedAt);
 }
 
 export default function healthRoutes(db) {
@@ -431,7 +471,11 @@ export default function healthRoutes(db) {
     const gotNewData = autoSynced.some((r) => r.ok && r.recordsInserted > 0);
     if (!forceRefresh && !gotNewData) {
       const cached = await getDailyIntelligence(db, { userId: req.user.sub, date });
-      if (cached) return res.json({ intelligence: cached, cached: true });
+      // Same staleness rule as the burn breakdown: a cached day whose
+      // wearable data arrived later is not actually up to date.
+      if (cached && !(await hasNewerHealthData(db, { userId: req.user.sub, date, computedAt: cached.computed_at }))) {
+        return res.json({ intelligence: cached, cached: true });
+      }
     }
     // Without tz, reconciliation buckets the day in the SERVER's default
     // timezone, which is a different day's worth of records for a user in
@@ -468,10 +512,17 @@ export default function healthRoutes(db) {
     const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     const tz = req.tz || DEFAULT_TZ;
+    // Syncing first means a day opened right after connecting a wearable
+    // already has that wearable's records to reconcile against.
+    await autoSyncStaleConnections(db, { userId: req.user.sub });
+
     let breakdown = await getBurnBreakdown(db, { userId: req.user.sub, date });
-    if (!breakdown) {
-      // Never reconciled yet (the user opened the breakdown before Home
-      // ever loaded this day) -- compute it once, then read it back.
+    // Recompute when there is no summary at all, OR when wearable data for
+    // this day landed after the summary was built (see hasNewerHealthData).
+    const stale = breakdown
+      ? await hasNewerHealthData(db, { userId: req.user.sub, date, computedAt: breakdown.computed_at })
+      : true;
+    if (stale) {
       await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date, tz });
       breakdown = await getBurnBreakdown(db, { userId: req.user.sub, date });
     }
