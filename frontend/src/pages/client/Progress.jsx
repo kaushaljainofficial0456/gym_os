@@ -36,6 +36,7 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
+import PeriodChart from '../../components/PeriodChart.jsx';
 import { WeekSection, MeasurementsSection, AchievementsSection, StrengthProgressSection } from './ProgressSections.jsx';
 import { RecoverySection, TransformationSection } from './ProgressRecovery.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -259,23 +260,43 @@ function useMetrics(intel) {
     const t = intel.training?.sessions || [];
     if (t.length) {
       out.push({
-        key: 'volume', label: 'Volume', category: 'training', unit: 'kg', decimals: 0,
+        key: 'volume', label: 'Volume', category: 'training', unit: 'kg', decimals: 0, fillZero: true,
         series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--m-training)', variant: 'bar',
       });
       out.push({
-        key: 'sets', label: 'Sets', category: 'training', unit: '', decimals: 0,
+        key: 'sets', label: 'Sets', category: 'training', unit: '', decimals: 0, fillZero: true,
         series: t.map((s) => ({ date: s.date, value: s.sets })), color: 'var(--m-training)', variant: 'bar',
       });
     }
     const nu = intel.nutrition?.days || [];
     if (nu.length) {
       out.push({
-        key: 'calories', label: 'Calories', category: 'nutrition', unit: 'kcal', decimals: 0,
+        key: 'calories', label: 'Calories', category: 'nutrition', unit: 'kcal', decimals: 0, fillZero: true,
         series: nu.map((d) => ({ date: d.date, value: d.calories })),
         goal: intel.nutrition.targets?.calories ?? null, color: 'var(--m-nutrition)',
       });
+      // Stacked macros: the only chart here where the SPLIT is the point,
+      // not the total. Drawn as columns because a day's macro breakdown is
+      // a composition, not a trend line.
       out.push({
-        key: 'protein', label: 'Protein', category: 'nutrition', unit: 'g', decimals: 0,
+        key: 'macros', label: 'Macros', category: 'nutrition', unit: 'g', decimals: 0,
+        columns: nu.map((d) => ({
+          date: d.date,
+          parts: [
+            { key: 'protein', value: d.protein || 0 },
+            { key: 'carbs', value: d.carbs || 0 },
+            { key: 'fat', value: d.fat || 0 },
+          ],
+        })),
+        stacks: [
+          { key: 'protein', label: 'Protein', color: 'var(--m-body)' },
+          { key: 'carbs', label: 'Carbs', color: 'var(--m-nutrition)' },
+          { key: 'fat', label: 'Fat', color: 'var(--m-strength)' },
+        ],
+        series: nu.map((d) => ({ date: d.date, value: (d.protein || 0) + (d.carbs || 0) + (d.fat || 0) })),
+      });
+      out.push({
+        key: 'protein', label: 'Protein', category: 'nutrition', unit: 'g', decimals: 0, fillZero: true,
         series: nu.map((d) => ({ date: d.date, value: d.protein })),
         goal: intel.nutrition.targets?.protein ?? null, color: 'var(--m-nutrition)',
       });
@@ -290,25 +311,23 @@ function useMetrics(intel) {
     }
     if (caps.steps?.available) {
       out.push({
-        key: 'steps', label: 'Steps', category: 'energy', unit: '', decimals: 0,
+        key: 'steps', label: 'Steps', category: 'energy', unit: '', decimals: 0, fillZero: true,
         series: h.filter((d) => d.steps != null).map((d) => ({ date: d.date, value: d.steps })),
         color: 'var(--warn)',
       });
     }
-    if (caps.sleep?.available) {
-      out.push({
-        key: 'sleep', label: 'Sleep', category: 'recovery', unit: 'h', decimals: 1,
-        series: h.filter((d) => d.sleep_duration_seconds != null).map((d) => ({ date: d.date, value: d.sleep_duration_seconds / 3600 })),
-        color: 'var(--good)',
-      });
-    }
-    if (caps.recovery?.available) {
-      out.push({
-        key: 'recovery', label: 'Recovery', category: 'recovery', unit: '', decimals: 0,
-        series: h.filter((d) => d.recovery_score != null).map((d) => ({ date: d.date, value: d.recovery_score })),
-        color: 'var(--good)',
-      });
-    }
+    // SLEEP AND RECOVERY ARE DELIBERATELY NOT CHARTED HERE.
+    //
+    // The explorer should offer the same shelf of metrics to everyone. If
+    // sleep and recovery appear as chips, a wearable user gets a Recovery
+    // category that a non-wearable user simply never sees, and the screen
+    // becomes two different products depending on hardware. Those two
+    // figures are reported as plain numbers in the Recovery section
+    // instead, which is all they are worth here -- a seven-point sleep
+    // line tells you very little that '7h 21m average' does not.
+    //
+    // Energy stays, because SK OS computes it for everyone (BMR plus
+    // logged workouts) rather than it being wearable-only.
     return out.filter((m) => m.series && m.series.length);
   }, [intel]);
 }
@@ -326,6 +345,56 @@ function localAnalyze(series) {
     count: series.length, spanDays,
     ratePerWeek: series.length >= 4 && spanDays >= 7 ? (change / spanDays) * 7 : null,
   };
+}
+
+/**
+ * "What's happening?" — a plain-language reading of the selected metric.
+ *
+ * Built from the SAME numbers already on screen, so the user can check it
+ * against the chart rather than having to trust it. Returns null whenever
+ * the data doesn't support a statement: a sentence is generated only when
+ * there is a real trend, a real plateau, or a real recent divergence.
+ * Vague filler ("keep going!") is worse than saying nothing.
+ */
+function describeMetric(metric, a, windowed, period) {
+  if (!a || !metric || windowed.length < 4) return null;
+  const unit = metric.unit ? ` ${metric.unit}` : '';
+  const dp = metric.decimals ?? 0;
+  const fmt = (v) => `${Math.abs(v).toFixed(dp)}${unit}`;
+  const down = metric.key === 'weight';          // lower is the goal here
+
+  // Compare the most recent third against the earliest third: this is what
+  // catches "falling, but slower lately", which a single slope cannot say.
+  const third = Math.max(2, Math.floor(windowed.length / 3));
+  const early = windowed.slice(0, third);
+  const late = windowed.slice(-third);
+  const mean = (arr) => arr.reduce((x, p) => x + p.value, 0) / arr.length;
+  const earlyMean = mean(early);
+  const lateMean = mean(late);
+  const shift = lateMean - earlyMean;
+  const spread = a.max - a.min;
+  const moved = spread > 0 && Math.abs(shift) / spread > 0.12;
+
+  if (!moved) {
+    return `Your ${metric.label.toLowerCase()} has held steady around ${fmt(a.average)} across these ${period} days.`;
+  }
+
+  const dir = shift < 0 ? 'down' : 'up';
+  const good = down ? shift < 0 : shift > 0;
+  const rate = a.ratePerWeek != null ? `, about ${fmt(a.ratePerWeek)} a week` : '';
+  let sentence = `Your ${metric.label.toLowerCase()} has moved ${dir} ${fmt(shift)} from the start of this window to now${rate}.`;
+
+  // Has the recent pace changed? Only worth saying if it clearly has.
+  const half = Math.floor(windowed.length / 2);
+  if (half >= 3) {
+    const firstHalfShift = mean(windowed.slice(half - half, half)) - windowed[0].value;
+    const secondHalfShift = windowed[windowed.length - 1].value - mean(windowed.slice(half - half, half));
+    if (Math.sign(firstHalfShift) === Math.sign(secondHalfShift) && Math.abs(secondHalfShift) < Math.abs(firstHalfShift) * 0.5) {
+      sentence += ' The pace has slowed over the second half.';
+    }
+  }
+  if (!good) sentence += down ? ' That is away from a lower target.' : '';
+  return sentence;
 }
 
 function MetricExplorer({ intel, period }) {
@@ -367,6 +436,34 @@ function MetricExplorer({ intel, period }) {
       return t >= prevFrom && t < curFrom;
     });
   }, [comparing, active, period]);
+
+  // A WEEK VIEW SHOULD SHOW THE WHOLE WEEK. Series only contain days that
+  // have records, so a 7-day window with two training days rendered two
+  // lonely columns and five invisible gaps -- the rest days, which are
+  // themselves information, simply weren't there.
+  //
+  // Only ever applied to metrics where an absent record genuinely MEANS
+  // zero (sets done, calories eaten, steps taken). Never to a measurement:
+  // a day you didn't weigh yourself is not a day you weighed nothing, and
+  // filling it with 0 would drag the line to the floor.
+  const columns = useMemo(() => {
+    if (!active) return [];
+    const base = active.stacks
+      ? (active.columns || []).filter((c) => windowed.some((w) => w.date === c.date))
+      : windowed;
+    if (!active.fillZero && !active.stacks) return base;
+    const byDate = new Map(base.map((p) => [p.date, p]));
+    const out = [];
+    const today = new Date();
+    for (let i = period - 1; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86400000);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      out.push(byDate.get(key) || (active.stacks
+        ? { date: key, parts: (active.stacks || []).map((sr) => ({ key: sr.key, value: 0 })) }
+        : { date: key, value: 0 }));
+    }
+    return out;
+  }, [active, windowed, period]);
 
   const a = localAnalyze(windowed);
   const prevA = localAnalyze(previous);
@@ -433,6 +530,23 @@ function MetricExplorer({ intel, period }) {
             </div>
 
             <div className="mt-2">
+              {/* A week or so of columns -> the readable weekly-trends
+                  shape, where every value is printed. Past that the dense
+                  scrubbable line is the right instrument: 30 printed
+                  labels on a phone is not a chart, it is a collision.
+                  Stacked series always use columns -- a composition
+                  cannot be drawn as a single line. */}
+              {(active.stacks || windowed.length <= 8) ? (
+                <PeriodChart
+                  points={columns}
+                  series={active.stacks || null}
+                  color={active.color}
+                  unit={active.unit}
+                  decimals={active.decimals}
+                  todayKey={new Date().toISOString().slice(0, 10)}
+                  ariaLabel={`${active.label} for each of the last ${period} days`}
+                />
+              ) : (
               <MetricChart
                 points={windowed}
                 smoothed={comparing ? [] : smoothed}
@@ -444,6 +558,7 @@ function MetricExplorer({ intel, period }) {
                 decimals={active.decimals}
                 ariaLabel={`${active.label} over the last ${period} days`}
               />
+              )}
             </div>
 
             {/* The comparison only means something once there IS a previous
@@ -479,6 +594,15 @@ function MetricExplorer({ intel, period }) {
                 )}
               </div>
             )}
+
+            {(() => {
+              const story = describeMetric(active, a, windowed, period);
+              return story ? (
+                <div className="mt-2.5 text-[11.5px] leading-snug" style={{ color: 'var(--mute)' }}>
+                  {story}
+                </div>
+              ) : null;
+            })()}
 
             <div className="mt-3 grid grid-cols-4 gap-2 border-t pt-3" style={{ borderColor: 'var(--line)' }}>
               <Stat label="Average" value={active.decimals ? n1(a.average) : fmtNum(n0(a.average))} />
@@ -884,13 +1008,73 @@ function ConsistencySection({ intel }) {
 
 /* ══════════════════════════ goal ══════════════════════════ */
 
+/**
+ * GOALS — every target the user ACTUALLY has on record.
+ *
+ * The brief asks for multiple goal types (weight, body fat, strength,
+ * frequency, nutrition, habit). Only two of those have real stored
+ * targets in this product today: target weight, and the nutrition plan's
+ * calorie/protein targets. The rest would mean inventing a number and
+ * then measuring the user against it, which is worse than not offering
+ * the goal at all — so this renders what exists and grows as real targets
+ * are added, rather than shipping placeholder rings.
+ */
 function GoalSection({ intel }) {
   const g = intel.weight?.goal;
-  if (!g || g.target == null) return null;
-  const pct = g.percent != null ? Math.max(0, Math.min(100, g.percent)) : null;
+  const targets = intel.nutrition?.targets;
+  const days = intel.nutrition?.days || [];
+
+  // Nutrition goals are measured as "days you hit it", not as a single
+  // average — an average hides a week of misses balanced by one huge day.
+  const nutritionGoals = [];
+  if (targets?.protein && days.length) {
+    const hit = days.filter((d) => (d.protein || 0) >= targets.protein * 0.9).length;
+    nutritionGoals.push({
+      key: 'protein', label: 'Protein target', hue: 'body',
+      hit, of: days.length, detail: `${Math.round(targets.protein)} g/day`,
+    });
+  }
+  if (targets?.calories && days.length) {
+    const hit = days.filter((d) => Math.abs((d.calories || 0) - targets.calories) <= targets.calories * 0.1).length;
+    nutritionGoals.push({
+      key: 'calories', label: 'Calorie target', hue: 'nutrition',
+      hit, of: days.length, detail: `${Math.round(targets.calories)} kcal ±10%`,
+    });
+  }
+
+  const hasWeightGoal = g && g.target != null;
+  if (!hasWeightGoal && !nutritionGoals.length) return null;
+  const pct = hasWeightGoal && g.percent != null ? Math.max(0, Math.min(100, g.percent)) : null;
 
   return (
-    <Section title="Goal">
+    <Section title="Goals">
+      {nutritionGoals.length > 0 && (
+        <div className="grid grid-cols-2 gap-2.5">
+          {nutritionGoals.map((ng) => (
+            <Card key={ng.key} className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[9.5px] font-semibold uppercase leading-tight tracking-[.06em]" style={{ color: 'var(--faint)' }}>
+                    {ng.label}
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1">
+                    <span className="text-[19px] font-black leading-none tabular-nums" style={{ color: 'var(--ink)' }}>{ng.hit}</span>
+                    <span className="text-[10px]" style={{ color: 'var(--faint)' }}>/ {ng.of} days</span>
+                  </div>
+                  <div className="mt-0.5 text-[9.5px] truncate" style={{ color: 'var(--faint)' }}>{ng.detail}</div>
+                </div>
+                <Ring
+                  value={ng.of ? ng.hit / ng.of : 0} size={38} stroke={4}
+                  color={`var(--m-${ng.hue})`}
+                  label={`${ng.label}: ${ng.hit} of ${ng.of} days`}
+                />
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {hasWeightGoal && (
       <Card className="p-4">
         <div className="flex items-end justify-between">
           <div>
@@ -921,6 +1105,7 @@ function GoalSection({ intel }) {
           </div>
         )}
       </Card>
+      )}
     </Section>
   );
 }
