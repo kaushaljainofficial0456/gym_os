@@ -88,9 +88,9 @@ async function sendVerificationEmail(db, { userId, email, name }) {
     const link = `${config.frontendUrl}/verify-email?token=${encodeURIComponent(payload)}`;
     await sendEmail({
       to: email,
-      subject: 'Verify your SK OS email',
-      html: `<p>Hi ${escapeHtml(name || '')},</p><p>Confirm your email address to finish setting up your SK OS account:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`,
-      text: `Hi ${name || ''},\n\nConfirm your email address to finish setting up your SK OS account:\n${link}\n\nThis link expires in 24 hours.`,
+      subject: 'Verify your Barbell email',
+      html: `<p>Hi ${escapeHtml(name || '')},</p><p>Confirm your email address to finish setting up your Barbell account:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`,
+      text: `Hi ${name || ''},\n\nConfirm your email address to finish setting up your Barbell account:\n${link}\n\nThis link expires in 24 hours.`,
     });
   } catch (e) {
     console.error('[auth] verification email failed (non-fatal):', e?.message || e);
@@ -314,7 +314,7 @@ export default function authRoutes(db) {
     const row = await db.q1('SELECT id FROM organizations WHERE slug = ?', [INDEPENDENT_ORG_SLUG]);
     await db.run(
       `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets, updated_at)
-       VALUES (?, 'SK OS', 'Your own coach, in your pocket.', 150, 0, 'custom', 1, 1, 1, ?)
+       VALUES (?, 'Barbell', 'Your own coach, in your pocket.', 150, 0, 'custom', 1, 1, 1, ?)
        ON CONFLICT (org_id) DO NOTHING`,
       [row.id, now()]);
     return row.id;
@@ -747,7 +747,7 @@ export default function authRoutes(db) {
       const link = `${config.frontendUrl}/reset-password?token=${encodeURIComponent(payload)}`;
       await sendEmail({
         to: email,
-        subject: 'Reset your SK OS password',
+        subject: 'Reset your Barbell password',
         html: `<p>Hi ${escapeHtml(user.name || '')},</p><p>Someone requested a password reset for this account. If this was you, set a new password here:</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email -- your password has not been changed.</p>`,
         text: `Hi ${user.name || ''},\n\nSomeone requested a password reset for this account. If this was you, set a new password here:\n${link}\n\nThis link expires in 1 hour. If you didn't request this, you can safely ignore this email -- your password has not been changed.`,
       });

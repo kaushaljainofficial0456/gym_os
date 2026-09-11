@@ -56,7 +56,7 @@ export default function ShareMealsSheet({ open, onClose, t }) {
       setTimeout(async () => {
         setStage(null);
         if (navigator.share) {
-          try { await navigator.share({ title: 'My meal on SK OS', text: 'Check out what I logged on SK OS', url }); }
+          try { await navigator.share({ title: 'My meal on Barbell', text: 'Check out what I logged on Barbell', url }); }
           catch { /* user cancelled the native sheet -- not an error */ }
         }
       }, 900);

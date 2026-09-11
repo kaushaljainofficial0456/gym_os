@@ -52,7 +52,7 @@ export default function EnterpriseDashboard() {
 
   return (
     <div className="space-y-6" data-tour="trainer-enterprise">
-      <PageHeader title="Enterprise" sub="Your SK OS subscription, capacity, and QR onboarding." />
+      <PageHeader title="Enterprise" sub="Your Barbell subscription, capacity, and QR onboarding." />
 
       <div className="grid sm:grid-cols-3 gap-4">
         <Kpi label="Purchased capacity" value={d.purchasedCapacity} />

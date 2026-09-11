@@ -169,7 +169,7 @@ export default function Settings() {
           <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Health Intelligence</span>
         </div>
         <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
-          Connect a wearable so SK OS can combine it with your logged workouts for a more complete burn estimate.
+          Connect a wearable so Barbell can combine it with your logged workouts for a more complete burn estimate.
         </p>
         <button className="btn w-full" onClick={() => nav('/app/client/health')}>Connected devices</button>
       </div>

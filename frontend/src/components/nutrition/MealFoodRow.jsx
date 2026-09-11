@@ -351,7 +351,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
                 </div>
               )}
               {!searching && !searchErr && !results.length && q.trim().length >= 2 && (
-                <div className="text-[10px] py-1" style={{ color: t.faint }}>No close match found in SK OS for "{q.trim()}".</div>
+                <div className="text-[10px] py-1" style={{ color: t.faint }}>No close match found in Barbell for "{q.trim()}".</div>
               )}
               {results.map((f) => (
                 <button key={f.id || f.source_id} onClick={() => handleAddFood(f)} disabled={adding}

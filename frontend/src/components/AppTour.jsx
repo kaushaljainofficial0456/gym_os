@@ -253,7 +253,7 @@ const OWNER_STEPS = [
     route: '/app/trainer/enterprise',
     target: '[data-tour="trainer-enterprise"]',
     title: 'Enterprise dashboard',
-    body: 'Your SK OS subscription: package details, client capacity, QR onboarding codes, and billing. This is where you manage your gym\'s SK OS membership.',
+    body: 'Your Barbell subscription: package details, client capacity, QR onboarding codes, and billing. This is where you manage your gym\'s Barbell membership.',
     placement: 'bottom',
   },
 ];

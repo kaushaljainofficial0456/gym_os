@@ -293,7 +293,7 @@ test('capacity exhaustion: generating a client QR at zero remaining capacity is 
   assert.equal(qr.json.error, 'No client capacity remaining');
 });
 
-test('client join rejects a QR for a gym whose SK OS package is not yet active', async (t) => {
+test('client join rejects a QR for a gym whose Barbell package is not yet active', async (t) => {
   const db = await memDb();
   await seedPricing(db);
   const api = await startApp(db);
@@ -308,7 +308,7 @@ test('client join rejects a QR for a gym whose SK OS package is not yet active',
   // qr/client itself is gated on ACTIVE status too -- confirm that gate fires first.
   const qr = await api.call('POST', '/api/enrollment/qr/client', { membershipPlanId: 'plan_y' }, ownerToken);
   assert.equal(qr.status, 409);
-  assert.equal(qr.json.error, 'Your SK OS package is not active yet');
+  assert.equal(qr.json.error, 'Your Barbell package is not active yet');
 });
 
 // Spec, verbatim: "Two requests consuming the last capacity

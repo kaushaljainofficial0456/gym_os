@@ -772,7 +772,7 @@ export default function intelligenceRoutes(db) {
     if (/diagnos|prescrib|medication|medicine|drug|emergency|suicid|chest pain|dizzy|faint|severe pain/i.test(low)) {
       return res.json({
         ok: true, provider: 'safety',
-        answer: 'That sounds like something a qualified professional should look at. SK OS provides fitness training guidance only — please consult a doctor or appropriate healthcare professional for this.',
+        answer: 'That sounds like something a qualified professional should look at. Barbell provides fitness training guidance only — please consult a doctor or appropriate healthcare professional for this.',
         actionable: { action: 'NONE' },
         provenance: 'SAFETY_GATE'
       });

@@ -322,7 +322,7 @@ export default function enterpriseRoutes(db) {
     const { invoice } = recipient;
     const result = await sendEmail({
       to,
-      subject: `Invoice ${invoice.invoice_number} from ${org?.name || 'SK OS'}`,
+      subject: `Invoice ${invoice.invoice_number} from ${org?.name || 'Barbell'}`,
       html: `<p>Hi${recipient.customer?.name ? ' ' + recipient.customer.name : ''},</p>` +
         `<p>Please find attached invoice <strong>${invoice.invoice_number}</strong> for ${invoice.currency} ${Number(invoice.amount).toFixed(2)}.</p>`,
       attachments: [{ filename: `${invoice.invoice_number}.pdf`, content: pdf }],

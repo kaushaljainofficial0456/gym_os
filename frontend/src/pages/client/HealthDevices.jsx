@@ -103,7 +103,7 @@ export default function HealthDevices() {
               </div>
             )}
             {d.status !== 'connected' && d.availability === 'requires_native_app' && (
-              <div className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>Requires the SK OS {d.platform} app</div>
+              <div className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>Requires the Barbell {d.platform} app</div>
             )}
             {d.status !== 'connected' && d.availability === 'architected_only' && (
               <div className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>Not yet available</div>
@@ -144,7 +144,7 @@ export default function HealthDevices() {
       <PageHeader
         eyebrow="Health Intelligence"
         title="Connected devices"
-        sub="SK OS combines your wearable data with your logged workouts for a more complete picture — no wearable is required."
+        sub="Barbell combines your wearable data with your logged workouts for a more complete picture — no wearable is required."
         onBack={() => nav(-1)}
         right={connected.length > 0 && (
           <button className="btn btn-sm" disabled={busyProvider === '__sync__'} onClick={syncNow}>
@@ -170,7 +170,7 @@ export default function HealthDevices() {
       </div>
 
       <div className="text-[10px] leading-relaxed px-1" style={{ color: 'var(--faint)' }}>
-        SK OS never guesses missing data or double-counts energy across sources — your workout estimate always works even without a connected device.
+        Barbell never guesses missing data or double-counts energy across sources — your workout estimate always works even without a connected device.
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ const PROFILE_SECTIONS = [
   // so this one row rendered Icon.jsx's fallback glyph instead of a real
   // icon. Same bug class ClientLayout.jsx already documents fixing at 9
   // other sites.
-  { id: 'help', label: 'Help', icon: 'bulb', desc: 'Learn how to use SK OS' },
+  { id: 'help', label: 'Help', icon: 'bulb', desc: 'Learn how to use Barbell' },
 ];
 
 function MiniSpark({ values, color = 'var(--accent)' }) {
@@ -67,11 +67,11 @@ function BackButton({ onClick }) {
 function HelpInline() {
   const [expanded, setExpanded] = useState(null);
   const HELP_SECTIONS = [
-    { id: 'overview', icon: 'home', title: 'How SK OS Works', content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'SK OS analyzes your data and provides insights', 'Your coach gets real-time updates'] },
+    { id: 'overview', icon: 'home', title: 'How Barbell Works', content: 'Barbell is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place.', items: ['Your coach designs personalized plans', 'Track daily activities — workouts, meals, sleep', 'Barbell analyzes your data and provides insights', 'Your coach gets real-time updates'] },
     { id: 'workouts', icon: 'strength', title: 'How Workouts Work', content: 'Your coach assigns structured workout plans with exercises, sets, reps, and weights.', items: ['Open a workout to see all exercises', 'Log your actual weights and reps', 'Rest timer helps track between sets', 'Complete all exercises to finish the session'] },
-    { id: 'nutrition', icon: 'food', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask SK OS to quickly log foods', 'Take a meal photo for calorie estimates'] },
+    { id: 'nutrition', icon: 'food', title: 'How Nutrition Works', content: 'Your nutrition plan is designed by your coach based on your goals.', items: ['View your daily meal plan', 'Mark meals as eaten when complete', 'Use Ask Barbell to quickly log foods', 'Take a meal photo for calorie estimates'] },
     { id: 'progress', icon: 'trending', title: 'Progress Tracking', content: 'Track your body transformation over time with weight, measurements, and photos.', items: ['Log weight regularly on Progress page', 'View weight trends with charts', 'Track body measurements', 'See your adherence score'] },
-    { id: 'coach', icon: 'robot', title: 'Coach & Intelligence', content: 'SK OS provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask SK OS natural language questions', 'Message your coach from Profile'] },
+    { id: 'coach', icon: 'robot', title: 'Coach & Intelligence', content: 'Barbell provides intelligent coaching insights and recommendations.', items: ['Coach Brief shows daily priorities', 'Weekly reviews summarize performance', 'Ask Barbell natural language questions', 'Message your coach from Profile'] },
   ];
   return (
     <div className="space-y-3">

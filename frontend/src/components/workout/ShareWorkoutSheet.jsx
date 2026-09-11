@@ -85,7 +85,7 @@ export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutNam
         if (navigator.share) {
           try {
             await navigator.share({
-              title: `${workoutName || 'Workout'} on SK OS`,
+              title: `${workoutName || 'Workout'} on Barbell`,
               text: `Check out this workout: ${workoutName}`,
               url,
             });

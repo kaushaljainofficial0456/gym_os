@@ -2582,7 +2582,7 @@ export default function Workout() {
                   what produced the number above); upgrades in place if a
                   connected wearable's own reading for this session arrives. */}
               <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
-                Source: {burnSource || 'Estimated by SK OS'}
+                Source: {burnSource || 'Estimated by Barbell'}
               </div>
               {/* The model's own caveats, surfaced rather than swallowed. An
                   estimate it has flagged as shaky must not read as clean. */}

@@ -28,12 +28,12 @@ export default function PrivacyPolicy() {
           </p>
 
           <Section title="1. Introduction">
-            <p>This Privacy Policy describes how SK OS collects, uses, stores, and protects your personal information when you use our fitness, workout, nutrition, and gym-management platform.</p>
-            <p className="mt-2"><em>[PLACEHOLDER — This Privacy Policy requires review by qualified legal counsel before publication. The actual data practices of SK OS should be accurately described here based on the platform&apos;s implementation.]</em></p>
+            <p>This Privacy Policy describes how Barbell collects, uses, stores, and protects your personal information when you use our fitness, workout, nutrition, and gym-management platform.</p>
+            <p className="mt-2"><em>[PLACEHOLDER — This Privacy Policy requires review by qualified legal counsel before publication. The actual data practices of Barbell should be accurately described here based on the platform&apos;s implementation.]</em></p>
           </Section>
 
           <Section title="2. Information We Collect">
-            <p>SK OS may collect the following types of information:</p>
+            <p>Barbell may collect the following types of information:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li><strong>Account information</strong> — name, email address, phone number</li>
               <li><strong>Profile information</strong> — age, sex, height, weight, fitness goals</li>
@@ -45,16 +45,16 @@ export default function PrivacyPolicy() {
           </Section>
 
           <Section title="3. How We Use Your Information">
-            <p>Your information is used to provide and improve the SK OS platform, including personalized fitness recommendations, nutrition tracking, and gym-management features.</p>
+            <p>Your information is used to provide and improve the Barbell platform, including personalized fitness recommendations, nutrition tracking, and gym-management features.</p>
           </Section>
 
           <Section title="4. Data Storage and Security">
-            <p>SK OS takes reasonable measures to protect your personal information. Data is stored using industry-standard security practices.</p>
+            <p>Barbell takes reasonable measures to protect your personal information. Data is stored using industry-standard security practices.</p>
             <p className="mt-2"><em>[PLACEHOLDER — Actual storage details (cloud provider, encryption, retention periods) require accurate disclosure based on the platform&apos;s implementation.]</em></p>
           </Section>
 
           <Section title="5. Data Sharing">
-            <p>SK OS does not sell your personal information. Data may be shared with:</p>
+            <p>Barbell does not sell your personal information. Data may be shared with:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>Your assigned trainer (for client accounts within a gym)</li>
               <li>Gym owners/administrators (for organization management)</li>

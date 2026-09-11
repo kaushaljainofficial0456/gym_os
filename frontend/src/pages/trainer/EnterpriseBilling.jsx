@@ -135,7 +135,7 @@ export default function EnterpriseBilling() {
         payment: 'success',
         receipt: 'generating',
         amountLabel: `₹${Number(paidOrder.amount).toLocaleString('en-IN')}`,
-        purchase: paidQuote?.description || 'SK OS subscription',
+        purchase: paidQuote?.description || 'Barbell subscription',
         transactionId: paymentId,
         receiptData: {
           /* `status.data?.org?.name` used to sit here and read as though it
@@ -149,7 +149,7 @@ export default function EnterpriseBilling() {
           gymName: user?.orgName,
           date: new Date().toLocaleDateString(),
           currency: paidOrder.currency,
-          items: [{ label: paidQuote?.description || 'SK OS subscription', amount: paidOrder.amount }],
+          items: [{ label: paidQuote?.description || 'Barbell subscription', amount: paidOrder.amount }],
           total: paidOrder.amount,
           transactionId: paymentId,
         },
@@ -175,7 +175,7 @@ export default function EnterpriseBilling() {
       setResult({
         payment: 'verifying',
         amountLabel: `₹${Number(paidOrder.amount).toLocaleString('en-IN')}`,
-        purchase: paidQuote?.description || 'SK OS subscription',
+        purchase: paidQuote?.description || 'Barbell subscription',
         transactionId: paymentId,
         verifyError: e.message,
       });
@@ -200,7 +200,7 @@ export default function EnterpriseBilling() {
   return (
     <div className="space-y-6">
       <Toast message={toast} tone={toast.toLowerCase?.().includes('complete') ? 'success' : 'error'} />
-      <PageHeader title="Billing" sub="Package, capacity, and invoices for your own SK OS subscription." />
+      <PageHeader title="Billing" sub="Package, capacity, and invoices for your own Barbell subscription." />
 
       <Card className="p-5">
         <div className="kicker">Current package</div>
@@ -273,7 +273,7 @@ export default function EnterpriseBilling() {
               </div>
               <div className="empty-state-title">No receipts yet</div>
               <p className="empty-state-body">
-                Every payment for your SK OS subscription is receipted here automatically —
+                Every payment for your Barbell subscription is receipted here automatically —
                 downloadable as a PDF and emailable to your accountant.
               </p>
             </div>

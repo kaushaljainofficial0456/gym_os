@@ -319,7 +319,7 @@ export default function adminRoutes(db) {
   // ---- gym settings (branding, crowd capacity, default client permissions) ----
   r.get('/settings', async (req, res) => {
     const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
-    res.json({ settings: s || { org_id: req.orgId, brand_name: 'SK OS', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
+    res.json({ settings: s || { org_id: req.orgId, brand_name: 'Barbell', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
   });
 
   r.put('/settings', async (req, res) => {
@@ -348,7 +348,7 @@ export default function adminRoutes(db) {
          instagram_url=excluded.instagram_url, description=excluded.description,
          updated_at=excluded.updated_at`,
       [req.orgId,
-       String(brand_name ?? existing?.brand_name ?? 'SK OS').slice(0, 40),
+       String(brand_name ?? existing?.brand_name ?? 'Barbell').slice(0, 40),
        String(tagline ?? existing?.tagline ?? 'Your fitness OS.').slice(0, 80),
        Math.max(1, Math.min(2000, parseInt(crowd_capacity, 10) || existing?.crowd_capacity || 150)),
        crowd_enabled === false || crowd_enabled === 0 ? 0 : (crowd_enabled === undefined ? (existing?.crowd_enabled ?? 1) : 1),
