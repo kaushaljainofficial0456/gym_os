@@ -220,7 +220,7 @@ export default function ClientLayout() {
 
           {/* CENTER: SK OS branding */}
           <div className="flex items-center gap-2">
-            <img src="/logo.svg" alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
+            <img src="/logo.jpg" alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
             <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>Barbell</span>
           </div>
 

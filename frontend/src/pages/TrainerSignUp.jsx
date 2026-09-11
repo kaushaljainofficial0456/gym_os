@@ -46,7 +46,7 @@ export default function TrainerSignUp() {
         <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ borderRight: '1px solid var(--line)' }}>
           <div className="absolute -top-32 -left-24 w-96 h-96 rounded-full blur-[110px] anim-fadeIn" style={{ background: 'var(--accent-soft)' }} />
           <div className="flex items-center gap-4 relative">
-            <img src="/logo.svg" alt="Barbell" className="w-14 h-14 rounded-2xl shadow-glow" />
+            <img src="/logo.jpg" alt="Barbell" className="w-14 h-14 rounded-2xl shadow-glow" />
             <div>
               <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
               <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
@@ -67,7 +67,7 @@ export default function TrainerSignUp() {
         <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-sm anim-fadeUp">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/logo.svg" alt="Barbell" className="w-11 h-11 rounded-xl" />
+              <img src="/logo.jpg" alt="Barbell" className="w-11 h-11 rounded-xl" />
               <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>Barbell</div>
             </div>
             <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Create your trainer account</h2>

@@ -59,7 +59,7 @@ export default function SignUp() {
           <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[100px] anim-fadeIn" style={{ background: 'rgba(160,128,255,.08)', animationDelay: '200ms' }} />
 
           <div className="flex items-center gap-4 relative">
-            <img src="/logo.svg" alt="Barbell" className="w-14 h-14 rounded-2xl shadow-glow" />
+            <img src="/logo.jpg" alt="Barbell" className="w-14 h-14 rounded-2xl shadow-glow" />
             <div>
               <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
               <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
@@ -82,7 +82,7 @@ export default function SignUp() {
         <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-sm anim-fadeUp">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/logo.svg" alt="Barbell" className="w-11 h-11 rounded-xl" />
+              <img src="/logo.jpg" alt="Barbell" className="w-11 h-11 rounded-xl" />
               <div>
                 <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>Barbell</div>
                 <div className="text-[9px] uppercase tracking-[.2em] font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>

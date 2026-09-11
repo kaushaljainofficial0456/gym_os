@@ -72,7 +72,7 @@ export default function JoinGym() {
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
       <div className="w-full max-w-sm space-y-5">
         <div className="text-center">
-          <img src="/logo.svg" alt="Barbell" className="w-12 h-12 rounded-xl mx-auto mb-3" />
+          <img src="/logo.jpg" alt="Barbell" className="w-12 h-12 rounded-xl mx-auto mb-3" />
           <h1 className="font-display font-bold text-xl">Join your gym</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--mute)' }}>
             Hi {user?.name?.split(' ')[0]} — scan the QR code your gym gave you to finish setting up your account.
