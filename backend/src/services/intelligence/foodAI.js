@@ -944,6 +944,9 @@ export async function estimateFoodAI(db, params) {
       aiModel: result.model || null,
       confidence,
       cuisine: out.cuisine,
+      // Persisted so the cached response can be identical to this one.
+      serving: out.serving || null,
+      isBrandedOrRestaurant,
     });
   }
 
@@ -959,6 +962,15 @@ function shapeCachedResult(cached, displayName) {
     estimate_status: 'ai_estimated',
     food_name: cached.canonical_name || displayName,
     cuisine: cached.cuisine || null,
+    // Both of these were missing here, making a cached estimate a
+    // DIFFERENT shape from a fresh one for the same dish. `serving` is what
+    // the UI labels its quantity control with; is_branded_or_restaurant
+    // decides which branch the deterministic recompute takes. Rows cached
+    // before the columns existed still return null/false -- the same values
+    // callers were already getting -- so this is strictly an improvement on
+    // the old behaviour, never a regression for old rows.
+    serving: cached.serving || null,
+    is_branded_or_restaurant: !!cached.is_branded_or_restaurant,
     components: cached.component_template,
     totals: cached.nutrition,
     uncertainty: cached.uncertainty,

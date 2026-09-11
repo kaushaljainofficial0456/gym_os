@@ -30,6 +30,15 @@ if (process.argv.includes('--force')) {
 // dropped or rewritten — new columns only.
 // ============================================================
 const MIGRATIONS = [
+  // --- AI food estimate cache: fields the cached response used to drop ---
+  // A cached estimate must be indistinguishable from a fresh one. These two
+  // were only ever on the fresh path, so the second person to look up a
+  // dish got a response missing its serving (the UI then had nothing to
+  // label "how many did you eat" with) and with is_branded_or_restaurant
+  // silently false, which sends the deterministic recompute down the wrong
+  // branch for restaurant food.
+  ['ai_food_estimates', 'serving_json', `serving_json TEXT`],
+  ['ai_food_estimates', 'is_branded_or_restaurant', `is_branded_or_restaurant INTEGER NOT NULL DEFAULT 0`],
   ['foods', 'client_id', `client_id TEXT REFERENCES clients(id) ON DELETE CASCADE`],
   ['foods', 'serving', `serving TEXT`],
   ['foods', 'piece_g', `piece_g REAL`],

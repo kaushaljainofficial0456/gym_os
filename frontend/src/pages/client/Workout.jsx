@@ -10,6 +10,7 @@ import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
+import LogPastWorkout from './LogPastWorkout.jsx';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
@@ -358,6 +359,7 @@ export default function Workout() {
   const [addExSaving, setAddExSaving] = useState(false);
   // personal workout planner — reusable workouts + weekly schedule (uses /me/planner)
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [logPastOpen, setLogPastOpen] = useState(false);
   const [planner, setPlanner] = useState(null); // { workouts, schedule }
   const [planForm, setPlanForm] = useState(null); // { id: null|workoutId, name, notes, exercises } when creating/editing
   const [savingPlan, setSavingPlan] = useState(false);
@@ -1170,7 +1172,7 @@ export default function Workout() {
               carries the distinction, which is its job.
               Labels also had hard <br/> breaks mid-phrase ("My<br/>Workout"),
               which forced a two-line ragged label at every width. */}
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-4">
             {[
               { label: 'My workouts', onClick: openPlanner,
                 path: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></> },
@@ -1183,6 +1185,10 @@ export default function Workout() {
                 path: <path d="M12 5v14M5 12h14"/> },
               { label: 'My PRs', onClick: () => nav('/app/client/progress?section=prs'),
                 path: <path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/> },
+              // Trained but forgot to hit start -- by far the most common
+              // reason a real session never makes it into the app.
+              { label: 'Log past', onClick: () => setLogPastOpen(true),
+                path: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></> },
             ].map((t) => (
               <button key={t.label} onClick={t.onClick}
                 className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
@@ -1742,6 +1748,15 @@ export default function Workout() {
             </div>
           </div>
         ), document.body)}
+
+        <LogPastWorkout
+          open={logPastOpen}
+          onClose={() => setLogPastOpen(false)}
+          libList={libList}
+          loadLib={() => api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'))}
+          toast={setToast}
+          onSaved={() => { today.reload({ silent: true }); hist.reload({ silent: true }); }}
+        />
 
         {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
         {plannerOpen && (

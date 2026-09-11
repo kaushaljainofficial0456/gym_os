@@ -48,6 +48,20 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
   const [checked, setChecked] = useState({}); // id -> true briefly, for the check-draw animation
   const [savingEdit, setSavingEdit] = useState(false);
   const [saveStage, setSaveStage] = useState(null);
+  // Pending default-quantity edits, id -> typed string.
+  //
+  // The quantity field used to be uncontrolled (defaultValue + onBlur) and
+  // "Save Changes" wrote NOTHING -- it waited 350ms and showed "Saved"
+  // regardless. So typing a new quantity and tapping Save Changes raced
+  // the blur against finishEditing's setEditing(false), which unmounts the
+  // input; when blur lost that race the value was never written, and the
+  // UI still said "Saved". A success state for a write that never
+  // happened is worse than an error.
+  //
+  // Edits are now held here and FLUSHED by Save Changes, which awaits the
+  // writes and only then reports success.
+  const [qtyDraft, setQtyDraft] = useState({});
+  const [saveError, setSaveError] = useState(null);
 
   const load = () => {
     api('/me/foods').then((r) => setFoods(r.mine || [])).catch(() => setFoods([]));
@@ -66,20 +80,27 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
     );
   }
 
+  // `serving` is a STRING ("100 g", "1 bowl"), so Number() on it is NaN for
+  // anything but a bare number -- which silently became 100 and made every
+  // non-gram food quick-log as if its base were 100 g. parseServing (right
+  // above, and already used by the edit-mode input) is the one correct
+  // reader of this field; nothing here may re-derive it a second way.
   const qtyFor = (kind, item) => {
     const key = `${kind}_${item.id}`;
     if (qty[key] !== undefined) return qty[key];
-    return kind === 'food' ? String(Number(item.serving) || 100) : '1';
+    return kind === 'food' ? String(parseServing(item.serving).amount) : '1';
   };
   const setQtyFor = (kind, item, v) => setQty((q) => ({ ...q, [`${kind}_${item.id}`]: v }));
 
   const quickLogFood = async (food) => {
     const key = `food_${food.id}`;
-    const amount = Math.max(0.1, Number(qtyFor('food', food)) || 100);
-    // foods.calories/etc are already PER-SERVING (whatever `serving` says,
-    // typically "100 g") -- scale by amount / that base, same grams/100
-    // linear scaling used everywhere else in this app (scaleNutrition()).
-    const base = Number(food.serving) || 100;
+    // foods.calories/etc are already PER-SERVING (whatever `serving` says:
+    // "100 g" for a weighed food, "1 bowl" for a countable one) -- scale by
+    // amount / that base, the same linear scaling used everywhere else in
+    // this app (scaleNutrition()). Reading the base with Number() instead
+    // of parseServing() made "2" mean 2/100 of a bowl rather than 2 bowls.
+    const { amount: base, suffix: unit } = parseServing(food.serving);
+    const amount = Math.max(0.1, Number(qtyFor('food', food)) || base);
     const factor = amount / base;
     setLogging((s) => ({ ...s, [key]: true }));
     setChecked((s) => ({ ...s, [key]: true }));
@@ -90,7 +111,9 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
         protein: Math.round((food.protein || 0) * factor * 10) / 10,
         carbs: Math.round((food.carbs || 0) * factor * 10) / 10,
         fat: Math.round((food.fat || 0) * factor * 10) / 10,
-        source: 'manual', quantity: amount, unit: 'g',
+        // The unit the food is actually measured in -- hardcoding 'g' here
+        // labelled every bowl/piece/serving log as grams.
+        source: 'manual', quantity: amount, unit,
       });
       toast(`+ ${food.name} added`);
     } catch (e) {
@@ -126,10 +149,12 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
   // with their own snapshot values at log time and stay that way (see
   // meal_logs, which stores calories/protein/etc directly, not a live
   // reference to this food row).
+  /** Writes ONE food's new default quantity. Throws on failure so the
+   *  caller (the Save Changes flush) can report it rather than swallow it. */
   const saveFoodQuantity = async (food, rawAmount) => {
     const { amount: oldAmount, suffix } = parseServing(food.serving);
     const newAmount = Math.max(0.1, Number(rawAmount) || oldAmount);
-    if (newAmount === oldAmount) return; // no real change -- skip the write
+    if (newAmount === oldAmount) return false; // no real change -- nothing to write
     const ratio = newAmount / oldAmount;
     const updated = {
       serving: `${newAmount} ${suffix}`,
@@ -138,24 +163,67 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
       carbs: Math.round((food.carbs || 0) * ratio * 10) / 10,
       fat: Math.round((food.fat || 0) * ratio * 10) / 10,
     };
+    await api(`/me/foods/${food.id}`, { method: 'PUT', body: JSON.stringify(updated) });
     setFoods((fs) => fs.map((f) => (f.id === food.id ? { ...f, ...updated } : f)));
-    try { await api(`/me/foods/${food.id}`, { method: 'PUT', body: JSON.stringify(updated) }); }
-    catch (e) { toast(e.message || 'Could not update that quantity'); load(); }
+    return true;
   };
+  /** A saved MEAL has no `serving` string to rewrite -- its stored macros
+   *  simply ARE one serving of it. So its edit control is a multiplier:
+   *  "this saved meal is really twice what I recorded" scales the template
+   *  and it becomes the new one serving. Deliberately not modelled as a
+   *  servings count, because there is nowhere to persist that and a
+   *  half-persisted quantity is exactly the class of bug this pass is
+   *  closing -- the number would read back as 1 on the next load while the
+   *  macros stayed scaled, quietly doubling the meal on every edit. */
+  const saveMealScale = async (meal, rawScale) => {
+    const scale = Number(rawScale);
+    if (!Number.isFinite(scale) || scale <= 0 || scale === 1) return false; // nothing to write
+    const updated = {
+      calories: Math.round((meal.calories || 0) * scale),
+      protein: Math.round((meal.protein || 0) * scale * 10) / 10,
+      carbs: Math.round((meal.carbs || 0) * scale * 10) / 10,
+      fat: Math.round((meal.fat || 0) * scale * 10) / 10,
+    };
+    await api(`/me/meals/${meal.id}`, { method: 'PUT', body: JSON.stringify(updated) });
+    setMeals((ms) => ms.map((m) => (m.id === meal.id ? { ...m, ...updated } : m)));
+    return true;
+  };
+
   const removeMeal = async (meal) => {
     setMeals((ms) => ms.filter((m) => m.id !== meal.id));
     try { await api(`/me/meals/${meal.id}`, { method: 'DELETE' }); } catch { load(); }
   };
 
+  /** Save Changes: actually FLUSHES every pending quantity edit, waits for
+   *  the server, and only then reports success. Removals already persisted
+   *  when they happened (see removeFood/removeMeal); quantities did not,
+   *  which is the bug this replaces. */
   const finishEditing = async () => {
     setSavingEdit(true);
+    setSaveError(null);
     setSaveStage('saving');
-    // Removals in edit mode already persisted immediately (per-action, see
-    // removeFood/removeMeal) -- this is the confirming flourish the spec
-    // asks for on "Save Changes", not a second write.
-    await new Promise((r) => setTimeout(r, 350));
-    setSaveStage('success');
-    setTimeout(() => { setSavingEdit(false); setSaveStage(null); setEditing(false); }, 700);
+    try {
+      // Foods and meals share one draft map (ids are prefixed and globally
+      // unique). Looking only in `foods` here is what left every meal edit
+      // unsaved while the button still reported success.
+      const pending = Object.entries(qtyDraft);
+      for (const [itemId, rawAmount] of pending) {
+        const food = (foods || []).find((f) => f.id === itemId);
+        if (food) { await saveFoodQuantity(food, rawAmount); continue; }
+        const meal = (meals || []).find((m) => m.id === itemId);
+        if (meal) await saveMealScale(meal, rawAmount);
+      }
+      setQtyDraft({});
+      setSaveStage('success');
+      setTimeout(() => { setSavingEdit(false); setSaveStage(null); setEditing(false); }, 700);
+    } catch (e) {
+      // Stay in edit mode with the drafts intact, so the user's typing is
+      // not thrown away by a failed request.
+      setSaveStage(null);
+      setSavingEdit(false);
+      setSaveError(e.message || "Couldn't save changes. Try again.");
+      load();
+    }
   };
 
   const Row = ({ kind, item, label, sub }) => {
@@ -207,27 +275,58 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
             <div className="font-grotesk text-[10px]" style={{ color: t.faint }}>{sub}</div>
           )}
         </div>
-        {!editing && (
-          <input
-            type="number" min="0" step={kind === 'food' ? 10 : 1} value={qtyFor(kind, item)}
-            onChange={(e) => setQtyFor(kind, item, e.target.value)}
-            aria-label={`${item.name} quantity`}
-            className="w-14 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums shrink-0"
-            style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }}
-          />
-        )}
+        {!editing && (() => {
+          // Grams step in tens; you do not eat 10 bowls more. The unit is
+          // shown because it is no longer always grams -- without it the
+          // field reads as "2" with no way to tell 2 g from 2 bowls.
+          const unit = kind === 'food' ? parseServing(item.serving).suffix : 'x';
+          const measured = unit === 'g' || unit === 'ml';
+          return (
+            <>
+              <input
+                type="number" min="0" step={kind === 'food' ? (measured ? 10 : 0.5) : 1}
+                value={qtyFor(kind, item)}
+                onChange={(e) => setQtyFor(kind, item, e.target.value)}
+                aria-label={`${item.name} quantity`}
+                className="w-14 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums shrink-0"
+                style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }}
+              />
+              <span className="text-[9px] shrink-0 w-8" style={{ color: t.faint }}>
+                {kind === 'food' ? unit : 'serv'}
+              </span>
+            </>
+          );
+        })()}
         {editing && kind === 'food' && (
           <input
             type="number" min="0.1" step="any"
-            defaultValue={parseServing(item.serving).amount}
-            onBlur={(e) => saveFoodQuantity(item, e.target.value)}
+            // Controlled: the typed value lives in qtyDraft so tapping
+            // "Save Changes" cannot lose it to an unmount/blur race.
+            value={qtyDraft[item.id] ?? String(parseServing(item.serving).amount)}
+            onChange={(e) => setQtyDraft((d) => ({ ...d, [item.id]: e.target.value }))}
             aria-label={`${item.name} default quantity`}
             className="w-16 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums shrink-0"
             style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }}
           />
         )}
         {editing && kind === 'food' && (
-          <span className="text-[9px] shrink-0" style={{ color: t.faint }}>{parseServing(item.serving).suffix}</span>
+          <span className="text-[9px] shrink-0 w-8" style={{ color: t.faint }}>{parseServing(item.serving).suffix}</span>
+        )}
+        {editing && kind === 'meal' && (
+          <>
+            <input
+              type="number" min="0.1" step="0.5"
+              // Same controlled-draft pattern as the food input: the typed
+              // value lives in qtyDraft so "Save Changes" cannot lose it.
+              value={qtyDraft[item.id] ?? '1'}
+              onChange={(e) => setQtyDraft((d) => ({ ...d, [item.id]: e.target.value }))}
+              aria-label={`Scale ${item.name}`}
+              title="Resize this saved meal — 2 makes it twice the food"
+              className="w-16 text-right text-[11px] rounded-lg px-1.5 py-1 tabular-nums shrink-0"
+              style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink }}
+            />
+            <span className="text-[9px] shrink-0 w-8" style={{ color: t.faint }}>x size</span>
+          </>
         )}
       </div>
     );
@@ -251,6 +350,18 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
 
   return (
     <div className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+      {/* A failed save has to be VISIBLE and has to keep the user's typing
+          -- the previous version could not fail at all, because it never
+          wrote anything. */}
+      {saveError && (
+        <div
+          role="alert"
+          className="mb-3 rounded-xl px-3 py-2 text-[11px]"
+          style={{ background: 'rgb(var(--bad-rgb) / .10)', border: '1px solid rgb(var(--bad-rgb) / .35)', color: 'var(--bad)' }}
+        >
+          {saveError}
+        </div>
+      )}
       <div className="flex items-end justify-between mb-4">
         <div>
           <div className="font-grotesk text-base font-bold" style={{ color: t.ink }}>Saved Foods & Meals</div>
@@ -262,7 +373,7 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
           className="px-3 py-1.5 rounded-xl font-grotesk text-[10px] font-bold transition-all active:scale-95"
           style={{ background: editing ? t.accent : t.glass, color: editing ? 'var(--accent-contrast)' : t.mute, border: `1px solid ${editing ? t.accent : t.border}` }}
         >
-          {editing ? 'Save Changes' : 'Edit'}
+          {editing ? (savingEdit ? 'Saving…' : 'Save Changes') : 'Edit'}
         </button>
       </div>
 

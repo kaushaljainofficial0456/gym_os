@@ -909,6 +909,13 @@ CREATE TABLE IF NOT EXISTS ai_food_estimates (
   ai_provider             TEXT,                    -- which provider produced this (ollama | groq | openai | gemini)
   ai_model                TEXT,
   confidence              TEXT NOT NULL DEFAULT 'low', -- high | medium | low | unreliable -- backend-derived, never AI-chosen; see foodAI.js
+  -- The serving this estimate describes ({description, estimated_weight_g},
+  -- e.g. "1 plate" / 400) and whether it's a branded/restaurant item. Both
+  -- are part of the FRESH response and were originally lost on the cache
+  -- round-trip, so a cached estimate rendered and recomputed differently
+  -- from an identical fresh one -- see shapeCachedResult in foodAI.js.
+  serving_json            TEXT,
+  is_branded_or_restaurant INTEGER NOT NULL DEFAULT 0,
   times_used              INTEGER NOT NULL DEFAULT 0,
   user_confirmation_count INTEGER NOT NULL DEFAULT 0,
   created_at              TEXT NOT NULL,
