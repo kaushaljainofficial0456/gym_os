@@ -7,6 +7,10 @@ import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 // Login/SignUp stay eager: they're the first thing an unauthenticated visitor
 // needs, so there's no "next page" to defer them in favor of.
 import Login from './pages/Login.jsx';
+// Password recovery is lazy: it is reached from an email link or a
+// single tap off the login form, never on first paint.
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'));
 import SignUp from './pages/SignUp.jsx';
 import TrainerLayout from './pages/trainer/TrainerLayout.jsx';
 import ClientLayout from './pages/client/ClientLayout.jsx';
@@ -137,6 +141,12 @@ export default function App() {
     <ClickSparkLazy>
     <Routes>
       <Route path="/login" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><Login /></GuestOnly>} />
+      {/* The reset emails already linked to /reset-password; the route
+          did not exist, so every one of them landed on a 404. Both are
+          public on purpose -- someone who cannot sign in is by
+          definition not signed in. */}
+      <Route path="/forgot-password" element={page(ForgotPassword)} />
+      <Route path="/reset-password" element={page(ResetPassword)} />
       <Route path="/signup" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><SignUp /></GuestOnly>} />
       <Route path="/signup/trainer" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(TrainerSignUp)}</GuestOnly>} />
       <Route path="/setup-org" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(SetupOrg)}</GuestOnly>} />
