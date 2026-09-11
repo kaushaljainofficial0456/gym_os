@@ -247,29 +247,19 @@ export default function ClientLayout() {
             <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>SK OS</span>
           </div>
 
-          {/* RIGHT: notification center + Coach brief. Two bell-shaped
-              icons side by side reads oddly at a glance, but they're
-              genuinely different features (this app's own established
-              glyph for "notification-shaped thing", same as Settings.jsx's
-              NotificationSettingsCard) -- the "Coach" text label plus this
-              one's own unread-count badge keep them distinguishable. */}
+          {/* RIGHT: ONE bell. It previously sat beside a second,
+              identical-looking bell for the Coach brief -- the comment
+              that used to live here argued they were distinguishable by a
+              text label, which is an argument about the markup rather
+              than about a person scanning a header. The brief is now the
+              pinned first item inside this panel, where its difference
+              from a gym update can actually be stated. */}
           <div className="flex items-center gap-1.5">
-            <NotificationBell />
-            <button
-              onClick={() => setCoachOpen(true)}
-              className="chrome-btn relative gap-1.5 py-1.5 px-2.5"
-              aria-label={hasBrief && briefPriority ? 'Coach brief — new' : 'Coach brief'}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
-              </svg>
-              <span className="hidden sm:block font-grotesk text-[11px] font-medium">Coach</span>
-              {hasBrief && briefPriority && (
-                <span aria-hidden="true" className="absolute top-0.5 right-1 w-2 h-2 rounded-full anim-pulse-soft"
-                  style={{ background: 'var(--accent)', boxShadow: '0 0 0 2px rgb(var(--bg-rgb))' }} />
-              )}
-            </button>
+            <NotificationBell
+              hasBrief={hasBrief}
+              briefPriority={briefPriority}
+              onOpenCoach={() => setCoachOpen(true)}
+            />
           </div>
         </div>
       </header>

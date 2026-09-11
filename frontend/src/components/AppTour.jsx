@@ -22,8 +22,28 @@
  *   Each step optionally navigates to a route, then spotlights the real DOM
  *   element via its [data-tour] anchor. If the anchor is missing (data state,
  *   permissions, screen size), the card gracefully falls back to screen-center.
- *   The ✕ button advances to the next step (not exit). A separate "Skip Tour"
- *   exits the entire tour.
+ *
+ * WHAT THIS PASS FIXED, because the tour was actively working against
+ * itself:
+ *
+ *   ✕ MEANT "NEXT". The close button advanced the tour. Everywhere else
+ *   in software ✕ means dismiss, so the one control a person reaches for
+ *   to GET OUT was the one that kept them in -- through seventeen steps,
+ *   with the real exit a small grey "Skip Tour" link. ✕ now exits, and
+ *   moving on is an explicit Next button.
+ *
+ *   NO WAY BACK. There was no Back control at all: miss something and
+ *   your only option was to finish and replay the whole thing.
+ *
+ *   THE PROFILE STEP APPEARED TWICE. buildSteps pushed it explicitly AND
+ *   included it as CLIENT_STEPS[0], so clients saw the same card at
+ *   position 2 and again at position 4.
+ *
+ *   SEVENTEEN STEPS OF NARRATION. Each one described what a piece of UI
+ *   contains, which is what a person can already see. The client tour is
+ *   now the handful of things that are NOT obvious -- what to do first,
+ *   where the non-obvious tools live -- and each card says what you can
+ *   DO, not what is on screen.
  */
 import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -58,8 +78,14 @@ const prefersReducedMotion = () =>
 
 // Shared intro step (same for all roles)
 const INTRO_STEP = {
-  title: 'Welcome to Gym OS',
-  body: 'Your training, nutrition and progress — all coached from one app. This quick tour shows you where everything lives. Tap ✕ to keep going, or Skip Tour anytime.',
+  title: 'A quick look around',
+  body: 'Six short stops covering the things that are not obvious. About thirty seconds — and you can leave at any point with the ✕.',
+};
+
+/** A real ending, rather than stopping dead on the last anchored step. */
+const OUTRO_STEP = {
+  title: "That's the tour",
+  body: 'Everything else is where you would expect it. You can replay this any time from Help.',
 };
 
 // Shared navigation step
@@ -75,107 +101,37 @@ const NAV_STEP = {
 const CLIENT_STEPS = [
   {
     route: '/app/client',
-    target: '[data-tour="header-profile"]',
-    title: 'Your profile menu',
-    body: 'Tap your avatar top-left anytime to reach your Profile, Measurements, Goals, Settings and Sign out.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client',
     target: '[data-tour="home-hero"]',
-    title: "Today's workout",
-    body: "Home opens on your session: today's workout name, focus muscles and exercise count. Hit Start workout to begin — or you'll see a Rest day card when nothing is scheduled.",
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client',
-    target: '[data-tour="home-fuel"]',
-    title: 'Fuel today',
-    body: 'The ring shows calories LEFT against your daily target, with protein, carbs and fat bars beside it — your eating at a glance.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/workout',
-    target: '[data-tour="workout-week"]',
-    title: 'This week',
-    body: 'Your training week at the top. Tap any day to preview that session before you get to the gym.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/workout',
-    target: '[data-tour="workout-actions"]',
-    title: 'My workout tools',
-    body: 'My Workout keeps reusable sessions and a weekly plan, Build Today picks exercises from the library for today, and My PR jumps to your records.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/workout',
-    target: '[data-tour="workout-today"]',
-    title: 'Start a session',
-    body: "Today's prescription lists sets, reps and weights. START SESSION begins live tracking — tick off each set with what you actually lifted, then finish for volume, duration and a calorie-burn estimate.",
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/nutrition',
-    target: '[data-tour="nutrition-hero"]',
-    title: "Today's fuel",
-    body: 'Your calorie ring and macro bars against the plan targets. The small pencil by the target lets you adjust your calorie goal.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/nutrition',
-    target: '[data-tour="nutrition-meals"]',
-    title: "Today's eaten meals",
-    body: 'Everything you log lands here. Edit quantities, mark items eaten, and use Log / Estimate Food to add more.',
+    title: 'Start here each day',
+    body: "Home opens on today's session. Start workout begins live tracking — you tick off each set with what you actually lifted, and it works out volume, duration and calories from that.",
     placement: 'bottom',
   },
   {
     route: '/app/client/nutrition',
     target: '[data-tour="nutrition-tools"]',
-    title: 'Food & meal tools',
-    body: "Log / Estimate Food searches foods, scans barcodes, takes voice input and estimates with AI. Customize My Meals swaps your planned meals, and Meal Information explains what's on your plan.",
+    title: 'Logging food is the quick bit',
+    body: 'Search a food, scan a barcode, speak it, or photograph a plate and let the AI estimate it. Anything you eat often can be saved once and re-logged in a tap.',
     placement: 'bottom',
   },
   {
-    route: '/app/client/nutrition',
-    target: '[data-tour="nutrition-water"]',
-    title: 'Water & supplements',
-    body: 'Tap the glasses to log water toward your daily goal. Your supplement checklist sits just above — tick each one as you take it.',
-    placement: 'top',
+    route: '/app/client/workout',
+    target: '[data-tour="workout-actions"]',
+    title: 'Build your own sessions',
+    body: 'My Workout stores sessions you reuse and your weekly plan. Build Today picks exercises for a one-off. Trained without the app? You can log that session afterwards.',
+    placement: 'bottom',
   },
   {
     route: '/app/client/progress',
     target: '[data-tour="progress-weight"]',
-    title: 'Log your weight',
-    body: "Enter today's weight here. As history builds, weight trend and adherence charts appear automatically.",
+    title: 'One number, most days',
+    body: 'Log your weight here. Charts, trends and your measurement history build themselves from it — the app only needs the number.',
     placement: 'bottom',
   },
   {
-    route: '/app/client/progress',
-    target: '[data-tour="progress-photos"]',
-    title: 'Track the journey',
-    body: 'Below your charts: measurements over time and private transformation photos, visible only to you and your coach.',
-    placement: 'top',
-  },
-  {
-    route: '/app/client/profile',
-    target: '[data-tour="profile-header"]',
-    title: 'Your profile',
-    body: 'Your photo and name lead into sections for Goal & setup, Equipment, Metrics, Dashboard customization and messaging your coach.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/settings',
-    target: '[data-tour="settings-account"]',
-    title: 'Settings',
-    body: 'Update your name and phone number here. Your email is fixed to keep the account secure.',
-    placement: 'bottom',
-  },
-  {
-    route: '/app/client/settings',
-    target: '[data-tour="settings-security"]',
-    title: 'Security',
-    body: "Change your password anytime — you'll confirm your current one first.",
+    route: '/app/client',
+    target: '[data-tour="header-profile"]',
+    title: 'Your settings live here',
+    body: 'Your avatar, top-left, opens Profile, Measurements, Goals, Settings and Sign out — including your equipment and dashboard preferences.',
     placement: 'bottom',
   },
 ];
@@ -274,12 +230,9 @@ function buildSteps({ isClient, isIndependent, isTrainer, isOwner }) {
   const steps = [INTRO_STEP];
 
   if (isClient || isIndependent) {
-    // Client & independent share the same client app layout
-    steps.push(
-      { route: '/app/client', target: '[data-tour="header-profile"]', title: 'Your profile menu', body: 'Tap your avatar top-left anytime to reach your Profile, Measurements, Goals, Settings and Sign out.', placement: 'bottom' },
-      NAV_STEP,
-      ...CLIENT_STEPS,
-    );
+    // NOTE: the profile step lives in CLIENT_STEPS and nowhere else. It
+    // used to be pushed here as well, so the same card showed twice.
+    steps.push(NAV_STEP, ...CLIENT_STEPS);
   } else if (isTrainer || isOwner) {
     steps.push(
       TRAINER_NAV_STEP,
@@ -288,6 +241,7 @@ function buildSteps({ isClient, isIndependent, isTrainer, isOwner }) {
     if (isOwner) steps.push(...OWNER_STEPS);
   }
 
+  steps.push(OUTRO_STEP);
   return steps;
 }
 
@@ -312,8 +266,12 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
   const last = idx === steps.length - 1;
 
   const finish = () => { markTourDone(userId); onDone(); };
-  // ✕ means "understood — continue", never "exit the tour".
   const next = () => { if (!last) setIdx(idx + 1); else finish(); };
+  const back = () => { if (idx > 0) setIdx(idx - 1); };
+  // ✕ exits, as it does everywhere else. Leaving early still counts as
+  // done -- re-showing a tour someone deliberately dismissed is how a
+  // first-run experience becomes an irritant.
+  const dismiss = finish;
 
   /* Route + spotlight engine. Deliberately keyed on [active, idx] only:
      the navigation WE trigger must not restart the step. */
@@ -380,6 +338,21 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
     if (active) setIdx(0);
   }, [active]);
 
+  /* Keyboard. A full-screen overlay that traps you with no Escape is the
+     most frustrating shape a modal can take, and this one covered the
+     entire app. */
+  useEffect(() => {
+    if (!active) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); finish(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, idx, last]);
+
   if (!active) return null;
 
   /* ── layout math ── */
@@ -407,7 +380,11 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
     const placeBelow = step.placement !== 'top' ? spaceBelow >= CARD_H_EST + 24 : rect.top > CARD_H_EST + 24;
     const top = placeBelow ? rect.bottom + 12 : Math.max(12, rect.top - CARD_H_EST - 12);
     const left = Math.min(Math.max(rect.left + rect.width / 2 - cardW / 2, 12), vw - cardW - 12);
-    cardStyle = { top: Math.min(top, vh - 150), left };
+    // Clamping to vh-150 could drag the card back UP over the very
+    // element it is describing when the anchor sits low on the screen.
+    // Never let the clamp push it above the spotlight's bottom edge.
+    const floor = placeBelow ? Math.max(rect.bottom + 12, vh - 150) : vh - 150;
+    cardStyle = { top: Math.min(top, floor), left };
   } else {
     // Centered fallback (intro / outro / missing anchor)
     cardStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
@@ -449,24 +426,15 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
             Gym OS Tour · {idx + 1} / {steps.length}
           </span>
           <button
-            onClick={next}
-            aria-label={last ? 'Finish tour' : 'Next tip'}
-            className="w-8 h-8 rounded-full grid place-items-center shrink-0 transition-all active:scale-90"
-            style={{
-              background: 'var(--accent-soft)',
-              border: '1px solid var(--accent)',
-              color: 'var(--accent)',
-            }}
+            onClick={dismiss}
+            aria-label="Close tour"
+            title="Close tour"
+            className="w-9 h-9 rounded-full grid place-items-center shrink-0 transition-all active:scale-90"
+            style={{ border: '1px solid var(--line)', color: 'var(--mute)' }}
           >
-            {last ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            )}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
@@ -477,28 +445,44 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
           {step.body}
         </p>
 
-        {/* Footer: Skip Tour (left) + progress dots */}
-        <div className="flex items-center justify-between mt-3 pt-2.5" style={{ borderTop: '1px solid var(--line)' }}>
-          <button
-            onClick={finish}
-            className="font-grotesk text-[10.5px] font-semibold px-2 py-1 rounded-lg transition-all active:scale-95"
-            style={{ color: 'var(--mute)' }}
-          >
-            Skip Tour
-          </button>
-          <div className="flex items-center gap-1">
+        {/* Footer: real Back / Next controls. Moving through the tour was
+            previously only possible via the ✕, which is also the one
+            control that should have got you out of it. */}
+        <div className="mt-3.5 pt-3 flex items-center gap-2" style={{ borderTop: '1px solid var(--line)' }}>
+          <div className="flex items-center gap-1 flex-1" aria-hidden="true">
             {steps.map((_, i) => (
               <span
                 key={i}
                 className="rounded-full transition-all duration-300"
                 style={{
-                  width: i === idx ? 14 : 4,
+                  width: i === idx ? 12 : 4,
                   height: 4,
                   background: i === idx ? 'var(--accent)' : 'var(--line)',
                 }}
               />
             ))}
           </div>
+          {idx > 0 && (
+            <button
+              onClick={back}
+              className="font-grotesk text-[11.5px] font-semibold px-3 rounded-xl transition-all active:scale-95"
+              style={{ minHeight: 38, border: '1px solid var(--line)', color: 'var(--mute)' }}
+            >
+              Back
+            </button>
+          )}
+          <button
+            onClick={next}
+            className="font-grotesk text-[11.5px] font-bold px-4 rounded-xl transition-all active:scale-95"
+            style={{
+              minHeight: 38,
+              background: 'var(--cta-solid)',
+              border: '1px solid var(--cta-edge)',
+              color: 'var(--cta-ink)',
+            }}
+          >
+            {last ? 'Done' : 'Next'}
+          </button>
         </div>
       </div>
     </div>
