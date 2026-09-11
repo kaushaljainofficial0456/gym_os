@@ -56,7 +56,7 @@ export default function SharedMeal() {
      accent is paired with the ink that belongs ON it: white text is
      unreadable on platinum, which is what a naive swap would have left
      on the primary button. */
-  const accent = dark ? '#B4C2CE' : '#55663D';
+  const accent = dark ? '#B4C2CE' : '#8E2A3F';
   const onAccent = dark ? '#10151A' : '#FFFFFF';
 
   if (error) {

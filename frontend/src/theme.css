@@ -378,17 +378,26 @@
      button labels (.btn-sm at 12px, which gets no "large text"
      exemption) both sat just under AA. Nine percent darker fixes both
      with one token and no call-site churn: 5.17:1 either way, same hue. */
-  /* Primary accent: DEEP OLIVE — the same hue family as dark mode's pale
-     olive, pitched dark enough to carry white text (~7.9:1 on --bg).
-     Light mode's accent was #B0503F: on a warm near-white ground a
-     saturated red-orange is the loudest thing on the page, and every
-     filled button read as a warning before it read as an action. Olive
-     keeps the warmth the ground is built on while giving the action a
-     calm, deliberate weight -- and because both themes now share one
-     hue, a button looks like the same button in either. */
-  --accent: #55663D;
-  --accent-deep: #3F4C2D;
-  --accent-soft: rgba(85,102,61,.10);
+  /* Primary accent: WINE BURGUNDY.
+     This ground is a warm off-white and its shadows are warm-tinted, so
+     a warm jewel tone belongs on it in a way a cool one never quite
+     does. It replaces a deep olive, which was correct about weight and
+     wrong about presence -- it receded into the warm paper instead of
+     reading as the thing to press.
+
+     Burgundy is deliberately NOT the terracotta #B0503F this theme
+     carried before either: that was a saturated red-ORANGE, bright
+     enough that every filled button read as a warning before it read as
+     an action. Pitched dark instead of bright keeps it unmistakably an
+     action, at 7.61:1 on --bg and 8.23:1 on a white card, so white text
+     clears AA everywhere it is used including 12px .btn-sm labels.
+
+     Dark mode stays platinum. The two themes no longer share a hue, and
+     that is fine: each is chosen for its own ground rather than one
+     being a tint of the other. */
+  --accent: #8E2A3F;
+  --accent-deep: #6E1F30;
+  --accent-soft: rgba(142,42,63,.10);
   --secondary: #D46A8A;
   --secondary-deep: #C25A7A;
   --secondary-soft: rgba(212,106,138,.08);
@@ -399,8 +408,8 @@
   --card-shadow: 0 1px 2px rgba(90,50,42,.06), 0 8px 24px -12px rgba(90,50,42,.12);
   --card-gradient: none;
 
-  --accent-rgb: 85 102 61;
-  --accent-deep-rgb: 63 76 45;
+  --accent-rgb: 142 42 63;
+  --accent-deep-rgb: 110 31 48;
   --accent-contrast: #FFFFFF;
   --bg-rgb: 250 245 243;
   --bg2-rgb: 242 234 231;
@@ -428,12 +437,15 @@
   /* The CTA follows the accent. A filled button still needs to be the
      darkest, most definite thing on a pale page -- that part was right --
      it just should not be orange to achieve it. */
-  --accent-grad: linear-gradient(135deg, #3F4C2D, #55663D);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(85,102,61,.26);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(85,102,61,.34);
-  --cta-ink: #F7F9F1;
-  --cta-solid: #4A5934;
-  --cta-edge: rgba(22,24,15,.18);
+  --accent-grad: linear-gradient(135deg, #6E1F30, #8E2A3F);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(142,42,63,.26);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(142,42,63,.34);
+  /* Very slightly warm white rather than pure #FFF: on a burgundy fill a
+     pure-white label edge looks to vibrate, and a hair of the accent's
+     own warmth in the ink settles it. */
+  --cta-ink: #FDF6F7;
+  --cta-solid: #82263A;
+  --cta-edge: rgba(36,10,16,.18);
 
   /* Metric hues, light mode: deeper and more saturated than the dark-mode
      set, because these sit on an off-white ground where a light tint would

@@ -83,8 +83,8 @@ export const brand = {
     ink: '#FFDFDD',           // blush
   },
   light: {
-    accent: '#55663D',        // deep olive
-    accentDeep: '#3F4C2D',
+    accent: '#8E2A3F',        // wine burgundy
+    accentDeep: '#6E1F30',
     accentContrast: '#FFFFFF',
     cyan: '#2A7A85',
     violet: '#7A609C',
