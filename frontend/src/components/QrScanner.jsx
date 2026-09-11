@@ -16,7 +16,19 @@ import { XIcon } from './UI.jsx';
 
 const supportsDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
-export default function QrScanner({ open, onClose, onScanned }) {
+/* The words are a prop because this scanner now serves two jobs with
+   nothing in common but the camera: joining a gym, and a trainer clocking
+   in. Hard-coded enrollment copy meant a trainer opening it to check in
+   was shown an "enr_..." placeholder and a button marked Join, which
+   describes neither what they scanned nor what happens next. Defaults
+   keep the original enrollment call sites unchanged. */
+export default function QrScanner({
+  open, onClose, onScanned,
+  title = 'Scan gym QR code',
+  placeholder = 'enr_xxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxx',
+  actionLabel = 'Join',
+  hint,
+}) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const rafRef = useRef(null);
@@ -83,7 +95,7 @@ export default function QrScanner({ open, onClose, onScanned }) {
          onClick={(e) => e.stopPropagation()}>
       <div className="card w-full max-w-sm p-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Scan gym QR code</div>
+          <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>{title}</div>
           <button onClick={() => { stop(); onClose(); }} aria-label="Close scanner" style={{ color: 'var(--mute)' }}><XIcon /></button>
         </div>
 
@@ -96,18 +108,19 @@ export default function QrScanner({ open, onClose, onScanned }) {
           </div>
         )}
 
+        {!!hint && <div className="text-[11.5px] mb-3" style={{ color: 'var(--mute)' }}>{hint}</div>}
         {!!status && <div className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>{status}</div>}
 
         <label className="block">
           <span className="text-[9px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Or paste the code</span>
           <div className="flex gap-2 mt-1">
             <input value={manual} onChange={(e) => setManual(e.target.value.trim())}
-                   placeholder="enr_xxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxx"
+                   placeholder={placeholder}
                    aria-label="QR code payload"
                    className="input flex-1 !py-2 text-[12px]" />
             <button onClick={() => manual && (stop(), onScanned(manual))} disabled={!manual}
                     className="btn-primary btn-sm text-[12px]">
-              Join
+              {actionLabel}
             </button>
           </div>
         </label>

@@ -146,19 +146,21 @@
      clears 4.5:1 on the worst surface of either theme (light 4.51,
      dark 5.90) while staying visibly quieter than --mute. */
   --faint: rgba(255,223,221,.60);
-  /* Primary accent: PLATINUM BLUE, not terracotta.
-     Dark mode is deliberately free of orange. Terracotta at #E07A63 is a
-     hot, high-chroma colour: on a near-black ground every active state,
-     border, ring and filled button lit up at once and the interface read
-     as warning-coloured rather than composed. Desaturating it (the
-     earlier 205 134 112 attempt) reduced the intensity but kept the hue,
-     so it still read as orange.
-     This is a cool, light, low-chroma blue-grey. It complements the warm
-     near-black ground by contrast rather than competing with it, stays
-     legible as text (~9:1 on --bg), and is distinct from every metric hue
-     in the chart palette so an accent can never be mistaken for data.
-     LIGHT MODE IS UNCHANGED -- terracotta on a warm paper ground is doing
-     none of the harm it did on black. */
+  /* Primary accent: PLATINUM.
+     Terracotta (#E07A63) was a hot, high-chroma orange: on a near-black
+     ground every active state, border, ring and filled button lit at once
+     and the interface read as warning-coloured. Desaturating it kept the
+     hue and so kept the problem.
+     This is a cool, light, low-chroma blue-grey. On near-black it reads
+     as brushed metal rather than as a colour, which is exactly what an
+     accent should do on a dark ground -- it complements by contrast and
+     never competes. ~9:1 as text on --bg, and distinct from every metric
+     hue so an accent is never mistaken for data.
+     LIGHT MODE USES OLIVE, deliberately. The two grounds are not
+     equivalent: a pale accent that reads as metal on black turns washed
+     out on warm paper, where a deep olive keeps the warmth the light
+     palette is built on and still carries white text. Same restraint,
+     different hue, because the backgrounds ask for different things. */
   --accent: #B4C2CE;
   --accent-deep: #8FA1B2;
   --accent-soft: rgba(180,194,206,.12);
@@ -376,9 +378,17 @@
      button labels (.btn-sm at 12px, which gets no "large text"
      exemption) both sat just under AA. Nine percent darker fixes both
      with one token and no call-site churn: 5.17:1 either way, same hue. */
-  --accent: #B0503F;                   /* terracotta for light mode */
-  --accent-deep: #8E3D30;
-  --accent-soft: rgba(176,80,63,.10);
+  /* Primary accent: DEEP OLIVE — the same hue family as dark mode's pale
+     olive, pitched dark enough to carry white text (~7.9:1 on --bg).
+     Light mode's accent was #B0503F: on a warm near-white ground a
+     saturated red-orange is the loudest thing on the page, and every
+     filled button read as a warning before it read as an action. Olive
+     keeps the warmth the ground is built on while giving the action a
+     calm, deliberate weight -- and because both themes now share one
+     hue, a button looks like the same button in either. */
+  --accent: #55663D;
+  --accent-deep: #3F4C2D;
+  --accent-soft: rgba(85,102,61,.10);
   --secondary: #D46A8A;
   --secondary-deep: #C25A7A;
   --secondary-soft: rgba(212,106,138,.08);
@@ -389,8 +399,8 @@
   --card-shadow: 0 1px 2px rgba(90,50,42,.06), 0 8px 24px -12px rgba(90,50,42,.12);
   --card-gradient: none;
 
-  --accent-rgb: 176 80 63;
-  --accent-deep-rgb: 142 61 48;
+  --accent-rgb: 85 102 61;
+  --accent-deep-rgb: 63 76 45;
   --accent-contrast: #FFFFFF;
   --bg-rgb: 250 245 243;
   --bg2-rgb: 242 234 231;
@@ -409,16 +419,21 @@
   --gold: #9A6D16;
   --gold-rgb: 154 109 22;
 
-  --tint-rgb: 138 66 50;
+  /* The ambient page tint. Kept WARM on purpose -- the ground is what
+     gives SK OS light mode its character, and cooling it too would make
+     the product feel like a different app rather than a calmer one. Just
+     pulled back so the cool accent does not fight it. */
+  --tint-rgb: 112 104 80;
 
-  /* Light mode keeps the terracotta CTA: on a pale ground the deep
-     terracotta is the RESTRAINED choice, and a cream button would vanish. */
-  --accent-grad: linear-gradient(135deg, #8E3D30, #B0503F);
-  --accent-grad-shadow: 0 4px 14px -4px rgba(176,80,63,.28);
-  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(176,80,63,.38);
-  --cta-ink: #FFF6F3;
-  --cta-solid: #A04A3B;
-  --cta-edge: rgba(43,18,10,.18);
+  /* The CTA follows the accent. A filled button still needs to be the
+     darkest, most definite thing on a pale page -- that part was right --
+     it just should not be orange to achieve it. */
+  --accent-grad: linear-gradient(135deg, #3F4C2D, #55663D);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(85,102,61,.26);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(85,102,61,.34);
+  --cta-ink: #F7F9F1;
+  --cta-solid: #4A5934;
+  --cta-edge: rgba(22,24,15,.18);
 
   /* Metric hues, light mode: deeper and more saturated than the dark-mode
      set, because these sit on an off-white ground where a light tint would
@@ -1360,3 +1375,66 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
    the element. This class is the sanctioned way to ask for one: same
    compact type and padding, a hand-sized hit area. */
 .btn-touch { min-height: 44px !important; }
+
+/* ─────────────────────────────────────────────
+   VIVID PAGES — Community and Progress
+
+   These two screens are the ones people look at for pleasure rather
+   than to complete a task: a social feed and a record of progress.
+   Everywhere else, one restrained accent (platinum in dark, olive in
+   light) is the right call -- it stays out of the way of the data.
+   On these two it was the opposite problem: with every chip, button,
+   ring and chart line resolving to the same olive, the whole page read
+   as one flat wash of the theme colour.
+
+   So they get their own accent, and it is deliberately the SAME family
+   in both themes rather than a light and a dark variant of the app
+   accent -- a teal that is simply lightened for the near-black ground
+   and deepened for the off-white one. The pages therefore look like
+   themselves regardless of theme, which is the point.
+
+   This overrides tokens only; no component needs to know. Every
+   existing var(--accent) inside these pages becomes vivid on its own,
+   and the metric hues (sage / periwinkle / rose / red / slate / teal)
+   continue to carry the charts, so the page reads as many colours
+   rather than one.
+   ───────────────────────────────────────────── */
+.page-vivid {
+  --accent: #45C7BE;
+  --accent-deep: #2FA79F;
+  --accent-soft: rgba(69,199,190,.14);
+  --accent-rgb: 69 199 190;
+  --accent-deep-rgb: 47 167 159;
+  --accent-contrast: #08211F;
+  --accent-grad: linear-gradient(135deg, #2FA79F, #45C7BE);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(47,167,159,.30);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(47,167,159,.40);
+  /* A vivid hue for personal records and milestones. --m-strength is
+     deliberately a metallic champagne and reads as drab next to the
+     rest of this palette, so achievements get their own colour here. */
+  --m-pr: #C98BFF;
+  --m-pr-bg: rgba(201,139,255,.12);
+}
+
+/* Light mode: same teal, deepened so it holds its own on an off-white
+   ground (the light-mode metric hues are darkened for the same reason).
+   Contrast is what changes between themes here, never the hue. */
+.light .page-vivid {
+  /* Measured, not eyeballed. A brighter teal (#0E8C84) looked right but
+     came in at 3.81:1 on the light ground -- an AA failure for the 11px
+     chip labels this colour is used as. The olive it replaces measured
+     5.79:1, so the vivid accent has to hold roughly that: this one is
+     5.56:1 on --bg and 6.02:1 on a white panel. Same hue, enough depth
+     to be read. */
+  --accent: #0A6F69;
+  --accent-deep: #075049;
+  --accent-soft: rgba(10,111,105,.10);
+  --accent-rgb: 10 111 105;
+  --accent-deep-rgb: 7 80 73;
+  --accent-contrast: #FFFFFF;
+  --accent-grad: linear-gradient(135deg, #075049, #0A6F69);
+  --accent-grad-shadow: 0 4px 14px -4px rgba(10,111,105,.26);
+  --accent-grad-shadow-hover: 0 6px 20px -4px rgba(10,111,105,.34);
+  --m-pr: #7B3FB8;
+  --m-pr-bg: rgba(123,63,184,.10);
+}

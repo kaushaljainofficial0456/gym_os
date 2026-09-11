@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, fmtK, fmt1 } from '../../utils.js';
 import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton } from '../../components/UI.jsx';
+import MembersTable from '../../components/trainer/MembersTable.jsx';
 import { TrendChart } from '../../components/charts.jsx';
 import { status } from '../../design/tokens.js';
 
@@ -19,12 +20,6 @@ const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', mon
 // explicit state graph on the server (an invalid jump like cancel ->
 // resume is rejected there, not just hidden here). Dangerous actions
 // (suspend/cancel) ask for confirmation, per spec.
-const MEMBERSHIP_TONE = {
-  ACTIVE: 'text-good border-good/40 bg-good/10', PAUSED: 'text-warn border-warn/40 bg-warn/10',
-  SUSPENDED: 'text-warn border-warn/40 bg-warn/10', EXPIRED: 'text-bad border-bad/40 bg-bad/10',
-  CANCELLED: 'text-mute border-line bg-tint/5', REFUND_PENDING: 'text-warn border-warn/40 bg-warn/10',
-  REFUNDED: 'text-mute border-line bg-tint/5',
-};
 function MembershipActions({ member, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
   const act = async (action, confirmMsg) => {
@@ -321,18 +316,44 @@ export default function Business() {
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-mute font-grotesk border-b border-line">
                   <th className="py-2 pr-3 font-semibold">Date</th>
+                  <th className="py-2 pr-3 font-semibold">Member</th>
                   <th className="py-2 pr-3 font-semibold">Amount</th>
+                  <th className="py-2 pr-3 font-semibold">Method</th>
                   <th className="py-2 pr-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {d.recentPayments.map((p, i) => (
-                  <tr key={i} className="border-b border-line/50 last:border-0">
-                    <td className="py-2 pr-3 text-xs text-mute">{p.paid_at?.slice(0, 10) || '—'}</td>
-                    <td className="py-2 pr-3 font-grotesk font-bold">₹{fmtK(p.amount)}</td>
-                    <td className="py-2 pr-3"><span className="chip text-[10px] text-good border-good/40 bg-good/10">PAID</span></td>
-                  </tr>
-                ))}
+                {/* WHO paid is the first thing an owner wants from this
+                    list and it was not here at all -- the table showed a
+                    date, a figure, and a green PAID chip hard-coded onto
+                    every row, so a failed or pending payment was
+                    indistinguishable from a settled one. The status is
+                    now read from the row. */}
+                {d.recentPayments.map((p) => {
+                  const status = String(p.status || 'paid').toLowerCase();
+                  const tone = status === 'paid' ? 'var(--good)'
+                    : status === 'failed' ? 'var(--bad)' : 'var(--warn)';
+                  return (
+                    <tr key={p.id || `${p.paid_at}-${p.amount}`} className="border-b border-line/50 last:border-0">
+                      <td className="py-2 pr-3 text-xs tabular-nums" style={{ color: 'var(--mute)' }}>
+                        {p.paid_at?.slice(0, 10) || '—'}
+                      </td>
+                      <td className="py-2 pr-3 text-xs" style={{ color: 'var(--ink)' }}>
+                        {p.client_name || <span style={{ color: 'var(--faint)' }}>Unknown member</span>}
+                      </td>
+                      <td className="py-2 pr-3 font-grotesk font-bold tabular-nums">₹{fmtK(p.amount)}</td>
+                      <td className="py-2 pr-3 text-xs" style={{ color: 'var(--mute)' }}>
+                        {p.method || '—'}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span className="inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold"
+                          style={{ color: tone, border: `1px solid ${tone}` }}>
+                          {status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -342,46 +363,16 @@ export default function Business() {
       {/* members */}
       <Card>
         <Kicker>Members</Kicker>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-mute font-grotesk border-b border-line">
-                <th className="py-2.5 pr-3 font-semibold">Member</th>
-                <th className="py-2.5 pr-3 font-semibold">Goal</th>
-                <th className="py-2.5 pr-3 font-semibold">Weight</th>
-                <th className="py-2.5 pr-3 font-semibold">Plan</th>
-                <th className="py-2.5 pr-3 font-semibold">Renews</th>
-                <th className="py-2.5 pr-3 font-semibold">Status</th>
-                <th className="py-2.5 pr-3 font-semibold">Membership</th>
-                <th className="py-2.5 pr-3 font-semibold"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(members.data?.members || []).map((m) => (
-                <tr key={m.id} className="border-b border-line/50 last:border-0">
-                  <td className="py-2.5 pr-3 font-grotesk font-semibold">{m.name}</td>
-                  <td className="py-2.5 pr-3 text-xs text-mute">{m.goal}</td>
-                  <td className="py-2.5 pr-3 text-xs">{m.current_weight ? `${m.current_weight} kg` : '—'}</td>
-                  <td className="py-2.5 pr-3 text-xs">{m.plan_name || '—'}</td>
-                  <td className="py-2.5 pr-3 text-xs text-mute">{m.end_date ? m.end_date.slice(5) : '—'}</td>
-                  <td className="py-2.5 pr-3">
-                    <span className={`chip border ${m.payment_status === 'paid' ? 'text-good border-good/40 bg-good/10' : m.payment_status === 'overdue' ? 'text-bad border-bad/40 bg-bad/10' : 'text-mute border-line bg-tint/5'}`}>
-                      {(m.payment_status || '—').toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="py-2.5 pr-3">
-                    {m.lifecycle_status && (
-                      <span className={`chip border ${MEMBERSHIP_TONE[m.lifecycle_status] || 'text-mute border-line bg-tint/5'}`}>{m.lifecycle_status}</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 pr-3">
-                    {m.subscription_id && <MembershipActions member={m} onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }} onError={(msg) => setToast(msg)} />}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <MembersTable
+          members={members.data?.members || []}
+          renderActions={(m) => (m.subscription_id ? (
+            <MembershipActions
+              member={m}
+              onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }}
+              onError={(msg) => setToast(msg)}
+            />
+          ) : null)}
+        />
       </Card>
 
       <Modal open={pkgOpen} onClose={() => setPkgOpen(false)} title="New package">

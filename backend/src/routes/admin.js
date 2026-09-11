@@ -13,6 +13,14 @@ import { initiateRefund, listRefunds } from '../services/payments/refunds.js';
 import { requirePermission } from '../permissions.js';
 import { createTicket, listTicketsForOrg, getTicket, listMessages, addMessage } from '../services/support/tickets.js';
 
+/** Postgres returns COUNT()/SUM() as a bigint STRING. Every numeric
+ *  comparison downstream needs a real number, not "40". */
+const int = (v) => {
+  if (v == null) return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function adminRoutes(db) {
   const r = Router();
   r.use(requireAuth, requireRole('GYM_OWNER', 'SUPER_ADMIN'), orgScope);
@@ -60,7 +68,21 @@ export default function adminRoutes(db) {
     const trendStart = (() => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 5); return d.toISOString().slice(0, 10); })();
 
     const [payments, subs, renewalsDue, overdue, attendance, packages, activeSubs] = await Promise.all([
-      db.q('SELECT amount, paid_at FROM payments WHERE org_id = ? AND paid_at >= ?', [orgId, trendStart]),
+      /* Selected `amount, paid_at` only, so the payments table on the
+         business page could show a date and a figure and nothing else --
+         no member name, which is the first thing an owner wants from a
+         payments list, and no status, which the UI then hard-coded to a
+         green "PAID" chip on every row regardless of what the row
+         actually said. Both columns exist; they were simply not asked
+         for. The name comes from a join because payments store client_id
+         and nothing human-readable. */
+      db.q(`SELECT p.id, p.amount, p.paid_at, p.status, p.method, p.client_id,
+                   u.name AS client_name
+              FROM payments p
+              LEFT JOIN clients c ON c.id = p.client_id
+              LEFT JOIN users u ON u.id = c.user_id
+             WHERE p.org_id = ? AND p.paid_at >= ?
+             ORDER BY p.paid_at`, [orgId, trendStart]),
       db.q(`SELECT * FROM subscriptions WHERE org_id = ?`, [orgId]),
       db.q(`SELECT COUNT(*) AS n FROM subscriptions WHERE org_id = ? AND renewal_date <= ? AND status = 'active'`,
         [orgId, addDays(new Date(), 30).toISOString().slice(0, 10)]),
@@ -216,6 +238,153 @@ export default function adminRoutes(db) {
         [id('att'), req.orgId, req.body.client_id, d, req.body.present ? 1 : 0]);
     }
     res.status(201).json({ ok: true });
+  });
+
+  /* ---- ANALYTICS ----
+     The business page had exactly one chart -- revenue by month -- and
+     no way to answer why it moved. Revenue is an OUTPUT; an owner
+     deciding anything needs the inputs underneath it: how many people
+     joined, how many left, and whether the gym is actually being used.
+
+     Every series below comes from a real column. There is deliberately
+     no LTV, no forecast and no projected churn: this schema records
+     joins, subscription states, payments and attendance, and inventing a
+     number on top of that would be the one thing an owner might
+     genuinely plan around.
+
+     `months` is clamped rather than trusted -- an unbounded window here
+     is an easy way to make the server scan an entire payments table. */
+  r.get('/analytics', async (req, res) => {
+    const orgId = req.orgId;
+    const months = Math.max(3, Math.min(24, Number(req.query.months) || 6));
+
+    const startDate = (() => {
+      const d = new Date();
+      d.setUTCDate(1);
+      d.setUTCMonth(d.getUTCMonth() - (months - 1));
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const [clients, payments, subs, attendance] = await Promise.all([
+      db.q('SELECT id, created_at, status FROM clients WHERE org_id = ?', [orgId]),
+      db.q('SELECT amount, paid_at FROM payments WHERE org_id = ? AND paid_at >= ?', [orgId, startDate]),
+      db.q('SELECT status, start_date, end_date FROM subscriptions WHERE org_id = ?', [orgId]),
+      db.q('SELECT date, present FROM attendance WHERE org_id = ? AND date >= ?', [orgId, startDate]),
+    ]);
+
+    // The month buckets, oldest first, built from the calendar rather
+    // than from whatever months happen to have data -- a month with no
+    // revenue is a zero on the chart, not a missing point, and those
+    // are very different stories.
+    const buckets = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCDate(1);
+      d.setUTCMonth(d.getUTCMonth() - i);
+      buckets.push(d.toISOString().slice(0, 7));
+    }
+    const inMonth = (value, key) => String(value || '').slice(0, 7) === key;
+
+    const series = buckets.map((key) => {
+      const joined = clients.filter((c) => inMonth(c.created_at, key)).length;
+      // "Left" means a subscription that ENDED in this month and is not
+      // active any more. An end_date in the future on an active plan is
+      // a renewal date, not a departure.
+      const left = subs.filter((sb) => inMonth(sb.end_date, key)
+        && (sb.status === 'expired' || sb.status === 'cancelled')).length;
+      const revenue = payments.filter((p) => inMonth(p.paid_at, key))
+        .reduce((n, p) => n + Number(p.amount || 0), 0);
+      const visits = attendance.filter((a) => inMonth(a.date, key) && int(a.present) === 1).length;
+      return { month: key, joined, left, net: joined - left, revenue: Math.round(revenue), visits };
+    });
+
+    const totals = series.reduce((acc, m) => ({
+      joined: acc.joined + m.joined,
+      left: acc.left + m.left,
+      revenue: acc.revenue + m.revenue,
+      visits: acc.visits + m.visits,
+    }), { joined: 0, left: 0, revenue: 0, visits: 0 });
+
+    /* Churn over the window: departures measured against the members who
+       were there to leave. Reported as null rather than 0 when there was
+       nobody on the books -- 0% churn on an empty gym is a meaningless
+       number that reads like an achievement. */
+    const activeNow = clients.filter((c) => c.status !== 'INACTIVE').length;
+    const exposed = activeNow + totals.left;
+    const churnPct = exposed > 0 ? Math.round((totals.left / exposed) * 1000) / 10 : null;
+
+    res.json({
+      months,
+      series,
+      totals,
+      churnPct,
+      activeMembers: activeNow,
+      totalMembers: clients.length,
+      // Stated explicitly so the page can say "no data yet" instead of
+      // drawing a flat line along zero and implying the gym is dead.
+      hasRevenue: totals.revenue > 0,
+      hasAttendance: totals.visits > 0,
+    });
+  });
+
+  /* ---- STAFF ----
+     The owner had no way to see their own trainers at all: no list, no
+     load, no capacity. "Who can take another client" and "who is
+     carrying forty of them" are the two questions that decide every
+     assignment, and both were answerable only by opening clients one at
+     a time and reading the trainer field.
+
+     Counts are computed in SQL rather than by pulling every client into
+     JS -- a gym with 400 members should not ship 400 rows to answer
+     "how many each". */
+  r.get('/trainers', async (req, res) => {
+    const rows = await db.q(
+      `SELECT t.user_id, t.specialization, t.bio, t.max_clients,
+              u.name, u.email, u.avatar, u.active, u.created_at,
+              (SELECT COUNT(*) FROM clients c
+                WHERE c.trainer_id = t.user_id AND c.org_id = t.org_id) AS client_count,
+              (SELECT COUNT(*) FROM clients c
+                WHERE c.trainer_id = t.user_id AND c.org_id = t.org_id
+                  AND c.status <> 'INACTIVE') AS active_client_count
+         FROM trainers t
+         JOIN users u ON u.id = t.user_id
+        WHERE t.org_id = ?
+        ORDER BY u.name`, [req.orgId]);
+
+    // Postgres returns COUNT() as a bigint STRING; left raw, every
+    // capacity comparison below would be a string compare ("9" > "40").
+    const trainers = rows.map((t) => {
+      const clients = int(t.client_count);
+      const active = int(t.active_client_count);
+      const max = int(t.max_clients) || 0;
+      return {
+        id: t.user_id,
+        name: t.name,
+        email: t.email,
+        avatar: t.avatar || null,
+        active: int(t.active) === 1,
+        specialization: t.specialization || null,
+        bio: t.bio || null,
+        maxClients: max,
+        clientCount: clients,
+        activeClientCount: active,
+        // A capacity with no ceiling set is unknown, not 0% full. Null
+        // renders as "no limit set" rather than as a full green ring.
+        loadPct: max > 0 ? Math.round((active / max) * 100) : null,
+        createdAt: t.created_at,
+      };
+    });
+
+    res.json({
+      trainers,
+      // Unassigned clients are the actionable number on this screen:
+      // nobody is looking after them.
+      unassigned: int((await db.q1(
+        `SELECT COUNT(*) AS n FROM clients
+          WHERE org_id = ? AND (trainer_id IS NULL OR trainer_id NOT IN
+                (SELECT user_id FROM trainers WHERE org_id = ?))`,
+        [req.orgId, req.orgId]))?.n),
+    });
   });
 
   r.get('/members', async (req, res) => {

@@ -114,3 +114,22 @@ export function useFetch(fn, deps = []) {
 
 // Tiny deterministic SVGs for empty/loading states are in UI.jsx.
 export const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+/**
+ * Format a prescribed load for display.
+ *
+ * `workout_exercises.weight` is FREE TEXT and the data proves it: the same
+ * column holds "60 kg", "60", "BW" and whatever else a coach typed. So a
+ * unit can only be appended to a bare number -- anything containing
+ * letters already states its own unit, and appending to it produced
+ * "60 kg kg". Lives here rather than in a component because the trainer's
+ * builder and the PUBLIC shared-workout page both render this same field,
+ * and they disagreed: one printed "60 kg" and a bare "22.5" side by side.
+ */
+export function formatLoad(value) {
+  const w = String(value ?? '').trim();
+  if (!w) return null;
+  if (/^(bw|bodyweight)$/i.test(w)) return 'Bodyweight';
+  if (/^\d+(\.\d+)?$/.test(w)) return `${w} kg`;
+  return w;
+}

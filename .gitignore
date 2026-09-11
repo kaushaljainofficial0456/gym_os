@@ -10,6 +10,10 @@ backend/.env
 backend/data/
 backend/data/exports/
 *.db
+# SQLite WAL sidecars -- *.db alone does not match these, so a stray
+# database left by a script run from the wrong cwd showed up as untracked.
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 

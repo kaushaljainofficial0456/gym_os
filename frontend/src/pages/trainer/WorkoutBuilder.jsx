@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api.js';
+import ExercisePicker, { prettyName } from '../../components/trainer/ExercisePicker.jsx';
+import ExerciseCard, { prescriptionLine } from '../../components/trainer/ExerciseCard.jsx';
+import TemplateList from '../../components/trainer/TemplateList.jsx';
+import AssignPreview from '../../components/trainer/AssignPreview.jsx';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, ErrorState, Modal, Empty, ChevronRightIcon, XIcon, PageSkeleton, CheckIcon } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, PageSkeleton, CheckIcon } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
@@ -147,6 +151,18 @@ export default function WorkoutBuilder() {
 
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(null); // draft {id?, name, type, notes, exercises[]}
+  // The new picker stays OPEN while exercises are added, so it needs to
+  // report how many landed -- that count is the only feedback a
+  // trainer gets in place of the sheet closing.
+  const [libOpen, setLibOpen] = useState(false);
+  const [addedThisSession, setAddedThisSession] = useState(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  /* UNSAVED WORK IS THE EXPENSIVE THING ON THIS SCREEN. Clicking another
+     template in the list silently replaced the draft -- ten minutes of
+     programming gone with no warning and no undo. This holds a snapshot
+     of the draft as it was last loaded or saved; anything that would
+     discard the draft compares against it first. */
+  const baseline = useRef('');
   const [saving, setSaving] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignClient, setAssignClient] = useState('');
@@ -253,26 +269,102 @@ export default function WorkoutBuilder() {
   // modal (opened on demand, see pickerEverOpened above), not the main page
   // -- including it here would reintroduce exactly the eager-load cost that
   // gating the fetch on pickerEverOpened was meant to remove.
+  /* What "unchanged" means. Compared as a normalised string rather than
+     by reference, because every keystroke replaces the draft object --
+     an identity check would call an untouched draft dirty. */
+  const snapshot = (draft) => (draft ? JSON.stringify({
+    id: draft.id || null,
+    name: draft.name || '',
+    type: draft.type || '',
+    notes: draft.notes || '',
+    exercises: (draft.exercises || []).map((x) => [
+      x.exercise_id || null, x.name || '', String(x.sets ?? ''), String(x.reps ?? ''),
+      String(x.weight ?? ''), String(x.rest_sec ?? ''), x.notes || '',
+    ]),
+  }) : '');
+
+  const isDirty = () => Boolean(editing) && snapshot(editing) !== baseline.current;
+
+  /* Closing the tab mid-draft gets the browser's own warning. The
+     message is the browser's, not ours -- Chrome has ignored custom text
+     for years, and pretending otherwise would be writing a string nobody
+     will ever read.
+
+     NOTE: this effect, and the two helpers above it, sit ABOVE the
+     loading/error early returns on purpose. Hooks cannot live below a
+     conditional return -- placed there, this one is skipped on the
+     loading render and present on the next, which React rejects outright
+     ("Rendered more hooks than during the previous render") and takes the
+     whole screen down with it. */
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!isDirty()) return undefined;
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  });
+
   if (tpl.loading || clients.loading) return <PageSkeleton variant="split" label="Loading workout builder" />;
   if (tpl.error) return <ErrorState error={tpl.error} onRetry={tpl.reload} />;
 
+
+  /* One gate in front of everything that throws the draft away. It names
+     the template at risk, because "you have unsaved changes" is useless
+     when a trainer has several on the go. */
+  const confirmDiscard = () => {
+    if (!isDirty()) return true;
+    const what = editing.name?.trim() || 'this new template';
+    return window.confirm(`Discard your unsaved changes to "${what}"?`);
+  };
+
+  const load = (draft, id) => {
+    baseline.current = snapshot(draft);
+    setSelectedId(id);
+    setEditing(draft);
+  };
+
   const startNew = () => {
-    setSelectedId(null);
-    setEditing({ id: null, name: '', type: 'Push', notes: '', exercises: [emptyEx()] });
+    if (!confirmDiscard()) return;
+    load({ id: null, name: '', type: 'Push', notes: '', exercises: [emptyEx()] }, null);
   };
 
   const openTemplate = (t) => {
-    setSelectedId(t.id);
-    setEditing({ id: t.id, name: t.name, type: t.type || '', notes: t.notes || '',
-      exercises: (t.exercises || []).map((e) => ({ ...e, exercise_id: e.exercise_id || null })) });
+    // Reopening the template already being edited must not offer to
+    // discard it -- that is not navigating away, it is a no-op.
+    if (t.id === selectedId && editing?.id === t.id) return;
+    if (!confirmDiscard()) return;
+    load({ id: t.id, name: t.name, type: t.type || '', notes: t.notes || '',
+      exercises: (t.exercises || []).map((e) => ({ ...e, exercise_id: e.exercise_id || null })) }, t.id);
   };
 
+
   const patch = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
-  const patchEx = (i, k, v) => setEditing((e) => {
-    const ex = e.exercises.map((x, j) => (j === i ? { ...x, [k]: v } : x));
-    return { ...e, exercises: ex };
+
+  /* Adding from the library. Defaults are stated once here rather than
+     left blank: an exercise with no prescription is not a programmed
+     exercise, and making the trainer type 4/8/90 for every single
+     movement is exactly the repetition this redesign exists to remove.
+     They are ordinary starting values, immediately editable. */
+  const addFromLibrary = (x) => {
+    setEditing((e) => ({
+      ...e,
+      exercises: [
+        ...(e.exercises || []).filter((ex) => String(ex.name || '').trim() || ex.exercise_id),
+        { exercise_id: x.id || null, name: x.name || '', sets: 4, reps: '8', weight: '', rest_sec: 90, notes: '' },
+      ],
+    }));
+    setAddedThisSession((n) => n + 1);
+  };
+
+  const duplicateEx = (i) => setEditing((e) => {
+    const copy = { ...e.exercises[i] };
+    const next = [...e.exercises];
+    next.splice(i + 1, 0, copy);
+    return { ...e, exercises: next };
   });
-  const addEx = () => setEditing((e) => ({ ...e, exercises: [...e.exercises, emptyEx()] }));
   const removeEx = (i) => setEditing((e) => ({ ...e, exercises: e.exercises.filter((_, j) => j !== i) }));
   const moveEx = (i, dir) => setEditing((e) => {
     const arr = [...e.exercises];
@@ -300,24 +392,71 @@ export default function WorkoutBuilder() {
 
   const saveTemplate = async () => {
     if (!editing?.exercises?.length) return setToast('Add at least one exercise');
+    // A named exercise is the one thing the backend cannot default, so it
+    // is checked HERE with a message naming the offender -- rather than
+    // letting the request fail and returning "Invalid workout data".
+    const blank = editing.exercises.findIndex((x) => !String(x.name || '').trim());
+    if (blank !== -1) return setToast(`Exercise ${blank + 1} still needs a name`);
+    if (saving) return;   // a second tap must not create a second template
     setSaving(true);
     try {
-      await api('/workouts/templates', { method: 'POST', body: JSON.stringify(payload()) });
-      setToast('Template saved');
+      /* EDITING AN EXISTING TEMPLATE UPDATES IT.
+         This always POSTed, even with editing.id set -- so "editing" Legs
+         B created a SECOND Legs B and threw the change away. Three edits
+         produced four templates and no saved work. PUT is the fix; the
+         endpoint did not exist until now either. */
+      let savedId = editing.id;
+      if (editing.id) {
+        await api(`/workouts/templates/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload()) });
+        setToast('Template updated');
+      } else {
+        const created = await api('/workouts/templates', { method: 'POST', body: JSON.stringify(payload()) });
+        savedId = created?.id || null;
+        setToast('Template saved');
+      }
       // silent: true -- this page gates its whole render on
       // `tpl.loading || lib.loading || clients.loading` (below); a bare
       // reload() would unmount everything for the duration of the
       // refetch, same class of bug already fixed for Nutrition.jsx.
       await tpl.reload({ silent: true });
-      setEditing(null);
+      /* STAY ON WHAT WAS JUST SAVED. Saving used to close the editor
+         outright, which threw the trainer back to an empty pane and made
+         "save, look at it, adjust one number" a three-click round trip.
+         The draft is now simply no longer dirty: same template, same
+         scroll position, nothing to discard. */
+      setSelectedId(savedId);
+      setEditing((draft) => {
+        const settled = draft ? { ...draft, id: savedId } : draft;
+        baseline.current = snapshot(settled);
+        return settled;
+      });
     } catch (e) { setToast(e.message); }
     setSaving(false);
   };
 
   const duplicate = async (id) => {
-    await api(`/workouts/templates/${id}/duplicate`, { method: 'POST' });
-    setToast('Template duplicated');
-    tpl.reload({ silent: true });
+    try {
+      await api(`/workouts/templates/${id}/duplicate`, { method: 'POST' });
+      setToast('Template duplicated');
+      tpl.reload({ silent: true });
+    } catch (e) { setToast(e.message || 'Could not duplicate that template'); }
+  };
+
+  /* Deleting a template does NOT touch workouts already assigned from it
+     -- those are what a client was actually given, and the backend only
+     removes rows carrying this template_id. The confirm says so, because
+     "will this wipe my clients' sessions?" is the question a trainer
+     actually has at this moment. */
+  const removeTemplate = async (t) => {
+    const ok = window.confirm(
+      `Delete "${t.name}"?\n\nWorkouts already assigned to clients from this template are kept.`);
+    if (!ok) return;
+    try {
+      await api(`/workouts/templates/${t.id}`, { method: 'DELETE' });
+      setToast('Template deleted');
+      if (editing?.id === t.id) setEditing(null);
+      tpl.reload({ silent: true });
+    } catch (e) { setToast(e.message || 'Could not delete that template'); }
   };
 
   const assign = async () => {
@@ -371,24 +510,14 @@ export default function WorkoutBuilder() {
         {/* template list */}
         <Card className="lg:col-span-2 self-start" data-tour="trainer-workouts-templates">
           <Kicker>Your templates</Kicker>
-          <div className="space-y-1.5">
-            {templates.map((t) => (
-              <div key={t.id} className={`rounded-xl border transition-colors ${selectedId === t.id ? 'border-gold/50 bg-tint/[.05]' : 'border-line bg-tint/[.02]'}`}>
-                <button className="w-full text-left px-3.5 py-3 flex items-center gap-3" onClick={() => openTemplate(t)}>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-grotesk text-sm font-semibold truncate">{t.name}</div>
-                    <div className="text-[11px] text-mute">{t.type} · {t.exercise_count || 0} exercises</div>
-                  </div>
-                  <span className="text-mute"><ChevronRightIcon /></span>
-                </button>
-                <div className="px-3.5 pb-2.5 flex gap-1.5">
-                  <button className="btn btn-sm" onClick={() => duplicate(t.id)}>⧉ Duplicate</button>
-                  <button className="btn btn-sm" onClick={() => { openTemplate(t); setAssignOpen(true); }}><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg> Assign</button>
-                </div>
-              </div>
-            ))}
-            {!templates.length && <Empty title="No templates yet" hint="Create your first workout template to assign it to clients." />}
-          </div>
+          <TemplateList
+            templates={templates}
+            selectedId={selectedId}
+            onOpen={openTemplate}
+            onDuplicate={duplicate}
+            onAssign={(t) => { openTemplate(t); setAssignOpen(true); }}
+            onDelete={removeTemplate}
+          />
         </Card>
 
         {/* editor */}
@@ -399,75 +528,72 @@ export default function WorkoutBuilder() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Name</label>
-                  <input className="input" value={editing.name} onChange={(e) => patch('name', e.target.value)} placeholder="Push Day A" />
+                  <input className="input" value={editing.name} onChange={(e) => patch('name', e.target.value)} placeholder="Push Day A" aria-label="Template name" />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Type</label>
-                  <input className="input" value={editing.type} onChange={(e) => patch('type', e.target.value)} placeholder="Push / Pull / Legs" />
+                  <input className="input" value={editing.type} onChange={(e) => patch('type', e.target.value)} placeholder="Push / Pull / Legs" aria-label="Template type" />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Notes</label>
-                  <input className="input" value={editing.notes} onChange={(e) => patch('notes', e.target.value)} placeholder="Optional coaching notes" />
+                  <input className="input" value={editing.notes} onChange={(e) => patch('notes', e.target.value)} placeholder="Optional coaching notes" aria-label="Template notes" />
                 </div>
               </div>
 
               <div className="space-y-2">
                 {editing.exercises.map((ex, i) => (
-                  <div key={i} className="rounded-xl border border-line bg-tint/[.02] p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-tint/5 border border-line grid place-items-center font-grotesk text-[10px] text-mute shrink-0">{i + 1}</span>
-                      <input className="input !py-2 flex-1" value={ex.name} onChange={(e) => patchEx(i, 'name', e.target.value)} placeholder="Exercise name" />
-                      <div className="flex gap-1">
-                        <button className="btn btn-sm" disabled={i === 0} onClick={() => moveEx(i, -1)} aria-label="Move up">↑</button>
-                        <button className="btn btn-sm" disabled={i === editing.exercises.length - 1} onClick={() => moveEx(i, 1)} aria-label="Move down">↓</button>
-                        <button className="btn btn-sm !text-bad" onClick={() => removeEx(i)} aria-label="Remove"><XIcon /></button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      <label className="block">
-                        <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">Sets</span>
-                        <input type="number" min="1" className="input !py-1.5" value={ex.sets} onChange={(e) => patchEx(i, 'sets', e.target.value)} />
-                      </label>
-                      <label className="block">
-                        <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">Reps</span>
-                        <input className="input !py-1.5" value={ex.reps} onChange={(e) => patchEx(i, 'reps', e.target.value)} placeholder="8-10" />
-                      </label>
-                      <label className="block">
-                        <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">Weight</span>
-                        <input className="input !py-1.5" value={ex.weight} onChange={(e) => patchEx(i, 'weight', e.target.value)} placeholder="60kg / BW" />
-                      </label>
-                      <label className="block">
-                        <span className="text-[9px] uppercase tracking-wider text-faint font-grotesk">Rest s</span>
-                        <input type="number" min="0" step="15" className="input !py-1.5" value={ex.rest_sec} onChange={(e) => patchEx(i, 'rest_sec', e.target.value)} />
-                      </label>
-                    </div>
-                    <div className="flex gap-2 items-end">
-                      {/* origin/main replaced the plain <select> (287
-                          exercises in one flat dropdown) with a real
-                          searchable combobox -- kept as the strictly
-                          better implementation; the button-size override
-                          is collapsed onto .btn-sm to match this pass's
-                          button sweep. */}
-                      <LibraryCombobox
-                        value={ex.exercise_id}
-                        name={ex.name}
-                        onSelect={(x) => {
-                          patchEx(i, 'exercise_id', x?.id || null);
-                          if (x?.name) patchEx(i, 'name', x.name);
-                        }}
-                      />
-                      <button className="btn btn-sm shrink-0" onClick={() => setAddOpen(true)}>+ New</button>
-                    </div>
-                  </div>
+                  <ExerciseCard
+                    key={i}
+                    ex={ex}
+                    index={i}
+                    total={editing.exercises.length}
+                    onChange={(next) => setEditing((e) => ({
+                      ...e, exercises: e.exercises.map((x, j) => (j === i ? next : x)),
+                    }))}
+                    onRemove={() => removeEx(i)}
+                    onDuplicate={() => duplicateEx(i)}
+                    onMove={(dir) => moveEx(i, dir)}
+                  />
                 ))}
-                <div className="flex gap-2">
-                  <button className="btn flex-1 !border-dashed" onClick={addEx}>+ Add exercise</button>
-                  <button className="btn flex-1 !border-dashed" onClick={() => { setPickerEverOpened(true); setPickOpen(true); }}>◎ Pick by muscle</button>
-                </div>
+                {/* One primary way in. "Add exercise" opens the library and
+                    keeps it open; the old pair of dashed buttons offered two
+                    routes to the same outcome and made neither obvious. */}
+                <button
+                  className="btn w-full !border-dashed"
+                  onClick={() => { setAddedThisSession(0); setLibOpen(true); }}
+                >
+                  + Add exercise
+                </button>
               </div>
 
+              {/* A session at a glance. Sets are counted, not estimated --
+                  there is no duration guess here because nothing in this
+                  data supports one, and a made-up "45-60 min" would be a
+                  number a trainer might actually plan around. */}
+              {editing.exercises.length > 0 && (
+                <div
+                  className="rounded-xl px-3 py-2.5 flex items-center gap-4 flex-wrap tabular-nums"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}
+                >
+                  <span className="text-[12px]" style={{ color: 'var(--ink)' }}>
+                    <strong>{editing.exercises.length}</strong>
+                    <span style={{ color: 'var(--mute)' }}> {editing.exercises.length === 1 ? 'exercise' : 'exercises'}</span>
+                  </span>
+                  <span className="text-[12px]" style={{ color: 'var(--ink)' }}>
+                    <strong>{editing.exercises.reduce((n, x) => n + (Number(x.sets) || 0), 0)}</strong>
+                    <span style={{ color: 'var(--mute)' }}> sets</span>
+                  </span>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-1">
-                <button className="btn-primary" onClick={saveTemplate} disabled={saving}>{saving ? 'Saving…' : 'Save template'}</button>
+                <button className="btn-primary" onClick={saveTemplate} disabled={saving}>
+                  {saving ? 'Saving…' : editing.id ? 'Update template' : 'Save template'}
+                </button>
+                {/* Seeing the session the way the client receives it,
+                    before sending it. The editor is a form; this is the
+                    workout. */}
+                <button className="btn" onClick={() => setPreviewOpen(true)}>Preview</button>
                 <button className="btn" onClick={() => setAssignOpen(true)}>Assign to client…</button>
                 <button className="btn-ghost btn-sm !text-mute" onClick={() => setEditing(null)}>Cancel</button>
               </div>
@@ -587,6 +713,51 @@ export default function WorkoutBuilder() {
         )}
       </Modal>
 
+      <Modal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title={editing?.name?.trim() || 'Untitled workout'}
+        sub={[editing?.type, `${editing?.exercises?.length || 0} exercises`,
+          `${(editing?.exercises || []).reduce((n, x) => n + (Number(x.sets) || 0), 0)} sets`]
+          .filter(Boolean).join(' · ')}
+      >
+        <div className="space-y-2">
+          {editing?.notes?.trim() && (
+            <div
+              className="rounded-xl px-3 py-2.5 text-[12px]"
+              style={{ background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--mute)' }}
+            >
+              {editing.notes}
+            </div>
+          )}
+          {(editing?.exercises || []).map((ex, i) => (
+            <div
+              key={i}
+              className="rounded-xl px-3 py-2.5 flex items-start gap-3"
+              style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}
+            >
+              <span
+                className="shrink-0 tabular-nums text-[11px] font-bold rounded-lg grid place-items-center"
+                style={{ width: 26, height: 26, background: 'var(--bg)', color: 'var(--mute)' }}
+              >
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-bold" style={{ color: 'var(--ink)' }}>
+                  {prettyName(ex.name) || 'Unnamed exercise'}
+                </div>
+                <div className="text-[11.5px] mt-0.5 tabular-nums" style={{ color: 'var(--mute)' }}>
+                  {prescriptionLine(ex) || 'No prescription set'}
+                </div>
+                {ex.notes?.trim() && (
+                  <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>“{ex.notes}”</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Modal>
+
       <Modal open={assignOpen} onClose={() => setAssignOpen(false)} title={`Assign "${editing?.name || 'workout'}"`}>
         <div className="space-y-3">
           <div>
@@ -600,6 +771,9 @@ export default function WorkoutBuilder() {
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Schedule date (optional)</label>
             <input type="date" className="input" value={assignDate} onChange={(e) => setAssignDate(e.target.value)} />
           </div>
+          {/* Chosen client + this template's exercises = the one place
+              previous performance is both knowable and useful. */}
+          <AssignPreview clientId={assignClient} exercises={editing?.exercises || []} />
           <button className="btn-primary w-full" onClick={assign} disabled={saving}>{saving ? 'Assigning…' : 'Assign workout'}</button>
         </div>
       </Modal>
@@ -671,6 +845,19 @@ export default function WorkoutBuilder() {
         </div>
       </Modal>
 
+      <ExercisePicker
+        open={libOpen}
+        addedCount={addedThisSession}
+        onClose={() => setLibOpen(false)}
+        onAdd={addFromLibrary}
+        onOpenMuscleMap={() => {
+          // Hand over rather than stack: two open sheets would leave the
+          // trainer unsure which one the next tap belongs to.
+          setLibOpen(false);
+          setPickerEverOpened(true);   // this is what triggers the library fetch
+          setPickOpen(true);
+        }}
+      />
       {toast && <div className="toast anim-toast">{toast}</div>}
     </div>
   );

@@ -528,6 +528,21 @@ CREATE TABLE IF NOT EXISTS gym_settings (
   allow_edit_targets INTEGER NOT NULL DEFAULT 1,
   community_enabled INTEGER NOT NULL DEFAULT 1,
   community_leaderboard_enabled INTEGER NOT NULL DEFAULT 1,
+  -- Trainer attendance rules. Configurable because "late" is a policy, not
+  -- a constant: a gym that opens at 5am with a 20-minute commute window
+  -- and a boutique studio with fixed 1:1 slots do not mean the same thing
+  -- by it.
+  attendance_mode          TEXT NOT NULL DEFAULT 'simple'
+                           CHECK (attendance_mode IN ('simple','scheduled')),
+  attendance_grace_min     INTEGER NOT NULL DEFAULT 10,
+  -- Whether a trainer must present the gym's rotating code to record
+  -- attendance. Defaults ON: a check-in button that works from anywhere
+  -- records intent, not attendance, and the whole reason a gym asks for
+  -- attendance data is to know who was actually in the building. Gyms
+  -- with no display, or a single self-employed trainer, can turn it off
+  -- deliberately -- but that is a decision they make, not the default
+  -- they get by accident.
+  attendance_require_qr    INTEGER NOT NULL DEFAULT 1,
   updated_at   TEXT
 );
 
@@ -1118,6 +1133,97 @@ CREATE TABLE IF NOT EXISTS community_follows (
 );
 CREATE INDEX IF NOT EXISTS idx_cf_follower ON community_follows(follower_id);
 CREATE INDEX IF NOT EXISTS idx_cf_following ON community_follows(following_id);
+
+-- ============================================================
+-- TRAINER ATTENDANCE — a staff work record, NOT a client check-in.
+--
+-- These are three different things and the product keeps them apart:
+--
+--   attendance / attendance_events   a CLIENT visited the gym
+--   workouts                         somebody trained
+--   trainer_attendance (here)        a STAFF MEMBER was at work
+--
+-- A trainer can be at work with no client sessions booked, and can coach
+-- a session without that being their shift. So trainer attendance is
+-- never INFERRED from a client session or from a logged workout -- it is
+-- always an explicit act (a check-in, a QR scan, or an owner entry), and
+-- the 'source' column records which.
+--
+-- EXPECTED vs ACTUAL is the whole point. scheduled_start/end are copied
+-- onto the row AT CHECK-IN rather than joined from trainer_shifts at read
+-- time: a shift edited in March must not retroactively make February's
+-- attendance late. The row is the historical fact.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS trainer_attendance (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  -- trainers are keyed by user_id (see the trainers table), so this is a
+  -- user id, not a separate trainer id.
+  trainer_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date            TEXT NOT NULL,                 -- YYYY-MM-DD in the GYM's timezone
+  scheduled_start TEXT,                          -- HH:MM, snapshot of the shift
+  scheduled_end   TEXT,
+  check_in        TEXT,                          -- UTC ISO
+  check_out       TEXT,                          -- UTC ISO
+  status          TEXT NOT NULL DEFAULT 'PRESENT'
+                  CHECK (status IN ('PRESENT','LATE','ABSENT','LEAVE','OFF_DAY','MISSING_CHECKOUT')),
+  -- How this record came to exist. An owner reviewing a surprising row
+  -- needs to know whether the trainer stood at the gym door or whether
+  -- somebody typed it in afterwards.
+  source          TEXT NOT NULL DEFAULT 'TRAINER_SELF'
+                  CHECK (source IN ('TRAINER_SELF','GYM_QR','OWNER_MANUAL','CORRECTION')),
+  late_minutes    INTEGER NOT NULL DEFAULT 0,
+  worked_minutes  INTEGER,
+  -- A correction is a REQUEST against an existing day, not a second row:
+  -- two rows for one trainer-day is how a day ends up counted twice.
+  correction_status TEXT CHECK (correction_status IN ('PENDING','APPROVED','REJECTED')),
+  correction_reason TEXT,
+  correction_check_in  TEXT,                     -- what the trainer is asking for
+  correction_check_out TEXT,
+  note            TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  -- One record per trainer per day per gym. A trainer working two gyms
+  -- has two independent rows, and neither gym sees the other's.
+  UNIQUE (org_id, trainer_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_tatt_org_date ON trainer_attendance(org_id, date);
+CREATE INDEX IF NOT EXISTS idx_tatt_trainer ON trainer_attendance(trainer_id, date);
+
+-- A trainer's expected working pattern. Optional: a gym that does not run
+-- formal shifts simply has no rows here, and attendance still records
+-- real hours -- it just never computes "late" or "absent", because
+-- without an expectation neither word means anything.
+CREATE TABLE IF NOT EXISTS trainer_shifts (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  trainer_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),  -- 0=Sunday
+  start_time  TEXT NOT NULL,                     -- HH:MM, gym-local
+  end_time    TEXT NOT NULL,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL,
+  UNIQUE (org_id, trainer_id, day_of_week)
+);
+CREATE INDEX IF NOT EXISTS idx_tshift_trainer ON trainer_shifts(trainer_id, active);
+
+-- Every change to an attendance row, kept forever. Attendance is a record
+-- of what happened; silently editing it destroys the only evidence of
+-- what it said before. admin_audit_logs is the PLATFORM admin's log and
+-- is scoped to that console -- this is the gym's own, so an owner can see
+-- their own corrections without being a platform admin.
+CREATE TABLE IF NOT EXISTS trainer_attendance_audit (
+  id            TEXT PRIMARY KEY,
+  org_id        TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  attendance_id TEXT NOT NULL,
+  actor_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
+  action        TEXT NOT NULL,                   -- CHECK_IN | CHECK_OUT | OWNER_EDIT | CORRECTION_REQUESTED | ...
+  before_json   TEXT,
+  after_json    TEXT,
+  reason        TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tatt_audit ON trainer_attendance_audit(attendance_id, created_at);
 
 -- ============================================================
 -- WORKOUT SHARING — cross-account shareable workout link

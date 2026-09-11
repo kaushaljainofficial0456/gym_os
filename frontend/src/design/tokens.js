@@ -68,18 +68,23 @@
  */
 export const brand = {
   dark: {
-    accent: '#E07A63',        // terracotta
-    accentDeep: '#C15C4C',    // gradient partner, deeper end
-    accentContrast: '#2B120A',// dark ink ON the accent
+    // Was terracotta #E07A63 long after theme.css moved to platinum. Every
+    // consumer of this module -- exercise animations, the muscle map, the
+    // adherence bars -- therefore kept painting the old orange brand on
+    // top of a page painted in the new one. That was the orange still
+    // showing up in dark mode after the CSS repaint.
+    accent: '#B4C2CE',        // platinum
+    accentDeep: '#8FA1B2',    // gradient partner, deeper end
+    accentContrast: '#10151A',// dark ink ON the accent
     cyan: '#22D3EE',
     violet: '#7C3AED',
-    bg: '#000000',            // true black canvas
-    panel: '#161616',
+    bg: '#0A0909',            // near-black canvas
+    panel: '#1A1717',
     ink: '#FFDFDD',           // blush
   },
   light: {
-    accent: '#B0503F',        // terracotta, darkened in the contrast pass
-    accentDeep: '#8E3D30',
+    accent: '#55663D',        // deep olive
+    accentDeep: '#3F4C2D',
     accentContrast: '#FFFFFF',
     cyan: '#2A7A85',
     violet: '#7A609C',

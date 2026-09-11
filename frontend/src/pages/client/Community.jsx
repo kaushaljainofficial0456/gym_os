@@ -302,7 +302,7 @@ export default function Community() {
 
   if (!available) {
     return (
-      <div className="pb-24">
+      <div className="page-vivid pb-24">
         <h1 className="font-black text-[24px] mb-2" style={{ color: 'var(--ink)' }}>Community</h1>
         <div className="rounded-2xl p-5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
           <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
@@ -318,7 +318,7 @@ export default function Community() {
 
   if (!joined) {
     return (
-      <div className="pb-24">
+      <div className="page-vivid pb-24">
         <h1 className="font-black text-[24px]" style={{ color: 'var(--ink)' }}>{gymName}</h1>
         <div className="rounded-2xl p-5 mt-4" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
           <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>Join your gym community</div>
@@ -348,7 +348,7 @@ export default function Community() {
   const challenges = challengesFetch.data?.challenges || [];
 
   return (
-    <div className="pb-24">
+    <div className="page-vivid pb-24">
       {/* ── header ── */}
       <header className="mb-4">
         <div className="flex items-start justify-between gap-3">

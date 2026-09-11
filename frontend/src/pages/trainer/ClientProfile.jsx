@@ -72,7 +72,15 @@ export default function ClientProfile() {
   const startW = client.startWeight, curW = client.currentWeight, tgtW = client.targetWeight;
   const delta = startW && curW ? Math.round((curW - startW) * 10) / 10 : null;
   const range = startW && tgtW ? Math.max(1, startW - tgtW) : 1;
-  const progress = startW && curW && tgtW ? Math.min(100, Math.max(0, ((startW - curW) / range) * 100)) : 0;
+  /* null, not 0, when the journey cannot be measured. The bar below was
+     guarded on start+target only, but the CALCULATION also needs a
+     current weight -- so a client with a goal set and nothing yet
+     weighed in rendered "0% of journey" against an empty track, which
+     reads as "has made no progress" rather than "we don't know where
+     they are". Those are different things to say to a coach. */
+  const progress = startW != null && curW != null && tgtW != null
+    ? Math.min(100, Math.max(0, ((startW - curW) / range) * 100))
+    : null;
 
   return (
     <div className="space-y-5">
@@ -142,11 +150,14 @@ export default function ClientProfile() {
         {startW != null && tgtW != null && (
           <div className="mt-6 relative">
             <div className="meter" style={{ height: 8 }}>
-              <span className="meter-fill" style={{ width: `${progress}%`, background: 'var(--accent-grad)' }} />
+              <span className="meter-fill"
+                style={{ width: `${progress ?? 0}%`, background: 'var(--accent-grad)' }} />
             </div>
             <div className="flex justify-between mt-2 text-[10px] text-faint font-grotesk tabular-nums">
               <span>Start {startW} kg</span>
-              <span className="font-semibold" style={{ color: 'var(--accent)' }}>{Math.round(progress)}% of journey</span>
+              <span className="font-semibold" style={{ color: progress == null ? 'var(--faint)' : 'var(--accent)' }}>
+                {progress == null ? 'no current weight logged' : `${Math.round(progress)}% of journey`}
+              </span>
               <span>Target {tgtW} kg</span>
             </div>
           </div>
@@ -364,10 +375,26 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
       )}
       <Card className="lg:col-span-1">
         <Kicker>Adherence score</Kicker>
+        {/* A null score is not zero. Math.round(null) is 0, so a client
+            who has logged nothing drew a full-width empty ring reading
+            "0%" -- visually identical to a client who logged everything
+            and complied with none of it. The two mean opposite things to
+            a coach deciding whether to call someone. */}
         <div className="flex justify-center py-2">
-          <Ring value={adherence.score} max={100} label={`${Math.round(adherence.score)}%`} sub="7-day score" />
+          {adherence.score == null ? (
+            <Ring value={0} max={100} color="var(--line)" label="—" sub="no data yet" />
+          ) : (
+            <Ring value={adherence.score} max={100} color="var(--m-body)"
+              label={`${Math.round(adherence.score)}%`} sub="7-day score" />
+          )}
         </div>
-        <AdherenceBreakdown components={adherence.components} />
+        {Object.values(adherence.components || {}).some((v) => v != null) ? (
+          <AdherenceBreakdown components={adherence.components} />
+        ) : (
+          <div className="text-[11.5px] text-center py-2" style={{ color: 'var(--mute)' }}>
+            Nothing logged in the last 7 days, so there is no breakdown to show.
+          </div>
+        )}
         <div className="mt-4 flex gap-2">
           <input className="input flex-1" type="number" placeholder="Log weight kg" value={w} onChange={(e) => setW(e.target.value)} />
           <button className="btn-primary" onClick={logWeight} disabled={busy || !w}>Log</button>
