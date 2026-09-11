@@ -146,8 +146,23 @@ export default function ClientLayout() {
     nav(item.to);
   }, [nav]);
 
+  // WIDTH IS PER-ROUTE, and only widens on a genuinely large screen.
+  //
+  // Every client page is a single centred 512px column, which is right for
+  // a phone-first product and right for Home/Workout/Nutrition at any
+  // size -- they are task screens, not dashboards. Progress is the one
+  // exception: it is an analytics surface with charts that gain real
+  // information density from width, and squeezing 11 sections into 512px
+  // on a 27" monitor wastes the screen it is being read on.
+  //
+  // A first attempt put a fixed side rail INSIDE the 512px column, which
+  // collapsed the main column to ~180px and stacked the hero's stat
+  // labels on top of each other. The container has to widen first; the
+  // two-column layout is then Progress's own business.
+  const wide = loc.pathname.startsWith('/app/client/progress');
+
   return (
-    <div className="min-h-screen max-w-lg mx-auto px-4 pb-28 pt-0">
+    <div className={`min-h-screen mx-auto px-4 pb-28 pt-0 ${wide ? 'max-w-lg xl:max-w-6xl' : 'max-w-lg'}`}>
       {/* ── TOP HEADER ── */}
       <header className="app-header px-1">
         <div className="flex items-center justify-between gap-2">

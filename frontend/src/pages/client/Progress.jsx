@@ -500,7 +500,10 @@ function MetricExplorer({ intel, period }) {
                 aria-pressed={comparing}
                 className="rounded-full px-3 text-[10.5px] font-semibold transition-colors"
                 style={{
-                  minHeight: 30,
+                  // 44px: the brief's touch-target floor. This was 30px,
+                  // which is comfortable with a mouse and fiddly with a
+                  // thumb -- and this control lives on a phone-first page.
+                  minHeight: 44,
                   background: comparing ? 'var(--cta-solid)' : 'transparent',
                   color: comparing ? 'var(--cta-ink)' : 'var(--faint)',
                   border: `1px solid ${comparing ? 'var(--cta-edge)' : 'var(--line)'}`,
@@ -1328,14 +1331,22 @@ export default function Progress() {
 
 
   return (
-    // Deliberately ONE column at every width. A two-column desktop split
-    // was tried and reverted: this app's shell centres page content in a
-    // narrow mobile-first container, so a fixed side rail inside it
-    // collapsed the main column to ~180px on a real laptop -- the hero
-    // headline broke onto five lines and the stat labels overlapped each
-    // other. Every other client page is a single centred column too;
-    // matching that is both correct here and consistent with the product.
-    <div className="space-y-6 pb-4">
+    // ONE column up to xl, TWO beyond it.
+    //
+    // An earlier attempt split at lg (1024px) INSIDE the app's 512px
+    // shell, which left the main column ~180px wide: the hero headline
+    // broke onto five lines and the stat labels stacked on top of each
+    // other. The fix was not to abandon the idea but to widen the
+    // container first (see ClientLayout's per-route width) and only split
+    // once there is genuinely room -- at xl the content area is ~1152px,
+    // so a 340px rail still leaves the charts ~780px, wider than they
+    // ever get on a phone.
+    //
+    // Source order is the mobile order. The rail's contents are the
+    // reference material (what changed, goals, streaks, logging); the
+    // main column keeps everything you came to read.
+    <div className="space-y-6 pb-4 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start xl:gap-7 xl:space-y-0">
+      <div className="space-y-6">
       <div className="space-y-3">
         <Hero intel={intel} period={period} />
         <div role="tablist" aria-label="Time period" className="flex gap-1.5">
@@ -1404,16 +1415,22 @@ export default function Progress() {
       />
 
       <TransformationSection photos={legacy.data?.photos} Section={Section} />
+      </div>
 
-      <UnlockHealthData capabilities={caps} onConnect={() => nav('/app/client/health')} />
+      {/* Companion rail on xl; simply the next sections on anything
+          narrower, in the same order. Sticky so the reference material
+          stays put while the charts scroll. */}
+      <div className="space-y-6 xl:sticky xl:top-4">
+        <UnlockHealthData capabilities={caps} onConnect={() => nav('/app/client/health')} />
 
-      {clientId && (
-        <LogWeight
-          clientId={clientId}
-          current={intel.weight?.analysis?.current}
-          onLogged={() => { intelFetch.reload({ silent: true }); home.reload?.({ silent: true }); }}
-        />
-      )}
+        {clientId && (
+          <LogWeight
+            clientId={clientId}
+            current={intel.weight?.analysis?.current}
+            onLogged={() => { intelFetch.reload({ silent: true }); home.reload?.({ silent: true }); }}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -310,3 +310,47 @@ test('aggregates are NUMBERS even when the driver returns bigint as a string (PG
   for (const m of intel.training.byMuscle) assert.equal(typeof m.sets, 'number');
   assert.equal(typeof intel.capabilities.workouts.count, 'number');
 });
+
+test('a YEAR of data stays correct and fast, and long windows do not blow up', async () => {
+  const db = await memDb();
+  const ids = await seedClient(db, { targetWeight: 80 });
+  await db.run('INSERT INTO exercise_library (id, org_id, name, primary_muscle, equipment, movement, ex_type, is_global) VALUES (?,NULL,?,?,?,?,?,1)',
+    ['ex1', 'Bench Press', 'chest', 'barbell', 'horizontal_push', 'compound']);
+
+  // 365 days: a weigh-in every other day, training every third day.
+  const ts = new Date().toISOString();
+  for (let d = 364; d >= 0; d--) {
+    if (d % 2 === 0) await addWeight(db, d, 95 - (364 - d) * 0.03);
+    if (d % 3 === 0) {
+      await db.run('INSERT INTO workout_logs (id, client_id, exercise_id, date, sets_done, reps, weight, created_at) VALUES (?,?,?,?,?,?,?,?)',
+        [`wl${d}`, 'c1', 'ex1', dayKey(d), 4, 8, 60 + Math.floor((364 - d) / 30), ts]);
+    }
+  }
+
+  const started = Date.now();
+  const intel = await getProgressIntel(db, { userId: ids.userId, clientId: ids.clientId, days: 365 });
+  const elapsed = Date.now() - started;
+
+  assert.ok(intel.weight.series.length > 150, `a year of weigh-ins should survive, got ${intel.weight.series.length}`);
+  assert.equal(intel.weight.analysis.insufficient, false);
+  assert.ok(intel.weight.analysis.ratePerWeek < 0, 'a year-long downward trend reads as downward');
+  assert.ok(intel.training.sessions.length > 100, 'a year of training days');
+  // Strength progression must still resolve one entry per exercise, not
+  // one per session -- an O(n) mistake here shows up as 120 duplicates.
+  assert.equal(intel.strengthProgress.length, 1);
+  assert.ok(intel.strengthProgress[0].gain > 0, 'the year of added weight reads as a gain');
+  // Not a benchmark, a smoke alarm: this is all indexed reads and linear
+  // passes, so a year should be well under a second even on CI.
+  assert.ok(elapsed < 5000, `a year took ${elapsed}ms -- something is superlinear`);
+});
+
+test('one year of data still refuses to invent a trend for a metric with a single reading', async () => {
+  const db = await memDb();
+  const ids = await seedClient(db);
+  // A year of training, but the user weighed in exactly once.
+  await addWeight(db, 200, 90);
+  const intel = await getProgressIntel(db, { userId: ids.userId, clientId: ids.clientId, days: 365 });
+  assert.equal(intel.weight.analysis.insufficient, true);
+  assert.equal(intel.weight.analysis.reason, 'single_point');
+  assert.equal(intel.weight.analysis.ratePerWeek, null, 'a long window does not make one point a trend');
+});

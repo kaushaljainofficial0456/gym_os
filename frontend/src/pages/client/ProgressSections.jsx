@@ -407,7 +407,14 @@ export function StrengthProgressSection({ progress, Section, onSelect }) {
       title="Where your strength is moving"
       action={
         progress.length > 4 ? (
-          <button onClick={() => setShowAll((v) => !v)} className="text-[10.5px] font-semibold" style={{ color: 'var(--accent)' }}>
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="-my-2 px-2 py-2 text-[10.5px] font-semibold"
+            // Padding rather than a taller box: the control has to reach
+            // 44px of TAPPABLE area without pushing the section header
+            // apart, so the negative margin absorbs it back out of flow.
+            style={{ color: 'var(--accent)', minHeight: 44 }}
+          >
             {showAll ? 'Show less' : `All ${progress.length}`}
           </button>
         ) : null
