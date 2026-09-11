@@ -726,7 +726,7 @@ function PersonalRecords({ intel, sectionRef }) {
         <Card className="p-5 text-center">
           <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Your first PR will appear here</div>
           <div className="mt-1 text-[11.5px]" style={{ color: 'var(--faint)' }}>
-            Log a workout with weight and reps, and SK OS records your bests automatically.
+            Log a workout with weight and reps, and Barbell records your bests automatically.
           </div>
         </Card>
       </Section>
