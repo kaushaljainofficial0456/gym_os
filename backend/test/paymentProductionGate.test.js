@@ -29,6 +29,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -52,7 +53,19 @@ function loadConfig(extraEnv) {
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     const { config } = await import('file://${cfgPath}');
     console.log('BOOTED:' + config.nodeEnv);
-  `], { env, encoding: 'utf8', timeout: 10000 });
+  `], {
+    env,
+    // config.js starts with process.loadEnvFile(), which reads `.env` from
+    // the CHILD'S WORKING DIRECTORY. Inheriting the repo cwd meant the
+    // developer's own gitignored backend/.env leaked into a test whose
+    // entire purpose is to control exactly which payment vars are set --
+    // so on a machine with real Razorpay keys configured, the gate
+    // correctly reported fewer missing vars than the test demanded and
+    // these cases failed while the product was working. Running from a
+    // directory with no .env makes `env` above the whole truth.
+    cwd: os.tmpdir(),
+    encoding: 'utf8', timeout: 10000,
+  });
   return { status: child.status, stdout: child.stdout || '', stderr: child.stderr || '' };
 }
 
