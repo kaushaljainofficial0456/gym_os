@@ -54,11 +54,20 @@ const todayKey = () => {
 test("today's resting energy is recomputed from elapsed time, not served frozen from cache", async () => {
   const db = await memDb();
   // Written at ~2am: two hours of a 1800 kcal/day BMR.
-  await seedSummary(db, { date: todayKey(), restingWritten: 150, active: 0 });
+  // Seeded on the SAME day the read asks for -- see the note below.
+  await seedSummary(db, { date: new Date().toISOString().slice(0, 10), restingWritten: 150, active: 0 });
 
-  const served = await getDailyIntelligence(db, { userId: 'u1', date: todayKey(), tz: 'UTC' });
+  // ONE timezone throughout. This previously took the day key in the app
+  // default (Asia/Kolkata) but asked for it in UTC and baselined against
+  // UTC midnight -- so for the five and a half hours after Kolkata
+  // midnight, the "today" being requested was still tomorrow in UTC and
+  // elapsed time came out NEGATIVE. Production was right to refuse to
+  // prorate a date that is not today; the test was measuring against the
+  // wrong midnight.
+  const utcToday = new Date().toISOString().slice(0, 10);
+  const served = await getDailyIntelligence(db, { userId: 'u1', date: utcToday, tz: 'UTC' });
 
-  const hoursElapsed = (Date.now() - Date.parse(`${todayKey()}T00:00:00Z`)) / 3600000;
+  const hoursElapsed = (Date.now() - Date.parse(`${utcToday}T00:00:00Z`)) / 3600000;
   const expected = (BMR / 24) * hoursElapsed;
 
   assert.ok(

@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import AttendanceCard from '../../components/trainer/AttendanceCard.jsx';
+import { TrainerPulse, OwnerPulse } from '../../components/trainer/RosterPulse.jsx';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
@@ -65,6 +67,15 @@ export default function Dashboard() {
           The gradient-clipped name is gone: gradient text on a peach ground
           reads as washed-out rather than premium, and it put the visual
           emphasis on the trainer's own name, which is not information. */}
+      {/* Attendance sits directly under the greeting because checking in
+          is the first thing a trainer does on arriving -- ahead of any
+          dashboard metric, which is something they read, not something
+          they act on. Owners see it too: an owner who coaches still has
+          their own hours to record. */}
+      <Reveal>
+        <AttendanceCard />
+      </Reveal>
+
       <Reveal>
         <div className="flex items-end justify-between flex-wrap gap-4" data-tour="trainer-dashboard-hero">
           <div className="min-w-0">
@@ -96,8 +107,14 @@ export default function Dashboard() {
                 {(k.needsAttention + k.atRisk) === 1 ? 'client needs you today' : 'clients need you today'}
               </span>
             </div>
+            {/* fmt1(null) is "0.0", so an org with nothing logged yet
+                announced "0.0% average adherence" -- which reads as every
+                client having failed, not as the absence of data. Same
+                distinction the attention rows below already make. */}
             <div className="text-[11px] mt-1.5 tabular-nums" style={{ color: 'var(--faint)' }}>
-              {todayLabel} · {fmt1(k.avgAdherence)}% average adherence
+              {todayLabel} · {k.avgAdherence == null
+                ? 'no adherence logged yet'
+                : `${fmt1(k.avgAdherence)}% average adherence`}
             </div>
           </div>
         </div>
@@ -115,7 +132,15 @@ export default function Dashboard() {
         <Kpi label="Active clients" value={k.activeClients} sub={k.newClients != null ? `${k.newClients} new · ${k.inactive} inactive` : `${k.totalClients} total · ${k.inactive} inactive`} />
         <Kpi label="On track" value={k.onTrack} sub="adherence above 70%" />
         <Kpi label="Needs attention" value={k.needsAttention} dot="bg-bad" />
-        <Kpi label="At risk" value={k.atRisk} sub={`${k.attentionCount || ''} open alerts`} dot="bg-bad" />
+        {/* attentionCount is absent from the owner payload entirely, so
+            this rendered a bare " open alerts" with no number in front
+            of it. Only claim a count when there is one. */}
+        <Kpi
+          label="At risk"
+          value={k.atRisk}
+          sub={k.attentionCount ? `${k.attentionCount} open alerts` : undefined}
+          dot="bg-bad"
+        />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
@@ -169,19 +194,25 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* adherence trend */}
-        <Card className="lg:col-span-2 self-start">
-          <Kicker>Adherence trend · 14 days</Kicker>
-          {trendRows.some((t) => t.value > 0) ? <TrendChart data={trendRows} /> : <Skeleton lines={4} />}
-          <div className="grid grid-cols-3 gap-2 mt-3 text-center">
-            {[['ON TRACK', k.onTrack, 'text-good'], ['NEEDS ATTN', k.needsAttention, 'text-warn'], ['AT RISK', k.atRisk, 'text-bad']].map(([l, v, c]) => (
-              <div key={l} className="rounded-xl border border-line bg-tint/[.02] py-2.5">
-                <div className={`font-grotesk font-bold text-lg ${c}`}>{v}</div>
-                <div className="text-[9px] text-mute uppercase tracking-wider font-grotesk">{l}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
+        {/* Right rail: the trend, then whichever pulse this role's own
+            endpoint can actually populate.
+
+            The three ON TRACK / NEEDS ATTN / AT RISK boxes that used to
+            sit under the trend are gone -- they restated the KPI row
+            directly above them, and the same four counts now appear once,
+            proportionally, inside the pulse's roster bar. */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="self-start">
+            <Kicker>Adherence trend · 14 days</Kicker>
+            {trendRows.some((t) => t.value > 0)
+              ? <TrendChart data={trendRows} color="var(--m-training)" />
+              : <div className="text-[11.5px] py-6 text-center" style={{ color: 'var(--mute)' }}>
+                  No adherence logged in the last 14 days yet.
+                </div>}
+          </Card>
+
+          {isTrainerOnly ? <TrainerPulse k={k} /> : <OwnerPulse k={k} />}
+        </div>
       </div>
     </div>
   );

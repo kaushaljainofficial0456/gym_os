@@ -52,7 +52,7 @@ const PERIODS = [
 
 const INSIGHT_TONE = {
   positive: 'var(--good)',
-  milestone: 'var(--accent)',
+  milestone: 'var(--m-pr)',
   warning: 'var(--warn)',
   observation: 'var(--faint)',
 };
@@ -254,7 +254,11 @@ function useMetrics(intel) {
         key: 'weight', label: 'Weight', category: 'body', unit: 'kg', decimals: 1,
         series: intel.weight.series,
         goal: intel.weight.target ?? null,
-        color: 'var(--accent)',
+        // Every other series takes the hue of its declared category;
+        // these two were pinned to the theme accent, so the two most-
+        // looked-at charts on the page rendered in whatever colour the
+        // theme happened to be rather than their own.
+        color: 'var(--m-body)',
       });
     }
     const t = intel.training?.sessions || [];
@@ -306,7 +310,7 @@ function useMetrics(intel) {
       out.push({
         key: 'energy', label: 'Energy', category: 'energy', unit: 'kcal', decimals: 0,
         series: h.filter((d) => d.total_energy != null).map((d) => ({ date: d.date, value: d.total_energy })),
-        color: 'var(--accent)',
+        color: 'var(--m-energy)',
       });
     }
     if (caps.steps?.available) {
@@ -677,7 +681,7 @@ function PrDetail({ open, onClose, exercise }) {
                 Estimated 1RM progression
               </div>
               <MetricChart
-                points={series} markers={prMarkers} color="var(--accent)" unit="kg" decimals={1} height={170}
+                points={series} markers={prMarkers} color="var(--m-pr)" unit="kg" decimals={1} height={170}
                 ariaLabel={`Estimated one rep max progression for ${exercise.exercise}`}
               />
               <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
@@ -699,7 +703,7 @@ function PrDetail({ open, onClose, exercise }) {
                     <span>{relDay(h.date)}</span>
                     <span className="tabular-nums" style={{ color: 'var(--ink)' }}>
                       {n1(h.weight)} kg × {n0(h.reps)}{h.sets ? ` × ${h.sets}` : ''}
-                      {h.isPr && <span className="ml-1.5 text-[9.5px] font-bold" style={{ color: 'var(--accent)' }}>PR</span>}
+                      {h.isPr && <span className="ml-1.5 text-[9.5px] font-bold" style={{ color: 'var(--m-pr)' }}>PR</span>}
                     </span>
                   </div>
                 ))}
@@ -939,7 +943,7 @@ function ConsistencySection({ intel }) {
           {/* A zero streak is a KNOWN zero, not missing data, so it reads 0
               rather than the em-dash used for genuinely unknown values. */}
           <Stat label="Current streak" value={c.streak?.current ?? 0} unit="d"
-            tone={c.streak?.current ? 'var(--accent)' : undefined} />
+            tone={c.streak?.current ? 'var(--m-energy)' : undefined} />
           <Stat label="Best streak" value={c.streak?.best ?? 0} unit="d" />
           <Stat label="Training days" value={trained.size || 0} sub="12 weeks" />
         </div>
@@ -1318,7 +1322,7 @@ export default function Progress() {
 
   if (!hasAnything) {
     return (
-      <div className="space-y-4">
+      <div className="page-vivid space-y-4">
         <h1 className="text-[26px] font-black tracking-[-.03em]" style={{ color: 'var(--ink)' }}>Progress</h1>
         <Empty
           title="Nothing to show yet"
@@ -1345,7 +1349,7 @@ export default function Progress() {
     // Source order is the mobile order. The rail's contents are the
     // reference material (what changed, goals, streaks, logging); the
     // main column keeps everything you came to read.
-    <div className="space-y-6 pb-4 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start xl:gap-7 xl:space-y-0">
+    <div className="page-vivid space-y-6 pb-4 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start xl:gap-7 xl:space-y-0">
       <div className="space-y-6">
       <div className="space-y-3">
         <Hero intel={intel} period={period} />

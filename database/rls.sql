@@ -152,6 +152,16 @@ ALTER TABLE community_challenges FORCE ROW LEVEL SECURITY;
 -- social map of who pays attention to whom.
 ALTER TABLE community_follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_follows FORCE ROW LEVEL SECURITY;
+-- Trainer attendance is staff data: hours worked, lateness, corrections.
+-- It carries a NOT NULL org_id and must never be readable across gyms --
+-- a trainer working two gyms has two independent records and neither
+-- owner may see the other's.
+ALTER TABLE trainer_attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trainer_attendance FORCE ROW LEVEL SECURITY;
+ALTER TABLE trainer_shifts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trainer_shifts FORCE ROW LEVEL SECURITY;
+ALTER TABLE trainer_attendance_audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trainer_attendance_audit FORCE ROW LEVEL SECURITY;
 -- Share-link snapshots (routes/workoutShare.js, me.js's workout-share
 -- endpoints). org_id is always populated from the sharing client's own
 -- org at INSERT (me.js passes c.org_id), so the plain direct-org_id
@@ -234,6 +244,7 @@ BEGIN
     'ai_memory','ai_feedback',
     'community_members','community_workout_shares','shared_workouts',
     'community_reactions','community_comments','community_challenges','community_follows',
+    'trainer_attendance','trainer_shifts','trainer_attendance_audit',
     'health_provider_connections','health_records','health_canonical_workouts',
     'health_energy_intervals','health_daily_summaries'
   ] LOOP

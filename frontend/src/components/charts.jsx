@@ -1,6 +1,5 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { WEEKDAY } from '../utils.js';
-import { brand } from '../design/tokens.js';
 
 /**
  * Recharts renders its tooltip through an inline style object rather than a
@@ -121,16 +120,25 @@ export function WeekBars({ days, valueKey, max = 10, color = '#9B7CFF', format }
 }
 
 export function AdherenceBreakdown({ components }) {
-  const isLight = typeof document !== 'undefined' && document.documentElement.classList.contains('light');
+  /* These bars are plain divs, not Recharts, so they can read CSS
+     variables directly -- and should. The previous literals had two
+     problems: three of the six rows resolved to the SAME accent (workout,
+     nutrition and check-in were all terracotta-family), so a breakdown
+     whose entire purpose is telling components apart drew half of them
+     in one colour; and 'Protein' was hard-coded #FF8C42, a pure orange
+     that survived the dark-mode repaint because it never came from a
+     token at all.
+
+     Each component now takes the metric hue that already means that
+     thing everywhere else in the product, which makes the breakdown
+     both colourful and consistent with the rings and charts beside it. */
   const rows = [
-    // Series colours come from the token module, so a palette repaint moves
-    // the charts with it. Recharts needs literal colours, not var().
-    ['Workout', components?.workout, isLight ? brand.light.accentDeep : brand.dark.accentDeep],
-    ['Nutrition', components?.nutrition, isLight ? brand.light.accent : brand.dark.accent],
-    ['Protein', components?.protein, isLight ? '#E07020' : '#FF8C42'],
-    ['Water', components?.water, isLight ? brand.light.cyan : brand.dark.cyan],
-    ['Sleep', components?.sleep, isLight ? brand.light.violet : brand.dark.violet],
-    ['Check-in', components?.checkin, isLight ? brand.light.accent : brand.dark.accent]
+    ['Workout', components?.workout, 'var(--m-training)'],
+    ['Nutrition', components?.nutrition, 'var(--m-nutrition)'],
+    ['Protein', components?.protein, 'var(--m-body)'],
+    ['Water', components?.water, 'var(--m-recovery)'],
+    ['Sleep', components?.sleep, 'var(--m-strength)'],
+    ['Check-in', components?.checkin, 'var(--m-energy)']
   ].filter(r => r[1] !== null && r[1] !== undefined);
   return (
     <div className="space-y-2.5">

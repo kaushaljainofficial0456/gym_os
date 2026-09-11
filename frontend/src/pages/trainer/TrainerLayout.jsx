@@ -30,6 +30,15 @@ const ICON_PATHS = {
   alert: 'M12 3 2 20h20L12 3ZM12 9v5M12 17h.01',
   chart: 'M4 20V13M11 20V6M18 20v-9',
   mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
+  /* 'calendar' was referenced by the Attendance nav item but never
+     defined here, so Icon fell through to ICON_PATHS.grid and Attendance
+     wore the Dashboard's icon -- two different destinations, one glyph. */
+  calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
+  whistle: 'M11 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM15 12l6-2M15 12V7a2 2 0 0 1 2-2h2',
+  /* Distinct from 'chart', which Reports already owns. Two nav rows
+     wearing the same glyph is the same defect as the missing calendar
+     icon above -- different destinations must not look identical. */
+  analytics: 'M3 3v18h18M7 15l4-5 3 3 5-7',
   business: 'M4 21V9l8-5 8 5v12M9 21v-6h6v6',
   enterprise: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M9 11h.01M9 8h.01M15 11h.01M15 8h.01',
   menu: 'M4 7h16M4 12h16M4 17h16',
@@ -71,8 +80,26 @@ export default function TrainerLayout() {
     window.addEventListener('sk-os:start-tour', startTour);
     return () => window.removeEventListener('sk-os:start-tour', startTour);
   }, []);
+  // Trainer attendance is an OWNER tool: it is about staff hours, and a
+  // trainer's own attendance lives on their home screen where they check
+  // in, not behind a management page listing their colleagues.
+  /* An owner was given ten flat nav items with coaching tools and
+     business tools interleaved -- Clients sat next to Alerts sat next to
+     Enterprise, all weighted identically, so finding anything meant
+     reading the whole list every time. A trainer's seven are a coherent
+     set and stay flat; an owner's split into the two jobs they actually
+     switch between. */
   const links = isOwner
-    ? [...NAV, { to: '/app/trainer/business', label: 'Business', icon: 'business' }, { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' }]
+    ? [
+        { section: 'Coaching' },
+        ...NAV,
+        { section: 'Running the gym' },
+        { to: '/app/trainer/trainers', label: 'Trainers', icon: 'whistle' },
+        { to: '/app/trainer/analytics', label: 'Analytics', icon: 'analytics' },
+        { to: '/app/trainer/attendance', label: 'Attendance', icon: 'calendar' },
+        { to: '/app/trainer/business', label: 'Business', icon: 'business' },
+        { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' },
+      ]
     : NAV;
 
   /* Closed by default, on every screen size — the sidebar used to sit

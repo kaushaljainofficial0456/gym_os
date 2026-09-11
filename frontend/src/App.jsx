@@ -50,6 +50,9 @@ const Community = lazy(() => import('./pages/client/Community.jsx'));
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
+const GymAttendance = lazy(() => import('./pages/trainer/GymAttendance.jsx'));
+const Trainers = lazy(() => import('./pages/trainer/Trainers.jsx'));
+const Analytics = lazy(() => import('./pages/trainer/Analytics.jsx'));
 const HealthDevices = lazy(() => import('./pages/client/HealthDevices.jsx'));
 const BurnDetail = lazy(() => import('./pages/client/BurnDetail.jsx'));
 // Design-system showcase — same treatment it already had.
@@ -168,6 +171,9 @@ export default function App() {
         <Route path="alerts" element={page(Alerts)} />
         <Route path="reports" element={page(Reports)} />
         <Route path="messages" element={page(Messages)} />
+        <Route path="attendance" element={page(GymAttendance)} />
+        <Route path="trainers" element={page(Trainers)} />
+        <Route path="analytics" element={page(Analytics)} />
         <Route path="business" element={page(Business)} />
         {/* Enterprise: SK OS billing THIS gym (packages/QR/upgrades) --
             distinct from Business above (this gym billing ITS OWN

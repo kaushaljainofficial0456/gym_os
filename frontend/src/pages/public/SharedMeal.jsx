@@ -49,7 +49,15 @@ export default function SharedMeal() {
   const mute = dark ? 'rgba(245,240,236,.6)' : 'rgba(36,28,22,.6)';
   const cardBg = dark ? 'rgba(255,255,255,.04)' : '#fff';
   const border = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)';
-  const accent = '#FF6A3D';
+  /* Was a hard-coded #FF6A3D on both share pages -- the terracotta brand
+     the app dropped two repaints ago, and the single loudest colour on a
+     dark screen. These pages are standalone (literals, not CSS
+     variables, because they render outside the themed app shell), so the
+     accent is paired with the ink that belongs ON it: white text is
+     unreadable on platinum, which is what a naive swap would have left
+     on the primary button. */
+  const accent = dark ? '#B4C2CE' : '#55663D';
+  const onAccent = dark ? '#10151A' : '#FFFFFF';
 
   if (error) {
     return (
