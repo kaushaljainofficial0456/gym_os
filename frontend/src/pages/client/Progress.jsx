@@ -37,6 +37,7 @@ import { useFetch } from '../../utils.js';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 import { WeekSection, MeasurementsSection, AchievementsSection, StrengthProgressSection } from './ProgressSections.jsx';
+import { RecoverySection, TransformationSection } from './ProgressRecovery.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
 
@@ -259,11 +260,11 @@ function useMetrics(intel) {
     if (t.length) {
       out.push({
         key: 'volume', label: 'Volume', category: 'training', unit: 'kg', decimals: 0,
-        series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--m-training)',
+        series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--m-training)', variant: 'bar',
       });
       out.push({
         key: 'sets', label: 'Sets', category: 'training', unit: '', decimals: 0,
-        series: t.map((s) => ({ date: s.date, value: s.sets })), color: 'var(--m-training)',
+        series: t.map((s) => ({ date: s.date, value: s.sets })), color: 'var(--m-training)', variant: 'bar',
       });
     }
     const nu = intel.nutrition?.days || [];
@@ -339,6 +340,7 @@ function MetricExplorer({ intel, period }) {
   const activeCat = cat && categories.some((c) => c.key === cat) ? cat : categories[0]?.key;
   const inCat = metrics.filter((m) => m.category === activeCat);
   const [metricKey, setMetricKey] = useState(null);
+  const [comparing, setComparing] = useState(false);
   const active = inCat.find((m) => m.key === metricKey) || inCat[0];
 
   if (!metrics.length) return null;
@@ -351,7 +353,23 @@ function MetricExplorer({ intel, period }) {
     return s.filter((p) => Date.parse(`${p.date}T00:00:00Z`) >= lastMs - (period - 1) * 86400000);
   }, [active, period]);
 
+  // The window immediately BEFORE the current one, never overlapping it.
+  // Same length, so laying them over each other compares like with like.
+  const previous = useMemo(() => {
+    if (!comparing || !active) return [];
+    const all = active.series;
+    if (!all.length) return [];
+    const lastMs = Date.parse(`${all[all.length - 1].date}T00:00:00Z`);
+    const curFrom = lastMs - (period - 1) * 86400000;
+    const prevFrom = curFrom - period * 86400000;
+    return all.filter((p) => {
+      const t = Date.parse(`${p.date}T00:00:00Z`);
+      return t >= prevFrom && t < curFrom;
+    });
+  }, [comparing, active, period]);
+
   const a = localAnalyze(windowed);
+  const prevA = localAnalyze(previous);
   const smoothed = useMemo(() => {
     if (windowed.length < 5) return [];
     const half = 3;
@@ -376,6 +394,24 @@ function MetricExplorer({ intel, period }) {
 
         {active && windowed.length > 0 ? (
           <>
+            {/* Compare is opt-in rather than always on: a second line on
+                every chart by default doubles the ink for a question the
+                user has not asked yet. */}
+            <div className="mt-2.5 flex items-center justify-end">
+              <button
+                onClick={() => setComparing((v) => !v)}
+                aria-pressed={comparing}
+                className="rounded-full px-3 text-[10.5px] font-semibold transition-colors"
+                style={{
+                  minHeight: 30,
+                  background: comparing ? 'var(--cta-solid)' : 'transparent',
+                  color: comparing ? 'var(--cta-ink)' : 'var(--faint)',
+                  border: `1px solid ${comparing ? 'var(--cta-edge)' : 'var(--line)'}`,
+                }}
+              >
+                Compare previous {period}d
+              </button>
+            </div>
             <div className="mt-3 flex items-end justify-between gap-3">
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>{active.label}</div>
@@ -399,7 +435,9 @@ function MetricExplorer({ intel, period }) {
             <div className="mt-2">
               <MetricChart
                 points={windowed}
-                smoothed={smoothed}
+                smoothed={comparing ? [] : smoothed}
+                compare={previous}
+                variant={active.variant || 'line'}
                 goal={active.goal}
                 color={active.color}
                 unit={active.unit}
@@ -407,6 +445,40 @@ function MetricExplorer({ intel, period }) {
                 ariaLabel={`${active.label} over the last ${period} days`}
               />
             </div>
+
+            {/* The comparison only means something once there IS a previous
+                window with data in it -- otherwise say so rather than
+                drawing an empty dashed line and leaving the user to guess. */}
+            {comparing && (
+              <div className="mt-2 rounded-[var(--r-sm)] px-3 py-2" style={{ background: 'var(--bg2)' }}>
+                {prevA ? (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                      Previous {period}d averaged{' '}
+                      <strong style={{ color: 'var(--mute)' }}>
+                        {active.decimals ? n1(prevA.average) : fmtNum(n0(prevA.average))} {active.unit}
+                      </strong>
+                    </span>
+                    {(() => {
+                      const d = a.average - prevA.average;
+                      const pct = prevA.average !== 0 ? (d / Math.abs(prevA.average)) * 100 : null;
+                      const better = active.key === 'weight' ? d < 0 : d > 0;
+                      return (
+                        <span className="shrink-0 text-[11.5px] font-bold tabular-nums"
+                          style={{ color: d === 0 ? 'var(--faint)' : better ? 'var(--good)' : 'var(--warn)' }}>
+                          {d > 0 ? '+' : ''}{active.decimals ? n1(d) : fmtNum(n0(d))}
+                          {pct != null && ` (${d > 0 ? '+' : ''}${n1(pct)}%)`}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <span className="text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                    No data in the previous {period} days yet — nothing to compare against.
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="mt-3 grid grid-cols-4 gap-2 border-t pt-3" style={{ borderColor: 'var(--line)' }}>
               <Stat label="Average" value={active.decimals ? n1(a.average) : fmtNum(n0(a.average))} />
@@ -1105,6 +1177,8 @@ export default function Progress() {
         </div>
       </div>
 
+      <RecoverySection intel={intel} Section={Section} Stat={Stat} />
+
       <MetricExplorer intel={intel} period={period} />
 
       <InsightsSection insights={intel.insights} />
@@ -1119,7 +1193,7 @@ export default function Progress() {
 
       <TrainingSection intel={intel} period={period} />
 
-      <AchievementsSection intel={intel} Section={Section} Ring={Ring} Icon={Icon} />
+      <AchievementsSection intel={intel} Section={Section} />
 
       <NutritionSection intel={intel} />
 
@@ -1144,7 +1218,7 @@ export default function Progress() {
           || (deepExerciseId ? { exerciseId: deepExerciseId, exercise: (intel.strengthProgress || []).find((p) => p.exerciseId === deepExerciseId)?.exercise || 'Exercise', records: {} } : null)}
       />
 
-      <PhotosSection photos={legacy.data?.photos} />
+      <TransformationSection photos={legacy.data?.photos} Section={Section} />
 
       <UnlockHealthData capabilities={caps} onConnect={() => nav('/app/client/health')} />
 

@@ -47,6 +47,8 @@ export default function MetricChart({
   smoothed = [],          // optional rolling-average overlay
   goal = null,            // optional horizontal target line
   markers = [],           // [{ date, label }] e.g. PR dates
+  compare = [],           // previous period, drawn muted behind the current one
+  variant = 'line',       // 'line' | 'bar' -- bars for discrete daily counts
   color = 'var(--accent)',
   unit = '',
   height = 190,
@@ -82,7 +84,9 @@ export default function MetricChart({
     if (!points.length) return null;
     const xs = points.map((p) => Date.parse(`${p.date}T00:00:00Z`));
     const ys = points.map((p) => p.value);
-    const allY = goal != null ? [...ys, goal] : ys;
+    // The comparison window must share the current window's scale, or the
+    // two lines look identical at different magnitudes.
+    const allY = [...ys, ...(goal != null ? [goal] : []), ...compare.map((p) => p.value)];
     let minY = Math.min(...allY);
     let maxY = Math.max(...allY);
     if (minY === maxY) { minY -= 1; maxY += 1; }          // a flat series still needs a band
@@ -107,8 +111,28 @@ export default function MetricChart({
       .filter((c) => Number.isFinite(c.x) && Number.isFinite(c.y));
     const smoothLine = smoothCoords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' ');
 
+    // The comparison period is drawn on the SAME x-range as the current
+    // one rather than at its own real dates -- the point is to lay the two
+    // windows over each other, so day 1 sits above day 1. Its real dates
+    // still travel with each point for the scrub readout.
+    const cmp = compare.length
+      ? compare.map((p, i) => {
+        const ratio = compare.length === 1 ? 0 : i / (compare.length - 1);
+        return { ...p, x: PAD.left + ratio * (W - PAD.left - PAD.right), y: py(p.value) };
+      })
+      : [];
+    const compareLine = cmp.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' ');
+
+    // Bars for discrete daily counts: a line implies a continuous quantity
+    // between readings, which is wrong for "sets done that day".
+    const slot = coords.length ? (W - PAD.left - PAD.right) / Math.max(coords.length, 1) : 0;
+    const barW = Math.max(2, Math.min(14, slot * 0.62));
+    const bars = coords.map((c) => ({
+      ...c, bx: c.x - barW / 2, bw: barW, bh: Math.max(0, (H - PAD.bottom) - c.y),
+    }));
+
     return {
-      coords, line, area, smoothLine, W, H, minY, maxY,
+      coords, line, area, smoothLine, compareLine, bars, barW, W, H, minY, maxY,
       goalY: goal != null ? py(goal) : null,
       markerCoords: markers
         .map((m) => {
@@ -119,7 +143,7 @@ export default function MetricChart({
         })
         .filter(Boolean),
     };
-  }, [points, smoothed, goal, markers, height, width]);
+  }, [points, smoothed, goal, markers, height, width, compare, variant]);
 
   if (!geom) return null;
 
@@ -174,7 +198,26 @@ export default function MetricChart({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${geom.W} ${geom.H}`}
-        style={{ width: '100%', height, display: 'block', touchAction: 'pan-y' }}
+        style={{ width: '100%', height, display: 'block', touchAction: 'pan-y', outlineOffset: 2 }}
+        // KEYBOARD ACCESS. The chart was pointer-only, so its values were
+        // unreachable without a mouse or touch -- and the scrub readout is
+        // the ONLY place exact per-day figures appear. Arrow keys step
+        // through readings, Home/End jump to the ends, Escape clears.
+        tabIndex={0}
+        onFocus={() => setActive((a) => (a == null ? geom.coords.length - 1 : a))}
+        onBlur={() => setActive(null)}
+        onKeyDown={(e) => {
+          const last = geom.coords.length - 1;
+          const step = (delta) => {
+            e.preventDefault();
+            setActive((a) => Math.max(0, Math.min(last, (a == null ? last : a) + delta)));
+          };
+          if (e.key === 'ArrowRight') step(1);
+          else if (e.key === 'ArrowLeft') step(-1);
+          else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
+          else if (e.key === 'End') { e.preventDefault(); setActive(last); }
+          else if (e.key === 'Escape') setActive(null);
+        }}
         role="img"
         aria-label={ariaLabel || `Chart of ${points.length} readings from ${fmtDate(points[0].date)} to ${fmtDate(points[points.length - 1].date)}`}
         onMouseMove={(e) => onScrub(e.clientX)}
@@ -203,7 +246,14 @@ export default function MetricChart({
           />
         )}
 
-        {geom.area && <path d={geom.area} fill={`url(#g${gradId})`} />}
+        {/* Previous period first, so the current one reads on top of it.
+            Dashed and faint: it is context, not a second headline. */}
+        {geom.compareLine && (
+          <path d={geom.compareLine} fill="none" stroke="var(--faint)" strokeWidth="1.5"
+            strokeDasharray="4 4" vectorEffect="non-scaling-stroke" strokeLinejoin="round" opacity="0.7" />
+        )}
+
+        {variant !== 'bar' && geom.area && <path d={geom.area} fill={`url(#g${gradId})`} />}
 
         {/* The smoothed trend sits UNDER the raw line and is visually
             quieter: it is an interpretation, the raw line is the record. */}
@@ -212,14 +262,24 @@ export default function MetricChart({
             strokeDasharray="4 3" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
         )}
 
-        <path
-          d={geom.line} fill="none" stroke={color} strokeWidth="2"
-          vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"
-          // pathLength normalises every series to the same 1000 units so one
-          // CSS draw rule works regardless of how long the real path is.
-          pathLength="1000"
-          className="metric-chart-line"
-        />
+        {variant === 'bar' ? (
+          geom.bars.map((b, i) => (
+            <rect
+              key={`b${i}`} x={b.bx} y={b.y} width={b.bw} height={b.bh}
+              rx={Math.min(2, b.bw / 3)} fill={color}
+              opacity={active != null && active !== i ? 0.45 : 0.9}
+            />
+          ))
+        ) : (
+          <path
+            d={geom.line} fill="none" stroke={color} strokeWidth="2"
+            vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"
+            // pathLength normalises every series to the same 1000 units so one
+            // CSS draw rule works regardless of how long the real path is.
+            pathLength="1000"
+            className="metric-chart-line"
+          />
+        )}
 
         {geom.markerCoords.map((m, i) => (
           <circle key={`mk${i}`} cx={m.x} cy={m.y} r="4" fill="var(--bg)" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
@@ -231,7 +291,7 @@ export default function MetricChart({
           <circle cx={geom.coords[0].x} cy={geom.coords[0].y} r="4.5" fill={color} />
         )}
 
-        {point && (
+        {point && variant !== 'bar' && (
           <>
             <line x1={point.x} y1={PAD.top} x2={point.x} y2={geom.H - PAD.bottom}
               stroke={color} strokeWidth="1" opacity="0.45" vectorEffect="non-scaling-stroke" />

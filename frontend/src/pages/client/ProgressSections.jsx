@@ -10,6 +10,8 @@
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { Card } from '../../components/UI.jsx';
+import Icon from '../../components/Icon.jsx';
+import Ring from '../../components/Ring.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 
 const n1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
@@ -250,7 +252,7 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
  * and it also tells the user what they haven't done, which is the opposite
  * of the point. If none are earned yet the section doesn't render at all.
  */
-export function AchievementsSection({ intel, Section, Ring, Icon }) {
+export function AchievementsSection({ intel, Section }) {
   const w = intel.weight?.analysis;
   const lost = w && w.change != null && w.change < 0 ? Math.abs(w.change) : 0;
   const trained = intel.consistency?.trainedDays?.length || 0;
