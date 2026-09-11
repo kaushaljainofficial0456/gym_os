@@ -22,7 +22,7 @@
 import crypto from 'node:crypto';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'SK OS <onboarding@resend.dev>';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Barbell <onboarding@resend.dev>';
 const REQUESTED_PROVIDER = (process.env.EMAIL_PROVIDER || 'mock').toLowerCase();
 
 export function providerName() {

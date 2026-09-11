@@ -17,10 +17,25 @@ const { estimateFood } = await import('../src/services/foodEstimator.js');
 
 // ---------- helpers ----------
 
-/** Find the first item whose name matches the given substring (case-insensitive). */
+/**
+ * Find the first item for the given query term (case-insensitive): matched
+ * either on the RESOLVED food's name or on the fragment it was matched from.
+ *
+ * The fragment is checked because the resolved name legitimately need not
+ * contain the queried word -- resolving through a synonym is the alias
+ * system working, not failing. "curd" resolves to the row named "Dahi"
+ * (which is what food_aliases.json's own curated `curd` entry points at, and
+ * is better data than the branded "Curd" rows it outranks: 60 kcal/P3.6
+ * against HATSUN's 65 kcal/P9.4, where ~3.5 g protein is the real figure).
+ * Asserting on the resolved name alone made this helper a de-facto
+ * "never improve a match" lock; `matched_from` states the actual intent --
+ * this fragment of the user's sentence produced an item.
+ */
 function findItem(result, nameSubstr) {
+  const needle = nameSubstr.toLowerCase();
   return result.items.find(
-    (i) => i.name.toLowerCase().includes(nameSubstr.toLowerCase())
+    (i) => i.name.toLowerCase().includes(needle)
+        || String(i.matched_from || '').toLowerCase().includes(needle)
   );
 }
 

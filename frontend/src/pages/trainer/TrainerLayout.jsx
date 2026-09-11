@@ -6,6 +6,7 @@ import LineNavList from '../../components/LineNavList.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import { Avatar } from '../../components/UI.jsx';
+import Logo from '../../components/Logo.jsx';
 import '../../components/LineNavList.css';
 
 const NAV = [
@@ -114,8 +115,8 @@ export default function TrainerLayout() {
           </motion.span>
         </button>
         <button className="flex items-center gap-2 min-w-0" onClick={() => nav('/app/trainer')}>
-          <img src="/logo.png" alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover shrink-0" />
-          <span className="font-brand text-[13px] font-bold leading-none shrink-0">SK OS</span>
+          <Logo alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover shrink-0" />
+          <span className="font-brand text-[13px] font-bold leading-none shrink-0">Barbell</span>
           {/* `truncate` matters: a long gym name pushed the wordmark out of
               the bar entirely at 375px. */}
           <span className="text-[10px] tracking-[.16em] uppercase truncate" style={{ color: 'var(--faint)' }}>
@@ -161,9 +162,9 @@ export default function TrainerLayout() {
           >
             <div className="flex items-center justify-between mb-6 px-1">
               <button className="flex items-center gap-2.5" onClick={() => { nav('/app/trainer'); setNavOpen(false); }}>
-                <img src="/logo.png" alt="SK OS" className="w-9 h-9 rounded-xl object-cover" />
+                <Logo className="w-9 h-9 rounded-xl object-cover" />
                 <div className="text-left">
-                  <div className="font-brand text-[13px] font-bold leading-none">SK OS</div>
+                  <div className="font-brand text-[13px] font-bold leading-none">Barbell</div>
                   <div className="text-[9px] tracking-[.2em] mt-1 uppercase" style={{ color: 'var(--faint)' }}>
                     {user?.orgName || 'Workspace'}
                   </div>

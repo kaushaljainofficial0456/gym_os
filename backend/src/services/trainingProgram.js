@@ -74,8 +74,21 @@ export async function ensureTodayWorkout(db, clientId, tz) {
     }
   }
 
+  // Rest day (no training-day template for today): resume the most recent
+  // still-pending workout instead of showing nothing. `created_at DESC` is
+  // a deliberate tiebreaker -- without it, two rows sharing the same
+  // scheduled_date (confirmed live: seed data can carry more than one
+  // 'assigned' workout dated the same day) sort in whatever order SQLite's
+  // query plan happens to produce, which is not guaranteed stable across
+  // separate connections/requests. That's the actual mechanism behind a
+  // real bug hit while testing this: /tracking/me/home and
+  // /tracking/me/today, called moments apart with no write in between,
+  // resolved "today's" workout to two DIFFERENT rows -- Home's dashboard
+  // and the Workout page disagreed about which session was "today's",
+  // even though both call this exact function. Tiebreaking on created_at
+  // makes every caller agree on the same row deterministically.
   w = await db.q1(
-    `SELECT * FROM workouts WHERE client_id = ? AND status = 'assigned' ORDER BY scheduled_date DESC LIMIT 1`,
+    `SELECT * FROM workouts WHERE client_id = ? AND status = 'assigned' ORDER BY scheduled_date DESC, created_at DESC LIMIT 1`,
     [clientId]);
   return w || null;
 }

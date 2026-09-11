@@ -60,7 +60,25 @@ export async function evaluatePRs(db, clientId, exerciseId, sets, date) {
   const existing = await db.q(
     'SELECT type, value FROM personal_records WHERE client_id = ? AND exercise_id = ?', [clientId, exerciseId]);
   const existingByType = new Map(existing.map(e => [e.type, e.value]));
-  const baseline = existing.length === 0 ? await historyBaseline(db, clientId, exerciseId, date) : {};
+  // Baseline from pre-existing workout_logs history, consulted PER TYPE --
+  // NOT gated on whether this exercise has ANY personal_records row at all.
+  // The 4 types are independent (a session can beat best_reps without
+  // beating heaviest_weight), so one type earning its first row must not
+  // silently disable the history fallback for a DIFFERENT type that still
+  // has none. Found live: a client with a genuine historical deadlift best
+  // of 85kg got best_reps/best_volume rows from a 60kg session (their first
+  // evaluation ever, existing.length was 0, so history WAS consulted and
+  // correctly suppressed a heaviest_weight/est_1rm PR for that low weight).
+  // The VERY NEXT session at 70kg -- still 15kg under the true best --
+  // re-evaluated with existing.length now 2 (nonzero), so history was
+  // skipped entirely, heaviest_weight/est_1rm had no row of their own to
+  // compare against, and the client got a false "New Personal Record:
+  // Heaviest weight 70kg" notification for a lift 15kg below their actual
+  // best. Only computed when at least one type genuinely lacks a row, so
+  // this costs nothing extra in the common case where every type already
+  // has one.
+  const needsBaseline = PR_TYPES.some(({ type }) => candidates[type] && !existingByType.has(type));
+  const baseline = needsBaseline ? await historyBaseline(db, clientId, exerciseId, date) : {};
   for (const { type, label } of PR_TYPES) {
     const cand = candidates[type];
     if (!cand) continue;

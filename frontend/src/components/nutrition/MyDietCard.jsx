@@ -141,7 +141,12 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
 
   const removeFood = async (food) => {
     setFoods((fs) => fs.filter((f) => f.id !== food.id));
-    try { await api(`/me/foods/${food.id}`, { method: 'DELETE' }); } catch { load(); }
+    // Was `catch { load(); }` -- on a failed delete the food silently
+    // reappeared a moment later (via load()) with no explanation, same
+    // "the app randomly undid my tap" bug already fixed for toggleMeal/
+    // addWater in Nutrition.jsx. saveFoodQuantity below already gets this
+    // right; removeFood/removeMeal were the two spots that didn't.
+    try { await api(`/me/foods/${food.id}`, { method: 'DELETE' }); } catch (e) { toast(e.message || 'Could not remove that food'); load(); }
   };
 
   // PERMANENT quantity edit -- the saved template only. Never touches
@@ -191,7 +196,8 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
 
   const removeMeal = async (meal) => {
     setMeals((ms) => ms.filter((m) => m.id !== meal.id));
-    try { await api(`/me/meals/${meal.id}`, { method: 'DELETE' }); } catch { load(); }
+    // Same fix as removeFood above.
+    try { await api(`/me/meals/${meal.id}`, { method: 'DELETE' }); } catch (e) { toast(e.message || 'Could not remove that meal'); load(); }
   };
 
   /** Save Changes: actually FLUSHES every pending quantity edit, waits for

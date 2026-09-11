@@ -16,16 +16,32 @@ export async function searchFoods(db, orgId, clientId, q, { limit = 8 } = {}) {
       `SELECT * FROM foods WHERE is_global = 1 ORDER BY name LIMIT ?`, [lim]);
   } else {
     const like = `%${term.toLowerCase()}%`;
-    // 1) name match (all scopes visible to this client)
+    const starts = `${term.toLowerCase()}%`;
+    /* The name filter and the VISIBILITY filter must be ANDed, not ORed.
+       As `name LIKE ? OR is_global = 1 OR ...` every global row satisfied the
+       clause on its own, so the query term did nothing to narrow the result:
+       any search returned the alphabetically-first global foods padded in
+       behind whatever genuinely matched. It also broke the alias fallback
+       below, which only runs when fewer than 3 rows came back -- with every
+       global row always matching, `rows.length` was effectively always the
+       limit, so the alias branch was unreachable dead code and "dahi" could
+       never resolve to curd.
+
+       Ranking, rather than plain alphabetical: exact name first, then names
+       that START with the term, then the rest -- "Curd" should outrank
+       "Curd rice" for the query "curd", which ORDER BY name alone reversed. */
     rows = await db.q(
       `SELECT * FROM foods
         WHERE LOWER(name) LIKE ?
-           OR (is_global = 1)
-           OR (org_id = ? AND client_id IS NULL)
-           OR (client_id = ?)
-       ORDER BY CASE WHEN LOWER(name) LIKE ? THEN 0 ELSE 1 END, name
+          AND (is_global = 1
+               OR (org_id = ? AND client_id IS NULL)
+               OR client_id = ?)
+       ORDER BY CASE WHEN LOWER(name) = ? THEN 0
+                     WHEN LOWER(name) LIKE ? THEN 1
+                     ELSE 2 END,
+                LENGTH(name), name
        LIMIT ?`,
-      [like, orgId, clientId, `%${term.toLowerCase()}%`, lim]);
+      [like, orgId, clientId, term.toLowerCase(), starts, lim]);
     if (rows.length < 3) {
       // 2) alias match — resolve to the food
       const aliased = await db.q(

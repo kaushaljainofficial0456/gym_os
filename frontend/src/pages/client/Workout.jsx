@@ -901,10 +901,31 @@ export default function Workout() {
         }),
       });
       const volume = logs.reduce((s, l) => s + l.sets.reduce((a, st) => a + (st.actual_reps * st.actual_weight), 0), 0);
-      // duration_min from server uses our active duration_seconds when provided.
-      // Fall back to local active duration if backend did not compute it.
+      // duration_min is server-authoritative (completed_at − started_at,
+      // minus paused time). Fall back to the local active duration --
+      // activeMs above, which already subtracts finalPausedMs -- only if
+      // the backend did not compute it; a raw Date.now()-startedAt fallback
+      // would overcount by however long the session was paused.
       const durationMin = res.duration_min ?? Math.max(1, Math.round(activeMs / 60000));
-      setResult({ prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null });
+      // name: workout.name is snapshotted HERE, not read live from
+      // `workout` on the summary screen -- `workout` is derived from
+      // `today.data`, and the `today.reload({ silent: true })` a few
+      // lines below (needed so browse mode shows the NEXT session once the
+      // user leaves this screen) replaces `today.data.workout` with
+      // whatever /tracking/me/today resolves to next, while the summary
+      // is still mounted and reading it live. Found live: completing
+      // "Leg Day" showed a summary titled "Pull Day" -- the name of the
+      // session that became "today's" AFTER this one was marked
+      // completed, not the one actually just finished.
+      // workoutId/exerciseList are likewise snapshotted for the same reason
+      // as `name` above: the Share buttons below pass workout.id/exercises
+      // (the live, about-to-be-swapped values) straight into the share
+      // request/sheet -- without this, "Share Workout" from the summary
+      // screen would share the NEXT session (id and all), not the one the
+      // user just finished. `state` (not `exercises`) is the right source:
+      // it's the exact same prescription array already used to build
+      // `logs` above, i.e. what this completed session actually was.
+      setResult({ name: workout.name, workoutId: workout.id, exerciseList: state, prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null });
       setMode('summary');
 
       /* Calorie burn (skos-cal-v1) needs an intensity rating -- see
@@ -2663,7 +2684,7 @@ export default function Workout() {
             </svg>
           </div>
           <h1 className="font-grotesk font-bold text-2xl mt-3">Workout complete</h1>
-          <div className="text-xs text-mute mt-1">{workout?.name}</div>
+          <div className="text-xs text-mute mt-1">{result?.name}</div>
           <div className="grid grid-cols-3 gap-2 mt-5">
             {[
               ['Duration', result?.durationMin != null ? `${result.durationMin} min` : '—'],
@@ -2734,7 +2755,7 @@ export default function Workout() {
                   what produced the number above); upgrades in place if a
                   connected wearable's own reading for this session arrives. */}
               <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
-                Source: {burnSource || 'Estimated by SK OS'}
+                Source: {burnSource || 'Estimated by Barbell'}
               </div>
               {/* The model's own caveats, surfaced rather than swallowed. An
                   estimate it has flagged as shaky must not read as clean. */}
@@ -2820,11 +2841,17 @@ export default function Workout() {
               different-looking calorie figures a few pixels apart. One
               honest range beats two numbers that disagree. */}
 
-          {/* Share Workout — personal link sharing */}
-          {workout?.id && (
+          {/* Share Workout — personal link sharing.
+              result?.workoutId/name/exerciseList (snapshotted in
+              finishWorkout, not the live workout?.id/name/exercises) --
+              see the comment there: `workout` gets swapped out from under
+              this screen by today.reload() a few lines after this summary
+              is shown, so the live values would share the NEXT session
+              instead of the one just completed. */}
+          {result?.workoutId && (
             <button
               className="btn w-full mt-3 flex items-center justify-center gap-2"
-              onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}>
+              onClick={() => { setShareSheetData({ workoutId: result.workoutId, workoutName: result.name, exercises: result.exerciseList || [] }); setShareSheetOpen(true); }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
               </svg>
@@ -2832,7 +2859,7 @@ export default function Workout() {
             </button>
           )}
           {/* Share to Community — gym community feed (separate from personal link sharing) */}
-          {workout?.id && (
+          {result?.workoutId && (
             <button
               className="btn w-full mt-2 flex items-center justify-center gap-2"
               disabled={sharing}
@@ -2841,7 +2868,7 @@ export default function Workout() {
                 try {
                   await api('/community/shares', {
                     method: 'POST',
-                    body: JSON.stringify({ workout_id: workout.id }),
+                    body: JSON.stringify({ workout_id: result.workoutId }),
                   });
                   setShareToast('Workout shared with your gym!');
                 } catch (e) {

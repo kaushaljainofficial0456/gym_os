@@ -40,6 +40,28 @@ function dig(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
 }
 
+/**
+ * Slack for the tolerance comparisons below — NOT a widening of any gate.
+ *
+ * The rule these gates encode is "a regression STRICTLY GREATER than the
+ * tolerance fails", so a regression of exactly the tolerance must pass. A bare
+ * `amount > tol` cannot express that, because neither side is exactly
+ * representable in binary floating point: a metric moving 0.603 -> 0.573 is a
+ * regression of exactly 0.030, but the subtraction yields
+ * 0.030000000000000027, which is `> 0.03` and failed the gate on 2.7e-17 of
+ * representation error alone. Every metric here is a rate or a rounded score,
+ * so the smallest difference that can be MEANT is many orders of magnitude
+ * above this epsilon; a real regression of 0.031 against a 0.030 tolerance
+ * still fails by 0.001. Same 1e-9 already used for the direct
+ * non-negotiable-metric assertions in foodBenchmarkGate.test.js.
+ */
+const TOL_EPSILON = 1e-9;
+
+/** Is `amount` genuinely beyond `tol`, ignoring float representation error? */
+function exceedsTol(amount, tol) {
+  return amount - tol > TOL_EPSILON;
+}
+
 export function compareToBaseline(rep, base) {
   const deltas = {};
   const blocking = [];
@@ -54,11 +76,11 @@ export function compareToBaseline(rep, base) {
     const better = cfg.dir === 'up' ? delta > 0 : delta < 0;
     const regressionAmt = cfg.dir === 'up' ? -delta : delta;   // positive = worse
     deltas[key] = { was, now, delta: round4(delta), better, dir: cfg.dir };
-    if (regressionAmt > cfg.tol) {
+    if (exceedsTol(regressionAmt, cfg.tol)) {
       const entry = { metric: key, was, now, regressed_by: round4(regressionAmt), tol: cfg.tol, hard: !!cfg.hard };
       if (cfg.block || cfg.hard) blocking.push(entry);
       else warnings.push(entry);
-    } else if (better && Math.abs(delta) > cfg.tol) {
+    } else if (better && exceedsTol(Math.abs(delta), cfg.tol)) {
       improved.push({ metric: key, was, now, improved_by: round4(Math.abs(delta)) });
     }
   }
@@ -70,9 +92,9 @@ export function compareToBaseline(rep, base) {
     if (typeof now !== 'number' || typeof was !== 'number') continue;
     const delta = now - was;
     deltas[`category.${cat}`] = { was, now, delta: round4(delta), better: delta > 0, dir: 'up' };
-    if (-delta > CATEGORY_GATE_TOL) {
+    if (exceedsTol(-delta, CATEGORY_GATE_TOL)) {
       blocking.push({ metric: `category.${cat}`, was, now, regressed_by: round4(-delta), tol: CATEGORY_GATE_TOL, hard: false });
-    } else if (delta > CATEGORY_GATE_TOL) {
+    } else if (exceedsTol(delta, CATEGORY_GATE_TOL)) {
       improved.push({ metric: `category.${cat}`, was, now, improved_by: round4(delta) });
     }
   }

@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import jwt from 'jsonwebtoken';
 import express from 'express';
 import { config } from '../src/config.js';
+import { dayKey } from '../src/utils/time.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -44,13 +45,18 @@ async function memDb() {
   return mk();
 }
 
-// Local YYYY-MM-DD, matching how the server computes "today" (dayKey) --
-// deliberately NOT going through Date.toISOString(), which is UTC and would
-// be off by a day around midnight in timezones behind UTC (exactly the
-// off-by-one class of bug this feature has to avoid).
+// "Today" exactly as the ROUTE computes it, via the route's own dayKey and
+// the same tz it falls back to when a request carries none (see the history
+// handler in routes/nutrition.js: `req.tz || 'Asia/Kolkata'`).
+//
+// This used to build the key from the RUNNER's local date parts. That agreed
+// with the route only on a machine already set to that zone -- it passed on a
+// developer box in IST and failed in CI, which runs UTC, for the 5.5 hours a
+// day when the two are on different dates. Deriving it from the route's own
+// helper makes the assertion track the route's real contract on any runner,
+// which is what the test is actually for.
 function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return dayKey(new Date(), 'Asia/Kolkata');
 }
 
 let mealLogSeq = 0;

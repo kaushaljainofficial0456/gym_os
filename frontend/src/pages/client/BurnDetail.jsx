@@ -56,10 +56,10 @@ function timeLabel(iso) {
 }
 
 function sourceLabel(entry) {
-  if (entry.source === 'skos_bmr') return 'SK OS';
+  if (entry.source === 'skos_bmr') return 'Barbell';
   if (entry.source === 'skos_steps') return 'Step count';
   if (PROVIDER_LABEL[entry.source]) return PROVIDER_LABEL[entry.source];
-  return 'SK OS';
+  return 'Barbell';
 }
 
 function Num({ value, unit = 'kcal', size = 'text-[15px]' }) {
@@ -105,10 +105,10 @@ function EntryRow({ entry }) {
         </div>
 
         {/* Both numbers, side by side -- the wearable's measurement and
-            what SK OS would have estimated on its own. */}
+            what Barbell would have estimated on its own. */}
         {entry.comparison && entry.comparison.skosEstimateKcal != null && (
           <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--mute)' }}>
-            {sourceLabel(entry)} measured {Math.round(entry.comparison.measuredKcal)} · SK OS estimated{' '}
+            {sourceLabel(entry)} measured {Math.round(entry.comparison.measuredKcal)} · Barbell estimated{' '}
             {Math.round(entry.comparison.skosEstimateKcal)}
           </div>
         )}
@@ -224,7 +224,7 @@ export default function BurnDetail() {
               <span className="t-micro">Where it came from</span>
               {b.providers?.length > 0 && (
                 <span className="text-[10.5px]" style={{ color: 'var(--faint)' }}>
-                  {b.providers.filter((p) => PROVIDER_LABEL[p]).map((p) => PROVIDER_LABEL[p]).join(' · ') || 'SK OS'}
+                  {b.providers.filter((p) => PROVIDER_LABEL[p]).map((p) => PROVIDER_LABEL[p]).join(' · ') || 'Barbell'}
                 </span>
               )}
             </div>

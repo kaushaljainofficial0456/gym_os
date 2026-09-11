@@ -189,7 +189,7 @@ export async function activateOrgSubscription(db, tx, { orgId, subscriptionId })
 
   await notifyOwners(db, orgId, {
     type: 'gym_package_activated',
-    title: 'Your SK OS package is active',
+    title: 'Your Barbell package is active',
     body: `${subscription.client_capacity} client capacity, active until ${endDate.slice(0, 10)}.`,
     data: { subscriptionId: subscription.id },
   });

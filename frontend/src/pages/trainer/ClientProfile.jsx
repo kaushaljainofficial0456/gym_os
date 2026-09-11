@@ -6,6 +6,7 @@ import { useFetch, GOAL_LABEL, fmt1, fmtK, cls } from '../../utils.js';
 import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg, CheckIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
+import Logo from '../../components/Logo.jsx';
 
 // Map trainer client-detail response to the shape the existing components expect.
 // Owner/admin uses the existing /clients/:id/overview endpoint (returns all org data).
@@ -39,8 +40,8 @@ function mapTrainerResponse(tr) {
     },
     rules: (tr.alerts || []).map(a => ({ type: a.type, severity: a.severity, title: a.title, detail: '' })),
     weights: (tr.weight?.history || []).map(w => ({ date: w.date, weight: w.weight })),
-    measurements: [],
-    photos: [],
+    measurements: tr.measurements || [],
+    photos: tr.photos || [],
     workoutHistory: (tr.workouts?.recent || []).map(w => ({
       id: w.date + w.name,
       name: w.name,
@@ -628,11 +629,21 @@ function PhotosTab({ clientId, photos, onChanged }) {
         const shots = group(v);
         const before = shots[0];
         const after = shots[shots.length - 1];
+        // imageUrl is the resolved, authenticated /uploads/:key path (see
+        // GET /:id/photos, /:id/overview, /trainer/clients/:id/dashboard) --
+        // data_url is a LEGACY field, always null for anything uploaded
+        // through the current private-storage pipeline (see storage.js).
+        // Reading data_url here made every photo persist correctly and then
+        // never render: "No {view} photo yet" forever, for a photo that
+        // genuinely existed. Falls back to data_url for any surviving
+        // pre-storage-abstraction row that still carries one.
+        const afterSrc = after?.imageUrl || after?.data_url;
+        const beforeSrc = before?.imageUrl || before?.data_url;
         return (
           <Card key={v}>
             <Kicker tone="cyan">{v.toUpperCase()} view</Kicker>
-            {after?.data_url ? (
-              <BeforeAfter before={before?.data_url} after={after.data_url} />
+            {afterSrc ? (
+              <BeforeAfter before={beforeSrc} after={afterSrc} />
             ) : (
               <div className="rounded-2xl border border-dashed border-line h-64 grid place-items-center text-mute text-sm">
                 No {v} photo yet
@@ -699,7 +710,7 @@ function AITab({ clientId }) {
           <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-violetx/10 blur-[80px] pointer-events-none" />
           <div className="flex items-center justify-between flex-wrap gap-3 relative">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="SK Coach" className="w-10 h-10 rounded-xl object-cover shadow-glow" />
+              <Logo alt="SK Coach" className="w-10 h-10 rounded-xl object-cover shadow-glow" />
               <div>
                 <div className="font-grotesk font-bold">SK Coach AI · Client analysis</div>
                 <div className="text-xs text-mute mt-0.5 max-w-md">

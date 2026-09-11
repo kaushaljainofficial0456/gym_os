@@ -248,7 +248,7 @@ async function callOpenRouter(system, user, { json = true, model } = {}) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${KEY}`,
       'HTTP-Referer': process.env.OPENROUTER_APP_URL || 'https://skos.app',
-      'X-Title': 'SK OS'
+      'X-Title': 'Barbell'
     },
     body: JSON.stringify({
       model: model || process.env.OPENROUTER_MODEL || process.env.LLM_MODEL || 'openrouter/free',
@@ -400,7 +400,7 @@ async function callOpenRouterWithKey(system, user, { json = true, model, apiKey,
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       'HTTP-Referer': process.env.OPENROUTER_APP_URL || 'https://skos.app',
-      'X-Title': 'SK OS'
+      'X-Title': 'Barbell'
     },
     body: JSON.stringify({
       model: modelId,
@@ -451,7 +451,7 @@ export async function interpret(text, clientContext = {}) {
       error: 'I need a bit more context to understand that. Try "220g paneer", "Bench press 60x8", or "Show dumbbell chest exercises".'
     };
   }
-  const system = `You are the intent router for SK OS, a fitness app. Convert the user's message into ONE structured JSON action. Never invent numbers. Available actions:
+  const system = `You are the intent router for Barbell, a fitness app. Convert the user's message into ONE structured JSON action. Never invent numbers. Available actions:
 {"intent":"LOG_FOOD","food":"...","quantity":number,"unit":"g|ml|pc|serving|scoop|cup|bowl"}
 {"intent":"LOG_WORKOUT","exercise":"...","sets":[{"weight":number,"reps":number}]}
 {"intent":"SEARCH_EXERCISES","query":"..."}
@@ -515,7 +515,7 @@ export async function estimateMeal(imageDataUrl) {
 // ------------------------------------------------------------------
 export async function coach(userMessage, contextSummary) {
   if (!isConfigured()) return null;
-  const system = `You are SK Coach for SK OS, a data-driven fitness coaching assistant. Be short, specific and actionable. Use ONLY the provided context — if a fact is absent, say "I don't have enough information". Distinguish MEASURED / CALCULATED / ESTIMATED / RECOMMENDATION. Never diagnose disease, never prescribe medical treatment, never promise results. This is fitness guidance, not medical advice.`;
+  const system = `You are SK Coach for Barbell, a data-driven fitness coaching assistant. Be short, specific and actionable. Use ONLY the provided context — if a fact is absent, say "I don't have enough information". Distinguish MEASURED / CALCULATED / ESTIMATED / RECOMMENDATION. Never diagnose disease, never prescribe medical treatment, never promise results. This is fitness guidance, not medical advice.`;
   try {
     const raw = await callAI(system, `Context: ${JSON.stringify(contextSummary)}\nClient: ${userMessage}`, { json: false });
     return String(raw || '').trim().slice(0, 2000);

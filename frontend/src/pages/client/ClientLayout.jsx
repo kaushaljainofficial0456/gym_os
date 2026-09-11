@@ -4,6 +4,7 @@ import { useMotionValue } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
+import Logo from '../../components/Logo.jsx';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
@@ -243,8 +244,8 @@ export default function ClientLayout() {
 
           {/* CENTER: SK OS branding */}
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
-            <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>SK OS</span>
+            <Logo alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
+            <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>Barbell</span>
           </div>
 
           {/* RIGHT: ONE bell. It previously sat beside a second,

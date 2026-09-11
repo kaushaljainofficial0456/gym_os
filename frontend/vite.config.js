@@ -50,6 +50,18 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
         changeOrigin: true
+      },
+      // Mirrors vercel.json's own rewrite ("/uploads/:path*" -> the same
+      // function that serves /api) so the private, authenticated image
+      // route (GET /uploads/:key) is reachable in local dev too. Without
+      // this, only /api was proxied to the backend, so every
+      // `<img src="/uploads/...">` in the app hit Vite's own dev server
+      // instead, got its SPA index.html fallback back, and silently never
+      // showed an image -- while looking, from the app code alone,
+      // identical to a correctly working request.
+      '/uploads': {
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
+        changeOrigin: true
       }
     }
   },
@@ -65,6 +77,18 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
+        changeOrigin: true
+      },
+      // Mirrors vercel.json's own rewrite ("/uploads/:path*" -> the same
+      // function that serves /api) so the private, authenticated image
+      // route (GET /uploads/:key) is reachable in local dev too. Without
+      // this, only /api was proxied to the backend, so every
+      // `<img src="/uploads/...">` in the app hit Vite's own dev server
+      // instead, got its SPA index.html fallback back, and silently never
+      // showed an image -- while looking, from the app code alone,
+      // identical to a correctly working request.
+      '/uploads': {
         target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
         changeOrigin: true
       }

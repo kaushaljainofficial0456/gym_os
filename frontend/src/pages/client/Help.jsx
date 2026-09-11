@@ -5,12 +5,12 @@ const HELP_SECTIONS = [
   {
     id: 'overview',
     icon: 'home',
-    title: 'How SK OS Works',
-    content: 'SK OS is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place. Think of it as your fitness command center.',
+    title: 'How Barbell Works',
+    content: 'Barbell is your personal fitness operating system. It connects you with your coach, tracks your workouts, nutrition, and progress — all in one place. Think of it as your fitness command center.',
     items: [
       'Your coach designs personalized workout and nutrition plans',
       'You track your daily activities — workouts, meals, sleep',
-      'SK OS analyzes your data and provides insights',
+      'Barbell analyzes your data and provides insights',
       'Your coach gets real-time updates on your progress',
     ]
   },
@@ -61,7 +61,7 @@ const HELP_SECTIONS = [
     items: [
       'View your daily meal plan with assigned foods',
       'Mark meals as eaten when you complete them',
-      'Use "Ask SK OS" to quickly log foods ("220g paneer")',
+      'Use "Ask Barbell" to quickly log foods ("220g paneer")',
       'Scan nutrition labels for packaged foods',
       'Take a meal photo for estimated calorie ranges',
     ]
@@ -70,7 +70,7 @@ const HELP_SECTIONS = [
     id: 'calories',
     icon: 'numbers',
     title: 'Food & Calorie Estimation',
-    content: 'SK OS can estimate calories from multiple sources — typed input, label scans, and meal photos.',
+    content: 'Barbell can estimate calories from multiple sources — typed input, label scans, and meal photos.',
     items: [
       'Type foods naturally: "2 rotis + 150g rice"',
       'Scan a packaged food label for instant recognition',
@@ -96,11 +96,11 @@ const HELP_SECTIONS = [
     id: 'coach',
     icon: 'robot',
     title: 'Coach & Intelligence Features',
-    content: 'SK OS has an intelligent coach system that provides insights and recommendations.',
+    content: 'Barbell has an intelligent coach system that provides insights and recommendations.',
     items: [
       'Your Coach Brief shows daily priorities and insights',
       'Weekly reviews summarize what went well and needs attention',
-      'Ask SK OS natural language questions about your fitness',
+      'Ask Barbell natural language questions about your fitness',
       'The coach adapts recommendations based on your data',
       'Message your coach directly from the Profile page',
     ]
@@ -127,7 +127,7 @@ export default function Help() {
     <div className="space-y-5">
       <div>
         <h1 className="font-display font-bold text-2xl tracking-tight" style={{ color: 'var(--ink)' }}>Help</h1>
-        <div className="text-xs mt-0.5" style={{ color: 'var(--mute)' }}>Your guide to using SK OS</div>
+        <div className="text-xs mt-0.5" style={{ color: 'var(--mute)' }}>Your guide to using Barbell</div>
       </div>
 
       <div className="card p-5">
@@ -136,7 +136,7 @@ export default function Help() {
 
           </div>
           <div className="flex-1">
-            <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Welcome to SK OS</div>
+            <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Welcome to Barbell</div>
             <div className="text-[11px]" style={{ color: 'var(--mute)' }}>Tap any section below to learn more</div>
           </div>
         </div>

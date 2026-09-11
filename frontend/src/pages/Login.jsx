@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { consumeReturnTo } from '../api.js';
 import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
+import Logo from '../components/Logo.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import Icon from '../components/Icon.jsx';
 import { PasswordInput } from '../components/UI.jsx';
@@ -20,7 +21,7 @@ import './../components/BorderGlow.css';
 //     POST /auth/google).
 const PATHS = [
   { id: 'enterprise', icon: 'clipboard', title: 'Enterprise', desc: "First time here? Set up your gym — code, roster and workspace in one go." },
-  { id: 'ecosystem', icon: 'strength', title: 'Gym ecosystem', desc: 'Trainer, owner or client at a gym already on SK OS.' },
+  { id: 'ecosystem', icon: 'strength', title: 'Gym ecosystem', desc: 'Trainer, owner or client at a gym already on Barbell.' },
   { id: 'independent', icon: 'user', title: 'Independent client', desc: 'Training solo, no gym — sign in with Google.' },
 ];
 
@@ -166,9 +167,9 @@ export default function Login() {
           <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[100px] anim-fadeIn" style={{ background: 'rgba(160,128,255,.08)', animationDelay: '200ms' }} />
 
           <div className="flex items-center gap-4 relative">
-            <img src="/logo.png" alt="SK OS" className="w-14 h-14 rounded-2xl shadow-glow" />
+            <Logo className="w-14 h-14 rounded-2xl shadow-glow" />
             <div>
-              <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>SK OS</div>
+              <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
               <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
             </div>
           </div>
@@ -199,9 +200,9 @@ export default function Login() {
         <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-sm anim-fadeUp">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/logo.png" alt="SK OS" className="w-11 h-11 rounded-xl" />
+              <Logo className="w-11 h-11 rounded-xl" />
               <div>
-                <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>SK OS</div>
+                <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>Barbell</div>
                 <div className="text-[9px] uppercase tracking-[.2em] font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
               </div>
             </div>
@@ -209,7 +210,7 @@ export default function Login() {
             {view === 'landing' && (
               <>
                 <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Welcome</h2>
-                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>How are you using SK OS?</p>
+                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>How are you using Barbell?</p>
                 <div className="space-y-2.5">
                   {PATHS.map((p, i) => (
                     <OptionCard key={p.id} icon={p.icon} title={p.title} desc={p.desc} delay={80 + i * 60} onClick={() => pickPath(p.id)} />
@@ -273,13 +274,13 @@ export default function Login() {
                     here -- creating a gym is a genuinely different action. */}
                 {roleHint === 'CLIENT' && (
                   <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
-                    New to SK OS?{' '}
+                    New to Barbell?{' '}
                     <Link to="/signup" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
                   </div>
                 )}
                 {roleHint === 'TRAINER' && (
                   <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
-                    New to SK OS?{' '}
+                    New to Barbell?{' '}
                     <Link to="/signup/trainer" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
                   </div>
                 )}

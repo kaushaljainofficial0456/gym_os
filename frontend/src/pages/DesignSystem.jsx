@@ -146,7 +146,7 @@ export default function DesignSystem() {
       <div className="relative overflow-hidden border-b" style={{ borderColor: 'var(--line)' }}>
         <AmbientBackdrop intensity={0.55} />
         <div className="relative max-w-5xl mx-auto px-6 py-16">
-          <div className="kicker">SK OS</div>
+          <div className="kicker">Barbell</div>
           <h1
             className="font-display font-bold text-4xl sm:text-5xl tracking-tight"
             style={{ color: 'var(--ink)' }}
@@ -154,7 +154,7 @@ export default function DesignSystem() {
             Design System
           </h1>
           <p className="mt-3 text-sm max-w-xl leading-relaxed" style={{ color: 'var(--mute)' }}>
-            Tokens, motion and 3D for the SK OS interface. Everything on this page is the
+            Tokens, motion and 3D for the Barbell interface. Everything on this page is the
             real component — toggle the app theme and watch it re-derive.
           </p>
           <div className="mt-6 flex gap-2 flex-wrap">

@@ -85,7 +85,7 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
         key: razorpayKeyId,
         amount: Math.round(order.amount * 100),
         currency: order.currency,
-        name: 'SK OS',
+        name: 'Barbell',
         description: orgName ? `${orgName} — payment` : 'Payment',
         order_id: order.provider_order_id,
         handler: (response) => {
@@ -151,7 +151,7 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
       {/* Trust cue: people abandon checkouts that don't say who is handling
           the money. One quiet line, not a badge farm. */}
       <p className="t-sub text-center" style={{ fontSize: '.6875rem' }}>
-        Payments are verified server-side. SK OS never stores your card details.
+        Payments are verified server-side. Barbell never stores your card details.
       </p>
     </div>
   );

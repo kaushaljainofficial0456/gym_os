@@ -125,7 +125,7 @@ export default function meRoutes(db) {
 
   r.put('/profile', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, onboarding_completed } = req.body || {};
+    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed } = req.body || {};
     const GOALS = ['FAT_LOSS', 'MUSCLE_GAIN', 'RECOMP', 'STRENGTH', 'GENERAL'];
     const EXP = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
     const SEX = ['MALE', 'FEMALE', 'OTHER'];
@@ -138,6 +138,16 @@ export default function meRoutes(db) {
     // Update user name if provided
     if (name !== undefined && name !== null && String(name).trim().length >= 2) {
       await db.run('UPDATE users SET name = ? WHERE id = ?', [String(name).trim().slice(0, 100), req.user.sub]);
+    }
+    // Phone: was accepted by the Settings UI and silently discarded --
+    // this route never read it, so "Save" always reported success while
+    // the number went nowhere. users.phone already exists and is already
+    // read by trainer-facing views (resolveClient's join); this is the
+    // only write path missing. Empty string clears it (same convention as
+    // admin.js's gym-settings `pick()` helper); undefined leaves it alone.
+    if (phone !== undefined) {
+      const trimmed = phone === null ? null : String(phone).trim().slice(0, 30) || null;
+      await db.run('UPDATE users SET phone = ? WHERE id = ?', [trimmed, req.user.sub]);
     }
     const sets = [];
     const params = [];

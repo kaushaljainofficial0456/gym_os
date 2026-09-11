@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import Icon from '../components/Icon.jsx';
+import Logo from '../components/Logo.jsx';
 import QrScanner from '../components/QrScanner.jsx';
 import PaymentCheckout from '../components/PaymentCheckout.jsx';
 import { Card, Spinner, CheckIcon } from '../components/UI.jsx';
@@ -83,7 +84,7 @@ export default function JoinGym() {
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
       <div className="w-full max-w-sm space-y-5">
         <div className="text-center">
-          <img src="/logo.png" alt="SK OS" className="w-12 h-12 rounded-xl mx-auto mb-3" />
+          <Logo className="w-12 h-12 rounded-xl mx-auto mb-3" />
           <h1 className="font-display font-bold text-xl">Join your gym</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--mute)' }}>
             Hi {user?.name?.split(' ')[0]} — scan the QR code your gym gave you to finish setting up your account.

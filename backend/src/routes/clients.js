@@ -12,6 +12,52 @@ import { rateLimit } from '../rateLimit.js';
 
 export default function clientRoutes(db) {
   const r = Router();
+
+  // ---- weight logs (self-service) ----
+  // Registered BEFORE the router-wide trainer/admin gate below, and given
+  // their own requireAuth, so a CLIENT can reach their OWN record here.
+  // resolveClient() (called by both handlers) already implements the real
+  // per-resource check -- same org AND (self OR assigned trainer OR
+  // owner/admin) -- so this doesn't weaken tenant isolation; it just lets
+  // the "isClientSelf" branch resolveClient was already written for
+  // actually be reachable. ROOT CAUSE of the Progress-page weight-entry
+  // bug: the blanket requireRole below ran for every route on this router,
+  // including this one, so a client logging their OWN weight from
+  // Progress.jsx got a blanket 403 before resolveClient's self-check ever
+  // ran -- resolveClient's CLIENT-self branch was dead code. Every other
+  // route on this router is trainer/admin client-management (confirmed via
+  // a full-repo grep of frontend callers: only Progress.jsx calls
+  // `/clients/:id/weights` as self-service; everything else under
+  // `/clients/*` is called from trainer/*.jsx pages), so only these two
+  // routes move -- the rest keep the exact trainer/admin-only gate they
+  // had before.
+  //
+  // 90-day window: this feeds WeightChart (a trend chart, not a
+  // full-history export), matching the same bound already used for weight
+  // history elsewhere (see /clients/:clientId/dashboard). Unbounded before
+  // this -- a client who's been logging daily for years would return their
+  // entire history on every chart render.
+  r.get('/:id/weights', requireAuth, async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const rows = await db.q(
+      'SELECT date, weight, source FROM weight_logs WHERE client_id = ? AND date >= ? ORDER BY date',
+      [client.id, daysAgoIso(90)]);
+    res.json({ weights: rows });
+  });
+
+  r.post('/:id/weights', requireAuth, validate(schemas.weightLog), async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const d = req.body.date || dayKey();
+    await db.run('INSERT INTO weight_logs (id, client_id, date, weight, source, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id('wlg'), client.id, d, req.body.weight, req.body.source, now()]);
+    await db.run('UPDATE clients SET current_weight = ?, last_checkin_at = ? WHERE id = ?',
+      [req.body.weight, now(), client.id]);
+    await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'checkin_completed', data: { clientId: client.id } });
+    res.status(201).json({ ok: true });
+  });
+
   r.use(requireAuth, requireRole('GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'), orgScope);
   const clientCreateLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
 
@@ -146,13 +192,24 @@ export default function clientRoutes(db) {
     if (!client) return;
     const profile = await db.q1('SELECT * FROM client_profiles WHERE client_id = ?', [client.id]);
     const ev = await evaluateClient(db, client);
-    const [weights, measurements, photos, workoutHistory, insights] = await Promise.all([
+    const [weights, measurements, photoRows, workoutHistory, insights] = await Promise.all([
       db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? AND date >= ? ORDER BY date', [client.id, daysAgoIso(90)]),
       db.q('SELECT * FROM measurements WHERE client_id = ? ORDER BY taken_at DESC LIMIT 12', [client.id]),
       db.q('SELECT * FROM progress_photos WHERE client_id = ? ORDER BY taken_at', [client.id]),
       db.q('SELECT * FROM workouts WHERE client_id = ? ORDER BY scheduled_date DESC LIMIT 20', [client.id]),
       db.q('SELECT * FROM coach_insights WHERE client_id = ? ORDER BY created_at DESC LIMIT 10', [client.id])
     ]);
+    // Resolve each photo's real, authenticated URL the SAME way GET
+    // /:id/photos already does -- this route used to return the raw row
+    // (storage_key + a data_url that is ALWAYS null for any photo uploaded
+    // through the current storage abstraction, see storage.js). The
+    // frontend's PhotosTab/BeforeAfter render `photo.data_url` directly, so
+    // every photo uploaded since the storage abstraction shipped was
+    // persisted correctly but could never actually be displayed here --
+    // confirmed live, "No front photo yet" shown for a photo that
+    // genuinely existed on disk and in the database.
+    const { objectUrl } = await import('../storage.js');
+    const photos = photoRows.map((p) => ({ ...p, imageUrl: objectUrl(p.storage_key) || p.data_url || null }));
     res.json({
       client: {
         id: client.id, name: client.name, email: client.email, avatar: client.avatar, phone: client.phone,
@@ -208,33 +265,6 @@ export default function clientRoutes(db) {
       await db.run('UPDATE clients SET last_checkin_at = ? WHERE id = ?', [now(), client.id]);
     }
     res.json({ ok: true });
-  });
-
-  // ---- weight logs ----
-  // 90-day window: this feeds WeightChart (a trend chart, not a full-history
-  // export), matching the same bound already used for weight history
-  // elsewhere (see /clients/:clientId/dashboard). Unbounded before this —
-  // a client who's been logging daily for years would return their entire
-  // history on every chart render.
-  r.get('/:id/weights', async (req, res) => {
-    const client = await resolveClient(db, req, res, req.params.id);
-    if (!client) return;
-    const rows = await db.q(
-      'SELECT date, weight, source FROM weight_logs WHERE client_id = ? AND date >= ? ORDER BY date',
-      [client.id, daysAgoIso(90)]);
-    res.json({ weights: rows });
-  });
-
-  r.post('/:id/weights', validate(schemas.weightLog), async (req, res) => {
-    const client = await resolveClient(db, req, res, req.params.id);
-    if (!client) return;
-    const d = req.body.date || dayKey();
-    await db.run('INSERT INTO weight_logs (id, client_id, date, weight, source, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [id('wlg'), client.id, d, req.body.weight, req.body.source, now()]);
-    await db.run('UPDATE clients SET current_weight = ?, last_checkin_at = ? WHERE id = ?',
-      [req.body.weight, now(), client.id]);
-    await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'checkin_completed', data: { clientId: client.id } });
-    res.status(201).json({ ok: true });
   });
 
   // ---- measurements ----

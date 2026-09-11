@@ -149,7 +149,7 @@ function StepWelcome({ t, name }) {
         <Icon name="strength" size={26} />
       </div>
       <h2 className="font-grotesk font-black leading-tight" style={{ fontSize: 24, color: t.ink }}>
-        {name ? `Welcome, ${name.split(' ')[0]}` : 'Welcome to SK OS'}
+        {name ? `Welcome, ${name.split(' ')[0]}` : 'Welcome to Barbell'}
       </h2>
       <p className="text-[13px] mt-2.5 leading-relaxed" style={{ color: t.mute }}>
         Six quick questions so your training and nutrition targets are built around

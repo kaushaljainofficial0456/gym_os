@@ -4,17 +4,33 @@ import { api, getStoredUser, setSession, setStoredUser, clearSession } from './a
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
+  // getStoredUser() is only an OPTIMISTIC first-paint value (see api.js's
+  // own comment on why USER_KEY exists) -- never proof of a valid session
+  // by itself. The effect below ALWAYS re-validates against the server via
+  // /auth/me, regardless of whether this cache is present.
+  //
+  // Root cause of "signed in, but the app forces me through the login
+  // flow again": this used to skip the /auth/me check entirely whenever
+  // getStoredUser() returned null (cleared localStorage, a private window,
+  // a fresh device/browser profile) -- `ready` was set `true` immediately
+  // with `user` left `null`, so the app decided "not authenticated"
+  // without ever asking the server, even though the httpOnly sk_token
+  // cookie (the actual, sole source of truth -- see auth.js's own comment)
+  // could still be perfectly valid for up to 7 days. Every route that
+  // gates on `authed` (App.jsx's <Require>/<GuestOnly>) inherited that
+  // wrong answer. Now this always asks first; `ready` stays false (every
+  // gated route shows its loading spinner, not a premature verdict) until
+  // the real answer comes back -- matching every other login-adjacent
+  // action in this file, which already re-fetches /auth/me rather than
+  // trusting a locally-assembled user object.
   const [user, setUser] = useState(getStoredUser());
-  // If a stored user exists, start unready until the token is validated.
-  const [ready, setReady] = useState(!getStoredUser());
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (getStoredUser()) {
-      api('/auth/me')
-        .then(({ user: u }) => setUser(u))
-        .catch(() => { clearSession(); setUser(null); })
-        .finally(() => setReady(true));
-    } else setReady(true);
+    api('/auth/me')
+      .then(({ user: u }) => { setStoredUser(u); setUser(u); })
+      .catch(() => { clearSession(); setUser(null); })
+      .finally(() => setReady(true));
   }, []);
 
   const login = async (email, password) => {
