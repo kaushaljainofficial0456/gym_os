@@ -1,5 +1,5 @@
 // ============================================================
-// TRAINER ATTENDANCE — the QR gate.
+// TRAINER ATTENDANCE — the routes: the QR gate, and shifts.
 //
 // These are anti-fraud properties, so they are tested at the HTTP layer
 // rather than against the service: the hole being closed here was a route
@@ -238,4 +238,71 @@ test('an existing gym cannot end up without the requirement after upgrading', as
 
   const res = await call('POST', '/api/attendance/me/check-in', AS_TRAINER, {});
   assert.equal(res.status, 422, 'and the endpoint enforces it');
+});
+
+// ---- SHIFTS ----
+// The service layer for shifts was tested from the start; these routes
+// were not, because until now nothing called them. The scheduled half of
+// attendance -- expected hours, and therefore lateness and absence -- was
+// fully built, exposed over HTTP, and completely unreachable: there was no
+// UI anywhere to define a single shift. Now that a screen drives them,
+// the boundaries it can hit are worth pinning.
+
+test('a shift that ends before it starts is refused', async (t) => {
+  const { db, call, AS_OWNER, close } = await startApp(); t.after(() => close());
+  const trainer = (await db.q1("SELECT user_id FROM trainers WHERE org_id = 'o1'")).user_id;
+
+  const res = await call('PUT', `/api/attendance/shifts/${trainer}`, AS_OWNER,
+    { day_of_week: 1, start_time: '18:00', end_time: '09:00' });
+  assert.equal(res.status, 422);
+  assert.match(res.json.error, /end after it starts/i);
+
+  assert.equal((await db.q('SELECT id FROM trainer_shifts')).length, 0, 'and nothing was written');
+});
+
+test('saving the same day twice updates it rather than creating a second shift', async (t) => {
+  const { db, call, AS_OWNER, close } = await startApp(); t.after(() => close());
+  const trainer = (await db.q1("SELECT user_id FROM trainers WHERE org_id = 'o1'")).user_id;
+
+  await call('PUT', `/api/attendance/shifts/${trainer}`, AS_OWNER,
+    { day_of_week: 1, start_time: '09:00', end_time: '18:00' });
+  await call('PUT', `/api/attendance/shifts/${trainer}`, AS_OWNER,
+    { day_of_week: 1, start_time: '07:00', end_time: '15:00' });
+
+  const rows = await db.q('SELECT start_time, end_time FROM trainer_shifts WHERE trainer_id = ?', [trainer]);
+  assert.equal(rows.length, 1, 'one row per trainer per day -- editing Monday twice is still one Monday');
+  assert.equal(rows[0].start_time, '07:00', 'and it holds the latest times');
+});
+
+test('removing a day that has no shift is a 404, not a silent success', async (t) => {
+  const { db, call, AS_OWNER, close } = await startApp(); t.after(() => close());
+  const trainer = (await db.q1("SELECT user_id FROM trainers WHERE org_id = 'o1'")).user_id;
+
+  const res = await call('DELETE', `/api/attendance/shifts/${trainer}/5`, AS_OWNER);
+  assert.equal(res.status, 404,
+    'a confirm dialog that says "removed" when nothing was there teaches people to distrust it');
+});
+
+test('an out-of-range day is refused', async (t) => {
+  const { db, call, AS_OWNER, close } = await startApp(); t.after(() => close());
+  const trainer = (await db.q1("SELECT user_id FROM trainers WHERE org_id = 'o1'")).user_id;
+
+  // Both 422: the repo's validate() middleware and this route's own day
+  // check report an unprocessable body the same way.
+  assert.equal((await call('PUT', `/api/attendance/shifts/${trainer}`, AS_OWNER,
+    { day_of_week: 7, start_time: '09:00', end_time: '18:00' })).status, 422);
+  assert.equal((await call('DELETE', `/api/attendance/shifts/${trainer}/9`, AS_OWNER)).status, 422);
+});
+
+test('a trainer cannot set their own shifts, and another gym cannot set them either', async (t) => {
+  const { db, call, AS_TRAINER, AS_OTHER_OWNER, close } = await startApp(); t.after(() => close());
+  const trainer = (await db.q1("SELECT user_id FROM trainers WHERE org_id = 'o1'")).user_id;
+  const body = { day_of_week: 1, start_time: '09:00', end_time: '18:00' };
+
+  assert.equal((await call('PUT', `/api/attendance/shifts/${trainer}`, AS_TRAINER, body)).status, 403,
+    'deciding your own expected hours is deciding your own lateness');
+  assert.equal((await call('PUT', `/api/attendance/shifts/${trainer}`, AS_OTHER_OWNER, body)).status, 404,
+    "another gym's owner cannot roster this trainer");
+
+  assert.equal((await db.q('SELECT id FROM trainer_shifts')).length, 0);
 });

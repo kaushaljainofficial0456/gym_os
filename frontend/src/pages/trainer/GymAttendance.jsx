@@ -19,6 +19,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import ShiftEditor from '../../components/trainer/ShiftEditor.jsx';
 import { api } from '../../api.js';
 import { ErrorState, PageSkeleton, Avatar, Toast } from '../../components/UI.jsx';
 import { formatDuration, clockTime, STATUS_TONE } from '../../components/trainer/AttendanceCard.jsx';
@@ -54,6 +55,7 @@ export default function GymAttendance() {
   const [busy, setBusy] = useState(null);
   const [qr, setQr] = useState(null);
   const [policyBusy, setPolicyBusy] = useState(false);
+  const [shiftFor, setShiftFor] = useState(null);   // { id, name } | null
 
   const load = useCallback(async (d) => {
     try {
@@ -104,6 +106,31 @@ export default function GymAttendance() {
       await load(date);
     } catch (e) {
       window.alert(e.message || 'Could not change the attendance policy');
+    }
+    setPolicyBusy(false);
+  };
+
+  /* Turning shifts ON starts measuring lateness against expectations
+     that may not exist yet, so it says so rather than silently marking a
+     roster of people absent tomorrow morning. */
+  const toggleMode = async () => {
+    const scheduled = data.policy?.mode === 'scheduled';
+    if (!scheduled) {
+      const ok = window.confirm(
+        'Use fixed shifts?\n\nTrainers will be marked late or absent against their weekly '
+        + 'shifts. Anyone without shifts set is simply not tracked, so set theirs before '
+        + 'relying on the numbers.');
+      if (!ok) return;
+    }
+    setPolicyBusy(true);
+    try {
+      await api('/attendance/policy', {
+        method: 'PUT',
+        body: JSON.stringify({ mode: scheduled ? 'simple' : 'scheduled' }),
+      });
+      await load(date);
+    } catch (e) {
+      window.alert(e.message || 'Could not change the attendance mode');
     }
     setPolicyBusy(false);
   };
@@ -179,6 +206,17 @@ export default function GymAttendance() {
           </button>
           {/* The toggle lives beside the codes because it is the same
               decision: whether this gym runs on scans at all. */}
+          {/* Scheduled mode is what makes lateness and absence
+              measurable, and there was no way to turn it on. */}
+          <button
+            type="button"
+            onClick={toggleMode}
+            disabled={policyBusy}
+            className="rounded-xl px-3 text-[12px] font-semibold"
+            style={{ minHeight: 40, border: '1px solid var(--line)', color: 'var(--mute)', opacity: policyBusy ? 0.6 : 1 }}
+          >
+            {data.policy?.mode === 'scheduled' ? 'Switch to open hours' : 'Use fixed shifts'}
+          </button>
           <button
             type="button"
             onClick={toggleRequireQr}
@@ -332,6 +370,19 @@ export default function GymAttendance() {
                   {r.lateMinutes > 0 && (
                     <div className="text-[10px]" style={{ color: 'var(--warn)' }}>+{r.lateMinutes}m late</div>
                   )}
+                  {/* Shifts are edited from the row the person is on,
+                      rather than from a separate settings screen: "Priya
+                      keeps showing as absent on Thursdays" is noticed
+                      HERE, and the fix should be one tap from the
+                      observation. */}
+                  <button
+                    type="button"
+                    onClick={() => setShiftFor({ id: r.trainerId, name: r.name })}
+                    className="text-[10px] font-semibold mt-0.5"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    {r.scheduled ? 'Edit shifts' : 'Set shifts'}
+                  </button>
                 </div>
               </div>
             );
@@ -343,6 +394,15 @@ export default function GymAttendance() {
         <div className="text-[11px] mt-3 text-center" style={{ color: 'var(--faint)' }}>
           Showing {date}. Switch back to today for live check-ins.
         </div>
+      )}
+
+      {shiftFor && (
+        <ShiftEditor
+          trainerId={shiftFor.id}
+          trainerName={shiftFor.name}
+          onClose={() => setShiftFor(null)}
+          onChanged={() => load(date)}
+        />
       )}
 
       {qr && <QrDialog qr={qr} onClose={() => setQr(null)} onRefresh={openQr} />}
