@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
+import Logo from '../components/Logo.jsx';
 import BorderGlow from '../components/BorderGlow.jsx';
 import { loadGoogleIdentity } from '../googleIdentity.js';
 import './../components/BorderGlow.css';
@@ -95,7 +96,7 @@ export default function SetupOrg() {
           <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[100px] anim-fadeIn" style={{ background: 'rgba(160,128,255,.08)', animationDelay: '200ms' }} />
 
           <div className="flex items-center gap-4 relative">
-            <img src="/logo.png" alt="Barbell" className="w-14 h-14 rounded-2xl shadow-glow" />
+            <Logo className="w-14 h-14 rounded-2xl shadow-glow" />
             <div>
               <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
               <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
@@ -118,7 +119,7 @@ export default function SetupOrg() {
         <div className="flex items-center justify-center p-6">
           <div className="w-full max-w-sm anim-fadeUp">
             <div className="lg:hidden flex items-center gap-3 mb-8">
-              <img src="/logo.png" alt="Barbell" className="w-11 h-11 rounded-xl" />
+              <Logo className="w-11 h-11 rounded-xl" />
               <div>
                 <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>Barbell</div>
                 <div className="text-[9px] uppercase tracking-[.2em] font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>

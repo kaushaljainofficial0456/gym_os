@@ -6,6 +6,7 @@ import { useFetch, GOAL_LABEL, fmt1, fmtK, cls } from '../../utils.js';
 import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg, CheckIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
+import Logo from '../../components/Logo.jsx';
 
 // Map trainer client-detail response to the shape the existing components expect.
 // Owner/admin uses the existing /clients/:id/overview endpoint (returns all org data).
@@ -709,7 +710,7 @@ function AITab({ clientId }) {
           <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-violetx/10 blur-[80px] pointer-events-none" />
           <div className="flex items-center justify-between flex-wrap gap-3 relative">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="SK Coach" className="w-10 h-10 rounded-xl object-cover shadow-glow" />
+              <Logo alt="SK Coach" className="w-10 h-10 rounded-xl object-cover shadow-glow" />
               <div>
                 <div className="font-grotesk font-bold">SK Coach AI · Client analysis</div>
                 <div className="text-xs text-mute mt-0.5 max-w-md">
