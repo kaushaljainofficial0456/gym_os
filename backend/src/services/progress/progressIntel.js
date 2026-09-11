@@ -146,6 +146,73 @@ async function loadPersonalRecords(db, clientId) {
   };
 }
 
+/**
+ * STRENGTH PROGRESSION — per exercise, where you started versus where you
+ * are now.
+ *
+ * This replaced a flat 'recent PRs' timeline, which listed the same
+ * exercise names already shown in the bests grid directly above it and
+ * clustered on whatever day the user last trained -- a session dump
+ * wearing a timeline's clothes. 'Bench went 60 -> 75 kg in 11 weeks' is a
+ * different question from 'what is my best bench?', and it is the one
+ * worth asking: it shows the JOURNEY, ranks where the real progress is,
+ * and surfaces lifts that have stopped moving.
+ *
+ * Compared on estimated 1RM (the same Epley the PR engine uses), because
+ * raw top weight cannot tell 60x5 from 60x10 -- one of which is a real
+ * improvement.
+ */
+async function loadStrengthProgress(db, clientId) {
+  const rows = await db.q(
+    `SELECT wl.exercise_id, wl.date, wl.weight, wl.reps, el.name AS exercise_name, el.primary_muscle
+       FROM workout_logs wl JOIN exercise_library el ON el.id = wl.exercise_id
+      WHERE wl.client_id = ? AND wl.weight IS NOT NULL AND wl.weight > 0 AND wl.reps > 0
+      ORDER BY wl.date ASC`, [clientId]);
+
+  const byExercise = new Map();
+  for (const r of rows) {
+    const e1rm = Number(r.weight) * (1 + Number(r.reps) / 30);
+    if (!Number.isFinite(e1rm)) continue;
+    const entry = byExercise.get(r.exercise_id) || {
+      exerciseId: r.exercise_id, exercise: r.exercise_name, muscle: r.primary_muscle, byDate: new Map(),
+    };
+    // Best effort of the DAY, so one warm-up set cannot look like a regression.
+    const prev = entry.byDate.get(r.date);
+    if (!prev || e1rm > prev.e1rm) entry.byDate.set(r.date, { e1rm, weight: Number(r.weight), reps: Number(r.reps) });
+    byExercise.set(r.exercise_id, entry);
+  }
+
+  const out = [];
+  for (const entry of byExercise.values()) {
+    const dates = [...entry.byDate.keys()].sort();
+    // A single session is a reading, not progression.
+    if (dates.length < 2) continue;
+    const firstDate = dates[0];
+    const lastDate = dates[dates.length - 1];
+    const first = entry.byDate.get(firstDate);
+    const last = entry.byDate.get(lastDate);
+    const spanDays = (Date.parse(`${lastDate}T00:00:00Z`) - Date.parse(`${firstDate}T00:00:00Z`)) / 86400000;
+    const gain = last.e1rm - first.e1rm;
+    out.push({
+      exerciseId: entry.exerciseId,
+      exercise: entry.exercise,
+      muscle: entry.muscle,
+      sessions: dates.length,
+      from: { weight: first.weight, reps: first.reps, e1rm: round(first.e1rm, 1), date: firstDate },
+      to: { weight: last.weight, reps: last.reps, e1rm: round(last.e1rm, 1), date: lastDate },
+      gain: round(gain, 1),
+      gainPercent: first.e1rm > 0 ? round((gain / first.e1rm) * 100, 1) : null,
+      spanDays: Math.round(spanDays),
+      // Days since this lift last improved on its own best -- what makes a
+      // stalled lift visible instead of just absent.
+      daysSinceBest: Math.round((Date.now() - Date.parse(`${lastDate}T00:00:00Z`)) / 86400000),
+    });
+  }
+
+  out.sort((a, b) => (b.gainPercent ?? -Infinity) - (a.gainPercent ?? -Infinity));
+  return out;
+}
+
 /** Every logged set for ONE exercise, for the PR explorer's progression
  *  chart -- the journey toward the record, not just the record. */
 export async function exerciseHistory(db, { clientId, exerciseId }) {
@@ -402,11 +469,12 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
 export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
   const since = daysAgoKey(days);
 
-  const [capabilities, weights, adherence, prs, training, nutrition, healthDays, client, measurementRows] = await Promise.all([
+  const [capabilities, weights, adherence, prs, strengthProgress, training, nutrition, healthDays, client, measurementRows] = await Promise.all([
     detectCapabilities(db, { userId, clientId }),
     db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? ORDER BY date', [clientId]),
     db.q('SELECT date, score FROM adherence_records WHERE client_id = ? AND date >= ? ORDER BY date', [clientId, daysAgoKey(120)]),
     loadPersonalRecords(db, clientId),
+    loadStrengthProgress(db, clientId),
     loadTraining(db, clientId, since),
     loadNutrition(db, clientId, since),
     db.q(`SELECT date, active_energy, resting_energy, total_energy, steps, sleep_duration_seconds,
@@ -503,6 +571,7 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
     training,
     nutrition,
     prs,
+    strengthProgress,
     health: { days: healthDays },
     profile: { goal: client?.goal ?? null },
     insights,

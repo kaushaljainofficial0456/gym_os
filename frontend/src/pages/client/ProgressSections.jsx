@@ -201,3 +201,106 @@ export function AchievementsSection({ intel, Section }) {
     </Section>
   );
 }
+
+/* ══════════════════════════ strength progression ══════════════════════════ */
+
+/**
+ * WHERE YOUR STRENGTH IS MOVING — start versus now, per lift, ranked.
+ *
+ * This replaced a flat "recent PRs" timeline that listed the same exercise
+ * names already shown in the bests grid directly above it, clustered on
+ * whichever day the user last trained. Six rows all dated the same day is a
+ * session dump, not a timeline, and it answered a question nobody asked.
+ *
+ * "Bench 60 -> 75 kg over 11 weeks" is a different question from "what is
+ * my best bench?", and a more useful one: it shows the journey, ranks where
+ * progress is actually happening, and — the part a bests grid structurally
+ * cannot show — makes lifts that have STOPPED moving or gone backwards
+ * visible. A lift going down is the single most actionable thing on this
+ * page, and it was previously invisible.
+ *
+ * Compared on estimated 1RM so 60x10 correctly beats 60x5.
+ */
+export function StrengthProgressSection({ progress, Section, onSelect }) {
+  const [showAll, setShowAll] = useState(false);
+  if (!progress?.length) return null;
+
+  const gaining = progress.filter((p) => (p.gainPercent ?? 0) > 0);
+  const losing = progress.filter((p) => (p.gainPercent ?? 0) < 0);
+  const shown = showAll ? progress : gaining.slice(0, 4);
+  if (!shown.length && !losing.length) return null;
+
+  const maxPct = Math.max(...progress.map((p) => Math.abs(p.gainPercent ?? 0)), 1);
+
+  const Row = ({ p }) => {
+    const up = (p.gainPercent ?? 0) >= 0;
+    const tone = up ? 'var(--good)' : 'var(--warn)';
+    return (
+      <button
+        onClick={() => onSelect?.(p.exerciseId)}
+        className="w-full rounded-[var(--r-sm)] px-1 py-2 text-left transition-colors"
+        style={{ minHeight: 44 }}
+      >
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="min-w-0 flex-1 text-[12.5px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>
+            {p.exercise}
+          </span>
+          <span className="shrink-0 text-[12.5px] font-black tabular-nums" style={{ color: tone }}>
+            {up ? '+' : ''}{p.gainPercent}%
+          </span>
+        </div>
+
+        <div className="mt-1 flex items-center gap-2">
+          {/* Magnitude bar, signed. Direction is carried by the number and
+              the words too, never by colour alone. */}
+          <span className="h-1 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
+            <span
+              className="block h-full rounded-full"
+              style={{ width: `${(Math.abs(p.gainPercent ?? 0) / maxPct) * 100}%`, background: tone }}
+            />
+          </span>
+        </div>
+
+        <div className="mt-1 flex items-baseline justify-between gap-2 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
+          <span>
+            {p.from.weight} kg × {p.from.reps} → <span style={{ color: 'var(--mute)' }}>{p.to.weight} kg × {p.to.reps}</span>
+          </span>
+          <span>{p.spanDays >= 14 ? `${Math.round(p.spanDays / 7)} wks` : `${p.spanDays}d`}</span>
+        </div>
+      </button>
+    );
+  };
+
+  return (
+    <Section
+      title="Where your strength is moving"
+      action={
+        progress.length > 4 ? (
+          <button onClick={() => setShowAll((v) => !v)} className="text-[10.5px] font-semibold" style={{ color: 'var(--accent)' }}>
+            {showAll ? 'Show less' : `All ${progress.length}`}
+          </button>
+        ) : null
+      }
+    >
+      <Card className="p-3">
+        <div className="divide-y" style={{ borderColor: 'var(--line)' }}>
+          {shown.map((p) => <Row key={p.exerciseId} p={p} />)}
+        </div>
+
+        {/* Lifts going the wrong way get their own, quieter block rather
+            than being buried at the bottom of a single ranked list. */}
+        {!showAll && losing.length > 0 && (
+          <div className="mt-2 border-t pt-2" style={{ borderColor: 'var(--line)' }}>
+            <div className="mb-1 text-[9.5px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
+              Going backwards
+            </div>
+            {losing.slice(0, 2).map((p) => <Row key={p.exerciseId} p={p} />)}
+            <div className="mt-1 px-1 text-[10px]" style={{ color: 'var(--faint)' }}>
+              Compared on estimated 1RM, so lighter weight at higher reps still counts.
+            </div>
+          </div>
+        )}
+      </Card>
+    </Section>
+  );
+}

@@ -36,7 +36,7 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
-import { WeekSection, MeasurementsSection, AchievementsSection } from './ProgressSections.jsx';
+import { WeekSection, MeasurementsSection, AchievementsSection, StrengthProgressSection } from './ProgressSections.jsx';
 import Icon from '../../components/Icon.jsx';
 
 const PERIODS = [
@@ -573,31 +573,6 @@ function PersonalRecords({ intel, sectionRef }) {
         </button>
       )}
 
-      {timeline.length > 1 && (
-        <Card className="p-4">
-          <div className="text-[10px] font-bold uppercase tracking-[.09em] mb-2" style={{ color: 'var(--faint)' }}>Timeline</div>
-          <div className="space-y-0">
-            {timeline.slice(0, 8).map((t, i) => (
-              <div key={i} className="flex items-center gap-3 py-2" style={{ borderTop: i ? '1px solid var(--line)' : 'none' }}>
-                <div className="w-11 shrink-0 text-center">
-                  <div className="text-[8.5px] font-bold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>
-                    {new Date(`${t.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })}
-                  </div>
-                  <div className="text-[15px] font-black leading-none tabular-nums" style={{ color: 'var(--ink)' }}>
-                    {new Date(`${t.date}T00:00:00`).getDate()}
-                  </div>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12.5px] font-semibold" style={{ color: 'var(--ink)' }}>{t.exercise}</div>
-                  <div className="text-[10.5px] tabular-nums" style={{ color: 'var(--faint)' }}>
-                    {n1(t.weight)} kg × {n0(t.reps)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
       <PrDetail open={!!selected} onClose={() => setSelected(null)} exercise={selected} />
     </Section>
@@ -982,6 +957,9 @@ export default function Progress() {
   const nav = useNavigate();
   const [params, setParams] = useSearchParams();
   const [period, setPeriod] = useState(90);
+  // Tapping a lift in the strength ranking opens the SAME detail sheet the
+  // bests grid uses, rather than a second, near-identical sheet.
+  const [deepExerciseId, setDeepExercise] = useState(null);
   const prRef = useRef(null);
 
   const intelFetch = useFetch(() => api(`/tracking/me/progress/intel?days=${period}`), [period]);
@@ -1065,6 +1043,12 @@ export default function Progress() {
 
       <PersonalRecords intel={intel} sectionRef={prRef} />
 
+      <StrengthProgressSection
+        progress={intel.strengthProgress}
+        Section={Section}
+        onSelect={(exerciseId) => setDeepExercise(exerciseId)}
+      />
+
       <TrainingSection intel={intel} period={period} />
 
       <NutritionSection intel={intel} />
@@ -1078,6 +1062,15 @@ export default function Progress() {
       <ConsistencySection intel={intel} />
 
       <AchievementsSection intel={intel} Section={Section} />
+
+      <PrDetail
+        open={!!deepExerciseId}
+        onClose={() => setDeepExercise(null)}
+        exercise={(intel.prs?.byExercise || []).find((e) => e.exerciseId === deepExerciseId)
+          // A lift can have progression without ever having set a stored PR
+          // row, so fall back to a minimal shape the sheet can still render.
+          || (deepExerciseId ? { exerciseId: deepExerciseId, exercise: (intel.strengthProgress || []).find((p) => p.exerciseId === deepExerciseId)?.exercise || 'Exercise', records: {} } : null)}
+      />
 
       <PhotosSection photos={legacy.data?.photos} />
 
