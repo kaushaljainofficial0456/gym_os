@@ -40,7 +40,7 @@ export default function MotivationalWelcome({ onComplete }) {
       <div className={`relative z-10 flex flex-col items-center px-8 max-w-md ${baseTransition} ${opacity} ${transform}`}>
         {/* logo */}
         <div className="mb-8 flex items-center gap-3 opacity-70">
-          <img src="/logo.jpg" alt="Barbell" className="w-10 h-10 rounded-xl" />
+          <img src="/logo.png" alt="Barbell" className="w-10 h-10 rounded-xl" />
           <span className="font-brand text-sm tracking-wide" style={{ color: textColor }}>Barbell</span>
         </div>
 

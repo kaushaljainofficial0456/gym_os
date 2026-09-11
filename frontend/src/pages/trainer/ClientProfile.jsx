@@ -709,7 +709,7 @@ function AITab({ clientId }) {
           <div className="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-violetx/10 blur-[80px] pointer-events-none" />
           <div className="flex items-center justify-between flex-wrap gap-3 relative">
             <div className="flex items-center gap-3">
-              <img src="/logo.jpg" alt="SK Coach" className="w-10 h-10 rounded-xl object-cover shadow-glow" />
+              <img src="/logo.png" alt="SK Coach" className="w-10 h-10 rounded-xl object-cover shadow-glow" />
               <div>
                 <div className="font-grotesk font-bold">SK Coach AI · Client analysis</div>
                 <div className="text-xs text-mute mt-0.5 max-w-md">
