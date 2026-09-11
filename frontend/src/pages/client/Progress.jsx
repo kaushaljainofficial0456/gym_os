@@ -125,8 +125,8 @@ function ChipRow({ options, value, onChange, ariaLabel }) {
             className="shrink-0 rounded-full px-3 text-[11.5px] font-semibold transition-colors"
             style={{
               minHeight: 34,
-              background: on ? 'var(--accent)' : 'transparent',
-              color: on ? 'var(--accent-contrast)' : 'var(--mute)',
+              background: on ? 'var(--cta-solid)' : 'transparent',
+              color: on ? 'var(--cta-ink)' : 'var(--mute)',
               border: `1px solid ${on ? 'var(--cta-edge)' : 'var(--line)'}`,
             }}
           >
@@ -700,9 +700,14 @@ function ConsistencySection({ intel }) {
 
   const WEEKS = 12;
   const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const cells = [];
+  // Align the grid so every column is a real Mon-Sun week; otherwise the
+  // weekday rail on the left would be lying about which row is which day.
+  const backToMonday = (today.getDay() + 6) % 7;
+  const gridEnd = new Date(today.getTime() + (6 - backToMonday) * 86400000);
   for (let i = WEEKS * 7 - 1; i >= 0; i--) {
-    const d = new Date(today.getTime() - i * 86400000);
+    const d = new Date(gridEnd.getTime() - i * 86400000);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isBoth = both.has(key);
     cells.push({
@@ -710,14 +715,15 @@ function ConsistencySection({ intel }) {
       // Four distinct states, not three. A day that was BOTH trained and
       // logged used to render identically to a train-only day, so the
       // best days in the grid were invisible.
+      future: key > todayKey,
       state: isBoth ? 'both' : trained.has(key) ? 'trained' : logged.has(key) ? 'logged' : 'none',
     });
   }
 
   const STATE = {
-    both: { bg: 'var(--accent-deep)', label: 'both' },
-    trained: { bg: 'var(--accent)', label: 'trained' },
-    logged: { bg: 'rgb(var(--accent-rgb) / .28)', label: 'logged food' },
+    both: { bg: 'var(--m-body)', label: 'both' },
+    trained: { bg: 'var(--m-training)', label: 'trained' },
+    logged: { bg: 'var(--m-nutrition)', label: 'logged food' },
     none: { bg: 'var(--line)', label: 'nothing logged' },
   };
 
@@ -739,20 +745,46 @@ function ConsistencySection({ intel }) {
           <Stat label="Training days" value={trained.size || 0} sub="12 weeks" />
         </div>
 
-        <div className="flex gap-[3px] overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {Array.from({ length: WEEKS }, (_, w) => (
-            <div key={w} className="flex shrink-0 flex-col gap-[3px]">
-              {cells.slice(w * 7, w * 7 + 7).map((cell) => (
-                <span
-                  key={cell.key}
-                  title={fmtCell(cell)}
-                  aria-label={fmtCell(cell)}
-                  className="block rounded-[2px]"
-                  style={{ width: 11, height: 11, background: STATE[cell.state].bg }}
-                />
-              ))}
+        {/* A grid of unlabelled squares is a pattern, not a calendar -- you
+            could see "lots of colour" but not WHICH days. A weekday rail on
+            the left and month markers along the top make it readable as
+            actual dates. Columns are weeks; rows are days of the week. */}
+        <div className="flex gap-1.5">
+          <div className="flex shrink-0 flex-col gap-[3px] pt-[13px]">
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+              <span key={i} className="flex items-center text-[8px] leading-none" style={{ height: 11, color: 'var(--faint)' }}>
+                {i % 2 === 0 ? d : ''}
+              </span>
+            ))}
+          </div>
+          <div className="min-w-0 flex-1 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex gap-[3px]">
+              {Array.from({ length: WEEKS }, (_, w) => {
+                const weekCells = cells.slice(w * 7, w * 7 + 7);
+                // Label a column only when its week contains the 1st of a
+                // month -- labelling every column would be noise.
+                const firstOfMonth = weekCells.find((c) => c.key.endsWith('-01'));
+                return (
+                  <div key={w} className="flex shrink-0 flex-col gap-[3px]">
+                    <span className="h-[10px] text-[8px] leading-none" style={{ color: 'var(--faint)' }}>
+                      {firstOfMonth
+                        ? new Date(`${firstOfMonth.key}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })
+                        : ''}
+                    </span>
+                    {weekCells.map((cell) => (
+                      <span
+                        key={cell.key}
+                        title={fmtCell(cell)}
+                        aria-label={fmtCell(cell)}
+                        className="block rounded-[2px]"
+                        style={{ width: 11, height: 11, background: STATE[cell.state].bg, opacity: cell.future ? 0.35 : 1 }}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          </div>
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9.5px]" style={{ color: 'var(--faint)' }}>
@@ -1061,8 +1093,8 @@ export default function Progress() {
                 className="flex-1 rounded-[var(--r-sm)] text-[11px] font-bold transition-colors"
                 style={{
                   minHeight: 34,
-                  background: on ? 'var(--accent)' : 'transparent',
-                  color: on ? 'var(--accent-contrast)' : 'var(--faint)',
+                  background: on ? 'var(--cta-solid)' : 'transparent',
+                  color: on ? 'var(--cta-ink)' : 'var(--faint)',
                   border: `1px solid ${on ? 'var(--cta-edge)' : 'var(--line)'}`,
                 }}
               >
@@ -1087,9 +1119,14 @@ export default function Progress() {
 
       <TrainingSection intel={intel} period={period} />
 
+      <AchievementsSection intel={intel} Section={Section} Ring={Ring} Icon={Icon} />
+
       <NutritionSection intel={intel} />
 
-      <MeasurementsSection measurements={intel.measurements} Section={Section} ChipRow={ChipRow} NeedMore={NeedMore} />
+      <MeasurementsSection
+        measurements={intel.measurements} Section={Section} ChipRow={ChipRow} NeedMore={NeedMore}
+        clientId={clientId} onLogged={() => intelFetch.reload({ silent: true })}
+      />
 
       <WeekSection week={intel.week} Section={Section} Stat={Stat} />
 
@@ -1097,7 +1134,6 @@ export default function Progress() {
 
       <ConsistencySection intel={intel} />
 
-      <AchievementsSection intel={intel} Section={Section} />
 
       <PrDetail
         open={!!deepExerciseId}

@@ -8,6 +8,7 @@
  * is fabricated to fill a card.
  */
 import { useState } from 'react';
+import { api } from '../../api.js';
 import { Card } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 
@@ -84,10 +85,31 @@ function analyze(series) {
  * Only parts the user has ACTUALLY recorded become tabs — a "Chest" tab
  * with no chest readings is the empty-card problem wearing a different hat.
  */
-export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore }) {
+export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, clientId, onLogged }) {
   const keys = Object.keys(measurements || {}).filter((k) => measurements[k]?.length);
   const [sel, setSel] = useState(null);
-  if (!keys.length) return null;
+  const [logging, setLogging] = useState(false);
+
+  // Renders even with NOTHING recorded -- previously the whole section
+  // vanished when empty, which meant a user had no way to discover that
+  // measurement tracking exists, let alone start it.
+  if (!keys.length) {
+    return (
+      <Section title="Measurements">
+        <Card className="p-4">
+          <div className="text-[12.5px] font-semibold" style={{ color: 'var(--ink)' }}>Track how your shape is changing</div>
+          <div className="mt-1 text-[11.5px] leading-snug" style={{ color: 'var(--faint)' }}>
+            Weight alone can't tell recomposition from loss. Waist, chest and arms can.
+          </div>
+          {clientId && (
+            logging
+              ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); onLogged?.(); }} onCancel={() => setLogging(false)} />
+              : <button className="btn mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
+          )}
+        </Card>
+      </Section>
+    );
+  }
 
   const active = keys.includes(sel) ? sel : keys[0];
   const series = measurements[active];
@@ -132,6 +154,14 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore }
           )}
         </div>
 
+        {clientId && (
+          logging
+            ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); onLogged?.(); }} onCancel={() => setLogging(false)} />
+            : (
+              <button className="btn btn-sm mt-3 w-full" onClick={() => setLogging(true)}>Add today's measurements</button>
+            )
+        )}
+
         {series.length >= 2 ? (
           <div className="mt-2">
             <MetricChart
@@ -153,6 +183,63 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore }
   );
 }
 
+
+const MEASURE_FIELDS = [
+  { key: 'waist', label: 'Waist' }, { key: 'chest', label: 'Chest' }, { key: 'arms', label: 'Arms' },
+  { key: 'thighs', label: 'Thighs' }, { key: 'hips', label: 'Hips' }, { key: 'neck', label: 'Neck' },
+];
+
+/** Logs a measurement set through the EXISTING POST /clients/:id/measurements
+ *  endpoint -- no new backend was added for this. Every field is optional:
+ *  someone who only ever tracks their waist should not be forced to invent
+ *  a neck measurement to save. */
+function MeasurementForm({ clientId, onDone, onCancel }) {
+  const [vals, setVals] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = {};
+    for (const f of MEASURE_FIELDS) {
+      const v = parseFloat(vals[f.key]);
+      if (Number.isFinite(v) && v > 0) body[f.key] = v;
+    }
+    if (!Object.keys(body).length) { setErr('Enter at least one measurement'); return; }
+    setSaving(true);
+    try {
+      await api(`/clients/${clientId}/measurements`, { method: 'POST', body: JSON.stringify(body) });
+      onDone?.();
+    } catch (e2) { setErr(e2.message); }
+    setSaving(false);
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-3 rounded-[var(--r-sm)] p-3" style={{ border: '1px solid var(--line)' }}>
+      <div className="grid grid-cols-3 gap-2">
+        {MEASURE_FIELDS.map((f) => (
+          <label key={f.key} className="block">
+            <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{f.label}</span>
+            <input
+              type="number" inputMode="decimal" step="0.1" min="0" placeholder="cm"
+              aria-label={`${f.label} in centimetres`}
+              value={vals[f.key] || ''}
+              onChange={(ev) => setVals((v) => ({ ...v, [f.key]: ev.target.value }))}
+              className="input mt-0.5 w-full text-[13px] tabular-nums" style={{ minHeight: 40 }}
+            />
+          </label>
+        ))}
+      </div>
+      {err && <div className="mt-2 text-[11px]" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+      <div className="mt-3 flex gap-2">
+        <button type="button" className="btn btn-sm flex-1" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="btn-primary btn-sm flex-1" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+      </div>
+      <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>Leave any blank — only what you fill in is saved.</div>
+    </form>
+  );
+}
+
 /* ══════════════════════════ milestones ══════════════════════════ */
 
 /**
@@ -163,40 +250,79 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore }
  * and it also tells the user what they haven't done, which is the opposite
  * of the point. If none are earned yet the section doesn't render at all.
  */
-export function AchievementsSection({ intel, Section }) {
-  const earned = [];
+export function AchievementsSection({ intel, Section, Ring, Icon }) {
   const w = intel.weight?.analysis;
+  const lost = w && w.change != null && w.change < 0 ? Math.abs(w.change) : 0;
   const trained = intel.consistency?.trainedDays?.length || 0;
   const prTotal = intel.prs?.total || 0;
   const best = intel.consistency?.streak?.best || 0;
 
-  if (w && w.change != null && w.change <= -5) {
-    earned.push({ label: `${Math.abs(Math.round(w.change))} kg down`, detail: 'since your first logged weight' });
-  }
-  for (const n of [10, 25, 50, 100]) {
-    if (trained >= n) earned.push({ label: `${n} training days`, detail: 'logged and qualifying' });
-  }
-  for (const n of [1, 10, 25, 50]) {
-    if (prTotal >= n) earned.push({ label: `${n} personal record${n === 1 ? '' : 's'}`, detail: 'across all exercises' });
-  }
-  if (best >= 7) {
-    earned.push({ label: `${best}-day streak`, detail: 'your longest run so far' });
-  }
+  // Each milestone knows its CURRENT value and its TARGET, so an unearned
+  // one can show how far away it is instead of just sitting greyed out.
+  // Showing the not-yet-earned ones was a deliberate change: hiding them
+  // made the section a trophy cabinet, which says nothing about where to
+  // go next. They stay visually quiet so they read as a horizon, not as a
+  // list of failures.
+  const defs = [
+    { hue: 'body', icon: 'trending', unit: 'kg', label: (t) => `${t} kg down`, value: lost, tiers: [2, 5, 10] },
+    { hue: 'training', icon: 'strength', unit: 'days', label: (t) => `${t} training days`, value: trained, tiers: [10, 25, 50, 100] },
+    { hue: 'strength', icon: 'bulb', unit: 'PRs', label: (t) => `${t} personal record${t === 1 ? '' : 's'}`, value: prTotal, tiers: [1, 10, 25, 50] },
+    { hue: 'nutrition', icon: 'target', unit: 'day streak', label: (t) => `${t}-day streak`, value: best, tiers: [3, 7, 14, 30] },
+  ];
 
-  if (!earned.length) return null;
-  // The most recent/highest tiers are the interesting ones; earlier tiers
-  // stay earned but stop taking up space.
-  const shown = earned.slice(-6);
+  const items = [];
+  for (const d of defs) {
+    // The highest tier already cleared, plus the next one to aim at --
+    // never the whole ladder, which would bury the page in badges.
+    const earnedTiers = d.tiers.filter((t) => d.value >= t);
+    const nextTier = d.tiers.find((t) => d.value < t);
+    const top = earnedTiers[earnedTiers.length - 1];
+    if (top != null) items.push({ ...d, tier: top, earned: true, progress: 1 });
+    if (nextTier != null) {
+      items.push({ ...d, tier: nextTier, earned: false, progress: Math.max(0, Math.min(1, d.value / nextTier)), remaining: nextTier - d.value });
+    }
+  }
+  if (!items.length) return null;
 
   return (
     <Section title="Milestones">
       <div className="grid grid-cols-2 gap-2.5">
-        {shown.map((e, i) => (
-          <div key={i} className="rounded-[var(--r-lg)] p-3" style={{ border: '1px solid var(--line)' }}>
-            <div className="text-[12.5px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>{e.label}</div>
-            <div className="mt-0.5 text-[9.5px]" style={{ color: 'var(--faint)' }}>{e.detail}</div>
-          </div>
-        ))}
+        {items.map((m, i) => {
+          const color = `var(--m-${m.hue})`;
+          return (
+            <div
+              key={i}
+              className="rounded-[var(--r-lg)] p-3"
+              style={{
+                background: m.earned ? `var(--m-${m.hue}-bg)` : 'transparent',
+                border: `1px solid ${m.earned ? 'transparent' : 'var(--line)'}`,
+                // Unearned tiles sit back without being unreadable --
+                // dimming the whole tile would fail contrast on its text.
+                opacity: m.earned ? 1 : 0.72,
+              }}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span
+                  className="inline-flex items-center justify-center rounded-full"
+                  style={{ width: 24, height: 24, background: m.earned ? color : 'var(--line)', color: m.earned ? 'var(--bg)' : 'var(--faint)' }}
+                >
+                  <Icon name={m.earned ? 'check' : m.icon} size={13} />
+                </span>
+                {!m.earned && (
+                  <Ring value={m.progress} size={24} stroke={3} color={color} label={`${Math.round(m.progress * 100)} percent toward ${m.label(m.tier)}`} />
+                )}
+              </div>
+              <div className="mt-1.5 text-[12.5px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>
+                {m.label(m.tier)}
+              </div>
+              <div className="mt-0.5 text-[9.5px]" style={{ color: m.earned ? color : 'var(--faint)' }}>
+                {m.earned
+                  ? 'Achieved'
+                  : `${Math.round(m.remaining * 10) / 10} ${m.unit} to go`}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </Section>
   );
@@ -238,7 +364,10 @@ export function StrengthProgressSection({ progress, Section, onSelect }) {
     return (
       <button
         onClick={() => onSelect?.(p.exerciseId)}
-        className="w-full rounded-[var(--r-sm)] px-1 py-2 text-left transition-colors"
+        // Square rows on purpose: rounded rows inside a divide-y container
+        // made each separator read as curve-straight-curve. The CARD carries
+        // the radius; the rows inside it are flush.
+        className="w-full px-1 py-2.5 text-left transition-colors"
         style={{ minHeight: 44 }}
       >
         <div className="flex items-baseline justify-between gap-3">

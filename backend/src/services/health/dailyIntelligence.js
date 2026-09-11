@@ -19,7 +19,7 @@
 // ============================================================
 import { id, now } from '../../ids.js';
 import { dayKey, iso, DEFAULT_TZ } from '../../utils/time.js';
-import { mifflinStJeorBmr, composeDailyEnergy } from '../intelligence/restingEnergy.js';
+import { mifflinStJeorBmr, composeDailyEnergy, elapsedSecondsOfDay, restingEnergyForSeconds } from '../intelligence/restingEnergy.js';
 import { buildWorkoutCalorieInput, estimateWorkoutCalories, resolveBodyWeight } from '../intelligence/calorieModel.js';
 import { reconcileWorkout, buildExternalWorkoutCandidate, clusterWearableWorkouts, reconcileDailyEnergy } from './reconciliation.js';
 import { computeTrainingLoad } from './trainingLoad.js';
@@ -356,14 +356,62 @@ async function upsertDailySummary(db, { userId, orgId, summary }) {
   return summaryId;
 }
 
-export async function getDailyIntelligence(db, { userId, date }) {
+export async function getDailyIntelligence(db, { userId, date, tz = DEFAULT_TZ }) {
   const row = await db.q1('SELECT * FROM health_daily_summaries WHERE user_id = ? AND date = ?', [userId, date]);
   if (!row) return null;
+  const summary = safeParse(row.source_summary_json);
+
+  // TODAY'S RESTING ENERGY IS TIME-DEPENDENT, SO IT CANNOT BE SERVED FROM
+  // CACHE UNCHANGED.
+  //
+  // Caught live: the burn screen showed a flat 150 kcal at 10:27 in the
+  // morning. The figure was right when it was WRITTEN -- reconciliation had
+  // run around 2am, when two hours of BMR had genuinely accrued -- and then
+  // sat frozen while the day went on, because every later read returned the
+  // stored row. Resting energy is the one number on this screen that keeps
+  // moving whether or not the user does anything, so it is recomputed from
+  // elapsed time on read and the totals are rebuilt around it. Everything
+  // else (workouts, steps) genuinely only changes when new data arrives, so
+  // it stays cached.
+  //
+  // Past days are already complete: elapsedSecondsOfDay caps at a full day,
+  // so this is a no-op for them rather than a special case.
+  const bmrPerDay = summary?.bmrPerDay;
+  if (bmrPerDay && date === dayKey(new Date(), tz)) {
+    const dayStartMs = Date.parse(`${date}T00:00:00${tzOffsetSuffix(date, tz)}`);
+    if (Number.isFinite(dayStartMs)) {
+      const elapsedSeconds = elapsedSecondsOfDay({ dayStartMs, nowMs: Date.now() });
+      const restingNow = restingEnergyForSeconds(bmrPerDay, elapsedSeconds);
+      if (Number.isFinite(restingNow)) {
+        const active = Number.isFinite(row.active_energy) ? row.active_energy : 0;
+        return {
+          ...row,
+          resting_energy: restingNow,
+          total_energy: restingNow + active,
+          source_summary: summary,
+          insights: safeParse(row.insights_json) || [],
+        };
+      }
+    }
+  }
+
   return {
     ...row,
-    source_summary: safeParse(row.source_summary_json),
+    source_summary: summary,
     insights: safeParse(row.insights_json) || [],
   };
+}
+
+/** The UTC offset for a date in a zone, as '+05:30'/'Z', so a day boundary
+ *  is the user's midnight rather than the server's. */
+function tzOffsetSuffix(date, tz) {
+  try {
+    const d = new Date(`${date}T12:00:00Z`);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+      .formatToParts(d).find((p) => p.type === 'timeZoneName')?.value || 'GMT';
+    const m = parts.match(/GMT([+-]\d{2}:\d{2})/);
+    return m ? m[1] : 'Z';
+  } catch { return 'Z'; }
 }
 
 function safeParse(json) { try { return json ? JSON.parse(json) : null; } catch { return null; } }

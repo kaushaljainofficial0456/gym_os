@@ -154,6 +154,53 @@ async function syncOneConnection(db, provider, conn) {
   }
 }
 
+// How stale a connection may be before simply OPENING the app refreshes it.
+// 15 minutes is short enough that a workout finished before you put the
+// phone down is there when you look, and long enough that flicking between
+// tabs does not hammer the provider.
+const AUTO_SYNC_STALE_MS = 15 * 60 * 1000;
+
+/**
+ * Syncs any connected provider that has gone stale, triggered by a normal
+ * read rather than by the user pressing anything.
+ *
+ * WHY THIS EXISTS ALONGSIDE THE WEBHOOK: the webhook is the fast path, but
+ * it only fires once the user has registered a webhook URL in the
+ * provider's own dashboard, and it can silently stop (revoked app, changed
+ * URL, provider outage) with no signal on our side. Relying on it alone is
+ * what left the app needing a manual 'Sync now' tap to show anything.
+ * This is the floor: worst case the data is AUTO_SYNC_STALE_MS old, with
+ * no configuration required at all.
+ *
+ * Never throws and never blocks the response on a provider failure -- a
+ * wearable being unreachable must not stop the page rendering the data
+ * already stored.
+ */
+async function autoSyncStaleConnections(db, { userId }) {
+  try {
+    const connections = await db.q(
+      'SELECT * FROM health_provider_connections WHERE user_id = ? AND status = ?', [userId, 'connected']);
+    const now = Date.now();
+    const stale = connections.filter((c) => {
+      if (c.sync_status === 'syncing') return false;       // one already in flight
+      if (!c.last_synced_at) return true;                  // never synced
+      const last = Date.parse(c.last_synced_at);
+      return !Number.isFinite(last) || now - last > AUTO_SYNC_STALE_MS;
+    });
+    if (!stale.length) return [];
+    const results = [];
+    for (const conn of stale) {
+      let provider;
+      try { provider = getProvider(conn.provider); } catch { continue; }
+      results.push(await syncOneConnection(db, provider, conn));
+    }
+    return results;
+  } catch (e) {
+    console.error('[health] auto-sync failed:', e.message || e);
+    return [];
+  }
+}
+
 export default function healthRoutes(db) {
   const r = Router();
 
@@ -376,7 +423,13 @@ export default function healthRoutes(db) {
     const date = req.query.date || dayKey(new Date(), DEFAULT_TZ);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
-    if (!forceRefresh) {
+
+    // Opening the app IS the sync trigger. Anything new on the provider's
+    // side lands before the day is reconciled below, so the figures the
+    // user sees already include it -- no 'Sync now' tap required.
+    const autoSynced = await autoSyncStaleConnections(db, { userId: req.user.sub });
+    const gotNewData = autoSynced.some((r) => r.ok && r.recordsInserted > 0);
+    if (!forceRefresh && !gotNewData) {
       const cached = await getDailyIntelligence(db, { userId: req.user.sub, date });
       if (cached) return res.json({ intelligence: cached, cached: true });
     }

@@ -175,7 +175,14 @@
   --card-gradient: linear-gradient(168deg, rgba(255,223,221,.03), rgba(255,223,221,.008) 62%);
 
   /* Channel tokens */
-  --accent-rgb: 224 122 99;
+  /* Softened from 224 122 99. The old value was a hot, fully-saturated
+     coral: on a near-black ground it read as a warning colour, and with
+     the accent used for every active state at once the interface looked
+     lit up rather than composed. This is the same hue with the saturation
+     pulled back, so it still reads as the brand and still clears contrast
+     for text (~6.9:1 on --bg), without shouting. Filled surfaces do not
+     use it at all any more -- see --cta-solid. */
+  --accent-rgb: 205 134 112;
   --accent-deep-rgb: 193 92 76;
   --accent-contrast: #2B120A;          /* dark ink ON terracotta */
   --bg-rgb: 10 9 9;
