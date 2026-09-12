@@ -22,9 +22,32 @@ export const setSession = ({ token, user }) => {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
+// Clears BOTH halves of an admin session, and both are load-bearing.
+//
+// The localStorage token is the credential this console SENDS (as a
+// Bearer header). The httpOnly sk_token cookie is one it never reads but
+// very much HAS: admin logs in through the same POST /api/auth/login as
+// the main app, and that route calls setAuthCookie() on every success --
+// so the browser is holding an admin cookie whether this code knows it
+// or not. api()/downloadCsv() both fetch with credentials: 'include', and
+// the backend's requireAuth falls back to req.cookies.sk_token whenever
+// no Authorization header is present.
+//
+// Dropping only localStorage therefore ended the session in the UI while
+// leaving it fully alive on the server for the cookie's whole 7-day life
+// -- on a SUPER_ADMIN console. Clearing the cookie needs a real request
+// (it is httpOnly, so client JS cannot delete it); POST /auth/logout is
+// idempotent and needs no auth, so this is safe to call from any state.
+//
+// Returns a never-rejecting promise: callers that navigate afterwards
+// MUST await it, or the navigation cancels the request in flight and the
+// cookie survives -- the exact bug this whole change set is fixing. See
+// frontend/src/api.js's clearSession for the full write-up.
 export const clearSession = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  return fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    .then(() => {}, () => {});
 };
 
 // CSV export downloads (Phase 3c) can't go through api() above -- the
@@ -37,7 +60,9 @@ export async function downloadCsv(path, filename) {
   if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch('/api' + path, { headers, credentials: 'include' });
   if (res.status === 401 && token) {
-    clearSession();
+    // Awaited: the navigation below would otherwise cancel the logout
+    // request mid-flight and leave the cookie alive (see clearSession).
+    await clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
   }
@@ -64,7 +89,8 @@ export async function api(path, opts = {}) {
   // being swallowed into a misleading "Session expired" instead of the
   // real "Invalid email or password" the backend sent back.
   if (res.status === 401 && token) {
-    clearSession();
+    // Awaited for the same reason as downloadCsv's 401 branch above.
+    await clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
   }
