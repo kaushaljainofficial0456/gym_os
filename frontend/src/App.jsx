@@ -46,7 +46,12 @@ const Progress = lazy(() => import('./pages/client/Progress.jsx'));
 const Profile = lazy(() => import('./pages/client/Profile.jsx'));
 const Settings = lazy(() => import('./pages/client/Settings.jsx'));
 const Help = lazy(() => import('./pages/client/Help.jsx'));
+// Community is now three screens: the home that lists the member's
+// communities, the gym community (unchanged), and one private friend
+// community.
+const CommunityHub = lazy(() => import('./pages/client/CommunityHub.jsx'));
 const Community = lazy(() => import('./pages/client/Community.jsx'));
+const FriendCommunity = lazy(() => import('./pages/client/FriendCommunity.jsx'));
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
@@ -63,6 +68,7 @@ const DevOnboardingPreview = import.meta.env.DEV
   ? lazy(() => import('./pages/DevOnboardingPreview.jsx'))
   : null;
 const SharedWorkout = lazy(() => import('./pages/public/SharedWorkout.jsx'));
+const CommunityInvite = lazy(() => import('./pages/public/CommunityInvite.jsx'));
 
 const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
 // Small helper so each route below stays a one-liner instead of repeating
@@ -153,6 +159,12 @@ export default function App() {
           being asked to log in. Importing it still requires auth, enforced
           by the API route it calls. */}
       <Route path="/workout-share/:id" element={page(SharedWorkout)} />
+      {/* Community invitation — PUBLIC on purpose (see CommunityInvite.jsx):
+          an invite link is usually opened on a phone that is not signed in,
+          and it must be able to say what it is an invitation to before
+          asking for a login. Joining still requires auth, enforced by the
+          API route it calls, not by this route being gated. */}
+      <Route path="/invite/:code" element={page(CommunityInvite)} />
       {/* QR-based gym join -- any authenticated CLIENT or TRAINER with no
           org yet lands here (see needsGymJoin above) instead of a normal
           dashboard, which would otherwise 404/empty-state on every
@@ -212,7 +224,9 @@ export default function App() {
         <Route path="profile" element={page(Profile)} />
         <Route path="membership" element={page(Membership)} />
         <Route path="settings" element={page(Settings)} />
-        <Route path="community" element={page(Community)} />
+        <Route path="community" element={page(CommunityHub)} />
+        <Route path="community/gym" element={page(Community)} />
+        <Route path="community/c/:id" element={page(FriendCommunity)} />
         <Route path="help" element={page(Help)} />
         <Route path="day/:date" element={page(DailyHistory)} />
         <Route path="history" element={page(SessionHistory)} />

@@ -33,12 +33,31 @@ import Leaderboard from '../../components/community/Leaderboard.jsx';
 import CommunityFeed, { mergeFeed, CommentsSheet } from '../../components/community/CommunityFeed.jsx';
 import ShareWorkoutSheet from '../../components/community/ShareWorkoutSheet.jsx';
 import CommunityMembers, { MemberSheet } from '../../components/community/CommunityMembers.jsx';
+import CommunitySwitcher from '../../components/community/friend/CommunitySwitcher.jsx';
 
 const FEED_PAGE = 10;
 // The weekly target the consistency ring measures against. Stated as a
 // constant rather than implied: the ring must never suggest a member
 // "should" be training 7 days a week.
 const WEEKLY_TARGET = 4;
+
+/** One tap back to the list of every community this member belongs to. */
+function BackToCommunities({ nav }) {
+  return (
+    <button
+      type="button"
+      onClick={() => nav('/app/client/community')}
+      className="flex items-center gap-1.5 text-[11.5px] mb-3 -ml-1 px-1"
+      style={{ minHeight: 36, color: 'var(--mute)' }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+      Your communities
+    </button>
+  );
+}
 
 export default function Community() {
   const nav = useNavigate();
@@ -303,14 +322,24 @@ export default function Community() {
   if (!available) {
     return (
       <div className="pb-24">
+        <BackToCommunities nav={nav} />
         <h1 className="font-black text-[24px] mb-2" style={{ color: 'var(--ink)' }}>Community</h1>
         <div className="rounded-2xl p-5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
           <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>
-            Community is a gym feature
+            This gym has no community
           </div>
           <div className="text-[12px] mt-1.5 leading-relaxed" style={{ color: 'var(--mute)' }}>
-            You are training independently, so there is no gym community to join yet.
+            You are training independently, so there is no gym community to join. You can still
+            create a private community and train with friends wherever they train.
           </div>
+          <button
+            type="button"
+            onClick={() => nav('/app/client/community')}
+            className="mt-4 w-full rounded-xl font-semibold text-[13px]"
+            style={{ minHeight: 46, background: 'var(--accent)', color: 'var(--accent-contrast)' }}
+          >
+            Your communities
+          </button>
         </div>
       </div>
     );
@@ -319,6 +348,7 @@ export default function Community() {
   if (!joined) {
     return (
       <div className="pb-24">
+        <BackToCommunities nav={nav} />
         <h1 className="font-black text-[24px]" style={{ color: 'var(--ink)' }}>{gymName}</h1>
         <div className="rounded-2xl p-5 mt-4" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
           <div className="text-[14px] font-bold" style={{ color: 'var(--ink)' }}>Join your gym community</div>
@@ -351,17 +381,12 @@ export default function Community() {
     <div className="pb-24">
       {/* ── header ── */}
       <header className="mb-4">
+        {/* The switcher, not a plain title: a member can belong to this gym
+            community AND several private ones, and the most damaging thing
+            this feature could do is leave someone unsure which one they are
+            looking at (or posting into). */}
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-black leading-tight" style={{ fontSize: 24, color: 'var(--ink)' }}>
-              {gymName}
-            </h1>
-            {pulse && (
-              <div className="text-[12px] mt-1" style={{ color: 'var(--mute)' }}>
-                {fmt(pulse.members)} {pulse.members === 1 ? 'member' : 'members'}
-              </div>
-            )}
-          </div>
+          <CommunitySwitcher current={{ id: 'gym', name: gymName, type: 'gym' }} onNavigate={nav} />
           <button
             type="button"
             onClick={() => setJoined(false)}
@@ -371,6 +396,11 @@ export default function Community() {
             Leave
           </button>
         </div>
+        {pulse && (
+          <div className="text-[12px] mt-1.5 px-1" style={{ color: 'var(--mute)' }}>
+            {fmt(pulse.members)} {pulse.members === 1 ? 'member' : 'members'}
+          </div>
+        )}
 
         <CommunityMoment pulse={pulse} busiestWeekday={overview?.busiestWeekday} />
       </header>

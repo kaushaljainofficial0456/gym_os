@@ -80,11 +80,31 @@ function Chevron() {
 
 function CommunityCard() {
   const nav = useNavigate();
-  const fetch = useFetch(() => api('/community/membership'));
-  if (fetch.loading || fetch.error || !fetch.data?.settings?.community_enabled) return null;
-  const membership = fetch.data?.membership;
-  const gym = fetch.data?.gym;
-  if (!membership?.enabled) return null;
+  // One call for every kind of community this member belongs to -- their
+  // gym's, their private ones, and any invitation waiting on them.
+  const fetch = useFetch(() => api('/communities'));
+  const data = fetch.data;
+  if (fetch.loading || fetch.error || !data) return null;
+
+  const gymJoined = !!(data.gym?.available && data.gym.joined);
+  const friendCount = data.communities?.length || 0;
+  const total = friendCount + (gymJoined ? 1 : 0);
+  const invites = data.invites?.length || 0;
+  // Nothing to show is nothing to show -- no card advertising a feature
+  // to someone who has not joined anything.
+  if (!total && !invites) return null;
+
+  const title = invites
+    ? (invites === 1 ? 'You have an invitation' : `${invites} invitations`)
+    : total === 1
+      ? (gymJoined ? data.gym.name : data.communities[0].name)
+      : 'Your communities';
+  const sub = invites
+    ? 'Tap to accept or decline'
+    : total === 1
+      ? 'Leaderboards, challenges and shared workouts'
+      : `${total} communities`;
+
   return (
     <Reveal delay={260}>
       <Tilt max={4}>
@@ -100,9 +120,16 @@ function CommunityCard() {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{gym?.name || 'Community'}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: 'var(--faint)' }}>Leaderboards &amp; shared workouts</div>
+            <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{title}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--faint)' }}>{sub}</div>
           </div>
+          {invites > 0 && (
+            <span
+              aria-hidden="true"
+              className="shrink-0 rounded-full"
+              style={{ width: 8, height: 8, background: 'var(--accent)' }}
+            />
+          )}
           <Chevron />
         </button>
       </Tilt>

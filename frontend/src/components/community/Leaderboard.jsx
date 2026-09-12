@@ -25,34 +25,49 @@ const PODIUM_TONE = ['var(--m-strength)', 'color-mix(in srgb, var(--ink) 45%, tr
 
 const METRIC_LABEL = {
   completedWorkouts: 'Workouts',
+  activeDays: 'Active days',
   volume: 'Volume',
   streak: 'Streaks',
+  prs: 'Records',
 };
 
 /** The board takes the colour of whatever it is currently ranking, so
  *  switching metric is visible at a glance and not only in the label. */
 const METRIC_HUE = {
   completedWorkouts: HUE.workouts,
+  activeDays: HUE.active,
   volume: HUE.recovery,
   streak: HUE.streak,
+  prs: HUE.prs,
 };
+
+/**
+ * The order metrics are offered in, most-to-least about turning up. A
+ * community that leads with Volume tells its newest member the board is not
+ * for them; consistency is something everybody can win.
+ *
+ * A caller only ever gets tabs for boards it actually passed, so the gym
+ * community's three are unaffected by the friend community's five.
+ */
+const METRIC_ORDER = ['completedWorkouts', 'activeDays', 'volume', 'streak', 'prs'];
 
 const PERIOD_LABEL = { day: 'Today', week: 'This week', month: 'This month' };
 
 export function formatMetric(metric, value) {
   if (metric === 'volume') return `${fmtVolume(value)} kg`;
   if (metric === 'streak') return `${fmt(value)} ${value === 1 ? 'day' : 'days'}`;
+  if (metric === 'activeDays') return `${fmt(value)} ${value === 1 ? 'day' : 'days'}`;
+  if (metric === 'prs') return `${fmt(value)} ${value === 1 ? 'record' : 'records'}`;
   return `${fmt(value)} ${value === 1 ? 'workout' : 'workouts'}`;
 }
 
 export default function Leaderboard({
-  boards, metric, onMetricChange, period, you, onSelectMember,
+  boards, metric, onMetricChange, period, you, onSelectMember, definitions,
 }) {
   // A tab per metric that actually has someone on it. Hiding an empty
   // board is not hiding bad news -- an empty board says nothing true.
   const available = useMemo(
-    () => ['completedWorkouts', 'volume', 'streak']
-      .filter((m) => (boards?.[m] || []).some((e) => e.value > 0)),
+    () => METRIC_ORDER.filter((m) => (boards?.[m] || []).some((e) => e.value > 0)),
     [boards]);
 
   const active = available.includes(metric) ? metric : available[0];
@@ -109,6 +124,14 @@ export default function Leaderboard({
             );
           })}
         </div>
+      )}
+
+      {/* What this board actually counts, in one sentence. A ranking whose
+          rule the reader has to guess is an opaque score by another name. */}
+      {definitions?.[active] && (
+        <p className="text-[11px] leading-relaxed mb-3 -mt-1" style={{ color: 'var(--faint)' }}>
+          {definitions[active]}
+        </p>
       )}
 
       {/* Podium: 2 · 1 · 3, the tallest in the middle. */}

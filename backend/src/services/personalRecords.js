@@ -58,8 +58,11 @@ export async function evaluatePRs(db, clientId, exerciseId, sets, date) {
   if (!candidates) return [];
   const prs = [];
   const existing = await db.q(
-    'SELECT type, value FROM personal_records WHERE client_id = ? AND exercise_id = ?', [clientId, exerciseId]);
+    'SELECT type, value, weight, reps FROM personal_records WHERE client_id = ? AND exercise_id = ?', [clientId, exerciseId]);
   const existingByType = new Map(existing.map(e => [e.type, e.value]));
+  // The full row too, so the record being replaced can be persisted with
+  // its own weight/reps (see the previous_* columns in schema.sql).
+  const existingRowByType = new Map(existing.map(e => [e.type, e]));
   // Baseline from pre-existing workout_logs history, consulted PER TYPE --
   // NOT gated on whether this exercise has ANY personal_records row at all.
   // The 4 types are independent (a session can beat best_reps without
@@ -85,12 +88,18 @@ export async function evaluatePRs(db, clientId, exerciseId, sets, date) {
     const prev = existingByType.get(type) ?? baseline[type]?.value;
     if (prev === undefined || cand.value > prev + EPS) {
       const prevValue = prev !== undefined ? prev : null;
+      // Weight/reps of the replaced record are only known when it was a
+      // real row; a history-baseline value has no single set behind it.
+      const prevRow = existingRowByType.get(type) || null;
       await db.run(
-        `INSERT INTO personal_records (id, client_id, exercise_id, type, value, weight, reps, date, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO personal_records (id, client_id, exercise_id, type, value, weight, reps, date, created_at,
+                                       previous_value, previous_weight, previous_reps)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (client_id, exercise_id, type) DO UPDATE SET
-           value = excluded.value, weight = excluded.weight, reps = excluded.reps, date = excluded.date, created_at = excluded.created_at`,
-        [id('pr_'), clientId, exerciseId, type, cand.value, cand.weight, cand.reps, date, now()]);
+           value = excluded.value, weight = excluded.weight, reps = excluded.reps, date = excluded.date, created_at = excluded.created_at,
+           previous_value = excluded.previous_value, previous_weight = excluded.previous_weight, previous_reps = excluded.previous_reps`,
+        [id('pr_'), clientId, exerciseId, type, cand.value, cand.weight, cand.reps, date, now(),
+         prevValue, prevRow?.weight ?? null, prevRow?.reps ?? null]);
       prs.push({ type, label, value: cand.value, previous: prevValue, weight: cand.weight, reps: cand.reps, date });
     }
   }

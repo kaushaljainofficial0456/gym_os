@@ -561,4 +561,31 @@ END $$;
 --                                                out of scope for this pass
 --                                                (see phase1-foundational-
 --                                                architecture's own audit).
+--   communities, community_memberships,
+--   community_invites, community_events,
+--   community_event_reactions,
+--   community_event_comments,
+--   community_group_challenges               -- FRIEND COMMUNITIES. Cross-
+--                                                tenant BY DESIGN: one
+--                                                community's members belong
+--                                                to different gyms (or none),
+--                                                so there is no org_id to key
+--                                                a tenant_isolation policy on,
+--                                                and an org-keyed policy would
+--                                                hide exactly the rows the
+--                                                feature exists to show.
+--                                                Access is an ACTIVE
+--                                                membership row, enforced in
+--                                                services/friendCommunities/
+--                                                on every read and write.
+--                                                NOTE for anyone touching those
+--                                                services: aggregates there
+--                                                read workouts/personal_records
+--                                                of members in OTHER orgs, so
+--                                                they must run as plain db.q()
+--                                                reads, never inside db.tx() --
+--                                                db.tx() engages app.org_id and
+--                                                the client-scoped policies
+--                                                above would silently drop
+--                                                every other gym's rows.
 -- ============================================================

@@ -46,8 +46,18 @@ export const HUE = {
 
 /** A challenge is coloured by WHAT IT MEASURES, so the bar itself tells
  *  you whether you are chasing sessions, kilos or records. */
-export const challengeHue = (metric) =>
-  (metric === 'prs' ? HUE.prs : metric === 'volume' ? HUE.recovery : HUE.workouts);
+export const challengeHue = (metric) => (
+  metric === 'prs' ? HUE.prs
+    : metric === 'volume' ? HUE.recovery
+      : metric === 'active_days' ? HUE.active
+        : HUE.workouts);
+
+/** What a challenge counts, in the unit a person would say out loud. */
+export const challengeUnit = (metric) => (
+  metric === 'volume' ? 'kg'
+    : metric === 'prs' ? 'PRs'
+      : metric === 'active_days' ? 'days'
+        : 'workouts');
 
 export function SectionTitle({ children, action }) {
   return (
@@ -318,7 +328,7 @@ export function ChallengeCard({ challenge, onOpen }) {
   const isCommunity = c.scope === 'community';
   const shownValue = isCommunity ? c.value : c.yourValue;
   const pct = isCommunity ? c.percent : c.yourPercent;
-  const unit = c.metric === 'volume' ? 'kg' : c.metric === 'prs' ? 'PRs' : 'workouts';
+  const unit = challengeUnit(c.metric);
   const hue = challengeHue(c.metric);
 
   return (
@@ -552,6 +562,189 @@ export function CommunityMoment({ pulse, busiestWeekday }) {
   return (
     <div className="text-[12.5px] leading-relaxed px-1" style={{ color: 'var(--mute)' }}>
       {line}
+    </div>
+  );
+}
+
+/* ══════════════ RINGS ══════════════ */
+
+/**
+ * Up to three rings, side by side, for the three things with a genuine
+ * CEILING: your week against your own target, the community's shared goal,
+ * and the challenge you are in. A ring implies "out of something", so a
+ * caller passes only rings that have a real denominator -- anything without
+ * one belongs in a number, not an arc.
+ */
+export function RingRow({ rings = [] }) {
+  const shown = rings.filter(Boolean);
+  if (!shown.length) return null;
+  return (
+    <div
+      className="rounded-2xl p-3.5 grid gap-2"
+      style={{
+        gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))`,
+        background: 'var(--panel)',
+        border: '1px solid var(--line)',
+      }}
+    >
+      {shown.map((r) => (
+        <div key={r.key} className="flex flex-col items-center text-center gap-1.5 min-w-0">
+          <Ring value={r.value} size={shown.length > 2 ? 64 : 76} stroke={7} color={r.color}>
+            <span className="font-black tabular-nums" style={{ fontSize: shown.length > 2 ? 13 : 15, color: r.color }}>
+              {Math.round(Math.min(1, r.value) * 100)}%
+            </span>
+          </Ring>
+          <div className="text-[9.5px] uppercase tracking-[.12em] leading-tight" style={{ color: 'var(--mute)' }}>
+            {r.label}
+          </div>
+          <div className="text-[11px] tabular-nums leading-tight truncate w-full" style={{ color: 'var(--ink)' }}>
+            {r.detail}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════ HEATMAP ══════════════ */
+
+const WEEKDAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+/**
+ * Four weeks of the community's training, as a calendar.
+ *
+ * The chart above it answers "is this picking up"; the heatmap answers "when
+ * do we actually train", which is a different question and the reason both
+ * exist. Intensity is relative to the community's own busiest day, so a
+ * group of four does not look dead next to a gym of four hundred.
+ *
+ * A day nobody trained is drawn as an empty cell, never omitted.
+ */
+export function ActivityHeatmap({ series }) {
+  const [sel, setSel] = useState(null);
+  const days = series || [];
+  const total = days.reduce((s, d) => s + d.workouts, 0);
+  // Nothing to see is not a grid of grey squares pretending to be data.
+  if (!days.length || total === 0) return null;
+
+  const max = Math.max(...days.map((d) => d.workouts), 1);
+  // Pad the front so the first column is a Monday: a calendar whose weeks do
+  // not line up is harder to read than no calendar.
+  const firstDow = new Date(`${days[0].date}T12:00:00Z`).getUTCDay(); // 0=Sun
+  const lead = (firstDow + 6) % 7;
+  const cells = [...Array(lead).fill(null), ...days];
+  const chosen = sel != null ? days[sel] : null;
+
+  return (
+    <div className="rounded-2xl p-3.5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+      <SectionTitle>When this community trains</SectionTitle>
+      <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+        {WEEKDAY_INITIALS.map((d, i) => (
+          <div key={`${d}${i}`} className="text-[9px] text-center" style={{ color: 'var(--faint)' }} aria-hidden="true">
+            {d}
+          </div>
+        ))}
+        {cells.map((day, i) => {
+          if (!day) return <div key={`pad${i}`} />;
+          const index = i - lead;
+          const intensity = day.workouts === 0 ? 0 : 0.25 + 0.75 * (day.workouts / max);
+          const on = sel === index;
+          const label = new Date(`${day.date}T12:00:00Z`)
+            .toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+          return (
+            <button
+              key={day.date}
+              type="button"
+              onClick={() => setSel(on ? null : index)}
+              aria-pressed={on}
+              aria-label={`${label}: ${day.workouts} ${day.workouts === 1 ? 'workout' : 'workouts'}`}
+              className="rounded-md transition-transform active:scale-95"
+              style={{
+                aspectRatio: '1 / 1',
+                background: day.workouts === 0
+                  ? 'var(--bg)'
+                  : `color-mix(in srgb, ${HUE.workouts.fg} ${Math.round(intensity * 100)}%, transparent)`,
+                border: `1px solid ${on ? HUE.workouts.fg : 'var(--line)'}`,
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {chosen ? (
+        <div className="mt-3 pt-3 flex items-center justify-between gap-3" style={{ borderTop: '1px solid var(--line)' }}>
+          <span className="text-[11.5px] font-semibold" style={{ color: 'var(--ink)' }}>
+            {new Date(`${chosen.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+          </span>
+          <span className="text-[11.5px] tabular-nums flex gap-2.5">
+            <span style={{ color: HUE.workouts.fg }}>{chosen.workouts} {chosen.workouts === 1 ? 'workout' : 'workouts'}</span>
+            <span style={{ color: HUE.active.fg }}>{chosen.members} active</span>
+            {chosen.prs > 0 && <span style={{ color: HUE.prs.fg }}>{chosen.prs} PRs</span>}
+          </span>
+        </div>
+      ) : (
+        <div className="mt-2 text-[10.5px]" style={{ color: 'var(--faint)' }}>Tap a day for its detail.</div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════ MILESTONES ══════════════ */
+
+/**
+ * What the group has done TOGETHER, and the next real threshold.
+ *
+ * Every figure is a count of sessions and records that exist, from the day
+ * each member joined -- a milestone is reached or it is not, and one that has
+ * not been reached is shown as progress rather than announced early.
+ */
+export function MilestoneStrip({ milestones }) {
+  if (!milestones?.workouts) return null;
+  const { workouts, prs } = milestones;
+  if (!workouts.value) return null;
+
+  const pct = workouts.next ? Math.min(100, Math.round((workouts.value / workouts.next) * 100)) : 100;
+  const since = milestones.since
+    ? new Date(`${milestones.since}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+    : null;
+
+  return (
+    <div className="rounded-2xl p-3.5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+      <SectionTitle>Together</SectionTitle>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="font-black tabular-nums leading-none" style={{ fontSize: 28, color: HUE.workouts.fg }}>
+          {fmt(workouts.value)}
+        </span>
+        <span className="text-[12px]" style={{ color: 'var(--mute)' }}>
+          {workouts.value === 1 ? 'workout' : 'workouts'}{since ? ` since ${since}` : ''}
+        </span>
+      </div>
+
+      {workouts.reached && (
+        <div className="text-[11.5px] mt-1.5 font-semibold" style={{ color: HUE.prs.fg }}>
+          {fmt(workouts.reached)} workouts together — milestone reached
+        </div>
+      )}
+
+      {workouts.next && (
+        <>
+          <div className="mt-2.5 h-2 rounded-full overflow-hidden" style={{ background: HUE.workouts.bg }}>
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${pct}%`, background: HUE.workouts.fg, transition: 'width .6s cubic-bezier(.22,.8,.3,1)' }}
+            />
+          </div>
+          <div className="text-[11px] mt-1.5 tabular-nums" style={{ color: 'var(--mute)' }}>
+            {fmt(workouts.toNext)} to go until {fmt(workouts.next)}
+          </div>
+        </>
+      )}
+
+      {prs?.value > 0 && (
+        <div className="text-[11.5px] mt-2.5 tabular-nums" style={{ color: 'var(--mute)' }}>
+          <span style={{ color: HUE.prs.fg }}>{fmt(prs.value)}</span> personal {prs.value === 1 ? 'record' : 'records'} set together
+        </div>
+      )}
     </div>
   );
 }

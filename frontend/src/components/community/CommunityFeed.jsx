@@ -219,9 +219,25 @@ export default function CommunityFeed({
   );
 }
 
-function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnshare }) {
+/**
+ * One event, one card. Exported because friend communities render the same
+ * kinds of event (a shared session, a set of records, someone joining) and a
+ * second card component would drift from this one within a release.
+ *
+ * `gym` is the author's gym, shown only where they chose to show it (friend
+ * communities only -- inside a gym community everyone is already in it).
+ * `verb` lets a caller name an event kind this component does not know.
+ */
+export function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnshare, gym, verb, removable }) {
   const s = social || { counts: {}, mine: [], total: 0, comments: 0 };
   const isPR = item.kind === 'pr';
+  const isMember = item.kind === 'joined' || item.kind === 'created';
+  // In a GYM community a record is not a post -- it appears because the
+  // record exists, so there is nothing to take down (the member's privacy
+  // control is elsewhere). In a friend community a record reaches the feed
+  // only because someone chose to post it, so they can unpost it; that
+  // caller passes `removable` explicitly.
+  const canRemove = typeof removable === 'boolean' ? removable : !isPR;
 
   return (
     <article
@@ -236,15 +252,24 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
               {isYou ? 'You' : item.name}
             </span>
             <span className="text-[11.5px]" style={{ color: 'var(--mute)' }}>
-              {isPR
+              {verb || (isPR
                 ? (item.data.recordCount > 1 ? 'set personal records' : 'set a personal record')
-                : 'shared a workout'}
+                : 'shared a workout')}
             </span>
           </div>
-          <div className="text-[10.5px] mt-0.5" style={{ color: 'var(--faint)' }}>{ago(item.at)}</div>
+          <div className="text-[10.5px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--faint)' }}>
+            <span>{ago(item.at)}</span>
+            {gym && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{gym}</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
+      {isMember ? null : (
       <div className="mt-2.5 ml-[44px]">
         {isPR ? <PRBody pr={item.data} /> : <ShareBody share={item.data} />}
         {/* Only the author needs to know the audience of their own post --
@@ -256,8 +281,12 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
           </div>
         )}
       </div>
+      )}
 
-      {/* Actions sit on one compact row rather than a block of buttons. */}
+      {/* Actions sit on one compact row rather than a block of buttons.
+          Someone joining is a fact, not a post: it gets no reactions and no
+          comment thread. */}
+      {!isMember && (
       <div className="mt-2.5 ml-[44px] flex items-center gap-1.5 flex-wrap">
         {REACTION_ORDER.map((key) => {
           const count = s.counts[key] || 0;
@@ -316,10 +345,10 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
             Save to my workouts
           </button>
         )}
-        {!isPR && isYou && onUnshare && (
+        {isYou && onUnshare && canRemove && (
           <button
             type="button"
-            onClick={() => onUnshare(item.data)}
+            onClick={() => onUnshare(item)}
             className="rounded-full px-2.5 text-[11.5px] ml-auto"
             style={{ minHeight: 32, color: 'var(--mute)' }}
           >
@@ -327,6 +356,7 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
           </button>
         )}
       </div>
+      )}
     </article>
   );
 }
@@ -370,16 +400,26 @@ function PRBody({ pr }) {
       </div>
 
       <div className="mt-1.5 space-y-1.5">
-        {shown.map((g) => (
-          <div key={g.exercise} className="flex items-baseline justify-between gap-3">
-            <span className="text-[12.5px] font-bold truncate" style={{ color: 'var(--ink)' }}>
-              {g.exercise}
-            </span>
-            <span className="text-[12.5px] font-black tabular-nums shrink-0" style={{ color: HUE.prs.fg }}>
-              {headlineFor(g.best)}
-            </span>
-          </div>
-        ))}
+        {shown.map((g) => {
+          const beat = deltaFor(g.best);
+          return (
+            <div key={g.exercise} className="flex items-baseline justify-between gap-3">
+              <span className="text-[12.5px] font-bold truncate" style={{ color: 'var(--ink)' }}>
+                {g.exercise}
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block text-[12.5px] font-black tabular-nums" style={{ color: HUE.prs.fg }}>
+                  {headlineFor(g.best)}
+                </span>
+                {beat && (
+                  <span className="block text-[10px] tabular-nums mt-0.5" style={{ color: 'var(--good)' }}>
+                    {beat}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {more > 0 && (
@@ -389,6 +429,23 @@ function PRBody({ pr }) {
       )}
     </div>
   );
+}
+
+/**
+ * What this record BEAT, when the record engine stored it (see
+ * personal_records.previous_value). Rendered only for a genuine improvement
+ * over a real earlier record: a first-ever record has nothing to compare
+ * against, and inventing "+70 kg" for it would be the most flattering lie on
+ * the page.
+ */
+function deltaFor(r) {
+  if (!r || r.previousValue == null) return null;
+  const gain = Math.round((Number(r.value) - Number(r.previousValue)) * 100) / 100;
+  if (!(gain > 0)) return null;
+  const trim = (n) => String(Math.round(Number(n) * 10) / 10);
+  if (r.type === 'best_reps') return `+${trim(gain)} reps · was ${trim(r.previousValue)}`;
+  if (r.type === 'best_volume') return `+${fmtVolume(gain)} kg · was ${fmtVolume(r.previousValue)} kg`;
+  return `+${trim(gain)} kg · was ${trim(r.previousValue)} kg`;
 }
 
 /** The one figure that best states a record, per type. Rendering them all
@@ -408,13 +465,21 @@ function headlineFor(r) {
 
 function ShareBody({ share }) {
   const ex = Array.isArray(share.payload) ? share.payload : [];
-  const sets = ex.reduce((n, e) => n + (Number(e.sets) || 0), 0);
-  // Only metrics the snapshot actually carries are shown -- a zero here
-  // would read as "this workout had no sets" rather than "we didn't store
-  // that".
+  const prescribedSets = ex.reduce((n, e) => n + (Number(e.sets) || 0), 0);
+  // A friend-community snapshot carries what was actually LOGGED (completed
+  // sets, real volume, real minutes); a gym share carries the prescription.
+  // Each shows what it genuinely has -- and only metrics the snapshot
+  // carries are shown, because a zero here would read as "this workout had
+  // no sets" rather than "we didn't store that".
+  const sets = Number(share.setCount) > 0 ? Number(share.setCount) : prescribedSets;
   const bits = [
     ex.length > 0 ? `${ex.length} ${ex.length === 1 ? 'exercise' : 'exercises'}` : null,
     sets > 0 ? `${sets} sets` : null,
+  ].filter(Boolean);
+  const totals = [
+    share.durationMin > 0 ? `${share.durationMin} min` : null,
+    share.volume > 0 ? `${fmtVolume(share.volume)} kg lifted` : null,
+    share.prCount > 0 ? `${share.prCount} ${share.prCount === 1 ? 'record' : 'records'}` : null,
   ].filter(Boolean);
 
   const SHOWN = 4;
@@ -429,6 +494,20 @@ function ShareBody({ share }) {
           <span className="text-[10.5px] shrink-0 tabular-nums" style={{ color: 'var(--mute)' }}>{bits.join(' · ')}</span>
         )}
       </div>
+
+      {totals.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap mt-2">
+          {totals.map((t) => (
+            <span
+              key={t}
+              className="text-[10.5px] tabular-nums rounded-full px-2 py-0.5"
+              style={{ background: HUE.workouts.bg, color: HUE.workouts.fg }}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* The actual prescription, not a truncated comma list. A shared
           workout is only worth copying if you can see what you would be
@@ -457,7 +536,22 @@ function ShareBody({ share }) {
 
 /* ══════════════ COMMENTS SHEET ══════════════ */
 
-export function CommentsSheet({ target, you, onClose, toast }) {
+/**
+ * How the gym community reads and writes comments. A friend community stores
+ * its comments against a real event row rather than a (type, id) pair, so it
+ * passes its own adapter -- the SHEET, which is all the person sees, stays
+ * one component.
+ */
+export const GYM_COMMENTS = {
+  list: (target) => api(`/community/comments?target_type=${target.targetType}&target_id=${encodeURIComponent(target.id)}`),
+  add: (target, body) => api('/community/comments', {
+    method: 'POST',
+    body: JSON.stringify({ target_type: target.targetType, target_id: target.id, body }),
+  }),
+  remove: (id) => api(`/community/comments/${id}`, { method: 'DELETE' }),
+};
+
+export function CommentsSheet({ target, you, onClose, toast, comments: commentsApi = GYM_COMMENTS }) {
   const [comments, setComments] = useState(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -465,13 +559,13 @@ export function CommentsSheet({ target, you, onClose, toast }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await api(`/community/comments?target_type=${target.targetType}&target_id=${encodeURIComponent(target.id)}`);
+      const res = await commentsApi.list(target);
       setComments(res.comments || []);
     } catch (e) {
       setErr(e.message || 'Could not load comments');
       setComments([]);
     }
-  }, [target]);
+  }, [target, commentsApi]);
 
   // A real effect, not a useState initializer: the initializer runs
   // DURING render, so kicking off a fetch there sets state mid-render.
@@ -482,10 +576,7 @@ export function CommentsSheet({ target, you, onClose, toast }) {
     if (!body) return;
     setBusy(true); setErr('');
     try {
-      await api('/community/comments', {
-        method: 'POST',
-        body: JSON.stringify({ target_type: target.targetType, target_id: target.id, body }),
-      });
+      await commentsApi.add(target, body);
       setDraft('');
       await load();
       toast?.('Comment added');
@@ -497,7 +588,7 @@ export function CommentsSheet({ target, you, onClose, toast }) {
 
   const remove = async (id) => {
     try {
-      await api(`/community/comments/${id}`, { method: 'DELETE' });
+      await commentsApi.remove(id);
       await load();
     } catch (e) {
       setErr(e.message || 'Could not delete that comment');

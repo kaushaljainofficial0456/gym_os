@@ -37,6 +37,14 @@ const MIGRATIONS = [
   ['community_workout_shares', 'visibility', `visibility TEXT NOT NULL DEFAULT 'everyone'`],
   ['community_members', 'pr_visibility', `pr_visibility TEXT NOT NULL DEFAULT 'everyone'`],
   ['community_members', 'feed_scope', `feed_scope TEXT NOT NULL DEFAULT 'all'`],
+  // --- Personal records: the value a new record replaced ---
+  // Written by personalRecords.js evaluatePRs() on every new record, so a
+  // shared PR can say "previous 110 kg, +10 kg" from stored fact instead of
+  // re-deriving it. Nullable: rows that predate this column simply have no
+  // recorded previous, and the UI omits the comparison for them.
+  ['personal_records', 'previous_value', `previous_value REAL`],
+  ['personal_records', 'previous_weight', `previous_weight REAL`],
+  ['personal_records', 'previous_reps', `previous_reps REAL`],
   // --- AI food estimate cache: fields the cached response used to drop ---
   // A cached estimate must be indistinguishable from a fresh one. These two
   // were only ever on the fresh path, so the second person to look up a

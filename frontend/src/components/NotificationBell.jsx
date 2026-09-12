@@ -22,6 +22,7 @@
  * not a bug; owner-facing events DO write real rows via notify().
  */
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 
 function timeAgo(iso) {
@@ -59,6 +60,7 @@ export default function NotificationBell({
   const [err, setErr] = useState('');
   const [onlyUnread, setOnlyUnread] = useState(false);
   const ref = useRef(null);
+  const navigate = useNavigate();
 
   const load = () => {
     setLoading(true);
@@ -89,6 +91,18 @@ export default function NotificationBell({
     const next = !open;
     setOpen(next);
     if (next) load();
+  };
+
+  // Some notifications are about a specific place in the app (an invitation
+  // to answer, a reaction on a post). Those carry a link, and tapping the row
+  // should go there -- a notification that only marks itself read is a
+  // dead end.
+  const openNotification = (n) => {
+    markRead(n);
+    const link = n.data?.link;
+    if (!link) return;
+    setOpen(false);
+    navigate(link);
   };
 
   const markRead = async (n) => {
@@ -246,7 +260,7 @@ export default function NotificationBell({
                   <button
                     key={n.id}
                     role="menuitem"
-                    onClick={() => markRead(n)}
+                    onClick={() => openNotification(n)}
                     className="w-full text-left px-3.5 py-2.5 flex items-start gap-2.5 transition-colors"
                     style={{ borderBottom: '1px solid var(--line)', background: n.read ? 'transparent' : 'var(--accent-soft)' }}
                   >

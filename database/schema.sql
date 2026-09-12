@@ -314,6 +314,15 @@ CREATE TABLE IF NOT EXISTS personal_records (
   reps        REAL,
   date        TEXT NOT NULL,
   created_at  TEXT NOT NULL,
+  -- The record this one replaced, captured by personalRecords.js at the
+  -- moment it is beaten. The table keeps only the CURRENT best, so without
+  -- this "previous 110 kg, +10 kg" could only be reconstructed by re-running
+  -- PR logic somewhere else -- a second opinion on what counts as a record.
+  -- NULL for rows written before the column existed and for a first-ever
+  -- record with no history to compare against.
+  previous_value  REAL,
+  previous_weight REAL,
+  previous_reps   REAL,
   UNIQUE (client_id, exercise_id, type)
 );
 CREATE INDEX IF NOT EXISTS idx_pr_client ON personal_records(client_id, exercise_id);
@@ -1118,6 +1127,189 @@ CREATE TABLE IF NOT EXISTS community_follows (
 );
 CREATE INDEX IF NOT EXISTS idx_cf_follower ON community_follows(follower_id);
 CREATE INDEX IF NOT EXISTS idx_cf_following ON community_follows(following_id);
+
+-- ============================================================
+-- FRIEND COMMUNITIES — private, invite-only, cross-gym.
+--
+-- TWO MEMBERSHIP MODELS, ONE ANALYTICS ENGINE. A gym community is
+-- implicit: it IS the organisation, and membership is the per-client
+-- opt-in row in community_members above. A friend community is an
+-- explicit entity whose members can come from any gym, from several
+-- gyms, or from no gym at all. services/communityScope.js is the one
+-- place that difference is expressed; every count, streak and board
+-- runs the same SQL against either scope.
+--
+-- WHY NOT REUSE THE GYM TABLES. community_workout_shares, _reactions,
+-- _comments and _challenges all carry a NOT NULL org_id and org-keyed
+-- RLS. A row in "Beast Squad" has no single tenant -- its members
+-- belong to three different gyms -- so it has no honest org_id to
+-- write. Forcing one would also make every existing gym query
+-- (WHERE org_id = ?) pick up friend-only shares from that gym's
+-- members, which is precisely the "shared somewhere I did not choose"
+-- failure this feature must never have.
+--
+-- NO org_id ON ANY OF THESE TABLES, deliberately: they are scoped by
+-- community_id, and access is decided by an ACTIVE membership row,
+-- checked server-side on every read and write (see
+-- services/friendCommunities/). rls.sql lists them as intentionally
+-- outside the org-keyed policy set.
+-- ============================================================
+
+-- type is explicit rather than implied by which table a row lives in, so
+-- a future kind (public, team) extends the CHECK instead of inventing a
+-- third membership model. Only 'friend' exists today.
+CREATE TABLE IF NOT EXISTS communities (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL DEFAULT 'friend' CHECK (type IN ('friend')),
+  name         TEXT NOT NULL,
+  description  TEXT,
+  -- Visual identity: a palette key (resolved to theme tokens on the
+  -- client, so it is legible in both light and dark) and an optional
+  -- short mark. No image upload -- initials on the palette are the
+  -- default identity and need no storage.
+  theme        TEXT NOT NULL DEFAULT 'ember',
+  mark         TEXT,
+  privacy      TEXT NOT NULL DEFAULT 'private' CHECK (privacy IN ('private')),
+  -- Historical only. OWNERSHIP lives in community_memberships.role, so a
+  -- deleted creator account can never orphan or silently delete a
+  -- community other people train in.
+  created_by   TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
+-- One row per (community, client), ever. Leaving or being removed flips
+-- status rather than deleting the row, which is what lets a removal stick:
+-- a removed member cannot walk back in with an invite code, only through a
+-- fresh direct invite from an owner or admin.
+CREATE TABLE IF NOT EXISTS community_memberships (
+  id            TEXT PRIMARY KEY,
+  community_id  TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  client_id     TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner','admin','member')),
+  status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','left','removed')),
+  -- Per-community sharing, disclosed at the moment of joining.
+  --   share_stats  workout count, active days, volume, streak and PR COUNT
+  --                on this community's boards and totals. Off = still a
+  --                member, but contributes to no number and no board.
+  --   show_gym     the member's gym name beside their name. Off by
+  --                default: a gym relationship is not the group's business
+  --                unless the member says so.
+  -- Individual workouts and PR details are never covered by either flag;
+  -- they reach a community only through an explicit share.
+  share_stats   INTEGER NOT NULL DEFAULT 1,
+  show_gym      INTEGER NOT NULL DEFAULT 0,
+  muted         INTEGER NOT NULL DEFAULT 0,
+  joined_at     TEXT NOT NULL,
+  left_at       TEXT,
+  updated_at    TEXT NOT NULL,
+  UNIQUE (community_id, client_id)
+);
+-- "My communities". Lookups by community (member lists, the scope join on
+-- (community_id, client_id)) are served by the UNIQUE index above.
+CREATE INDEX IF NOT EXISTS idx_cmship_client ON community_memberships(client_id, status);
+
+-- Two kinds of invitation share one lifecycle:
+--   direct  addressed to one existing client; accepted or declined by them
+--   code    a shareable code (and the link/QR that carries it), reusable up
+--           to max_uses before expires_at, revocable at any time
+-- A code is stored only as an HMAC (see friendCommunities/invites.js): the
+-- raw code exists in exactly one response, the one that created it, so a
+-- database read alone can never produce a working invitation.
+CREATE TABLE IF NOT EXISTS community_invites (
+  id                 TEXT PRIMARY KEY,
+  community_id       TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  kind               TEXT NOT NULL CHECK (kind IN ('direct','code')),
+  created_by         TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  invitee_client_id  TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  code_hash          TEXT UNIQUE,
+  status             TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending','accepted','declined','revoked','expired')),
+  max_uses           INTEGER,
+  use_count          INTEGER NOT NULL DEFAULT 0,
+  expires_at         TEXT NOT NULL,
+  created_at         TEXT NOT NULL,
+  responded_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_cinv_community ON community_invites(community_id, kind, status);
+CREATE INDEX IF NOT EXISTS idx_cinv_invitee ON community_invites(invitee_client_id, status);
+-- At most one OPEN direct invite per person per community, enforced by the
+-- database rather than a read-then-insert that two taps can race past.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cinv_direct_pending
+  ON community_invites(community_id, invitee_client_id)
+  WHERE kind = 'direct' AND status = 'pending';
+
+-- The normalized event stream a friend community's feed reads. Every row
+-- is either an explicit share (type workout | pr) or a fact the member
+-- consented to by acting (joined). payload is a SERVER-BUILT snapshot --
+-- the client submits a workout id and a choice, never numbers.
+--
+-- type has no CHECK on purpose: the service owns the allow-list, so a new
+-- kind (challenge_completed, streak) needs no table rebuild on SQLite.
+-- dedupe_key makes sharing idempotent: the same workout shared twice into
+-- the same community is one event, not two.
+CREATE TABLE IF NOT EXISTS community_events (
+  id            TEXT PRIMARY KEY,
+  community_id  TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  client_id     TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  type          TEXT NOT NULL,
+  -- A deleted workout takes its shares with it, exactly as
+  -- community_workout_shares does: the feed must not keep celebrating a
+  -- session that no longer exists.
+  workout_id    TEXT REFERENCES workouts(id) ON DELETE CASCADE,
+  dedupe_key    TEXT NOT NULL,
+  payload       TEXT NOT NULL DEFAULT '{}',
+  created_at    TEXT NOT NULL,
+  UNIQUE (community_id, dedupe_key)
+);
+-- Keyset pagination: WHERE community_id = ? AND (created_at, id) < cursor
+-- ORDER BY created_at DESC, id DESC.
+CREATE INDEX IF NOT EXISTS idx_cevents_feed ON community_events(community_id, created_at, id);
+-- Serves the ON DELETE CASCADE from workouts, which would otherwise scan
+-- every community's events for each deleted workout.
+CREATE INDEX IF NOT EXISTS idx_cevents_workout ON community_events(workout_id);
+
+-- Reactions and comments hang off a REAL foreign key here, unlike the gym
+-- tables' (target_type, target_id) pair: every friend-community target is
+-- a community_events row, so deleting an event removes its reactions and
+-- comments with it and no reader has to filter orphans.
+CREATE TABLE IF NOT EXISTS community_event_reactions (
+  id          TEXT PRIMARY KEY,
+  event_id    TEXT NOT NULL REFERENCES community_events(id) ON DELETE CASCADE,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  emoji       TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  UNIQUE (event_id, client_id, emoji)
+);
+
+CREATE TABLE IF NOT EXISTS community_event_comments (
+  id          TEXT PRIMARY KEY,
+  event_id    TEXT NOT NULL REFERENCES community_events(id) ON DELETE CASCADE,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  body        TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cecomments_event ON community_event_comments(event_id, created_at);
+
+-- Same definition-only rule as community_challenges above: progress is
+-- computed at read time from workouts / exercise_set_logs /
+-- personal_records through the shared challenge engine, never stored.
+-- Named _group_ because community_challenges is the org-scoped gym table.
+-- active_days is the consistency measure ("train 4 days this week").
+CREATE TABLE IF NOT EXISTS community_group_challenges (
+  id            TEXT PRIMARY KEY,
+  community_id  TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  description   TEXT,
+  metric        TEXT NOT NULL CHECK (metric IN ('workouts','volume','prs','active_days')),
+  goal          REAL NOT NULL,
+  scope         TEXT NOT NULL DEFAULT 'member' CHECK (scope IN ('member','community')),
+  start_date    TEXT NOT NULL,
+  end_date      TEXT NOT NULL,
+  created_by    TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cgchal_community ON community_group_challenges(community_id, end_date);
 
 -- ============================================================
 -- WORKOUT SHARING — cross-account shareable workout link

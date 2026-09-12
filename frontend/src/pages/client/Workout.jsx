@@ -10,6 +10,7 @@ import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
+import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
 
@@ -395,6 +396,9 @@ export default function Workout() {
   const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model
   // Workout link sharing (personal share, NOT community)
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  // The completed session, waiting for the member to pick which communities
+  // (if any) it goes to.
+  const [shareCommunitiesFor, setShareCommunitiesFor] = useState(null);
   const [shareSheetData, setShareSheetData] = useState(null); // { workoutId, workoutName, exercises } (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
   const [burnLoading, setBurnLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
@@ -2858,26 +2862,18 @@ export default function Workout() {
               Share Workout
             </button>
           )}
-          {/* Share to Community — gym community feed (separate from personal link sharing) */}
+          {/* Share to communities — the gym community AND any private
+              communities, chosen per session. Nothing is preselected and
+              nothing is posted until a destination is picked: this used to
+              be a single button that published straight to the gym, which is
+              the wrong default once a member can belong to several places
+              (see ShareToCommunitiesSheet). */}
           {result?.workoutId && (
             <button
               className="btn w-full mt-2 flex items-center justify-center gap-2"
-              disabled={sharing}
-              onClick={async () => {
-                setSharing(true);
-                try {
-                  await api('/community/shares', {
-                    method: 'POST',
-                    body: JSON.stringify({ workout_id: result.workoutId }),
-                  });
-                  setShareToast('Workout shared with your gym!');
-                } catch (e) {
-                  setShareToast(e.message || 'Could not share');
-                }
-                setSharing(false);
-              }}>
+              onClick={() => setShareCommunitiesFor(result.workoutId)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
-              {sharing ? 'Sharing…' : 'Share to Community'}
+              Share to communities
             </button>
           )}
           <button className="btn w-full mt-3" onClick={() => { clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setBurn(null); setBurnInput(null); setIntensity(null); setBurnSource(null); setSharing(false); setShareToast(''); setCardioMode('browse'); setCardioResult(null); setCardioItems([]); setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0); }}>Done</button>
@@ -2896,6 +2892,13 @@ export default function Workout() {
         exercises={shareSheetData?.exercises || []}
         t={{}}
       />
+      {shareCommunitiesFor && (
+        <ShareToCommunitiesSheet
+          workoutId={shareCommunitiesFor}
+          onClose={() => setShareCommunitiesFor(null)}
+          toast={setShareToast}
+        />
+      )}
     </div>
   );
 }

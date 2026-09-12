@@ -6,6 +6,7 @@ import { id, now } from '../ids.js';
 import { dayKey, todayKey } from '../utils/time.js';
 import { track } from './events.js';
 import { isFeatureEnabled } from './platform/featureFlags.js';
+import { toScope, gymScope } from './communityScope.js';
 
 // A share's payload is written by shareWorkout() as JSON.stringify(exercises),
 // so it is well-formed for every row this codebase creates. It is still parsed
@@ -105,14 +106,22 @@ export function periodRange(period, tz) {
 // ---- Streak computation ----
 // Current streak = consecutive days ending today or yesterday with completed workouts
 
-async function computeStreaks(db, orgId, tz) {
+//
+// Every board below is scope-aware (see communityScope.js): a gym
+// community and a friend community run the SAME query with a different
+// membership join, so "12 day streak" or "18.4k kg" means one thing
+// everywhere in the product. A bare orgId still means that org's gym
+// community, which is what every pre-existing caller passes.
+
+export async function computeStreaks(db, scopeOrOrgId, tz, { limit = 50 } = {}) {
+  const scope = toScope(scopeOrOrgId);
   const today = todayKey(tz);
   // Look back 365 days — enough for any realistic streak
   const lookback = new Date(today + 'T12:00:00Z');
   lookback.setUTCDate(lookback.getUTCDate() - 365);
   const since = dayKey(lookback, tz);
 
-  // Fetch the completed workout DATES for community members in this org.
+  // Fetch the completed workout DATES for community members.
   //
   // DISTINCT is load-bearing, not cosmetic: a streak only cares whether a
   // member trained on a given day, and the grouping below drops the row into
@@ -122,15 +131,14 @@ async function computeStreaks(db, orgId, tz) {
   // is the difference between transferring every workout row in the org and
   // transferring one row per member per active day. Served by
   // idx_workouts_client_status_date (client_id, status, scheduled_date).
+  const m = scope.member('cm', 'w.client_id');
   const rows = await db.q(
-    `SELECT DISTINCT cm.client_id, w.scheduled_date AS d
-       FROM community_members cm
-       JOIN clients c ON c.id = cm.client_id
-       JOIN workouts w ON w.client_id = c.id
-     WHERE cm.org_id = ? AND cm.enabled = 1
-       AND w.status = 'completed' AND w.scheduled_date >= ?
-     ORDER BY cm.client_id, d DESC`,
-    [orgId, since]);
+    `SELECT DISTINCT w.client_id, w.scheduled_date AS d
+       FROM workouts w
+       ${m.sql}
+     WHERE w.status = 'completed' AND w.scheduled_date >= ?
+     ORDER BY w.client_id, d DESC`,
+    [...m.params, since]);
 
   // Group by client
   const byClient = new Map();
@@ -180,7 +188,7 @@ async function computeStreaks(db, orgId, tz) {
     a.client_id.localeCompare(b.client_id)
   );
 
-  return results.slice(0, 50).map((r, i) => ({
+  return results.slice(0, limit).map((r, i) => ({
     rank: i + 1,
     clientId: r.client_id,
     value: r.streak,
@@ -190,25 +198,28 @@ async function computeStreaks(db, orgId, tz) {
 // ---- Volume computation ----
 // Volume = SUM(actual_reps * actual_weight) over completed exercise_set_logs
 
-async function computeVolume(db, orgId, start, end) {
+export async function computeVolume(db, scopeOrOrgId, start, end, { limit = 50 } = {}) {
+  const scope = toScope(scopeOrOrgId);
+  // strict: this board always required the client's current org to match,
+  // unlike the streak board above -- preserved, not unified.
+  const m = scope.member('cm', 'wl.client_id', { strict: true });
   const rows = await db.q(
     `SELECT wl.client_id,
             COALESCE(SUM(CASE WHEN esl.actual_reps > 0 AND esl.actual_weight >= 0
                               THEN esl.actual_reps * esl.actual_weight ELSE 0 END), 0) AS volume
        FROM exercise_set_logs esl
        JOIN workout_logs wl ON wl.id = esl.workout_log_id
-       JOIN clients c ON c.id = wl.client_id
-       JOIN community_members cm ON cm.client_id = c.id AND cm.enabled = 1 AND cm.org_id = c.org_id
-     WHERE c.org_id = ? AND wl.date >= ? AND wl.date <= ? AND esl.completed = 1
+       ${m.sql}
+     WHERE wl.date >= ? AND wl.date <= ? AND esl.completed = 1
      GROUP BY wl.client_id`,
-    [orgId, start, end]);
+    [...m.params, start, end]);
 
   rows.sort((a, b) =>
     b.volume - a.volume ||
     a.client_id.localeCompare(b.client_id)
   );
 
-  return rows.slice(0, 50).map((r, i) => ({
+  return rows.slice(0, limit).map((r, i) => ({
     rank: i + 1,
     clientId: r.client_id,
     value: Math.round(r.volume),
@@ -217,29 +228,104 @@ async function computeVolume(db, orgId, start, end) {
 
 // ---- Completed workouts computation ----
 
-async function computeCompleted(db, orgId, start, end) {
+export async function computeCompleted(db, scopeOrOrgId, start, end, { limit = 50 } = {}) {
+  const scope = toScope(scopeOrOrgId);
+  const m = scope.member('cm', 'w.client_id', { strict: true });
   const rows = await db.q(
     `SELECT w.client_id, COUNT(*) AS n
        FROM workouts w
-       JOIN clients c ON c.id = w.client_id
-       JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1 AND cm.org_id = c.org_id
-     WHERE c.org_id = ? AND w.scheduled_date >= ? AND w.scheduled_date <= ? AND w.status = 'completed'
+       ${m.sql}
+     WHERE w.scheduled_date >= ? AND w.scheduled_date <= ? AND w.status = 'completed'
      GROUP BY w.client_id`,
-    [orgId, start, end]);
+    [...m.params, start, end]);
 
   rows.sort((a, b) =>
     b.n - a.n ||
     a.client_id.localeCompare(b.client_id)
   );
 
-  return rows.slice(0, 50).map((r, i) => ({
+  return rows.slice(0, limit).map((r, i) => ({
     rank: i + 1,
     clientId: r.client_id,
-    value: r.n,
+    // Number(): PostgreSQL returns COUNT as a bigint string, and a "1"
+    // would never equal 1 in the frontend's singular/plural check.
+    value: Number(r.n),
   }));
 }
 
-// ---- Full leaderboards ----
+// ---- Active days (consistency) ----
+// Days with at least one completed workout. Distinct from the workout
+// count on purpose: two sessions in one day is more work, not more
+// consistency, and a board that rewards showing up should not be won by
+// doubling up.
+
+export async function computeActiveDays(db, scopeOrOrgId, start, end, { limit = 50 } = {}) {
+  const scope = toScope(scopeOrOrgId);
+  const m = scope.member('cm', 'w.client_id', { strict: true });
+  const rows = await db.q(
+    `SELECT w.client_id, COUNT(DISTINCT w.scheduled_date) AS n
+       FROM workouts w
+       ${m.sql}
+     WHERE w.scheduled_date >= ? AND w.scheduled_date <= ? AND w.status = 'completed'
+     GROUP BY w.client_id`,
+    [...m.params, start, end]);
+
+  rows.sort((a, b) => b.n - a.n || a.client_id.localeCompare(b.client_id));
+  return rows.slice(0, limit).map((r, i) => ({ rank: i + 1, clientId: r.client_id, value: Number(r.n) }));
+}
+
+// ---- Personal records set in the period ----
+// Counts rows from the canonical PR engine's own table (see the note on
+// counting PRs at the top of communityIntel.js) -- nothing here decides
+// what a record is.
+
+export async function computePRCount(db, scopeOrOrgId, start, end, { limit = 50 } = {}) {
+  const scope = toScope(scopeOrOrgId);
+  const m = scope.member('cm', 'pr.client_id', { strict: true });
+  const rows = await db.q(
+    `SELECT pr.client_id, COUNT(*) AS n
+       FROM personal_records pr
+       ${m.sql}
+     WHERE pr.date >= ? AND pr.date <= ?
+     GROUP BY pr.client_id`,
+    [...m.params, start, end]);
+
+  rows.sort((a, b) => b.n - a.n || a.client_id.localeCompare(b.client_id));
+  return rows.slice(0, limit).map((r, i) => ({ rank: i + 1, clientId: r.client_id, value: Number(r.n) }));
+}
+
+// ---- Boards, for any scope ----
+
+const BOARD_COMPUTERS = {
+  streak: (db, scope, range, tz, opts) => computeStreaks(db, scope, tz, opts),
+  volume: (db, scope, range, tz, opts) => computeVolume(db, scope, range.start, range.end, opts),
+  completedWorkouts: (db, scope, range, tz, opts) => computeCompleted(db, scope, range.start, range.end, opts),
+  activeDays: (db, scope, range, tz, opts) => computeActiveDays(db, scope, range.start, range.end, opts),
+  prs: (db, scope, range, tz, opts) => computePRCount(db, scope, range.start, range.end, opts),
+};
+
+export const BOARD_METRICS = Object.freeze(Object.keys(BOARD_COMPUTERS));
+
+/**
+ * The requested boards for one period, with no settings gate -- callers
+ * that have one (the gym's own community toggles) apply it first. Each
+ * metric is a separate, named ranking: there is deliberately no way to
+ * ask this for a blended score.
+ */
+export async function computeBoards(db, scopeOrOrgId, period, tz, {
+  metrics = ['streak', 'volume', 'completedWorkouts'], limit = 50,
+} = {}) {
+  const scope = toScope(scopeOrOrgId);
+  const range = periodRange(period, tz);
+  const names = metrics.filter((name) => BOARD_COMPUTERS[name]);
+  const boards = await Promise.all(names.map((name) => BOARD_COMPUTERS[name](db, scope, range, tz, { limit })));
+  return {
+    period: { type: period, start: range.start, end: range.end },
+    leaderboards: Object.fromEntries(names.map((name, i) => [name, boards[i]])),
+  };
+}
+
+// ---- Full leaderboards (gym community) ----
 
 export async function leaderboards(db, orgId, period, tz) {
   const { start, end } = periodRange(period, tz);
@@ -249,19 +335,17 @@ export async function leaderboards(db, orgId, period, tz) {
     return { settings, period: { type: period, start, end }, leaderboards: { streak: [], volume: [], completedWorkouts: [] } };
   }
 
-  const [streakBoard, volumeBoard, completedBoard] = await Promise.all([
-    computeStreaks(db, orgId, tz),
-    computeVolume(db, orgId, start, end),
-    computeCompleted(db, orgId, start, end),
-  ]);
+  const { leaderboards: boards } = await computeBoards(db, gymScope(orgId), period, tz, {
+    metrics: ['streak', 'volume', 'completedWorkouts'],
+  });
 
   return {
     settings,
     period: { type: period, start, end },
     leaderboards: {
-      streak: streakBoard,
-      volume: volumeBoard,
-      completedWorkouts: completedBoard,
+      streak: boards.streak,
+      volume: boards.volume,
+      completedWorkouts: boards.completedWorkouts,
     },
   };
 }
@@ -423,9 +507,28 @@ export async function copyWorkout(db, { shareId, clientId, orgId, overrides = {}
   const share = await getShare(db, orgId, shareId);
   if (!share) return null;
 
-  const name = overrides.name || share.workout_name;
-  const exercises = overrides.exercises || share.payload;
+  const result = await copyExercisesToPlanner(db, {
+    clientId,
+    orgId,
+    name: overrides.name || share.workout_name,
+    exercises: overrides.exercises || share.payload,
+  });
+  if (!result) return null;
 
+  await track(db, { orgId, userId: null, type: 'workout_copied', data: { clientId, shareId, newWorkoutId: result.id } });
+  return result;
+}
+
+/**
+ * Put a list of exercises into a client's own planner as a new workout.
+ *
+ * Extracted from copyWorkout so friend communities copy a shared session
+ * through exactly the same path: the same library validation, the same
+ * clamping of sets/reps/rest, the same single transaction. A second
+ * implementation would eventually disagree about which exercises a client is
+ * allowed to copy.
+ */
+export async function copyExercisesToPlanner(db, { clientId, orgId, name, exercises, note = 'Copied from community share' }) {
   // Validate exercises against library (global or same-org only)
   const exerciseIds = exercises.map(e => e.exercise_id).filter(Boolean);
   let validIds = new Set();
@@ -451,7 +554,7 @@ export async function copyWorkout(db, { shareId, clientId, orgId, overrides = {}
       `INSERT INTO client_workouts (id, org_id, client_id, name, notes, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [wId, client.org_id, clientId, String(name).trim().slice(0, 80),
-       `Copied from community share`, now()]);
+       note, now()]);
 
     for (let i = 0; i < valid.length; i++) {
       const ex = valid[i];
@@ -470,8 +573,6 @@ export async function copyWorkout(db, { shareId, clientId, orgId, overrides = {}
          ex.notes ? String(ex.notes).slice(0, 200) : null]);
     }
   });
-
-  await track(db, { orgId, userId: null, type: 'workout_copied', data: { clientId, shareId, newWorkoutId: wId } });
 
   return { id: wId, name: String(name).trim().slice(0, 80), exerciseCount: valid.length };
 }
