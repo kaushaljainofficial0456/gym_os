@@ -109,7 +109,18 @@ export async function api(path, opts = {}) {
     // Awaited, not fire-and-forget: the navigation on the next line would
     // otherwise cancel the logout POST mid-flight (see clearSession).
     await clearSession();
-    if (!location.pathname.startsWith('/login')) location.href = '/login';
+    // /auth/me is the SESSION PROBE, not an app action. AuthProvider calls it
+    // on every mount -- including on the PUBLIC pages a signed-out visitor is
+    // meant to be able to read (a community invitation, a shared workout, a
+    // shared meal). Redirecting on ITS 401 sent every one of those straight to
+    // the login screen, so an invite link could not be read without already
+    // having an account, which is exactly backwards. A failed probe is the
+    // caller's to interpret (auth.jsx clears the session and renders the page
+    // signed-out, and App.jsx's own route guards still send a signed-out
+    // visitor away from anything private). A 401 on any OTHER call still means
+    // a live session expired mid-use, and still goes to /login.
+    const isSessionProbe = path === '/auth/me';
+    if (!isSessionProbe && !location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
   }
   const data = await res.json().catch(() => ({}));
