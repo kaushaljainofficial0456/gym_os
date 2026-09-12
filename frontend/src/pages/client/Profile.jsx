@@ -3,6 +3,9 @@ import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, GOAL_LABEL } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
+import { useUnits } from '../../unitsContext.jsx';
+import { DASH_CARDS, DEFAULT_ORDER, resolveDashboard, parseDashboardPrefs } from '../../dashboardCards.js';
+import WeightInput, { LengthInput } from '../../components/WeightInput.jsx';
 import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -19,18 +22,13 @@ const GOALS = [
 ];
 const EXP = [['BEGINNER', 'Beginner'], ['INTERMEDIATE', 'Intermediate'], ['ADVANCED', 'Advanced']];
 
-const DASH_CARDS = [
-  ['workout', "Today's workout"], ['fuel', 'Calories & macros'], ['water', 'Water'],
-  ['sleep', 'Sleep'], ['coach', 'SK Coach'], ['adherence', 'Adherence'], ['goal', 'My goal'], ['crowd', 'Gym crowd']
-];
-
 const PROFILE_SECTIONS = [
   { id: 'goal', label: 'Goal & Setup', icon: 'target', desc: 'View progress and update your goals' },
   { id: 'equipment', label: 'My Equipment', icon: 'strength', desc: 'Manage your gym equipment' },
   { id: 'metrics', label: 'My Metrics', icon: 'chart', desc: 'Track personal measurements' },
   { id: 'nutrition-tracker', label: 'Nutrition Tracker', icon: 'food', desc: 'Calendar and full logging history' },
   { id: 'coach', label: 'Coach Preference', icon: 'chat', desc: 'Coach settings and messages' },
-  { id: 'dashboard', label: 'Dashboard', icon: 'clipboard', desc: 'Customize your home dashboard' },
+  { id: 'dashboard', label: 'Home Screen', icon: 'clipboard', desc: 'Choose which cards appear, and in what order' },
   // Was '❓' — a literal emoji where the other six rows pass an Icon name,
   // so this one row rendered Icon.jsx's fallback glyph instead of a real
   // icon. Same bug class ClientLayout.jsx already documents fixing at 9
@@ -58,6 +56,7 @@ const PROFILE_SECTIONS = [
  * number would just be the header again in a bigger font.
  */
 function JourneyHero({ client }) {
+  const u = useUnits();
   const start = Number(client?.startWeight);
   const now = Number(client?.currentWeight);
   const target = Number(client?.targetWeight);
@@ -89,16 +88,16 @@ function JourneyHero({ client }) {
             className="font-grotesk font-bold text-[13px] tabular-nums"
             style={{ color: losing === moved < 0 ? 'var(--m-body)' : 'var(--mute)' }}
           >
-            {moved > 0 ? '+' : ''}{moved} kg
+            {u.fmtWeightDelta(moved)}
           </div>
         )}
       </div>
 
       <div className="flex items-end gap-2 mt-2 tabular-nums">
-        <Leg label="Start" value={start} />
+        <Leg label="Start" value={u.weightNum(start)} unit={u.weightUnit} />
         <Arrow />
-        <Leg label="Now" value={now} emphasis />
-        {hasTarget && <><Arrow /><Leg label="Target" value={target} /></>}
+        <Leg label="Now" value={u.weightNum(now)} unit={u.weightUnit} emphasis />
+        {hasTarget && <><Arrow /><Leg label="Target" value={u.weightNum(target)} unit={u.weightUnit} /></>}
       </div>
 
       {done != null && (
@@ -114,8 +113,8 @@ function JourneyHero({ client }) {
               /* Stated as a fact, not as a failure. Going past a target is
                  information, and calling it "-7 kg remaining" would be
                  both wrong and discouraging. */
-              ? <>Target reached — you're <strong style={{ color: 'var(--ink)' }}>{Math.abs(remaining)} kg</strong> past it.</>
-              : <><strong style={{ color: 'var(--ink)' }}>{Math.abs(remaining)} kg</strong> to go · {Math.round(done)}% of the way</>}
+              ? <>Target reached — you're <strong style={{ color: 'var(--ink)' }}>{u.fmtWeight(Math.abs(remaining))}</strong> past it.</>
+              : <><strong style={{ color: 'var(--ink)' }}>{u.fmtWeight(Math.abs(remaining))}</strong> to go · {Math.round(done)}% of the way</>}
           </div>
         </div>
       )}
@@ -123,7 +122,7 @@ function JourneyHero({ client }) {
   );
 }
 
-function Leg({ label, value, emphasis }) {
+function Leg({ label, value, unit, emphasis }) {
   return (
     <div className="min-w-0">
       <div className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>{label}</div>
@@ -131,7 +130,7 @@ function Leg({ label, value, emphasis }) {
         className="font-grotesk font-bold leading-none mt-0.5"
         style={{ fontSize: emphasis ? 22 : 15, color: emphasis ? 'var(--ink)' : 'var(--mute)' }}
       >
-        {value}<span className="text-[10px] font-semibold" style={{ color: 'var(--faint)' }}> kg</span>
+        {value}<span className="text-[10px] font-semibold" style={{ color: 'var(--faint)' }}> {unit}</span>
       </div>
     </div>
   );
@@ -239,6 +238,7 @@ function ThemeToggle() {
 }
 
 export default function Profile() {
+  const units = useUnits();
   /* Which panel is open lives in the URL, not only in state, so the
      header menu's "Measurements" / "Goals" rows can land on the panel they
      name instead of dumping you on the hub to find it yourself. Back still
@@ -339,10 +339,17 @@ export default function Profile() {
   }, [toast]);
 
   useEffect(() => {
-    if (meDash.data?.prefs) {
-      try { setOrder(JSON.parse(meDash.data.prefs.order_list || '[]')); } catch { setOrder(DASH_CARDS.map(c => c[0])); }
-      try { setHidden(JSON.parse(meDash.data.prefs.hidden || '[]')); } catch { setHidden([]); }
-    }
+    if (!meDash.data) return;
+    // Resolved, not raw: rows saved before the catalogue was corrected
+    // still name cards that no longer exist ('water', 'sleep', 'coach',
+    // 'adherence' -- offered for months, rendered never). Running the
+    // stored value through the same resolver Home uses means the editor
+    // shows exactly the list Home will lay out, instead of offering
+    // switches for cards that are not on the screen.
+    const parsed = parseDashboardPrefs(meDash.data.prefs);
+    const resolved = resolveDashboard(parsed.order, parsed.hidden);
+    setOrder(resolved.order);
+    setHidden([...resolved.hidden]);
   }, [meDash.data]);
 
   useEffect(() => {
@@ -495,23 +502,40 @@ This cannot be undone.`
     await api(`/me/metrics/${mId}`, { method: 'DELETE' }).then(() => { metrics.reload({ silent: true }); setToast('Metric deleted'); }).catch((e) => setToast(e.message));
   };
 
+  /* Declared above savePrefs deliberately: a `const` used by a handler
+     defined earlier in the same body is in the temporal dead zone for
+     the rest of that render, and this file has already been bitten once
+     by exactly that (see Workout.jsx's buildSets note). */
+  const dashOrder = order.length ? order : DEFAULT_ORDER;
+
   const savePrefs = async () => {
     setSavingPrefs(true);
     try {
-      await api('/me/dashboard', { method: 'PUT', body: JSON.stringify({ order, hidden }) });
-      setToast('Dashboard saved');
+      await api('/me/dashboard', { method: 'PUT', body: JSON.stringify({ order: dashOrder, hidden }) });
+      meDash.reload({ silent: true });
+      setToast('Home screen saved');
     } catch (e) { setToast(e.message); }
     setSavingPrefs(false);
   };
 
+  /* Reorders within the VISIBLE list only. Swapping with a hidden
+     neighbour looked like a broken button: the row did not move, because
+     the card it traded places with is not on the screen. */
   const move = (key, dir) => {
-    setOrder((o) => {
+    setOrder((prev) => {
+      const o = prev.length ? [...prev] : [...DEFAULT_ORDER];
+      const visible = o.filter((k) => !hidden.includes(k));
+      const vi = visible.indexOf(key);
+      const vj = vi + dir;
+      if (vi < 0 || vj < 0 || vj >= visible.length) return prev;
       const i = o.indexOf(key);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= o.length) return o;
-      const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n;
+      const j = o.indexOf(visible[vj]);
+      [o[i], o[j]] = [o[j], o[i]];
+      return o;
     });
   };
+
+  const resetDash = () => { setOrder([...DEFAULT_ORDER]); setHidden([]); };
 
   const saveGoal = async () => {
     if (!gForm) return;
@@ -521,13 +545,13 @@ This cannot be undone.`
       const heightVal = gForm.heightCm !== '' && gForm.heightCm != null ? Number(gForm.heightCm) : null;
       const weightVal = gForm.currentWeight !== '' && gForm.currentWeight != null ? Number(gForm.currentWeight) : null;
       const ageVal = gForm.age !== '' && gForm.age != null ? Number(gForm.age) : null;
-      if (heightVal !== null && (heightVal < 100 || heightVal > 250)) { setToast('Height must be between 100–250 cm'); setSavingG(false); return; }
-      if (weightVal !== null && (weightVal < 20 || weightVal > 400)) { setToast('Weight must be between 20–400 kg'); setSavingG(false); return; }
+      if (heightVal !== null && (heightVal < 100 || heightVal > 250)) { setToast(`Height must be between ${units.fmtLength(100)} and ${units.fmtLength(250)}`); setSavingG(false); return; }
+      if (weightVal !== null && (weightVal < 20 || weightVal > 400)) { setToast(`Weight must be between ${units.fmtWeight(20)} and ${units.fmtWeight(400)}`); setSavingG(false); return; }
       if (ageVal !== null && (ageVal < 10 || ageVal > 120)) { setToast('Age must be between 10–120'); setSavingG(false); return; }
 
       const targetVal = gForm.targetWeight !== '' && gForm.targetWeight != null ? Number(gForm.targetWeight) : null;
       if (targetVal !== null && (targetVal < 20 || targetVal > 400)) {
-        setToast('Target weight must be between 20–400 kg'); setSavingG(false); return;
+        setToast(`Target weight must be between ${units.fmtWeight(20)} and ${units.fmtWeight(400)}`); setSavingG(false); return;
       }
 
       /* A TARGET THAT CONTRADICTS THE GOAL. A fat-loss client at 75 kg
@@ -560,7 +584,7 @@ This cannot be undone.`
         if (wrongWay) {
           const label = gForm.goal === 'FAT_LOSS' ? 'fat loss' : 'muscle gain';
           const ok = window.confirm(
-            `Your target (${targetVal} kg) is ${wrongWay} than your starting weight (${compare} kg), `
+            `Your target (${units.fmtWeight(targetVal)}) is ${wrongWay} than your starting weight (${units.fmtWeight(compare)}), `
             + `but your goal is ${label}.
 
 Save it anyway?`);
@@ -586,7 +610,7 @@ Save it anyway?`);
     });
   };
 
-  const visibleCards = (order.length ? order : DASH_CARDS.map((x) => x[0])).filter((k) => !hidden.includes(k));
+  const visibleCards = dashOrder.filter((k) => !hidden.includes(k));
 
   // ── Profile section renderers ──
 
@@ -608,9 +632,9 @@ Save it anyway?`);
                 <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700" style={{ width: `${progress}%` }} />
               </div>
               <div className="flex justify-between text-[11px] text-mute font-grotesk">
-                <span>Start {c.startWeight} kg</span>
-                <span>Now {c.currentWeight} kg</span>
-                <span>Target {c.targetWeight} kg · {c.goalDate?.slice(0, 10) || '—'}</span>
+                <span>Start {units.fmtWeight(c.startWeight)}</span>
+                <span>Now {units.fmtWeight(c.currentWeight)}</span>
+                <span>Target {units.fmtWeight(c.targetWeight)} · {c.goalDate?.slice(0, 10) || '—'}</span>
               </div>
             </div>
             {/* goal editor */}
@@ -637,13 +661,28 @@ Save it anyway?`);
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
+                    {/* THE UNIT IN THE LABEL HAS TO BE THE UNIT IN THE BOX.
+                        These three fields were labelled "(CM)" and "(KG)"
+                        and wrote whatever was typed straight to the
+                        canonical column. Once imperial existed that was a
+                        data-corruption bug, not a cosmetic one: a reader
+                        seeing pounds everywhere else types 165 here and
+                        their stored weight becomes 165 kg. The inputs now
+                        convert at the boundary and say which unit they
+                        are in. */}
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">HEIGHT (CM)</span>
-                      <input type="number" className="input mt-1" placeholder="170" value={gForm.heightCm ?? ''} onChange={(e) => setGForm((f) => ({ ...f, heightCm: e.target.value }))} />
+                      <span className="text-[10px] text-faint font-grotesk">HEIGHT ({units.lengthUnit.toUpperCase()})</span>
+                      <LengthInput className="input mt-1" placeholder={units.isImperial ? '69' : '170'}
+                        valueCm={gForm.heightCm} emptyValue={''}
+                        ariaLabel={`Height in ${units.isImperial ? 'inches' : 'centimetres'}`}
+                        onChangeCm={(cm) => setGForm((f) => ({ ...f, heightCm: cm }))} />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">CURRENT WEIGHT (KG)</span>
-                      <input type="number" className="input mt-1" placeholder="75" value={gForm.currentWeight ?? ''} onChange={(e) => setGForm((f) => ({ ...f, currentWeight: e.target.value }))} />
+                      <span className="text-[10px] text-faint font-grotesk">CURRENT WEIGHT ({units.weightUnit.toUpperCase()})</span>
+                      <WeightInput className="input mt-1" placeholder={units.isImperial ? '165' : '75'}
+                        valueKg={gForm.currentWeight} emptyValue={''}
+                        ariaLabel={`Current weight in ${units.isImperial ? 'pounds' : 'kilograms'}`}
+                        onChangeKg={(kg) => setGForm((f) => ({ ...f, currentWeight: kg }))} />
                     </label>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -663,8 +702,10 @@ Save it anyway?`);
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">TARGET WEIGHT (KG)</span>
-                      <input type="number" className="input mt-1" value={gForm.targetWeight ?? ''} onChange={(e) => setGForm((f) => ({ ...f, targetWeight: e.target.value }))} />
+                      <span className="text-[10px] text-faint font-grotesk">TARGET WEIGHT ({units.weightUnit.toUpperCase()})</span>
+                      <WeightInput className="input mt-1" valueKg={gForm.targetWeight} emptyValue={''}
+                        ariaLabel={`Target weight in ${units.isImperial ? 'pounds' : 'kilograms'}`}
+                        onChangeKg={(kg) => setGForm((f) => ({ ...f, targetWeight: kg }))} />
                     </label>
                     <label className="block">
                       <span className="text-[10px] text-faint font-grotesk">TARGET DATE</span>
@@ -898,38 +939,111 @@ Save it anyway?`);
           </div>
         );
 
-      case 'dashboard':
+      case 'dashboard': {
+        /* The list is split into what IS on the home screen and what is
+           not, rather than one list where hidden rows are just faded.
+           A person editing this is answering two different questions --
+           "what do I want to see" and "in what order" -- and ordering
+           only has meaning for the cards that are actually shown. */
+        const hiddenCards = DASH_CARDS.filter((cd) => hidden.includes(cd.key));
+        const isDefault =
+          visibleCards.length === DEFAULT_ORDER.length
+          && visibleCards.every((k, i) => k === DEFAULT_ORDER[i]);
+
+        const Row = ({ cd, shown, index, total }) => (
+          <div
+            className="flex items-start gap-2 rounded-xl border border-line px-3 py-2.5"
+            style={{ background: shown ? 'var(--bg2)' : 'transparent', opacity: shown ? 1 : 0.6 }}
+          >
+            {shown && (
+              /* REAL, NON-OVERLAPPING TARGETS. These were 16px-tall glyphs
+                 wearing `.tap-target`, whose -12px inset expands the hit
+                 area 12px in every direction: stacked 16px apart, the two
+                 arrows' expanded areas overlapped, and the lower one --
+                 painted last, so on top -- swallowed every click aimed at
+                 the upper. On the last row that lower button is disabled,
+                 so "move up" did nothing at all. Caught by clicking it.
+                 They are now 30px tall and claim only their own box. */
+              <div className="flex flex-col gap-px shrink-0">
+                <button
+                  type="button"
+                  className="rounded-md text-[13px] leading-none h-[30px] w-7 grid place-items-center transition-colors disabled:opacity-20"
+                  style={{ color: 'var(--mute)', background: 'var(--line)' }}
+                  onClick={() => move(cd.key, -1)} disabled={index === 0}
+                  aria-label={`Move ${cd.label} up`}
+                >↑</button>
+                <button
+                  type="button"
+                  className="rounded-md text-[13px] leading-none h-[30px] w-7 grid place-items-center transition-colors disabled:opacity-20"
+                  style={{ color: 'var(--mute)', background: 'var(--line)' }}
+                  onClick={() => move(cd.key, 1)} disabled={index === total - 1}
+                  aria-label={`Move ${cd.label} down`}
+                >↓</button>
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>{cd.label}</div>
+              <div className="text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--faint)' }}>{cd.desc}</div>
+            </div>
+            <button
+              onClick={() => setHidden((h) => (shown ? [...h, cd.key] : h.filter((x) => x !== cd.key)))}
+              className={`tap-target chip !text-[10px] shrink-0 ${shown ? '!border-line text-mute' : '!border-good/40 !text-good'}`}
+              aria-label={`${shown ? 'Hide' : 'Show'} ${cd.label} on your home screen`}
+            >
+              {shown ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        );
+
         return (
           <div className="space-y-4 anim-fadeUp">
             <BackButton onClick={goBack} />
             <div className="card p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="t-micro">My dashboard</div>
-                <span className="text-[10px] text-faint font-grotesk">show · hide · reorder</span>
-              </div>
-              <div className="space-y-1.5">
-                {(order.length ? order : DASH_CARDS.map((x) => x[0])).map((key) => {
-                  const label = DASH_CARDS.find((d) => d[0] === key)?.[1] || key;
-                  const isHidden = hidden.includes(key);
-                  return (
-                    <div key={key} className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isHidden ? 'border-line opacity-45' : 'border-line bg-tint/[.03]'}`}>
-                      <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, -1)} aria-label={`Move ${label} up`}>↑</button>
-                      <button className="text-faint hover:text-ink text-sm w-5" onClick={() => move(key, 1)} aria-label={`Move ${label} down`}>↓</button>
-                      <span className="flex-1 text-sm">{label}</span>
-                      <button
-                        onClick={() => setHidden((h) => (isHidden ? h.filter((x) => x !== key) : [...h, key]))}
-                        className={`chip !text-[10px] ${isHidden ? '!border-good/40 !text-good' : '!border-line text-mute'}`}>
-                        {isHidden ? 'Show' : 'Hide'}
-                      </button>
-                    </div>
-                  );
+              <div className="t-micro">My home screen</div>
+              <p className="text-[11px] leading-snug mt-1" style={{ color: 'var(--mute)' }}>
+                Choose which cards appear on Home and the order they appear in.
+                Cards still only show when there is something to put in them.
+              </p>
+
+              <div className="space-y-1.5 mt-3">
+                {visibleCards.map((key, i) => {
+                  const cd = DASH_CARDS.find((x) => x.key === key);
+                  return cd ? <Row key={key} cd={cd} shown index={i} total={visibleCards.length} /> : null;
                 })}
+                {!visibleCards.length && (
+                  <div className="rounded-xl border border-line px-3 py-4 text-center">
+                    <div className="text-[12px] font-semibold" style={{ color: 'var(--ink)' }}>Nothing on your home screen</div>
+                    <div className="text-[10.5px] mt-0.5" style={{ color: 'var(--faint)' }}>
+                      Turn a card back on below.
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="text-[10px] text-faint mt-2">Currently showing: {visibleCards.join(' · ').replace(/_/g, ' ')}</div>
-              <button className="btn-primary w-full mt-2" onClick={savePrefs} disabled={savingPrefs}>{savingPrefs ? 'Saving…' : 'Save dashboard layout'}</button>
+
+              {hiddenCards.length > 0 && (
+                <>
+                  <div className="t-micro mt-4 mb-1.5">Hidden</div>
+                  <div className="space-y-1.5">
+                    {hiddenCards.map((cd) => <Row key={cd.key} cd={cd} shown={false} index={0} total={1} />)}
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-2 mt-4">
+                <button className="btn-primary flex-1" onClick={savePrefs} disabled={savingPrefs}>
+                  {savingPrefs ? 'Saving…' : 'Save layout'}
+                </button>
+                <button className="btn" onClick={resetDash} disabled={isDefault || savingPrefs}>
+                  Reset
+                </button>
+              </div>
+              <p className="text-[10px] mt-2" style={{ color: 'var(--faint)' }}>
+                Home picks up your layout as soon as you open it.
+              </p>
             </div>
           </div>
         );
+      }
 
       default:
         return null;
@@ -1015,8 +1129,8 @@ Save it anyway?`);
           <div className="text-xs" style={{ color: 'var(--mute)' }}>
             {[
               GOAL_LABEL[c.goal] || String(c.goal || '').replace(/_/g, ' ').toLowerCase(),
-              c.currentWeight ? `${c.currentWeight} kg` : null,
-              c.heightCm ? `${c.heightCm} cm` : null,
+              c.currentWeight ? units.fmtWeight(c.currentWeight) : null,
+              c.heightCm ? units.fmtHeight(c.heightCm) : null,
               c.age ? `${c.age} yrs` : null,
             ].filter(Boolean).join(' · ')}
           </div>

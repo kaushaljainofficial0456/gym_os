@@ -1,5 +1,5 @@
 /**
- * AppTour — guided first-run spotlight tour for EVERY new user entering Gym OS,
+ * AppTour — guided first-run spotlight tour for EVERY new user entering Barbell,
  * regardless of role.
  *
  * ARCHITECTURE:
@@ -423,7 +423,7 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
             className="font-grotesk text-[9.5px] uppercase tracking-[.18em] font-semibold"
             style={{ color: 'var(--faint)' }}
           >
-            Gym OS Tour · {idx + 1} / {steps.length}
+            Barbell Tour · {idx + 1} / {steps.length}
           </span>
           <button
             onClick={dismiss}

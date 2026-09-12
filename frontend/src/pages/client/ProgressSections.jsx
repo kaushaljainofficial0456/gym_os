@@ -13,6 +13,7 @@ import { Card } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 const n1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 const fmtNum = (v) => (v == null ? '—' : Number(v).toLocaleString());
@@ -25,6 +26,7 @@ const fmtNum = (v) => (v == null ? '—' : Number(v).toLocaleString());
  * without a meaningless "+100%" pinned beside them.
  */
 export function WeekSection({ week, Section, Stat }) {
+  const u = useUnits();
   if (!week) return null;
   if (!week.workouts && !week.nutritionDays && !week.prs) return null;
 
@@ -46,7 +48,7 @@ export function WeekSection({ week, Section, Stat }) {
       <Card className="p-4">
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Workouts" value={week.workouts || 0} />
-          <Stat label="Volume" value={fmtNum(week.volume || 0)} unit="kg" />
+          <Stat label="Volume" value={fmtNum(u.weightNum(week.volume || 0, { decimals: 0 }))} unit={u.weightUnit} />
           <Stat label="Food logged" value={week.nutritionDays || 0} sub="days" />
         </div>
 
@@ -88,6 +90,7 @@ function analyze(series) {
  * with no chest readings is the empty-card problem wearing a different hat.
  */
 export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, clientId, onLogged }) {
+  const u = useUnits();
   const keys = Object.keys(measurements || {}).filter((k) => measurements[k]?.length);
   const [sel, setSel] = useState(null);
   const [logging, setLogging] = useState(false);
@@ -117,43 +120,61 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
   const series = measurements[active];
   const a = analyze(series);
 
+  /* EVERY TRACKED SITE AT ONCE, then one of them in detail.
+     A chip row plus a single number answered "what is my waist" but not
+     "what is my shape doing", which is the only reason to measure more
+     than one site. The grid is the section's real content now; selecting
+     a tile swaps which one gets the chart underneath, so the detail is
+     still one tap away and nothing was lost. */
+  const tiles = keys.map((k) => {
+    const s = measurements[k];
+    const st = analyze(s);
+    return { key: k, label: MEASURE_LABEL[k] || k, current: st.current, change: st.count > 1 ? st.change : null };
+  });
+
+  // Direction is stated in words as well as colour -- for most
+  // circumferences down is the wanted direction, and colour alone would
+  // be the only carrier of that for anyone who cannot separate the hues.
+  const toneFor = (change) => (change == null || change === 0 ? 'var(--faint)' : change < 0 ? 'var(--good)' : 'var(--warn)');
+
   return (
     <Section title="Measurements">
       <Card className="p-4">
-        {keys.length > 1 && (
-          <ChipRow
-            options={keys.map((k) => ({ key: k, label: MEASURE_LABEL[k] || k }))}
-            value={active}
-            onChange={setSel}
-            ariaLabel="Body measurement"
-          />
-        )}
-
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
-              {MEASURE_LABEL[active] || active}
-            </div>
-            <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-[26px] font-black leading-none tabular-nums tracking-[-.03em]" style={{ color: 'var(--ink)' }}>
-                {n1(a.current)}
-              </span>
-              <span className="text-[11px]" style={{ color: 'var(--faint)' }}>cm</span>
-            </div>
-          </div>
-          {a.count > 1 && (
-            <div className="text-right">
-              {/* Down is the desirable direction for most circumference
-                  measurements, so a reduction reads as positive. */}
-              <div
-                className="text-[13px] font-bold tabular-nums"
-                style={{ color: a.change < 0 ? 'var(--good)' : a.change > 0 ? 'var(--warn)' : 'var(--faint)' }}
+        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
+          {tiles.map((t) => {
+            const on = t.key === active;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setSel(t.key)}
+                aria-pressed={on}
+                className="rounded-[var(--r-lg)] p-2.5 text-left transition-colors"
+                style={{
+                  border: `1px solid ${on ? 'var(--m-body)' : 'var(--line)'}`,
+                  background: on ? 'var(--m-body-bg)' : 'transparent',
+                  minHeight: 62,
+                }}
               >
-                {a.change > 0 ? '+' : ''}{n1(a.change)} cm
-              </div>
-              <div className="text-[9.5px]" style={{ color: 'var(--faint)' }}>since first</div>
-            </div>
-          )}
+                <div className="text-[9.5px] font-semibold uppercase tracking-[.07em] truncate" style={{ color: 'var(--faint)' }}>
+                  {t.label}
+                </div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-[17px] font-black leading-none tabular-nums" style={{ color: 'var(--ink)' }}>
+                    {u.lengthNum(t.current, { decimals: 1 }) ?? '—'}
+                  </span>
+                  <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>{u.lengthUnit}</span>
+                </div>
+                <div className="mt-0.5 text-[9.5px] tabular-nums" style={{ color: toneFor(t.change) }}>
+                  {t.change == null
+                    ? 'first reading'
+                    : t.change === 0
+                      ? 'no change'
+                      : `${t.change < 0 ? '−' : '+'}${u.lengthNum(Math.abs(t.change), { decimals: 1 })} ${u.lengthUnit} ${t.change < 0 ? 'down' : 'up'}`}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {clientId && (
@@ -165,11 +186,23 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
         )}
 
         {series.length >= 2 ? (
-          <div className="mt-2">
+          <div className="mt-3">
+            <div className="text-[10px] font-bold uppercase tracking-[.09em] mb-1" style={{ color: 'var(--faint)' }}>
+              {MEASURE_LABEL[active] || active} over time
+              {a.count > 1 && (
+                <span className="ml-1.5 font-semibold tracking-normal normal-case" style={{ color: toneFor(a.change) }}>
+                  {a.change > 0 ? '+' : a.change < 0 ? '−' : ''}
+                  {u.lengthNum(Math.abs(a.change), { decimals: 1 })} {u.lengthUnit} since first
+                </span>
+              )}
+            </div>
             <MetricChart
-              points={series}
+              /* Converted as a SERIES, not per point at render: the axis,
+                 the tooltip and the label all read one array, so they
+                 cannot end up in different units. */
+              points={series.map((p) => ({ ...p, value: u.lengthNum(p.value, { decimals: 1 }) }))}
               color="var(--m-body)"
-              unit="cm"
+              unit={u.lengthUnit}
               decimals={1}
               height={150}
               ariaLabel={`${MEASURE_LABEL[active] || active} measurements over time`}
@@ -185,10 +218,19 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
   );
 }
 
-
+/* The typical adult range for each site, in centimetres, alongside the
+   label. These are NOT a validation gate -- the server owns that -- they
+   drive a hint next to a value that looks like a mistake, which is the
+   only place a mistake can actually be corrected. Generous on both ends:
+   the point is to catch an inch typed into a centimetre field or a
+   slipped decimal, not to tell anyone their body is out of range. */
 const MEASURE_FIELDS = [
-  { key: 'waist', label: 'Waist' }, { key: 'chest', label: 'Chest' }, { key: 'arms', label: 'Arms' },
-  { key: 'thighs', label: 'Thighs' }, { key: 'hips', label: 'Hips' }, { key: 'neck', label: 'Neck' },
+  { key: 'waist', label: 'Waist', lo: 50, hi: 160 },
+  { key: 'chest', label: 'Chest', lo: 60, hi: 160 },
+  { key: 'arms', label: 'Arms', lo: 18, hi: 60 },
+  { key: 'thighs', label: 'Thighs', lo: 30, hi: 90 },
+  { key: 'hips', label: 'Hips', lo: 60, hi: 170 },
+  { key: 'neck', label: 'Neck', lo: 25, hi: 55 },
 ];
 
 /** Logs a measurement set through the EXISTING POST /clients/:id/measurements
@@ -196,6 +238,7 @@ const MEASURE_FIELDS = [
  *  someone who only ever tracks their waist should not be forced to invent
  *  a neck measurement to save. */
 function MeasurementForm({ clientId, onDone, onCancel }) {
+  const u = useUnits();
   const [vals, setVals] = useState({});
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
@@ -204,7 +247,11 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
     e.preventDefault();
     const body = {};
     for (const f of MEASURE_FIELDS) {
-      const v = parseFloat(vals[f.key]);
+      /* The number typed is in the reader's unit; the API stores
+         centimetres. Converting here -- at the one boundary where a human
+         entered it -- is what stops a series from becoming a mix of cm
+         and inch rows, which no later formatter could untangle. */
+      const v = u.toCm(vals[f.key]);
       if (Number.isFinite(v) && v > 0) body[f.key] = v;
     }
     if (!Object.keys(body).length) { setErr('Enter at least one measurement'); return; }
@@ -216,6 +263,13 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
     setSaving(false);
   };
 
+  // Compared in CANONICAL centimetres, so the hint behaves identically
+  // in either unit rather than needing a second set of thresholds.
+  const odd = MEASURE_FIELDS.filter((f) => {
+    const cm = u.toCm(vals[f.key]);
+    return Number.isFinite(cm) && cm > 0 && (cm < f.lo || cm > f.hi);
+  });
+
   return (
     <form onSubmit={submit} className="mt-3 rounded-[var(--r-sm)] p-3" style={{ border: '1px solid var(--line)' }}>
       <div className="grid grid-cols-3 gap-2">
@@ -223,8 +277,8 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
           <label key={f.key} className="block">
             <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{f.label}</span>
             <input
-              type="number" inputMode="decimal" step="0.1" min="0" placeholder="cm"
-              aria-label={`${f.label} in centimetres`}
+              type="number" inputMode="decimal" step="0.1" min="0" placeholder={u.lengthUnit}
+              aria-label={`${f.label} in ${u.isImperial ? 'inches' : 'centimetres'}`}
               value={vals[f.key] || ''}
               onChange={(ev) => setVals((v) => ({ ...v, [f.key]: ev.target.value }))}
               className="input mt-0.5 w-full text-[13px] tabular-nums" style={{ minHeight: 40 }}
@@ -232,6 +286,16 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
           </label>
         ))}
       </div>
+      {/* A value far outside the human range is nearly always a unit
+          mix-up or a slipped decimal, and saying so BEFORE the save is
+          what stops it owning the chart forever. Phrased as a question,
+          not a rejection -- the save still goes through. */}
+      {odd.length > 0 && (
+        <div className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--warn)' }}>
+          {odd.map((f) => f.label).join(' and ')} {odd.length === 1 ? 'looks' : 'look'} unusual for
+          {u.isImperial ? ' inches' : ' centimetres'} — worth a second look before saving.
+        </div>
+      )}
       {err && <div className="mt-2 text-[11px]" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
       <div className="mt-3 flex gap-2">
         <button type="button" className="btn btn-sm flex-1" onClick={onCancel}>Cancel</button>
@@ -253,6 +317,7 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
  * of the point. If none are earned yet the section doesn't render at all.
  */
 export function AchievementsSection({ intel, Section }) {
+  const u = useUnits();
   const w = intel.weight?.analysis;
   const lost = w && w.change != null && w.change < 0 ? Math.abs(w.change) : 0;
   const trained = intel.consistency?.trainedDays?.length || 0;
@@ -266,10 +331,18 @@ export function AchievementsSection({ intel, Section }) {
   // go next. They stay visually quiet so they read as a horizon, not as a
   // list of failures.
   const defs = [
-    { hue: 'body', icon: 'trending', unit: 'kg', label: (t) => `${t} kg down`, value: lost, tiers: [2, 5, 10] },
-    { hue: 'training', icon: 'strength', unit: 'days', label: (t) => `${t} training days`, value: trained, tiers: [10, 25, 50, 100] },
-    { hue: 'strength', icon: 'bulb', unit: 'PRs', label: (t) => `${t} personal record${t === 1 ? '' : 's'}`, value: prTotal, tiers: [1, 10, 25, 50] },
-    { hue: 'nutrition', icon: 'target', unit: 'day streak', label: (t) => `${t}-day streak`, value: best, tiers: [3, 7, 14, 30] },
+    /* The tiers are defined in kilograms and stay that way -- a milestone
+       is a fixed thing, not something that changes size with a display
+       preference. Only the LABEL converts, so an imperial reader sees
+       "11 lb down" for the same 5 kg badge. */
+    { hue: 'body', icon: 'trending', label: (t) => `${u.fmtWeight(t)} down`, value: lost, tiers: [2, 5, 10],
+      remainingText: (r) => `${u.fmtWeight(r)} to go` },
+    { hue: 'training', icon: 'strength', label: (t) => `${t} training days`, value: trained, tiers: [10, 25, 50, 100],
+      remainingText: (r) => `${Math.round(r)} days to go` },
+    { hue: 'strength', icon: 'bulb', label: (t) => `${t} personal record${t === 1 ? '' : 's'}`, value: prTotal, tiers: [1, 10, 25, 50],
+      remainingText: (r) => `${Math.round(r)} PRs to go` },
+    { hue: 'nutrition', icon: 'target', label: (t) => `${t}-day streak`, value: best, tiers: [3, 7, 14, 30],
+      remainingText: (r) => `${Math.round(r)} day streak to go` },
   ];
 
   const items = [];
@@ -318,9 +391,7 @@ export function AchievementsSection({ intel, Section }) {
                 {m.label(m.tier)}
               </div>
               <div className="mt-0.5 text-[9.5px]" style={{ color: m.earned ? color : 'var(--faint)' }}>
-                {m.earned
-                  ? 'Achieved'
-                  : `${Math.round(m.remaining * 10) / 10} ${m.unit} to go`}
+                {m.earned ? 'Achieved' : m.remainingText(m.remaining)}
               </div>
             </div>
           );
@@ -350,6 +421,7 @@ export function AchievementsSection({ intel, Section }) {
  * Compared on estimated 1RM so 60x10 correctly beats 60x5.
  */
 export function StrengthProgressSection({ progress, Section, onSelect }) {
+  const u = useUnits();
   const [showAll, setShowAll] = useState(false);
   if (!progress?.length) return null;
 
@@ -394,7 +466,7 @@ export function StrengthProgressSection({ progress, Section, onSelect }) {
 
         <div className="mt-1 flex items-baseline justify-between gap-2 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
           <span>
-            {p.from.weight} kg × {p.from.reps} → <span style={{ color: 'var(--mute)' }}>{p.to.weight} kg × {p.to.reps}</span>
+            {u.fmtWeight(p.from.weight)} × {p.from.reps} → <span style={{ color: 'var(--mute)' }}>{u.fmtWeight(p.to.weight)} × {p.to.reps}</span>
           </span>
           <span>{p.spanDays >= 14 ? `${Math.round(p.spanDays / 7)} wks` : `${p.spanDays}d`}</span>
         </div>

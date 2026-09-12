@@ -23,6 +23,7 @@
 // workout_logs/exercise_set_logs, weight_logs, adherence_records.
 // ============================================================
 import { analyzeSeries, comparePeriods, streak, goalProgress, normalizeSeries } from './trendEngine.js';
+import { unitsFor } from '../../units.js';
 
 const round = (v, d = 1) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
 
@@ -343,7 +344,13 @@ async function loadNutrition(db, clientId, since) {
  * Nothing here claims causation. Relationships are phrased as what the
  * data shows ("X rose while Y fell"), never as one causing the other.
  */
-function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, adherenceStreak, capabilities, nutritionCompare }) {
+function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, adherenceStreak, capabilities, nutritionCompare, units }) {
+  /* Insights are PROSE, so the unit has to be resolved here -- the client
+     cannot reformat a finished sentence. Without this a reader in pounds
+     saw "165.3 lb" in the page header and "now 87.4 kg" in the insight
+     directly beneath it. Defaults to metric so any caller that has not
+     been updated still produces correct kilogram copy. */
+  const u = units || unitsFor('metric');
   const out = [];
   const push = (i) => out.push(i);
 
@@ -354,8 +361,8 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
       push({
         type: ratePerWeek < 0 ? 'positive' : 'observation',
         priority: 90,
-        title: `Trending ${ratePerWeek < 0 ? 'down' : 'up'} ${Math.abs(round(ratePerWeek, 2))} kg/week`,
-        description: `Your weight moved ${change >= 0 ? '+' : ''}${round(change, 1)} kg over the last ${Math.round(spanDays)} days, now ${round(current, 1)} kg.`,
+        title: `Trending ${ratePerWeek < 0 ? 'down' : 'up'} ${Math.abs(u.wNum(ratePerWeek, 2))} ${u.weightUnit}/week`,
+        description: `Your weight moved ${u.wDelta(change)} over the last ${Math.round(spanDays)} days, now ${u.w(current)}.`,
         metric: 'weight',
         confidence: weightAnalysis.count >= 8 ? 'high' : 'medium',
       });
@@ -364,7 +371,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
         type: 'warning',
         priority: 80,
         title: 'Your weight has plateaued',
-        description: `Essentially flat across ${Math.round(spanDays)} days (${round(weightAnalysis.min, 1)}–${round(weightAnalysis.max, 1)} kg). If the goal is movement, calories or training volume are the levers.`,
+        description: `Essentially flat across ${Math.round(spanDays)} days (${u.wNum(weightAnalysis.min)}–${u.w(weightAnalysis.max)}). If the goal is movement, calories or training volume are the levers.`,
         metric: 'weight',
         confidence: 'medium',
       });
@@ -379,7 +386,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
         type: 'positive',
         priority: 95,
         title: 'Getting stronger while getting lighter',
-        description: `${recent} personal record${recent === 1 ? '' : 's'} in the last 30 days while body weight fell ${Math.abs(round(weightAnalysis.change, 1))} kg.`,
+        description: `${recent} personal record${recent === 1 ? '' : 's'} in the last 30 days while body weight fell ${u.w(Math.abs(weightAnalysis.change))}.`,
         metric: 'prs',
         confidence: 'high',
       });
@@ -394,7 +401,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
       priority: 88,
       title: `${prs.recentCount} new PR${prs.recentCount === 1 ? '' : 's'} in 30 days`,
       description: latest
-        ? `Most recent: ${latest.exercise}${latest.weight ? ` at ${round(latest.weight, 1)} kg` : ''}${latest.reps ? ` × ${latest.reps}` : ''}.`
+        ? `Most recent: ${latest.exercise}${latest.weight ? ` at ${u.w(latest.weight)}` : ''}${latest.reps ? ` × ${latest.reps}` : ''}.`
         : 'Keep the sessions coming.',
       metric: 'prs',
       confidence: 'high',
@@ -409,7 +416,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
       type: 'observation',
       priority: 70,
       title: `${days} training day${days === 1 ? '' : 's'} logged`,
-      description: `${Math.round(totalVolume).toLocaleString()} kg of total volume across those sessions.`,
+      description: `${Math.round(u.wNum(totalVolume, 0)).toLocaleString('en-US')} ${u.weightUnit} of total volume across those sessions.`,
       metric: 'training',
       confidence: 'high',
     });
@@ -448,7 +455,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
       type: 'observation',
       priority: 85,
       title: `About ${Math.round(weightGoal.weeksToTarget)} weeks from your target`,
-      description: `${Math.abs(round(weightGoal.remaining, 1))} kg to go at your current trend. An estimate, not a promise — it moves as the trend moves.`,
+      description: `${u.w(Math.abs(weightGoal.remaining))} to go at your current trend. An estimate, not a promise — it moves as the trend moves.`,
       metric: 'goal',
       confidence: 'low',
     });
@@ -469,7 +476,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
 export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
   const since = daysAgoKey(days);
 
-  const [capabilities, weights, adherence, prs, strengthProgress, training, nutrition, healthDays, client, measurementRows] = await Promise.all([
+  const [capabilities, weights, adherence, prs, strengthProgress, training, nutrition, healthDays, client, measurementRows, profile] = await Promise.all([
     detectCapabilities(db, { userId, clientId }),
     db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? ORDER BY date', [clientId]),
     db.q('SELECT date, score FROM adherence_records WHERE client_id = ? AND date >= ? ORDER BY date', [clientId, daysAgoKey(120)]),
@@ -482,6 +489,9 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
             FROM health_daily_summaries WHERE user_id = ? AND date >= ? ORDER BY date`, [userId, since]),
     db.q1('SELECT current_weight, target_weight, goal, height_cm, age, sex FROM clients WHERE id = ?', [clientId]),
     db.q('SELECT taken_at, waist, chest, arms, thighs, hips, neck FROM measurements WHERE client_id = ? ORDER BY taken_at', [clientId]),
+    // Only for the generated prose below. Everything else on this
+    // response stays canonical -- the client formats its own screens.
+    db.q1('SELECT unit_system FROM client_profiles WHERE client_id = ?', [clientId]),
   ]);
 
   const weightAnalysis = analyzeSeries(weights, { valueKey: 'weight', days });
@@ -521,6 +531,7 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
 
   const insights = buildInsights({
     weightAnalysis, weightGoal, training, nutrition, prs, adherenceStreak, capabilities, nutritionCompare,
+    units: unitsFor(profile?.unit_system),
   });
 
   // Only measurement types the user has ACTUALLY recorded become series.

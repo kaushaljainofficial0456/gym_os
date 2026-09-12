@@ -12,6 +12,8 @@ const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'))
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
+import { useUnits } from '../../unitsContext.jsx';
+import WeightInput from '../../components/WeightInput.jsx';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
@@ -39,6 +41,10 @@ function buildSets(list) {
 // Progressive-discovery filters for the exercise picker. Region maps to the
 // backend muscles.region model; equipment is a compact subset of the library's
 // equipment vocabulary (functional kit like TRX/rings stays searchable by name).
+/* PR values that are a weight and therefore follow the unit preference;
+   best_reps is a count. Mirrors the same set in Progress.jsx. */
+const PR_WEIGHT_TYPES = new Set(['heaviest_weight', 'est_1rm', 'best_volume']);
+
 const PICKER_REGIONS = [['', 'All'], ['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['arms', 'Arms'], ['legs', 'Legs'], ['core', 'Core']];
 const PICKER_EQUIP = [['', 'All'], ['barbell', 'Barbell'], ['dumbbell', 'Dumbbell'], ['machine', 'Machine'], ['cable', 'Cable'], ['bodyweight', 'Bodyweight'], ['kettlebell', 'Kettlebell'], ['bands', 'Bands']];
 
@@ -336,6 +342,7 @@ function calcAllCardioCalories(items, activeItem, activeElapsed, bodyWeightKg) {
 }
 
 export default function Workout() {
+  const u = useUnits();
   const nav = useNavigate();
   const today = useFetch(() => api('/tracking/me/today'));
   const week = useFetch(() => api('/tracking/me/week'));
@@ -2320,7 +2327,7 @@ export default function Workout() {
                 <div className="px-3.5 pb-3.5 space-y-1.5">
                   <div className="grid grid-cols-[26px_1fr_1fr_32px_32px] gap-2 px-1 text-[9px] uppercase tracking-[.12em]"
                        style={{ color: 'var(--faint)' }}>
-                    <span>Set</span><span>Reps</span><span>Kg</span><span className="text-right">Done</span><span></span>
+                    <span>Set</span><span>Reps</span><span>{u.isImperial ? 'Lb' : 'Kg'}</span><span className="text-right">Done</span><span></span>
                   </div>
                   {sets.map((st, i) => (
                     <div key={i}
@@ -2333,9 +2340,11 @@ export default function Workout() {
                       <input type="number" inputMode="numeric" className="input !py-1.5 !text-[13px] tabular-nums"
                              value={st.reps} aria-label={`Set ${i + 1} reps`}
                              onChange={(e) => patchSet(ex.id, i, 'reps', e.target.value)} />
-                      <input type="number" inputMode="decimal" step="0.5" className="input !py-1.5 !text-[13px] tabular-nums"
-                             value={st.weight} aria-label={`Set ${i + 1} weight in kg`}
-                             onChange={(e) => patchSet(ex.id, i, 'weight', e.target.value)} />
+                      <WeightInput
+                        className="input !py-1.5 !text-[13px] tabular-nums"
+                        valueKg={st.weight}
+                        ariaLabel={`Set ${i + 1} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
+                        onChangeKg={(kg) => patchSet(ex.id, i, 'weight', kg)} />
                       <button
                         onClick={() => toggleSet(ex.id, i)}
                         aria-label={`Mark set ${i + 1} ${st.done ? 'not done' : 'done'}`}
@@ -2688,7 +2697,7 @@ export default function Workout() {
           <div className="grid grid-cols-3 gap-2 mt-5">
             {[
               ['Duration', result?.durationMin != null ? `${result.durationMin} min` : '—'],
-              ['Volume', result?.volume ? `${Math.round(result.volume).toLocaleString()} kg` : '—'],
+              ['Volume', result?.volume ? `${Math.round(u.weightNum(result.volume, { decimals: 0 })).toLocaleString()} ${u.weightUnit}` : '—'],
               ['Exercises', result?.exercises || '—']
             ].map(([l, v]) => (
               <div key={l} className="rounded-xl px-2 py-3"
@@ -2827,7 +2836,9 @@ export default function Workout() {
                   <span className="font-bold">{p.name}</span>
                   {p.records?.map((r) => (
                     <span key={r.type} className="block text-xs text-ink/80 mt-0.5">
-                      {r.label}: <span className="text-gold font-semibold">{r.value}{r.type === 'est_1rm' ? ' kg' : r.type === 'heaviest_weight' ? ' kg' : r.type === 'best_volume' ? ' kg' : ''}</span>
+                      {r.label}: <span className="text-gold font-semibold">
+                        {PR_WEIGHT_TYPES.has(r.type) ? `${u.weightNum(r.value, { decimals: 1 })} ${u.weightUnit}` : r.value}
+                      </span>
                       {r.previous !== null && <span className="text-mute"> (prev {r.previous})</span>}
                     </span>
                   ))}

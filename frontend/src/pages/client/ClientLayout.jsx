@@ -15,6 +15,7 @@ import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import NotificationBell from '../../components/NotificationBell.jsx';
 import NotificationPermissionPrompt from '../../components/NotificationPermissionPrompt.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -68,6 +69,7 @@ const PROFILE_MENU = [
 
 export default function ClientLayout() {
   const { user, logout, isIndependent } = useAuth();
+  const units = useUnits();
   const loc = useLocation();
   const nav = useNavigate();
   // Infinity, not 0: Dock's distance-from-cursor transform maps
@@ -281,6 +283,10 @@ export default function ClientLayout() {
           initialName={user?.name || ''}
           onComplete={() => {
             setOnboardingDone(true);
+            // Onboarding saves unit_system as part of its one profile PUT,
+            // so the units provider has to re-read it -- nothing here
+            // reloads the page.
+            units.refresh();
             // silent: true -- avoids a spinner flash on the exact frame
             // the app tour is about to start, for the same reason as
             // every other reload() call fixed this pass.

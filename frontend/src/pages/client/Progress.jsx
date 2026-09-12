@@ -34,6 +34,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
+import { useUnits } from '../../unitsContext.jsx';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 import PeriodChart from '../../components/PeriodChart.jsx';
@@ -63,6 +64,13 @@ const PR_TYPE_LABEL = {
   est_1rm: 'Est. 1RM',
   best_volume: 'Best set volume',
 };
+
+/* Which PR values are a WEIGHT and must follow the unit preference.
+   best_reps is a count and stays a count; best_volume is weight x reps,
+   so it carries the weight unit even though the old copy never labelled
+   it -- an unlabelled kilogram sitting next to a pound is exactly the
+   mixed-unit trap this preference exists to avoid. */
+const PR_WEIGHT_TYPES = new Set(['heaviest_weight', 'est_1rm', 'best_volume']);
 
 const n1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 const n0 = (v) => (v == null ? null : Math.round(v));
@@ -155,6 +163,7 @@ function NeedMore({ need, what }) {
 /* ══════════════════════════ hero ══════════════════════════ */
 
 function Hero({ intel, period }) {
+  const u = useUnits();
   const w = intel.weight?.analysis;
   const lead = intel.insights?.[0];
   const prCount = intel.prs?.recentCount ?? 0;
@@ -194,8 +203,10 @@ function Hero({ intel, period }) {
       <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
         <MetricTile
           label="Weight" hue="body" icon="trending"
-          value={w && !w.insufficient && w.change != null ? `${w.change > 0 ? '+' : ''}${n1(w.change)}` : (w?.current != null ? n1(w.current) : null)}
-          unit="kg" sub={w && !w.insufficient ? `${period}d` : 'current'}
+          value={w && !w.insufficient && w.change != null
+            ? `${w.change > 0 ? '+' : ''}${u.weightNum(w.change, { decimals: 1 })}`
+            : (w?.current != null ? u.weightNum(w.current, { decimals: 1 }) : null)}
+          unit={u.weightUnit} sub={w && !w.insufficient ? `${period}d` : 'current'}
         />
         <MetricTile label="Sessions" hue="training" icon="strength" value={workouts || null} sub={`${period}d`} />
         {/* Adherence is a true percentage, so it earns a ring. Open-ended
@@ -245,15 +256,25 @@ function MetricTile({ label, value, unit, sub, hue = 'energy', icon, ring = null
  *  A metric with no rows never appears as a chip -- the explorer offers
  *  only real choices. */
 function useMetrics(intel) {
+  const u = useUnits();
   return useMemo(() => {
+    /* A weight series is converted HERE, once, before it reaches the
+       chart. Converting inside the chart -- or formatting only the
+       tooltip -- is how an axis ends up in kg while its labels say lb.
+       The unit label travels with the converted data for the same
+       reason. */
+    const asWeight = (series) => (series || []).map((pt) => ({
+      ...pt,
+      value: u.weightNum(pt.value, { decimals: 1 }),
+    }));
     const caps = intel.capabilities || {};
     const out = [];
 
     if (caps.weight?.available) {
       out.push({
-        key: 'weight', label: 'Weight', category: 'body', unit: 'kg', decimals: 1,
-        series: intel.weight.series,
-        goal: intel.weight.target ?? null,
+        key: 'weight', label: 'Weight', category: 'body', unit: u.weightUnit, decimals: 1,
+        series: asWeight(intel.weight.series),
+        goal: u.weightNum(intel.weight.target ?? null, { decimals: 1 }),
         // Every other series takes the hue of its declared category;
         // these two were pinned to the theme accent, so the two most-
         // looked-at charts on the page rendered in whatever colour the
@@ -264,8 +285,9 @@ function useMetrics(intel) {
     const t = intel.training?.sessions || [];
     if (t.length) {
       out.push({
-        key: 'volume', label: 'Volume', category: 'training', unit: 'kg', decimals: 0, fillZero: true,
-        series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--m-training)', variant: 'bar',
+        key: 'volume', label: 'Volume', category: 'training', unit: u.weightUnit, decimals: 0, fillZero: true,
+        series: t.map((s) => ({ date: s.date, value: u.weightNum(s.volume, { decimals: 0 }) })),
+        color: 'var(--m-training)', variant: 'bar',
       });
       out.push({
         key: 'sets', label: 'Sets', category: 'training', unit: '', decimals: 0, fillZero: true,
@@ -333,7 +355,10 @@ function useMetrics(intel) {
     // Energy stays, because SK OS computes it for everyone (BMR plus
     // logged workouts) rather than it being wearable-only.
     return out.filter((m) => m.series && m.series.length);
-  }, [intel]);
+    // u.system belongs here: the series values are converted inside this
+    // memo, so switching units must rebuild them or the chart keeps
+    // drawing kilograms under a "lb" axis label.
+  }, [intel, u.system]);
 }
 
 function localAnalyze(series) {
@@ -639,6 +664,7 @@ function MetricExplorer({ intel, period }) {
 /* ══════════════════════════ personal records ══════════════════════════ */
 
 function PrDetail({ open, onClose, exercise }) {
+  const u = useUnits();
   const hist = useFetch(
     () => (exercise?.exerciseId ? api(`/tracking/me/progress/exercise/${exercise.exerciseId}`) : Promise.resolve({ history: [] })),
     [exercise?.exerciseId],
@@ -648,7 +674,9 @@ function PrDetail({ open, onClose, exercise }) {
   // Estimated 1RM is the fairest single progression line across sets of
   // different weights and reps -- and it is the SAME Epley formula the PR
   // engine already uses, not a second definition invented for this chart.
-  const series = history.filter((h) => h.est1rm != null).map((h) => ({ date: h.date, value: h.est1rm }));
+  const series = history
+    .filter((h) => h.est1rm != null)
+    .map((h) => ({ date: h.date, value: u.weightNum(h.est1rm, { decimals: 1 }) }));
   const prMarkers = history.filter((h) => h.isPr).map((h) => ({ date: h.date }));
   const best = exercise?.records || {};
 
@@ -663,11 +691,11 @@ function PrDetail({ open, onClose, exercise }) {
                   {PR_TYPE_LABEL[type] || type}
                 </div>
                 <div className="mt-0.5 text-[17px] font-black tabular-nums" style={{ color: 'var(--ink)' }}>
-                  {n1(r.value)}
-                  {type === 'heaviest_weight' || type === 'est_1rm' ? <span className="ml-1 text-[10px] font-medium" style={{ color: 'var(--faint)' }}>kg</span> : null}
+                  {PR_WEIGHT_TYPES.has(type) ? u.weightNum(r.value, { decimals: 1 }) : n1(r.value)}
+                  {PR_WEIGHT_TYPES.has(type) ? <span className="ml-1 text-[10px] font-medium" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span> : null}
                 </div>
                 <div className="mt-0.5 text-[9.5px]" style={{ color: 'var(--faint)' }}>
-                  {r.weight != null && r.reps != null ? `${n1(r.weight)} kg × ${n0(r.reps)} · ` : ''}{relDay(r.date)}
+                  {r.weight != null && r.reps != null ? `${u.fmtWeight(r.weight)} × ${n0(r.reps)} · ` : ''}{relDay(r.date)}
                 </div>
               </div>
             ))}
@@ -681,7 +709,7 @@ function PrDetail({ open, onClose, exercise }) {
                 Estimated 1RM progression
               </div>
               <MetricChart
-                points={series} markers={prMarkers} color="var(--m-pr)" unit="kg" decimals={1} height={170}
+                points={series} markers={prMarkers} color="var(--m-pr)" unit={u.weightUnit} decimals={1} height={170}
                 ariaLabel={`Estimated one rep max progression for ${exercise.exercise}`}
               />
               <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
@@ -702,7 +730,7 @@ function PrDetail({ open, onClose, exercise }) {
                   <div key={i} className="flex items-center justify-between text-[11.5px]" style={{ color: 'var(--mute)' }}>
                     <span>{relDay(h.date)}</span>
                     <span className="tabular-nums" style={{ color: 'var(--ink)' }}>
-                      {n1(h.weight)} kg × {n0(h.reps)}{h.sets ? ` × ${h.sets}` : ''}
+                      {u.fmtWeight(h.weight)} × {n0(h.reps)}{h.sets ? ` × ${h.sets}` : ''}
                       {h.isPr && <span className="ml-1.5 text-[9.5px] font-bold" style={{ color: 'var(--m-pr)' }}>PR</span>}
                     </span>
                   </div>
@@ -717,6 +745,7 @@ function PrDetail({ open, onClose, exercise }) {
 }
 
 function PersonalRecords({ intel, sectionRef }) {
+  const u = useUnits();
   const prs = intel.prs || {};
   const [selected, setSelected] = useState(null);
   const [showAll, setShowAll] = useState(false);
@@ -771,7 +800,7 @@ function PersonalRecords({ intel, sectionRef }) {
             {timeline[0].exercise}
           </div>
           <div className="mt-0.5 text-[13px] font-semibold tabular-nums" style={{ color: 'var(--mute)' }}>
-            {n1(timeline[0].weight)} kg × {n0(timeline[0].reps)}
+            {u.fmtWeight(timeline[0].weight)} × {n0(timeline[0].reps)}
           </div>
         </Card>
       )}
@@ -794,9 +823,9 @@ function PersonalRecords({ intel, sectionRef }) {
               <div className="text-[12px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>{ex.exercise}</div>
               <div className="mt-1 flex items-baseline gap-1">
                 <span className="text-[18px] font-black tabular-nums leading-none" style={{ color: 'var(--ink)' }}>
-                  {n1(heaviest?.value ?? orm?.value)}
+                  {u.weightNum(heaviest?.value ?? orm?.value, { decimals: 1 })}
                 </span>
-                <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>kg</span>
+                <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
               </div>
               <div className="mt-0.5 text-[9.5px]" style={{ color: 'var(--faint)' }}>
                 {heaviest?.reps ? `× ${n0(heaviest.reps)} · ` : ''}{relDay(latest.date)}
@@ -821,6 +850,7 @@ function PersonalRecords({ intel, sectionRef }) {
 /* ══════════════════════════ training ══════════════════════════ */
 
 function TrainingSection({ intel, period }) {
+  const u = useUnits();
   const muscles = (intel.training?.byMuscle || []).filter((m) => m.sets > 0);
   const sessions = intel.training?.sessions || [];
   if (!sessions.length) return null;
@@ -834,7 +864,7 @@ function TrainingSection({ intel, period }) {
       <Card className="p-4">
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Sessions" value={sessions.length} sub={`last ${period}d`} />
-          <Stat label="Volume" value={fmtNum(n0(totalVolume))} unit="kg" />
+          <Stat label="Volume" value={fmtNum(u.weightNum(totalVolume, { decimals: 0 }))} unit={u.weightUnit} />
           <Stat label="Sets" value={fmtNum(totalSets)} />
         </div>
 
@@ -1027,6 +1057,7 @@ function ConsistencySection({ intel }) {
  * are added, rather than shipping placeholder rings.
  */
 function GoalSection({ intel }) {
+  const u = useUnits();
   const g = intel.weight?.goal;
   const targets = intel.nutrition?.targets;
   const days = intel.nutrition?.days || [];
@@ -1087,12 +1118,12 @@ function GoalSection({ intel }) {
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>Target weight</div>
             <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-[26px] font-black leading-none tabular-nums tracking-[-.03em]" style={{ color: 'var(--ink)' }}>{n1(g.target)}</span>
-              <span className="text-[11px]" style={{ color: 'var(--faint)' }}>kg</span>
+              <span className="text-[26px] font-black leading-none tabular-nums tracking-[-.03em]" style={{ color: 'var(--ink)' }}>{u.weightNum(g.target, { decimals: 1 })}</span>
+              <span className="text-[11px]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[15px] font-bold tabular-nums" style={{ color: 'var(--ink)' }}>{Math.abs(n1(g.remaining))} kg</div>
+            <div className="text-[15px] font-bold tabular-nums" style={{ color: 'var(--ink)' }}>{u.fmtWeight(Math.abs(g.remaining))}</div>
             <div className="text-[9.5px]" style={{ color: 'var(--faint)' }}>to go</div>
           </div>
         </div>
@@ -1213,6 +1244,7 @@ function PhotosSection({ photos }) {
  *  and largest thing on this page, which put data entry ahead of the
  *  progress the user came to see. */
 function LogWeight({ clientId, current, onLogged }) {
+  const u = useUnits();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -1237,13 +1269,19 @@ function LogWeight({ clientId, current, onLogged }) {
     // it forward.
     const raw = value.trim();
     if (!raw) { setMsg({ text: 'Enter a weight first', tone: 'bad' }); return; }
-    const w = parseFloat(raw);
+    // The user types in THEIR unit; the API only ever accepts kilograms.
+    // Converting here -- at the input boundary -- is what keeps a stored
+    // series from silently becoming a mix of kg and lb rows.
+    const w = u.toKg(raw);
     if (!Number.isFinite(w) || w <= 0) { setMsg({ text: 'Enter a valid weight greater than 0', tone: 'bad' }); return; }
+    // The 500 bound is the backend's (schemas.weightLog), so it must be
+    // checked against the CANONICAL value -- 900 lb is under 500 as a
+    // typed number and over it as a weight.
     if (w > 500) { setMsg({ text: 'That weight looks too high — double-check it', tone: 'bad' }); return; }
     setSaving(true);
     try {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });
-      setMsg({ text: `Logged ${w} kg`, tone: 'good' });
+      setMsg({ text: `Logged ${u.fmtWeight(w)}`, tone: 'good' });
       setValue('');
       onLogged?.();
     } catch (err) { setMsg({ text: err.message, tone: 'bad' }); }
@@ -1257,13 +1295,14 @@ function LogWeight({ clientId, current, onLogged }) {
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>Log today's weight</div>
             {current != null && (
-              <div className="mt-0.5 text-[11px]" style={{ color: 'var(--faint)' }}>Last: {n1(current)} kg</div>
+              <div className="mt-0.5 text-[11px]" style={{ color: 'var(--faint)' }}>Last: {u.fmtWeight(current)}</div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <input
               type="number" inputMode="decimal" step="0.1" min="0" value={value}
-              onChange={(e) => setValue(e.target.value)} placeholder="kg" aria-label="Weight in kilograms"
+              onChange={(e) => setValue(e.target.value)} placeholder={u.weightUnit}
+              aria-label={u.isImperial ? 'Weight in pounds' : 'Weight in kilograms'}
               className="input w-20 text-right tabular-nums" style={{ minHeight: 44 }}
             />
             <button type="submit" className="btn-primary btn-sm" disabled={saving} style={{ minHeight: 44 }}>

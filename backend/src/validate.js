@@ -302,15 +302,21 @@ export const schemas = {
     duration_h: z.number().min(0).max(24),
     source: z.enum(['manual', 'wearable']).default('manual')
   }),
+  /* Centimetres, with bounds that reject a typo rather than merely a
+     negative number. `min(0)` accepted a 0 cm neck and `max(200)` an
+     arm two metres round -- neither is a measurement, and once stored,
+     a slipped decimal or an inch/cm mix-up silently owns that chart for
+     good. The maxima stay well clear of any real person (the largest
+     recorded bicep is about 79 cm) so this only ever catches mistakes. */
   measurement: z.object({
     taken_at: z.string().optional(),
     weight: z.number().positive().max(500).optional(),
-    waist: z.number().min(0).max(300).optional(),
-    chest: z.number().min(0).max(300).optional(),
-    arms: z.number().min(0).max(200).optional(),
-    thighs: z.number().min(0).max(200).optional(),
-    hips: z.number().min(0).max(300).optional(),
-    neck: z.number().min(0).max(150).optional()
+    waist: z.number().min(30).max(250).optional(),
+    chest: z.number().min(30).max(250).optional(),
+    arms: z.number().min(10).max(100).optional(),
+    thighs: z.number().min(15).max(150).optional(),
+    hips: z.number().min(30).max(250).optional(),
+    neck: z.number().min(15).max(90).optional()
   }),
   aiEstimate: z.object({ text: z.string().min(1).max(300) }),
   // Tier 4 (food-AI) single-food estimate request. Deliberately separate

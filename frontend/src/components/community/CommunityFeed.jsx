@@ -21,6 +21,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Avatar } from '../UI.jsx';
 import { api } from '../../api.js';
 import { fmt, fmtVolume, HUE } from './CommunityPieces.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 const REACTION_GLYPH = { like: '❤️', fire: '🔥', clap: '👏', strong: '💪' };
 const REACTION_ORDER = ['like', 'fire', 'clap', 'strong'];
@@ -332,6 +333,7 @@ function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy, onUnsh
 }
 
 function PRBody({ pr }) {
+  const u = useUnits();
   // `pr` is a SESSION's worth of records. Rendering each record as its own
   // feed card is what turned one leg session into eight posts, and what a
   // 200-member gym would have turned into ~1,600 posts a day.
@@ -376,7 +378,7 @@ function PRBody({ pr }) {
               {g.exercise}
             </span>
             <span className="text-[12.5px] font-black tabular-nums shrink-0" style={{ color: HUE.prs.fg }}>
-              {headlineFor(g.best)}
+              {headlineFor(g.best, u)}
             </span>
           </div>
         ))}
@@ -394,14 +396,15 @@ function PRBody({ pr }) {
 /** The one figure that best states a record, per type. Rendering them all
  *  as "weight x reps" misreported an estimated 1RM as its source set and
  *  printed a volume record with no unit at all. */
-function headlineFor(r) {
+function headlineFor(r, u) {
   if (!r) return '';
-  if (r.type === 'est_1rm') return `${fmt(r.value)} kg 1RM`;
-  if (r.type === 'best_volume') return `${fmtVolume(r.value)} kg`;
+  const w = (kg) => `${fmt(u.weightNum(kg, { decimals: 0 }))} ${u.weightUnit}`;
+  if (r.type === 'est_1rm') return `${w(r.value)} 1RM`;
+  if (r.type === 'best_volume') return `${fmtVolume(r.value, u)} ${u.weightUnit}`;
   if (r.weight != null && r.reps != null) {
     return r.type === 'best_reps'
-      ? `${fmt(r.reps)} x ${fmt(r.weight)} kg`
-      : `${fmt(r.weight)} kg x ${fmt(r.reps)}`;
+      ? `${fmt(r.reps)} x ${w(r.weight)}`
+      : `${w(r.weight)} x ${fmt(r.reps)}`;
   }
   return fmt(r.value);
 }

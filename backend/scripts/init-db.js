@@ -34,6 +34,9 @@ const MIGRATIONS = [
   ['gym_settings', 'attendance_mode', `attendance_mode TEXT NOT NULL DEFAULT 'simple'`],
   ['gym_settings', 'attendance_grace_min', `attendance_grace_min INTEGER NOT NULL DEFAULT 10`],
   ['gym_settings', 'attendance_require_qr', `attendance_require_qr INTEGER NOT NULL DEFAULT 1`],
+  // --- Display units. Storage stays canonical kg/cm; this only changes
+  // what is rendered and how typed input is read. ---
+  ['client_profiles', 'unit_system', `unit_system TEXT NOT NULL DEFAULT 'metric'`],
   // --- Community: who sees my PRs, and whose PRs I see ---
   // Defaults preserve exactly today's behaviour: 'everyone' is what every
   // existing member already agreed to when they opted in, so this

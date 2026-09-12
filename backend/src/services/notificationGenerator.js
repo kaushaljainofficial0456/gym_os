@@ -369,7 +369,7 @@ export async function generateNotifications(db, userId, orgId) {
         const notif = await upsertNotification(db, {
           userId, orgId, clientId,
           type: 'daily_summary',
-          title: '📊 Your Gym OS day',
+          title: '📊 Your Barbell day',
           body: summaryBody,
           dedupKey,
           dataJson: JSON.stringify({ date: today }),

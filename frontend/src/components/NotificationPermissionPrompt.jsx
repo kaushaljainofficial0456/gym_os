@@ -1,5 +1,5 @@
 // ============================================================
-// NOTIFICATION PERMISSION PROMPT — custom Gym OS modal shown
+// NOTIFICATION PERMISSION PROMPT — custom Barbell modal shown
 // after first successful login. Uses the REAL browser
 // Notification.requestPermission() API when the user clicks
 // "Allow Notifications".
@@ -161,7 +161,7 @@ export default function NotificationPermissionPrompt() {
           className="font-grotesk font-bold text-lg mb-2"
           style={{ color: 'var(--ink)' }}
         >
-          Stay on track with Gym OS
+          Stay on track with Barbell
         </h2>
 
         {/* Description */}

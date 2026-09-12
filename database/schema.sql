@@ -77,7 +77,15 @@ CREATE TABLE IF NOT EXISTS client_profiles (
   water_target_l   REAL DEFAULT 3,
   equipment        TEXT,          -- JSON array: ["dumbbells","bench","bands"] (full_gym = everything)
   experience       TEXT,          -- BEGINNER | INTERMEDIATE | ADVANCED
-  notes            TEXT
+  notes            TEXT,
+  -- Display units only. Every weight in this database is stored in KG and
+  -- every length in CM, always, regardless of this column -- it decides
+  -- what the app renders and how it parses typed input, nothing else.
+  -- Storing converted values would make the canonical number depend on a
+  -- preference that can change, and a round-trip through lb and back
+  -- would quietly drift by rounding.
+  unit_system      TEXT NOT NULL DEFAULT 'metric'
+                   CHECK (unit_system IN ('metric','imperial'))
 );
 
 CREATE TABLE IF NOT EXISTS goals (
