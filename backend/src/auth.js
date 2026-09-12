@@ -144,8 +144,34 @@ export function setAuthCookie(res, token) {
   });
 }
 
+// The legacy path this cookie used to be scoped to. Until c257290
+// (2026-09-11) setAuthCookie wrote sk_token with path '/api'; that commit
+// moved it to '/' so requireAuth could also gate /uploads/:key (see
+// authCookieOptions above for the full reasoning).
+const LEGACY_COOKIE_PATH = '/api';
+
 export function clearAuthCookie(res) {
   res.clearCookie('sk_token', authCookieOptions());
+  // Clear the LEGACY '/api'-scoped cookie as well, not just the current
+  // '/'-scoped one. A cookie's identity is (name, domain, path), so the
+  // clear above is incapable of touching a cookie stored under a different
+  // path -- it is a different cookie as far as the browser is concerned,
+  // no matter that the name matches.
+  //
+  // Root cause of "Sign out still does nothing on production", found after
+  // the earlier fixes were already live and verified: every session created
+  // BEFORE c257290 deployed still holds sk_token at path=/api, carrying a
+  // JWT good for 7 days. The browser sends it on every /api/* request, so
+  // after a logout that only cleared '/', it was the ONLY sk_token left --
+  // /auth/me authenticated with it, and App.jsx's <GuestOnly> bounced the
+  // user off /login straight back into the app. Reproduced against a real
+  // cookie engine: with the legacy cookie present /auth/me returned 200
+  // after logout; without it, 401.
+  //
+  // Harmless for everyone else: clearing a cookie the browser does not have
+  // is a no-op. Safe to delete once every pre-c257290 cookie has aged out
+  // (7-day maxAge, so after ~2026-09-18) -- keeping it costs one header.
+  res.clearCookie('sk_token', { ...authCookieOptions(), path: LEGACY_COOKIE_PATH });
 }
 
 // Attach req.user from the Bearer token (claims carry identity), then resolve the
