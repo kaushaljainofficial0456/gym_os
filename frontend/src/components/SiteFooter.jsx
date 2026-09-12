@@ -47,7 +47,7 @@ export default function SiteFooter({ className = '' }) {
               {SUPPORT_EMAIL}
             </a>
           </p>
-          <p style={{ color: 'var(--faint)' }}>© 2026 SK OS. All rights reserved.</p>
+          <p style={{ color: 'var(--faint)' }}>© 2026 {BRAND}. All rights reserved.</p>
         </div>
       </div>
     </footer>
