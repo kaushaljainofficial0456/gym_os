@@ -99,36 +99,79 @@ export function signToken(user) {
   );
 }
 
+// The attributes sk_token is set with. Shared by setAuthCookie and
+// clearAuthCookie ON PURPOSE: a browser only removes a cookie when the
+// clearing Set-Cookie's name/path/domain AND its security attributes match
+// the ones it was stored with (Express says as much of res.clearCookie --
+// "clients will only clear the cookie if the given options is identical to
+// those given to res.cookie()"). clearAuthCookie used to pass `path` alone,
+// so the clear response disagreed with the original on httpOnly/secure/
+// sameSite and a compliant browser was entitled to keep the cookie -- a
+// second, independent way for logout to leave the session alive. One
+// definition means the two can no longer drift apart.
+const authCookieOptions = () => ({
+  httpOnly: true,
+  secure: config.nodeEnv === 'production' || config.nodeEnv === 'staging',
+  sameSite: 'strict',
+  // Root, not '/api': requireAuth also gates /uploads/:key (private
+  // photo/image serving, see index.js), a SIBLING mount, not a path under
+  // /api. A cookie scoped to path=/api is a browser-enforced restriction
+  // the server-side route never knows happened -- every request to
+  // /uploads/* simply arrives with no cookie, at all, for every role,
+  // including the photo's own owner. Combined with the frontend no longer
+  // sending a Bearer header as a fallback (removed; auth is cookie-only
+  // now, see api.js), this meant NO transformation photo could ever
+  // actually load for anyone, in any environment -- confirmed live:
+  // authenticating and then requesting a just-uploaded photo's own URL
+  // returned 401 "Authentication required" regardless of who was logged
+  // in. Scoping to '/' costs nothing extra: the cookie is httpOnly
+  // (immune to XSS reads), secure+sameSite=strict in prod/staging
+  // (immune to cross-site leakage), so widening which same-origin PATHS
+  // it's attached to is not a new exposure -- it only fixes which of the
+  // app's OWN routes can see it.
+  path: '/',
+});
+
 // Set the JWT as an httpOnly cookie — immune to XSS token theft.
 export function setAuthCookie(res, token) {
-  const isSecure = config.nodeEnv === 'production' || config.nodeEnv === 'staging';
+  // maxAge lives here rather than in authCookieOptions(): it is the one
+  // attribute clearAuthCookie must NOT repeat (it would fight the
+  // expiry-in-the-past that does the clearing), and Express excludes
+  // expires/maxAge from the attributes a client matches on anyway.
   res.cookie('sk_token', token, {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: 'strict',
-    // Root, not '/api': requireAuth also gates /uploads/:key (private
-    // photo/image serving, see index.js), a SIBLING mount, not a path under
-    // /api. A cookie scoped to path=/api is a browser-enforced restriction
-    // the server-side route never knows happened -- every request to
-    // /uploads/* simply arrives with no cookie, at all, for every role,
-    // including the photo's own owner. Combined with the frontend no longer
-    // sending a Bearer header as a fallback (removed; auth is cookie-only
-    // now, see api.js), this meant NO transformation photo could ever
-    // actually load for anyone, in any environment -- confirmed live:
-    // authenticating and then requesting a just-uploaded photo's own URL
-    // returned 401 "Authentication required" regardless of who was logged
-    // in. Scoping to '/' costs nothing extra: the cookie is httpOnly
-    // (immune to XSS reads), secure+sameSite=strict in prod/staging
-    // (immune to cross-site leakage), so widening which same-origin PATHS
-    // it's attached to is not a new exposure -- it only fixes which of the
-    // app's OWN routes can see it.
-    path: '/',
+    ...authCookieOptions(),
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days — matches JWT expiry
   });
 }
 
+// The legacy path this cookie used to be scoped to. Until c257290
+// (2026-09-11) setAuthCookie wrote sk_token with path '/api'; that commit
+// moved it to '/' so requireAuth could also gate /uploads/:key (see
+// authCookieOptions above for the full reasoning).
+const LEGACY_COOKIE_PATH = '/api';
+
 export function clearAuthCookie(res) {
-  res.clearCookie('sk_token', { path: '/' });
+  res.clearCookie('sk_token', authCookieOptions());
+  // Clear the LEGACY '/api'-scoped cookie as well, not just the current
+  // '/'-scoped one. A cookie's identity is (name, domain, path), so the
+  // clear above is incapable of touching a cookie stored under a different
+  // path -- it is a different cookie as far as the browser is concerned,
+  // no matter that the name matches.
+  //
+  // Root cause of "Sign out still does nothing on production", found after
+  // the earlier fixes were already live and verified: every session created
+  // BEFORE c257290 deployed still holds sk_token at path=/api, carrying a
+  // JWT good for 7 days. The browser sends it on every /api/* request, so
+  // after a logout that only cleared '/', it was the ONLY sk_token left --
+  // /auth/me authenticated with it, and App.jsx's <GuestOnly> bounced the
+  // user off /login straight back into the app. Reproduced against a real
+  // cookie engine: with the legacy cookie present /auth/me returned 200
+  // after logout; without it, 401.
+  //
+  // Harmless for everyone else: clearing a cookie the browser does not have
+  // is a no-op. Safe to delete once every pre-c257290 cookie has aged out
+  // (7-day maxAge, so after ~2026-09-18) -- keeping it costs one header.
+  res.clearCookie('sk_token', { ...authCookieOptions(), path: LEGACY_COOKIE_PATH });
 }
 
 // Attach req.user from the Bearer token (claims carry identity), then resolve the

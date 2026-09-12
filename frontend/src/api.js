@@ -43,17 +43,40 @@ export const setSession = ({ user }) => {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 export const setStoredUser = (user) => { localStorage.setItem(USER_KEY, JSON.stringify(user)); };
-// Best-effort: clears the httpOnly cookie server-side (see routes/auth.js's
-// POST /auth/logout -- client-side JS cannot read OR delete an httpOnly
-// cookie itself, that's the point of httpOnly, so a real network call is
-// the only way "log out" can actually end the session rather than just
-// forgetting local UI state). Never blocks or throws on failure -- a
-// logout must always clear what THIS browser can control (the stored
-// user, immediately below) even if the network call itself fails.
+// Clears the httpOnly cookie server-side (see routes/auth.js's POST
+// /auth/logout -- client-side JS cannot read OR delete an httpOnly cookie
+// itself, that's the point of httpOnly, so a real network call is the only
+// way "log out" can actually end the session rather than just forgetting
+// local UI state).
+//
+// RETURNS A PROMISE, and every caller that follows it with a navigation
+// MUST await it. Root cause of "Sign out doesn't work": this used to fire
+// the fetch and immediately drop the promise, and auth.jsx's logout() set
+// `location.href` on the very next line -- a full-page navigation cancels
+// in-flight requests, so the browser tore the logout POST down before it
+// reached the server. The sk_token cookie therefore survived; the reloaded
+// page's /auth/me authenticated with it perfectly happily, and App.jsx's
+// <GuestOnly> saw an authenticated user sitting on /login and redirected
+// straight back into the app -- so clicking "Sign out" looked like it did
+// nothing at all.
+//
+// Never rejects: the state THIS browser controls (the stored user) is
+// cleared first and unconditionally, so awaiting this can delay a logout
+// on a slow/offline network but can never block or break one.
 export const clearSession = () => {
-  fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
-  localStorage.removeItem(USER_KEY);
+  clearStoredUser();
+  return fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    .then(() => {}, () => {});
 };
+
+// The local half of clearSession, WITHOUT the server round-trip -- for the
+// callers that only need to drop this browser's optimistic UI state and
+// know the cookie is already being dealt with (or can't be: no network).
+// Exists so a failed /auth/me doesn't fire a SECOND, redundant logout POST
+// on top of the one api()'s own 401 branch already sent -- that pair was
+// visible in the server log as two POST /auth/logout per anonymous page
+// load, one of them pure waste.
+export const clearStoredUser = () => { localStorage.removeItem(USER_KEY); };
 
 // Downloads a binary response (e.g. an invoice PDF) -- same pattern as
 // admin/'s own downloadCsv() helper. api()'s JSON-only parsing can't be
@@ -62,7 +85,8 @@ export const clearSession = () => {
 export async function downloadFile(path, filename) {
   const res = await fetch('/api' + path, { credentials: 'include' });
   if (res.status === 401) {
-    clearSession();
+    // Awaited for the same reason as api()'s 401 branch above.
+    await clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
   }
@@ -82,7 +106,9 @@ export async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   const res = await fetch('/api' + path, { ...opts, headers, credentials: 'include' });
   if (res.status === 401) {
-    clearSession();
+    // Awaited, not fire-and-forget: the navigation on the next line would
+    // otherwise cancel the logout POST mid-flight (see clearSession).
+    await clearSession();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
   }

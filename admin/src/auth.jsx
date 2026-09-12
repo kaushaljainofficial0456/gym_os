@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
         // independently enforces this server-side too (see console.js),
         // this is purely so a non-admin token doesn't sit in a confusing
         // half-logged-in UI state.
-        if (fresh.role !== 'SUPER_ADMIN') { clearSession(); if (alive) setUser(null); }
+        if (fresh.role !== 'SUPER_ADMIN') { await clearSession(); if (alive) setUser(null); }
         else if (alive) { setUser(fresh); setSession({ token, user: fresh }); }
       } catch {
         if (alive) setUser(null);
@@ -33,14 +33,23 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const { token, user: loggedInUser } = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
     if (loggedInUser.role !== 'SUPER_ADMIN') {
-      clearSession();
+      // await before throwing: /auth/login has already handed this
+      // non-admin a valid sk_token cookie, and it must be revoked before
+      // the caller surfaces the rejection.
+      await clearSession();
       throw new Error('This account does not have Admin Console access.');
     }
     setSession({ token, user: loggedInUser });
     setUser(loggedInUser);
   };
 
-  const logout = () => { clearSession(); setUser(null); };
+  // async + await: clearSession() now also POSTs /auth/logout to clear the
+  // httpOnly sk_token cookie this console was silently holding (see
+  // api.js's clearSession). Nothing navigates here, so the await is not
+  // guarding against a cancelled request -- it is so `logout()` does not
+  // resolve until the session is genuinely gone server-side, and any
+  // caller that chains a redirect onto it inherits that guarantee.
+  const logout = async () => { await clearSession(); setUser(null); };
 
   return <AuthCtx.Provider value={{ user, ready, authed: !!user, login, logout }}>{children}</AuthCtx.Provider>;
 }
