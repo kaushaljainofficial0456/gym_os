@@ -354,7 +354,9 @@ function StepReview({ form, t, goTo }) {
 const STEPS = ['Welcome', 'Name', 'Sex', 'Height', 'Weight', 'Age', 'Goal', 'Experience', 'Review'];
 
 export default function OnboardingWizard({ open, onComplete, initialName = '' }) {
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const t = T[theme] || T.dark;
   const [step, setStep] = useState(0);
   const direction = useRef(1);

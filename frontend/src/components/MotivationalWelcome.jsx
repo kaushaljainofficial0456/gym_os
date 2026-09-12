@@ -7,7 +7,9 @@ import Logo from './Logo.jsx';
 export default function MotivationalWelcome({ onComplete }) {
   const [quote] = useState(() => getNextQuote());
   const [phase, setPhase] = useState('enter');
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const isDark = theme === 'dark';
 
   useEffect(() => {

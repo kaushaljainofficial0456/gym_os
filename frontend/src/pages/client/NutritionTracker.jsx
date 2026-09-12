@@ -131,7 +131,18 @@ export default function NutritionTracker() {
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
   const avgCal = loggedCount ? Math.round(sums.calories / loggedCount) : 0;
   const chartRows = histDates.map((date) => ({ date, label: date.slice(5), value: Math.round(histByDate.get(date)?.calories || 0) }));
-  const chartMax = Math.max(200, ...chartRows.map((r) => r.value)) * 1.15;
+  /* A chart axis has to end on a number a person can read. This was
+     `peak * 1.15`, so a 3,165 kcal day produced an axis labelled
+     3639.7499999999995 -- floating-point noise printed at full precision
+     on screen. Rounded UP to a clean step instead, which also keeps the
+     top gridline meaningful (2,000 / 2,500 / 3,000) rather than an
+     arbitrary product of the tallest bar. */
+  const niceCeiling = (n) => {
+    if (!Number.isFinite(n) || n <= 0) return 200;
+    const step = n <= 500 ? 50 : n <= 2000 ? 100 : n <= 5000 ? 250 : 500;
+    return Math.ceil(n / step) * step;
+  };
+  const chartMax = niceCeiling(Math.max(200, ...chartRows.map((r) => r.value)) * 1.15);
 
   return (
     <div className="space-y-5 pb-2">

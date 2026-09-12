@@ -73,7 +73,18 @@ export default {
            same alpha as theme.css's :root, so both paths agree. */
         line: 'rgba(255,223,221,.08)',
         mute: 'rgba(255,223,221,.68)',
-        faint: 'rgba(255,223,221,.44)',
+        /* .44 was correct when this was last aligned; theme.css's --faint
+           has since been raised to .60 by a contrast pass and this was not
+           moved with it -- the exact drift the comment above describes,
+           recurring. At .44 every `text-faint` label measured ~3.7:1 on
+           both --panel and --bg, under AA for the 10px type it is mostly
+           used on. .60 measures 5.84:1 / 6.05:1 and matches the token.
+
+           Kept as a literal rgba rather than rgb(var(--ink-rgb) / <alpha-value>)
+           because the alpha slot has to stay free for Tailwind's own
+           modifier syntax -- `border-line/50` is used in this codebase,
+           and baking a default alpha in would break it. */
+        faint: 'rgba(255,223,221,.60)',
       },
       /* The four legacy names are KEPT as aliases rather than renamed,
          because ~40 files use `font-display` / `font-grotesk` today and a

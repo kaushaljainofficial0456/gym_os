@@ -396,7 +396,9 @@ export default function ExerciseVisual({
   showControls = true,
   intensity = 1.0, // animation intensity multiplier (0-1)
 }) {
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const t = THEMES[theme] || THEMES.dark;
   const [playing, setPlaying] = useState(autoPlay);
   const [speed, setSpeed] = useState(1);

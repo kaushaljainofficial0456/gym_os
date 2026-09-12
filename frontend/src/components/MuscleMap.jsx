@@ -88,7 +88,9 @@ export default function MuscleMap({ activeMuscles = [], selected = null, onSelec
   const regions = activeMuscles.map(regionForMuscle).filter(Boolean);
   const [view, setView] = useState(() => (regions.some(r => BACK_ONLY.has(r)) ? 'back' : 'front'));
   const [hover, setHover] = useState(null);
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const t = MAP_THEMES[theme] || MAP_THEMES.dark;
 
   useEffect(() => {

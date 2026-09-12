@@ -21,6 +21,7 @@
 // (see /client/payment/order's idempotency) without needing a new QR.
 // ============================================================
 import { Router } from 'express';
+import { effectiveMembershipStatus } from '../services/enterprise/membershipLifecycle.js';
 import { z } from 'zod';
 import { requireAuth, requireRole, orgScope, signToken, setAuthCookie } from '../auth.js';
 import { validate } from '../validate.js';
@@ -401,7 +402,16 @@ export default function enrollmentRoutes(db) {
     if (!client) return res.json({ membership: null });
     const subscription = await db.q1('SELECT * FROM subscriptions WHERE client_id = ? ORDER BY end_date DESC LIMIT 1', [client.id]);
     const org = client.org_id ? await db.q1('SELECT id, name FROM organizations WHERE id = ?', [client.org_id]) : null;
-    res.json({ membership: subscription, gym: org });
+    /* Served with the status the membership actually has today, not the
+       one last written to it. Nothing expires a membership in this app,
+       so a lapsed row keeps reporting ACTIVE -- which put an "Active"
+       chip directly above "This membership has expired" on the client's
+       own card. See effectiveMembershipStatus for why this is derived
+       rather than written. */
+    const membership = subscription
+      ? { ...subscription, lifecycle_status: effectiveMembershipStatus(subscription) }
+      : null;
+    res.json({ membership, gym: org });
   });
 
   /* ================= CLIENT: renew ================= */

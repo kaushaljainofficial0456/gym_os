@@ -7,7 +7,7 @@ import { id, now } from '../ids.js';
 import { dayKey, addDays } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
-import { transitionMembership } from '../services/enterprise/membershipLifecycle.js';
+import { transitionMembership, effectiveMembershipStatus } from '../services/enterprise/membershipLifecycle.js';
 import { runReconciliationSweep, listReconciliationIssues, resolveReconciliationIssue } from '../services/payments/reconciliation.js';
 import { initiateRefund, listRefunds } from '../services/payments/refunds.js';
 import { requirePermission } from '../permissions.js';
@@ -394,7 +394,15 @@ export default function adminRoutes(db) {
          JOIN users u ON u.id = c.user_id
          LEFT JOIN subscriptions s ON s.client_id = c.id AND s.status = 'active'
         WHERE c.org_id = ? ORDER BY u.name`, [req.orgId]);
-    res.json({ members: rows });
+    /* Same derivation the client's own membership card uses. Without it
+       the owner's roster and the member's own screen disagree about the
+       same subscription -- the roster saying ACTIVE while the member is
+       told they have expired. */
+    res.json({
+      members: rows.map((m) => (m.subscription_id
+        ? { ...m, lifecycle_status: effectiveMembershipStatus(m) }
+        : m)),
+    });
   });
 
   // ---- membership lifecycle actions (suspend / resume / cancel) ----

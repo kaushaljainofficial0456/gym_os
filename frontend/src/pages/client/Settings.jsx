@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useCookieConsent } from '../../components/CookieConsent.jsx';
 import { api } from '../../api.js';
+import { useTheme } from '../../themeContext.jsx';
 import { Toast } from '../../components/UI.jsx';
 
 const SETTINGS_SECTIONS = [
@@ -175,8 +176,75 @@ export default function Settings() {
         <button className="btn w-full" onClick={() => nav('/app/client/health')}>Connected devices</button>
       </div>
 
+      <AppearanceCard />
       <NotificationSettingsCard />
       <CookieSettingsCard />
+    </div>
+  );
+}
+
+/**
+ * APPEARANCE — theme lived on the Profile page, not in Settings.
+ *
+ * Somebody looking for the theme switch goes to Settings; it was a
+ * toggle buried in the Profile header instead, and Settings -- the
+ * screen literally subtitled "Manage your account and preferences" --
+ * had no appearance section at all.
+ *
+ * Three choices rather than a two-state switch, because "System" is a
+ * real preference and not having it forces a decision the OS has already
+ * made. The choice persists as the CHOICE (see themeContext): storing
+ * the resolved value would silently convert "System" into whichever
+ * appearance happened to be active at the time.
+ */
+function AppearanceCard() {
+  const { theme, resolved, systemTheme, setTheme } = useTheme();
+  const OPTIONS = [
+    ['system', 'System', 'Follows your device'],
+    ['light', 'Light', null],
+    ['dark', 'Dark', null],
+  ];
+  return (
+    <div className="card p-4">
+      <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium mb-3" style={{ color: 'var(--mute)' }}>
+        Appearance
+      </div>
+      <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2">
+        {OPTIONS.map(([value, label, hint]) => {
+          const on = theme === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setTheme(value)}
+              className="rounded-xl px-2 py-2.5 text-center"
+              style={{
+                background: on ? 'var(--accent-soft)' : 'transparent',
+                border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                color: on ? 'var(--accent)' : 'var(--mute)',
+                minHeight: 56,
+              }}
+            >
+              <div className="text-[12.5px] font-semibold">{label}</div>
+              {hint && <div className="text-[9.5px] mt-0.5" style={{ color: 'var(--faint)' }}>{hint}</div>}
+            </button>
+          );
+        })}
+      </div>
+      {/* Says what "System" currently resolves to, so the choice is not
+          a guess about what the device is going to do. */}
+      {theme === 'system' && (
+        <div className="text-[11px] mt-2.5" style={{ color: 'var(--mute)' }}>
+          Your device is set to <strong style={{ color: 'var(--ink)' }}>{systemTheme}</strong> right now.
+        </div>
+      )}
+      {theme !== 'system' && (
+        <div className="text-[11px] mt-2.5" style={{ color: 'var(--mute)' }}>
+          Showing the {resolved} theme on every device you sign in on.
+        </div>
+      )}
     </div>
   );
 }

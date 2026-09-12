@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
 import { api } from '../../api.js';
-import { useFetch } from '../../utils.js';
+import { useFetch, GOAL_LABEL } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
 import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
@@ -37,6 +37,109 @@ const PROFILE_SECTIONS = [
   // other sites.
   { id: 'help', label: 'Help', icon: 'bulb', desc: 'Learn how to use Barbell' },
 ];
+
+/**
+ * JOURNEY HERO — where they started, where they are, where they're going.
+ *
+ * The profile header stated a current weight and nothing else, so the one
+ * fact a person opens this page for -- am I actually moving? -- was not
+ * on it. Progress owns the deep analysis; this is the single sentence
+ * version, and it links there rather than duplicating it (§119).
+ *
+ * IT HAS TO HANDLE OVERSHOOT, because real people do. This client began
+ * at 94, targets 82 and is now 75: seven kilos PAST the goal. A naive
+ * "7 kg remaining" would render as a negative, and a progress bar clamped
+ * to 100% would quietly hide that they have gone further than they
+ * planned -- which for a fat-loss client is a thing a coach wants to see,
+ * not a rounding detail.
+ *
+ * Renders nothing at all without a start and a current weight. A journey
+ * with one end missing is not a journey, and a hero built from a single
+ * number would just be the header again in a bigger font.
+ */
+function JourneyHero({ client }) {
+  const start = Number(client?.startWeight);
+  const now = Number(client?.currentWeight);
+  const target = Number(client?.targetWeight);
+  if (!Number.isFinite(start) || !Number.isFinite(now)) return null;
+
+  const moved = Math.round((now - start) * 10) / 10;
+  const hasTarget = Number.isFinite(target);
+  // Which way this goal is meant to go, taken from the journey itself
+  // rather than the goal label -- the two can disagree, and the numbers
+  // are the thing actually happening.
+  const losing = hasTarget ? target < start : moved < 0;
+  const remaining = hasTarget ? Math.round((now - target) * 10) / 10 : null;
+  const overshot = hasTarget && (losing ? now < target : now > target);
+
+  const span = hasTarget ? Math.abs(target - start) : 0;
+  const done = hasTarget && span > 0
+    ? Math.max(0, Math.min(100, (Math.abs(now - start) / span) * 100))
+    : null;
+
+  return (
+    <div
+      className="rounded-2xl p-4 mb-3"
+      style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}
+    >
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="t-micro">Your journey</div>
+        {moved !== 0 && (
+          <div
+            className="font-grotesk font-bold text-[13px] tabular-nums"
+            style={{ color: losing === moved < 0 ? 'var(--m-body)' : 'var(--mute)' }}
+          >
+            {moved > 0 ? '+' : ''}{moved} kg
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-end gap-2 mt-2 tabular-nums">
+        <Leg label="Start" value={start} />
+        <Arrow />
+        <Leg label="Now" value={now} emphasis />
+        {hasTarget && <><Arrow /><Leg label="Target" value={target} /></>}
+      </div>
+
+      {done != null && (
+        <div className="mt-3">
+          <div className="meter" style={{ height: 6 }}>
+            <span
+              className="meter-fill"
+              style={{ width: `${done}%`, background: overshot ? 'var(--m-body)' : 'var(--accent-grad)' }}
+            />
+          </div>
+          <div className="text-[11px] mt-1.5" style={{ color: 'var(--mute)' }}>
+            {overshot
+              /* Stated as a fact, not as a failure. Going past a target is
+                 information, and calling it "-7 kg remaining" would be
+                 both wrong and discouraging. */
+              ? <>Target reached — you're <strong style={{ color: 'var(--ink)' }}>{Math.abs(remaining)} kg</strong> past it.</>
+              : <><strong style={{ color: 'var(--ink)' }}>{Math.abs(remaining)} kg</strong> to go · {Math.round(done)}% of the way</>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Leg({ label, value, emphasis }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>{label}</div>
+      <div
+        className="font-grotesk font-bold leading-none mt-0.5"
+        style={{ fontSize: emphasis ? 22 : 15, color: emphasis ? 'var(--ink)' : 'var(--mute)' }}
+      >
+        {value}<span className="text-[10px] font-semibold" style={{ color: 'var(--faint)' }}> kg</span>
+      </div>
+    </div>
+  );
+}
+
+function Arrow() {
+  return <span className="text-[13px] pb-1" style={{ color: 'var(--faint)' }} aria-hidden="true">→</span>;
+}
 
 function MiniSpark({ values, color = 'var(--accent)' }) {
   if (!values?.length) return <div className="text-[10px] text-faint">No entries yet</div>;
@@ -106,34 +209,32 @@ function HelpInline() {
   );
 }
 
+/**
+ * Appearance now lives in Settings, where someone looking for it goes.
+ *
+ * This was a two-state switch, and Settings offers System / Light / Dark.
+ * Leaving both meant the switch could silently destroy a "System" choice
+ * -- flipping it has to resolve to an explicit light or dark, because
+ * there is no third position on a toggle. Two controls for one
+ * preference, disagreeing about what the preference even is.
+ *
+ * Kept as a row rather than deleted outright: this is where people have
+ * been changing the theme, so it says where it moved to instead of
+ * vanishing.
+ */
 function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  const isDark = theme === 'dark';
+  const { theme: choice, resolved } = useTheme();
+  const label = choice === 'system'
+    ? `System · currently ${resolved}`
+    : resolved === 'dark' ? 'Dark' : 'Light';
   return (
-    <div className="card p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="t-micro">Appearance</div>
-          <div className="text-sm font-grotesk mt-0.5" style={{ color: 'var(--ink)' }}>{isDark ? 'Dark Mode' : 'Light Mode'}</div>
-        </div>
-        <button
-          onClick={toggle}
-          className="relative w-12 h-6 rounded-full transition-colors duration-200"
-          style={{ background: 'var(--accent-grad)' }}
-          role="switch"
-          aria-checked={isDark}
-          aria-label="Toggle dark mode"
-        >
-          <span
-            className="absolute top-0.5 w-5 h-5 rounded-full transition-all duration-200 shadow-sm"
-            style={{
-              left: isDark ? 'calc(100% - 22px)' : '2px',
-              background: '#fff',
-            }}
-          />
-        </button>
+    <Link to="/app/client/settings" className="card p-4 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="t-micro">Appearance</div>
+        <div className="text-sm font-grotesk mt-0.5" style={{ color: 'var(--ink)' }}>{label}</div>
       </div>
-    </div>
+      <span className="text-[11.5px] shrink-0" style={{ color: 'var(--accent)' }}>Change in Settings</span>
+    </Link>
   );
 }
 
@@ -333,7 +434,22 @@ export default function Profile() {
     setSavingM(false);
   };
 
-  const deleteEntry = async (mId, eId) => {
+  const deleteEntry = async (mId, eId, label) => {
+    /* Measurements are history, and this control is an 11px x sitting
+       inside a chip -- eleven of them on screen at once, each one tap
+       from permanently destroying a data point somebody stood on a scale
+       to produce. There is no undo and no soft delete behind it, so the
+       confirm names the exact reading rather than asking "are you sure?",
+       which tells the reader nothing about what is about to vanish. */
+    const ok = window.confirm(
+      label
+        ? `Delete this measurement?
+
+${label}
+
+This cannot be undone.`
+        : 'Delete this measurement? This cannot be undone.');
+    if (!ok) return;
     try {
       await api(`/me/metrics/${mId}/entries/${eId}`, { method: 'DELETE' });
       metrics.reload({ silent: true });
@@ -354,8 +470,29 @@ export default function Profile() {
     setSavingM(false);
   };
 
+  /* DELETING A METRIC TAKES ITS ENTIRE HISTORY WITH IT -- the server
+     removes every metric_entries row before the metric itself. This had
+     no confirmation of any kind: one tap on a small icon permanently
+     destroyed months of readings, with no undo and no soft delete
+     anywhere behind it. Proven the hard way while testing this screen,
+     which is exactly how a real user would lose their data.
+
+     The count is in the prompt because "Delete Waist?" and "Delete
+     Waist, including 4 recorded measurements?" are different questions,
+     and only the second one lets someone decide properly. */
   const deleteMetric = async (mId) => {
-    await api(`/me/metrics/${mId}`, { method: 'DELETE' }).then(() => { metrics.reload({ silent: true }); }).catch((e) => setToast(e.message));
+    const metric = (metrics.data?.metrics || []).find((x) => x.id === mId);
+    const n = metric?.entriesCount ?? (metric?.entries || []).length;
+    const ok = window.confirm(
+      `Delete "${metric?.name || 'this metric'}"?
+
+`
+      + (n > 0
+        ? `Its ${n} recorded ${n === 1 ? 'measurement' : 'measurements'} will be deleted too. `
+        : '')
+      + 'This cannot be undone.');
+    if (!ok) return;
+    await api(`/me/metrics/${mId}`, { method: 'DELETE' }).then(() => { metrics.reload({ silent: true }); setToast('Metric deleted'); }).catch((e) => setToast(e.message));
   };
 
   const savePrefs = async () => {
@@ -387,8 +524,52 @@ export default function Profile() {
       if (heightVal !== null && (heightVal < 100 || heightVal > 250)) { setToast('Height must be between 100–250 cm'); setSavingG(false); return; }
       if (weightVal !== null && (weightVal < 20 || weightVal > 400)) { setToast('Weight must be between 20–400 kg'); setSavingG(false); return; }
       if (ageVal !== null && (ageVal < 10 || ageVal > 120)) { setToast('Age must be between 10–120'); setSavingG(false); return; }
+
+      const targetVal = gForm.targetWeight !== '' && gForm.targetWeight != null ? Number(gForm.targetWeight) : null;
+      if (targetVal !== null && (targetVal < 20 || targetVal > 400)) {
+        setToast('Target weight must be between 20–400 kg'); setSavingG(false); return;
+      }
+
+      /* A TARGET THAT CONTRADICTS THE GOAL. A fat-loss client at 75 kg
+         could save a target of 95 kg and be told "Goal updated" -- the
+         app then cheerfully reported 0% progress toward getting heavier,
+         on a plan built to make them lighter. Almost always a typo (95
+         for 85, or the target typed into the wrong box), and the app was
+         the only thing in a position to notice.
+
+         Asked, not blocked, and the value is never silently changed:
+         someone may genuinely be reverse dieting or recovering weight,
+         and the app does not get to overrule that. Only the two goals
+         with an unambiguous direction are checked -- recomposition,
+         strength and general fitness imply nothing about which way the
+         number should move. */
+      /* Compared against the START weight, not the current one. Measuring
+         from current punishes success: this client began at 94, targets
+         82 and is already down to 75 -- a perfectly good fat-loss goal
+         they have overshot -- and comparing to current flagged their own
+         real target as contradictory every time they opened the form.
+         The direction of a goal is a property of the journey, so it is
+         judged from where the journey started. */
+      const startW = Number(data?.client?.startWeight);
+      const compare = Number.isFinite(startW) ? startW : (weightVal ?? null);
+      if (targetVal !== null && compare != null) {
+        const wrongWay =
+          (gForm.goal === 'FAT_LOSS' && targetVal > compare) ? 'heavier'
+          : (gForm.goal === 'MUSCLE_GAIN' && targetVal < compare) ? 'lighter'
+          : null;
+        if (wrongWay) {
+          const label = gForm.goal === 'FAT_LOSS' ? 'fat loss' : 'muscle gain';
+          const ok = window.confirm(
+            `Your target (${targetVal} kg) is ${wrongWay} than your starting weight (${compare} kg), `
+            + `but your goal is ${label}.
+
+Save it anyway?`);
+          if (!ok) { setSavingG(false); return; }
+        }
+      }
+
       await api('/me/profile', { method: 'PUT', body: JSON.stringify({
-        goal: gForm.goal, target_weight: Number(gForm.targetWeight) || null,
+        goal: gForm.goal, target_weight: targetVal,
         goal_date: gForm.goalDate || null, experience: gForm.experience, equipment: gForm.equipment,
         height_cm: heightVal, current_weight: weightVal, age: ageVal, sex: gForm.sex || null
       }) });
@@ -586,8 +767,8 @@ export default function Profile() {
                           {m.latest && <span className="block text-[11px] text-gold font-grotesk">latest {m.latest.value} {m.unit || ''} · {m.latest.date}</span>}
                         </div>
                         <div className="flex gap-1.5 shrink-0">
-                          <button className="text-[10px] text-mute hover:text-ink" onClick={() => setEditingM({ id: m.id, name: m.name, unit: m.unit || '', frequency: m.frequency, target: m.target ?? '', type: m.type || 'number' })} aria-label={`Edit ${m.name}`}>Edit</button>
-                          <button className="text-[10px] text-bad/80 hover:text-bad" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}><XIcon /></button>
+                          <button className="text-[10px] text-mute hover:text-ink tap-target" onClick={() => setEditingM({ id: m.id, name: m.name, unit: m.unit || '', frequency: m.frequency, target: m.target ?? '', type: m.type || 'number' })} aria-label={`Edit ${m.name}`}>Edit</button>
+                          <button className="text-[10px] text-bad/80 hover:text-bad tap-target" onClick={() => deleteMetric(m.id)} aria-label={`Delete ${m.name}`}><XIcon /></button>
                         </div>
                       </div>
                       <MiniSpark values={vals} color={m.color || 'var(--accent)'} />
@@ -596,7 +777,15 @@ export default function Profile() {
                           {(m.entries || []).slice(0, 4).map((e) => (
                             <span key={e.id} className="inline-flex items-center gap-1 chip border-line !px-2 !py-0.5 text-[10px]">
                               {m.type === 'boolean' ? (e.value ? '✓ done' : '✗ no') : `${e.value}${m.unit ? ' ' + m.unit : ''}`} · {e.date}
-                              <button className="text-faint hover:text-bad" onClick={() => deleteEntry(m.id, e.id)} aria-label={`Delete entry ${e.date}`}><XIcon /></button>
+                              <button
+                                className="text-faint hover:text-bad tap-target"
+                                onClick={() => deleteEntry(
+                                  m.id,
+                                  e.id,
+                                  `${m.name}: ${m.type === 'boolean' ? (e.value ? 'done' : 'not done') : `${e.value}${m.unit ? ` ${m.unit}` : ''}`} on ${e.date}`,
+                                )}
+                                aria-label={`Delete ${m.name} entry from ${e.date}`}
+                              ><XIcon /></button>
                             </span>
                           ))}
                         </div>
@@ -819,10 +1008,39 @@ export default function Profile() {
         )}
         <div className="flex-1 min-w-0">
           <div className="font-display font-bold text-lg" style={{ color: 'var(--ink)' }}>{c.name}</div>
-          <div className="text-xs" style={{ color: 'var(--mute)' }}>{c.goal.replace(/_/g, ' ')}{c.currentWeight ? ` · ${c.currentWeight} kg` : ''}{c.height_cm ? ` · ${c.height_cm} cm` : ''}{c.age ? ` · ${c.age} yrs` : ''}</div>
+          {/* `c.height_cm` never existed on this object -- the API sends
+              heightCm -- so the height segment silently never rendered.
+              Each fact is also dropped when absent rather than leaving a
+              stray separator behind. */}
+          <div className="text-xs" style={{ color: 'var(--mute)' }}>
+            {[
+              GOAL_LABEL[c.goal] || String(c.goal || '').replace(/_/g, ' ').toLowerCase(),
+              c.currentWeight ? `${c.currentWeight} kg` : null,
+              c.heightCm ? `${c.heightCm} cm` : null,
+              c.age ? `${c.age} yrs` : null,
+            ].filter(Boolean).join(' · ')}
+          </div>
         </div>
-        <Ring value={data.adherence} max={100} size={72} stroke={7} label={<span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{data.adherence}%</span>} sub={<span className="text-[7px]" style={{ color: 'var(--mute)' }}>adh.</span>} />
+        {/* A ring label is a glance, not a readout: "25.2%" spends two
+            characters on precision nobody acts on. Absent adherence shows
+            a dash rather than an empty "%" -- see the NaN fix in
+            services/adherence.js for how that used to happen. */}
+        <Ring
+          value={data.adherence ?? 0}
+          max={100}
+          size={72}
+          stroke={7}
+          color={data.adherence == null ? 'var(--line)' : undefined}
+          label={(
+            <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>
+              {data.adherence == null ? '—' : `${Math.round(data.adherence)}%`}
+            </span>
+          )}
+          sub={<span className="text-[7px]" style={{ color: 'var(--mute)' }}>adh.</span>}
+        />
       </div>
+
+      <JourneyHero client={c} />
 
       {/* Theme toggle */}
       <ThemeToggle />

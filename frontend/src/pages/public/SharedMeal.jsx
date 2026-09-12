@@ -18,7 +18,9 @@ const r1 = (n) => Math.round((n || 0) * 10) / 10;
 export default function SharedMeal() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const dark = theme !== 'light';
   const [data, setData] = useState(null);
   const [error, setError] = useState('');

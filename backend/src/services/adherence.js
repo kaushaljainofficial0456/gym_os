@@ -52,7 +52,18 @@ function adherenceFromData({ client, profile, plan, workouts, meals, logs, water
         if (l && l.eaten) eaten++;
       }
     }
-    nutrition = round1((eaten / (meals.length * days)) * 100);
+    /* A plan with no meals on it makes this 0/0 -- NaN, not zero. The
+       protein line directly below already guards its own divisor; this
+       one did not, and a NaN here does not stay local: it flows into the
+       weighted composite below and turns the WHOLE adherence score into
+       NaN, which JSON.stringify writes as `null`. That is what put a
+       bare "%" with no number in the client's profile ring, and it is
+       silent everywhere else adherence is read -- trainer dashboard,
+       clients list, weekly reports, risk evaluation.
+       An empty plan means nutrition is not measurable, which is null. */
+    nutrition = meals.length > 0
+      ? round1((eaten / (meals.length * days)) * 100)
+      : null;
 
     const target = plan.protein * days;
     const eatenProtein = logs.reduce((s, l) => s + (l.eaten ? l.protein : 0), 0);
@@ -86,14 +97,25 @@ function adherenceFromData({ client, profile, plan, workouts, meals, logs, water
   const components = { workout, nutrition, protein, water, sleep, checkin };
   let totalWeight = 0, scoreSum = 0;
   const detail = {};
+  /* Number.isFinite, not `!== null`. The previous test let through
+     undefined, NaN and Infinity -- all of which multiply into the sum and
+     destroy every component's contribution at once, so one unmeasurable
+     input silently invalidates the whole score rather than being skipped
+     the way a null is. This is the guard that makes the bug class
+     impossible, not just the one divisor that caused it. */
   for (const [key, w] of Object.entries(WEIGHTS)) {
-    if (components[key] !== null) {
+    if (Number.isFinite(components[key])) {
       totalWeight += w;
       scoreSum += components[key] * w;
       detail[key] = { value: components[key], weight: w };
     }
   }
-  const score = totalWeight > 0 ? round1(scoreSum / totalWeight) : 0;
+  /* Nothing measurable is not "scored zero". 0 reads as total
+     non-compliance; null reads as "we have no data", which is what a
+     brand-new client actually is. Every consumer already had to handle a
+     missing score, because this returned NaN->null in exactly this
+     situation until the divisor above was fixed. */
+  const score = totalWeight > 0 ? round1(scoreSum / totalWeight) : null;
 
   return {
     clientId: client.id,

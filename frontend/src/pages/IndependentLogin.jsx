@@ -17,7 +17,9 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 export default function IndependentLogin() {
   const { loginWithGoogle } = useAuth();
   const nav = useNavigate();
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const btnRef = useRef(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);

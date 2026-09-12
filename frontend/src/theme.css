@@ -1450,3 +1450,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   --m-pr: #7B3FB8;
   --m-pr-bg: rgba(123,63,184,.10);
 }
+
+/* ─────────────────────────────────────────────
+   TAP TARGET — a hit area bigger than the glyph.
+
+   Some controls are legitimately tiny to LOOK at: the x on a measurement
+   chip is 10x15px, and making it physically bigger would turn a quiet row
+   of readings into a row of buttons. The problem is that 10x15 is also
+   what your finger has to hit -- below WCAG 2.2's 24x24 minimum, never
+   mind the 44x44 guideline -- and on this screen the small ones DELETE
+   things permanently.
+
+   So the hit area grows and the glyph does not. An absolutely positioned
+   ::after expands the clickable region outward without occupying layout
+   space, so nothing reflows and the visual density is unchanged. The
+   parent needs no positioning context of its own: `position: relative`
+   here is on the button itself.
+   ───────────────────────────────────────────── */
+.tap-target { position: relative; }
+.tap-target::after {
+  content: '';
+  position: absolute;
+  /* Grows a 10x15 glyph to ~34x39 of reachable area. */
+  inset: -12px;
+  /* Never paints, never intercepts hover styling -- only pointer hits. */
+  border-radius: inherit;
+}
+/* Where several sit in a row, their expanded areas would otherwise
+   overlap and the wrong one would win. Keeping them on their own
+   stacking order means the topmost is always the one under the finger. */
+.tap-target + .tap-target::after { inset: -12px -6px; }
+

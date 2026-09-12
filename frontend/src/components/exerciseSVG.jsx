@@ -220,7 +220,9 @@ export function exerciseAnim(key, theme = 'dark') {
 }
 
 export default function ExerciseAnim({ anim, className = '', label, muscle }) {
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const t = THEMES[theme] || THEMES.dark;
 
   return (
