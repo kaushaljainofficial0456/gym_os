@@ -99,36 +99,53 @@ export function signToken(user) {
   );
 }
 
+// The attributes sk_token is set with. Shared by setAuthCookie and
+// clearAuthCookie ON PURPOSE: a browser only removes a cookie when the
+// clearing Set-Cookie's name/path/domain AND its security attributes match
+// the ones it was stored with (Express says as much of res.clearCookie --
+// "clients will only clear the cookie if the given options is identical to
+// those given to res.cookie()"). clearAuthCookie used to pass `path` alone,
+// so the clear response disagreed with the original on httpOnly/secure/
+// sameSite and a compliant browser was entitled to keep the cookie -- a
+// second, independent way for logout to leave the session alive. One
+// definition means the two can no longer drift apart.
+const authCookieOptions = () => ({
+  httpOnly: true,
+  secure: config.nodeEnv === 'production' || config.nodeEnv === 'staging',
+  sameSite: 'strict',
+  // Root, not '/api': requireAuth also gates /uploads/:key (private
+  // photo/image serving, see index.js), a SIBLING mount, not a path under
+  // /api. A cookie scoped to path=/api is a browser-enforced restriction
+  // the server-side route never knows happened -- every request to
+  // /uploads/* simply arrives with no cookie, at all, for every role,
+  // including the photo's own owner. Combined with the frontend no longer
+  // sending a Bearer header as a fallback (removed; auth is cookie-only
+  // now, see api.js), this meant NO transformation photo could ever
+  // actually load for anyone, in any environment -- confirmed live:
+  // authenticating and then requesting a just-uploaded photo's own URL
+  // returned 401 "Authentication required" regardless of who was logged
+  // in. Scoping to '/' costs nothing extra: the cookie is httpOnly
+  // (immune to XSS reads), secure+sameSite=strict in prod/staging
+  // (immune to cross-site leakage), so widening which same-origin PATHS
+  // it's attached to is not a new exposure -- it only fixes which of the
+  // app's OWN routes can see it.
+  path: '/',
+});
+
 // Set the JWT as an httpOnly cookie — immune to XSS token theft.
 export function setAuthCookie(res, token) {
-  const isSecure = config.nodeEnv === 'production' || config.nodeEnv === 'staging';
+  // maxAge lives here rather than in authCookieOptions(): it is the one
+  // attribute clearAuthCookie must NOT repeat (it would fight the
+  // expiry-in-the-past that does the clearing), and Express excludes
+  // expires/maxAge from the attributes a client matches on anyway.
   res.cookie('sk_token', token, {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: 'strict',
-    // Root, not '/api': requireAuth also gates /uploads/:key (private
-    // photo/image serving, see index.js), a SIBLING mount, not a path under
-    // /api. A cookie scoped to path=/api is a browser-enforced restriction
-    // the server-side route never knows happened -- every request to
-    // /uploads/* simply arrives with no cookie, at all, for every role,
-    // including the photo's own owner. Combined with the frontend no longer
-    // sending a Bearer header as a fallback (removed; auth is cookie-only
-    // now, see api.js), this meant NO transformation photo could ever
-    // actually load for anyone, in any environment -- confirmed live:
-    // authenticating and then requesting a just-uploaded photo's own URL
-    // returned 401 "Authentication required" regardless of who was logged
-    // in. Scoping to '/' costs nothing extra: the cookie is httpOnly
-    // (immune to XSS reads), secure+sameSite=strict in prod/staging
-    // (immune to cross-site leakage), so widening which same-origin PATHS
-    // it's attached to is not a new exposure -- it only fixes which of the
-    // app's OWN routes can see it.
-    path: '/',
+    ...authCookieOptions(),
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days — matches JWT expiry
   });
 }
 
 export function clearAuthCookie(res) {
-  res.clearCookie('sk_token', { path: '/' });
+  res.clearCookie('sk_token', authCookieOptions());
 }
 
 // Attach req.user from the Bearer token (claims carry identity), then resolve the

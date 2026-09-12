@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { api, getStoredUser, setSession, setStoredUser, clearSession } from './api.js';
+import { api, getStoredUser, setSession, setStoredUser, clearSession, clearStoredUser } from './api.js';
 
 const AuthCtx = createContext(null);
 
@@ -29,7 +29,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     api('/auth/me')
       .then(({ user: u }) => { setStoredUser(u); setUser(u); })
-      .catch(() => { clearSession(); setUser(null); })
+      // clearStoredUser, not clearSession: whatever made /auth/me fail has
+      // already been handled at the network layer -- a 401 went through
+      // api()'s own 401 branch, which already POSTed the logout, and a
+      // transport failure means a second POST would fail too. All that is
+      // left to do here is drop this browser's optimistic cached user.
+      .catch(() => { clearStoredUser(); setUser(null); })
       .finally(() => setReady(true));
   }, []);
 
@@ -111,7 +116,24 @@ export function AuthProvider({ children }) {
     return full;
   };
 
-  const logout = () => { clearSession(); setUser(null); location.href = '/login'; };
+  // `await` is load-bearing, not decoration: clearSession()'s POST
+  // /auth/logout is the ONLY thing that can clear the httpOnly sk_token
+  // cookie, and a full-page navigation cancels requests still in flight.
+  // Firing it and navigating on the same tick (what this used to do) meant
+  // the request was usually killed before the server saw it, the cookie
+  // survived, and the reloaded app re-authenticated the user via /auth/me
+  // and bounced them out of /login right back into the app -- i.e. "Sign
+  // out" silently did nothing. See api.js's clearSession for the full
+  // write-up. clearSession never rejects, so there is no failure path
+  // here that can strand the user on a half-logged-out screen.
+  //
+  // replace(), not href: logging out should not leave the app page the
+  // user just left behind as the Back-button destination.
+  const logout = async () => {
+    await clearSession();
+    setUser(null);
+    location.replace('/login');
+  };
 
   // Called after a QR join/renewal/trainer-join completes and the API
   // handed back a FRESH token (org membership just changed mid-session,

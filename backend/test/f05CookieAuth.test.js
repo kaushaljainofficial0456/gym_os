@@ -50,6 +50,11 @@ async function memDb() {
 // genuinely needs to role-play the browser's own cookie storage.
 function makeCookieJar() {
   let cookies = {};
+  // The raw Set-Cookie line each cookie name was last seen on. The stored
+  // name=value above is all the auth tests need, but whether a browser
+  // actually DROPS a cookie is decided by the clearing line's attributes,
+  // not its value -- so that line has to be kept to be asserted on.
+  const rawLines = {};
   return {
     capture(res) {
       const setCookie = res.headers.getSetCookie ? res.headers.getSetCookie() : (res.headers.raw?.()['set-cookie'] || []);
@@ -58,6 +63,7 @@ function makeCookieJar() {
         const eq = pair.indexOf('=');
         const name = pair.slice(0, eq).trim();
         const value = pair.slice(eq + 1).trim();
+        rawLines[name] = line;
         // An expired/cleared cookie (Expires in the past, empty value) --
         // model it as removed rather than stored, matching real browsers.
         if (/expires=thu, 01 jan 1970/i.test(line) || value === '') delete cookies[name];
@@ -69,6 +75,7 @@ function makeCookieJar() {
       return pairs.length ? pairs.join('; ') : undefined;
     },
     has(name) { return name in cookies; },
+    rawFor(name) { return rawLines[name] || null; },
   };
 }
 
@@ -140,6 +147,43 @@ test('POST /auth/logout clears the cookie -- a subsequent request is unauthentic
 
   const meAfter = await api.call('GET', '/api/auth/me');
   assert.equal(meAfter.status, 401, 'a request after logout is genuinely unauthenticated, not just locally forgotten');
+});
+
+// The two tests above prove the SERVER sends a clearing Set-Cookie. They
+// cannot prove a real browser honours it: fetch (and this file's jar) drop
+// a cookie on the expiry alone, while browsers additionally require the
+// clearing line's attributes to match the ones the cookie was stored with,
+// and will otherwise keep it. clearAuthCookie() used to pass `path` only --
+// no httpOnly/secure/sameSite -- which is exactly that mismatch, and one of
+// two reasons "Sign out" left users still signed in (the other being the
+// frontend cancelling the logout request by navigating on the same tick;
+// see api.js's clearSession).
+test("the logout Set-Cookie repeats every attribute sk_token was set with -- a browser only removes a cookie on an attribute match", async (t) => {
+  const db = await memDb();
+  await seedOrgAndOwner(db);
+  const api = await startAuthApi(db);
+  t.after(() => api.close());
+
+  await api.call('POST', '/api/auth/login', { email: 'owner@x.in', password: 'password123' });
+  const setLine = api.jar.rawFor('sk_token');
+  assert.ok(setLine, 'sanity: login sent a Set-Cookie for sk_token');
+
+  await api.call('POST', '/api/auth/logout');
+  const clearLine = api.jar.rawFor('sk_token');
+  assert.ok(clearLine && clearLine !== setLine, 'sanity: logout sent its own Set-Cookie for sk_token');
+
+  // Everything but the value and the lifetime -- expires/max-age are the
+  // attributes that DO differ by design (that difference is the deletion)
+  // and the ones a client is specified to exclude when matching.
+  const attrs = (line) => line.split(';').slice(1)
+    .map((a) => a.trim().toLowerCase())
+    .filter((a) => !a.startsWith('expires=') && !a.startsWith('max-age='))
+    .sort();
+
+  assert.deepEqual(attrs(clearLine), attrs(setLine),
+    `logout's cookie attributes must match login's exactly.
+  set:   ${setLine}
+  clear: ${clearLine}`);
 });
 
 test('POST /auth/logout succeeds even with no session at all (idempotent, never requires auth)', async (t) => {
