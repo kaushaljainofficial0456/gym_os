@@ -321,7 +321,7 @@ export default function Community() {
 
   if (!available) {
     return (
-      <div className="pb-24">
+      <div className="page-vivid pb-24">
         <BackToCommunities nav={nav} />
         <h1 className="font-black text-[24px] mb-2" style={{ color: 'var(--ink)' }}>Community</h1>
         <div className="rounded-2xl p-5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
@@ -347,7 +347,7 @@ export default function Community() {
 
   if (!joined) {
     return (
-      <div className="pb-24">
+      <div className="page-vivid pb-24">
         <BackToCommunities nav={nav} />
         <h1 className="font-black text-[24px]" style={{ color: 'var(--ink)' }}>{gymName}</h1>
         <div className="rounded-2xl p-5 mt-4" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
@@ -378,7 +378,7 @@ export default function Community() {
   const challenges = challengesFetch.data?.challenges || [];
 
   return (
-    <div className="pb-24">
+    <div className="page-vivid pb-24">
       {/* ── header ── */}
       <header className="mb-4">
         {/* The switcher, not a plain title: a member can belong to this gym

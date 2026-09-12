@@ -53,10 +53,22 @@ export default function NutritionBuilder() {
 
   const savePlan = async () => {
     if (!editing?.meals?.length) return setToast('Add at least one meal');
+    if (saving) return;          // a second tap must not create a second plan
     setSaving(true);
     try {
-      await api('/nutrition/plans', { method: 'POST', body: JSON.stringify(payload()) });
-      setToast('Plan saved');
+      /* EDITING AN EXISTING PLAN UPDATES IT.
+         This always POSTed, even with editing.id set and the panel
+         header reading "Edit plan" -- so refining a plan created a
+         SECOND copy and left the original untouched. The same defect the
+         workout builder had, except here PUT /nutrition/plans/:id
+         already existed on the server and simply was never called. */
+      if (editing.id) {
+        await api(`/nutrition/plans/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload()) });
+        setToast('Plan updated');
+      } else {
+        await api('/nutrition/plans', { method: 'POST', body: JSON.stringify(payload()) });
+        setToast('Plan saved');
+      }
       // silent: true -- this page gates its whole render on
       // `plans.loading || clients.loading` (above); a bare reload()
       // would unmount everything for the duration of the refetch, same
@@ -169,7 +181,9 @@ export default function NutritionBuilder() {
                   c={editing.meals.reduce((s, m) => s + (Number(m.carbs) || 0), 0)}
                   f={editing.meals.reduce((s, m) => s + (Number(m.fat) || 0), 0)} />
                 <div className="flex gap-2">
-                  <button className="btn-primary" onClick={savePlan} disabled={saving}>{saving ? 'Saving…' : 'Save plan'}</button>
+                  <button className="btn-primary" onClick={savePlan} disabled={saving}>
+                    {saving ? 'Saving…' : editing.id ? 'Update plan' : 'Save plan'}
+                  </button>
                   <button className="btn-ghost btn-sm !text-mute" onClick={() => setEditing(null)}>Cancel</button>
                 </div>
               </div>

@@ -13,12 +13,46 @@ export default function Clients() {
   const [sort, setSort] = useState('status');
   const [createOpen, setCreateOpen] = useState(false);
 
+  /* THE SORT CONTROL DID NOTHING. `sort` was declared and bound to the
+     select, and then never read -- this memo filtered and returned, so
+     picking "Sort: Adherence" re-rendered the identical list. Four dead
+     options on a roster screen, which is exactly where a trainer needs
+     to ask "who is slipping" and sort by adherence to find out.
+
+     Status order is by urgency, not alphabet: at-risk first, because the
+     point of the default view is what needs doing. Nulls always sort to
+     the END regardless of direction -- a client with no adherence data
+     is not the worst performer, they are unmeasured, and letting them
+     occupy the top of an ascending sort buries the people who actually
+     need attention. */
   const filtered = useMemo(() => {
     let rows = data?.clients || [];
     if (q) rows = rows.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
     if (status !== 'ALL') rows = rows.filter((c) => c.status === status);
-    return rows;
-  }, [data, q, status]);
+
+    const URGENCY = { AT_RISK: 0, NEEDS_ATTENTION: 1, ON_TRACK: 2, INACTIVE: 3 };
+    const nullsLast = (a, b, pick, dir = 1) => {
+      const x = pick(a); const y = pick(b);
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (x - y) * dir;
+    };
+
+    const out = [...rows];
+    if (sort === 'name') {
+      out.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    } else if (sort === 'adherence') {
+      // Ascending: the people slipping are the ones worth looking at.
+      out.sort((a, b) => nullsLast(a, b, (c) => c.adherence, 1));
+    } else if (sort === 'change') {
+      out.sort((a, b) => nullsLast(a, b, (c) => c.change7, 1));
+    } else {
+      out.sort((a, b) => (URGENCY[a.status] ?? 9) - (URGENCY[b.status] ?? 9)
+        || String(a.name || '').localeCompare(String(b.name || '')));
+    }
+    return out;
+  }, [data, q, status, sort]);
 
   if (loading) return <PageSkeleton variant="list" label="Loading clients" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
@@ -83,13 +117,24 @@ export default function Clients() {
                   <td className={cls('px-3 py-3 font-grotesk text-xs', (c.change7 ?? 0) < -0.1 ? 'text-cyanx' : (c.change7 ?? 0) > 0.1 ? 'text-bad' : 'text-mute')}>
                     {c.change7 === null ? '—' : `${c.change7 > 0 ? '+' : ''}${c.change7}`}
                   </td>
+                  {/* An unmeasured client rendered "null%" above a bar
+                      drawn at 0% -- indistinguishable from someone who
+                      logged nothing all week. Absence is stated as
+                      absence. The bar also takes the body metric hue
+                      rather than the ember->gold gradient, which was two
+                      brand colours the palette no longer uses. */}
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 rounded-full bg-tint/10 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold" style={{ width: `${Math.min(100, c.adherence)}%` }} />
+                    {c.adherence == null ? (
+                      <span className="text-xs" style={{ color: 'var(--faint)' }}>No data</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+                          <div className="h-full rounded-full"
+                            style={{ width: `${Math.min(100, c.adherence)}%`, background: 'var(--m-body)' }} />
+                        </div>
+                        <span className="font-grotesk text-xs tabular-nums">{Math.round(c.adherence)}%</span>
                       </div>
-                      <span className="font-grotesk text-xs">{c.adherence}%</span>
-                    </div>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-xs text-mute font-grotesk">{c.lastWorkout || '—'}</td>
                   <td className="px-3 py-3 text-xs text-mute font-grotesk">{c.lastCheckin ? c.lastCheckin.slice(0, 10) : '—'}</td>

@@ -259,6 +259,16 @@ export default function Login() {
                       aria-invalid={err ? 'true' : undefined}
                       placeholder="Your password" required />
                   </div>
+                  {/* Sits directly under the password field, which is where
+                      someone looks the moment they realise they cannot
+                      remember it -- not at the bottom of the page after the
+                      signup links. Without this the reset flow existed but
+                      was unreachable from anywhere in the product. */}
+                  <div className="flex justify-end -mt-1">
+                    <Link to="/forgot-password" className="text-[12.5px]" style={{ color: 'var(--mute)' }}>
+                      Forgot password?
+                    </Link>
+                  </div>
                   {err && <div className="field-error anim-fadeIn" role="alert" style={{ marginTop: 12 }}>{err}</div>}
                   <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
                     <button className="btn-primary btn-lg btn-block" data-loading={busy ? 'true' : undefined} disabled={busy}>

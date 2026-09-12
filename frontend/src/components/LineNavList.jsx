@@ -82,7 +82,21 @@ export default function LineNavList({ items, onNavigate }) {
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
-      {items.map((l, i) => (
+      {/* An entry carrying `section` is a heading, not a destination. It
+          takes no ref, so the proximity-hover loop keeps indexing only
+          real links and a heading never lights up as though it were
+          clickable -- and it is skipped by the numbering, because "03"
+          against a group label would count headings as destinations. */}
+      {items.map((l, i) => (l.section ? (
+        <div
+          key={`section-${l.section}`}
+          className="px-3 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-[.14em] select-none"
+          style={{ color: 'var(--faint)' }}
+          aria-hidden="true"
+        >
+          {l.section}
+        </div>
+      ) : (
         <motion.div key={l.to}
           initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.28, delay: 0.08 + i * 0.045, ease: [0.22, 0.8, 0.3, 1] }}
@@ -95,13 +109,15 @@ export default function LineNavList({ items, onNavigate }) {
               <>
                 <span className="line-nav__icon shrink-0" style={isActive ? { color: 'var(--accent)' } : undefined}>{l.icon}</span>
                 <span className="line-nav__label flex-1 min-w-0 truncate" style={isActive ? { color: 'var(--accent)' } : undefined}>{l.label}</span>
-                <span className="line-nav__index shrink-0" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+                <span className="line-nav__index shrink-0" aria-hidden="true">
+                  {String(items.slice(0, i + 1).filter((x) => !x.section).length).padStart(2, '0')}
+                </span>
                 {isActive && <span className="line-nav__marker" aria-hidden="true" />}
               </>
             )}
           </NavLink>
         </motion.div>
-      ))}
+      )))}
     </nav>
   );
 }

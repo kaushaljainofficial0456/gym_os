@@ -155,6 +155,88 @@ export default function workoutRoutes(db) {
     res.status(201).json({ id: tId });
   });
 
+  /* UPDATE a template.
+   *
+   * This did not exist, and the builder's Save button posted a NEW
+   * template every time -- so "editing" Legs B three times left a trainer
+   * with four copies of it and none of their edits applied. The list grew
+   * and the change silently went nowhere.
+   *
+   * Exercises are REPLACED rather than diffed: position, sets, reps and
+   * load all move together when a session is re-programmed, and matching
+   * old rows to new ones by index would quietly reassign a set to the
+   * wrong exercise. Deleting and re-inserting inside one transaction is
+   * both simpler and correct.
+   *
+   * CRITICALLY, this touches ONLY rows with this template_id. Assigned
+   * and completed workouts live in the same table keyed by workout_id,
+   * and they are historical records of what a client was actually given
+   * -- editing a template must never reach back and rewrite them. */
+  r.put('/templates/:id', trainerOnly, validate(schemas.workoutTemplate), async (req, res) => {
+    const t = await db.q1('SELECT * FROM workout_templates WHERE id = ? AND org_id = ?',
+      [req.params.id, req.orgId]);
+    if (!t) return res.status(404).json({ error: 'Template not found' });
+
+    await db.tx(async (tx) => {
+      await tx.run(
+        'UPDATE workout_templates SET name = ?, type = ?, notes = ? WHERE id = ?',
+        [req.body.name, req.body.type || t.type || 'custom', req.body.notes ?? t.notes, t.id]);
+      // template_id is the whole guard here -- see the note above.
+      await tx.run('DELETE FROM workout_exercises WHERE template_id = ?', [t.id]);
+      for (let i = 0; i < req.body.exercises.length; i += 1) {
+        const ex = req.body.exercises[i];
+        await tx.run(
+          `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id('wxe'), t.id, ex.exercise_id || null, i, ex.name, ex.sets, ex.reps,
+           ex.weight, ex.rest_sec, ex.tempo || null, ex.notes || null]);
+      }
+    });
+    await track(db, { orgId: req.orgId, userId: req.user.sub, type: 'workout_template_updated', data: { templateId: t.id } });
+    res.json({ ok: true, id: t.id });
+  });
+
+  r.delete('/templates/:id', trainerOnly, async (req, res) => {
+    const t = await db.q1('SELECT id FROM workout_templates WHERE id = ? AND org_id = ?',
+      [req.params.id, req.orgId]);
+    if (!t) return res.status(404).json({ error: 'Template not found' });
+    await db.tx(async (tx) => {
+      // Again: only the template's own exercise rows. Workouts already
+      // assigned from this template keep theirs and are unaffected --
+      // deleting a blueprint must not delete the sessions built from it.
+      await tx.run('DELETE FROM workout_exercises WHERE template_id = ?', [t.id]);
+      await tx.run('DELETE FROM workout_templates WHERE id = ?', [t.id]);
+    });
+    res.json({ ok: true });
+  });
+
+  /* The exercises this trainer has actually programmed lately.
+   *
+   * Programming is repetitive by nature -- the same twenty movements
+   * cover most sessions -- so the fastest picker is one that opens with
+   * what you last used rather than an alphabetical wall. Derived from
+   * real rows; a trainer who has programmed nothing gets an empty list
+   * and the picker simply shows categories instead. */
+  r.get('/exercises/recent', trainerOnly, async (req, res) => {
+    const rows = await db.q(
+      `SELECT we.exercise_id, we.name, MAX(wt.created_at) AS last_used, COUNT(*) AS uses
+         FROM workout_exercises we
+         JOIN workout_templates wt ON wt.id = we.template_id
+        WHERE wt.org_id = ? AND wt.trainer_id = ? AND we.exercise_id IS NOT NULL
+        GROUP BY we.exercise_id, we.name
+        ORDER BY last_used DESC
+        LIMIT 12`,
+      [req.orgId, req.user.sub]);
+    res.json({
+      recent: rows.map((r2) => ({
+        exerciseId: r2.exercise_id,
+        name: r2.name,
+        uses: Number(r2.uses) || 0,
+        lastUsed: r2.last_used,
+      })),
+    });
+  });
+
   // ---- client workouts ----
   r.get('/clients/:id/workouts', trainerOnly, async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);

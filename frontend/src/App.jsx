@@ -7,6 +7,10 @@ import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 // Login/SignUp stay eager: they're the first thing an unauthenticated visitor
 // needs, so there's no "next page" to defer them in favor of.
 import Login from './pages/Login.jsx';
+// Password recovery is lazy: it is reached from an email link or a
+// single tap off the login form, never on first paint.
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'));
 import SignUp from './pages/SignUp.jsx';
 import TrainerLayout from './pages/trainer/TrainerLayout.jsx';
 import ClientLayout from './pages/client/ClientLayout.jsx';
@@ -55,6 +59,9 @@ const FriendCommunity = lazy(() => import('./pages/client/FriendCommunity.jsx'))
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
+const GymAttendance = lazy(() => import('./pages/trainer/GymAttendance.jsx'));
+const Trainers = lazy(() => import('./pages/trainer/Trainers.jsx'));
+const Analytics = lazy(() => import('./pages/trainer/Analytics.jsx'));
 const HealthDevices = lazy(() => import('./pages/client/HealthDevices.jsx'));
 const BurnDetail = lazy(() => import('./pages/client/BurnDetail.jsx'));
 // Design-system showcase — same treatment it already had.
@@ -140,6 +147,12 @@ export default function App() {
     <ClickSparkLazy>
     <Routes>
       <Route path="/login" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><Login /></GuestOnly>} />
+      {/* The reset emails already linked to /reset-password; the route
+          did not exist, so every one of them landed on a 404. Both are
+          public on purpose -- someone who cannot sign in is by
+          definition not signed in. */}
+      <Route path="/forgot-password" element={page(ForgotPassword)} />
+      <Route path="/reset-password" element={page(ResetPassword)} />
       <Route path="/signup" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><SignUp /></GuestOnly>} />
       <Route path="/signup/trainer" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(TrainerSignUp)}</GuestOnly>} />
       <Route path="/setup-org" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(SetupOrg)}</GuestOnly>} />
@@ -203,6 +216,9 @@ export default function App() {
         <Route path="alerts" element={page(Alerts)} />
         <Route path="reports" element={page(Reports)} />
         <Route path="messages" element={page(Messages)} />
+        <Route path="attendance" element={page(GymAttendance)} />
+        <Route path="trainers" element={page(Trainers)} />
+        <Route path="analytics" element={page(Analytics)} />
         <Route path="business" element={page(Business)} />
         {/* Enterprise: SK OS billing THIS gym (packages/QR/upgrades) --
             distinct from Business above (this gym billing ITS OWN

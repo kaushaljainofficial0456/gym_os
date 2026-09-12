@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api, getStoredUser, setReturnTo } from '../../api.js';
-import { exerciseLabel } from '../../utils.js';
+import { exerciseLabel, formatLoad } from '../../utils.js';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
 
 /**
@@ -115,7 +115,29 @@ export default function SharedWorkout() {
   const mute = dark ? 'rgba(245,240,236,.6)' : 'rgba(36,28,22,.6)';
   const cardBg = dark ? 'rgba(255,255,255,.04)' : '#fff';
   const border = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)';
-  const accent = '#FF6A3D';
+  /* Was a hard-coded #FF6A3D on both share pages -- the terracotta brand
+     the app dropped two repaints ago, and the single loudest colour on a
+     dark screen. These pages are standalone (literals, not CSS
+     variables, because they render outside the themed app shell), so the
+     accent is paired with the ink that belongs ON it: white text is
+     unreadable on platinum, which is what a naive swap would have left
+     on the primary button. */
+  const accent = dark ? '#B4C2CE' : '#8E2A3F';
+  const onAccent = dark ? '#10151A' : '#FFFFFF';
+  /* Destination chips. These were three fixed pastel washes (#FEF3C7,
+     #DBEAFE, #F3E8FF) picked for a white page: on the dark theme they
+     rendered as bright blocks, and the first one's icon is drawn in
+     currentColor -- blush ink on pale amber, effectively invisible. Each
+     chip is now a low-alpha tint of its own hue with the hue itself as
+     the icon colour, which holds on either ground. */
+  const chip = (rgb) => ({
+    background: `rgba(${rgb}, ${dark ? 0.16 : 0.12})`,
+    border: `1px solid rgba(${rgb}, ${dark ? 0.4 : 0.28})`,
+    color: dark ? `rgb(${rgb})` : `rgba(${rgb}, .9)`,
+  });
+  const CHIP_TODAY = '217, 123, 132';    // warm red -- today, immediate
+  const CHIP_PLANNER = '111, 178, 201';  // slate blue -- saved, reusable
+  const CHIP_DAY = '155, 147, 224';      // periwinkle -- scheduled
   const faint = dark ? 'rgba(245,240,236,.35)' : 'rgba(36,28,22,.35)';
 
   // ---- ERROR STATE ----
@@ -203,7 +225,7 @@ export default function SharedWorkout() {
             style={{ background: selectAll ? `${accent}12` : 'transparent', border: `1px solid ${selectAll ? `${accent}40` : border}` }}>
             <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all"
               style={{ background: selectAll ? accent : 'transparent', border: `2px solid ${selectAll ? accent : border}` }}>
-              {selectAll && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+              {selectAll && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={onAccent} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
             </span>
             <span className="font-grotesk text-[12px] font-semibold" style={{ color: ink }}>Select all</span>
           </button>
@@ -218,12 +240,12 @@ export default function SharedWorkout() {
                 <div className="flex items-center gap-3">
                   <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all"
                     style={{ background: sel ? accent : 'transparent', border: `2px solid ${sel ? accent : border}` }}>
-                    {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                    {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={onAccent} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: ink }}>{exerciseLabel(ex.name)}</div>
                     <div className="text-[11px] mt-0.5" style={{ color: mute }}>
-                      {ex.sets} sets · {ex.reps} reps · {ex.weight}
+                      {ex.sets} sets · {ex.reps} reps · {formatLoad(ex.weight) || '—'}
                       {ex.rest_sec ? ` · ${ex.rest_sec}s rest` : ''}
                     </div>
                     {ex.tempo && <div className="text-[10px] mt-0.5" style={{ color: faint }}>Tempo: {ex.tempo}</div>}
@@ -243,7 +265,7 @@ export default function SharedWorkout() {
             className="w-full py-3 rounded-xl text-[13px] font-bold transition-all active:scale-[.98]"
             style={{
               background: selected.size === 0 ? '#888' : accent,
-              color: 'white',
+              color: onAccent,
               opacity: selected.size === 0 ? 0.5 : 1,
               cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
             }}>
@@ -276,7 +298,7 @@ export default function SharedWorkout() {
             className="w-full rounded-2xl px-5 py-4 text-left transition-all active:scale-[.98]"
             style={{ background: cardBg, border: `1px solid ${border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: '#FEF3C7', border: '1px solid #F59E0B33' }}>
+              <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={chip(CHIP_TODAY)}>
                 <span className="text-lg"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg></span>
               </div>
               <div>
@@ -291,7 +313,7 @@ export default function SharedWorkout() {
             className="w-full rounded-2xl px-5 py-4 text-left transition-all active:scale-[.98]"
             style={{ background: cardBg, border: `1px solid ${border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: '#DBEAFE', border: '1px solid #3B82F633' }}>
+              <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={chip(CHIP_PLANNER)}>
                 <span className="text-lg">📋</span>
               </div>
               <div>
@@ -307,7 +329,7 @@ export default function SharedWorkout() {
               className="w-full rounded-2xl px-5 py-4 text-left transition-all active:scale-[.98]"
               style={{ background: cardBg, border: `1px solid ${border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: '#F3E8FF', border: '1px solid #8B5CF633' }}>
+                <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={chip(CHIP_DAY)}>
                   <span className="text-lg">📅</span>
                 </div>
                 <div>
@@ -377,7 +399,7 @@ export default function SharedWorkout() {
                   <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: ink }}>{exerciseLabel(ex.name)}</div>
                 </div>
                 <div className="text-[11px] mt-1" style={{ color: mute }}>
-                  {ex.sets} sets · {ex.reps} reps · {ex.weight}
+                  {ex.sets} sets · {ex.reps} reps · {formatLoad(ex.weight) || '—'}
                 </div>
                 {ex.rest_sec && <div className="text-[10px] mt-0.5" style={{ color: faint }}>Rest: {ex.rest_sec}s</div>}
                 {ex.tempo && <div className="text-[10px] mt-0.5" style={{ color: faint }}>Tempo: {ex.tempo}</div>}

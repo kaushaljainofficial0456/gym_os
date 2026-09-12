@@ -31,14 +31,20 @@ const T = {
     border: 'var(--line)', ink: 'var(--ink)', mute: 'var(--mute)',
     faint: 'var(--faint)', accent: 'var(--accent)', accentDim: 'var(--accent-soft)',
     gold: 'rgb(var(--warn-rgb))', goldDim: 'rgb(var(--warn-rgb) / .10)', danger: 'rgb(var(--bad-rgb))',
-    protein: '#FF8C42', carbs: '#FFD166', fat: '#4ECDC4',
+    /* Macro colours come from the metric hues rather than literals. The
+       old set was #FF8C42 / #FFD166 / #4ECDC4 -- a bright orange and a
+       bright yellow that were the loudest thing on the dark theme, and
+       which no other nutrition surface used, so protein was orange here
+       and a different colour in the adherence breakdown. Because these
+       are CSS variables they also stop needing a separate light set. */
+    protein: 'var(--m-body)', carbs: 'var(--m-nutrition)', fat: 'var(--m-recovery)',
   },
   light: {
     bg: 'var(--bg)', surface: 'var(--panel)', glass: 'rgba(255,255,255,0.6)',
     border: 'var(--line)', ink: 'var(--ink)', mute: 'var(--mute)',
     faint: 'var(--faint)', accent: 'var(--accent)', accentDim: 'var(--accent-soft)',
     gold: 'rgb(var(--warn-rgb))', goldDim: 'rgb(var(--warn-rgb) / .10)', danger: 'rgb(var(--bad-rgb))',
-    protein: '#D4623A', carbs: '#B47828', fat: '#3A8AB0',
+    protein: 'var(--m-body)', carbs: 'var(--m-nutrition)', fat: 'var(--m-recovery)',
   },
 };
 

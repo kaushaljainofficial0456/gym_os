@@ -44,16 +44,35 @@ export default function Messages() {
       setBody('');
       thread.reload({ silent: true });
     } catch (e) {
-      // Was `catch (e) { /* keep body */ }` -- a failed send (network
-      // error, a client no longer assigned to this trainer, etc.) left no
-      // trace: the input just sat there with no indication anything went
-      // wrong. Same fix as the client-side thread in Profile.jsx.
-      setToast(e.message || 'Could not send message');
+      /* Was `catch (e) { /* keep body *\/ }` -- a failed send (network
+         error, a client no longer assigned to this trainer) left no
+         trace: the input just sat there and the trainer was left to guess
+         whether it sent. Never let a refused write look like a successful
+         one, the same rule the attendance card follows. */
+      setToast(e.message || 'Could not send — the message was not delivered.');
     }
     setSending(false);
   };
 
   const msgs = thread.data?.messages || [];
+
+  /* Day separators. Every bubble showed a bare clock time, so a thread
+     spanning three weeks read as though all of it happened today -- and
+     "02:10 AM" against a message from last month is actively
+     misleading. The separator is inserted where the DAY changes, which
+     is the only place the reader needs telling. */
+  const dayOf = (iso) => String(iso || '').slice(0, 10);
+  const dayLabel = (iso) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const today = new Date();
+    const key = dayOf(iso);
+    const todayKey = today.toISOString().slice(0, 10);
+    const yest = new Date(today.getTime() - 86400000).toISOString().slice(0, 10);
+    if (key === todayKey) return 'Today';
+    if (key === yest) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
   const clientName = (clients.data?.clients || []).find((c) => c.id === clientId)?.name;
 
   return (
@@ -72,19 +91,36 @@ export default function Messages() {
       <Card>
         <Kicker>{clientName ? `Thread · ${clientName}` : 'Thread'}</Kicker>
         <div className="h-[46vh] overflow-y-auto space-y-2.5 pr-1">
-          {msgs.map((m) => {
+          {msgs.map((m, i) => {
             const mine = m.from_user === user?.id || m.from_name === user?.name;
+            const newDay = i === 0 || dayOf(m.created_at) !== dayOf(msgs[i - 1].created_at);
             return (
-              <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+              <div key={m.id}>
+                {newDay && (
+                  <div className="flex items-center gap-2 my-3" aria-hidden="true">
+                    <span className="flex-1" style={{ borderTop: '1px solid var(--line)' }} />
+                    <span className="text-[10px] font-semibold" style={{ color: 'var(--faint)' }}>
+                      {dayLabel(m.created_at)}
+                    </span>
+                    <span className="flex-1" style={{ borderTop: '1px solid var(--line)' }} />
+                  </div>
+                )}
+              <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${mine ? 'rounded-br-md' : 'rounded-bl-md'} ${mine ? 'bg-gradient-to-br from-ember/25 to-gold/15 border border-gold/30' : 'bg-tint/[.05] border border-line'}`}>
                   {!mine && <div className="text-[10px] text-mute font-grotesk mb-1">{m.from_name}{m.type !== 'message' ? ` · ${m.type.replace(/_/g, ' ')}` : ''}</div>}
                   <div className="leading-relaxed">{m.body}</div>
                   <div className="text-[9px] text-faint mt-1 font-grotesk">{new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
               </div>
+              </div>
             );
           })}
-          {!msgs.length && <Empty title="No messages yet" hint="Send the first message to start the thread." />}
+          {/* Two different empty situations. Telling someone to "send the
+              first message" when they have not picked a client yet points
+              at a disabled field. */}
+          {!msgs.length && (clientId
+            ? <Empty title="No messages yet" hint={`Send the first message to ${clientName}.`} />
+            : <Empty title="Pick a client" hint="Choose a client above to open their thread." />)}
           <div ref={endRef} />
         </div>
 
