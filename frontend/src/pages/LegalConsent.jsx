@@ -168,7 +168,12 @@ export default function LegalConsent() {
           {/* 14 ─ Contact */}
           <Section num={14} title="Contact">
             <p>If you have questions about these Terms &amp; Conditions, please reach out to us:</p>
-            <p className="mt-2"><em>[Contact email — to be supplied by the Gym&nbsp;OS team]</em></p>
+            <p>
+              Email us at{' '}
+              <a href="mailto:skventures1111@gmail.com" className="text-[var(--accent)] underline underline-offset-2 break-all">
+                skventures1111@gmail.com
+              </a>
+            </p>
           </Section>
 
           {/* Bottom spacer so content isn't hidden behind the sticky footer */}

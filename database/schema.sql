@@ -834,6 +834,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   type      TEXT NOT NULL,
   title     TEXT NOT NULL,
   body      TEXT,
+  data_json TEXT,
+  dedup_key TEXT,
   read      INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
@@ -849,6 +851,15 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- never required to exist for a user who has never opened Settings.
 -- Booleans are INTEGER 0/1 (SQLite has no native boolean; every other
 -- flag column in this schema follows the same convention).
+--
+-- MERGE NOTE: two versions of this table met here. org_id is KEPT -- it
+-- is the multi-tenant scoping column the rest of this schema relies on,
+-- and dropping it would silently remove org isolation from a table that
+-- already has rows carrying it. The browser-permission columns from the
+-- notification-permissions work are ADDED, because that feature genuinely
+-- needs somewhere to record that a user already answered the prompt.
+-- Quiet hours stay NOT NULL with defaults rather than nullable: every
+-- reader already assumes a value, and existing rows have one.
 CREATE TABLE IF NOT EXISTS notification_preferences (
   user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -864,6 +875,11 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   incomplete_workout  INTEGER NOT NULL DEFAULT 1,
   quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
   quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+  -- Browser Notification API permission state: 'granted' | 'denied' | 'default'.
+  -- Stored so a user who already answered is never re-prompted.
+  browser_permission  TEXT NOT NULL DEFAULT 'default',
+  -- When the in-app prompt was last shown, so it is not shown on every login.
+  prompted_at         TEXT,
   updated_at          TEXT NOT NULL
 );
 

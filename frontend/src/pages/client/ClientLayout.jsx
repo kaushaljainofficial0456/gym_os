@@ -14,6 +14,7 @@ import DockNavItem from '../../components/DockNavItem.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import NotificationBell from '../../components/NotificationBell.jsx';
+import NotificationPermissionPrompt from '../../components/NotificationPermissionPrompt.jsx';
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -317,6 +318,9 @@ export default function ClientLayout() {
 
       {/* ── FEATURE POPUP ── */}
       {featurePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
+
+      {/* ── NOTIFICATION PERMISSION PROMPT ── */}
+      <NotificationPermissionPrompt />
 
       {/* ── BOTTOM NAV — Dock's spring-physics magnify-on-proximity,
           layered onto the existing full-width tab bar rather than the

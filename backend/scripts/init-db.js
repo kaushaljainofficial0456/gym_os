@@ -268,6 +268,10 @@ const MIGRATIONS = [
   // feature's first migration, these two columns are additive to it ---
   ['nutrition_balance_adjustments', 'custom_days', `custom_days INTEGER`],
   ['nutrition_balance_adjustments', 'custom_protein_target', `custom_protein_target REAL`],
+  // --- Notification generator deduplication key ---
+  ['notifications', 'dedup_key', `dedup_key TEXT`],
+  // --- Notification preferences: per-user toggle + frequency + browser permission tracking ---
+  // Created via a standalone table CREATE below (not as column additions)
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -614,7 +618,8 @@ async function applySqliteMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
   // --- notification-center preferences (also in schema.sql; repeated here
   // for older DBs / parity with the PG path, same as exercise_relations
-  // above) ---
+  // above). Mirrors the merged shape: org_id kept for tenant scoping,
+  // browser_permission/prompted_at added for the permission prompt. ---
   db.exec(`
     CREATE TABLE IF NOT EXISTS notification_preferences (
       user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -631,6 +636,8 @@ async function applySqliteMigrations(db) {
       incomplete_workout  INTEGER NOT NULL DEFAULT 1,
       quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
       quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      browser_permission  TEXT NOT NULL DEFAULT 'default',
+      prompted_at         TEXT,
       updated_at          TEXT NOT NULL
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
@@ -692,7 +699,8 @@ async function applyPgMigrations(pool) {
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
-  // --- notification-center preferences (also in schema.sql) ---
+  // --- notification-center preferences (also in schema.sql). Same merged
+  // shape as the SQLite path above. ---
   await pool.query(`
     CREATE TABLE IF NOT EXISTS notification_preferences (
       user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -709,6 +717,8 @@ async function applyPgMigrations(pool) {
       incomplete_workout  INTEGER NOT NULL DEFAULT 1,
       quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
       quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      browser_permission  TEXT NOT NULL DEFAULT 'default',
+      prompted_at         TEXT,
       updated_at          TEXT NOT NULL
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
