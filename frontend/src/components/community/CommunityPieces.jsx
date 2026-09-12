@@ -482,7 +482,11 @@ export function YouVsYou({ trend }) {
   return (
     <div className="rounded-2xl p-3.5" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
       <SectionTitle>Your last {rows.length} weeks</SectionTitle>
-      <div className="flex items-end gap-2" style={{ height: 84 }}>
+      {/* minHeight, not a fixed height: each column is a value label, a bar of
+          up to 64px, and a caption -- about 100px in total. Pinning the row to
+          84px made the tallest column overflow UPWARDS (the row is bottom-
+          aligned), printing its number on top of the heading above it. */}
+      <div className="flex items-end gap-2" style={{ minHeight: 104 }}>
         {rows.map((w, i) => {
           const h = Math.max(4, (w.workouts / max) * 64);
           const isNow = i === rows.length - 1;

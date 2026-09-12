@@ -11,6 +11,7 @@
  * already shared are marked and cannot be shared twice.
  */
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
 
 export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, toast }) {
@@ -51,7 +52,9 @@ export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, to
     setBusy(null);
   };
 
-  return (
+  // Portalled to <body> -- see UI.jsx's Modal for why a `fixed` sheet inside
+  // ClientLayout's animated page wrapper is not fixed to the viewport.
+  return createPortal((
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,.5)' }}
@@ -160,5 +163,5 @@ export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, to
         {err && <div className="text-[11.5px] mt-3" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
     </div>
-  );
+  ), document.body);
 }

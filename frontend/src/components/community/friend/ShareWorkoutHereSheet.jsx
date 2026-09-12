@@ -22,14 +22,13 @@ export default function ShareWorkoutHereSheet({ communityId, communityName, onCl
 
   useEffect(() => {
     let alive = true;
-    api('/me/workouts')
-      .then((res) => {
-        if (!alive) return;
-        setWorkouts((res.workouts || []).filter((w) => w.status === 'completed'));
-      })
+    // Every completed session, whatever produced it -- a coach's program, a
+    // gym template, or one the member built themselves.
+    api(`/communities/${communityId}/shareable-workouts`)
+      .then((res) => { if (alive) setWorkouts(res.workouts || []); })
       .catch((e) => { if (alive) { setErr(e.message || 'Could not load your workouts'); setWorkouts([]); } });
     return () => { alive = false; };
-  }, []);
+  }, [communityId]);
 
   const share = async (w) => {
     setBusy(w.id); setErr('');
@@ -92,7 +91,7 @@ export default function ShareWorkoutHereSheet({ communityId, communityName, onCl
 
       <div className="space-y-1.5">
         {(workouts || []).map((w) => {
-          const shared = done.has(w.id);
+          const shared = done.has(w.id) || w.sharedHere;
           return (
             <div
               key={w.id}
@@ -103,9 +102,12 @@ export default function ShareWorkoutHereSheet({ communityId, communityName, onCl
                 <div className="text-[12.5px] font-semibold truncate" style={{ color: 'var(--ink)' }}>
                   {w.name || 'Workout'}
                 </div>
-                <div className="text-[10.5px] mt-0.5" style={{ color: 'var(--mute)' }}>
-                  {w.scheduled_date}
-                  {w.exercise_count > 0 ? ` · ${w.exercise_count} ${w.exercise_count === 1 ? 'exercise' : 'exercises'}` : ''}
+                <div className="text-[10.5px] mt-0.5 tabular-nums" style={{ color: 'var(--mute)' }}>
+                  {[
+                    w.date,
+                    w.exerciseCount > 0 ? `${w.exerciseCount} ${w.exerciseCount === 1 ? 'exercise' : 'exercises'}` : null,
+                    w.durationMin > 0 ? `${w.durationMin} min` : null,
+                  ].filter(Boolean).join(' · ')}
                 </div>
               </div>
               <button

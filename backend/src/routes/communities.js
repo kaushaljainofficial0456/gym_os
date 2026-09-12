@@ -30,7 +30,8 @@ import {
   removeMember, setMemberRole, transferOwnership, updateMySettings,
   generateCode, listInvites, revokeInvite, previewCode, redeemCode, inviteCandidates,
   createDirectInvite, listMyInvites, respondToInvite, CODE_EXPIRY_DAYS, CODE_MAX_USES,
-  listEvents, shareToCommunity, shareTargets, deleteEvent, copyEventWorkout, toggleEventReaction, socialForEvents,
+  listEvents, shareToCommunity, shareTargets, shareableWorkouts, deleteEvent, copyEventWorkout,
+  toggleEventReaction, socialForEvents,
   listEventComments, addEventComment, deleteEventComment, FEED_FILTERS,
   friendOverview, friendLeaderboards, friendMembers, memberProfile, listGroupChallenges,
   challengeDetail, createGroupChallenge, deleteGroupChallenge, CHALLENGE_METRICS, cleanPeriod,
@@ -205,6 +206,11 @@ export default function communitiesRoutes(db) {
       limit: Number.isFinite(rawLimit) ? rawLimit : 15,
       filter,
     }));
+  }));
+
+  r.get('/:id/shareable-workouts', handle(async (req, res) => {
+    const { client, community } = await context(req);
+    res.json({ workouts: await shareableWorkouts(db, { community, client }) });
   }));
 
   r.post('/:id/shares', writeLimit, validate(z.object({

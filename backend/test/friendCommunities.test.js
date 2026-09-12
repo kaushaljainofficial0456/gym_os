@@ -709,6 +709,57 @@ test('sharing records when there are none says so instead of posting an empty ce
   assert.equal(nothing.json.reason, 'nothing_to_share');
 });
 
+test('the share picker offers every completed session, not just self-made ones', async (t) => {
+  const { call, close, db } = await startApi();
+  t.after(() => close());
+  const id = await makeCommunity(call, 'rahul');
+  // A session from a coach's program -- which is most of a gym member's
+  // training, and exactly what the planner's own workout list leaves out.
+  const workoutId = await completeSession(db, 'rahul', { date: today(), name: 'Coach Program Day' });
+
+  const offered = await call('GET', `/api/communities/${id}/shareable-workouts`, undefined, 'rahul');
+  assert.equal(offered.status, 200);
+  assert.deepEqual(offered.json.workouts.map((w) => w.name), ['Coach Program Day']);
+  assert.equal(offered.json.workouts[0].exerciseCount, 1);
+  assert.equal(offered.json.workouts[0].sharedHere, false);
+
+  await call('POST', `/api/communities/${id}/shares`, { workout_id: workoutId }, 'rahul');
+  const after = await call('GET', `/api/communities/${id}/shareable-workouts`, undefined, 'rahul');
+  assert.equal(after.json.workouts[0].sharedHere, true, 'a session already here cannot be posted twice');
+
+  // It is the member's OWN list, and only for a community they are in.
+  assert.equal((await call('GET', `/api/communities/${id}/shareable-workouts`, undefined, 'sambhav')).status, 404);
+});
+
+test('a friend can take a shared session into their own planner', async (t) => {
+  const { call, close, db } = await startApi();
+  t.after(() => close());
+  const id = await makeCommunity(call, 'rahul');
+  await joinViaCode(call, id, 'rahul', 'sambhav');
+  const workoutId = await completeSession(db, 'sambhav', {
+    date: today(), name: 'Leg Day', lifts: [{ exercise: 'ex_squat', weight: 100, reps: 5, sets: 4 }],
+  });
+  await call('POST', `/api/communities/${id}/shares`, { workout_id: workoutId }, 'sambhav');
+  const feed = await call('GET', `/api/communities/${id}/feed?filter=workouts`, undefined, 'rahul');
+  const eventId = feed.json.events[0].id;
+
+  const copied = await call('POST', `/api/communities/${id}/events/${eventId}/copy`, {}, 'rahul');
+  assert.equal(copied.status, 201, JSON.stringify(copied.json));
+  assert.equal(copied.json.exerciseCount, 1);
+
+  // It lands in RAHUL's own planner, in his own gym, and takes nothing from
+  // Sambhav's session with it.
+  const planned = await db.q1('SELECT * FROM client_workouts WHERE client_id = ?', [cid('rahul')]);
+  assert.equal(planned.name, 'Leg Day');
+  assert.equal(planned.org_id, PEOPLE.rahul.org, "a copy belongs to the copier's own gym");
+  const exercises = await db.q('SELECT name, sets FROM client_workout_exercises WHERE workout_id = ?', [planned.id]);
+  assert.deepEqual(exercises.map((e) => e.name), ['Squat']);
+  assert.ok(await db.q1('SELECT id FROM workouts WHERE id = ?', [workoutId]), "the original session is untouched");
+
+  // Somebody outside the community cannot copy out of it.
+  assert.equal((await call('POST', `/api/communities/${id}/events/${eventId}/copy`, {}, 'kaushal')).status, 404);
+});
+
 test('the feed pages without repeating or skipping, even when timestamps tie', async (t) => {
   const { call, close, db } = await startApi();
   t.after(() => close());

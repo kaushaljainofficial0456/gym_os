@@ -17,6 +17,7 @@
  * before this ever renders.
  */
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
 import { Avatar } from '../UI.jsx';
 import { SectionTitle, HUE, fmt } from './CommunityPieces.jsx';
@@ -246,7 +247,9 @@ export function MemberSheet({ member, isYou, onClose }) {
     ? new Date(`${member.lastActive}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : null;
 
-  return (
+  // Portalled to <body> -- see UI.jsx's Modal for why a `fixed` sheet inside
+  // ClientLayout's animated page wrapper is not fixed to the viewport.
+  return createPortal((
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,.5)' }}
@@ -289,7 +292,7 @@ export function MemberSheet({ member, isYou, onClose }) {
         </p>
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 function Tile({ label, value, hue }) {

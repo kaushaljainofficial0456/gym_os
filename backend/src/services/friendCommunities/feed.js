@@ -240,6 +240,38 @@ export async function sessionSnapshot(db, { clientId, workoutId }) {
   };
 }
 
+/**
+ * The member's recent completed sessions, for the picker inside a community.
+ *
+ * Reads `workouts` directly rather than /me/workouts: that endpoint powers
+ * the planner and deliberately lists only sessions the client authored
+ * (source client_custom / manual_retroactive), so a member whose training
+ * comes from a coach's program would open the share picker and be told they
+ * have nothing to share -- while sitting on thirty logged sessions.
+ */
+export async function shareableWorkouts(db, { community, client, limit = 30 }) {
+  const rows = await db.q(
+    `SELECT w.id, w.name, w.scheduled_date, w.duration_min,
+            (SELECT COUNT(*) FROM workout_exercises we WHERE we.workout_id = w.id) AS exercise_count,
+            EXISTS (SELECT 1 FROM community_events e
+                     WHERE e.community_id = ? AND e.dedupe_key = 'workout:' || w.id) AS shared_here
+       FROM workouts w
+      WHERE w.client_id = ? AND w.status = 'completed'
+      ORDER BY w.scheduled_date DESC, w.id DESC
+      LIMIT ?`,
+    [community.id, client.id, Math.max(1, Math.min(Number(limit) || 30, 60))]);
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name || 'Workout',
+    date: r.scheduled_date,
+    durationMin: r.duration_min == null ? null : Math.round(num(r.duration_min)),
+    exerciseCount: int(r.exercise_count),
+    // EXISTS is a boolean on PostgreSQL and 0/1 on SQLite.
+    sharedHere: !!Number(r.shared_here),
+  }));
+}
+
 export async function shareToCommunity(db, { community, membership, workoutId, includeWorkout = true, includePrs = false }) {
   if (!includeWorkout && !includePrs) {
     fail(422, 'nothing_to_share', 'Choose the workout, its personal records, or both');

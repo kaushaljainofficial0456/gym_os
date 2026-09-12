@@ -136,6 +136,7 @@ export default function ShareToCommunitiesSheet({ workoutId, onClose, onShared, 
                 onClick={() => !d.shared && toggle(d.key)}
                 disabled={d.shared}
                 aria-pressed={on}
+                aria-label={d.shared ? `${d.name} — already shared` : `Share to ${d.name}`}
                 className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-transform active:scale-[.99]"
                 style={{
                   minHeight: 60,

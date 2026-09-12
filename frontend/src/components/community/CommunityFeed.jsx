@@ -18,8 +18,10 @@
  * "suggested" or filler content, and an empty feed is rendered as empty.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Avatar } from '../UI.jsx';
 import { api } from '../../api.js';
+import { exerciseLabel } from '../../utils.js';
 import { fmt, fmtVolume, HUE } from './CommunityPieces.jsx';
 
 const REACTION_GLYPH = { like: '❤️', fire: '🔥', clap: '👏', strong: '💪' };
@@ -319,6 +321,9 @@ export function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy,
         <button
           type="button"
           onClick={() => onOpenComments(item)}
+          aria-label={s.comments > 0
+            ? `Comments (${s.comments})`
+            : 'Add a comment'}
           className="rounded-full px-2.5 flex items-center gap-1 text-[11.5px]"
           style={{ minHeight: 32, border: '1px solid var(--line)', color: 'var(--mute)' }}
         >
@@ -404,8 +409,10 @@ function PRBody({ pr }) {
           const beat = deltaFor(g.best);
           return (
             <div key={g.exercise} className="flex items-baseline justify-between gap-3">
+              {/* Library names are identifiers (leg_press); exerciseLabel is
+                  how the rest of the product renders them to people. */}
               <span className="text-[12.5px] font-bold truncate" style={{ color: 'var(--ink)' }}>
-                {g.exercise}
+                {exerciseLabel(g.exercise)}
               </span>
               <span className="shrink-0 text-right">
                 <span className="block text-[12.5px] font-black tabular-nums" style={{ color: HUE.prs.fg }}>
@@ -516,7 +523,7 @@ function ShareBody({ share }) {
         <div className="mt-2 space-y-1">
           {shown.map((e, i) => (
             <div key={`${e.name}-${i}`} className="flex items-baseline justify-between gap-3 text-[11.5px]">
-              <span className="truncate" style={{ color: 'var(--ink)' }}>{e.name}</span>
+              <span className="truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(e.name)}</span>
               <span className="shrink-0 tabular-nums" style={{ color: 'var(--mute)' }}>
                 {[e.sets ? `${e.sets}x${e.reps ?? ''}` : null, e.weight && e.weight !== 'BW' ? `${e.weight}` : null]
                   .filter(Boolean).join(' · ') || '—'}
@@ -595,7 +602,12 @@ export function CommentsSheet({ target, you, onClose, toast, comments: commentsA
     }
   };
 
-  return (
+  // Portalled to <body>: ClientLayout's page wrapper carries `.anim-fadeUp`,
+  // whose end-state transform makes it the containing block for every
+  // `position: fixed` descendant -- so without this the sheet opens at the
+  // bottom of the PAGE instead of the viewport (see UI.jsx's Modal and
+  // FoodLogSheet.jsx for the same fix and the full reasoning).
+  return createPortal((
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,.5)' }}
@@ -676,5 +688,5 @@ export function CommentsSheet({ target, you, onClose, toast, comments: commentsA
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }

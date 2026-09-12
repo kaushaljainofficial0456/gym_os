@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
 import Icon from './Icon.jsx';
@@ -215,7 +216,16 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // Portalled to <body>, for the reason FoodLogSheet.jsx documents at length:
+  // ClientLayout.jsx wraps every page in `.anim-fadeUp`, an animation with
+  // fill-mode `both` whose end keyframe leaves a transform applied forever --
+  // and any ancestor with a transform becomes the containing block for
+  // `position: fixed` descendants. Without this, `.scrim`'s "fixed inset-0"
+  // is fixed to that wrapper rather than the viewport, so on a long page the
+  // sheet opens far below the fold and looks like a dead button. Verified
+  // live: the community comments sheet measured 2804px tall, starting 221px
+  // above the viewport, until this portal was added.
+  return createPortal((
     <div className="scrim z-50 flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
       onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
       <div className={cls('sheet w-full flex flex-col anim-scaleIn max-h-[92vh] sm:max-h-[90vh]', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}
@@ -239,7 +249,7 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
         {footer && <div className="px-5 py-4 shrink-0" style={{ borderTop: '1px solid var(--line)' }}>{footer}</div>}
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 /** Icon, title, one sentence, one action (Part 20) — never bare space. */
