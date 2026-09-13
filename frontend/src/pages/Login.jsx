@@ -185,10 +185,6 @@ export default function Login() {
               Train smarter.<br />Coach better.<br />
               <span className="bg-gradient-to-r from-ember to-gold bg-clip-text text-transparent">Prove progress.</span>
             </h1>
-            <p className="text-sm mt-5 max-w-sm leading-relaxed" style={{ color: 'var(--mute)' }}>
-              Client data → tracking → analysis → AI insight → trainer action → client progress.
-              The operating system for fitness professionals — and for anyone training on their own.
-            </p>
             <div className="mt-8 flex items-center gap-2 text-[11px] font-grotesk uppercase tracking-[.2em]" style={{ color: 'var(--faint)' }}>
               {/* The glow was `rgba(52,211,153,.8)` — the neon mint that
                   --good-rgb was deliberately moved away from (see the
