@@ -179,46 +179,111 @@ function MacroBar({ label, value, max, color, t }) {
 
 function HydrationCard({ waterState, target, onAdd, t }) {
   const pct = target > 0 ? Math.min(waterState / target, 1) : 0;
-  const glasses = Math.ceil(target / 0.25);
   const animLitres = useCountUp(waterState * 10, 800) / 10;
 
+  /* A GLASS THAT FILLS, and buttons that say what people actually drink.
+   *
+   * This was a row of twelve identical squares you toggled one quarter-
+   * litre at a time -- about 26px each on a phone, so hitting the right
+   * one was a aim test, and four taps to record a bottle. Worse, the way
+   * to correct a mistake was "tap a filled one", which nothing on screen
+   * could have told you.
+   *
+   * Now the vessel IS the display: it fills as you drink, so the state is
+   * one glance rather than counting squares. Adding is three real
+   * amounts -- a glass, a bottle, a big bottle -- and a mistake is undone
+   * by an Undo button that says so, instead of a hidden second meaning
+   * for the same tap.
+   */
+  const ADD_AMOUNTS = [
+    { ml: 250, label: 'Glass', sub: '250 ml' },
+    { ml: 500, label: 'Bottle', sub: '500 ml' },
+    { ml: 1000, label: 'Large', sub: '1 L' },
+  ];
+  const fillPct = Math.min(100, pct * 100);
+
   return (
-    <div data-tour="nutrition-water" className="relative overflow-hidden rounded-2xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, transparent 60%, ${t.waterDim})`, opacity: pct * 0.6 }} />
+    <div data-tour="nutrition-water" className="relative overflow-hidden rounded-2xl p-5"
+         style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
+      <div className="absolute inset-0 pointer-events-none"
+           style={{ background: `linear-gradient(180deg, transparent 60%, ${t.waterDim})`, opacity: pct * 0.6 }} />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: t.waterDim, color: t.water }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2.7 6.3 9.9a7.5 7.5 0 1 0 11.4 0Z"/></svg></div>
-            <div>
-              <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2" style={{ color: t.mute }}>
-                <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />Water
+          <div className="font-grotesk text-[11px] uppercase tracking-[.16em] font-semibold flex items-center gap-2"
+               style={{ color: t.mute }}>
+            <span className="inline-block w-1 h-1 rounded-full" style={{ background: t.accent }} />Water
+          </div>
+          <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>
+            {Math.round(pct * 100)}% of {target}L
+          </div>
+        </div>
+
+        <div className="flex items-center gap-5">
+          {/* The vessel. Its fill is the reading -- no counting required. */}
+          <div className="relative shrink-0" style={{ width: 74, height: 104 }} aria-hidden="true">
+            <div className="absolute inset-0 overflow-hidden"
+                 style={{
+                   borderRadius: '10px 10px 26px 26px',
+                   border: `2px solid ${t.border}`,
+                   background: t.glass,
+                 }}>
+              <div
+                className="absolute inset-x-0 bottom-0"
+                style={{
+                  height: `${fillPct}%`,
+                  background: `linear-gradient(180deg, ${t.water}CC, ${t.water})`,
+                  transition: 'height .7s cubic-bezier(.22,.8,.3,1)',
+                }}
+              >
+                {/* The meniscus, so the level reads as liquid and not as a bar. */}
+                <div className="absolute inset-x-0 top-0" style={{ height: 6, background: `linear-gradient(180deg, rgba(255,255,255,.45), transparent)` }} />
               </div>
-              <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{Math.round(pct * 100)}% of daily goal</div>
             </div>
           </div>
-          <div className="font-grotesk text-xl font-black" style={{ color: t.water }}>
-            {animLitres.toFixed(1)}<span className="text-xs font-medium" style={{ color: t.mute }}> / {target}L</span>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1">
+              <span className="font-grotesk font-black tabular-nums leading-none" style={{ fontSize: 34, color: t.water }}>
+                {animLitres.toFixed(1)}
+              </span>
+              <span className="font-grotesk text-[13px] font-medium" style={{ color: t.mute }}>/ {target} L</span>
+            </div>
+            <div className="font-grotesk text-[11px] mt-1" style={{ color: t.mute }}>
+              {waterState >= target
+                ? "Target reached — nice."
+                : `${Math.max(0, Math.round((target - waterState) * 1000))} ml to go`}
+            </div>
+
+            {/* Real amounts, at a real size. */}
+            <div className="grid grid-cols-3 gap-1.5 mt-3">
+              {ADD_AMOUNTS.map((a) => (
+                <button
+                  key={a.ml}
+                  onClick={() => onAdd(a.ml / 1000)}
+                  className="rounded-xl px-1 py-2 transition-transform active:scale-95"
+                  style={{ background: t.waterDim, border: `1px solid ${t.water}40`, color: t.water, minHeight: 48 }}
+                  aria-label={`Add ${a.sub} of water`}
+                >
+                  <span className="block font-grotesk text-[12px] font-bold leading-none">+{a.label}</span>
+                  <span className="block font-grotesk text-[9.5px] mt-0.5" style={{ color: t.mute }}>{a.sub}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: t.ringTrack }}>
-          <div className="h-full rounded-full relative" style={{ width: `${pct * 100}%`, background: `linear-gradient(90deg, ${t.water}88, ${t.water})`, transition: 'width 0.6s cubic-bezier(.22,.8,.3,1)' }}>
-            <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%)` }} />
-          </div>
-        </div>
-        <div className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${Math.min(glasses, 12)}, 1fr)` }}>
-          {Array.from({ length: Math.min(glasses, 12) }).map((_, i) => {
-            const filled = waterState >= (i + 1) * 0.25;
-            return (
-              <button key={i} onClick={() => onAdd(filled ? -0.25 : 0.25)}
-                className="aspect-square rounded-lg grid place-items-center text-[10px] transition-all duration-300 active:scale-90"
-                style={{ background: filled ? `${t.water}25` : t.glass, border: `1px solid ${filled ? t.water + '50' : t.border}`, color: filled ? t.water : t.faint, boxShadow: filled ? `0 0 8px ${t.water}20` : 'none' }}
-                aria-label={`Water glass ${i + 1}`}>
-                {filled ? <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.7 6.3 9.9a7.5 7.5 0 1 0 11.4 0Z"/></svg> : null}
-              </button>
-            );
-          })}
-        </div>
-        <div className="text-center text-[10px]" style={{ color: t.faint }}>Tap a glass to fill · tap filled to remove</div>
+
+        {/* A named way back, rather than a hidden second meaning for the
+            same tap. Only offered when there is something to undo. */}
+        {waterState > 0 && (
+          <button
+            onClick={() => onAdd(-0.25)}
+            className="mt-3 w-full rounded-lg font-grotesk text-[11px] font-semibold transition-colors"
+            style={{ minHeight: 38, border: `1px solid ${t.border}`, color: t.mute }}
+            aria-label="Remove 250 ml of water"
+          >
+            Undo 250 ml
+          </button>
+        )}
       </div>
     </div>
   );

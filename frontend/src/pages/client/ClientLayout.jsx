@@ -30,11 +30,17 @@ const FEATURE_MAP = {
 // glyphs are keys in Icon.jsx's PATHS table, so all four nav icons would
 // silently render as the generic fallback glyph — same bug class already
 // fixed at 9 other sites (see UI.jsx), just missed here.
+/* Five, because Community earned a place in the bar.
+   It was buried in the profile menu -- a social surface reachable only by
+   opening a drawer and reading a list, which is the one place people do
+   not look for other people. The four that were here are the things you
+   do; this is the reason to come back when you have not done them. */
 const NAV = [
   { to: '/app/client', end: true, label: 'Home', icon: 'home' },
   { to: '/app/client/workout', label: 'Workout', icon: 'strength' },
   { to: '/app/client/nutrition', label: 'Nutrition', icon: 'food' },
   { to: '/app/client/progress', label: 'Progress', icon: 'trending' },
+  { to: '/app/client/community', label: 'Community', icon: 'users' },
 ];
 
 /* Grouped, because a flat list of eight rows makes the reader scan all
@@ -58,7 +64,6 @@ const PROFILE_MENU = [
   [
     { to: '/app/client/nutrition-tracker', label: 'Nutrition tracker', icon: 'food' },
     { to: '/app/client/membership', label: 'Membership', icon: 'clipboard' },
-    { to: '/app/client/community', label: 'Community', icon: 'users' },
   ],
   [
     { to: '/app/client/settings', label: 'Settings', icon: 'settings' },
@@ -340,7 +345,7 @@ export default function ClientLayout() {
       <nav className="app-tabbar" aria-label="Main"
         onMouseMove={(e) => bottomNavMouseX.set(e.clientX)}
         onMouseLeave={() => bottomNavMouseX.set(Infinity)}>
-        <div data-tour="bottom-nav" className="max-w-lg mx-auto grid grid-cols-4 gap-1 px-2 pb-1">
+        <div data-tour="bottom-nav" className="max-w-lg mx-auto grid grid-cols-5 gap-1 px-2 pb-1">
           {NAV.map((l) => (
             <DockNavItem key={l.to} to={l.to} end={l.end} label={l.label}
               icon={<Icon name={l.icon} size={20} />}
