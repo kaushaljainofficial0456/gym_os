@@ -40,7 +40,11 @@ export default function Dashboard() {
     ? (ov.data?.attention || [])
     : (att.data?.clients || []);
 
-  if (ov.loading || (!isTrainerOnly && att.loading) || trend.loading) {
+  // pulse is part of the gate: GymPulse arrives far taller than its own
+  // one-row skeleton, so painting the page without it and letting it land
+  // afterwards shoved the attention queue ~480px down (layout shift 0.31,
+  // e2e/performance.spec.js). The page now appears once, and holds still.
+  if (ov.loading || (!isTrainerOnly && (att.loading || pulse.loading)) || trend.loading) {
     return (
       <div className="space-y-6">
         <div className="skeleton h-20 w-2/3" />

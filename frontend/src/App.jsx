@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useAuth } from './auth.jsx';
+import { useAuth, isTrainerRole } from './auth.jsx';
+import { getStoredUser } from './api.js';
 import { Spinner } from './components/UI.jsx';
 import ClickSparkLazy from './components/ClickSparkLazy.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
@@ -12,8 +13,22 @@ import Login from './pages/Login.jsx';
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'));
 import SignUp from './pages/SignUp.jsx';
-import TrainerLayout from './pages/trainer/TrainerLayout.jsx';
-import ClientLayout from './pages/client/ClientLayout.jsx';
+// The two signed-in shells are lazy too. Eager, they put framer-motion and the
+// whole app chrome -- onboarding wizard, app tour, notification bell, coach
+// drawer -- into the entry chunk, so a signed-out visitor on /login downloaded
+// all of it: first-paint JS was 140 kB gzipped with them, 84 kB without.
+//
+// A lazy shell around lazy pages would make a signed-in visitor wait for one
+// download before the next could start. So a returning user's shell starts
+// downloading as this module loads, in parallel with the /auth/me probe that
+// has to finish before any route renders anyway. A signed-out visitor has no
+// stored user and never fetches it (e2e/performance.spec.js holds both).
+const loadTrainerLayout = () => import('./pages/trainer/TrainerLayout.jsx');
+const loadClientLayout = () => import('./pages/client/ClientLayout.jsx');
+const TrainerLayout = lazy(loadTrainerLayout);
+const ClientLayout = lazy(loadClientLayout);
+const storedRole = getStoredUser()?.role;
+if (storedRole) (isTrainerRole(storedRole) ? loadTrainerLayout : loadClientLayout)();
 
 // Every other page is route-split: previously all of these were static
 // imports, so the entry bundle (the one thing every visitor downloads
@@ -239,7 +254,7 @@ export default function App() {
         </Require>
       } />
       <Route path="/app/trainer" element={
-        <Require ready={ready} ok={() => authed && isTrainer && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/client') : '/login'}><TrainerLayout /></Require>
+        <Require ready={ready} ok={() => authed && isTrainer && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/client') : '/login'}>{page(TrainerLayout)}</Require>
       }>
         <Route index element={page(Dashboard)} />
         <Route path="clients" element={page(Clients)} />
@@ -285,7 +300,7 @@ export default function App() {
         <Route path="enterprise/billing" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseBilling)}</OwnerOnly>} />
       </Route>
       <Route path="/app/client" element={
-        <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/trainer') : '/login'}><ClientLayout /></Require>
+        <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/trainer') : '/login'}>{page(ClientLayout)}</Require>
       }>
         <Route index element={page(Home)} />
         <Route path="workout" element={page(Workout)} />

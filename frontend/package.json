@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "test:e2e": "playwright test --project=desktop",
     "test:visual": "playwright test --project=visual-desktop --project=visual-mobile"
   },
