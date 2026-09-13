@@ -1,3 +1,4 @@
+import Icon, { ICON_NAMES } from '../Icon.jsx';
 /**
  * COMMUNITY IDENTITY — what a community looks like before you know anything
  * about it.
@@ -66,7 +67,15 @@ export function IdentityMark({ name, theme, mark, size = 44, className, style })
         ...style,
       }}
     >
-      {mark || initialsOf(name)}
+      {/* A stored mark is an ICON NAME now, not an emoji. Emoji were
+          different artwork on every platform, ignored the palette, and
+          sat on their own baseline -- so one community's chosen mark
+          looked like a different mark to each member. Falls back to the
+          initials if the name is not one this build knows, which is what
+          an older stored emoji will do. */}
+      {mark && ICON_NAMES.includes(mark)
+        ? <Icon name={mark} size={Math.round(size * 0.5)} strokeWidth={2} />
+        : initialsOf(name)}
     </span>
   );
 }

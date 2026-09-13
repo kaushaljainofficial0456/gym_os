@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Icon from '../../components/Icon.jsx';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api, getStoredUser, setReturnTo } from '../../api.js';
@@ -316,7 +317,7 @@ export default function SharedWorkout() {
             style={{ background: cardBg, border: `1px solid ${border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={chip(CHIP_PLANNER)}>
-                <span className="text-lg">📋</span>
+                <Icon name="clipboard" size={18} />
               </div>
               <div>
                 <div className="font-grotesk text-[14px] font-bold" style={{ color: ink }}>Add to My Workouts</div>
@@ -332,7 +333,7 @@ export default function SharedWorkout() {
               style={{ background: cardBg, border: `1px solid ${border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={chip(CHIP_DAY)}>
-                  <span className="text-lg">📅</span>
+                  <Icon name="calendar" size={18} />
                 </div>
                 <div>
                   <div className="font-grotesk text-[14px] font-bold" style={{ color: ink }}>Add to a Specific Day</div>

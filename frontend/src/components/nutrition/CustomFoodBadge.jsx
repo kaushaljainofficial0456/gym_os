@@ -30,7 +30,7 @@ export default function CustomFoodBadge({ source, t }) {
   return (
     <span className="shrink-0 text-[8px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full"
           style={{ background: isAI ? t.accentDim : `${t.fat}18`, color: isAI ? t.accent : t.fat }}>
-      {isAI ? '✨ AI Estimated' : '✓ Database'}
+      {isAI ? 'AI Estimated' : '✓ Database'}
     </span>
   );
 }

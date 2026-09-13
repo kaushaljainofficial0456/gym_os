@@ -15,6 +15,7 @@
 // The prompt NEVER blocks the user from entering the app.
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
+import Icon from './Icon.jsx';
 import { api } from '../api.js';
 
 const STORAGE_KEY = 'notif_prompt_seen';
@@ -153,7 +154,7 @@ export default function NotificationPermissionPrompt() {
           className="w-14 h-14 mx-auto mb-4 rounded-2xl grid place-items-center text-2xl"
           style={{ background: 'var(--accent-soft)' }}
         >
-          🔔
+          <Icon name="bell" size={26} />
         </div>
 
         {/* Title */}

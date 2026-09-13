@@ -18,6 +18,7 @@
  * "suggested" or filler content, and an empty feed is rendered as empty.
  */
 import { useState, useEffect, useCallback } from 'react';
+import Icon from '../Icon.jsx';
 import { createPortal } from 'react-dom';
 import { Avatar } from '../UI.jsx';
 import { api } from '../../api.js';
@@ -25,7 +26,11 @@ import { exerciseLabel } from '../../utils.js';
 import { fmt, fmtVolume, HUE } from './CommunityPieces.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 
-const REACTION_GLYPH = { like: '❤️', fire: '🔥', clap: '👏', strong: '💪' };
+/* Reactions as icons rather than emoji: the same three problems apply
+   (platform-specific artwork, unmanageable colour, drifting baselines),
+   and a reaction row is where they showed most -- four glyphs from four
+   different design languages sitting side by side. */
+const REACTION_ICON = { like: 'heart', fire: 'flame', clap: 'clap', strong: 'bicep' };
 const REACTION_ORDER = ['like', 'fire', 'clap', 'strong'];
 
 /** Relative time, in the coarse units a feed actually needs. */
@@ -280,7 +285,7 @@ export function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy,
             restricted group. */}
         {!isPR && isYou && item.data.visibility === 'followers' && (
           <div className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: 'var(--faint)' }}>
-            <span aria-hidden="true">🔒</span> Visible to your followers
+            <Icon name="lock" size={11} strokeWidth={2} /> Visible to your followers
           </div>
         )}
       </div>
@@ -310,7 +315,7 @@ export function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy,
                 border: `1px solid ${mine ? 'var(--accent)' : 'var(--line)'}`,
               }}
             >
-              <span aria-hidden="true">{REACTION_GLYPH[key]}</span>
+              <Icon name={REACTION_ICON[key]} size={13} strokeWidth={2} />
               {count > 0 && (
                 <span className="tabular-nums text-[11px] font-semibold" style={{ color: mine ? 'var(--accent)' : 'var(--mute)' }}>
                   {count}
@@ -328,7 +333,7 @@ export function FeedCard({ item, social, isYou, onReact, onOpenComments, onCopy,
           className="rounded-full px-2.5 flex items-center gap-1 text-[11.5px]"
           style={{ minHeight: 32, border: '1px solid var(--line)', color: 'var(--mute)' }}
         >
-          <span aria-hidden="true">💬</span>
+          <Icon name="chat" size={13} strokeWidth={2} />
           {s.comments > 0 && <span className="tabular-nums font-semibold">{s.comments}</span>}
         </button>
 

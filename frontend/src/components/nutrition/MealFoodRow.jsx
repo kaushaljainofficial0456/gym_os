@@ -423,7 +423,7 @@ export default function MealFoodRow({ onAddFood, onAddCustom, onAddAI, onAdded, 
                 <button onClick={estimateWithAI} disabled={aiEstimating}
                         className="w-full text-left rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-grotesk text-[10px] font-semibold"
                         style={{ border: `1px dashed ${t.border}`, color: t.accent }}>
-                  ✨ {aiEstimating ? 'Estimating…' : `Estimate "${q.trim()}" with AI`}
+                  {aiEstimating ? 'Estimating…' : `Estimate "${q.trim()}" with AI`}
                 </button>
               )}
               {aiErr && <div className="text-[10px]" style={{ color: t.danger }}>{aiErr}</div>}

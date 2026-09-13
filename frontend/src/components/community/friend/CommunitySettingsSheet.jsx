@@ -10,11 +10,16 @@
  * would fail, and never gets one by editing the page.
  */
 import { useState } from 'react';
+import Icon from '../../Icon.jsx';
 import { api } from '../../../api.js';
 import { Modal } from '../../UI.jsx';
 import { IdentityMark, THEME_KEYS, themeOf } from '../identity.jsx';
 
-const MARKS = ['🔥', '⚡', '💪', '🏋️', '🏃', '🚴', '🥇', '🎯', '⛰️', '🌅'];
+/* Emblems as ICONS, not emoji. An emoji is different artwork on every
+   platform, ignores the palette entirely, and sits on its own baseline --
+   so a community's chosen mark looked like a different mark to each
+   member. These inherit currentColor and one size prop. */
+const MARKS = ['flame', 'bolt', 'bicep', 'strength', 'run', 'bike', 'medal', 'target', 'mountain', 'sunrise'];
 
 export default function CommunitySettingsSheet({ community, members = [], onClose, onChanged, onGone, toast }) {
   const you = community.you;

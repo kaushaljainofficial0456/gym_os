@@ -2263,7 +2263,7 @@ export default function Workout() {
                 onClick={pauseWorkout}
                 className="w-full py-2 rounded-xl text-[12px] font-grotesk font-semibold border transition-all active:scale-[.97]"
                 style={{ borderColor: 'var(--line)', color: 'var(--mute)' }}>
-                ⏸ PAUSE
+                PAUSE
               </button>
             </div>
           )}

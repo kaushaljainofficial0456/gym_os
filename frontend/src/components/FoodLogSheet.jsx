@@ -1722,7 +1722,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       the CACHED value -- a completely different concept
                       from a Tier-1/3 search-match percentage, never labelled
                       the same way. */}
-                  {aiResult.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ Barbell Estimated' : '✨ AI Estimated'}
+                  {aiResult.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ Barbell Estimated' : 'AI Estimated'}
                 </span>
               </div>
 

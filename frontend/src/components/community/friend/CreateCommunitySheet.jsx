@@ -10,13 +10,18 @@
  * like itself from the first screen is one people come back to.
  */
 import { useState } from 'react';
+import Icon from '../../Icon.jsx';
 import { api } from '../../../api.js';
 import { Modal } from '../../UI.jsx';
 import { IdentityMark, THEME_KEYS, themeOf } from '../identity.jsx';
 import InvitePanel from './InvitePanel.jsx';
 
 // Kept in step with the server's own allow-list (friendCommunities/core.js).
-const MARKS = ['🔥', '⚡', '💪', '🏋️', '🏃', '🚴', '🥇', '🎯', '⛰️', '🌅'];
+/* Emblems as ICONS, not emoji. An emoji is different artwork on every
+   platform, ignores the palette entirely, and sits on its own baseline --
+   so a community's chosen mark looked like a different mark to each
+   member. These inherit currentColor and one size prop. */
+const MARKS = ['flame', 'bolt', 'bicep', 'strength', 'run', 'bike', 'medal', 'target', 'mountain', 'sunrise'];
 const NAME_MAX = 40;
 const DESCRIPTION_MAX = 160;
 
@@ -162,7 +167,7 @@ export default function CreateCommunitySheet({ onClose, onCreated, toast }) {
           </MarkButton>
           {MARKS.map((m) => (
             <MarkButton key={m} on={mark === m} onClick={() => setMark(m)}>
-              <span className="text-[17px]" aria-hidden="true">{m}</span>
+              <Icon name={m} size={17} strokeWidth={2} />
             </MarkButton>
           ))}
         </div>

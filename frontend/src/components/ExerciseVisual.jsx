@@ -8,6 +8,7 @@
  * Zero new dependencies — pure React + SVG + requestAnimationFrame.
  */
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Icon from './Icon.jsx';
 import { useTheme } from '../themeContext.jsx';
 
 /* ════════════════════════════════════════════════════════════════
@@ -638,7 +639,7 @@ export default function ExerciseVisual({
             style={{ background: t.controlBg, border: `1px solid ${t.controlBorder}`, color: t.textPrimary }}
             aria-label={playing ? 'Pause animation' : 'Play animation'}
           >
-            {playing ? '⏸' : '▶'}
+            <Icon name={playing ? 'pause' : 'play'} size={14} strokeWidth={2.2} />
           </button>
           {[0.5, 1, 2].map(s => (
             <button
