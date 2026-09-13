@@ -22,6 +22,7 @@
 // ============================================================
 import { id, now } from '../ids.js';
 import { periodRange } from './community.js';
+import { gymScope, toScope } from './communityScope.js';
 
 const int = (v) => {
   if (v == null) return 0;
@@ -199,98 +200,155 @@ export async function activeChallenges(db, { orgId, clientId, today }) {
     [orgId, today, today]);
   if (!rows.length) return [];
 
-  return Promise.all(rows.map(async (ch) => {
-    const window = { start: ch.start_date, end: ch.end_date };
-    const [mine, community, participants] = await Promise.all([
-      clientId ? measure(db, { orgId, clientId, metric: ch.metric, ...window }) : Promise.resolve(0),
-      ch.scope === 'community' ? measure(db, { orgId, metric: ch.metric, ...window }) : Promise.resolve(null),
-      participantCount(db, { orgId, metric: ch.metric, goal: ch.goal, ...window }),
-    ]);
+  const scope = gymScope(orgId);
+  return Promise.all(rows.map((ch) => challengeProgress(db, { scope, challenge: ch, clientId })));
+}
 
-    const target = Number(ch.goal);
-    const value = ch.scope === 'community' ? community : mine;
-    return {
-      id: ch.id,
-      name: ch.name,
-      description: ch.description,
-      metric: ch.metric,
-      scope: ch.scope,
-      goal: target,
-      startDate: ch.start_date,
-      endDate: ch.end_date,
-      value,
-      // Capped for the BAR only. `value` stays raw so a member who beat
-      // the goal sees that they beat it rather than a flat 100%.
-      percent: target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0,
-      complete: value >= target,
-      yourValue: mine,
-      yourPercent: target > 0 ? Math.min(100, Math.round((mine / target) * 100)) : 0,
-      membersCompleted: participants.completed,
-      membersParticipating: participants.participating,
-    };
-  }));
+/**
+ * Live progress for ONE challenge definition, in any community scope. The
+ * gym's activeChallenges above and friend communities both come through
+ * here, so a challenge reads the same way wherever it lives.
+ *
+ * `challenge` is a raw row (community_challenges or
+ * community_group_challenges -- they share every column this reads).
+ */
+export async function challengeProgress(db, { scope: scopeOrOrgId, challenge: ch, clientId }) {
+  const scope = toScope(scopeOrOrgId);
+  const window = { start: ch.start_date, end: ch.end_date };
+  const [mine, community, participants] = await Promise.all([
+    clientId ? measure(db, { scope, clientId, metric: ch.metric, ...window }) : Promise.resolve(0),
+    ch.scope === 'community' ? measure(db, { scope, metric: ch.metric, ...window }) : Promise.resolve(null),
+    participantCount(db, { scope, metric: ch.metric, goal: ch.goal, ...window }),
+  ]);
+
+  const target = Number(ch.goal);
+  const value = ch.scope === 'community' ? community : mine;
+  return {
+    id: ch.id,
+    name: ch.name,
+    description: ch.description,
+    metric: ch.metric,
+    scope: ch.scope,
+    goal: target,
+    startDate: ch.start_date,
+    endDate: ch.end_date,
+    value,
+    // Capped for the BAR only. `value` stays raw so a member who beat
+    // the goal sees that they beat it rather than a flat 100%.
+    percent: target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0,
+    complete: value >= target,
+    yourValue: mine,
+    yourPercent: target > 0 ? Math.min(100, Math.round((mine / target) * 100)) : 0,
+    membersCompleted: participants.completed,
+    membersParticipating: participants.participating,
+  };
+}
+
+/**
+ * Every counted member's value for one challenge, ranked -- the challenge's
+ * own leaderboard. Only members of the scope contribute, so someone who
+ * left the community (or stopped sharing stats) drops out of the standings
+ * and out of the community total at the same moment.
+ */
+export async function challengeStandings(db, { scope: scopeOrOrgId, challenge: ch }) {
+  const scope = toScope(scopeOrOrgId);
+  const rows = await perMemberValues(db, {
+    scope, metric: ch.metric, start: ch.start_date, end: ch.end_date,
+  });
+  const goal = Number(ch.goal);
+  return rows
+    .map((r) => ({ clientId: r.cid, value: Math.round(Number(r.v) || 0) }))
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value || a.clientId.localeCompare(b.clientId))
+    .map((r, i) => ({ ...r, rank: i + 1, complete: r.value >= goal }));
 }
 
 /** Run one challenge metric over a window, for a single member or for the
  *  whole community. Reuses the SAME expressions the leaderboards use --
  *  a challenge and the board it sits next to must never disagree about
  *  what a workout or a kilogram is. */
-async function measure(db, { orgId, clientId, metric, start, end }) {
-  if (metric === 'workouts') {
+async function measure(db, { scope, clientId, metric, start, end }) {
+  if (metric === 'workouts' || metric === 'active_days') {
+    const m = scope.member('cm', 'w.client_id');
+    // active_days counts (member, day) pairs, so a community total is the
+    // sum of each member's own training days rather than the number of
+    // calendar days anyone at all trained. || concatenates on both engines.
+    const count = metric === 'active_days'
+      ? "COUNT(DISTINCT w.client_id || ':' || w.scheduled_date)"
+      : 'COUNT(*)';
     const r = await db.q1(
-      `SELECT COUNT(*) AS n FROM workouts w
-         JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND w.status = 'completed'
+      `SELECT ${count} AS n FROM workouts w
+         ${m.sql}
+        WHERE w.status = 'completed'
           AND w.scheduled_date >= ? AND w.scheduled_date <= ?
           ${clientId ? 'AND w.client_id = ?' : ''}`,
-      clientId ? [orgId, start, end, clientId] : [orgId, start, end]);
+      clientId ? [...m.params, start, end, clientId] : [...m.params, start, end]);
     return int(r?.n);
   }
   if (metric === 'prs') {
+    const m = scope.member('cm', 'pr.client_id');
     const r = await db.q1(
       `SELECT COUNT(*) AS n FROM personal_records pr
-         JOIN community_members cm ON cm.client_id = pr.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND pr.date >= ? AND pr.date <= ?
+         ${m.sql}
+        WHERE pr.date >= ? AND pr.date <= ?
           ${clientId ? 'AND pr.client_id = ?' : ''}`,
-      clientId ? [orgId, start, end, clientId] : [orgId, start, end]);
+      clientId ? [...m.params, start, end, clientId] : [...m.params, start, end]);
     return int(r?.n);
   }
   // volume
+  const m = scope.member('cm', 'wl.client_id');
   const r = await db.q1(
     `SELECT COALESCE(SUM(CASE WHEN esl.actual_reps > 0 AND esl.actual_weight >= 0
                               THEN esl.actual_reps * esl.actual_weight ELSE 0 END), 0) AS v
        FROM exercise_set_logs esl
        JOIN workout_logs wl ON wl.id = esl.workout_log_id
-       JOIN community_members cm ON cm.client_id = wl.client_id AND cm.enabled = 1
-      WHERE cm.org_id = ? AND wl.date >= ? AND wl.date <= ? AND esl.completed = 1
+       ${m.sql}
+      WHERE wl.date >= ? AND wl.date <= ? AND esl.completed = 1
         ${clientId ? 'AND wl.client_id = ?' : ''}`,
-    clientId ? [orgId, start, end, clientId] : [orgId, start, end]);
+    clientId ? [...m.params, start, end, clientId] : [...m.params, start, end]);
   return Math.round(Number(r?.v) || 0);
+}
+
+/** One row per counted member with their value for the metric. Shared by
+ *  the participant count and the standings so the two can never disagree
+ *  about who is taking part. */
+async function perMemberValues(db, { scope, metric, start, end }) {
+  if (metric === 'prs') {
+    const m = scope.member('cm', 'pr.client_id');
+    return db.q(
+      `SELECT pr.client_id AS cid, COUNT(*) AS v FROM personal_records pr
+         ${m.sql}
+        WHERE pr.date >= ? AND pr.date <= ? GROUP BY pr.client_id`,
+      [...m.params, start, end]);
+  }
+  if (metric === 'workouts' || metric === 'active_days') {
+    const m = scope.member('cm', 'w.client_id');
+    const count = metric === 'active_days' ? 'COUNT(DISTINCT w.scheduled_date)' : 'COUNT(*)';
+    return db.q(
+      `SELECT w.client_id AS cid, ${count} AS v FROM workouts w
+         ${m.sql}
+        WHERE w.status = 'completed'
+          AND w.scheduled_date >= ? AND w.scheduled_date <= ? GROUP BY w.client_id`,
+      [...m.params, start, end]);
+  }
+  const m = scope.member('cm', 'wl.client_id');
+  return db.q(
+    `SELECT wl.client_id AS cid,
+            COALESCE(SUM(CASE WHEN esl.actual_reps > 0 AND esl.actual_weight >= 0
+                              THEN esl.actual_reps * esl.actual_weight ELSE 0 END), 0) AS v
+       FROM exercise_set_logs esl
+       JOIN workout_logs wl ON wl.id = esl.workout_log_id
+       ${m.sql}
+      WHERE wl.date >= ? AND wl.date <= ? AND esl.completed = 1
+      GROUP BY wl.client_id`,
+    [...m.params, start, end]);
 }
 
 /** How many members are taking part, and how many have finished. Drives
  *  the honest "42 / 60 members" line -- both halves counted, never
  *  estimated from one. */
-async function participantCount(db, { orgId, metric, goal, start, end }) {
-  const table = metric === 'prs'
-    ? `SELECT pr.client_id AS cid, COUNT(*) AS v FROM personal_records pr
-         JOIN community_members cm ON cm.client_id = pr.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND pr.date >= ? AND pr.date <= ? GROUP BY pr.client_id`
-    : metric === 'workouts'
-      ? `SELECT w.client_id AS cid, COUNT(*) AS v FROM workouts w
-           JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-          WHERE cm.org_id = ? AND w.status = 'completed'
-            AND w.scheduled_date >= ? AND w.scheduled_date <= ? GROUP BY w.client_id`
-      : `SELECT wl.client_id AS cid,
-                COALESCE(SUM(CASE WHEN esl.actual_reps > 0 AND esl.actual_weight >= 0
-                                  THEN esl.actual_reps * esl.actual_weight ELSE 0 END), 0) AS v
-           FROM exercise_set_logs esl
-           JOIN workout_logs wl ON wl.id = esl.workout_log_id
-           JOIN community_members cm ON cm.client_id = wl.client_id AND cm.enabled = 1
-          WHERE cm.org_id = ? AND wl.date >= ? AND wl.date <= ? AND esl.completed = 1
-          GROUP BY wl.client_id`;
-
-  const rows = await db.q(table, [orgId, start, end]);
+async function participantCount(db, { scope, metric, goal, start, end }) {
+  const rows = await perMemberValues(db, { scope, metric, start, end });
   const target = Number(goal);
   return {
     participating: rows.length,

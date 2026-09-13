@@ -38,6 +38,7 @@
 import { dayKey, todayKey } from '../utils/time.js';
 import { now } from '../ids.js';
 import { periodRange, getCommunitySettings } from './community.js';
+import { toScope } from './communityScope.js';
 
 /** Postgres returns COUNT/SUM as a STRING (bigint), SQLite as a number.
  *  Every aggregate read in this file goes through here -- a raw `+` on
@@ -72,12 +73,14 @@ export function previousRange({ start, end }, tz) {
 
 // ---- how many people opted in ----
 
-export async function memberCount(db, orgId) {
-  const r = await db.q1(
-    `SELECT COUNT(*) AS n FROM community_members cm
-       JOIN clients c ON c.id = cm.client_id
-      WHERE cm.org_id = ? AND cm.enabled = 1 AND c.org_id = ?`,
-    [orgId, orgId]);
+/** Scope-aware: a bare orgId is that org's gym community; a friend scope
+ *  counts active members who share their stats (see communityScope.js). */
+export async function memberCount(db, scopeOrOrgId) {
+  const scope = toScope(scopeOrOrgId);
+  // Driven from clients so the join shape is identical for both scopes;
+  // strict keeps the gym's long-standing "client's current org must match".
+  const m = scope.member('cm', 'cl.id', { strict: true });
+  const r = await db.q1(`SELECT COUNT(*) AS n FROM clients cl ${m.sql}`, m.params);
   return int(r?.n);
 }
 
@@ -89,38 +92,41 @@ export async function memberCount(db, orgId) {
  * "community score" (see the fairness rule: a member must be able to see
  * why a number is what it is).
  */
-export async function communityPulse(db, orgId, tz) {
+export async function communityPulse(db, scopeOrOrgId, tz) {
+  const scope = toScope(scopeOrOrgId);
   const today = todayKey(tz);
   const week = periodRange('week', tz);
+  const mw = scope.member('cm', 'w.client_id');
+  const mp = scope.member('cm', 'pr.client_id');
 
   const [members, activeToday, weekWorkouts, weekPRs, activeThisWeek] = await Promise.all([
-    memberCount(db, orgId),
+    memberCount(db, scope),
     db.q1(
       `SELECT COUNT(DISTINCT w.client_id) AS n
          FROM workouts w
-         JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND w.scheduled_date = ? AND w.status = 'completed'`,
-      [orgId, today]),
+         ${mw.sql}
+        WHERE w.scheduled_date = ? AND w.status = 'completed'`,
+      [...mw.params, today]),
     db.q1(
       `SELECT COUNT(*) AS n
          FROM workouts w
-         JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND w.scheduled_date >= ? AND w.scheduled_date <= ?
+         ${mw.sql}
+        WHERE w.scheduled_date >= ? AND w.scheduled_date <= ?
           AND w.status = 'completed'`,
-      [orgId, week.start, week.end]),
+      [...mw.params, week.start, week.end]),
     db.q1(
       `SELECT COUNT(*) AS n
          FROM personal_records pr
-         JOIN community_members cm ON cm.client_id = pr.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND pr.date >= ? AND pr.date <= ?`,
-      [orgId, week.start, week.end]),
+         ${mp.sql}
+        WHERE pr.date >= ? AND pr.date <= ?`,
+      [...mp.params, week.start, week.end]),
     db.q1(
       `SELECT COUNT(DISTINCT w.client_id) AS n
          FROM workouts w
-         JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND w.scheduled_date >= ? AND w.scheduled_date <= ?
+         ${mw.sql}
+        WHERE w.scheduled_date >= ? AND w.scheduled_date <= ?
           AND w.status = 'completed'`,
-      [orgId, week.start, week.end]),
+      [...mw.params, week.start, week.end]),
   ]);
 
   const active = int(activeThisWeek?.n);
@@ -145,28 +151,31 @@ export async function communityPulse(db, orgId, tz) {
  * every day present (a day nobody trained is a real 0, not a gap). Feeds
  * both the trend chart and the heatmap -- one query, not two.
  */
-export async function activitySeries(db, orgId, tz, days = 28) {
+export async function activitySeries(db, scopeOrOrgId, tz, days = 28) {
+  const scope = toScope(scopeOrOrgId);
   const today = todayKey(tz);
   const start = shiftDay(today, -(days - 1), tz);
+  const mw = scope.member('cm', 'w.client_id');
+  const mp = scope.member('cm', 'pr.client_id');
 
   const rows = await db.q(
     `SELECT w.scheduled_date AS d,
             COUNT(*) AS workouts,
             COUNT(DISTINCT w.client_id) AS members
        FROM workouts w
-       JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-      WHERE cm.org_id = ? AND w.scheduled_date >= ? AND w.scheduled_date <= ?
+       ${mw.sql}
+      WHERE w.scheduled_date >= ? AND w.scheduled_date <= ?
         AND w.status = 'completed'
       GROUP BY w.scheduled_date`,
-    [orgId, start, today]);
+    [...mw.params, start, today]);
 
   const prRows = await db.q(
     `SELECT pr.date AS d, COUNT(*) AS prs
        FROM personal_records pr
-       JOIN community_members cm ON cm.client_id = pr.client_id AND cm.enabled = 1
-      WHERE cm.org_id = ? AND pr.date >= ? AND pr.date <= ?
+       ${mp.sql}
+      WHERE pr.date >= ? AND pr.date <= ?
       GROUP BY pr.date`,
-    [orgId, start, today]);
+    [...mp.params, start, today]);
 
   const byDay = new Map(rows.map((r) => [r.d, r]));
   const prByDay = new Map(prRows.map((r) => [r.d, int(r.prs)]));
@@ -216,19 +225,21 @@ export function busiestWeekday(series) {
  * Rank is computed over the SAME member set the leaderboard uses, so the
  * "#8 of 128" a member sees here always agrees with the list below it.
  */
-export async function memberPosition(db, orgId, clientId, period, tz) {
+export async function memberPosition(db, scopeOrOrgId, clientId, period, tz) {
+  const scope = toScope(scopeOrOrgId);
   const range = periodRange(period, tz);
   const prev = previousRange(range, tz);
 
   const countsFor = async ({ start, end }) => {
+    const m = scope.member('cm', 'w.client_id');
     const rows = await db.q(
       `SELECT w.client_id, COUNT(*) AS n
          FROM workouts w
-         JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND w.scheduled_date >= ? AND w.scheduled_date <= ?
+         ${m.sql}
+        WHERE w.scheduled_date >= ? AND w.scheduled_date <= ?
           AND w.status = 'completed'
         GROUP BY w.client_id`,
-      [orgId, start, end]);
+      [...m.params, start, end]);
     return rows.map((r) => ({ clientId: r.client_id, n: int(r.n) }));
   };
 
@@ -262,7 +273,7 @@ export async function memberPosition(db, orgId, clientId, period, tz) {
       `SELECT COUNT(*) AS n FROM personal_records
         WHERE client_id = ? AND date >= ? AND date <= ?`,
       [clientId, range.start, range.end]),
-    memberCount(db, orgId),
+    memberCount(db, scope),
   ]);
 
   const mine = thisRows.find((r) => r.clientId === clientId);
@@ -511,24 +522,26 @@ export async function setPreferences(db, clientId, { prVisibility, feedScope }) 
  * member can genuinely win, so it is computed against each member's own
  * previous week rather than against the top of the gym.
  */
-export async function weeklyRecap(db, orgId, tz) {
+export async function weeklyRecap(db, scopeOrOrgId, tz) {
+  const scope = toScope(scopeOrOrgId);
   const week = periodRange('week', tz);
   const prev = previousRange(week, tz);
 
   const perMember = async ({ start, end }) => {
+    const m = scope.member('cm', 'w.client_id');
     const rows = await db.q(
       `SELECT w.client_id, COUNT(*) AS n
          FROM workouts w
-         JOIN community_members cm ON cm.client_id = w.client_id AND cm.enabled = 1
-        WHERE cm.org_id = ? AND w.scheduled_date >= ? AND w.scheduled_date <= ?
+         ${m.sql}
+        WHERE w.scheduled_date >= ? AND w.scheduled_date <= ?
           AND w.status = 'completed'
         GROUP BY w.client_id`,
-      [orgId, start, end]);
+      [...m.params, start, end]);
     return new Map(rows.map((r) => [r.client_id, int(r.n)]));
   };
 
   const [thisWeek, lastWeek, pulse] = await Promise.all([
-    perMember(week), perMember(prev), communityPulse(db, orgId, tz),
+    perMember(week), perMember(prev), communityPulse(db, scope, tz),
   ]);
 
   // Improvement is only meaningful for someone who was already here last

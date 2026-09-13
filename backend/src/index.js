@@ -37,6 +37,8 @@ import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 import notificationRoutes from './routes/notifications.js';
 import communityRoutes from './routes/community.js';
+import communitiesRoutes from './routes/communities.js';
+import communityInviteRoutes from './routes/communityInvite.js';
 import attendanceRoutes from './routes/attendance.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
@@ -235,6 +237,8 @@ app.use('/api/workout-share', workoutShareRoutes(db)); // PUBLIC: preview a shar
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
+app.use('/api/communities', communitiesRoutes(db)); // friend communities: private, invite-only, cross-gym -- see routes/communities.js
+app.use('/api/community-invite', communityInviteRoutes(db)); // PUBLIC: what an invite link leads to (no auth) -- joining requires auth, see POST /api/communities/join
 app.use('/api/attendance', attendanceRoutes(db)); // TRAINER attendance: shifts, check-in/out, corrections (distinct from client attendance)
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js
