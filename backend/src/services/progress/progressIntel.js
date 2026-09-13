@@ -487,7 +487,7 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
     db.q(`SELECT date, active_energy, resting_energy, total_energy, steps, sleep_duration_seconds,
                  recovery_score, readiness_score, training_load, data_quality
             FROM health_daily_summaries WHERE user_id = ? AND date >= ? ORDER BY date`, [userId, since]),
-    db.q1('SELECT current_weight, target_weight, goal, height_cm, age, sex FROM clients WHERE id = ?', [clientId]),
+    db.q1('SELECT current_weight, start_weight, target_weight, goal, goal_date, height_cm, age, sex FROM clients WHERE id = ?', [clientId]),
     db.q('SELECT taken_at, waist, chest, arms, thighs, hips, neck FROM measurements WHERE client_id = ? ORDER BY taken_at', [clientId]),
     // Only for the generated prose below. Everything else on this
     // response stays canonical -- the client formats its own screens.
@@ -497,13 +497,32 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
   const weightAnalysis = analyzeSeries(weights, { valueKey: 'weight', days });
   const weightAll = normalizeSeries(weights, { valueKey: 'weight' });
 
+  /* THE JOURNEY'S START, not the first row in whatever window was
+     asked for. clients.start_weight is the figure the client declared
+     when they set the goal; weightAll[0] is merely the oldest log that
+     survived. Using the latter made Progress and Profile disagree about
+     the same percentage -- Profile's journey reads start_weight -- and
+     it also meant deleting an old entry silently moved the goal's
+     baseline and jumped the progress number. The log is the fallback for
+     a client who has a target but never declared a start. */
+  const goalStart = Number.isFinite(Number(client?.start_weight))
+    ? Number(client.start_weight)
+    : (weightAll.length ? weightAll[0].value : null);
+
   const weightGoal = client?.target_weight && weightAnalysis.current != null
-    ? goalProgress({
-      start: weightAll.length ? weightAll[0].value : null,
-      current: weightAnalysis.current,
-      target: client.target_weight,
-      ratePerWeek: weightAnalysis.ratePerWeek,
-    })
+    ? {
+      ...goalProgress({
+        start: goalStart,
+        current: weightAnalysis.current,
+        target: client.target_weight,
+        ratePerWeek: weightAnalysis.ratePerWeek,
+      }),
+      // Only a real deadline. Section 24: no target trajectory, and no
+      // pace judgement, without one.
+      date: client?.goal_date ? String(client.goal_date).slice(0, 10) : null,
+      startDate: weightAll.length ? weightAll[0].date : null,
+      kind: client?.goal ?? null,
+    }
     : null;
 
   const nutritionCompare = comparePeriods(nutrition.days, { days: Math.min(days, 30), valueKey: 'protein' });

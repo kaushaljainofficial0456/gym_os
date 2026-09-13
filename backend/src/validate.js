@@ -318,6 +318,21 @@ export const schemas = {
     hips: z.number().min(30).max(250).optional(),
     neck: z.number().min(15).max(90).optional()
   }),
+  /* The PATCH form of the above. Same bounds, but each field is also
+     NULLABLE: clearing a reading that should not have been recorded is a
+     real edit, and `.optional()` alone rejects an explicit null -- which
+     would have made "remove this one bad waist figure" impossible while
+     leaving the rest of the set intact. */
+  measurementPatch: z.object({
+    taken_at: z.string().optional(),
+    weight: z.number().positive().max(500).nullable().optional(),
+    waist: z.number().min(30).max(250).nullable().optional(),
+    chest: z.number().min(30).max(250).nullable().optional(),
+    arms: z.number().min(10).max(100).nullable().optional(),
+    thighs: z.number().min(15).max(150).nullable().optional(),
+    hips: z.number().min(30).max(250).nullable().optional(),
+    neck: z.number().min(15).max(90).nullable().optional()
+  }),
   aiEstimate: z.object({ text: z.string().min(1).max(300) }),
   // Tier 4 (food-AI) single-food estimate request. Deliberately separate
   // from `aiEstimate` above, which parses a free-text SENTENCE of several

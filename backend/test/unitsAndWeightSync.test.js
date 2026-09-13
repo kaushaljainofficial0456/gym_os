@@ -199,12 +199,20 @@ test('saving a weight on the profile appends it to the weight series', async (t)
   // Saving again the same day REPLACES today's reading rather than
   // stacking a second row for one date -- a person correcting a typo has
   // not weighed themselves twice.
+  /* Counted from AFTER the first save, not from the seed. Whether the
+     first save inserts a row or updates one depends on whether the
+     server's local date already matches the seeded one -- which flips at
+     midnight and made this assertion fail by the clock rather than by
+     the code. What actually matters is that the SECOND save of the day
+     adds nothing. */
+  const countAfterFirst = after.length;
   await put({ current_weight: 76 });
   const after2 = await db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? AND date = ?', ['c1', today]);
   assert.equal(after2.length, 1, 'a correction replaces today, it does not stack a second reading');
   assert.equal(after2[0].weight, 76);
-  assert.equal(before.length + 1, (await db.q('SELECT id FROM weight_logs WHERE client_id = ?', ['c1'])).length,
-    'two saves in one day add exactly one row in total');
+  assert.equal((await db.q('SELECT id FROM weight_logs WHERE client_id = ?', ['c1'])).length, countAfterFirst,
+    'a second save the same day adds no row');
+  assert.ok(before.length >= 1);
 });
 
 test('a profile save that does not touch weight leaves the series alone', async (t) => {

@@ -58,6 +58,118 @@ export default function clientRoutes(db) {
     res.status(201).json({ ok: true });
   });
 
+  /* MEASUREMENTS LIVE ABOVE THE STAFF GATE, with /:id/weights, because
+   * they are a CLIENT-facing feature. They used to sit below it, so the
+   * `requireRole('GYM_OWNER','TRAINER','SUPER_ADMIN')` line immediately
+   * beneath this block applied to them: every one of these endpoints
+   * answered a client with 403 "Insufficient permissions".
+   *
+   * That meant the "Add today's measurements" button on the client's own
+   * Progress page had never once worked. The form opened, validated,
+   * submitted and surfaced the error -- so the feature looked built,
+   * and only a client account could discover that it was not.
+   *
+   * Authorization is not weakened by the move: resolveClient() below
+   * allows exactly the client themselves, their trainer, and an owner or
+   * admin in the same org, which is a tighter rule than role alone.
+   */
+  r.get('/:id/measurements', requireAuth, async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    res.json({ measurements: await db.q('SELECT * FROM measurements WHERE client_id = ? ORDER BY taken_at', [client.id]) });
+  });
+
+  r.post('/:id/measurements', requireAuth, validate(schemas.measurement), async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const b = req.body;
+    await db.run(
+      `INSERT INTO measurements (id, client_id, taken_at, weight, waist, chest, arms, thighs, hips, neck)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id('mea'), client.id, b.taken_at || now(), b.weight ?? null, b.waist ?? null, b.chest ?? null,
+       b.arms ?? null, b.thighs ?? null, b.hips ?? null, b.neck ?? null]);
+    if (b.weight) {
+      await db.run('UPDATE clients SET current_weight = ?, last_checkin_at = ? WHERE id = ?', [b.weight, now(), client.id]);
+      await db.run('INSERT INTO weight_logs (id, client_id, date, weight, source, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [id('wlg'), client.id, dayKey(), b.weight, 'manual', now()]);
+    }
+    res.status(201).json({ ok: true });
+  });
+
+  /* EDIT AND DELETE, which did not exist.
+   *
+   * A measurement set could be created and never corrected. A tape read
+   * in the wrong column, or a reading typed against yesterday's date,
+   * was permanent -- and because these feed the trend charts, one bad
+   * row bends a line that the user then has to reason around forever.
+   *
+   * Both go through resolveClient, so a client can only touch their own
+   * rows and a trainer only their own clients' (the row's client_id is
+   * re-checked below regardless, so a valid id from ANOTHER client
+   * cannot be edited by passing your own in the path).
+   */
+  r.patch('/:id/measurements/:measurementId', requireAuth, validate(schemas.measurementPatch), async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const row = await db.q1('SELECT * FROM measurements WHERE id = ?', [req.params.measurementId]);
+    if (!row || row.client_id !== client.id) return res.status(404).json({ error: 'Measurement not found' });
+
+    const FIELDS = ['weight', 'waist', 'chest', 'arms', 'thighs', 'hips', 'neck'];
+    const sets = [];
+    const params = [];
+    for (const f of FIELDS) {
+      // `null` is a real instruction here -- it clears a reading that
+      // should not have been recorded -- so absence and null differ.
+      if (req.body[f] !== undefined) { sets.push(`${f} = ?`); params.push(req.body[f]); }
+    }
+    if (req.body.taken_at !== undefined) { sets.push('taken_at = ?'); params.push(req.body.taken_at); }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+
+    params.push(req.params.measurementId);
+    await db.run(`UPDATE measurements SET ${sets.join(', ')} WHERE id = ?`, params);
+
+    /* A corrected weight has to reach the weight series too, or the
+     * measurement row and the chart disagree -- the same split-brain the
+     * profile editor had. Only the row this measurement created is
+     * touched, matched on its own date. */
+    if (req.body.weight !== undefined && req.body.weight !== null) {
+      const d = String(req.body.taken_at || row.taken_at).slice(0, 10);
+      const existing = await db.q1(
+        'SELECT id FROM weight_logs WHERE client_id = ? AND date = ? ORDER BY created_at DESC LIMIT 1', [client.id, d]);
+      if (existing) await db.run('UPDATE weight_logs SET weight = ? WHERE id = ?', [req.body.weight, existing.id]);
+      const latest = await db.q1(
+        'SELECT weight FROM measurements WHERE client_id = ? AND weight IS NOT NULL ORDER BY taken_at DESC LIMIT 1', [client.id]);
+      if (latest?.weight != null) await db.run('UPDATE clients SET current_weight = ? WHERE id = ?', [latest.weight, client.id]);
+    }
+
+    await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'measurement_updated', data: { clientId: client.id, measurementId: req.params.measurementId } });
+    res.json({ ok: true });
+  });
+
+  r.delete('/:id/measurements/:measurementId', requireAuth, async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const row = await db.q1('SELECT * FROM measurements WHERE id = ?', [req.params.measurementId]);
+    if (!row || row.client_id !== client.id) return res.status(404).json({ error: 'Measurement not found' });
+
+    await db.run('DELETE FROM measurements WHERE id = ?', [req.params.measurementId]);
+
+    /* The weight series is NOT cascaded. A weight_log row is its own
+     * record of a weigh-in -- often the same reading the user also
+     * entered from the weight logger -- and silently deleting history
+     * the user did not ask to delete is exactly what section 18 of the
+     * spec forbids. Removing a tape measurement removes the tape
+     * measurement. */
+    if (row.weight != null) {
+      const latest = await db.q1(
+        'SELECT weight FROM measurements WHERE client_id = ? AND weight IS NOT NULL ORDER BY taken_at DESC LIMIT 1', [client.id]);
+      if (latest?.weight != null) await db.run('UPDATE clients SET current_weight = ? WHERE id = ?', [latest.weight, client.id]);
+    }
+
+    await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'measurement_deleted', data: { clientId: client.id, measurementId: req.params.measurementId } });
+    res.json({ ok: true });
+  });
+
   r.use(requireAuth, requireRole('GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'), orgScope);
   const clientCreateLimit = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
 
@@ -265,30 +377,6 @@ export default function clientRoutes(db) {
       await db.run('UPDATE clients SET last_checkin_at = ? WHERE id = ?', [now(), client.id]);
     }
     res.json({ ok: true });
-  });
-
-  // ---- measurements ----
-  r.get('/:id/measurements', async (req, res) => {
-    const client = await resolveClient(db, req, res, req.params.id);
-    if (!client) return;
-    res.json({ measurements: await db.q('SELECT * FROM measurements WHERE client_id = ? ORDER BY taken_at', [client.id]) });
-  });
-
-  r.post('/:id/measurements', validate(schemas.measurement), async (req, res) => {
-    const client = await resolveClient(db, req, res, req.params.id);
-    if (!client) return;
-    const b = req.body;
-    await db.run(
-      `INSERT INTO measurements (id, client_id, taken_at, weight, waist, chest, arms, thighs, hips, neck)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id('mea'), client.id, b.taken_at || now(), b.weight ?? null, b.waist ?? null, b.chest ?? null,
-       b.arms ?? null, b.thighs ?? null, b.hips ?? null, b.neck ?? null]);
-    if (b.weight) {
-      await db.run('UPDATE clients SET current_weight = ?, last_checkin_at = ? WHERE id = ?', [b.weight, now(), client.id]);
-      await db.run('INSERT INTO weight_logs (id, client_id, date, weight, source, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [id('wlg'), client.id, dayKey(), b.weight, 'manual', now()]);
-    }
-    res.status(201).json({ ok: true });
   });
 
   // ---- progress photos ----

@@ -7,7 +7,7 @@
  * Progress — nothing is rendered unless real rows back it, and no number
  * is fabricated to fill a card.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { Card } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -94,6 +94,10 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
   const keys = Object.keys(measurements || {}).filter((k) => measurements[k]?.length);
   const [sel, setSel] = useState(null);
   const [logging, setLogging] = useState(false);
+  // Bumped on any save or delete so the history refetches without the
+  // whole Progress page reloading underneath the reader.
+  const [historyKey, setHistoryKey] = useState(0);
+  const changed = () => { setHistoryKey((k) => k + 1); onLogged?.(); };
 
   // Renders even with NOTHING recorded -- previously the whole section
   // vanished when empty, which meant a user had no way to discover that
@@ -108,7 +112,7 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
           </div>
           {clientId && (
             logging
-              ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); onLogged?.(); }} onCancel={() => setLogging(false)} />
+              ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
               : <button className="btn mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
           )}
         </Card>
@@ -179,11 +183,12 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
 
         {clientId && (
           logging
-            ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); onLogged?.(); }} onCancel={() => setLogging(false)} />
+            ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
             : (
-              <button className="btn btn-sm mt-3 w-full" onClick={() => setLogging(true)}>Add today's measurements</button>
+              <button className="btn btn-sm mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
             )
         )}
+        <MeasurementHistory clientId={clientId} reloadKey={historyKey} onChanged={changed} />
 
         {series.length >= 2 ? (
           <div className="mt-3">
@@ -233,31 +238,62 @@ const MEASURE_FIELDS = [
   { key: 'neck', label: 'Neck', lo: 25, hi: 55 },
 ];
 
-/** Logs a measurement set through the EXISTING POST /clients/:id/measurements
- *  endpoint -- no new backend was added for this. Every field is optional:
- *  someone who only ever tracks their waist should not be forced to invent
- *  a neck measurement to save. */
-function MeasurementForm({ clientId, onDone, onCancel }) {
+/** Logs or corrects a measurement set.
+ *
+ *  Creating posts to the EXISTING POST /clients/:id/measurements; editing
+ *  PATCHes the one row. Every field is optional: someone who only ever
+ *  tracks their waist should not have to invent a neck measurement to
+ *  save, and clearing a field on an edit sends an explicit null so the
+ *  one bad reading goes without taking the set with it.
+ */
+function MeasurementForm({ clientId, onDone, onCancel, editing }) {
   const u = useUnits();
-  const [vals, setVals] = useState({});
+  const isEdit = !!editing;
+  const [vals, setVals] = useState(() => {
+    if (!editing) return {};
+    const out = {};
+    for (const f of MEASURE_FIELDS) {
+      const cm = editing[f.key];
+      if (cm != null) out[f.key] = String(u.lengthNum(cm, { decimals: u.isImperial ? 1 : 0 }));
+    }
+    return out;
+  });
+  /* THE DATE IS PART OF THE READING. Without it every entry lands on
+     today, so a set measured on Sunday and typed in on Tuesday is
+     recorded two days late -- and the trend line is drawn from these
+     dates. Defaults to today, which is the common case. */
+  const [takenOn, setTakenOn] = useState(() => (editing?.taken_at || new Date().toISOString()).slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
   const submit = async (e) => {
     e.preventDefault();
     const body = {};
+    let any = false;
     for (const f of MEASURE_FIELDS) {
+      const raw = vals[f.key];
       /* The number typed is in the reader's unit; the API stores
          centimetres. Converting here -- at the one boundary where a human
          entered it -- is what stops a series from becoming a mix of cm
          and inch rows, which no later formatter could untangle. */
-      const v = u.toCm(vals[f.key]);
-      if (Number.isFinite(v) && v > 0) body[f.key] = v;
+      const v = u.toCm(raw);
+      if (Number.isFinite(v) && v > 0) { body[f.key] = v; any = true; }
+      else if (isEdit && editing[f.key] != null && (raw ?? '').trim() === '') {
+        // Emptied a field that had a value: that is a deliberate clear.
+        body[f.key] = null; any = true;
+      }
     }
-    if (!Object.keys(body).length) { setErr('Enter at least one measurement'); return; }
+    if (!any) { setErr(isEdit ? 'Nothing changed' : 'Enter at least one measurement'); return; }
+    // Midday, not midnight: a date-only value parsed as UTC midnight lands
+    // on the previous day for anyone west of Greenwich.
+    body.taken_at = `${takenOn}T12:00:00.000Z`;
     setSaving(true);
     try {
-      await api(`/clients/${clientId}/measurements`, { method: 'POST', body: JSON.stringify(body) });
+      if (isEdit) {
+        await api(`/clients/${clientId}/measurements/${editing.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        await api(`/clients/${clientId}/measurements`, { method: 'POST', body: JSON.stringify(body) });
+      }
       onDone?.();
     } catch (e2) { setErr(e2.message); }
     setSaving(false);
@@ -270,8 +306,18 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
     return Number.isFinite(cm) && cm > 0 && (cm < f.lo || cm > f.hi);
   });
 
+  const today = new Date().toISOString().slice(0, 10);
+
   return (
     <form onSubmit={submit} className="mt-3 rounded-[var(--r-sm)] p-3" style={{ border: '1px solid var(--line)' }}>
+      <label className="block mb-2.5">
+        <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>Measured on</span>
+        <input
+          type="date" value={takenOn} max={today} aria-label="Date measured"
+          onChange={(e) => setTakenOn(e.target.value)}
+          className="input mt-0.5 w-full text-[13px]" style={{ minHeight: 40 }}
+        />
+      </label>
       <div className="grid grid-cols-3 gap-2">
         {MEASURE_FIELDS.map((f) => (
           <label key={f.key} className="block">
@@ -299,10 +345,142 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
       {err && <div className="mt-2 text-[11px]" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
       <div className="mt-3 flex gap-2">
         <button type="button" className="btn btn-sm flex-1" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn-primary btn-sm flex-1" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn-primary btn-sm flex-1" disabled={saving}>
+          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save'}
+        </button>
       </div>
-      <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>Leave any blank — only what you fill in is saved.</div>
+      <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>
+        {isEdit ? 'Clear a box to remove just that reading.' : 'Leave any blank — only what you fill in is saved.'}
+      </div>
     </form>
+  );
+}
+
+/**
+ * MEASUREMENT HISTORY — every set you have recorded, newest first.
+ *
+ * The charts above answer "which way is this going". This answers "what
+ * did I actually write down, and can I fix it" -- which until now had no
+ * answer at all, because nothing in the product could edit or remove a
+ * measurement once saved. A tape read into the wrong column was
+ * permanent, and it bends a trend line forever.
+ *
+ * Cards rather than a table: six columns of numbers on a 360px phone is
+ * a horizontal scroll pretending to be a data grid.
+ */
+function MeasurementHistory({ clientId, reloadKey, onChanged }) {
+  const u = useUnits();
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open || !clientId) return undefined;
+    let alive = true;
+    setErr(null);
+    api(`/clients/${clientId}/measurements`)
+      .then((r) => { if (alive) setRows(r.measurements || []); })
+      .catch((e) => { if (alive) setErr(e.message); });
+    return () => { alive = false; };
+  }, [clientId, open, reloadKey]);
+
+  const remove = async (row) => {
+    // Confirmed, and named: "are you sure?" over a list of six identical
+    // cards does not tell you WHICH one is about to go.
+    const when = new Date(row.taken_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    if (!window.confirm(`Delete the measurements recorded on ${when}? This cannot be undone.`)) return;
+    setBusyId(row.id);
+    try {
+      await api(`/clients/${clientId}/measurements/${row.id}`, { method: 'DELETE' });
+      setRows((rs) => (rs || []).filter((x) => x.id !== row.id));
+      onChanged?.();
+    } catch (e) { setErr(e.message); }
+    setBusyId(null);
+  };
+
+  if (!clientId) return null;
+
+  if (!open) {
+    return (
+      <button className="btn btn-sm mt-2 w-full" onClick={() => setOpen(true)}>
+        View measurement history
+      </button>
+    );
+  }
+
+  const ordered = [...(rows || [])].sort((a, b) => String(b.taken_at).localeCompare(String(a.taken_at)));
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-[10px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>History</div>
+        <button className="text-[10.5px] font-semibold tap-target" style={{ color: 'var(--accent)' }} onClick={() => { setOpen(false); setEditingId(null); }}>
+          Hide
+        </button>
+      </div>
+
+      {err && <div className="text-[11px] mb-2" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+      {rows === null && !err && <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Loading…</div>}
+      {rows && !ordered.length && (
+        <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Nothing recorded yet.</div>
+      )}
+
+      <div className="space-y-2">
+        {ordered.map((row) => {
+          const present = MEASURE_FIELDS.filter((f) => row[f.key] != null);
+          return (
+            <div key={row.id} className="rounded-[var(--r-sm)] p-2.5" style={{ border: '1px solid var(--line)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11.5px] font-bold" style={{ color: 'var(--ink)' }}>
+                  {new Date(row.taken_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    className="chip !text-[10px] tap-target"
+                    onClick={() => setEditingId(editingId === row.id ? null : row.id)}
+                    aria-label={`Edit the measurements from ${new Date(row.taken_at).toLocaleDateString()}`}
+                  >
+                    {editingId === row.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button
+                    className="chip !text-[10px] !border-bad/40 tap-target"
+                    style={{ color: 'var(--bad)' }}
+                    disabled={busyId === row.id}
+                    onClick={() => remove(row)}
+                    aria-label={`Delete the measurements from ${new Date(row.taken_at).toLocaleDateString()}`}
+                  >
+                    {busyId === row.id ? '…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+
+              {present.length ? (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {present.map((f) => (
+                    <span key={f.key} className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
+                      {f.label} <strong style={{ color: 'var(--ink)' }}>{u.lengthNum(row[f.key], { decimals: 1 })} {u.lengthUnit}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-1 text-[10.5px]" style={{ color: 'var(--faint)' }}>No readings left in this entry.</div>
+              )}
+
+              {editingId === row.id && (
+                <MeasurementForm
+                  clientId={clientId}
+                  editing={row}
+                  onCancel={() => setEditingId(null)}
+                  onDone={() => { setEditingId(null); onChanged?.(); }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
