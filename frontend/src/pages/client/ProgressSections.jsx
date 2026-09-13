@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
+import { useFetch } from '../../utils.js';
 import { Card } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
@@ -116,6 +117,7 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
               : <button className="btn mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
           )}
         </Card>
+        {clientId && <CustomMetrics />}
       </Section>
     );
   }
@@ -219,6 +221,11 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
           </div>
         )}
       </Card>
+
+      {/* The other half of "measurements": the things only this person
+          thought to track. One screen, because the product had two and
+          the navigation already called both of them Measurements. */}
+      {clientId && <CustomMetrics />}
     </Section>
   );
 }
@@ -481,6 +488,219 @@ function MeasurementHistory({ clientId, reloadKey, onChanged }) {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * ANYTHING ELSE YOU WANT TO TRACK.
+ *
+ * The product had two places for "a number about me, over time" and the
+ * navigation could not tell them apart: Progress held body measurements
+ * (fixed sites, metric storage) and Profile held "My Metrics" (anything
+ * you name yourself) -- and the sidebar row pointing at the second one
+ * was labelled "Measurements". Two screens, one job, one name between
+ * them. So they are one screen now: the six body sites above, and
+ * whatever else you have defined here, with the same logging and the
+ * same history underneath.
+ *
+ * THE UNIT STAYS YOURS. Body sites are stored in centimetres and drawn
+ * in whatever you read in, because the app knows what they are. A custom
+ * metric's unit is a label you typed -- "steps", "hours", "mg" -- so it
+ * is stored and shown exactly as entered and never converted. Guessing
+ * that "kg" on a custom metric means bodyweight would be the app being
+ * clever about a number it does not understand.
+ */
+function CustomMetrics() {
+  const metrics = useFetch(() => api('/me/metrics'), []);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ name: '', unit: '', type: 'number', frequency: 'weekly', target: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [logFor, setLogFor] = useState(null);
+  const [logValue, setLogValue] = useState('');
+
+  const rows = metrics.data?.metrics || [];
+
+  const create = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setErr('Give it a name'); return; }
+    setBusy(true); setErr('');
+    try {
+      await api('/me/metrics', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name.trim(),
+          unit: form.unit.trim() || null,
+          type: form.type,
+          frequency: form.frequency,
+          target: form.target === '' ? null : Number(form.target),
+        }),
+      });
+      setForm({ name: '', unit: '', type: 'number', frequency: 'weekly', target: '' });
+      setAdding(false);
+      metrics.reload({ silent: true });
+    } catch (e2) { setErr(e2.message); }
+    setBusy(false);
+  };
+
+  const logEntry = async (m) => {
+    const v = Number(logValue);
+    if (!Number.isFinite(v)) { setErr('Enter a number'); return; }
+    setBusy(true); setErr('');
+    try {
+      await api(`/me/metrics/${m.id}/entries`, { method: 'POST', body: JSON.stringify({ value: v }) });
+      setLogFor(null); setLogValue('');
+      metrics.reload({ silent: true });
+    } catch (e2) { setErr(e2.message); }
+    setBusy(false);
+  };
+
+  const remove = async (m) => {
+    if (!window.confirm(
+      `Delete "${m.name}" and every reading you have recorded for it?\n\nThis cannot be undone.`,
+    )) return;
+    try {
+      await api(`/me/metrics/${m.id}`, { method: 'DELETE' });
+      metrics.reload({ silent: true });
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
+          Anything else you track
+        </div>
+        {!adding && (
+          <button className="text-[10.5px] font-semibold tap-target" style={{ color: 'var(--accent)' }}
+                  onClick={() => { setAdding(true); setErr(''); }}>
+            + Add
+          </button>
+        )}
+      </div>
+
+      {err && <div className="mt-2 text-[11px]" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+
+      {adding && (
+        <form onSubmit={create} className="mt-2.5 rounded-[var(--r-sm)] p-3" style={{ border: '1px solid var(--line)' }}>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>What</span>
+              <input className="input mt-0.5 w-full text-[13px]" style={{ minHeight: 40 }} autoFocus
+                     placeholder="Resting heart rate" aria-label="Metric name"
+                     value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>Unit</span>
+              <input className="input mt-0.5 w-full text-[13px]" style={{ minHeight: 40 }}
+                     placeholder="bpm" aria-label="Unit"
+                     value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <label className="block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>How often</span>
+              <select className="input mt-0.5 w-full text-[13px]" style={{ minHeight: 40 }} aria-label="How often"
+                      value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>Target</span>
+              <input className="input mt-0.5 w-full text-[13px] tabular-nums" style={{ minHeight: 40 }}
+                     type="number" placeholder="optional" aria-label="Target"
+                     value={form.target} onChange={(e) => setForm((f) => ({ ...f, target: e.target.value }))} />
+            </label>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="btn btn-sm flex-1" onClick={() => { setAdding(false); setErr(''); }}>Cancel</button>
+            <button type="submit" className="btn-primary btn-sm flex-1" disabled={busy}>
+              {busy ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+          <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>
+            The unit is shown exactly as you type it — custom metrics are never converted.
+          </div>
+        </form>
+      )}
+
+      {!rows.length && !adding && (
+        <p className="mt-2 text-[11.5px] leading-snug" style={{ color: 'var(--faint)' }}>
+          Resting heart rate, sleep hours, step count, a lift you want to watch — anything with a
+          number and a date belongs here.
+        </p>
+      )}
+
+      <div className="mt-2.5 space-y-2">
+        {rows.map((m) => {
+          const entries = m.entries || [];
+          const values = entries.map((e) => e.value).reverse();
+          return (
+            <div key={m.id} className="rounded-[var(--r-sm)] p-2.5" style={{ border: '1px solid var(--line)' }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[12.5px] font-bold truncate" style={{ color: 'var(--ink)' }}>
+                    {m.name}
+                    {m.unit && <span className="ml-1 text-[10px] font-medium" style={{ color: 'var(--faint)' }}>{m.unit}</span>}
+                  </div>
+                  <div className="text-[10.5px] mt-0.5 tabular-nums" style={{ color: 'var(--mute)' }}>
+                    {m.latest
+                      ? <>Latest <strong style={{ color: 'var(--ink)' }}>{m.latest.value}{m.unit ? ` ${m.unit}` : ''}</strong> · {String(m.latest.date).slice(0, 10)}</>
+                      : 'Nothing recorded yet'}
+                    {m.target != null && <> · target {m.target}{m.unit ? ` ${m.unit}` : ''}</>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button className="chip !text-[10px] tap-target"
+                          onClick={() => { setLogFor(logFor === m.id ? null : m.id); setLogValue(''); setErr(''); }}
+                          aria-label={`Log a reading for ${m.name}`}>
+                    {logFor === m.id ? 'Close' : 'Log'}
+                  </button>
+                  <button className="chip !text-[10px] !border-bad/40 tap-target" style={{ color: 'var(--bad)' }}
+                          onClick={() => remove(m)} aria-label={`Delete ${m.name}`}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              {values.length > 1 && <MiniTrend values={values} />}
+
+              {logFor === m.id && (
+                <div className="mt-2 flex gap-2">
+                  <input className="input flex-1 text-[13px] tabular-nums" style={{ minHeight: 40 }}
+                         type="number" inputMode="decimal" autoFocus
+                         placeholder={m.unit || 'value'} aria-label={`New reading for ${m.name}`}
+                         value={logValue} onChange={(e) => setLogValue(e.target.value)}
+                         onKeyDown={(e) => { if (e.key === 'Enter') logEntry(m); }} />
+                  <button className="btn-primary btn-sm shrink-0" disabled={busy} onClick={() => logEntry(m)}>
+                    {busy ? '…' : 'Save'}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/** A bare sparkline. No axis, no labels -- it answers "which way" and
+ *  the number above it answers "how much". */
+function MiniTrend({ values }) {
+  const v = (values || []).filter((n) => Number.isFinite(Number(n))).map(Number);
+  if (v.length < 2) return null;
+  const min = Math.min(...v);
+  const max = Math.max(...v);
+  const span = max - min || 1;
+  const pts = v.map((n, i) => `${(i / (v.length - 1)) * 100},${28 - ((n - min) / span) * 24}`).join(' ');
+  return (
+    <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 w-full" style={{ height: 30 }} aria-hidden="true">
+      <polyline points={pts} fill="none" stroke="var(--m-body)" strokeWidth="1.6"
+                vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

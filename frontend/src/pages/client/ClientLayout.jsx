@@ -48,7 +48,11 @@ const NAV = [
 const PROFILE_MENU = [
   [
     { to: '/app/client/profile', label: 'Profile', icon: 'user' },
-    { to: '/app/client/profile?section=metrics', label: 'Measurements', icon: 'ruler' },
+    /* One destination, because there is now one Measurements screen. This
+       pointed at Profile's "My Metrics" panel while Progress held body
+       measurements under the same word -- two screens, one job, and a
+       nav row that named the wrong one. */
+    { to: '/app/client/progress?section=measurements', label: 'Measurements', icon: 'ruler' },
     { to: '/app/client/profile?section=goal', label: 'Goals', icon: 'target' },
   ],
   [

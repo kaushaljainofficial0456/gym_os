@@ -1567,6 +1567,9 @@ export default function Progress() {
   // bests grid uses, rather than a second, near-identical sheet.
   const [deepExerciseId, setDeepExercise] = useState(null);
   const prRef = useRef(null);
+  // Measurements is now the single home for body sites AND custom
+  // metrics, so the sidebar's Measurements row deep-links straight to it.
+  const measureRef = useRef(null);
 
   const intelFetch = useFetch(() => api(`/tracking/me/progress/intel?days=${period}`), [period]);
   // Photos/measurements still come from the original progress endpoint --
@@ -1579,10 +1582,12 @@ export default function Progress() {
   // Deep link from Workout's "My PRs": open on the records, don't dump the
   // user at the top of a long page to hunt for them.
   useEffect(() => {
-    if (params.get('section') !== 'prs') return;
-    if (!intel) return;
+    const want = params.get('section');
+    if (!want || !intel) return undefined;
+    const target = want === 'prs' ? prRef : want === 'measurements' ? measureRef : null;
+    if (!target) return undefined;
     const t = setTimeout(() => {
-      prRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
     return () => clearTimeout(t);
   }, [params, intel]);
@@ -1671,6 +1676,7 @@ export default function Progress() {
 
       <NutritionSection intel={intel} />
 
+      <div ref={measureRef} />
       <MeasurementsSection
         measurements={intel.measurements} Section={Section} ChipRow={ChipRow} NeedMore={NeedMore}
         clientId={clientId} onLogged={() => intelFetch.reload({ silent: true })}

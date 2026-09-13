@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams, Link } from 'react-router-dom';
+import { useOutletContext, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, GOAL_LABEL } from '../../utils.js';
 import { useTheme } from '../../themeContext.jsx';
@@ -25,7 +25,13 @@ const EXP = [['BEGINNER', 'Beginner'], ['INTERMEDIATE', 'Intermediate'], ['ADVAN
 const PROFILE_SECTIONS = [
   { id: 'goal', label: 'Goal & Setup', icon: 'target', desc: 'View progress and update your goals' },
   { id: 'equipment', label: 'My Equipment', icon: 'strength', desc: 'Manage your gym equipment' },
-  { id: 'metrics', label: 'My Metrics', icon: 'chart', desc: 'Track personal measurements' },
+  /* "My Metrics" lived here and body measurements lived on Progress --
+     two screens for "a number about me over time", and the sidebar row
+     for this one was itself labelled "Measurements". They are one screen
+     now (Progress), and this row points there rather than being a second
+     half-version of it. */
+  { id: 'metrics', label: 'Measurements', icon: 'ruler', desc: 'Body measurements and anything else you track',
+    href: '/app/client/progress?section=measurements' },
   { id: 'nutrition-tracker', label: 'Nutrition Tracker', icon: 'food', desc: 'Calendar and full logging history' },
   { id: 'coach', label: 'Coach Preference', icon: 'chat', desc: 'Coach settings and messages' },
   { id: 'dashboard', label: 'Home Screen', icon: 'clipboard', desc: 'Choose which cards appear, and in what order' },
@@ -239,6 +245,7 @@ function ThemeToggle() {
 
 export default function Profile() {
   const units = useUnits();
+  const nav = useNavigate();
   /* Which panel is open lives in the URL, not only in state, so the
      header menu's "Measurements" / "Goals" rows can land on the panel they
      name instead of dumping you on the hub to find it yourself. Back still
@@ -1176,8 +1183,13 @@ Save it anyway?`);
             <button
               key={section.id}
               onClick={() => {
-                if (section.id === 'help') { window.location.href = '/app/client/help'; return; }
-                if (section.id === 'nutrition-tracker') { window.location.href = '/app/client/nutrition-tracker'; return; }
+                /* A row with an href goes somewhere real instead of
+                   opening a panel here -- which is how "My Metrics" came
+                   to be a second, weaker version of the Measurements
+                   screen that already existed on Progress. */
+                if (section.href) { nav(section.href); return; }
+                if (section.id === 'help') { nav('/app/client/help'); return; }
+                if (section.id === 'nutrition-tracker') { nav('/app/client/nutrition-tracker'); return; }
                 setActiveSection(section.id);
               }}
               className="w-full card p-4 flex items-center gap-4 text-left hover:border-gold/40 transition-colors group"
