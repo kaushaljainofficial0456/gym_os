@@ -265,15 +265,36 @@ export default function Home() {
         {today.name}
       </h1>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]"
+      {/* THE MUSCLES ARE THE ANSWER TO A DIFFERENT QUESTION than the
+          length of the session, so they stopped being one dash-separated
+          run-on. "QUADS · HAMSTRINGS · CORE — 5 exercises — 58 min" made
+          the reader parse a sentence to find two facts. Chips for what
+          you are training; one quiet line for how much of it. */}
+      {!!today.focus?.length && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {today.focus.slice(0, 4).map((f) => (
+            <span
+              key={f.muscle}
+              className="rounded-full px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-[.06em]"
+              style={{
+                background: 'rgb(var(--accent-rgb) / .10)',
+                color: 'var(--accent)',
+                border: '1px solid rgb(var(--accent-rgb) / .22)',
+              }}
+            >
+              {f.muscle}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-2 flex items-center gap-2 text-[12px] tabular-nums"
            style={{ color: 'var(--mute)' }}>
-        {!!today.focus?.length && <span>{today.focus.map((f) => f.muscle).join(' · ')}</span>}
-        {!!today.focus?.length && <span style={{ color: 'var(--faint)' }}>—</span>}
-        <span>{totalEx} exercises</span>
+        <span>{totalEx} {totalEx === 1 ? 'exercise' : 'exercises'}</span>
         {today.meta?.estMinutes && (
           <>
-            <span style={{ color: 'var(--faint)' }}>—</span>
-            <span>{today.meta.estMinutes} min</span>
+            <span aria-hidden="true" style={{ color: 'var(--line)' }}>·</span>
+            <span>about {today.meta.estMinutes} min</span>
           </>
         )}
       </div>
@@ -348,9 +369,15 @@ export default function Home() {
         />
         <div className="relative">
           <Reveal>
+            {/* The date, because "today" is the whole premise of this
+                screen and nothing on it said which day that was. Quiet
+                and uppercase: it orients, it does not announce. */}
+            <div className="text-[10px] font-bold uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
             {/* Sentient, the one serif on the screen: this is the only
                 human sentence here, everything else is data. */}
-            <div className="font-serif text-[15px]" style={{ color: 'var(--mute)' }}>
+            <div className="font-serif text-[15px] mt-1" style={{ color: 'var(--mute)' }}>
               {greet}, {c.name.split(' ')[0]}
             </div>
           </Reveal>

@@ -625,81 +625,172 @@ Save it anyway?`);
     const goBack = () => setActiveSection(null);
 
     switch (sectionId) {
-      case 'goal':
+      case 'goal': {
+        /* GOAL & SETUP — two different jobs, told apart.
+         *
+         * This was one flat card: a micro-label, then seven inputs in a
+         * grid, then a save button. Nothing said which fields were the
+         * GOAL (what you are aiming at, which you change when your mind
+         * changes) and which were YOU (height, age, sex — facts the
+         * calorie model needs, set once and rarely touched). So every
+         * visit presented seven equally-weighted boxes and left you to
+         * work out which two mattered today.
+         *
+         * The journey now leads, because that is what the page is for.
+         * Then the goal itself. Then, quietly and last, the physical
+         * details — present, editable, and not competing.
+         */
+        const reached = c.targetWeight != null && c.startWeight != null
+          && Math.sign(c.targetWeight - c.currentWeight) !== Math.sign(c.targetWeight - c.startWeight);
+        const remaining = c.targetWeight != null ? Math.abs(c.currentWeight - c.targetWeight) : null;
+
         return (
           <div className="space-y-4 anim-fadeUp">
             <BackButton onClick={goBack} />
-            {/* goal progress */}
+
+            {/* ── where you are ── */}
             <div className="card p-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="t-micro">Goal progress</div>
-                <div className="font-grotesk text-xs font-bold text-gold">{Math.round(progress)}%</div>
+              <div className="flex items-center gap-4">
+                <Ring
+                  value={Math.max(0, Math.min(100, progress)) / 100}
+                  size={72} stroke={7} color="var(--m-body)"
+                  label={`${Math.round(progress)} percent of the way to your target`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="t-micro">Goal progress</div>
+                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                    <span className="font-grotesk text-[26px] font-black leading-none tabular-nums"
+                          style={{ color: 'var(--ink)' }}>{Math.round(progress)}</span>
+                    <span className="text-[12px]" style={{ color: 'var(--faint)' }}>%</span>
+                  </div>
+                  <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>
+                    {c.targetWeight == null
+                      ? 'No target set yet'
+                      : reached
+                        ? `Target reached — ${units.fmtWeight(remaining)} past it`
+                        : `${units.fmtWeight(remaining)} to go`}
+                  </div>
+                </div>
               </div>
-              <div className="h-2 rounded-full bg-tint/8 overflow-hidden mb-2">
-                <div className="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700" style={{ width: `${progress}%` }} />
-              </div>
-              <div className="flex justify-between text-[11px] text-mute font-grotesk">
+
+              <div className="mt-3 flex items-center justify-between gap-2 text-[10.5px] tabular-nums"
+                   style={{ color: 'var(--faint)' }}>
                 <span>Start {units.fmtWeight(c.startWeight)}</span>
-                <span>Now {units.fmtWeight(c.currentWeight)}</span>
-                <span>Target {units.fmtWeight(c.targetWeight)} · {c.goalDate?.slice(0, 10) || '—'}</span>
+                <span style={{ color: 'var(--ink)' }}>Now {units.fmtWeight(c.currentWeight)}</span>
+                <span>Target {units.fmtWeight(c.targetWeight)}</span>
               </div>
+              {c.goalDate && (
+                <div className="mt-1 text-[10.5px] text-center" style={{ color: 'var(--faint)' }}>
+                  by {c.goalDate.slice(0, 10)}
+                </div>
+              )}
             </div>
-            {/* goal editor */}
-            <div className="card p-4">
-              <div className="t-micro mb-3">My goal & setup</div>
-              {gForm && (
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-[10px] text-faint mb-1.5 font-grotesk">PRIMARY GOAL</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {GOALS.map(([v, l]) => (
+
+            {gForm && (
+              <>
+                {/* ── what you are aiming at ── */}
+                <div className="card p-4">
+                  <div className="t-micro mb-3">What you're working toward</div>
+
+                  <div className="text-[10px] mb-1.5 font-grotesk" style={{ color: 'var(--faint)' }}>PRIMARY GOAL</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {GOALS.map(([v, l]) => {
+                      const on = gForm.goal === v;
+                      return (
                         <button key={v} onClick={() => setGForm((f) => ({ ...f, goal: v }))}
-                          className={`chip ${gForm.goal === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
-                      ))}
-                    </div>
+                          aria-pressed={on}
+                          className="rounded-xl px-3 text-left text-[12.5px] font-semibold transition-colors"
+                          style={{
+                            minHeight: 44,
+                            border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                            background: on ? 'var(--bg2)' : 'transparent',
+                            color: on ? 'var(--ink)' : 'var(--mute)',
+                          }}>{l}</button>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <div className="text-[10px] text-faint mb-1.5 font-grotesk">EXPERIENCE</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {EXP.map(([v, l]) => (
-                        <button key={v} onClick={() => setGForm((f) => ({ ...f, experience: v }))}
-                          className={`chip ${gForm.experience === v ? '!border-gold/50 !text-gold bg-gold/10' : ''}`}>{l}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* THE UNIT IN THE LABEL HAS TO BE THE UNIT IN THE BOX.
-                        These three fields were labelled "(CM)" and "(KG)"
-                        and wrote whatever was typed straight to the
-                        canonical column. Once imperial existed that was a
-                        data-corruption bug, not a cosmetic one: a reader
-                        seeing pounds everywhere else types 165 here and
-                        their stored weight becomes 165 kg. The inputs now
-                        convert at the boundary and say which unit they
-                        are in. */}
+
+                  <div className="grid grid-cols-2 gap-2 mt-3">
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">HEIGHT ({units.lengthUnit.toUpperCase()})</span>
+                      <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>
+                        TARGET WEIGHT ({units.weightUnit.toUpperCase()})
+                      </span>
+                      <WeightInput className="input mt-1" valueKg={gForm.targetWeight} emptyValue={''}
+                        ariaLabel={`Target weight in ${units.isImperial ? 'pounds' : 'kilograms'}`}
+                        onChangeKg={(kg) => setGForm((f) => ({ ...f, targetWeight: kg }))} />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>TARGET DATE</span>
+                      <input type="date" className="input mt-1" value={gForm.goalDate || ''}
+                        aria-label="Target date"
+                        onChange={(e) => setGForm((f) => ({ ...f, goalDate: e.target.value }))} />
+                    </label>
+                  </div>
+                  <p className="text-[10.5px] mt-2 leading-snug" style={{ color: 'var(--faint)' }}>
+                    A date turns the target into a pace you can check against — without one, Progress
+                    can only say how far you've come.
+                  </p>
+                </div>
+
+                {/* ── who the maths is about ── */}
+                <div className="card p-4">
+                  <div className="t-micro">About you</div>
+                  <p className="text-[10.5px] mt-0.5 mb-3 leading-snug" style={{ color: 'var(--faint)' }}>
+                    Used to work out your calorie and energy targets. Set once — you'll rarely come back here.
+                  </p>
+
+                  <div className="text-[10px] mb-1.5 font-grotesk" style={{ color: 'var(--faint)' }}>EXPERIENCE</div>
+                  <div className="flex gap-1.5">
+                    {EXP.map(([v, l]) => {
+                      const on = gForm.experience === v;
+                      return (
+                        <button key={v} onClick={() => setGForm((f) => ({ ...f, experience: v }))}
+                          aria-pressed={on}
+                          className="flex-1 rounded-xl px-2 text-[12px] font-semibold transition-colors"
+                          style={{
+                            minHeight: 42,
+                            border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                            background: on ? 'var(--bg2)' : 'transparent',
+                            color: on ? 'var(--ink)' : 'var(--mute)',
+                          }}>{l}</button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    {/* THE UNIT IN THE LABEL HAS TO BE THE UNIT IN THE BOX.
+                        These were labelled "(CM)" and "(KG)" and wrote
+                        whatever was typed straight to the canonical column,
+                        so once imperial existed, typing 165 meaning pounds
+                        stored 165 kg. */}
+                    <label className="block">
+                      <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>
+                        HEIGHT ({units.lengthUnit.toUpperCase()})
+                      </span>
                       <LengthInput className="input mt-1" placeholder={units.isImperial ? '69' : '170'}
                         valueCm={gForm.heightCm} emptyValue={''}
                         ariaLabel={`Height in ${units.isImperial ? 'inches' : 'centimetres'}`}
                         onChangeCm={(cm) => setGForm((f) => ({ ...f, heightCm: cm }))} />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">CURRENT WEIGHT ({units.weightUnit.toUpperCase()})</span>
+                      <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>
+                        CURRENT WEIGHT ({units.weightUnit.toUpperCase()})
+                      </span>
                       <WeightInput className="input mt-1" placeholder={units.isImperial ? '165' : '75'}
                         valueKg={gForm.currentWeight} emptyValue={''}
                         ariaLabel={`Current weight in ${units.isImperial ? 'pounds' : 'kilograms'}`}
                         onChangeKg={(kg) => setGForm((f) => ({ ...f, currentWeight: kg }))} />
                     </label>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">AGE</span>
-                      <input type="number" className="input mt-1" placeholder="25" value={gForm.age ?? ''} onChange={(e) => setGForm((f) => ({ ...f, age: e.target.value }))} />
+                      <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>AGE</span>
+                      <input type="number" className="input mt-1" placeholder="25" aria-label="Age"
+                        value={gForm.age ?? ''}
+                        onChange={(e) => setGForm((f) => ({ ...f, age: e.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">SEX</span>
-                      <select className="input mt-1" value={gForm.sex || ''} onChange={(e) => setGForm((f) => ({ ...f, sex: e.target.value }))}>
+                      <span className="text-[10px] font-grotesk" style={{ color: 'var(--faint)' }}>SEX</span>
+                      <select className="input mt-1" value={gForm.sex || ''} aria-label="Sex"
+                        onChange={(e) => setGForm((f) => ({ ...f, sex: e.target.value }))}>
                         <option value="">Select…</option>
                         <option value="MALE">Male</option>
                         <option value="FEMALE">Female</option>
@@ -707,24 +798,19 @@ Save it anyway?`);
                       </select>
                     </label>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">TARGET WEIGHT ({units.weightUnit.toUpperCase()})</span>
-                      <WeightInput className="input mt-1" valueKg={gForm.targetWeight} emptyValue={''}
-                        ariaLabel={`Target weight in ${units.isImperial ? 'pounds' : 'kilograms'}`}
-                        onChangeKg={(kg) => setGForm((f) => ({ ...f, targetWeight: kg }))} />
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] text-faint font-grotesk">TARGET DATE</span>
-                      <input type="date" className="input mt-1" value={gForm.goalDate || ''} onChange={(e) => setGForm((f) => ({ ...f, goalDate: e.target.value }))} />
-                    </label>
-                  </div>
-                  <button className="btn-primary w-full" onClick={saveGoal} disabled={savingG}>{savingG ? 'Saving…' : 'Save my goal'}</button>
                 </div>
-              )}
-            </div>
+
+                {/* One save for the screen, pinned to the bottom of the
+                    flow rather than buried inside one of the cards. */}
+                <button className="btn-primary w-full" onClick={saveGoal} disabled={savingG}
+                        style={{ minHeight: 48 }}>
+                  {savingG ? 'Saving…' : 'Save changes'}
+                </button>
+              </>
+            )}
           </div>
         );
+      }
 
       case 'equipment':
         return (

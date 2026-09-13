@@ -99,6 +99,13 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
   // Bumped on any save or delete so the history refetches without the
   // whole Progress page reloading underneath the reader.
   const [historyKey, setHistoryKey] = useState(0);
+  /* The most recent reading per site, in canonical cm, so the log form
+     can show what each figure was last time and what just changed. */
+  const previous = Object.fromEntries(
+    Object.entries(measurements || {})
+      .map(([k, series]) => [k, series?.length ? series[series.length - 1].value : null])
+      .filter(([, v]) => v != null),
+  );
   const changed = () => { setHistoryKey((k) => k + 1); onLogged?.(); };
 
   // Renders even with NOTHING recorded -- previously the whole section
@@ -114,7 +121,7 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
           </div>
           {clientId && (
             logging
-              ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
+              ? <MeasurementForm clientId={clientId} previous={previous} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
               : <button className="btn mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
           )}
         </Card>
@@ -186,7 +193,7 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
 
         {clientId && (
           logging
-            ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
+            ? <MeasurementForm clientId={clientId} previous={previous} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
             : (
               <button className="btn btn-sm mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
             )
@@ -254,7 +261,7 @@ const MEASURE_FIELDS = [
  *  save, and clearing a field on an edit sends an explicit null so the
  *  one bad reading goes without taking the set with it.
  */
-function MeasurementForm({ clientId, onDone, onCancel, editing }) {
+function MeasurementForm({ clientId, onDone, onCancel, editing, previous }) {
   const u = useUnits();
   const isEdit = !!editing;
   const [vals, setVals] = useState(() => {
@@ -326,19 +333,40 @@ function MeasurementForm({ clientId, onDone, onCancel, editing }) {
           className="input mt-0.5 w-full text-[13px]" style={{ minHeight: 40 }}
         />
       </label>
-      <div className="grid grid-cols-3 gap-2">
-        {MEASURE_FIELDS.map((f) => (
-          <label key={f.key} className="block">
-            <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{f.label}</span>
-            <input
-              type="number" inputMode="decimal" step="0.1" min="0" placeholder={u.lengthUnit}
-              aria-label={`${f.label} in ${u.isImperial ? 'inches' : 'centimetres'}`}
-              value={vals[f.key] || ''}
-              onChange={(ev) => setVals((v) => ({ ...v, [f.key]: ev.target.value }))}
-              className="input mt-0.5 w-full text-[13px] tabular-nums" style={{ minHeight: 40 }}
-            />
-          </label>
-        ))}
+      {/* EACH FIELD KNOWS WHAT IT WAS LAST TIME.
+          Six bare number boxes made this pure data entry: you typed a
+          figure with no idea whether it was progress, and found out
+          later on a chart. Showing the previous reading turns the same
+          form into the thing people actually came for -- the change --
+          and it appears as you type, in your own unit. */}
+      <div className="grid grid-cols-2 gap-2 min-[380px]:grid-cols-3">
+        {MEASURE_FIELDS.map((f) => {
+          const prevCm = previous?.[f.key];
+          const nowCm = u.toCm(vals[f.key]);
+          const delta = (Number.isFinite(nowCm) && nowCm > 0 && Number.isFinite(Number(prevCm)))
+            ? nowCm - Number(prevCm) : null;
+          const tone = delta == null || Math.abs(delta) < 0.05
+            ? 'var(--faint)' : delta < 0 ? 'var(--good)' : 'var(--warn)';
+          return (
+            <label key={f.key} className="block">
+              <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{f.label}</span>
+              <input
+                type="number" inputMode="decimal" step="0.1" min="0" placeholder={u.lengthUnit}
+                aria-label={`${f.label} in ${u.isImperial ? 'inches' : 'centimetres'}`}
+                value={vals[f.key] || ''}
+                onChange={(ev) => setVals((v) => ({ ...v, [f.key]: ev.target.value }))}
+                className="input mt-0.5 w-full text-[14px] tabular-nums" style={{ minHeight: 46 }}
+              />
+              <span className="block mt-0.5 text-[9.5px] tabular-nums truncate" style={{ color: tone }}>
+                {delta != null
+                  ? (Math.abs(delta) < 0.05
+                      ? 'no change'
+                      : `${delta < 0 ? '−' : '+'}${u.lengthNum(Math.abs(delta), { decimals: 1 })} ${u.lengthUnit}`)
+                  : (prevCm != null ? `was ${u.lengthNum(prevCm, { decimals: 1 })}` : '—')}
+              </span>
+            </label>
+          );
+        })}
       </div>
       {/* A value far outside the human range is nearly always a unit
           mix-up or a slipped decimal, and saying so BEFORE the save is

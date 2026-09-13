@@ -86,13 +86,10 @@ async function exchangeCode(code, redirectUri) {
   // access token is already valid) -- it just means webhook auto-sync
   // can't resolve this user until the next successful sync retries it.
   let externalAccountId = null;
-  try {
-    const profileRes = await fetch(`${API_BASE}/user/profile/basic`, { headers: { Authorization: `Bearer ${body.access_token}` } });
-    if (profileRes.ok) {
-      const profile = await profileRes.json();
-      externalAccountId = profile.user_id != null ? String(profile.user_id) : null;
-    }
-  } catch { /* best-effort -- see comment above */ }
+  // One definition of "ask WHOOP who this is", shared with the sync-time
+  // backfill below, so the two cannot drift on what counts as the id.
+  try { externalAccountId = await fetchExternalAccountId(body.access_token); }
+  catch { /* best-effort -- see comment above */ }
   return {
     accessToken: body.access_token,
     refreshToken: body.refresh_token,
@@ -134,6 +131,18 @@ function verifyWebhookSignature(rawBody, signature, timestamp) {
  *     access token and keeping the old refresh token means the next
  *     refresh fails with an invalid_grant and the user has to reconnect
  *     by hand. See health.js's ensureFreshToken, which does persist it. */
+/** WHOOP's own numeric user id for this access token.
+ *
+ *  Split out of exchangeCode so a sync can retry it: the webhook matches
+ *  deliveries by this id, and a connection that missed it at OAuth time
+ *  could never receive one. See health.js's syncOneConnection. */
+async function fetchExternalAccountId(accessToken) {
+  const res = await fetch(`${API_BASE}/user/profile/basic`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) return null;
+  const profile = await res.json();
+  return profile?.user_id != null ? String(profile.user_id) : null;
+}
+
 async function refreshAccessToken(refreshToken) {
   requireCredentials();
   const res = await fetch(TOKEN_URL, {
@@ -290,6 +299,7 @@ export default {
   getAuthorizeUrl,
   exchangeCode,
   refreshAccessToken,
+  fetchExternalAccountId,
   incrementalSync,
   normalizeWorkout,
   normalizeRecovery,

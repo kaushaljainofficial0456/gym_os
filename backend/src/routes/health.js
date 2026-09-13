@@ -132,6 +132,33 @@ async function syncOneConnection(db, provider, conn) {
   await db.run('UPDATE health_provider_connections SET sync_status = ?, updated_at = ? WHERE id = ?', ['syncing', now(), conn.id]);
   try {
     conn = await ensureFreshToken(db, provider, conn);
+
+    /* BACKFILL THE PROVIDER'S OWN USER ID, if the OAuth callback never
+     * captured it.
+     *
+     * The webhook matches an incoming delivery to a connection by
+     * external_account_id. That column is written once, at callback time,
+     * by a best-effort profile fetch -- and exchangeCode's own comment
+     * says "the next successful sync retries it". Nothing ever did. So a
+     * single transient failure during connect (a blip, a 5xx, a rate
+     * limit) left a connection that syncs perfectly when asked and can
+     * NEVER receive a webhook: the lookup finds no row and acks 200, so
+     * nothing even looks broken. That is "my workouts don't sync
+     * automatically" with no error anywhere to explain it.
+     *
+     * Now the retry the comment promised actually happens, on any sync of
+     * a connection missing the id. */
+    if (!conn.external_account_id && provider.fetchExternalAccountId) {
+      try {
+        const externalId = await provider.fetchExternalAccountId(conn.access_token);
+        if (externalId) {
+          await db.run('UPDATE health_provider_connections SET external_account_id = ?, updated_at = ? WHERE id = ?',
+            [String(externalId), now(), conn.id]);
+          conn = { ...conn, external_account_id: String(externalId) };
+        }
+      } catch { /* best-effort, exactly as at connect time -- never fail a sync over it */ }
+    }
+
     let result;
     try {
       result = await provider.incrementalSync({ accessToken: conn.access_token, cursor: conn.sync_cursor, since: syncSince(conn) });
@@ -240,6 +267,13 @@ async function hasNewerHealthData(db, { userId, date, computedAt }) {
   if (!row?.newest) return false;
   return Date.parse(row.newest) > Date.parse(computedAt);
 }
+
+/* Exposed for tests only. syncOneConnection is the one place the
+   token-refresh, backfill and record-upsert steps compose, and the
+   failure modes worth pinning (a webhook that can never match, a
+   backfill that breaks a sync) live in that composition rather than in
+   any single helper. */
+export const __testables = { syncOneConnection, ensureFreshToken };
 
 export default function healthRoutes(db) {
   const r = Router();
