@@ -437,8 +437,24 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
     const left = Math.min(Math.max(rect.left + rect.width / 2 - cardW / 2, EDGE), vw - cardW - EDGE);
     cardStyle = { top, left };
   } else {
-    // Centered fallback (intro / outro / missing anchor)
-    cardStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+    /* CENTRED WITH ARITHMETIC, NOT WITH A TRANSFORM.
+     *
+     * This was top/left 50% plus translate(-50%, -50%) -- the standard
+     * trick, and broken here, because the card also carries anim-scaleIn.
+     * A CSS animation's transform beats an inline one, so the translate
+     * was simply discarded and `left: 50%` left the card's LEFT EDGE at
+     * the centre of the screen. On a 375px phone a 330px card then ran
+     * 143px off the right side: the intro and outro steps -- the first
+     * thing a new user ever sees of this app -- were half off-screen,
+     * with their buttons out of reach.
+     *
+     * Computing the offsets directly cannot be overridden by a keyframe,
+     * and clamping to EDGE keeps it on screen if the card is ever taller
+     * or wider than the viewport. */
+    cardStyle = {
+      top: Math.max(EDGE, Math.round((vh - cardH_) / 2)),
+      left: Math.max(EDGE, Math.round((vw - cardW) / 2)),
+    };
   }
 
   return (

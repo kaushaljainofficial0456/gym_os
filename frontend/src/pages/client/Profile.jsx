@@ -477,7 +477,24 @@ export default function Profile() {
   useEffect(() => {
     if (coachMem.data?.memory) {
       const map = {};
-      for (const m of coachMem.data.memory) { map[m.key] = typeof m.value === 'object' ? JSON.stringify(m.value) : String(m.value ?? ''); }
+      /* JSON IS NOT SOMETHING TO SHOW A PERSON.
+       *
+       * ai_memory stores values as JSON, and GET /intel/coach/memory
+       * parses them back -- so a list arrives here as a real array. This
+       * ran JSON.stringify over it and dropped the result into a text
+       * box, so the field for "foods you actually eat" literally read
+       * ["paneer","grilled chicken"], brackets and quotes included. It is
+       * then also what you would edit and save back, one stray quote away
+       * from being unparseable.
+       *
+       * A list reads as a list. Saving it back as plain comma-separated
+       * text is fine and arguably better: the value's only consumer is
+       * the AI context builder, which passes it to a language model. */
+      for (const m of coachMem.data.memory) {
+        map[m.key] = Array.isArray(m.value)
+          ? m.value.join(', ')
+          : (m.value && typeof m.value === 'object' ? Object.values(m.value).join(', ') : String(m.value ?? ''));
+      }
       setCoachPrefs(map);
     }
   }, [coachMem.data]);
