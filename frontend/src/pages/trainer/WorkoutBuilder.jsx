@@ -790,7 +790,9 @@ export default function WorkoutBuilder() {
             <Kicker>{lib.loading ? 'Loading exercise library…' : pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
               {lib.loading && <div className="text-center py-8 text-mute text-sm">Loading exercise library…</div>}
-              {!lib.loading && pickMatches.map((ex) => (
+              {/* A library that failed to load is not a muscle with no exercises. */}
+              {!lib.loading && lib.error && <ErrorState error={lib.error} onRetry={lib.reload} />}
+              {!lib.loading && !lib.error && pickMatches.map((ex) => (
                 <button key={ex.id} type="button" onClick={() => addFromPicker(ex)}
                   className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-tint/[.02] hover:bg-tint/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
                   <span className="min-w-0">

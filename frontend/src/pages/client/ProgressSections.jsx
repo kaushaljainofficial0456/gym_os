@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card } from '../../components/UI.jsx';
+import { Card, ErrorState } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
@@ -655,7 +655,10 @@ function CustomMetrics() {
         </form>
       )}
 
-      {!rows.length && !adding && (
+      {/* A failed load is not an empty list -- the copy below would tell
+          someone who tracks five metrics that they track none. */}
+      {metrics.error && <ErrorState error={metrics.error} onRetry={metrics.reload} />}
+      {!metrics.error && !rows.length && !adding && (
         <p className="mt-2 text-[11.5px] leading-snug" style={{ color: 'var(--faint)' }}>
           Resting heart rate, sleep hours, step count, a lift you want to watch — anything with a
           number and a date belongs here.

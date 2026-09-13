@@ -263,6 +263,10 @@ export default function EnterpriseBilling() {
           <div className="space-y-2" aria-busy="true">
             {[0, 1, 2].map((i) => <div key={i} className="skeleton-row" />)}
           </div>
+        ) : invoices.error ? (
+          // A failed load is not an empty history: 'No receipts yet' would tell
+          // an owner they have never been billed.
+          <Card><ErrorState error={invoices.error} onRetry={invoices.reload} /></Card>
         ) : !invoices.data?.invoices?.length ? (
           <Card>
             <div className="empty-state">

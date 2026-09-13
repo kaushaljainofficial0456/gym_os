@@ -192,7 +192,11 @@ export default function EnterpriseOnboarding() {
 
       {step === 'package' && (
         <Card className="p-6 space-y-5">
-          {packages.loading ? <Spinner /> : (
+          {packages.loading ? <Spinner /> : packages.error ? (
+            // Without this the plan grid simply rendered empty, leaving an owner
+            // mid-setup with nothing to choose and no reason why.
+            <ErrorState error={packages.error} onRetry={packages.reload} />
+          ) : (
             <>
               <div className="grid sm:grid-cols-3 gap-3">
                 {(packages.data?.packages || []).map((p) => (

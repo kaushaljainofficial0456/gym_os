@@ -166,7 +166,9 @@ export default function Messages() {
           {/* Two different empty situations. Telling someone to "send the
               first message" when they have not picked a client yet points
               at a disabled field. */}
-          {!msgs.length && (clientId
+          {/* And a third: a thread that failed to load is not an empty one. */}
+          {thread.error && <ErrorState error={thread.error} onRetry={thread.reload} />}
+          {!thread.error && !msgs.length && (clientId
             ? <Empty title="No messages yet" hint={`Send the first message to ${clientName}.`} />
             : <Empty title="Pick a client" hint="Choose a client above to open their thread." />)}
           <div ref={endRef} />
