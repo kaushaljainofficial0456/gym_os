@@ -77,11 +77,35 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }, [date, startTime]);
 
-  const endLabel = useMemo(() => {
+  /* END TIME AND DURATION ARE THE SAME FACT, entered from either side.
+   *
+   * The form only took a duration, so someone who remembers "I got there
+   * at 7 and left at half eight" had to do the subtraction themselves --
+   * and the end time was shown as a read-only consequence, which is the
+   * one thing people actually know. Now duration derives the end, typing
+   * an end derives the duration, and neither is the privileged one. */
+  const endTime = useMemo(() => {
     if (!startedAtIso) return '';
     const end = new Date(Date.parse(startedAtIso) + Number(durationMin) * 60000);
     return `${pad(end.getHours())}:${pad(end.getMinutes())}`;
   }, [startedAtIso, durationMin]);
+
+  const onEndTimeChange = (value) => {
+    if (!value || !startedAtIso) return;
+    const [h, m] = value.split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+    const start = new Date(startedAtIso);
+    const end = new Date(start);
+    end.setHours(h, m, 0, 0);
+    // A session that ends "before" it started ran past midnight -- 23:30
+    // to 00:45 is a real hour and a quarter, not a negative one.
+    let mins = Math.round((end - start) / 60000);
+    if (mins <= 0) mins += 24 * 60;
+    if (mins > 0 && mins <= 360) setDurationMin(mins);
+  };
+
+  // Kept for the places that render the plain label.
+  const endLabel = endTime;
 
   const isFuture = startedAtIso ? Date.parse(startedAtIso) > Date.now() : false;
 
@@ -107,13 +131,41 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
     return all.filter((e) => e.name.toLowerCase().includes(q)).slice(0, 8);
   }, [libList, search]);
 
+  /* SETS ARE A LIST, not a count.
+   *
+   * This used to hold one reps value and one weight per exercise and
+   * multiply it out, so a real session -- 60kg, 60kg, then 50kg when the
+   * last set fell apart -- could only be logged as three sets at 60. That
+   * inflates volume and hands the PR engine a lift that never happened.
+   * Now each set is its own row, seeded from the previous one so the
+   * common case (three identical sets) is still three taps. */
   const addExercise = (e) => {
     if (rows.some((r) => r.exercise_id === e.id)) return;
-    setRows((rs) => [...rs, { exercise_id: e.id, name: e.name, sets: 3, reps: 8, weight: 20 }]);
+    setRows((rs) => [...rs, {
+      exercise_id: e.id,
+      name: e.name,
+      sets: [
+        { reps: 8, weight: 20 },
+        { reps: 8, weight: 20 },
+        { reps: 8, weight: 20 },
+      ],
+    }]);
     setSearch('');
   };
-  const patchRow = (i, patch) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const removeRow = (i) => setRows((rs) => rs.filter((_, j) => j !== i));
+
+  const patchSet = (i, si, patch) => setRows((rs) => rs.map((r, j) => (
+    j === i ? { ...r, sets: r.sets.map((st, k) => (k === si ? { ...st, ...patch } : st)) } : r
+  )));
+  // A new set copies the one above it: the next set is usually the same
+  // weight, and retyping it every time is the tax this screen existed to
+  // avoid.
+  const addSet = (i) => setRows((rs) => rs.map((r, j) => (
+    j === i ? { ...r, sets: [...r.sets, { ...(r.sets[r.sets.length - 1] || { reps: 8, weight: 20 }) }] } : r
+  )));
+  const removeSet = (i, si) => setRows((rs) => rs.map((r, j) => (
+    j === i && r.sets.length > 1 ? { ...r, sets: r.sets.filter((_, k) => k !== si) } : r
+  )));
 
   const canSave = rows.length > 0 && startedAtIso && !isFuture && Number(durationMin) > 0
     && (overlaps.length === 0 || confirmDupe);
@@ -130,8 +182,13 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
           date,
           started_at: startedAtIso,
           exercises: rows.map((r) => ({
-            exercise_id: r.exercise_id, sets: Number(r.sets) || 1,
-            reps: String(r.reps), weight: String(r.weight), rest_sec: 90,
+            exercise_id: r.exercise_id,
+            sets: r.sets.length,
+            // The prescription line still wants one representative figure;
+            // the real per-set numbers go in the completion below.
+            reps: String(r.sets[0]?.reps ?? 0),
+            weight: String(r.sets[0]?.weight ?? 0),
+            rest_sec: 90,
           })),
         }),
       });
@@ -140,12 +197,14 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
       const byExercise = new Map((created.exercises || []).map((e) => [e.exercise_id, e.id]));
       const logs = rows.map((r) => ({
         exercise_id: byExercise.get(r.exercise_id),
-        sets: Array.from({ length: Math.max(1, Number(r.sets) || 1) }, () => ({
-          actual_reps: Number(r.reps) || 0,
-          actual_weight: Number(r.weight) || 0,
+        // Each set exactly as entered -- this is what reaches workout_logs,
+        // the PR engine and the calorie model.
+        sets: r.sets.map((st) => ({
+          actual_reps: Number(st.reps) || 0,
+          actual_weight: Number(st.weight) || 0,
           rir, completed: true,
         })),
-      })).filter((l) => l.exercise_id);
+      })).filter((l) => l.exercise_id && l.sets.length);
 
       const res = await api(`/workouts/${created.id}/complete`, {
         method: 'POST',
@@ -202,29 +261,38 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
               </label>
             </div>
 
-            <div className="mt-2">
-              <span className="text-[9.5px] uppercase tracking-[.08em]" style={{ color: 'var(--faint)' }}>Duration</span>
-              <div className="flex gap-1.5 mt-1 flex-wrap">
-                {[30, 45, 60, 75, 90].map((m) => (
-                  <button key={m} onClick={() => setDurationMin(m)}
-                    className="rounded-full px-3 text-[11.5px] font-semibold"
-                    style={{
-                      minHeight: 44,
-                      background: Number(durationMin) === m ? 'var(--cta-solid)' : 'transparent',
-                      color: Number(durationMin) === m ? 'var(--cta-ink)' : 'var(--mute)',
-                      border: `1px solid ${Number(durationMin) === m ? 'var(--cta-edge)' : 'var(--line)'}`,
-                    }}>{m}m</button>
-                ))}
+            {/* Either end of the session, whichever you remember. */}
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <label className="block">
+                <span className="text-[9.5px] uppercase tracking-[.08em]" style={{ color: 'var(--faint)' }}>End time</span>
+                <input type="time" value={endTime} onChange={(e) => onEndTimeChange(e.target.value)}
+                  aria-label="End time" className="input mt-1 w-full" style={{ ...field, minHeight: 44 }} />
+              </label>
+              <label className="block">
+                <span className="text-[9.5px] uppercase tracking-[.08em]" style={{ color: 'var(--faint)' }}>Minutes</span>
                 <input type="number" min="1" max="360" value={durationMin}
                   onChange={(e) => setDurationMin(e.target.value)} aria-label="Duration in minutes"
-                  className="input w-20 text-right tabular-nums" style={{ ...field, minHeight: 44 }} />
-              </div>
-              {startedAtIso && !isFuture && (
-                <div className="text-[10px] mt-1" style={{ color: 'var(--faint)' }}>
-                  {startTime} → {endLabel}
-                </div>
-              )}
+                  className="input mt-1 w-full text-right tabular-nums" style={{ ...field, minHeight: 44 }} />
+              </label>
             </div>
+
+            <div className="flex gap-1.5 mt-2 flex-wrap">
+              {[30, 45, 60, 75, 90].map((m) => (
+                <button key={m} onClick={() => setDurationMin(m)} type="button"
+                  className="rounded-full px-3 text-[11.5px] font-semibold"
+                  style={{
+                    minHeight: 40,
+                    background: Number(durationMin) === m ? 'var(--cta-solid)' : 'transparent',
+                    color: Number(durationMin) === m ? 'var(--cta-ink)' : 'var(--mute)',
+                    border: `1px solid ${Number(durationMin) === m ? 'var(--cta-edge)' : 'var(--line)'}`,
+                  }}>{m}m</button>
+              ))}
+            </div>
+            {startedAtIso && !isFuture && (
+              <div className="text-[10px] mt-1.5" style={{ color: 'var(--faint)' }}>
+                {startTime} → {endLabel} · {durationMin} min
+              </div>
+            )}
 
             {isFuture && (
               <div role="alert" className="mt-2 text-[11px]" style={{ color: 'var(--bad)' }}>
@@ -269,29 +337,66 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
             <div className="space-y-2 mt-2">
               {rows.map((r, i) => (
                 <div key={r.exercise_id} className="rounded-xl p-2.5" style={{ border: '1px solid var(--line)' }}>
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="font-grotesk text-[12px] font-semibold truncate">{r.name}</span>
-                    <button onClick={() => removeRow(i)} className="text-[10px] shrink-0" style={{ color: 'var(--bad)', minHeight: 32 }}>Remove</button>
+                    <button type="button" onClick={() => removeRow(i)} className="text-[10px] shrink-0 tap-target"
+                      style={{ color: 'var(--bad)', minHeight: 32 }}>Remove</button>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[['sets', 'Sets'], ['reps', 'Reps']].map(([k, label]) => (
-                      <label key={k} className="block">
-                        <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{label}</span>
-                        <input type="number" min="0" value={r[k]} aria-label={`${r.name} ${label}`}
-                          onChange={(e) => patchRow(i, { [k]: e.target.value })}
-                          className="input w-full text-right tabular-nums" style={{ ...field, minHeight: 40 }} />
-                      </label>
+
+                  {/* One row per set, because that is how the session
+                      happened. The old form took a single reps/weight and
+                      multiplied it out, so 60/60/50 could only be logged
+                      as three sets at 60 — inflating volume and handing
+                      the PR engine a lift that never took place. */}
+                  <div className="grid grid-cols-[18px_1fr_1fr_28px] gap-1.5 items-center px-0.5 mb-1">
+                    <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>#</span>
+                    <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>Reps</span>
+                    <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
+                    <span />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {r.sets.map((st, si) => (
+                      <div key={si} className="grid grid-cols-[18px_1fr_1fr_28px] gap-1.5 items-center">
+                        <span className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>{si + 1}</span>
+                        <input
+                          type="number" min="0" inputMode="numeric" value={st.reps}
+                          aria-label={`${r.name} set ${si + 1} reps`}
+                          onChange={(e) => patchSet(i, si, { reps: e.target.value })}
+                          className="input w-full text-right tabular-nums" style={{ ...field, minHeight: 40 }}
+                        />
+                        {/* Weight is the one field whose stored value and
+                            typed value differ, so it uses the shared
+                            kg-canonical input rather than a raw box. */}
+                        <WeightInput
+                          valueKg={st.weight}
+                          onChangeKg={(kg) => patchSet(i, si, { weight: kg })}
+                          ariaLabel={`${r.name} set ${si + 1} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
+                          className="input w-full text-right tabular-nums" style={{ ...field, minHeight: 40 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeSet(i, si)}
+                          disabled={r.sets.length <= 1}
+                          aria-label={`Remove set ${si + 1} of ${r.name}`}
+                          className="grid place-items-center rounded-md disabled:opacity-25"
+                          style={{ width: 28, height: 34, color: 'var(--faint)' }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14" /></svg>
+                        </button>
+                      </div>
                     ))}
-                    {/* Weight is the one field whose stored value and typed
-                        value are not the same number, so it gets the shared
-                        kg-canonical input rather than a raw text box. */}
-                    <label className="block">
-                      <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
-                      <WeightInput valueKg={r.weight} onChangeKg={(kg) => patchRow(i, { weight: kg })}
-                        ariaLabel={`${r.name} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
-                        className="input w-full text-right tabular-nums" style={{ ...field, minHeight: 40 }} />
-                    </label>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => addSet(i)}
+                    className="mt-2 w-full rounded-lg text-[11px] font-semibold"
+                    style={{ minHeight: 36, border: '1px dashed var(--line)', color: 'var(--mute)' }}
+                  >
+                    + Add set
+                  </button>
                 </div>
               ))}
               {!rows.length && (
