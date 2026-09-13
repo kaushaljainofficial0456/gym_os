@@ -7,6 +7,7 @@ import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroP
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import Logo from '../../components/Logo.jsx';
+import MembershipTab from '../../components/trainer/MembershipTab.jsx';
 
 // Map trainer client-detail response to the shape the existing components expect.
 // Owner/admin uses the existing /clients/:id/overview endpoint (returns all org data).
@@ -170,6 +171,12 @@ export default function ClientProfile() {
         { value: 'workouts', label: 'Workouts' },
         { value: 'nutrition', label: 'Nutrition' },
         { value: 'photos', label: 'Photos' },
+        /* The commercial side of the relationship, which this screen had
+           no tab for at all -- an owner chasing a renewal had to leave
+           the client and go hunting in Business. Placed after the
+           coaching tabs because it is what you check ABOUT someone, not
+           what you do with them. */
+        { value: 'membership', label: 'Membership' },
         { value: 'ai', label: 'AI Coach' },
         { value: 'messages', label: 'Messages' }
       ]} value={tab} onChange={setTab} />
@@ -179,6 +186,7 @@ export default function ClientProfile() {
       {tab === 'workouts' && <WorkoutsTab clientId={id} history={workoutHistory} onChanged={reload} />}
       {tab === 'nutrition' && <NutritionTab clientId={id} profile={profile} />}
       {tab === 'photos' && <PhotosTab clientId={id} photos={photos} onChanged={reload} />}
+      {tab === 'membership' && <MembershipTab clientId={id} />}
       {tab === 'ai' && <AITab clientId={id} />}
       {tab === 'messages' && <MessagesTab clientId={id} />}
     </div>

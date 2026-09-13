@@ -74,8 +74,43 @@ export async function getOrgBillingSnapshot(db, orgId) {
   const activeClients = Number(activeClientsRow?.n || 0);
   const reservedSlots = billingState?.reserved_slots || 0;
 
+  /* A LIVE SUBSCRIPTION IS THE TRUTH; org_billing_state IS A CACHE.
+   *
+   * The two are written in separate steps, so they drift: this gym had an
+   * ACTIVE subscription with 75 seats running to 2027 while its
+   * billing_state row still said SETUP, and the Enterprise screen -- which
+   * gates on that field alone -- greeted a gym with 26 paying clients,
+   * three trainers and eight lakh of recorded revenue with "Let's get your
+   * gym set up. Start setup." Not merely wrong: the button leads to an
+   * onboarding wizard for a gym that finished onboarding in August.
+   *
+   * Deriving from the subscription makes the cache unable to lie in the
+   * direction that locks a paying customer out of their own product. The
+   * row is healed on the way past, so the drift is corrected rather than
+   * routed around forever -- best-effort, because reporting the right
+   * status matters more than persisting it this millisecond.
+   *
+   * The same shape of bug as trusting subscriptions.status over its end
+   * date, which reported 23 active members for a gym with 2. */
+  let status = billingState?.status || 'SETUP';
+
+  /* The expiry branch above writes EXPIRED to both tables -- but
+     `billingState` was read BEFORE it ran, so this function went on to
+     report the stale ACTIVE it had loaded a few lines earlier. A gym
+     whose package ran out therefore kept full access for the whole of
+     the request that expired it, and every screen reading this snapshot
+     was told it was live. Pre-existing, and surfaced only by asking what
+     happens on the day a subscription ends. */
+  if (subscription && subscription.status === 'EXPIRED') status = 'EXPIRED';
+
+  if (subscription && subscription.status === 'ACTIVE' && status !== 'ACTIVE') {
+    status = 'ACTIVE';
+    await db.run(`UPDATE org_billing_state SET status = 'ACTIVE', updated_at = ? WHERE org_id = ?`, [now(), orgId])
+      .catch(() => {});
+  }
+
   return {
-    status: billingState?.status || 'SETUP',
+    status,
     subscription,
     purchasedCapacity,
     activeClients,

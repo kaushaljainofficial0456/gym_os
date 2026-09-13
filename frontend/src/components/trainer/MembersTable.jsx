@@ -252,9 +252,10 @@ function Chip({ children, on, onClick }) {
   return (
     <button
       type="button" onClick={onClick} aria-pressed={on}
-      className="rounded-lg px-2.5 text-[11px] font-semibold shrink-0"
+      /* A filter pill you tap with a thumb, not click with a mouse. */
+      className="rounded-lg px-3 text-[11px] font-semibold shrink-0"
       style={{
-        minHeight: 32,
+        minHeight: 36,
         background: on ? 'var(--accent-soft)' : 'transparent',
         border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
         color: on ? 'var(--accent)' : 'var(--mute)',

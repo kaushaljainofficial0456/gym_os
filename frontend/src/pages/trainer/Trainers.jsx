@@ -209,6 +209,32 @@ function TrainerCard({ t }) {
         </span>
         <span className="text-[10.5px] font-semibold" style={{ color: tone.color }}>{tone.label}</span>
       </div>
+
+      {/* HOW THEIR CLIENTS ARE DOING, AND WHETHER THEY TURNED UP.
+          This card could say how many clients a coach HAS and nothing
+          about the outcome or the attendance -- so "who needs a
+          conversation?", the question an owner opens this page to ask,
+          had no data on the screen. Both already existed: client status
+          is evaluated product-wide, and trainer_attendance has been
+          recording days all along.
+          Stated as counts with words, never as a score: attendance and
+          client outcomes are facts to discuss, and blending them into a
+          single "performance" number would rank people on a definition
+          nobody agreed to (spec 39). */}
+      <div className="flex items-center justify-between gap-2 mt-2 text-[10.5px] tabular-nums"
+           style={{ color: 'var(--faint)' }}>
+        <span>
+          {t.atRiskClients > 0 && (
+            <span style={{ color: 'var(--bad)' }}>{t.atRiskClients} at risk</span>
+          )}
+          {t.atRiskClients > 0 && t.inactiveClients > 0 && ' · '}
+          {t.inactiveClients > 0 && <span>{t.inactiveClients} inactive</span>}
+          {!t.atRiskClients && !t.inactiveClients && 'No clients flagged'}
+        </span>
+        <span style={{ color: t.daysInLast7 === 0 ? 'var(--warn)' : 'var(--faint)' }}>
+          {t.daysInLast7 === 0 ? 'Not in this week' : `In ${t.daysInLast7}/7 days`}
+        </span>
+      </div>
     </Card>
   );
 }

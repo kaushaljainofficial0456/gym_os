@@ -868,11 +868,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
      `padding: 0` on equal specificity by source order alone, so an icon
      button rendered 40px wide with 18px of padding each side and squeezed
      its 15px icon down to a 4px sliver. */
-  .btn-sm { padding: 6px 12px !important; min-height: 32px !important; font-size: .75rem !important; }
+  /* 32px is a mouse target. .btn-sm carries the real per-row ACTIONS
+     across this product -- "Mark read", "Follow up", "Dismiss" on every
+     alert, three of them side by side, ~300 to a screen on a busy gym --
+     and at 32px on a phone the wrong one is a routine mis-tap. 36px is
+     the floor; it stays visually small without being unhittable. */
+  .btn-sm { padding: 7px 12px !important; min-height: 36px !important; font-size: .75rem !important; }
   .btn-lg { padding: 14px 24px !important; min-height: 50px !important; font-size: .9375rem !important; font-weight: 700 !important; }
   .btn-block { @apply w-full; }
   .btn-icon { padding: 0 !important; width: 40px; min-height: 40px; }
-  .btn-icon.btn-sm { width: 32px; min-height: 32px !important; }
+  .btn-icon.btn-sm { width: 36px; min-height: 36px !important; }
 
   .btn {
     @apply btn-base;
@@ -1000,15 +1005,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
      chip between idle and an active/selected look (border-gold, bg-gold/10,
      etc via inline conditional classes) and none of them animated -- the
      colour just snapped. One line here smooths every chip in the app. */
+  /* TOUCH TARGET. `py-1` gave a chip a ~26px box -- comfortable with a
+     mouse, fiddly with a thumb, and these are filter controls on screens
+     a coach uses standing in a gym holding a phone. The app's own brief
+     sets a 44px floor for primary actions; a filter chip does not need to
+     be that tall, but it does need to be hittable, so 36px is the floor
+     here. Set on the shared class rather than page by page, because the
+     same 26px chip was on Clients, Business and everywhere else that
+     reaches for it. */
   .chip {
-    @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-1.5 font-grotesk text-[11px] px-3 rounded-full transition-all duration-200;
+    min-height: 36px;
     border: 1px solid var(--line);
     color: var(--mute);
   }
   .chip { background: rgb(var(--tint-rgb) / .04); }
 
   .chip-active {
-    @apply inline-flex items-center gap-1.5 font-grotesk text-[11px] px-2.5 py-1 rounded-full;
+    @apply inline-flex items-center justify-center gap-1.5 font-grotesk text-[11px] px-3 rounded-full;
+    min-height: 36px;
     border: 1px solid rgb(var(--accent-rgb) / .4);
     background: rgb(var(--accent-rgb) / .10);
     color: var(--accent);

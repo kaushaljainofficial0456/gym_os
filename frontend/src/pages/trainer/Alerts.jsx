@@ -64,7 +64,13 @@ export default function Alerts() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Link to={`/app/trainer/clients/${a.client_id}`} className="font-grotesk text-sm font-semibold hover:text-gold transition-colors">{a.client_name}</Link>
+                    {/* A 20px hit area on the one link that takes you to the
+                        person the alert is ABOUT. tap-target grows the
+                        reachable box without changing the inline layout --
+                        the neighbours here are spans, so there is nothing
+                        for the expanded area to overlap and steal. */}
+                    <Link to={`/app/trainer/clients/${a.client_id}`}
+                          className="font-grotesk text-sm font-semibold hover:text-gold transition-colors tap-target">{a.client_name}</Link>
                     <span className={`chip border ${sev[1]}`}>{sev[0]}</span>
                     <span className="text-[10px] text-faint font-grotesk uppercase tracking-wider">{a.type?.replace(/_/g, ' ')}</span>
                     <span className="text-[10px] text-faint font-grotesk">{daysAgoLabel(a.created_at)}</span>

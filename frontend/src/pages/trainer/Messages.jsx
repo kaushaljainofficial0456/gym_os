@@ -18,11 +18,35 @@ export default function Messages() {
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState('');
   const thread = useFetch(() => (clientId ? api(`/messages?client_id=${clientId}`) : Promise.resolve({ messages: [] })), [clientId]);
+  /* WHO IS WAITING ON A REPLY. messages.read had been written as 0 on
+     every insert since the table existed and read by nothing, so this
+     screen could not tell a new message from one answered last week --
+     you opened threads one by one to find out. */
+  const unread = useFetch(() => api('/messages/unread'));
   const endRef = useRef(null);
 
   useEffect(() => {
     if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [thread.data, clientId]);
+
+  /* Opening a thread IS the read receipt -- no "mark as read" button to
+     remember. Scoped server-side to messages addressed to you, so reading
+     never clears the other side's badge on their behalf. Best-effort: a
+     failed receipt must not stop you reading the conversation. */
+  useEffect(() => {
+    if (!clientId) return;
+    api('/messages/read', { method: 'POST', body: JSON.stringify({ client_id: clientId }) })
+      .then(() => {
+        unread.reload({ silent: true });
+        /* The LAYOUT holds its own unread count for the nav badge, and it
+           has no idea this page just cleared a thread -- so the badge sat
+           at "1" over a screen that had already said zero. One event,
+           following the same pattern the app already uses for the tour,
+           rather than giving the two components a shared store. */
+        window.dispatchEvent(new Event('sk-os:messages-read'));
+      })
+      .catch(() => {});
+  }, [clientId, thread.data]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-dismiss, same pattern used everywhere else in the app -- without
   // it the toast (including the send-failure error a few lines below)
@@ -43,6 +67,7 @@ export default function Messages() {
       await api('/messages', { method: 'POST', body: JSON.stringify({ client_id: clientId, type, body }) });
       setBody('');
       thread.reload({ silent: true });
+      unread.reload({ silent: true });
     } catch (e) {
       /* Was `catch (e) { /* keep body *\/ }` -- a failed send (network
          error, a client no longer assigned to this trainer) left no
@@ -74,17 +99,40 @@ export default function Messages() {
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
   const clientName = (clients.data?.clients || []).find((c) => c.id === clientId)?.name;
+  const unreadBy = unread.data?.byClient || {};
+  const unreadTotal = unread.data?.total || 0;
+  /* Anyone waiting on you comes first, most-waiting at the top; the rest
+     stay alphabetical so the list is still scannable when nothing is
+     outstanding. */
+  const sortedClients = [...(clients.data?.clients || [])].sort((a, b) => {
+    const ua = unreadBy[a.id] || 0;
+    const ub = unreadBy[b.id] || 0;
+    if (ua !== ub) return ub - ua;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-grotesk font-bold text-2xl">Messages</h1>
-          <p className="text-mute text-sm">Direct line to each client. WhatsApp Business delivery is a planned integration.</p>
+          <p className="text-mute text-sm">
+            {unreadTotal > 0
+              ? `${unreadTotal} unread ${unreadTotal === 1 ? 'message' : 'messages'} waiting on a reply.`
+              : 'Direct line to each client. WhatsApp Business delivery is a planned integration.'}
+          </p>
         </div>
-        <select className="input max-w-xs" value={clientId} onChange={(e) => setClientId(e.target.value)}>
-          <option value="">Choose client…</option>
-          {(clients.data?.clients || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        {/* Waiting clients FIRST, with the count in the label. The picker
+            was alphabetical with no unread signal at all, so finding who
+            had written to you meant opening threads one at a time. */}
+        <select className="input max-w-xs" aria-label="Choose a client thread"
+                value={clientId} onChange={(e) => setClientId(e.target.value)}>
+          <option value="">{unreadTotal > 0 ? `Choose client… (${unreadTotal} unread)` : 'Choose client…'}</option>
+          {sortedClients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {unreadBy[c.id] ? `● ${c.name} (${unreadBy[c.id]})` : c.name}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -125,13 +173,24 @@ export default function Messages() {
         </div>
 
         <div className="mt-3 pt-3 border-t border-line space-y-2">
+          {/* `!py-1.5` forced a 28px box on the message-type picker -- four
+              controls in a row, all under the touch floor, on a screen a
+              coach uses one-handed. */}
           <div className="flex gap-1.5 overflow-x-auto">
             {TYPES.map(([v, l]) => (
-              <button key={v} className={`tab !px-3 !py-1.5 !text-[11px] ${type === v ? 'active' : ''}`} onClick={() => setType(v)}>{l}</button>
+              <button key={v} aria-pressed={type === v}
+                      className={`tab !px-3 !text-[11px] ${type === v ? 'active' : ''}`}
+                      style={{ minHeight: 36 }}
+                      onClick={() => setType(v)}>{l}</button>
             ))}
           </div>
           <div className="flex gap-2">
-            <input className="input flex-1" placeholder={clientId ? `Message ${clientName}…` : 'Pick a client first'} disabled={!clientId}
+            {/* A placeholder is not a label: it disappears the moment you
+                type, and a screen reader announced this as an unnamed
+                text box. */}
+            <input className="input flex-1"
+              aria-label={clientName ? `Message ${clientName}` : 'Message a client'}
+              placeholder={clientId ? `Message ${clientName}…` : 'Pick a client first'} disabled={!clientId}
               value={body} onChange={(e) => setBody(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }} />
             <button className="btn-primary shrink-0" onClick={send} disabled={sending || !clientId || !body.trim()}>{sending ? '…' : 'Send'}</button>

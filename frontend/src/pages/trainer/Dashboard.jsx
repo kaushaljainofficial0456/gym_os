@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import AttendanceCard from '../../components/trainer/AttendanceCard.jsx';
 import { TrainerPulse, OwnerPulse } from '../../components/trainer/RosterPulse.jsx';
+import GymPulse from '../../components/trainer/GymPulse.jsx';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
@@ -27,6 +28,11 @@ export default function Dashboard() {
   const ov = useFetch(() => api(isTrainerOnly ? '/dashboard/trainer' : '/dashboard/overview'));
   const att = useFetch(() => isTrainerOnly ? Promise.resolve(null) : api('/dashboard/attention'));
   const trend = useFetch(() => api('/dashboard/adherence-trend'));
+  /* Gym-wide numbers: money, check-ins, roster, and the series behind
+     them. Owner-only both here and on the server -- a trainer has no
+     business reading the gym's takings, and gating it in the fetch as
+     well as the route means the request is never even made. */
+  const pulse = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/pulse')));
   const trendRows = useMemo(() => (trend.data?.trend || []).map(t => ({ label: t.date.slice(5), value: t.avg ?? 0 })), [trend.data]);
 
   // For trainers, attention data comes from the trainer endpoint response
@@ -72,9 +78,18 @@ export default function Dashboard() {
           dashboard metric, which is something they read, not something
           they act on. Owners see it too: an owner who coaches still has
           their own hours to record. */}
-      <Reveal>
-        <AttendanceCard />
-      </Reveal>
+      {/* TRAINERS ONLY. Recording attendance is TRAINER-only on the
+          server, so for an owner this card could never do anything --
+          it rendered "Not checked in" and then a line explaining that
+          the button they can see is not for them, at the very top of
+          the screen they open every morning. An owner's interest in
+          attendance is the ROSTER, and that is a tile in GymPulse
+          below which links straight to it. */}
+      {isTrainerOnly && (
+        <Reveal>
+          <AttendanceCard />
+        </Reveal>
+      )}
 
       <Reveal>
         <div className="flex items-end justify-between flex-wrap gap-4" data-tour="trainer-dashboard-hero">
@@ -128,6 +143,21 @@ export default function Dashboard() {
           dot hues to one: amber-vs-terracotta was a second colour
           distinction the reference doesn't make -- both actionable tiles
           use the same accent-family dot now. */}
+      {/* OWNERS GET THE GYM, TRAINERS GET THEIR CLIENTS.
+          Both used to get the same four client-health tiles, which for an
+          owner answered a question they had not asked: "how is my gym
+          doing?" is about people through the door, money in, and the
+          roster, and not one of those was on the screen. GymPulse carries
+          those, plus an action centre and the trends behind them, and it
+          already contains Active clients -- so showing this row to an
+          owner as well would be eight tiles, two of them duplicates. */}
+      {!isTrainerOnly && (
+        <Reveal>
+          <GymPulse pulse={pulse.data} kpis={k} loading={pulse.loading} error={pulse.error} onRetry={pulse.reload} />
+        </Reveal>
+      )}
+
+      {isTrainerOnly && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="trainer-dashboard-kpis">
         <Kpi label="Active clients" value={k.activeClients} sub={k.newClients != null ? `${k.newClients} new · ${k.inactive} inactive` : `${k.totalClients} total · ${k.inactive} inactive`} />
         <Kpi label="On track" value={k.onTrack} sub="adherence above 70%" />
@@ -142,6 +172,7 @@ export default function Dashboard() {
           dot="bg-bad"
         />
       </div>
+      )}
 
       <div className="grid lg:grid-cols-5 gap-6">
         {/* attention queue — staggered cards */}

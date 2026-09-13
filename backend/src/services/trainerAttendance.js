@@ -144,6 +144,35 @@ function minutesBetween(aIso, bIso) {
  *  With no shift there is nothing to be late against, so a check-in is
  *  simply PRESENT -- inventing a lateness figure from an assumed start
  *  time would be fabricating the expectation. */
+/** "HH:MM" on `dateKey`, in the gym's timezone, as a UTC ISO instant.
+ *
+ *  A CORRECTION USED TO ACCEPT ANY STRING AT ALL. The schema said
+ *  z.string().max(40), so "7:30 PM" -- which is exactly what a localized
+ *  clock helper produces, and exactly what one screen was pre-filling --
+ *  was stored verbatim. On the owner's screen it rendered as the literal
+ *  text "null"; on APPROVE it was written straight into check_in, where
+ *  minutesBetween turned the day's worked hours into NaN. A corrupted
+ *  attendance record, from a form field, with nothing in between saying
+ *  no.
+ *
+ *  Returns null for anything that is not a real 24-hour time, so the
+ *  caller can reject rather than store it.
+ *
+ *  The zone offset is MEASURED at that date rather than assumed, so gyms
+ *  in DST-observing regions get the right instant on the two days a year
+ *  it moves. */
+export function timeOnDateToIso(dateKey, hhmm, tz) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return null;
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || '').trim());
+  if (!m) return null;
+  const naive = Date.parse(`${dateKey}T${m[1]}:${m[2]}:00Z`);
+  if (!Number.isFinite(naive)) return null;
+  const probe = new Date(naive);
+  const asLocal = new Date(probe.toLocaleString('en-US', { timeZone: tz }));
+  const asUtc = new Date(probe.toLocaleString('en-US', { timeZone: 'UTC' }));
+  return new Date(naive + (asUtc.getTime() - asLocal.getTime())).toISOString();
+}
+
 export function classifyCheckIn({ checkInIso, shift, graceMinutes, tz }) {
   if (!shift?.start) return { status: 'PRESENT', lateMinutes: 0 };
   const actual = localMinutes(checkInIso, tz);
@@ -347,8 +376,21 @@ export async function resolveCorrection(db, { orgId, attendanceId, actorId, appr
     return after;
   }
 
-  const checkInIso = row.correction_check_in || row.check_in;
-  const checkOutIso = row.correction_check_out || row.check_out;
+  /* A STORED CORRECTION IS STILL UNTRUSTED INPUT. Approving used to copy
+     correction_check_in straight into check_in, so anything that reached
+     that column -- and before the route validated times, "7:30 PM" could
+     -- became the attendance record itself, with minutesBetween then
+     unable to compute the day's hours. The route now rejects a bad time
+     at the boundary, but rows written before that, or by any other
+     caller, must not be promoted into the real record on approval.
+     Validate here as well: this is the step that makes it true. */
+  const instant = (v) => {
+    if (!v) return null;
+    const t = Date.parse(v);
+    return Number.isFinite(t) ? new Date(t).toISOString() : null;
+  };
+  const checkInIso = instant(row.correction_check_in) || row.check_in;
+  const checkOutIso = instant(row.correction_check_out) || row.check_out;
   const policy = await getPolicy(db, orgId);
   const shift = { start: row.scheduled_start, end: row.scheduled_end };
   const { status, lateMinutes } = checkInIso

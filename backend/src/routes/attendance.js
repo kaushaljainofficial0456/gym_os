@@ -32,6 +32,7 @@ import {
   checkIn, checkOut, getDay, shiftFor, dayRoster, summarise, trainerHistory,
   requestCorrection, resolveCorrection, ownerSet, pendingCorrections,
   flagMissingCheckouts, auditFor,
+  timeOnDateToIso,
 } from '../services/trainerAttendance.js';
 
 const QR_TTL_SECONDS = 90;   // the code on the wall rotates; a photo of it dies fast
@@ -219,8 +220,13 @@ export default function attendanceRoutes(db) {
   // self-service edit of your own hours is not attendance, it is a form.
   r.post('/me/corrections', writeLimit, validate(z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    check_in: z.string().max(40).optional(),
-    check_out: z.string().max(40).optional(),
+    // A TIME, NOT ANY STRING. This was z.string().max(40), so "7:30 PM"
+    // was stored verbatim -- and on approve it was written straight into
+    // check_in, where minutesBetween made the day's hours NaN. The
+    // 24-hour form is what <input type="time"> emits, and it is the only
+    // thing accepted now.
+    check_in: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+    check_out: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
     reason: z.string().min(1).max(300),
   })), async (req, res) => {
     if (req.user.role !== 'TRAINER') {
@@ -229,9 +235,21 @@ export default function attendanceRoutes(db) {
     if (req.body.date > todayKey(req.tz)) {
       return res.status(422).json({ error: 'You cannot record attendance for a future date' });
     }
+    // Stored as a real instant, resolved against the GYM's timezone --
+    // "06:00" means six in the morning where the gym is, not six UTC.
+    const toIso = (hhmm) => (hhmm ? timeOnDateToIso(req.body.date, hhmm, req.tz) : null);
+    const checkInIso = toIso(req.body.check_in);
+    const checkOutIso = toIso(req.body.check_out);
+    if (checkInIso && checkOutIso && Date.parse(checkOutIso) <= Date.parse(checkInIso)) {
+      return res.status(422).json({ error: 'Check-out has to be after check-in' });
+    }
+    if (!checkInIso && !checkOutIso) {
+      return res.status(422).json({ error: 'Give a check-in or a check-out time to correct' });
+    }
+
     const row = await requestCorrection(db, {
       orgId: req.orgId, trainerId: req.user.sub, date: req.body.date,
-      checkIn: req.body.check_in, checkOut: req.body.check_out, reason: req.body.reason,
+      checkIn: checkInIso, checkOut: checkOutIso, reason: req.body.reason,
     });
     res.status(201).json({ ok: true, attendance: { id: row.id, correctionStatus: row.correction_status } });
   });

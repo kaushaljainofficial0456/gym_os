@@ -186,7 +186,12 @@ export default function GymAttendance() {
               : 'Scan required — hours come from the gym codes'}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        {/* `shrink-0` with no wrap made this row 492px wide inside a 375px
+            phone -- the three policy controls ran clean off the screen and
+            took the whole page into a horizontal scroll with them. They
+            wrap now; shrink-0 stays off each BUTTON instead, so the labels
+            themselves never squash. */}
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             type="date"
             value={date}
@@ -257,8 +262,13 @@ export default function GymAttendance() {
                       {c.trainerName} · {c.date}
                     </div>
                     <div className="text-[11.5px] mt-1" style={{ color: 'var(--mute)' }}>
+                      {/* clockTime returns null for anything unparseable, and
+                          a null inside a template literal becomes the TEXT
+                          "null" -- which is what an owner was shown when a
+                          bad time reached this card. Format first, test the
+                          result, and never interpolate the raw call. */}
                       Asking for {clockTime(c.requestedCheckIn) || '—'}
-                      {c.requestedCheckOut ? ` – ${clockTime(c.requestedCheckOut)}` : ''}
+                      {clockTime(c.requestedCheckOut) ? ` – ${clockTime(c.requestedCheckOut)}` : ''}
                       {c.currentCheckIn
                         ? ` · currently ${clockTime(c.currentCheckIn)}`
                         : ' · nothing currently recorded'}

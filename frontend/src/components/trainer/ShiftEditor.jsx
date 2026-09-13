@@ -217,7 +217,7 @@ function Btn({ children, onClick, disabled, danger, primary }) {
       type="button" onClick={onClick} disabled={disabled}
       className="rounded-lg px-2.5 text-[11px] font-semibold"
       style={{
-        minHeight: 32,
+        minHeight: 36,
         border: `1px solid ${primary ? 'var(--accent)' : 'var(--line)'}`,
         background: primary ? 'var(--accent-soft)' : 'transparent',
         color: danger ? 'var(--bad)' : primary ? 'var(--accent)' : 'var(--mute)',

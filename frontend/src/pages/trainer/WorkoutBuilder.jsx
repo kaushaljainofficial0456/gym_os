@@ -618,7 +618,11 @@ export default function WorkoutBuilder() {
         <div className="grid sm:grid-cols-[240px_1fr] gap-4 mt-4">
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
-            <select className="input" value={progClient} onChange={(e) => loadProgram(e.target.value)}>
+            {/* The <label> above is a SIBLING with no htmlFor, so it labels
+                this visually and not programmatically -- a screen reader
+                announced an unnamed combo box. */}
+            <select className="input" aria-label="Client for this program"
+                    value={progClient} onChange={(e) => loadProgram(e.target.value)}>
               <option value="">Choose client…</option>
               {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
             </select>
@@ -762,7 +766,8 @@ export default function WorkoutBuilder() {
         <div className="space-y-3">
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
-            <select className="input" value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
+            <select className="input" aria-label="Client to assign this workout to"
+                    value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
               <option value="">Choose client…</option>
               {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
             </select>

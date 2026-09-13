@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
+import { api } from '../../api.js';
+import { useFetch } from '../../utils.js';
 import LineNavList from '../../components/LineNavList.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
@@ -17,6 +19,12 @@ const NAV = [
   { to: '/app/trainer/alerts', label: 'Alerts', icon: 'alert' },
   { to: '/app/trainer/reports', label: 'Reports', icon: 'chart' },
   { to: '/app/trainer/messages', label: 'Messages', icon: 'mail' },
+  /* A TRAINER'S OWN HOURS. This was absent from their nav entirely --
+     /app/trainer/attendance was owner-only, so the whole self-service
+     side (history, totals, correction requests) existed on the server
+     and was unreachable. The same path now resolves to the roster for
+     an owner and to your own record for a trainer. */
+  { to: '/app/trainer/attendance', label: 'My attendance', icon: 'calendar' },
 ];
 
 /** Stroke icons, 20px grid — matches the client app's Icon.jsx convention
@@ -90,10 +98,32 @@ export default function TrainerLayout() {
      reading the whole list every time. A trainer's seven are a coherent
      set and stay flat; an owner's split into the two jobs they actually
      switch between. */
+  /* One unread fetch for the whole workspace, so the nav can say what is
+     waiting. Silent on failure: a badge is a convenience, and a workspace
+     that refuses to render its own navigation because a count did not
+     load is a worse trade than a missing number. */
+  const unread = useFetch(() => api('/messages/unread'));
+  const unreadTotal = unread.data?.total || 0;
+
+  // Re-count when a thread is read, and on every route change -- the
+  // second catches messages that arrived while you were on another page.
+  const reloadUnread = unread.reload;
+  useEffect(() => {
+    const onRead = () => reloadUnread({ silent: true });
+    window.addEventListener('sk-os:messages-read', onRead);
+    return () => window.removeEventListener('sk-os:messages-read', onRead);
+  }, [reloadUnread]);
+
+  const withBadges = (list) => list.map((n) => (
+    n.to === '/app/trainer/messages' ? { ...n, badge: unreadTotal } : n));
+
   const links = isOwner
     ? [
         { section: 'Coaching' },
-        ...NAV,
+        // The owner's attendance link belongs with the gym-running tools
+        // below (it is the ROSTER for them, not their own hours), so it is
+        // dropped from the coaching list rather than appearing twice.
+        ...NAV.filter((n) => n.to !== '/app/trainer/attendance'),
         { section: 'Running the gym' },
         { to: '/app/trainer/trainers', label: 'Trainers', icon: 'whistle' },
         { to: '/app/trainer/analytics', label: 'Analytics', icon: 'analytics' },
@@ -102,6 +132,7 @@ export default function TrainerLayout() {
         { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' },
       ]
     : NAV;
+  const navLinks = withBadges(links);
 
   /* Closed by default, on every screen size — the sidebar used to sit
      permanently open, eating a fixed 240px on every trainer screen
@@ -115,6 +146,7 @@ export default function TrainerLayout() {
   // Route change closes the drawer — opening a page is the natural signal
   // that the trainer is done choosing where to go.
   useEffect(() => { setNavOpen(false); }, [loc.pathname]);
+  useEffect(() => { reloadUnread({ silent: true }); }, [loc.pathname, reloadUnread]);
 
   // Escape closes it too, for keyboard users; a drawer with no keyboard
   // exit is a trap.
@@ -204,7 +236,7 @@ export default function TrainerLayout() {
             </div>
 
             <LineNavList
-              items={links.map((l) => ({ ...l, icon: <Icon name={l.icon} size={18} /> }))}
+              items={navLinks.map((l) => ({ ...l, icon: <Icon name={l.icon} size={18} /> }))}
               onNavigate={() => setNavOpen(false)}
             />
 

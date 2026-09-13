@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireRole, orgScope, resolveClient, hashPassword } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
-import { dayKey, daysAgoIso, round1 } from '../utils/time.js';
+import { dayKey, daysAgoIso, round1, todayKey} from '../utils/time.js';
 import { computeAdherence } from '../services/adherence.js';
 import { evaluateClient } from '../services/atRisk.js';
 import { validateProgram } from '../services/programValidation.js';
@@ -203,11 +203,34 @@ export default function clientRoutes(db) {
     const ids = rows.map((c) => c.id);
     const inClause = ids.map(() => '?').join(',');
     const evs = await evaluateClients(db, rows);
-    const [users, lastWos, w7s] = await Promise.all([
+    /* MEMBERSHIP AND THE TRAINER'S NAME, in two more bulk queries.
+     *
+     * The list could show how a client was TRAINING and nothing about
+     * their commercial relationship with the gym -- whether they were
+     * paid up, when their membership ends, or even who coaches them
+     * (the payload carried a trainer_id and no name, so the column
+     * could not be rendered at all). Those are the first things an
+     * owner scans a roster for, and the roster could not answer them.
+     *
+     * Bulk, not per-client: this list runs to 500 rows, and a query per
+     * client is how a client list stops loading at 200 members. */
+    const trainerIds = [...new Set(rows.map((c) => c.trainer_id).filter(Boolean))];
+    const [users, lastWos, w7s, subs, trainerUsers] = await Promise.all([
       db.q(`SELECT id, name, email, avatar, phone FROM users WHERE id IN (${inClause})`, rows.map((c) => c.user_id)),
       db.q(`SELECT client_id, MAX(scheduled_date) AS d FROM workouts WHERE client_id IN (${inClause}) AND status = 'completed' GROUP BY client_id`, ids),
-      db.q(`SELECT client_id, date, weight FROM weight_logs WHERE client_id IN (${inClause}) AND date >= ? ORDER BY client_id, date`, [...ids, daysAgoIso(7)])
+      db.q(`SELECT client_id, date, weight FROM weight_logs WHERE client_id IN (${inClause}) AND date >= ? ORDER BY client_id, date`, [...ids, daysAgoIso(7)]),
+      // Newest first, so the map below keeps the CURRENT membership when
+      // a client has renewed and therefore has several rows.
+      db.q(`SELECT client_id, status, payment_status, end_date, plan_name
+              FROM subscriptions WHERE client_id IN (${inClause})
+             ORDER BY start_date DESC`, ids),
+      trainerIds.length
+        ? db.q(`SELECT id, name FROM users WHERE id IN (${trainerIds.map(() => '?').join(',')})`, trainerIds)
+        : Promise.resolve([]),
     ]);
+    const subBy = new Map();
+    for (const sub of subs) if (!subBy.has(sub.client_id)) subBy.set(sub.client_id, sub);
+    const trainerBy = new Map(trainerUsers.map((u) => [u.id, u.name]));
     const userBy = new Map(users.map((u) => [u.id, u]));
     const lastBy = new Map(lastWos.map((w) => [w.client_id, w.d]));
     const w7By = new Map();
@@ -220,6 +243,20 @@ export default function clientRoutes(db) {
       return {
         id: c.id, name: user?.name || 'Client', email: user?.email, avatar: user?.avatar,
         age: c.age, sex: c.sex, goal: c.goal, trainerId: c.trainer_id,
+        trainerName: c.trainer_id ? (trainerBy.get(c.trainer_id) || null) : null,
+        // null, not a fabricated "active" -- a client with no subscription
+        // row has no membership, which is a different thing from a lapsed
+        // one and is exactly what an owner needs to see.
+        membership: (() => {
+          const sub = subBy.get(c.id);
+          if (!sub) return null;
+          return {
+            status: sub.status,
+            paymentStatus: sub.payment_status,
+            endDate: sub.end_date || null,
+            planName: sub.plan_name || null,
+          };
+        })(),
         startWeight: c.start_weight, currentWeight: c.current_weight, targetWeight: c.target_weight,
         goalDate: c.goal_date, heightCm: c.height_cm,
         change7,
@@ -342,6 +379,65 @@ export default function clientRoutes(db) {
   });
 
   // ---- update client (trainer_id, targets, status, name) ----
+  /* ---- /api/clients/:id/account — the commercial side of one client ----
+   *
+   * The client detail screen had seven tabs about TRAINING and not one
+   * about the relationship the gym actually runs on. An owner could not
+   * see what this member pays, when their membership ends, whether they
+   * are behind, or how often they have actually come in -- all of it
+   * already in the database, none of it reachable from the one screen
+   * built for looking at a single person.
+   *
+   * PAYMENTS ARE OWNER-ONLY. A trainer coaching this client gets their
+   * membership dates and attendance -- both of which change how you coach
+   * someone -- and no money at all. That is enforced here rather than by
+   * hiding a tab, because a hidden tab is a URL away from not being
+   * hidden (spec 40/41).
+   */
+  r.get('/:id/account', async (req, res) => {
+    const client = await resolveClient(db, req, res, req.params.id);
+    if (!client) return;
+    const isOwner = req.user.role === 'GYM_OWNER' || req.user.role === 'SUPER_ADMIN';
+    const today = todayKey(req.tz);
+
+    const [subs, payments, attendance, attCount] = await Promise.all([
+      db.q(`SELECT id, plan_name, amount, currency, start_date, end_date, renewal_date, status, payment_status
+              FROM subscriptions WHERE client_id = ? ORDER BY start_date DESC`, [client.id]),
+      isOwner
+        ? db.q(`SELECT id, amount, currency, method, status, paid_at
+                  FROM payments WHERE client_id = ? ORDER BY paid_at DESC LIMIT 24`, [client.id])
+        : Promise.resolve(null),
+      db.q(`SELECT date FROM attendance WHERE client_id = ? AND present = 1 AND date >= ?
+             ORDER BY date DESC`, [client.id, daysAgoIso(90)]),
+      db.q1('SELECT COUNT(*) AS n FROM attendance WHERE client_id = ? AND present = 1', [client.id]),
+    ]);
+
+    const current = subs[0] || null;
+    /* LAPSED IS A DATE, NOT A COLUMN. Nothing expires subscriptions on a
+       schedule here, so rows stay 'active' long after they run out --
+       believing the column told this gym's owner they had 23 active
+       members when 21 had already lapsed. */
+    const lapsed = !!(current && current.status === 'active' && current.end_date && current.end_date < today);
+
+    res.json({
+      membership: current && {
+        ...current,
+        lapsed,
+        effectiveStatus: lapsed ? 'lapsed' : current.status,
+      },
+      history: subs.slice(1),
+      // null (not []) when the caller may not see money, so the UI can
+      // tell "no payments" apart from "not yours to look at".
+      payments,
+      attendance: {
+        recentDates: attendance.map((a) => a.date),
+        last90: attendance.length,
+        allTime: Number(attCount?.n || 0),
+        lastVisit: attendance[0]?.date || null,
+      },
+    });
+  });
+
   r.patch('/:id/equipment', validate(z.object({
     equipment: z.array(z.string().max(40)).max(12)
   })), async (req, res) => {

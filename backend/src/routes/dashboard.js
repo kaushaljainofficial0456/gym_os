@@ -3,10 +3,31 @@ import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { computeAdherence } from '../services/adherence.js';
 import { evaluateClient, evaluateClients } from '../services/atRisk.js';
 import { daysAgoIso, todayKey, lastNDays, round1 } from '../utils/time.js';
+import { gymPulse } from '../services/gymPulse.js';
 
 export default function dashboardRoutes(db) {
   const r = Router();
   r.use(requireAuth, requireRole('GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'), orgScope);
+
+  /* ---- /api/dashboard/pulse ----
+   *
+   * "How is my gym doing today?" -- the question the dashboard exists to
+   * answer, and the one it could not. /overview knows about client
+   * adherence and nothing else: not who walked in today, not what is
+   * actually outstanding, not whether the trainers turned up, and no
+   * series for any of it.
+   *
+   * Owner-scoped because it is gym-wide money and roster data. A trainer
+   * has no business reading either, and gating it here rather than in
+   * the UI is the difference between hiding a number and protecting it.
+   */
+  r.get('/pulse', requireRole('GYM_OWNER', 'SUPER_ADMIN'), async (req, res) => {
+    const allowed = new Set([7, 30, 90]);
+    const asked = parseInt(req.query.days, 10);
+    const days = allowed.has(asked) ? asked : 30;
+    const pulse = await gymPulse(db, req.orgId, { tz: req.tz || 'Asia/Kolkata', days });
+    res.json(pulse);
+  });
 
   // ---- /api/dashboard/overview ----
   // Owner/admin view: org-wide metrics. Uses bulk evaluation to avoid N+1.

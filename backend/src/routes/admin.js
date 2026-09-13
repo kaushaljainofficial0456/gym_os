@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
-import { dayKey, addDays } from '../utils/time.js';
+import { dayKey, addDays, daysAgoIso } from '../utils/time.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
 import { transitionMembership, effectiveMembershipStatus } from '../services/enterprise/membershipLifecycle.js';
@@ -85,10 +85,28 @@ export default function adminRoutes(db) {
              WHERE p.org_id = ? AND p.paid_at >= ?
              ORDER BY p.paid_at`, [orgId, trendStart]),
       db.q(`SELECT * FROM subscriptions WHERE org_id = ?`, [orgId]),
-      db.q(`SELECT COUNT(*) AS n FROM subscriptions WHERE org_id = ? AND renewal_date <= ? AND status = 'active'`,
-        [orgId, addDays(new Date(), 30).toISOString().slice(0, 10)]),
-      db.q(`SELECT COUNT(*) AS n FROM subscriptions WHERE org_id = ? AND status = 'overdue'`, [orgId]),
-      db.q('SELECT COUNT(*) AS n FROM attendance WHERE org_id = ? AND date = ?', [orgId, today]),
+      /* RENEWALS DUE HAD NO LOWER BOUND. `renewal_date <= +30d` counts
+         every subscription whose renewal date has already PASSED, and
+         nothing in this app expires one, so the lapsed rows never leave
+         the set: this gym was shown "Renewals due 23" when exactly 2
+         fall in the next month. A renewal you can still act on is one
+         that has not happened yet. Same definition as gymPulse's
+         expiringSoon, deliberately -- two screens disagreeing about the
+         same number is worse than either being wrong alone. */
+      db.q(`SELECT COUNT(*) AS n FROM subscriptions
+             WHERE org_id = ? AND status = 'active'
+               AND renewal_date IS NOT NULL AND renewal_date >= ? AND renewal_date <= ?`,
+      [orgId, today, addDays(new Date(), 30).toISOString().slice(0, 10)]),
+      /* Money owed is not only the rows literally labelled 'overdue' --
+         a pending or failed payment_status is money the gym has not
+         been paid either, and was being reported as nothing owed. */
+      db.q(`SELECT COUNT(*) AS n FROM subscriptions
+             WHERE org_id = ? AND (status = 'overdue'
+                OR payment_status IN ('overdue', 'failed', 'pending'))`, [orgId]),
+      /* `present` was never filtered, so a member explicitly marked
+         ABSENT counted towards "attendance today". The column exists
+         precisely to record that they did not come. */
+      db.q('SELECT COUNT(*) AS n FROM attendance WHERE org_id = ? AND date = ? AND present = 1', [orgId, today]),
       db.q('SELECT * FROM packages WHERE org_id = ?', [orgId]),
       db.q(`SELECT s.*, u.name AS client_name FROM subscriptions s
              JOIN clients c ON c.id = s.client_id
@@ -269,7 +287,7 @@ export default function adminRoutes(db) {
     const [clients, payments, subs, attendance] = await Promise.all([
       db.q('SELECT id, created_at, status FROM clients WHERE org_id = ?', [orgId]),
       db.q('SELECT amount, paid_at FROM payments WHERE org_id = ? AND paid_at >= ?', [orgId, startDate]),
-      db.q('SELECT status, start_date, end_date FROM subscriptions WHERE org_id = ?', [orgId]),
+      db.q('SELECT client_id, status, start_date, end_date FROM subscriptions WHERE org_id = ?', [orgId]),
       db.q('SELECT date, present FROM attendance WHERE org_id = ? AND date >= ?', [orgId, startDate]),
     ]);
 
@@ -277,6 +295,40 @@ export default function adminRoutes(db) {
     // than from whatever months happen to have data -- a month with no
     // revenue is a zero on the chart, not a missing point, and those
     // are very different stories.
+    const today = dayKey(new Date(), req.tz);
+
+    /* WHAT COUNTS AS A DEPARTURE.
+     *
+     * This asked for status 'expired' or 'cancelled' -- and nothing in
+     * this app ever sets either. Subscriptions stay 'active' forever, so
+     * `left` was structurally always 0, and CHURN with it: this gym was
+     * shown "0% churn" while 21 of its 25 memberships had already run
+     * out. A metric that cannot produce a non-zero answer is worse than
+     * no metric, because it reads as good news (spec 30: do not call
+     * something churn unless the calculation is defined).
+     *
+     * A subscription is a departure when its end date has PASSED and the
+     * client did not take out another one that runs later. That second
+     * clause is what keeps renewals out: someone on their fourth
+     * quarterly plan has three expired rows behind them and has not left
+     * at all. An explicit cancellation counts whatever the dates say.
+     *
+     * An end date in the FUTURE is a renewal date, not a departure --
+     * which is what the original comment correctly said; the bug was
+     * only in believing the status column alongside it. */
+    const latestEndByClient = new Map();
+    for (const sb of subs) {
+      if (!sb.end_date) continue;
+      const best = latestEndByClient.get(sb.client_id);
+      if (!best || sb.end_date > best) latestEndByClient.set(sb.client_id, sb.end_date);
+    }
+    const departed = (sb) => {
+      if (sb.status === 'cancelled') return true;
+      if (!sb.end_date || sb.end_date >= today) return false;
+      // Superseded by a later plan for the same client => a renewal.
+      return latestEndByClient.get(sb.client_id) === sb.end_date;
+    };
+
     const buckets = [];
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date();
@@ -288,11 +340,7 @@ export default function adminRoutes(db) {
 
     const series = buckets.map((key) => {
       const joined = clients.filter((c) => inMonth(c.created_at, key)).length;
-      // "Left" means a subscription that ENDED in this month and is not
-      // active any more. An end_date in the future on an active plan is
-      // a renewal date, not a departure.
-      const left = subs.filter((sb) => inMonth(sb.end_date, key)
-        && (sb.status === 'expired' || sb.status === 'cancelled')).length;
+      const left = subs.filter((sb) => inMonth(sb.end_date, key) && departed(sb)).length;
       const revenue = payments.filter((p) => inMonth(p.paid_at, key))
         .reduce((n, p) => n + Number(p.amount || 0), 0);
       const visits = attendance.filter((a) => inMonth(a.date, key) && int(a.present) === 1).length;
@@ -352,6 +400,32 @@ export default function adminRoutes(db) {
         WHERE t.org_id = ?
         ORDER BY u.name`, [req.orgId]);
 
+    /* HOW THE ROSTER IS ACTUALLY DOING, and whether the coach turned up.
+     *
+     * This screen could say how many clients each trainer HAS and nothing
+     * about how those clients are faring or whether the trainer has been
+     * in this week -- so "who needs a conversation?", the question an
+     * owner opens this page to answer, had no data behind it. Both
+     * already exist: client status is evaluated everywhere else in the
+     * product, and trainer_attendance has been recording days all along.
+     *
+     * Two grouped queries for the whole roster, not one per trainer. */
+    const since = daysAgoIso(7);
+    const [outcomes, attended] = await Promise.all([
+      db.q(`SELECT trainer_id,
+                   SUM(CASE WHEN status = 'AT_RISK' THEN 1 ELSE 0 END) AS at_risk,
+                   SUM(CASE WHEN status = 'INACTIVE' THEN 1 ELSE 0 END) AS inactive
+              FROM clients
+             WHERE org_id = ? AND trainer_id IS NOT NULL
+             GROUP BY trainer_id`, [req.orgId]),
+      db.q(`SELECT trainer_id, COUNT(*) AS n
+              FROM trainer_attendance
+             WHERE org_id = ? AND date >= ? AND check_in IS NOT NULL
+             GROUP BY trainer_id`, [req.orgId, since]).catch(() => []),
+    ]);
+    const outcomeBy = new Map(outcomes.map((o) => [o.trainer_id, o]));
+    const attendedBy = new Map(attended.map((a) => [a.trainer_id, int(a.n)]));
+
     // Postgres returns COUNT() as a bigint STRING; left raw, every
     // capacity comparison below would be a string compare ("9" > "40").
     const trainers = rows.map((t) => {
@@ -372,6 +446,11 @@ export default function adminRoutes(db) {
         // A capacity with no ceiling set is unknown, not 0% full. Null
         // renders as "no limit set" rather than as a full green ring.
         loadPct: max > 0 ? Math.round((active / max) * 100) : null,
+        atRiskClients: int(outcomeBy.get(t.user_id)?.at_risk),
+        inactiveClients: int(outcomeBy.get(t.user_id)?.inactive),
+        // Days checked in over the last 7. Zero is a real answer here --
+        // it means they have not been in, which is the point.
+        daysInLast7: attendedBy.get(t.user_id) || 0,
         createdAt: t.created_at,
       };
     });

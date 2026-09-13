@@ -109,9 +109,24 @@ export default function LineNavList({ items, onNavigate }) {
               <>
                 <span className="line-nav__icon shrink-0" style={isActive ? { color: 'var(--accent)' } : undefined}>{l.icon}</span>
                 <span className="line-nav__label flex-1 min-w-0 truncate" style={isActive ? { color: 'var(--accent)' } : undefined}>{l.label}</span>
-                <span className="line-nav__index shrink-0" aria-hidden="true">
-                  {String(items.slice(0, i + 1).filter((x) => !x.section).length).padStart(2, '0')}
-                </span>
+                {/* A count, when the item carries one. The nav had no way
+                    to say anything was waiting, so a trainer learned about
+                    a client's message by opening Messages and looking.
+                    It replaces the decorative index rather than sitting
+                    beside it -- two numbers on one row is a puzzle. */}
+                {l.badge > 0 ? (
+                  <span
+                    className="shrink-0 rounded-full px-1.5 text-[10px] font-bold tabular-nums"
+                    style={{ minWidth: 18, lineHeight: '18px', textAlign: 'center',
+                             background: 'var(--accent)', color: 'var(--accent-contrast)' }}
+                  >
+                    {l.badge > 99 ? '99+' : l.badge}
+                  </span>
+                ) : (
+                  <span className="line-nav__index shrink-0" aria-hidden="true">
+                    {String(items.slice(0, i + 1).filter((x) => !x.section).length).padStart(2, '0')}
+                  </span>
+                )}
                 {isActive && <span className="line-nav__marker" aria-hidden="true" />}
               </>
             )}

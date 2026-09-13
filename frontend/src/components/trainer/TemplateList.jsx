@@ -215,9 +215,14 @@ function Chip({ children, on, onClick, small }) {
   return (
     <button
       type="button" onClick={onClick} aria-pressed={on}
-      className={`rounded-lg font-semibold shrink-0 ${small ? 'px-2 text-[10.5px]' : 'px-2.5 text-[11px]'}`}
+      /* 28-30px is a mouse target, not a thumb one. Every filter and sort
+         control on this screen sat below the app's own 44px floor, on a
+         page a coach uses standing in a gym holding a phone. 38 keeps the
+         chip row compact while being hittable; the actions below get the
+         full 44. */
+      className={`rounded-lg font-semibold shrink-0 ${small ? 'px-2.5 text-[10.5px]' : 'px-3 text-[11px]'}`}
       style={{
-        minHeight: small ? 28 : 30,
+        minHeight: small ? 36 : 38,
         background: on ? 'var(--accent-soft)' : 'transparent',
         border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
         color: on ? 'var(--accent)' : 'var(--mute)',
@@ -230,10 +235,18 @@ function Action({ children, onClick, label, danger }) {
   return (
     <button
       type="button" onClick={onClick} aria-label={label}
-      className="rounded-lg px-2.5 text-[11px] font-semibold"
+      /* DELETE WAS A 32px TARGET SITTING BESIDE DUPLICATE AND ASSIGN.
+         Three buttons within a few pixels of each other, one of them
+         destructive, all under the touch-target floor -- on a phone that
+         is a mis-tap waiting to happen, and the confirm dialog is a
+         mitigation for a problem the layout should not create. 44px, and
+         the destructive one carries its own tint so it is distinguishable
+         before the finger lands rather than after. */
+      className={`rounded-lg px-3 text-[11px] font-semibold ${danger ? 'ml-auto' : ''}`}
       style={{
-        minHeight: 32,
-        border: '1px solid var(--line)',
+        minHeight: 44,
+        border: `1px solid ${danger ? 'rgb(var(--bad-rgb) / .35)' : 'var(--line)'}`,
+        background: danger ? 'rgb(var(--bad-rgb) / .06)' : 'transparent',
         color: danger ? 'var(--bad)' : 'var(--mute)',
       }}
     >{children}</button>

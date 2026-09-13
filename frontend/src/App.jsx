@@ -60,6 +60,7 @@ const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
 const GymAttendance = lazy(() => import('./pages/trainer/GymAttendance.jsx'));
+const MyAttendance = lazy(() => import('./pages/trainer/MyAttendance.jsx'));
 const Trainers = lazy(() => import('./pages/trainer/Trainers.jsx'));
 const Analytics = lazy(() => import('./pages/trainer/Analytics.jsx'));
 const HealthDevices = lazy(() => import('./pages/client/HealthDevices.jsx'));
@@ -248,7 +249,20 @@ export default function App() {
         <Route path="alerts" element={page(Alerts)} />
         <Route path="reports" element={page(Reports)} />
         <Route path="messages" element={page(Messages)} />
-        <Route path="attendance" element={<OwnerOnly ok={isOwner} ready={ready}>{page(GymAttendance)}</OwnerOnly>} />
+        {/* ONE ROUTE, TWO JOBS -- because "attendance" means different
+            things to the two people who open it. An owner wants the
+            roster: who is in, who is late, whose correction is waiting.
+            A trainer wants their OWN hours.
+
+            This was OwnerOnly, so a trainer had no way to see any of it.
+            The entire self-service side -- history, totals, and the
+            correction-request workflow -- was built, tested and reachable
+            only by someone not allowed to use it: the trainer's one point
+            of contact with their own attendance was a check-in button on
+            the dashboard, after which the record vanished from their
+            view. Both endpoints were already scoped server-side, so this
+            is a UI that finally matches what the API always allowed. */}
+        <Route path="attendance" element={isOwner ? page(GymAttendance) : page(MyAttendance)} />
         {/* OWNER-ONLY, GATED AT THE ROUTER.
             The sidebar already hides these from a trainer, so the only
             way in is typing the URL -- and doing that mounted the page,
