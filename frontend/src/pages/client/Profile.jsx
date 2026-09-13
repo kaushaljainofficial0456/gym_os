@@ -7,6 +7,12 @@ import { useUnits } from '../../unitsContext.jsx';
 import { DASH_CARDS, DEFAULT_ORDER, resolveDashboard, parseDashboardPrefs } from '../../dashboardCards.js';
 import WeightInput, { LengthInput } from '../../components/WeightInput.jsx';
 import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
+// TWO components are called Ring and they mean OPPOSITE things by `label`:
+// UI.jsx's renders it as visible 26px centre text, Ring.jsx's uses it as an
+// aria-label. Writing a call for one while importing the other put a whole
+// sentence across the goal card at 26px. Imported under a distinct name so
+// the next reader cannot make the same swap by accident.
+import ProgressArc from '../../components/Ring.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
 
@@ -227,6 +233,100 @@ function HelpInline() {
  * been changing the theme, so it says where it moved to instead of
  * vanishing.
  */
+/* ════════════════════════════════════════════════════════════════
+   COACH PREFERENCES — a conversation, not a form to endure.
+
+   Every field was a bare text box whose placeholder repeated its own
+   label word for word ("PREFERRED TRAINING TIME" over a box reading
+   "Preferred training time"). That is zero information twice: the hint
+   tells you nothing the label didn't, and the moment you type it's gone.
+   Nothing on the screen said what any of it was FOR, so the honest
+   response to "Equipment preference" was to skip it.
+
+   Three of these have a small, knowable set of answers, and typing prose
+   where a choice exists is both slower and worse input. Those are chips
+   now. The two that are genuinely open keep free text but carry a real
+   example, and the note becomes the textarea it always was.
+
+   Each field says what it CHANGES, because these feed the plans the
+   coach writes -- and a field that visibly does something gets filled in.
+   ──────────────────────────────────────────────────────────────── */
+const COACH_FIELDS = [
+  { key: 'training_time', label: 'When you train',
+    why: 'Sessions get scheduled when you actually have energy.',
+    options: ['Early morning', 'Morning', 'Afternoon', 'Evening', 'Late night'] },
+  { key: 'workout_duration', label: 'Time per session',
+    why: 'The plan is built to fit this, not trimmed to fit later.',
+    options: ['30 min', '45 min', '60 min', '75 min', '90 min'] },
+  { key: 'equipment_pref', label: 'What you can train with',
+    why: 'Anything you have no kit for is left out entirely.',
+    options: ['Full gym', 'Home basics', 'Dumbbells only', 'Bodyweight only', 'Resistance bands'] },
+  { key: 'liked_foods', label: 'Foods you actually eat',
+    why: 'Meal suggestions are built from these first.',
+    placeholder: 'paneer, oats, eggs, rajma…' },
+  { key: 'disliked_exercises', label: 'Exercises to avoid',
+    why: 'Each one gets swapped for something that trains the same muscle.',
+    placeholder: 'burpees, overhead press…' },
+  { key: 'note', label: 'Anything else worth knowing',
+    why: 'Injuries, a competition, travel coming up.',
+    placeholder: 'Bad left knee — no deep lunges. Wedding in March.',
+    multiline: true },
+];
+
+function CoachField({ field, value, onChange }) {
+  const val = value ?? '';
+  // A value typed before these were chips (or set by the coach) must stay
+  // selectable, or opening this screen and saving would silently delete it.
+  const opts = field.options
+    ? (val && !field.options.includes(val) ? [...field.options, val] : field.options)
+    : null;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>{field.label}</span>
+        {val ? null : <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>optional</span>}
+      </div>
+      <div className="text-[10.5px] mt-0.5 mb-1.5 leading-snug" style={{ color: 'var(--faint)' }}>{field.why}</div>
+
+      {opts ? (
+        <div className="flex flex-wrap gap-1.5">
+          {opts.map((o) => {
+            const on = val === o;
+            return (
+              <button
+                key={o} type="button" aria-pressed={on}
+                onClick={() => onChange(on ? '' : o)}
+                className="rounded-full px-3 text-[11.5px] font-semibold transition-colors"
+                style={{
+                  minHeight: 38,
+                  background: on ? 'var(--cta-solid)' : 'transparent',
+                  color: on ? 'var(--cta-ink)' : 'var(--mute)',
+                  border: `1px solid ${on ? 'transparent' : 'var(--line)'}`,
+                }}
+              >{o}</button>
+            );
+          })}
+        </div>
+      ) : field.multiline ? (
+        <textarea
+          className="input w-full" rows={3} value={val} placeholder={field.placeholder}
+          aria-label={field.label}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ minHeight: 76, resize: 'vertical' }}
+        />
+      ) : (
+        <input
+          type="text" className="input w-full" value={val} placeholder={field.placeholder}
+          aria-label={field.label}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ minHeight: 44 }}
+        />
+      )}
+    </div>
+  );
+}
+
 function ThemeToggle() {
   const { theme: choice, resolved } = useTheme();
   const label = choice === 'system'
@@ -651,10 +751,12 @@ Save it anyway?`);
             {/* ── where you are ── */}
             <div className="card p-4">
               <div className="flex items-center gap-4">
-                <Ring
+                <ProgressArc
                   value={Math.max(0, Math.min(100, progress)) / 100}
                   size={72} stroke={7} color="var(--m-body)"
-                  label={`${Math.round(progress)} percent of the way to your target`}
+                  label={c.targetWeight == null
+                    ? 'No goal target set yet'
+                    : `${Math.round(progress)} percent of the way to your target weight`}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="t-micro">Goal progress</div>
@@ -963,25 +1065,37 @@ Save it anyway?`);
             </div>
             {/* coach preferences */}
             <div className="card p-4">
-              <div className="t-micro mb-3">Coach preferences</div>
-              <div className="space-y-2">
-                {[['training_time', 'Preferred training time', 'text'], ['workout_duration', 'Workout duration (min)', 'number'],
-                  ['equipment_pref', 'Equipment preference', 'text'], ['liked_foods', 'Liked foods', 'text'],
-                  ['disliked_exercises', 'Disliked exercises', 'text'], ['note', 'Note for coach', 'text']
-                ].map(([key, label, type]) => (
-                  <label key={key} className="block">
-                    <span className="text-[10px] text-faint font-grotesk">{label.toUpperCase()}</span>
-                    <input type={type} className="input mt-1" placeholder={label} value={coachPrefs[key] ?? ''}
-                      onChange={(e) => setCoachPrefs((p) => ({ ...p, [key]: e.target.value }))} />
-                  </label>
+              <div className="t-micro">Coach preferences</div>
+              <p className="text-[10.5px] mt-0.5 mb-3 leading-snug" style={{ color: 'var(--faint)' }}>
+                What the coach knows about you before it writes anything. Fill in what's
+                true — every one of these changes the plans you get.
+              </p>
+
+              <div className="space-y-4">
+                {COACH_FIELDS.map((f) => (
+                  <CoachField
+                    key={f.key}
+                    field={f}
+                    value={coachPrefs[f.key]}
+                    onChange={(v) => setCoachPrefs((p) => ({ ...p, [f.key]: v }))}
+                  />
                 ))}
               </div>
-              <button className="btn-primary w-full mt-3" disabled={savingPrefs2} onClick={async () => {
+
+              <button className="btn-primary w-full mt-4" style={{ minHeight: 48 }}
+                      disabled={savingPrefs2} onClick={async () => {
                 setSavingPrefs2(true);
                 try {
-                  const entries = Object.entries(coachPrefs)
-                    .filter(([, v]) => v !== '' && v != null)
-                    .map(([key, value]) => ({ key, value }));
+                  // SEND THE EMPTIES TOO. This filtered them out, so clearing
+                  // a preference never reached the server -- and the server has
+                  // always treated an empty value as "delete this row" (see
+                  // PUT /intel/coach/memory). You could set a preference and
+                  // never un-set it; it simply came back on reload. Harmless
+                  // now, visible the moment chips let you tap a choice off.
+                  const entries = COACH_FIELDS.map(({ key }) => ({
+                    key,
+                    value: typeof coachPrefs[key] === 'string' ? coachPrefs[key].trim() : (coachPrefs[key] ?? ''),
+                  }));
                   await api('/intel/coach/memory', { method: 'PUT', body: JSON.stringify({ entries }) });
                   coachMem.reload({ silent: true });
                   setToast('Coach preferences saved');

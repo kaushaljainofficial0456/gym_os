@@ -13,6 +13,7 @@ import { requireAuth, orgScope } from '../auth.js';
 import { id, now } from '../ids.js';
 import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR } from '../utils/time.js';
 import { invalidateDayStart } from '../services/logDay.js';
+import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
@@ -1328,6 +1329,39 @@ export default function meRoutes(db) {
    * to your Thursday, and close to worthless as an absolute. Every
    * surface that shows it says so.
    */
+  /* ---------------- net energy balance ----------------
+   *
+   * Intake minus expenditure, per day. The app has always known both
+   * halves and never subtracted them, which left the one number a cut or
+   * a bulk is actually run on unavailable anywhere in the product.
+   *
+   * `days` is capped at a year: this is a chart feed, and an uncapped
+   * range lets one request scan a client's entire history three times
+   * over. The composition rules -- and the reason an incomplete profile
+   * returns null rather than a number -- live in services/energyBalance.js.
+   */
+  r.get('/energy/balance', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = req.tz || 'Asia/Kolkata';
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 14, 1), 365);
+
+    const toKey = await logToday(c.id, tz);
+    const from = new Date(toKey + 'T00:00:00Z');
+    from.setUTCDate(from.getUTCDate() - (days - 1));
+    const fromKey = from.toISOString().slice(0, 10);
+
+    const { days: series, bmrPerDay, missing } = await balanceRange(db, c, { fromKey, toKey, tz });
+    res.json({
+      days: series,
+      today: series.length ? series[series.length - 1] : null,
+      bmrPerDay,
+      // Named fields, so the UI can say "add your height" rather than
+      // rendering a dash and leaving the user to guess what is wrong.
+      missing,
+      range: { from: fromKey, to: toKey },
+    });
+  });
+
   r.get('/cardio', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : null;

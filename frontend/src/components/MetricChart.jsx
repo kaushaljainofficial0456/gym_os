@@ -98,7 +98,16 @@ export default function MetricChart({
 
     const W = width || 320;                                // real px; see the measuring comment above
     const H = height;
-    const px = (t) => PAD.left + ((t - minX) / spanX) * (W - PAD.left - PAD.right);
+    // A LONE READING SITS IN THE MIDDLE, not hard against the axis.
+    // With one point minX === maxX, so the ratio is 0 and every x
+    // collapsed onto PAD.left -- the dot landed on top of the y-axis and
+    // a bar was drawn half outside the plot area. Both are present, and
+    // both read as "the chart is empty", which is what a first workout or
+    // a first weigh-in looked like.
+    const lone = points.length === 1;
+    const px = (t) => (lone
+      ? PAD.left + (W - PAD.left - PAD.right) / 2
+      : PAD.left + ((t - minX) / spanX) * (W - PAD.left - PAD.right));
     const py = (v) => PAD.top + (1 - (v - minY) / (maxY - minY)) * (H - PAD.top - PAD.bottom);
 
     const coords = points.map((p, i) => ({ ...p, x: px(xs[i]), y: py(p.value) }));

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useUnits } from '../../unitsContext.jsx';
 import WeightInput from '../../components/WeightInput.jsx';
+import { Sheet } from '../../components/UI.jsx';
 
 // Easy -> lots left in the tank; Very hard -> nothing left. These are the
 // RIR values the existing calorie model already reasons about.
@@ -230,20 +231,34 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
 
   const field = { background: 'var(--bg)', border: '1px solid var(--line)', color: 'var(--ink)' };
 
+  /* THIS SHEET USED TO BUILD ITS OWN OVERLAY, and that is why its blocks
+     sat on top of each other on a phone. It positioned itself with
+     `fixed inset-0` -- but `position: fixed` is resolved against the
+     nearest TRANSFORMED ancestor, not the viewport, and this app animates
+     cards in with transforms (anim-fadeUp / anim-scaleIn). Opened from
+     inside one of those, the overlay anchored to the card instead of the
+     screen and everything stacked.
+     The shared Sheet portals to document.body, so it cannot inherit an
+     ancestor's transform. It also brings the three things this hand-rolled
+     copy never had: the page behind stops scrolling, Escape closes, and
+     the save button clears the phone's home indicator
+     (env(safe-area-inset-bottom)) instead of sitting under it. On mobile
+     it is a bottom sheet rather than a centred modal, which is what the
+     rest of the app already does. */
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" style={{ background: 'rgb(var(--bg-rgb) / .8)', backdropFilter: 'blur(4px)' }}>
-      <div className="card w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden anim-scaleIn">
-        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--line)' }}>
-          <div>
-            <div className="font-grotesk font-bold">Log a past workout</div>
-            <div className="text-[10px]" style={{ color: 'var(--mute)' }}>For a session you already did</div>
-          </div>
-          <button className="chrome-btn btn-icon justify-center shrink-0" onClick={onClose} aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      wide
+      title="Log a past workout"
+      sub="For a session you already did"
+      footer={(
+        <button className="btn-primary btn-block" disabled={!canSave || saving} onClick={save} style={{ minHeight: 48 }}>
+          {saving ? 'Saving…' : 'Save workout'}
+        </button>
+      )}
+    >
+        <div className="space-y-4">
           {/* ── when ── */}
           <div>
             <div className="t-micro mb-2">When did you train?</div>
@@ -434,13 +449,6 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
             </div>
           )}
         </div>
-
-        <div className="p-4 border-t" style={{ borderColor: 'var(--line)' }}>
-          <button className="btn-primary btn-block" disabled={!canSave || saving} onClick={save} style={{ minHeight: 48 }}>
-            {saving ? 'Saving…' : 'Save workout'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

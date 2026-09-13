@@ -45,7 +45,7 @@
  *   where the non-obvious tools live -- and each card says what you can
  *   DO, not what is on screen.
  */
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const STORAGE_KEY = 'sk-os-app-tour-done';
@@ -256,6 +256,44 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
   const [rect, setRect] = useState(null);     // spotlight rect when an anchor was found
   const [hasTarget, setHasTarget] = useState(false);
 
+  /* THE CARD'S REAL HEIGHT, not a guess at it.
+   *
+   * The layout below decided where to put this card -- above the anchor or
+   * below it, and how far -- using a hardcoded CARD_H_EST of 216px. On a
+   * phone the copy wraps to more lines than it does on a laptop, so the
+   * real card is routinely taller than the estimate, and every consumer of
+   * that number was then wrong in the same direction: the "does it fit
+   * below?" test said yes when it did not, and placing it ABOVE an anchor
+   * (top = rect.top - 216) left the surplus height hanging straight back
+   * down over the element the step was pointing at. That is the tour
+   * covering the thing it is explaining.
+   *
+   * Measured after paint and re-measured on resize, so rotating the phone
+   * or opening the keyboard re-solves the layout instead of keeping a
+   * position computed for the old viewport. */
+  const cardRef = useRef(null);
+  const [cardH, setCardH] = useState(216);
+  const [viewport, setViewport] = useState(() => ({
+    w: typeof window === 'undefined' ? 360 : window.innerWidth,
+    h: typeof window === 'undefined' ? 640 : window.innerHeight,
+  }));
+
+  useLayoutEffect(() => {
+    if (!active) return undefined;
+    const measure = () => {
+      if (cardRef.current) setCardH(cardRef.current.offsetHeight || 216);
+      setViewport({ w: window.innerWidth, h: window.innerHeight });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    let ro;
+    if (typeof ResizeObserver !== 'undefined' && cardRef.current) {
+      ro = new ResizeObserver(measure);
+      ro.observe(cardRef.current);
+    }
+    return () => { window.removeEventListener('resize', measure); ro?.disconnect(); };
+  }, [active, idx]);
+
   // Build steps once from role flags
   const steps = useMemo(
     () => buildSteps({ isClient, isIndependent, isTrainer, isOwner }),
@@ -356,11 +394,15 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
   if (!active) return null;
 
   /* ── layout math ── */
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const vw = viewport.w;
+  const vh = viewport.h;
   const pad = 7;                       // breathing room around the spotlight
   const cardW = Math.min(330, vw - 28);
-  const CARD_H_EST = 216;              // estimate used only for flip/clamp decisions
+  // The MEASURED height, capped at what the viewport can actually show --
+  // past that the card scrolls internally (maxHeight below) and its
+  // on-screen box is the cap, which is the figure the clamp needs.
+  const EDGE = 12;
+  const cardH_ = Math.min(cardH, vh - EDGE * 2);
 
   let spotlightStyle = null;
   let cardStyle = {};
@@ -377,14 +419,23 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
       transition: prefersReducedMotion() ? 'none' : 'all .38s cubic-bezier(.22,.8,.3,1)',
     };
     const spaceBelow = vh - rect.bottom;
-    const placeBelow = step.placement !== 'top' ? spaceBelow >= CARD_H_EST + 24 : rect.top > CARD_H_EST + 24;
-    const top = placeBelow ? rect.bottom + 12 : Math.max(12, rect.top - CARD_H_EST - 12);
-    const left = Math.min(Math.max(rect.left + rect.width / 2 - cardW / 2, 12), vw - cardW - 12);
-    // Clamping to vh-150 could drag the card back UP over the very
-    // element it is describing when the anchor sits low on the screen.
-    // Never let the clamp push it above the spotlight's bottom edge.
-    const floor = placeBelow ? Math.max(rect.bottom + 12, vh - 150) : vh - 150;
-    cardStyle = { top: Math.min(top, floor), left };
+    const spaceAbove = rect.top;
+    // Prefer the requested side, but only if the card GENUINELY fits there.
+    const fitsBelow = spaceBelow >= cardH_ + 24;
+    const fitsAbove = spaceAbove >= cardH_ + 24;
+    const placeBelow = step.placement === 'top'
+      ? (!fitsAbove && fitsBelow)
+      : (fitsBelow || !fitsAbove);
+
+    let top = placeBelow ? rect.bottom + 12 : rect.top - cardH_ - 12;
+
+    // The card must end up wholly on screen whatever the anchor did. This
+    // is the last word: a position that runs off the bottom is how a step
+    // ends up with its Next button unreachable.
+    top = Math.min(Math.max(top, EDGE), vh - cardH_ - EDGE);
+
+    const left = Math.min(Math.max(rect.left + rect.width / 2 - cardW / 2, EDGE), vw - cardW - EDGE);
+    cardStyle = { top, left };
   } else {
     // Centered fallback (intro / outro / missing anchor)
     cardStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
@@ -404,10 +455,11 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
         role="dialog"
         aria-label={`Tour step ${idx + 1} of ${steps.length}: ${step.title}`}
         className="anim-scaleIn"
+        ref={cardRef}
         style={{
           position: 'fixed',
           width: cardW,
-          maxHeight: vh - 40,
+          maxHeight: vh - EDGE * 2,
           overflowY: 'auto',
           background: 'var(--panel)',
           border: '1px solid var(--line)',

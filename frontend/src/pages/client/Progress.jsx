@@ -42,6 +42,7 @@ import { WeekSection, MeasurementsSection, AchievementsSection, StrengthProgress
 import { RecoverySection, TransformationSection } from './ProgressRecovery.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
+import EnergyBalanceChart from '../../components/EnergyBalanceChart.jsx';
 
 const PERIODS = [
   { key: 7, label: '7D' },
@@ -1657,6 +1658,16 @@ export default function Progress() {
       </div>
 
       <RecoverySection intel={intel} Section={Section} Stat={Stat} />
+
+      {/* ENERGY BALANCE — deliberately its own section rather than another
+          chip inside the explorer. Every metric in there is one series
+          trending over time; this one is a SIGNED quantity whose zero line
+          carries the meaning, it wants its own day range (a cut starts when
+          it starts, not on a 30/90 boundary), and it is the screen people
+          open Progress to check during one. */}
+      <Section title="Energy balance">
+        <EnergyBalanceChart />
+      </Section>
 
       <MetricExplorer intel={intel} period={period} />
 

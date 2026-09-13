@@ -9,6 +9,7 @@ import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
 import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
+import NetEnergyCard from '../../components/nutrition/NetEnergyCard.jsx';
 import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
@@ -831,6 +832,16 @@ export default function Nutrition() {
           </div>
         </div>
       )}
+
+      {/* ══════ NET ENERGY ══════
+          Intake minus expenditure. Sits directly under the day's numbers
+          because it is the CONCLUSION those numbers add up to -- the ring
+          says how much of a target is left, this says which direction the
+          day actually went. Collapsed by default: one figure and one word
+          is the whole answer most of the time. `refreshKey` is today's
+          eaten total, so logging a meal moves this immediately rather
+          than at the next page load. */}
+      <NetEnergyCard t={t} refreshKey={Math.round(eaten.calories)} />
 
       {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
       {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
