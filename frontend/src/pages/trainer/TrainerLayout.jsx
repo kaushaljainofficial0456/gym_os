@@ -5,6 +5,7 @@ import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import LineNavList from '../../components/LineNavList.jsx';
+import ThemeSwitch from '../../components/trainer/ThemeSwitch.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import { Avatar } from '../../components/UI.jsx';
@@ -182,6 +183,19 @@ export default function TrainerLayout() {
             {user?.orgName || 'Workspace'}
           </span>
         </button>
+
+        {/* APPEARANCE, WHERE BOTH ROLES CAN REACH IT. A client could change
+            theme in Settings; an owner or trainer had no control anywhere
+            in the workspace -- they got whatever their device implied on
+            the day they first signed in. A gym floor at 6am and an office
+            at 3pm are not the same lighting.
+            Icon-only below sm: at 375px the three labelled pills would
+            push the gym name out of the bar, which is the bug the
+            `truncate` above already exists to prevent. */}
+        <div className="ml-auto shrink-0">
+          <span className="hidden sm:inline-flex"><ThemeSwitch /></span>
+          <span className="sm:hidden inline-flex"><ThemeSwitch compact /></span>
+        </div>
       </header>
 
       {/* ── backdrop + drawer, StaggeredMenu-style choreography: panel

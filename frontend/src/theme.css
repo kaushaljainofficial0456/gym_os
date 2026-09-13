@@ -136,6 +136,16 @@
   --panel: #1A1717;
   --panel2: #241F20;
   --line: rgba(255,223,221,.08);
+  /* THE EDGE OF A FORM CONTROL, which is not the same thing as a divider.
+     `--line` is a decorative separator and is deliberately faint -- but
+     .input borrowed it, so a field sitting directly on the page (the
+     search and filter row on Clients, for one) had a 1.19:1 edge and a
+     1.05:1 fill: a box you genuinely could not see the boundary of.
+     WCAG 1.4.11 asks 3:1 for a control's boundary, and this is measured
+     to clear it against the field fill, a card and the page alike.
+     Scoped to controls on purpose -- pushing every border this dark would
+     make the whole product heavy to look at. */
+  --field-edge: rgba(255,223,221,.40);
   --ink: #FFDFDD;                      /* blush -- was warm off-white */
   --mute: rgba(255,223,221,.68);
   /* CONTRAST PASS (Part 33). --faint was .44, which composites to 3.61:1
@@ -373,6 +383,8 @@
   --panel: #FFFFFF;
   --panel2: #FBF6F4;
   --line: #EBDFDA;
+  /* Light was FAINTER than dark here (1.1:1 both ways), not better. */
+  --field-edge: #9E8176;
   --ink: #1E1714;                      /* deeper: "strong black text" */
   --mute: rgba(30,23,20,.66);
   --faint: rgba(30,23,20,.60);        /* see the dark block's note */
@@ -963,7 +975,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     padding: 11px 14px;
     border-radius: var(--r-md);
     background-color: var(--bg2);
-    border: 1px solid var(--line);
+    border: 1px solid var(--field-edge);
     color: var(--ink);
     min-height: 44px;                    /* touch target (Part 33) */
     transition: border-color var(--dur-base) ease, box-shadow var(--dur-base) ease, background-color var(--dur-base) ease;
