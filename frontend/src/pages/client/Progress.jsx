@@ -1019,6 +1019,7 @@ function ConsistencySection({ intel }) {
                       <span
                         key={cell.key}
                         title={fmtCell(cell)}
+                        role="img"
                         aria-label={fmtCell(cell)}
                         className="block rounded-[2px]"
                         style={{ width: 11, height: 11, background: STATE[cell.state].bg, opacity: cell.future ? 0.35 : 1 }}

@@ -386,8 +386,15 @@
   /* Light was FAINTER than dark here (1.1:1 both ways), not better. */
   --field-edge: #9E8176;
   --ink: #1E1714;                      /* deeper: "strong black text" */
-  --mute: rgba(30,23,20,.66);
-  --faint: rgba(30,23,20,.60);        /* see the dark block's note */
+  /* CONTRAST, MEASURED ON EVERY SURFACE (automated axe scan, e2e/a11y.spec.js).
+     .60 cleared 4.5:1 on the canvas (4.51) but NOT on the surfaces faint
+     text actually sits on: bg2 wells 4.39, tinted metric tiles 4.36, and
+     --line 4.23 -- so every unit, date and field hint on a recessed card
+     failed AA. .64 is the lowest value clearing all of them (worst: --line
+     4.77). --mute moves up with it so the two tiers stay distinguishable
+     (6.75 vs 5.15 on canvas) instead of collapsing into one grey. */
+  --mute: rgba(30,23,20,.72);
+  --faint: rgba(30,23,20,.64);
   /* Was #C15C4C. That value was marginal in BOTH directions at once:
      4.28:1 as accent-coloured TEXT on a white panel, and 4.28:1 for the
      white label sitting ON a primary button — so link text and small
@@ -493,11 +500,16 @@
      values measured good 3.83:1 and warn 3.08:1, both AA failures, and
      both are used as label text ("On track", "Expires in 3 days") rather
      than only as a fill. Now 4.5:1+. The hues are unchanged. */
-  --good-rgb: 75 111 79;
-  /* 3.98:1 on its own 12% tint -- --warn is used as text on a warn-tinted
-     chip (pace warnings, the unusual-measurement hint, status pills), and
-     that is the surface it has to be read against, not the plain panel. */
-  --warn-rgb: 133 99 56;
+  /* ON THEIR OWN TINT, ON EVERY SURFACE. --good and --warn are read as
+     11px text on a 14% tint of themselves (.badge-good/.badge-warn, pace
+     warnings, the unusual-measurement hint), and that tint sits on white,
+     the canvas, or a recessed bg2 well. At 75 111 79 / 133 99 56 they
+     cleared AA only on white; in a well they fell to 4.03 and 3.88, and the
+     axe scan caught "Needs attention" at 4.33 on the owner dashboard. Same
+     hues, darker: worst case now good 4.64, warn 4.67; as plain text on
+     white 6.66 and 6.74. --bad already cleared every surface (4.60+). */
+  --good-rgb: 67 100 71;
+  --warn-rgb: 116 86 48;
   --bad-rgb: 142 61 48;
 
   /* Light mode gets its own elevation ladder: soft warm spread, no glow.
@@ -580,14 +592,14 @@ body {
 .light .border-line\/50 { border-color: rgba(235,223,218,.65) !important; }
 .light .border-line\/60 { border-color: rgba(235,223,218,.75) !important; }
 .light .\!border-line { border-color: #EBDFDA !important; }
-.light .text-mute  { color: rgba(30,23,20,.66) !important; }
-.light .\!text-mute { color: rgba(30,23,20,.66) !important; }
-/* MUST track --faint in the .light block above. It did not: --faint moved
-   to .60 in the contrast pass while this !important rule stayed at .44,
-   which would have silently kept every `text-faint` element in light mode
-   at the failing 2.80:1. This is precisely the two-places-to-edit trap
-   this file's own header warns about. */
-.light .text-faint { color: rgba(30,23,20,.60) !important; }
+/* These read the tokens rather than repeating their values. They used to
+   repeat them, and drifted: --faint moved to .60 in one contrast pass while
+   this rule stayed at .44, silently keeping every `text-faint` element in
+   light mode at a failing 2.80:1. Referencing the token closes the
+   two-places-to-edit trap this file's header warns about. */
+.light .text-mute  { color: var(--mute) !important; }
+.light .\!text-mute { color: var(--mute) !important; }
+.light .text-faint { color: var(--faint) !important; }
 .light .bg-mute { background-color: rgba(30,23,20,.4) !important; }
 .light .hover\:border-white\/15:hover { border-color: rgba(176,80,63,.28) !important; }
 

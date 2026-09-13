@@ -242,7 +242,7 @@ export default function Business() {
             </div>
             <div className="space-y-2.5">
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">DEFAULT CLIENT PERMISSIONS</div>
-              <select className="input" value={setForm.workout_mode_default} onChange={(e) => setSetForm((f) => ({ ...f, workout_mode_default: e.target.value }))}>
+              <select className="input" aria-label="Default workout mode for new clients" value={setForm.workout_mode_default} onChange={(e) => setSetForm((f) => ({ ...f, workout_mode_default: e.target.value }))}>
                 <option value="hybrid">Hybrid — trainer prescribes, client can personalize</option>
                 <option value="prescribed">Prescribed — trainer controls workouts</option>
                 <option value="custom">Custom — clients build their own workouts</option>
@@ -284,7 +284,7 @@ export default function Business() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Kicker>Attendance</Kicker>
           <div className="flex items-center gap-2">
-            <input type="date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
+            <input type="date" aria-label="Attendance date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
             {!attList && <button className="btn btn-sm" onClick={() => loadAttendance()}>Load</button>}
           </div>
         </div>
@@ -389,28 +389,32 @@ export default function Business() {
 
       <Modal open={subOpen} onClose={() => setSubOpen(false)} title="New subscription">
         <div className="space-y-3">
-          <select className="input" value={subForm.client_id} onChange={(e) => setSubForm((f) => ({ ...f, client_id: e.target.value }))}>
+          <select className="input" aria-label="Member" value={subForm.client_id} onChange={(e) => setSubForm((f) => ({ ...f, client_id: e.target.value }))}>
             <option value="">Choose member…</option>
             {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
-          <select className="input" value={subForm.package_id} onChange={(e) => setSubForm((f) => ({ ...f, package_id: e.target.value }))}>
+          <select className="input" aria-label="Package" value={subForm.package_id} onChange={(e) => setSubForm((f) => ({ ...f, package_id: e.target.value }))}>
             <option value="">Choose package…</option>
             {(d.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} · ₹{fmtK(p.amount)}</option>)}
           </select>
-          <input type="date" className="input" value={subForm.start_date} onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))} />
+          {/* A bare date field gave no hint what the date was for. */}
+          <div className="field">
+            <label htmlFor="sub-start-date" className="field-label">Start date</label>
+            <input id="sub-start-date" type="date" className="input mt-1.5" value={subForm.start_date} onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))} />
+          </div>
           <button className="btn-primary w-full" onClick={addSub}>Create subscription</button>
         </div>
       </Modal>
 
       <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Record payment">
         <div className="space-y-3">
-          <select className="input" value={payForm.client_id} onChange={(e) => setPayForm((f) => ({ ...f, client_id: e.target.value }))}>
+          <select className="input" aria-label="Member" value={payForm.client_id} onChange={(e) => setPayForm((f) => ({ ...f, client_id: e.target.value }))}>
             <option value="">Choose member…</option>
             {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
           <div className="grid grid-cols-2 gap-3">
-            <input className="input" type="number" placeholder="Amount ₹" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
-            <select className="input" value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}>
+            <input className="input" type="number" aria-label="Amount in rupees" placeholder="Amount ₹" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
+            <select className="input" aria-label="Payment method" value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}>
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
               <option value="card">Card</option>

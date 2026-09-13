@@ -795,8 +795,10 @@ export function AchievementsSection({ intel, Section }) {
       className="rounded-[var(--r-lg)] p-3"
       style={{
         background: a.earned ? `var(--m-${a.hue}-bg)` : 'transparent',
+        // No opacity on the tile: dimming it to .75 took its description
+        // and level text to 3.8:1, under AA. Unearned already reads as
+        // unearned -- no fill, an outline, and a grey icon instead of a check.
         border: `1px solid ${a.earned ? 'transparent' : 'var(--line)'}`,
-        opacity: a.earned ? 1 : 0.75,
       }}
     >
       <div className="flex items-start justify-between gap-2">

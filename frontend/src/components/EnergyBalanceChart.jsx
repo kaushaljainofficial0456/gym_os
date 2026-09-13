@@ -166,7 +166,10 @@ export default function EnergyBalanceChart() {
             <div
               className="flex items-stretch gap-[3px]"
               style={{ height: 150, minWidth: Math.max(model.all.length * 10, 260) }}
-              role="img"
+              // group, not img: every bar is a real button, and role="img"
+              // makes its children presentational -- the per-day buttons
+              // vanished for screen readers while staying clickable.
+              role="group"
               aria-label={`Net energy balance for the last ${days} days. ${model.surplusDays} days in surplus, ${model.deficitDays} in deficit.`}
             >
               {model.all.map((d) => {
