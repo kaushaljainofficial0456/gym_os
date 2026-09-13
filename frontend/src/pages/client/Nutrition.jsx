@@ -10,12 +10,10 @@ import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
 import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
 import NetEnergyCard from '../../components/nutrition/NetEnergyCard.jsx';
-import QuickAddStrip from '../../components/nutrition/QuickAddStrip.jsx';
 import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
-import { burnSourceLabel } from '../../healthProviderLabels.js';
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -656,17 +654,6 @@ export default function Nutrition() {
   // already-shipped feature, not something a merge gets to drop.
   const balance = useFetch(() => api('/me/nutrition/balance'), []);
   const activePlan = balance.data?.activePlan;
-  // SK OS Health Intelligence Engine -- a SEPARATE fetch from `home`
-  // above, same reasoning as Home.jsx's own identical comment: this page's
-  // real data (home.data, via the shared ClientLayout fetch) must never
-  // wait on or be gated by this. Purely informational here (spec §80:
-  // Nutrition consumes the ONE canonical energy number rather than any
-  // raw wearable/ML figure directly) -- it does NOT adjust the calorie
-  // target/budget math above. Building a safe, bounded activity-adjusted
-  // budget (spec §49/§50: never a punitive deficit, protein always
-  // protected) is real, separate, safety-sensitive work, deliberately
-  // NOT done as a side effect of wiring up a display card.
-  const health = useFetch(() => api('/health/daily-intelligence'), []);
 
   useEffect(() => { if (data && !plan && !targetSetupOpen) setTargetSetupOpen(true); }, [data, plan]);
   const mealState = meals || data?.nutrition?.meals || [];
@@ -846,107 +833,46 @@ export default function Nutrition() {
       {/* ══════ INSIGHT ══════ */}
       <NutritionInsight plan={effectivePlan} eaten={eaten} t={t} />
 
-      {/* ══════ TODAY'S ACTIVITY — SK OS Health Intelligence Engine ══════
-          Informational only (see the `health` fetch's own comment above)
-          -- shows the one canonical active-energy figure the app has for
-          today, with real source attribution, never a raw provider or
-          "AI calculated" label (spec §51). Hidden entirely when there's
-          nothing real to report, same as Home.jsx's identical card. */}
-      {!health.loading && health.data?.intelligence && (health.data.intelligence.active_energy > 0 || health.data.intelligence.workout_minutes > 0) && (
-        <div className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-          <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-[.14em] font-medium" style={{ color: t.faint }}>Today's activity</div>
-            <div className="text-[10.5px] mt-0.5" style={{ color: t.mute }}>{burnSourceLabel(health.data.intelligence.source_summary)}</div>
-          </div>
-          <div className="text-right shrink-0">
-            <span className="font-grotesk font-bold text-lg tabular-nums" style={{ color: t.ink }}>{Math.round(health.data.intelligence.active_energy || 0)}</span>
-            <span className="text-[11px] ml-1" style={{ color: t.mute }}>kcal active</span>
-          </div>
-        </div>
-      )}
+      {/* ══════ LOG FOOD ══════
+          THE ONLY REASON MOST PEOPLE OPEN THIS PAGE, so it is the first
+          thing under the day's numbers and nothing competes with it.
+          It used to be the fifth card down, behind an activity readout, a
+          quick-add rail, the net-energy card and the balance card -- four
+          things to scroll past before reaching the one you came to do.
+          The card chrome and the "Food & Meal Tools" heading are gone
+          too: a titled container around a single button is a label for
+          something that needs no label. The two settings beneath it are
+          deliberately plain text, because they are not peers of this. */}
+      <button
+        onClick={() => setFoodLogSheetOpen(true)}
+        data-tour="nutrition-tools"
+        className="w-full flex items-center gap-3 rounded-2xl px-4 py-4 transition-all active:scale-[.98]"
+        style={{ background: t.accent, border: `1px solid ${t.accent}`, minHeight: 64, boxShadow: t.cardShadow }}
+      >
+        <span className="shrink-0" style={{ color: 'var(--accent-contrast)' }}><Icon name="plate" size={22} /></span>
+        <span className="min-w-0 text-left">
+          <span className="block font-grotesk text-[15px] font-bold leading-tight" style={{ color: 'var(--accent-contrast)' }}>
+            Log food
+          </span>
+          <span className="block font-grotesk text-[10.5px] leading-tight mt-0.5"
+                style={{ color: 'var(--accent-contrast)', opacity: .78 }}>
+            Search, scan a barcode, or just describe it
+          </span>
+        </span>
+      </button>
 
-      {/* ══════ QUICK ADD ══════
-          Directly under the day's numbers and ABOVE every tool, because
-          re-logging something you eat constantly is the single most
-          frequent action on this page by a wide margin, and it was the
-          one buried deepest -- four interactions down, behind a library
-          you had to curate first. Renders nothing until you have eaten
-          something twice, so it never occupies space it hasn't earned. */}
-      <QuickAddStrip
-        t={t}
-        onLog={logEntry}
-        onLogged={(f) => setToast(`${f.name} logged`)}
-        refreshKey={Math.round(eaten.calories)}
-      />
-
-      {/* ══════ NET ENERGY ══════
-          Intake minus expenditure. Sits directly under the day's numbers
-          because it is the CONCLUSION those numbers add up to -- the ring
-          says how much of a target is left, this says which direction the
-          day actually went. Collapsed by default: one figure and one word
-          is the whole answer most of the time. `refreshKey` is today's
-          eaten total, so logging a meal moves this immediately rather
-          than at the next page load. */}
-      <NetEnergyCard t={t} refreshKey={Math.round(eaten.calories)} />
-
-      {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
-      {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
-
-      {/* ══════ FOOD & MEAL TOOLS ══════
-          Moved above Today's Eaten Meals / Saved Foods & Meals -- the
-          primary task on this page is "log what I ate", so the primary
-          actions come right after the summary, not buried below it.
-          (manavi-progress-enhancements-v2 still had this block in its
-          OLD position further down the page, below Today's Eaten Meals --
-          that duplicate copy is removed below rather than kept, so the
-          page renders one Food & Meal Tools / Saved Foods & Meals
-          section, not two.) */}
-      <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
-        {/* ONE DAILY ACTION, TWO SETTINGS -- and they are not peers.
-            All three sat in a 3-up grid, so on a 375px phone each got
-            ~110px and "Log / Estimate Food" wrapped across three lines at
-            the same size as "Meal Information", something you touch maybe
-            twice a year. Accent fill alone could not carry a hierarchy the
-            LAYOUT was flatly denying. The thing you do every day is now
-            full width and says what it opens; the other two share a
-            quieter row underneath. */}
-        <div className="p-1 space-y-1.5">
-          <button
-            onClick={() => setFoodLogSheetOpen(true)}
-            className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all active:scale-[.98]"
-            style={{ background: t.accent, border: `1px solid ${t.accent}`, minHeight: 60 }}
-          >
-            <span className="shrink-0" style={{ color: 'var(--accent-contrast)' }}><Icon name="plate" size={20} /></span>
-            <span className="min-w-0 text-left">
-              <span className="block font-grotesk text-[14px] font-bold leading-tight" style={{ color: 'var(--accent-contrast)' }}>
-                Log food
-              </span>
-              <span className="block font-grotesk text-[10px] leading-tight mt-0.5"
-                    style={{ color: 'var(--accent-contrast)', opacity: .75 }}>
-                Search, scan a barcode, or describe it
-              </span>
-            </span>
+      <div className="flex items-center justify-center gap-5 -mt-1">
+        {[
+          { label: 'Customize my meals', onClick: () => setCustomizeOpen(true) },
+          { label: 'Meal information', onClick: () => setInfoOpen(true) },
+        ].map((tool) => (
+          <button key={tool.label} onClick={tool.onClick}
+                  className="font-grotesk text-[11px] font-semibold underline-offset-4 hover:underline"
+                  style={{ color: t.mute, minHeight: 40 }}>
+            {tool.label}
           </button>
-
-          <div className="grid grid-cols-2 gap-1.5">
-            {[
-              { label: 'Customize My Meals', icon: 'note', onClick: () => setCustomizeOpen(true) },
-              { label: 'Meal Information', icon: 'chart', onClick: () => setInfoOpen(true) },
-            ].map((tool) => (
-              <button key={tool.label} onClick={tool.onClick}
-                      className="flex items-center justify-center gap-2 rounded-2xl px-2 py-2.5 transition-all active:scale-95"
-                      style={{ background: t.glass, border: `1px solid ${t.border}`, minHeight: 46 }}>
-                <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={tool.icon} size={15} /></span>
-                <span className="font-grotesk text-[10.5px] font-semibold leading-tight" style={{ color: t.ink }}>{tool.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
-
-      {/* ══════ SAVED FOODS & MEALS ══════ */}
-      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
 
       {/* ══════ TODAY'S EATEN MEALS ══════ */}
       <div data-tour="nutrition-meals" className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
@@ -996,6 +922,19 @@ export default function Nutrition() {
           the surviving copy above additionally uses the shared Icon set
           instead of emoji and the silent-reload fix on MyDietCard's
           onLogged. */}
+
+      {/* ══════ NET ENERGY ══════
+          Intake minus expenditure -- the CONCLUSION the day adds up to,
+          so it reads after the day's list rather than before it. The page
+          now runs: how much is left, log something, what you logged, and
+          only then which direction the day actually went. Collapsed by default: one figure and one word
+          is the whole answer most of the time. `refreshKey` is today's
+          eaten total, so logging a meal moves this immediately rather
+          than at the next page load. */}
+      <NetEnergyCard t={t} refreshKey={Math.round(eaten.calories)} />
+
+      {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
+      {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
 
       {/* ══════ SUPPLEMENTS ══════ */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
@@ -1072,6 +1011,14 @@ export default function Nutrition() {
           );
         })()}
       </div>
+
+      {/* ══════ SAVED FOODS & MEALS ══════
+          A LIBRARY, not a daily action -- so it sits below the things
+          you touch every day. It used to sit between the Log food
+          button and Today's Eaten Meals, which is the worst place for
+          it: directly across the one path people walk on this page. */}
+      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
+
 
       {/* ══════ HYDRATION ══════ */}
       <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
