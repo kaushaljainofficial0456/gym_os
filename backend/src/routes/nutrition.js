@@ -4,6 +4,7 @@ import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey, addDays, daysBetween } from '../utils/time.js';
+import { clientLogDay } from '../services/logDay.js';
 import { estimateFood, estimateMeal } from '../services/food/index.js';
 import { track } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
@@ -141,7 +142,8 @@ export default function nutritionRoutes(db) {
   r.get('/clients/:id/meals', async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    const d = req.query.date || dayKey();
+    // The client's LOGGING day, not the calendar day -- see logDay.js.
+    const d = req.query.date || await clientLogDay(db, client.id, req.tz);
     const plan = await db.q1(
       'SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]);
     const meals = plan ? await db.q('SELECT * FROM meals WHERE plan_id = ? ORDER BY position', [plan.id]) : [];
@@ -181,7 +183,7 @@ export default function nutritionRoutes(db) {
     // Plan meals live in the `meals` table — create or update a meal_log for today.
     const meal = await db.q1('SELECT * FROM meals WHERE id = ?', [mealId]);
     if (!meal) return res.status(404).json({ error: 'Meal not found' });
-    const d = dayKey();
+    const d = await clientLogDay(db, client.id, req.tz);
     const existing = await db.q1(
       'SELECT id FROM meal_logs WHERE client_id = ? AND meal_id = ? AND date = ?', [client.id, meal.id, d]);
     if (existing) {
@@ -209,7 +211,7 @@ export default function nutritionRoutes(db) {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const b = req.body;
-    const logDate = b.date || dayKey();
+    const logDate = b.date || await clientLogDay(db, client.id, req.tz);
     await db.run(
       `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -251,7 +253,7 @@ export default function nutritionRoutes(db) {
   r.get('/clients/:id/nutrition-summary', async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    const d = req.query.date || dayKey();
+    const d = req.query.date || await clientLogDay(db, client.id, req.tz);
     const plan = await db.q1('SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]);
     const logs = await db.q(
       'SELECT * FROM meal_logs WHERE client_id = ? AND date = ? AND eaten = 1', [client.id, d]);

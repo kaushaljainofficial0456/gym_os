@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
 import Icon from './Icon.jsx';
@@ -240,6 +241,102 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
       </div>
     </div>
   );
+}
+
+/**
+ * SHEET — a bottom sheet on phones, a centred dialog on desktop, with the
+ * header and the actions PINNED.
+ *
+ * This exists because several sheets were built as one scrolling card:
+ *
+ *   <div className="card max-h-[88vh] overflow-y-auto"> header + body + actions
+ *
+ * which reads fine while the sheet is nearly empty and fails the moment
+ * it holds real content. The card grows to its max height, and because
+ * the whole card is the scroll container, the title scrolls away at the
+ * top and the primary button scrolls off the bottom -- so saving means
+ * dragging past a screenful of blurred backdrop to find the button. On a
+ * phone that is most of the interaction.
+ *
+ * The fix is the layout the shared Modal already used: a flex column
+ * whose MIDDLE is the only scrolling part. The header stays, the actions
+ * stay, and the content moves between them.
+ *
+ * PORTALLED, always. `position: fixed` resolves against the nearest
+ * transformed ancestor rather than the viewport, and this app animates
+ * pages with transforms -- so a sheet rendered in place can end up
+ * fixed to a card instead of the screen (this has bitten FoodLogSheet
+ * and CustomizeMealSheet before; both carry their own note about it).
+ */
+export function Sheet({
+  open, onClose, title, sub, children, footer, wide, labelledBy,
+  closeLabel = 'Close', dismissOnBackdrop = true,
+}) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  /* The page behind must not scroll while a sheet is up: on iOS a touch
+     that starts on the backdrop otherwise drags the page, which is the
+     other half of "I'm scrolling over a blurred screen". */
+  useEffect(() => {
+    if (!open) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  if (!open) return null;
+
+  return createPortal((
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
+      style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={labelledBy ? undefined : title}
+      aria-labelledby={labelledBy}
+    >
+      <div
+        className={cls(
+          'card w-full flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn',
+          'max-h-[88vh] sm:max-h-[90vh]',
+          wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sheet-handle sm:hidden" />
+        {(title || sub) && (
+          <div className="shrink-0 px-4 pt-3 pb-3 flex items-start justify-between gap-3"
+               style={{ borderBottom: '1px solid var(--line)' }}>
+            <div className="min-w-0">
+              {title && <div className="font-grotesk font-bold text-[15px] truncate" style={{ color: 'var(--ink)' }}>{title}</div>}
+              {sub && <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{sub}</div>}
+            </div>
+            <button className="chrome-btn btn-icon justify-center shrink-0" onClick={onClose} aria-label={closeLabel}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* The only scrolling region. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">{children}</div>
+
+        {/* Pinned, so the action is reachable at any content length. */}
+        {footer && (
+          <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid var(--line)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  ), document.body);
 }
 
 /** Icon, title, one sentence, one action (Part 20) — never bare space. */

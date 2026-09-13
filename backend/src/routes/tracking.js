@@ -3,6 +3,7 @@ import { requireAuth, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey, getOrgTzCached } from '../utils/time.js';
+import { clientLogDay } from '../services/logDay.js';
 import { computeAdherence } from '../services/adherence.js';
 import { generateCoachMessage } from '../services/aiCoach.js';
 import { todaySession, getActiveProgram, getProgramDays } from '../services/trainingProgram.js';
@@ -17,7 +18,9 @@ export default function trackingRoutes(db) {
   r.post('/clients/:id/water', validate(schemas.waterLog), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    const d = req.body.date || dayKey();
+    // Water at 00:30 belongs to the night just gone, like food -- see
+    // services/logDay.js.
+    const d = req.body.date || await clientLogDay(db, client.id, req.tz);
     const existing = await db.q1('SELECT id FROM water_logs WHERE client_id = ? AND date = ?', [client.id, d]);
     if (existing) await db.run('UPDATE water_logs SET litres = ? WHERE id = ?', [req.body.litres, existing.id]);
     else await db.run('INSERT INTO water_logs (id, client_id, date, litres) VALUES (?, ?, ?, ?)',
@@ -29,7 +32,7 @@ export default function trackingRoutes(db) {
   r.post('/clients/:id/sleep', validate(schemas.sleepLog), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
-    const d = req.body.date || dayKey();
+    const d = req.body.date || await clientLogDay(db, client.id, req.tz);
     const existing = await db.q1('SELECT id FROM sleep_logs WHERE client_id = ? AND date = ?', [client.id, d]);
     const vals = [req.body.duration_h, req.body.bed_time || null, req.body.wake_time || null, req.body.source];
     if (existing) {
@@ -299,7 +302,9 @@ export default function trackingRoutes(db) {
       db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]),
     ]);
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
-    const d = dayKey();
+    // Reading has to use the same rule as writing, or a late meal is
+    // stored against yesterday and then missing from yesterday too.
+    const d = await clientLogDay(db, client.id, req.tz);
 
     const [plan, logs, water, sleep, adherence, profile] = await Promise.all([
       db.q1('SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]),

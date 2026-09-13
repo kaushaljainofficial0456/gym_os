@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
 
 // Cookie categories that the app actually uses:
 //   Essential  — auth tokens (pos_token, sk_token, pos_user). Cannot reject.
@@ -87,25 +87,68 @@ export function CookieConsentProvider({ children }) {
  * top of it, and it says what it does in one line instead of five.
  */
 function CookieBanner({ onAcceptAll, onRejectOptional, onManage }) {
+  /* THE OFFSET HAS TO COME FROM WHETHER A TAB BAR IS ACTUALLY THERE.
+   *
+   * This was a hardcoded 64px, which is the client tab bar's height --
+   * correct inside the app, and wrong everywhere else. On the login and
+   * signup pages there is no tab bar, so the banner floated 64px up into
+   * the middle of the form and sat on top of the buttons it was covering.
+   * Measured, so it is right on every screen and stays right if the bar's
+   * height ever changes. */
+  const [lift, setLift] = useState(0);
+  const boxRef = useRef(null);
+  useEffect(() => {
+    const measure = () => {
+      const bar = document.querySelector('.app-tabbar');
+      setLift(bar ? Math.round(bar.getBoundingClientRect().height) : 0);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    // The bar mounts with the layout, which can be a frame after this.
+    const t = setTimeout(measure, 300);
+    return () => { window.removeEventListener('resize', measure); clearTimeout(t); };
+  }, []);
+
+  /* A FIXED BANNER HAS TO PAY FOR ITS OWN SPACE.
+   *
+   * Sitting at the bottom stopped it floating over the middle of the
+   * login form, but it still covered whatever the page ends with -- on
+   * login, the Privacy Policy and refund links. Reserving its height as
+   * page padding means that content can still be scrolled clear of it
+   * rather than being permanently underneath. Removed when the banner
+   * goes, so nothing is left behind once a choice is made. */
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return undefined;
+    const apply = () => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      document.body.style.setProperty('padding-bottom', `calc(${h + lift + 20}px + env(safe-area-inset-bottom, 0px))`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => { ro.disconnect(); document.body.style.removeProperty('padding-bottom'); };
+  }, [lift]);
+
   return (
     <div
       className="fixed inset-x-0 z-50 px-3 anim-fadeUp"
       role="region"
       aria-label="Cookie choices"
-      /* Clears the tab bar (64px) plus the phone's home indicator, so the
-         banner never sits on top of navigation. */
-      style={{ animationDuration: '0.35s', bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
+      style={{ animationDuration: '0.35s', bottom: `calc(${lift}px + 10px + env(safe-area-inset-bottom, 0px))` }}
     >
-      <div className="max-w-2xl mx-auto p-4"
+      {/* Narrower and shorter than it was: this is a notice, not a
+          dialog, and at full width with a three-line paragraph it read
+          as the main content of the page it was covering. */}
+      <div ref={boxRef} className="max-w-md mx-auto px-3.5 py-3"
         style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--e-3)' }}>
-        <p className="t-sub" style={{ color: 'var(--ink)' }}>
-          We use cookies to keep you signed in and remember your preferences. Analytics and
-          marketing cookies are optional.
+        <p className="text-[11.5px] leading-snug" style={{ color: 'var(--ink)' }}>
+          We use cookies to keep you signed in. Analytics and marketing cookies are optional.
         </p>
-        <div className="flex flex-wrap items-center gap-2 mt-3.5">
-          <button onClick={onAcceptAll} className="btn-primary btn-sm flex-1">Accept all</button>
-          <button onClick={onRejectOptional} className="btn btn-sm flex-1">Reject optional</button>
-          <button onClick={onManage} className="btn-ghost btn-sm">Manage</button>
+        <div className="flex items-center gap-1.5 mt-2.5">
+          <button onClick={onAcceptAll} className="btn-primary btn-sm flex-1 !text-[11.5px]">Accept all</button>
+          <button onClick={onRejectOptional} className="btn btn-sm flex-1 !text-[11.5px]">Reject optional</button>
+          <button onClick={onManage} className="btn-ghost btn-sm !text-[11.5px] shrink-0">Manage</button>
         </div>
       </div>
     </div>

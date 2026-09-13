@@ -37,6 +37,7 @@ const MIGRATIONS = [
   // --- Display units. Storage stays canonical kg/cm; this only changes
   // what is rendered and how typed input is read. ---
   ['client_profiles', 'unit_system', `unit_system TEXT NOT NULL DEFAULT 'metric'`],
+  ['client_profiles', 'day_start_hour', 'day_start_hour INTEGER NOT NULL DEFAULT 4'],
   // --- Community: who sees my PRs, and whose PRs I see ---
   // Defaults preserve exactly today's behaviour: 'everyone' is what every
   // existing member already agreed to when they opted in, so this

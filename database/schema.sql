@@ -85,7 +85,12 @@ CREATE TABLE IF NOT EXISTS client_profiles (
   -- preference that can change, and a round-trip through lb and back
   -- would quietly drift by rounding.
   unit_system      TEXT NOT NULL DEFAULT 'metric'
-                   CHECK (unit_system IN ('metric','imperial'))
+                   CHECK (unit_system IN ('metric','imperial')),
+  -- The hour a LOGGING day starts, 0-12. A meal at 00:40 belongs to the
+  -- night that just happened, not the morning that technically began --
+  -- see logDayKey() in utils/time.js. 0 restores plain calendar days.
+  day_start_hour   INTEGER NOT NULL DEFAULT 4
+                   CHECK (day_start_hour >= 0 AND day_start_hour <= 12)
 );
 
 CREATE TABLE IF NOT EXISTS goals (

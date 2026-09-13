@@ -15,6 +15,7 @@ import { rateLimit } from '../rateLimit.js';
 import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
+import { clientLogDay } from '../services/logDay.js';
 import { track } from '../services/events.js';
 import { parseFoodInput } from '../services/intelligence/parseFoods.js';
 import { parseWorkoutInput } from '../services/intelligence/parseWorkout.js';
@@ -109,7 +110,7 @@ export default function intelligenceRoutes(db) {
     const { entries } = req.body || {};   // [{food_id, quantity, unit}]
     if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'entries required' });
     const tz = req.tz || 'Asia/Kolkata';
-    const d = dayKey(new Date(), tz);
+    const d = await clientLogDay(db, c.id, tz);
     // Batch-resolve all foods in one query instead of one SELECT per entry
     // (was N+1 — the inserts below still run per entry, but the lookup that
     // previously blocked each iteration on its own round trip no longer does).

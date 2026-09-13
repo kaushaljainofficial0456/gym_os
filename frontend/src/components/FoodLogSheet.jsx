@@ -1292,10 +1292,17 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
          onClick={requestClose} role="dialog" aria-modal="true" aria-label={dialogLabel}>
-      <div className="card w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-b-none sm:rounded-2xl"
+      {/* FLEX COLUMN, NOT ONE SCROLLING CARD. This was
+          `max-h-[88vh] overflow-y-auto` on the card itself, so at full
+          height the whole thing scrolled -- header included, and every
+          action at the bottom with it. Logging a food meant dragging
+          past a screenful of blurred backdrop to find the button. The
+          header is pinned by its own `shrink-0` now and the body below
+          is the only scrolling part. */}
+      <div className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl"
            onClick={(e) => e.stopPropagation()}>
 
-        <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
+        <div className="shrink-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               {showBack && (
@@ -1349,7 +1356,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
           )}
         </div>
 
-        <div className="px-4 pb-4">
+        {/* The only scrolling region -- see the note on the card above. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4"
+             style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
           {/* ── custom macros ── */}
           {screen === 'custom' && (
             <div className="space-y-3">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useCountUp } from '../../utils.js';
-import { XIcon } from './../UI.jsx';
+import { Sheet } from './../UI.jsx';
 
 /**
  * INFORMATION ABOUT MY MEALS — today's eaten meals, tap the eye icon on
@@ -82,15 +82,13 @@ export default function MealInfoSheet({ open, onClose, meals, plan, goal, t }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center anim-fadeIn"
-         style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
-        <div className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: 'var(--panel)' }}>
-          <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Information About My Meals</div>
-          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}><XIcon /></button>
-        </div>
-        <div className="px-4 pb-5 space-y-2">
+    <Sheet
+      open
+      onClose={onClose}
+      title="Information About My Meals"
+      sub={meals.length ? `${meals.length} logged today` : undefined}
+    >
+      <div className="space-y-2">
           {meals.length === 0 && <div className="text-center py-6 font-grotesk text-[12px]" style={{ color: t.mute }}>No meals logged today yet</div>}
           {meals.map((m) => (
             <div key={m.id}>
@@ -105,9 +103,7 @@ export default function MealInfoSheet({ open, onClose, meals, plan, goal, t }) {
               </button>
               {openId === m.id && <div className="mt-1.5"><AnalysisCard meal={m} plan={plan} goal={goal} t={t} /></div>}
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
+          ))}</div>
+    </Sheet>
   );
 }

@@ -12,6 +12,53 @@ export function dayKey(d = new Date(), tz = DEFAULT_TZ) {
   return d.toLocaleDateString('en-CA', { timeZone: tz });
 }
 
+/**
+ * THE LOGGING DAY, which is not the calendar day.
+ *
+ * A meal eaten at 00:40 belongs to the night that just happened, not to
+ * the morning that has technically started. Keying food logs on the
+ * calendar date meant a late dinner landed on tomorrow: the day you
+ * actually ate it closed under-counted, and the next day opened already
+ * spent, before you had eaten anything. Nobody thinks of their day that
+ * way, and a tracker that does is wrong about both days at once.
+ *
+ * So a logging day runs from `startHour` to `startHour` -- 4am by
+ * default, which is past when people stop eating and before they start.
+ * Anything earlier than that counts to the day before. 0 restores plain
+ * calendar behaviour for anyone who wants it.
+ *
+ * This is a DISPLAY AND GROUPING rule, not a storage one: the row still
+ * records the real instant it was created. Only which day it is counted
+ * against moves, so changing the cutoff re-buckets history rather than
+ * rewriting it.
+ */
+export const DEFAULT_DAY_START_HOUR = 4;
+
+export function logDayKey(d = new Date(), tz = DEFAULT_TZ, startHour = DEFAULT_DAY_START_HOUR) {
+  const h = Number(startHour);
+  const shift = Number.isFinite(h) ? Math.min(Math.max(h, 0), 12) : DEFAULT_DAY_START_HOUR;
+  if (shift === 0) return dayKey(d, tz);
+  // Reading the hour IN THE TARGET TIMEZONE matters: shifting the UTC
+  // instant first and then formatting would move the boundary by the
+  // zone's own offset, which is how a 4am rule silently becomes 9:30am
+  // in Asia/Kolkata.
+  const hourInTz = Number(d.toLocaleString('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }));
+  if (hourInTz >= shift) return dayKey(d, tz);
+  const prev = new Date(d.getTime() - 24 * 3600 * 1000);
+  return dayKey(prev, tz);
+}
+
+/** True when `now` falls in the pre-cutoff window, i.e. the log is being
+ *  counted against yesterday. The UI says so rather than letting the
+ *  date quietly disagree with the clock on the wall. */
+export function isBeforeDayStart(d = new Date(), tz = DEFAULT_TZ, startHour = DEFAULT_DAY_START_HOUR) {
+  const h = Number(startHour);
+  const shift = Number.isFinite(h) ? Math.min(Math.max(h, 0), 12) : DEFAULT_DAY_START_HOUR;
+  if (shift === 0) return false;
+  const hourInTz = Number(d.toLocaleString('en-GB', { timeZone: tz, hour: '2-digit', hour12: false }));
+  return hourInTz < shift;
+}
+
 // ISO timestamp in the given timezone (YYYY-MM-DDTHH:mm:ss±HH:mm)
 export function iso(d = new Date(), tz = DEFAULT_TZ) {
   return d.toLocaleString('sv', { timeZone: tz, hour12: false }).replace(' ', 'T');

@@ -224,8 +224,11 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
          role="dialog" aria-modal="true" aria-label="Create new meal">
-      <div className="card w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
-        <div className="sticky top-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
+      {/* Flex column so only the body scrolls -- this was one scrolling
+          card, which pushed the meal-name field and the save action off
+          screen once a few foods had been added. */}
+      <div className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn">
+        <div className="shrink-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Create New Meal</div>
             <button onClick={onClose} aria-label="Close"
@@ -235,7 +238,8 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
                  aria-label="Meal name" className="input w-full !py-2.5 text-[14px] font-semibold" />
         </div>
 
-        <div className="px-4 pb-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-3"
+             style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
           <div className="space-y-2">
             {rowIds.map((id) => (
               <div key={id} className="relative">

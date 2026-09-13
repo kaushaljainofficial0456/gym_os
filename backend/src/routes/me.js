@@ -11,7 +11,8 @@
 import { Router } from 'express';
 import { requireAuth, orgScope } from '../auth.js';
 import { id, now } from '../ids.js';
-import { dayKey, getOrgTz } from '../utils/time.js';
+import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR } from '../utils/time.js';
+import { invalidateDayStart } from '../services/logDay.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
 import {
@@ -71,6 +72,23 @@ export default function meRoutes(db) {
     return c;
   };
 
+  /* WHICH DAY A LOG COUNTS AGAINST.
+   *
+   * Not the calendar date: food eaten at 00:40 belongs to the night that
+   * just happened. Keying on the calendar day meant a late dinner landed
+   * on tomorrow -- the day you actually ate it closed under-counted, and
+   * the next day opened already spent. The cutoff is the client's own
+   * (client_profiles.day_start_hour, 4am by default; 0 restores calendar
+   * days), so this reads it rather than assuming. */
+  const clientDayStart = async (clientId) => {
+    const p = await db.q1('SELECT day_start_hour FROM client_profiles WHERE client_id = ?', [clientId]);
+    const h = Number(p?.day_start_hour);
+    return Number.isFinite(h) ? h : DEFAULT_DAY_START_HOUR;
+  };
+
+  /** Today, as the client's logging day. */
+  const logToday = async (clientId, tz) => logDayKey(new Date(), tz, await clientDayStart(clientId));
+
   // ---------------- avatar (profile photo) ----------------
   // The frontend (Profile.jsx) has called POST/DELETE /me/avatar since it
   // was built, but no matching route ever existed here -- every upload or
@@ -125,7 +143,7 @@ export default function meRoutes(db) {
 
   r.put('/profile', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed, unit_system } = req.body || {};
+    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed, unit_system, day_start_hour } = req.body || {};
     const GOALS = ['FAT_LOSS', 'MUSCLE_GAIN', 'RECOMP', 'STRENGTH', 'GENERAL'];
     const EXP = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
     const SEX = ['MALE', 'FEMALE', 'OTHER'];
@@ -209,6 +227,19 @@ export default function meRoutes(db) {
         return res.status(400).json({ error: "unit_system must be 'metric' or 'imperial'" });
       }
       psets.push('unit_system = ?'); pparams.push(unit_system);
+    }
+    /* When the logging day starts. Bounded to 0-12 by the column's CHECK,
+       so an out-of-range value is rejected here with a message rather
+       than at the database with one nobody can act on. Changing it
+       re-buckets history rather than rewriting it -- the rows still hold
+       the instant they were created. */
+    if (day_start_hour !== undefined) {
+      const h = Number(day_start_hour);
+      if (!Number.isInteger(h) || h < 0 || h > 12) {
+        return res.status(400).json({ error: 'day_start_hour must be a whole number between 0 and 12' });
+      }
+      psets.push('day_start_hour = ?'); pparams.push(h);
+      invalidateDayStart(c.id);
     }
     if (psets.length) {
       const cols = psets.map(s => s.split(' = ')[0]);
@@ -1014,7 +1045,7 @@ export default function meRoutes(db) {
     const servings = Number(req.body?.servings);
     const scale = Number.isFinite(servings) && servings > 0 ? servings : 1;
     const tz = req.tz || 'Asia/Kolkata';
-    const d = dayKey(new Date(), tz);
+    const d = await logToday(c.id, tz);
     const lId = id('mlg');
     const r1 = (n) => Math.round(n * 10) / 10;
     await db.run(
@@ -1052,7 +1083,7 @@ export default function meRoutes(db) {
     const m = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!m) return res.status(404).json({ error: 'Meal not found' });
     const tz = req.tz || 'Asia/Kolkata';
-    const today = dayKey(new Date(), tz);
+    const today = await logToday(c.id, tz);
     await db.run('DELETE FROM meal_items WHERE meal_template_id = ?', [m.id]);
     // Remove today's logged meals that came from this template
     await db.run(

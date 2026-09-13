@@ -179,6 +179,7 @@ export default function Settings() {
       <Group title="Preferences" hint="How Barbell looks and what it tells you.">
         <AppearanceCard />
         <UnitsCard />
+        <DayStartCard />
         <NotificationSettingsCard />
       </Group>
 
@@ -341,6 +342,103 @@ function UnitsCard() {
         Your recorded data is unchanged — only how it is displayed.
       </div>
       {err && <div className="text-[11.5px] mt-2" role="alert" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  );
+}
+
+/**
+ * WHEN YOUR DAY STARTS.
+ *
+ * Food logged at 00:40 used to land on tomorrow, so the evening you
+ * actually ate it closed under-counted and the next day opened already
+ * spent. A logging day that runs 4am-to-4am matches how people actually
+ * think about "yesterday", and the hour is a preference because the
+ * right answer depends on when you sleep.
+ *
+ * Changing it re-buckets what you have already logged rather than
+ * editing it -- every row still holds the moment it was created -- so
+ * this is safe to move around and the copy says so.
+ */
+function DayStartCard() {
+  const [hour, setHour] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api('/me/profile')
+      .then((r) => { if (alive) setHour(Number(r?.profile?.day_start_hour ?? 4)); })
+      .catch(() => { if (alive) setHour(4); });
+    return () => { alive = false; };
+  }, []);
+
+  const save = async (next) => {
+    const before = hour;
+    setHour(next); setBusy(true); setErr('');
+    try {
+      await api('/me/profile', { method: 'PUT', body: JSON.stringify({ day_start_hour: next }) });
+    } catch (e) {
+      setHour(before);
+      setErr(e.message || 'Could not save that');
+    }
+    setBusy(false);
+  };
+
+  const OPTIONS = [
+    [0, 'Midnight', 'Calendar days. A 1am snack counts to the new day.'],
+    [3, '3 am', ''],
+    [4, '4 am', ''],
+    [5, '5 am', ''],
+    [6, '6 am', ''],
+  ];
+  const label = (h) => (h === 0 ? 'midnight' : `${h} am`);
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="clock" size={18} /></span>
+        <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>My day starts at</span>
+      </div>
+      <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
+        Anything you log before this counts to the day before — so a late dinner stays on the
+        night you ate it.
+      </p>
+
+      {hour === null && <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Loading…</div>}
+      {err && <div className="text-[11px] mb-2" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+
+      {hour !== null && (
+        <>
+          <div className="flex gap-1.5 flex-wrap">
+            {OPTIONS.map(([value, text]) => {
+              const on = hour === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={on}
+                  onClick={() => save(value)}
+                  className="rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors"
+                  style={{
+                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                    background: on ? 'var(--bg2)' : 'transparent',
+                    color: on ? 'var(--ink)' : 'var(--mute)',
+                    minHeight: 40,
+                  }}
+                >
+                  {text}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10.5px] mt-2.5" style={{ color: 'var(--faint)' }}>
+            {hour === 0
+              ? 'Your day runs midnight to midnight.'
+              : `Your day runs ${label(hour)} to ${label(hour)}. Nothing already logged is changed — it just moves to the day it belongs to.`}
+          </p>
+        </>
+      )}
     </div>
   );
 }
