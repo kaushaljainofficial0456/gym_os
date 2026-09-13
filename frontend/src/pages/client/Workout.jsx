@@ -13,6 +13,7 @@ import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
+import LogPastCardio from './LogPastCardio.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import {
   ACTIVITIES, ACTIVITY_GROUPS, activityName, activityFields, metFor, estimateKcal, usesEffortLevel, EFFORTS,
@@ -380,6 +381,7 @@ export default function Workout() {
   const [cardioSegStart, setCardioSegStart] = useState(0);    // Date.now() when current segment started
   const [cardioElapsed, setCardioElapsed] = useState(0);      // total elapsed seconds for the active exercise
   const [cardioResult, setCardioResult] = useState(null);     // { totalCalories, items: [...] }
+  const [logCardioOpen, setLogCardioOpen] = useState(false);
   const [clientWeight, setClientWeight] = useState(null);     // fetched from /me/profile for calorie calc
 
   const session = today.data;
@@ -1073,12 +1075,32 @@ export default function Workout() {
       }));
     }
     const totalCalories = calcAllCardioCalories(cardioItems, null, 0, clientWeight);
-    setCardioResult({
-      totalCalories,
-      items: cardioItems.map((item) => ({
-        ...item,
-        calories: calcCardioItemCalories(item, clientWeight),
-      })),
+    const finished = cardioItems.map((item) => ({
+      ...item,
+      calories: calcCardioItemCalories(item, clientWeight),
+    }));
+    setCardioResult({ totalCalories, items: finished });
+
+    /* PERSIST IT. Until now a cardio session lived only in this component:
+       you ran for forty minutes, saw a calorie summary, and it was gone.
+       Nothing reached history, the day's burn, the streak or Progress.
+       Fire-and-forget per bout -- a failed save must not swallow the
+       summary the user is looking at, and each bout is independent. */
+    finished.forEach((item) => {
+      const seconds = (item.segments || []).reduce((sum, seg) => sum + (Number(seg.durationSec) || 0), 0);
+      if (seconds < 30) return;          // a mis-tap, not a session
+      api('/me/cardio', {
+        method: 'POST',
+        body: JSON.stringify({
+          activity_id: item.id,
+          activity_name: cardioName(item.id),
+          duration_sec: Math.round(seconds),
+          effort: item.effort || undefined,
+          params: item.params || {},
+          kcal: item.calories,
+          source: 'live',
+        }),
+      }).catch(() => { /* advisory: the summary on screen is still true */ });
     });
     setCardioMode('summary');
     setCardioActiveId(null);
@@ -1157,7 +1179,7 @@ export default function Workout() {
               carries the distinction, which is its job.
               Labels also had hard <br/> breaks mid-phrase ("My<br/>Workout"),
               which forced a two-line ragged label at every width. */}
-          <div className="grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-5">
             {[
               { label: 'My workouts', onClick: openPlanner,
                 path: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></> },
@@ -1174,6 +1196,10 @@ export default function Workout() {
               // reason a real session never makes it into the app.
               { label: 'Log past', onClick: () => setLogPastOpen(true),
                 path: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></> },
+              // A run or a game is training too, and until cardio was
+              // stored at all there was nowhere to log one after the fact.
+              { label: 'Log cardio', onClick: () => setLogCardioOpen(true),
+                path: <><path d="M13 2 4.5 12.5h6L11 22l8.5-10.5h-6z"/></> },
             ].map((t) => (
               <button key={t.label} onClick={t.onClick}
                 className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
@@ -1743,6 +1769,14 @@ export default function Workout() {
             </div>
           </div>
         ), document.body)}
+
+        <LogPastCardio
+          open={logCardioOpen}
+          onClose={() => setLogCardioOpen(false)}
+          bodyWeightKg={clientWeight}
+          toast={setToast}
+          onSaved={() => { hist.reload({ silent: true }); today.reload({ silent: true }); }}
+        />
 
         <LogPastWorkout
           open={logPastOpen}

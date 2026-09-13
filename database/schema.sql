@@ -107,6 +107,36 @@ CREATE TABLE IF NOT EXISTS client_profiles (
 -- this table adds is the history that a single org_id column cannot
 -- hold -- which gym, from when, until when, and why it ended -- so
 -- leaving is a closed period rather than an erased one.
+-- A cardio or sport bout.
+--
+-- These used to exist only in React state: you ran for forty minutes,
+-- the app showed you a calorie summary, and then it was gone. Nothing
+-- reached history, the day's burn, the streak, or Progress -- and "log a
+-- past cardio session" was impossible to build because there was nowhere
+-- to put one.
+--
+-- Its own table rather than a workout row, because a bout is genuinely a
+-- different shape: one activity, a duration and an intensity, with no
+-- sets, reps or load. Forcing it into workout_exercises would mean a row
+-- of nulls and a PR engine asked to find a personal record in a game of
+-- badminton.
+CREATE TABLE IF NOT EXISTS cardio_sessions (
+  id           TEXT PRIMARY KEY,
+  client_id    TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  org_id       TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  activity_id  TEXT NOT NULL,          -- see frontend/src/cardioActivities.js
+  activity_name TEXT NOT NULL,         -- denormalised: the catalogue can change, history should not
+  date         TEXT NOT NULL,          -- the client's logging day (see services/logDay.js)
+  started_at   TEXT,
+  duration_sec INTEGER NOT NULL,
+  effort       TEXT,                   -- light | moderate | hard, where the model is categorical
+  params_json  TEXT,                   -- speed/incline/resistance as entered
+  kcal         REAL,                   -- ESTIMATED, never measured
+  source       TEXT NOT NULL DEFAULT 'live',  -- live | manual_retroactive
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cardio_client_date ON cardio_sessions(client_id, date);
+
 CREATE TABLE IF NOT EXISTS client_gym_periods (
   id          TEXT PRIMARY KEY,
   client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,

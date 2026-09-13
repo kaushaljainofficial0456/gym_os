@@ -333,6 +333,21 @@ export const schemas = {
     hips: z.number().min(30).max(250).nullable().optional(),
     neck: z.number().min(15).max(90).nullable().optional()
   }),
+  /* A cardio or sport bout. `kcal` is accepted from the client because the
+     MET model lives there (shared with the live session UI), but it is
+     bounded: an estimate is not a number to trust unchecked, and 100,000
+     kcal from an hour of badminton is a bug or a probe, not a workout. */
+  cardioSession: z.object({
+    activity_id: z.string().min(1).max(40),
+    activity_name: z.string().min(1).max(80).optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    started_at: z.string().max(40).optional(),
+    duration_sec: z.number().int().min(30).max(12 * 3600),
+    effort: z.enum(['light', 'moderate', 'hard']).optional(),
+    params: z.record(z.union([z.string(), z.number()])).optional(),
+    kcal: z.number().min(0).max(10000).nullable().optional(),
+    source: z.enum(['live', 'manual_retroactive']).optional(),
+  }),
   aiEstimate: z.object({ text: z.string().min(1).max(300) }),
   // Tier 4 (food-AI) single-food estimate request. Deliberately separate
   // from `aiEstimate` above, which parses a free-text SENTENCE of several

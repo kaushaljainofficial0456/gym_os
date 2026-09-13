@@ -1315,6 +1315,84 @@ export default function meRoutes(db) {
     res.json({ ok: true, recordsRebuilt: touched.length });
   });
 
+  /* ---------------- cardio & sport sessions ----------------
+   *
+   * A bout used to live only in React state: you ran for forty minutes,
+   * the app showed a calorie summary, and then it was gone. Nothing
+   * reached history, the day's burn, the streak or Progress -- and "log a
+   * past cardio session" could not be built at all, because there was
+   * nowhere to put one.
+   *
+   * The kcal figure is ESTIMATED and stored as such. It is a MET model
+   * applied to one person's body mass: useful for comparing your Tuesday
+   * to your Thursday, and close to worthless as an absolute. Every
+   * surface that shows it says so.
+   */
+  r.get('/cardio', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : null;
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : null;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const params = [c.id];
+    let where = 'client_id = ?';
+    if (from) { where += ' AND date >= ?'; params.push(from); }
+    if (to) { where += ' AND date <= ?'; params.push(to); }
+    const rows = await db.q(
+      `SELECT * FROM cardio_sessions WHERE ${where} ORDER BY date DESC, created_at DESC LIMIT ${limit}`, params);
+    res.json({
+      sessions: rows.map((x) => ({
+        id: x.id,
+        activityId: x.activity_id,
+        activityName: x.activity_name,
+        date: x.date,
+        startedAt: x.started_at,
+        durationMin: Math.round(Number(x.duration_sec) / 60),
+        effort: x.effort,
+        params: (() => { try { return JSON.parse(x.params_json || '{}'); } catch { return {}; } })(),
+        kcal: x.kcal == null ? null : Math.round(Number(x.kcal)),
+        source: x.source,
+      })),
+    });
+  });
+
+  r.post('/cardio', workoutWriteLimit, validate(schemas.cardioSession), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const b = req.body;
+    const tz = req.tz || 'Asia/Kolkata';
+
+    /* The date is the client's LOGGING day, so a late run lands on the
+       night it happened rather than on tomorrow -- the same rule food and
+       water follow. An explicitly supplied date (logging a past session)
+       wins, because then the user is telling us directly. */
+    const date = b.date || await logToday(c.id, tz);
+    const today = await logToday(c.id, tz);
+    if (date > today) return res.status(422).json({ error: 'A session cannot be logged in the future' });
+
+    const sessionId = id('crd');
+    await db.run(
+      `INSERT INTO cardio_sessions
+         (id, client_id, org_id, activity_id, activity_name, date, started_at, duration_sec, effort, params_json, kcal, source, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [sessionId, c.id, c.org_id, b.activity_id, String(b.activity_name || b.activity_id).slice(0, 80),
+       date, b.started_at || null, Math.round(Number(b.duration_sec) || 0),
+       b.effort || null, JSON.stringify(b.params || {}),
+       b.kcal == null ? null : Number(b.kcal), b.source === 'manual_retroactive' ? 'manual_retroactive' : 'live', now()]);
+
+    await track(db, { type: 'cardio_logged', orgId: c.org_id, userId: req.user.sub,
+      data: { clientId: c.id, activityId: b.activity_id, durationSec: b.duration_sec } }).catch(() => {});
+    res.status(201).json({ ok: true, id: sessionId, date });
+  });
+
+  r.delete('/cardio/:id', workoutWriteLimit, async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    // Scoped by client_id as well as id: an id from another client must
+    // not be deletable by knowing it.
+    const row = await db.q1('SELECT id FROM cardio_sessions WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!row) return res.status(404).json({ error: 'Session not found' });
+    await db.run('DELETE FROM cardio_sessions WHERE id = ?', [row.id]);
+    res.json({ ok: true });
+  });
+
   // ---------------- effective permissions (gym defaults → client) ----------------
   r.get('/permissions', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;

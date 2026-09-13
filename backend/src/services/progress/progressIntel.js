@@ -476,7 +476,7 @@ function buildInsights({ weightAnalysis, weightGoal, training, nutrition, prs, a
 export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
   const since = daysAgoKey(days);
 
-  const [capabilities, weights, adherence, prs, strengthProgress, training, nutrition, healthDays, client, measurementRows, profile] = await Promise.all([
+  const [capabilities, weights, adherence, prs, strengthProgress, training, nutrition, healthDays, client, measurementRows, profile, cardioRows] = await Promise.all([
     detectCapabilities(db, { userId, clientId }),
     db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? ORDER BY date', [clientId]),
     db.q('SELECT date, score FROM adherence_records WHERE client_id = ? AND date >= ? ORDER BY date', [clientId, daysAgoKey(120)]),
@@ -492,6 +492,11 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
     // Only for the generated prose below. Everything else on this
     // response stays canonical -- the client formats its own screens.
     db.q1('SELECT unit_system FROM client_profiles WHERE client_id = ?', [clientId]),
+    // Cardio and sport bouts. A 10k run or an hour of football IS a
+    // training day -- counting only lifted sets told someone who ran five
+    // mornings a week that they had not trained at all.
+    db.q('SELECT date, activity_name, duration_sec, kcal FROM cardio_sessions WHERE client_id = ? AND date >= ? ORDER BY date',
+      [clientId, since]).catch(() => []),
   ]);
 
   const weightAnalysis = analyzeSeries(weights, { valueKey: 'weight', days });
@@ -531,7 +536,12 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
   // It used to key off adherence_records alone, which meant the heatmap
   // could show a wall of training days while the streak beside it read
   // zero: two different questions presented as one.
-  const qualifyingTrainingDays = new Set(training.qualifyingDays || []);
+  /* A cardio bout of ten minutes or more is a training day. Anything
+     shorter is a walk to the shops with the app open, and the same
+     qualifying instinct the lifting side already applies. */
+  const cardioDays = new Set(
+    (cardioRows || []).filter((c) => Number(c.duration_sec) >= 600).map((c) => String(c.date).slice(0, 10)));
+  const qualifyingTrainingDays = new Set([...(training.qualifyingDays || []), ...cardioDays]);
   const nutritionDays = new Set((nutrition.days || []).map((d) => d.date));
   const activeDays = new Set([...qualifyingTrainingDays, ...nutritionDays]);
   const adherenceStreak = streak([...activeDays]);
@@ -599,6 +609,14 @@ export async function getProgressIntel(db, { userId, clientId, days = 90 }) {
     adherence: { series: adherence, streak: adherenceStreak },
     consistency,
     training,
+    cardio: {
+      sessions: (cardioRows || []).map((c) => ({
+        date: String(c.date).slice(0, 10),
+        name: c.activity_name,
+        minutes: Math.round(Number(c.duration_sec) / 60),
+        kcal: c.kcal == null ? null : Math.round(Number(c.kcal)),
+      })),
+    },
     nutrition,
     prs,
     strengthProgress,
