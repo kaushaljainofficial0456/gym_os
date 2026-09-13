@@ -936,7 +936,21 @@ export default function Nutrition() {
       {/* ══════ FLEXIBLE CALORIE BALANCE ══════ */}
       {plan && <CalorieBalance balance={balance} t={t} onToast={setToast} baseTarget={plan} />}
 
-      {/* ══════ SUPPLEMENTS ══════ */}
+      {/* ══════ SAVED FOODS & MEALS ══════
+          A LIBRARY, not a daily action -- so it sits below the things
+          you touch every day. It used to sit between the Log food
+          button and Today's Eaten Meals, which is the worst place for
+          it: directly across the one path people walk on this page. */}
+      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
+
+
+      {/* ══════ HYDRATION ══════ */}
+      <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
+
+      {/* ══════ SUPPLEMENTS ══════
+          Last of the day's cards, after water. It is the one block
+          here plenty of people never use at all, so it gets the spot
+          that costs nothing to scroll past. */}
       <div className="rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         {(() => {
           const sups = supList || [];
@@ -1011,17 +1025,6 @@ export default function Nutrition() {
           );
         })()}
       </div>
-
-      {/* ══════ SAVED FOODS & MEALS ══════
-          A LIBRARY, not a daily action -- so it sits below the things
-          you touch every day. It used to sit between the Log food
-          button and Today's Eaten Meals, which is the worst place for
-          it: directly across the one path people walk on this page. */}
-      <MyDietCard clientId={clientId} onLogged={(entry) => (entry ? logEntry(entry) : home.reload({ silent: true }))} t={t} toast={setToast} />
-
-
-      {/* ══════ HYDRATION ══════ */}
-      <HydrationCard waterState={waterState} target={data.water.target} onAdd={addWater} t={t} />
 
       {/* ══════ TOAST ══════ */}
       {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
