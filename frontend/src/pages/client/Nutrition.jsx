@@ -10,6 +10,7 @@ import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
 import CalorieBalance from '../../components/nutrition/CalorieBalance.jsx';
 import NetEnergyCard from '../../components/nutrition/NetEnergyCard.jsx';
+import QuickAddStrip from '../../components/nutrition/QuickAddStrip.jsx';
 import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
@@ -422,16 +423,47 @@ function TodaysEatenList({ meals, editing, onToggle, onEditQty, onDelete, t }) {
    ════════════════════════════════════════════════════════════════ */
 
 function NutritionInsight({ plan, eaten, t }) {
+  /* AN EMPTY MORNING IS NOT A FAILURE.
+   *
+   * This said "2625 kcal away from today's target" before you had eaten
+   * anything, in a tinted alert box, at the top of the page. At 8am that
+   * is not information -- it is the whole day's target restated as a
+   * shortfall, and the first thing the app says to you is that you are
+   * behind. Nobody is behind at breakfast.
+   *
+   * So the line is read against the CLOCK as well as the plate: an
+   * untouched day reads as open early and only becomes a nudge late,
+   * and the pace line only appears once there is a pace to have. The
+   * genuinely useful case -- protein trailing, which is the macro people
+   * actually miss and the one worth acting on -- is kept and promoted. */
   const insight = useMemo(() => {
     if (!plan) return null;
-    const remaining = plan.calories - eaten.calories;
-    const proteinPct = plan.protein > 0 ? Math.round((eaten.protein / plan.protein) * 100) : 0;
-    const carbPct = plan.carbs > 0 ? Math.round((eaten.carbs / plan.carbs) * 100) : 0;
-    const fatPct = plan.fat > 0 ? Math.round((eaten.fat / plan.fat) * 100) : 0;
-    if (remaining <= 0) return { text: `You've reached your calorie target.`, tone: 'gold' };
-    if (proteinPct < carbPct && proteinPct < fatPct && proteinPct < 100) return { text: `Protein is your lowest macro — ${plan.protein - eaten.protein}g remaining.`, tone: 'protein' };
-    if (remaining > 0) return { text: `${remaining} kcal away from today's target.`, tone: 'accent' };
-    return null;
+    const remaining = Math.round(plan.calories - eaten.calories);
+    const hour = new Date().getHours();
+    const nothingYet = eaten.calories <= 0;
+
+    if (nothingYet) {
+      if (hour < 11) return { text: "Today's a clean slate. Log breakfast whenever you get to it.", tone: 'accent' };
+      if (hour < 17) return { text: 'Nothing logged yet — add what you had and the rest of the day fills in.', tone: 'accent' };
+      return { text: "Nothing logged today. Even a rough entry beats a blank day.", tone: 'accent' };
+    }
+
+    if (remaining <= 0) {
+      const over = Math.abs(remaining);
+      return over > 150
+        ? { text: `${over} kcal over target — one day is a data point, not a trend.`, tone: 'accent' }
+        : { text: "You've hit your calorie target for today.", tone: 'gold' };
+    }
+
+    const proteinLeft = Math.round(plan.protein - eaten.protein);
+    const proteinPct = plan.protein > 0 ? (eaten.protein / plan.protein) * 100 : 100;
+    const caloriePct = plan.calories > 0 ? (eaten.calories / plan.calories) * 100 : 0;
+    // Trailing by a real margin, not merely lowest by a rounding error.
+    if (proteinLeft > 0 && proteinPct + 15 < caloriePct) {
+      return { text: `Protein's lagging your calories — ${proteinLeft}g still to go.`, tone: 'protein' };
+    }
+
+    return { text: `${remaining} kcal left today.`, tone: 'accent' };
   }, [plan, eaten]);
 
   if (!insight) return null;
@@ -833,6 +865,20 @@ export default function Nutrition() {
         </div>
       )}
 
+      {/* ══════ QUICK ADD ══════
+          Directly under the day's numbers and ABOVE every tool, because
+          re-logging something you eat constantly is the single most
+          frequent action on this page by a wide margin, and it was the
+          one buried deepest -- four interactions down, behind a library
+          you had to curate first. Renders nothing until you have eaten
+          something twice, so it never occupies space it hasn't earned. */}
+      <QuickAddStrip
+        t={t}
+        onLog={logEntry}
+        onLogged={(f) => setToast(`${f.name} logged`)}
+        refreshKey={Math.round(eaten.calories)}
+      />
+
       {/* ══════ NET ENERGY ══════
           Intake minus expenditure. Sits directly under the day's numbers
           because it is the CONCLUSION those numbers add up to -- the ring
@@ -857,25 +903,45 @@ export default function Nutrition() {
           section, not two.) */}
       <div data-tour="nutrition-tools" className="rounded-3xl p-2" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
         <div className="px-3 pt-2 pb-1 font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>Food & Meal Tools</div>
-        <div className="grid grid-cols-3 gap-1.5 p-1">
-          {[
-            // Log / Estimate Food is the most frequent action by far --
-            // accent-filled and full-weight vs. the other two's glass
-            // treatment, so it reads as the strongest option at a glance
-            // without introducing a new visual style.
-            { label: 'Log / Estimate Food', icon: 'plate', onClick: () => setFoodLogSheetOpen(true), primary: true },
-            { label: 'Customize My Meals', icon: 'note', onClick: () => setCustomizeOpen(true) },
-            { label: 'Meal Information', icon: 'chart', onClick: () => setInfoOpen(true) },
-          ].map((tool) => (
-            <button key={tool.label} onClick={tool.onClick}
-                    className="flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3.5 transition-all active:scale-95"
-                    style={tool.primary
-                      ? { background: t.accent, border: `1px solid ${t.accent}` }
-                      : { background: t.glass, border: `1px solid ${t.border}` }}>
-              <span className="shrink-0" style={{ color: tool.primary ? 'var(--accent-contrast)' : 'var(--accent)' }}><Icon name={tool.icon} size={18} /></span>
-              <span className="font-grotesk text-[10px] font-semibold text-center leading-tight" style={{ color: tool.primary ? 'var(--accent-contrast)' : t.ink }}>{tool.label}</span>
-            </button>
-          ))}
+        {/* ONE DAILY ACTION, TWO SETTINGS -- and they are not peers.
+            All three sat in a 3-up grid, so on a 375px phone each got
+            ~110px and "Log / Estimate Food" wrapped across three lines at
+            the same size as "Meal Information", something you touch maybe
+            twice a year. Accent fill alone could not carry a hierarchy the
+            LAYOUT was flatly denying. The thing you do every day is now
+            full width and says what it opens; the other two share a
+            quieter row underneath. */}
+        <div className="p-1 space-y-1.5">
+          <button
+            onClick={() => setFoodLogSheetOpen(true)}
+            className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all active:scale-[.98]"
+            style={{ background: t.accent, border: `1px solid ${t.accent}`, minHeight: 60 }}
+          >
+            <span className="shrink-0" style={{ color: 'var(--accent-contrast)' }}><Icon name="plate" size={20} /></span>
+            <span className="min-w-0 text-left">
+              <span className="block font-grotesk text-[14px] font-bold leading-tight" style={{ color: 'var(--accent-contrast)' }}>
+                Log food
+              </span>
+              <span className="block font-grotesk text-[10px] leading-tight mt-0.5"
+                    style={{ color: 'var(--accent-contrast)', opacity: .75 }}>
+                Search, scan a barcode, or describe it
+              </span>
+            </span>
+          </button>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { label: 'Customize My Meals', icon: 'note', onClick: () => setCustomizeOpen(true) },
+              { label: 'Meal Information', icon: 'chart', onClick: () => setInfoOpen(true) },
+            ].map((tool) => (
+              <button key={tool.label} onClick={tool.onClick}
+                      className="flex items-center justify-center gap-2 rounded-2xl px-2 py-2.5 transition-all active:scale-95"
+                      style={{ background: t.glass, border: `1px solid ${t.border}`, minHeight: 46 }}>
+                <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={tool.icon} size={15} /></span>
+                <span className="font-grotesk text-[10.5px] font-semibold leading-tight" style={{ color: t.ink }}>{tool.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
