@@ -181,7 +181,13 @@ export default function SessionHistory() {
                 {g.month}
               </h2>
               <div className="space-y-1.5">
-                {g.items.map((w) => <SessionRow key={w.id} w={w} onOpen={() => nav(`/app/client/day/${w.scheduled_date}`)} />)}
+                {g.items.map((w) => (
+                  <SessionRow
+                    key={w.id} w={w}
+                    onOpen={() => nav(`/app/client/day/${w.scheduled_date}`)}
+                    onDeleted={(id) => setRows((rs) => (rs || []).filter((x) => x.id !== id))}
+                  />
+                ))}
               </div>
             </section>
           ))}
@@ -210,9 +216,35 @@ export default function SessionHistory() {
  *  identically-named sessions apart. Only figures the session actually
  *  has are rendered -- a "0 kg" on a bodyweight day would be a false
  *  statement about the session rather than a missing value. */
-export function SessionRow({ w, onOpen, compact = false }) {
+export function SessionRow({ w, onOpen, compact = false, onDeleted }) {
   const u = useUnits();
+  const [busy, setBusy] = useState(false);
   const done = w.status === 'completed';
+
+  /* Only sessions the CLIENT logged can be removed here. A workout their
+     trainer assigned is the trainer's row; offering a delete on it would
+     be a button that 404s. `source` comes straight off the row. */
+  const mine = w.source === 'client_custom' || w.source === 'manual_retroactive';
+
+  const remove = async (e) => {
+    e.stopPropagation();          // the whole row is a button
+    const when = dayLabel(w.scheduled_date);
+    if (!window.confirm(
+      `Delete "${w.name}" from ${when}?
+
+`
+      + 'Its logged sets go too, and any personal record it set is recalculated '
+      + 'from your remaining history. This cannot be undone.',
+    )) return;
+    setBusy(true);
+    try {
+      await api(`/me/workouts/${w.id}`, { method: 'DELETE' });
+      onDeleted?.(w.id);
+    } catch (err) {
+      window.alert(err.message || 'Could not delete that workout');
+      setBusy(false);
+    }
+  };
   const metrics = [
     // A rounded 0 min reads as a bug; below a minute the duration is
     // not a fact worth stating.
@@ -259,6 +291,31 @@ export function SessionRow({ w, onOpen, compact = false }) {
       >
         {dayLabel(w.scheduled_date)}
       </span>
+
+      {/* Logged the wrong session, or logged one twice? Until now there
+          was no way back -- a completed workout could not be removed at
+          all, so a slip in the "log a past workout" form was permanent.
+          Rendered as a span so it is not a button inside a button. */}
+      {mine && onDeleted && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`Delete ${w.name} from ${dayLabel(w.scheduled_date)}`}
+          onClick={remove}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); remove(e); } }}
+          className="shrink-0 grid place-items-center rounded-lg transition-colors"
+          style={{ width: 30, height: 30, color: busy ? 'var(--faint)' : 'var(--mute)', cursor: 'pointer' }}
+        >
+          {busy ? (
+            <span className="text-[10px]">…</span>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+          )}
+        </span>
+      )}
     </button>
   );
 }

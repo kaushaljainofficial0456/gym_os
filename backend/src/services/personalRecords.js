@@ -98,3 +98,59 @@ export async function evaluatePRs(db, clientId, exerciseId, sets, date) {
 }
 
 function round2(v) { return Math.round(v * 100) / 100; }
+
+/**
+ * REBUILD a client's records for one exercise from what is actually
+ * logged, and delete the row entirely when nothing is left.
+ *
+ * personal_records holds one rolling best per (client, exercise, type)
+ * and carries no workout_id, so a deleted workout cannot cascade into
+ * it. Without this, removing a session logged by mistake leaves the
+ * record it set standing forever -- the app would keep congratulating
+ * someone on a lift they never did, with no trace of where it came from.
+ *
+ * Recomputed from workout_logs rather than adjusted, because "undo the
+ * effect of one session" is not something a running maximum can answer:
+ * the previous best might have come from any earlier session, or from
+ * none at all.
+ */
+export async function rebuildPRsForExercise(db, clientId, exerciseId) {
+  const rows = await db.q(
+    `SELECT weight, reps, sets_done, date FROM workout_logs
+      WHERE client_id = ? AND exercise_id = ? AND weight IS NOT NULL`,
+    [clientId, exerciseId]);
+
+  // computePRCandidates reads the LIVE LOGGER's shape -- actual_weight,
+  // actual_reps, completed -- not the column names workout_logs uses.
+  // Passing the row through unmapped silently produces no candidates,
+  // which would clear every record instead of recomputing it.
+  const sets = rows
+    .filter((r) => Number(r.weight) > 0 && Number(r.reps) > 0)
+    .map((r) => ({ actual_weight: Number(r.weight), actual_reps: Number(r.reps), completed: 1 }));
+
+  const candidates = computePRCandidates(sets);
+  if (!candidates) {
+    await db.run('DELETE FROM personal_records WHERE client_id = ? AND exercise_id = ?', [clientId, exerciseId]);
+    return { cleared: true };
+  }
+
+  // The date of the effort that produced each best, so the record still
+  // points at a session that exists.
+  const dateFor = (weight, reps) => {
+    const hit = rows.find((r) => Number(r.weight) === weight && Number(r.reps) === reps);
+    return hit?.date || rows[rows.length - 1]?.date || null;
+  };
+
+  for (const { type } of PR_TYPES) {
+    const cand = candidates[type];
+    if (!cand) continue;
+    await db.run(
+      `INSERT INTO personal_records (id, client_id, exercise_id, type, value, weight, reps, date, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (client_id, exercise_id, type) DO UPDATE SET
+         value = excluded.value, weight = excluded.weight, reps = excluded.reps, date = excluded.date`,
+      [id('pr_'), clientId, exerciseId, type, cand.value, cand.weight, cand.reps,
+       dateFor(cand.weight, cand.reps), now()]);
+  }
+  return { cleared: false };
+}

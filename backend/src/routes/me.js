@@ -13,6 +13,7 @@ import { requireAuth, orgScope } from '../auth.js';
 import { id, now } from '../ids.js';
 import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR } from '../utils/time.js';
 import { invalidateDayStart } from '../services/logDay.js';
+import { rebuildPRsForExercise } from '../services/personalRecords.js';
 import { track } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
 import {
@@ -1268,14 +1269,50 @@ export default function meRoutes(db) {
     res.json({ id: wId, scheduled_date: d, source, exercises: createdExercises });
   });
 
+  /* DELETING A WORKOUT THE CLIENT LOGGED, including a completed one.
+   *
+   * This used to refuse anything completed, which meant a session logged
+   * by mistake -- the whole point of "log a past workout" being a form
+   * you can get wrong -- was permanent. The client created the row; they
+   * can remove it.
+   *
+   * What makes it safe is the cleanup. A completed workout leaves
+   * workout_logs behind, and those feed personal_records, which holds one
+   * rolling best per exercise and carries no workout_id. Deleting the
+   * workout alone would leave the record it set standing forever: the app
+   * congratulating someone on a lift they never did, with nothing left to
+   * trace it to. So the logs go too, and every exercise the session
+   * touched has its records rebuilt from what remains.
+   *
+   * Still refuses workouts this client did not create -- a plan assigned
+   * by a trainer is the trainer's row, not theirs to delete.
+   */
   r.delete('/workouts/:id', workoutWriteLimit, async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const w = await db.q1('SELECT * FROM workouts WHERE id = ? AND client_id = ? AND source = ?', [req.params.id, c.id, 'client_custom']);
+    const w = await db.q1(
+      `SELECT * FROM workouts WHERE id = ? AND client_id = ? AND source IN ('client_custom','manual_retroactive')`,
+      [req.params.id, c.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });
-    if (w.status === 'completed') return res.status(400).json({ error: 'Completed workouts cannot be deleted' });
+
+    // Which exercises this session touched, before its logs are gone.
+    const touched = await db.q(
+      'SELECT DISTINCT exercise_id FROM workout_logs WHERE workout_id = ? AND exercise_id IS NOT NULL', [w.id]);
+
+    await db.run('DELETE FROM workout_logs WHERE workout_id = ?', [w.id]);
     await db.run('DELETE FROM workout_exercises WHERE workout_id = ?', [w.id]);
     await db.run('DELETE FROM workouts WHERE id = ?', [w.id]);
-    res.json({ ok: true });
+
+    for (const row of touched) {
+      try {
+        await rebuildPRsForExercise(db, c.id, row.exercise_id);
+      } catch {
+        // A record left slightly stale is bad; a delete that half-fails
+        // and leaves the workout behind is worse. The row is already gone.
+      }
+    }
+
+    await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'workout_deleted', data: { clientId: c.id, workoutId: w.id, wasCompleted: w.status === 'completed' } });
+    res.json({ ok: true, recordsRebuilt: touched.length });
   });
 
   // ---------------- effective permissions (gym defaults → client) ----------------
