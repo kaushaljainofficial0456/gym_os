@@ -56,7 +56,9 @@ export default function Analytics() {
               key={value} type="button" onClick={() => setMonths(value)} aria-pressed={months === value}
               className="rounded-lg px-2.5 text-[11.5px] font-semibold"
               style={{
-                minHeight: 34,
+                // 36px floor, same as every other filter control in the
+                // workspace -- these three were the last ones under it.
+                minHeight: 36,
                 background: months === value ? 'var(--accent-soft)' : 'transparent',
                 border: `1px solid ${months === value ? 'var(--accent)' : 'var(--line)'}`,
                 color: months === value ? 'var(--accent)' : 'var(--mute)',

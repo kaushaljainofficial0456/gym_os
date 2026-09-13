@@ -224,6 +224,39 @@ export default function adminRoutes(db) {
     const client = await requireOrgClient(req, res, req.body.client_id);
     if (!client) return;
     const b = req.body;
+
+    /* A DOUBLE-CLICK MUST NOT BOOK THE MONEY TWICE.
+     *
+     * Two identical concurrent POSTs both returned 201 and wrote two
+     * payment rows -- so a double tap, or a retry after a connection
+     * blip, silently recorded a member as having paid twice. That is
+     * wrong in the direction that inflates revenue and clears a debt
+     * nobody settled, and it is the exact case spec 47 names.
+     *
+     * The guard is a short window rather than a client-supplied
+     * idempotency key: this is a human filling in a form, and the real
+     * failure is the same hand hitting the same button twice within a
+     * couple of seconds. A member genuinely paying the identical amount
+     * twice inside 60 seconds is not a thing that happens at a gym
+     * counter -- and if it ever did, the second one is a minute away.
+     *
+     * REPORTED, NOT SWALLOWED. A silent 201 would tell the owner it
+     * saved when it deliberately did not; they need to know the first
+     * one landed. */
+    const since = new Date(Date.now() - 60_000).toISOString();
+    const dupe = await db.q1(
+      `SELECT id, paid_at FROM payments
+        WHERE org_id = ? AND client_id = ? AND amount = ? AND status = 'paid' AND paid_at >= ?
+        ORDER BY paid_at DESC`,
+      [req.orgId, b.client_id, b.amount, since]);
+    if (dupe) {
+      return res.status(409).json({
+        error: 'An identical payment for this member was recorded moments ago. '
+             + 'If this is a second, separate payment, try again in a minute.',
+        existingPaymentId: dupe.id,
+      });
+    }
+
     await db.run(
       `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
        VALUES (?, ?, ?, ?, ?, 'INR', ?, 'paid', ?)`,
@@ -607,7 +640,36 @@ export default function adminRoutes(db) {
     res.json({ settings: s || { org_id: req.orgId, brand_name: 'Barbell', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
   });
 
+  /* The settings this endpoint actually applies. Partial updates are
+     deliberate -- omitting a field leaves it unchanged -- but a field
+     nobody recognises is a DIFFERENT thing, and it used to return
+     {"ok":true} while discarding the value. A typo, a stale client, a
+     renamed column: all reported "Saved" and saved nothing, which is the
+     one outcome a settings screen must never produce (spec 42/47). */
+  const SETTING_KEYS = new Set([
+    'brand_name', 'tagline', 'crowd_capacity', 'crowd_enabled', 'workout_mode_default',
+    'allow_substitute', 'allow_add_exercise', 'allow_edit_targets',
+    'community_enabled', 'community_leaderboard_enabled',
+    'contact_email', 'contact_phone', 'address', 'city', 'country',
+    'logo_url', 'website', 'instagram_url', 'description',
+    // Returned by GET and echoed back by clients that send the whole
+    // object; accepted and ignored rather than refused, because rejecting
+    // a field we ourselves handed them would be our bug, not theirs.
+    'org_id', 'updated_at',
+    // Read-only here on purpose: these live on the same row but are owned
+    // by PUT /attendance/policy, which validates them properly and writes
+    // an audit trail. GET hands them out, so they must be accepted;
+    // changing them from this endpoint would bypass that.
+    'attendance_mode', 'attendance_grace_min', 'attendance_require_qr',
+  ]);
+
   r.put('/settings', async (req, res) => {
+    const unknown = Object.keys(req.body || {}).filter((k) => !SETTING_KEYS.has(k));
+    if (unknown.length) {
+      return res.status(422).json({
+        error: `Unknown setting${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}`,
+      });
+    }
     const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
       community_enabled, community_leaderboard_enabled,
       contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description } = req.body || {};

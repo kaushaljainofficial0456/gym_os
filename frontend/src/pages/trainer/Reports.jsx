@@ -56,7 +56,8 @@ export default function Reports() {
           <h1 className="font-grotesk font-bold text-2xl">Weekly reports</h1>
           <p className="text-mute text-sm">A data-backed week in review, generated from real tracked data — send it to the client in one tap.</p>
         </div>
-        <select className="input max-w-xs" value={clientId} onChange={(e) => load(e.target.value)}>
+        <select className="input max-w-xs" aria-label="Choose a client to report on"
+                value={clientId} onChange={(e) => load(e.target.value)}>
           <option value="">Choose client…</option>
           {(clients.data?.clients || []).map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
         </select>

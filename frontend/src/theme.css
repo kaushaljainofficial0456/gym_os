@@ -1030,8 +1030,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 
   /* ── Tabs ── */
+  /* The last shared control under the touch floor: `py-2` gave .tab a
+     32px box, and it carries the status filters on Alerts and the
+     message-type picker among others. 36px, set here rather than at each
+     call site -- the same reasoning as .chip and .btn-sm above. */
   .tab {
-    @apply relative font-grotesk text-xs font-semibold px-3.5 py-2 rounded-full transition-colors whitespace-nowrap;
+    @apply relative inline-flex items-center justify-center font-grotesk text-xs font-semibold px-3.5 rounded-full transition-colors whitespace-nowrap;
+    min-height: 36px;
     color: var(--mute);
   }
   .tab:hover { color: var(--ink); }
