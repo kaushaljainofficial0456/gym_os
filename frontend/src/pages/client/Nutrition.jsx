@@ -378,14 +378,17 @@ function TodaysEatenList({ meals, editing, onToggle, onEditQty, onDelete, t }) {
               </button>
             )}
 
-            <div className="flex-1 rounded-xl p-3.5 transition-all duration-200" style={{
+            {/* min-w-0: a flex item will not shrink below its content by default,
+                so a long meal name pushed this card -- and the page -- past a
+                320px screen. The name wraps instead. */}
+            <div className="flex-1 min-w-0 rounded-xl p-3.5 transition-all duration-200" style={{
               background: m.eaten ? t.accentDim : t.surface,
               border: `1px solid ${m.eaten ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}`,
             }}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-grotesk text-sm font-bold" style={{ color: t.ink }}>{m.name}</span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-0.5">
+                    <span className="font-grotesk text-sm font-bold break-words min-w-0" style={{ color: t.ink }}>{m.name}</span>
                     {m.time && <span className="font-grotesk text-[10px] px-1.5 py-px rounded-md" style={{ background: t.glass, color: t.mute }}>{m.time}</span>}
                   </div>
                   <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{m.slot}{m.quantity ? ` · ${m.quantity}${m.unit || 'g'}` : ''}</div>

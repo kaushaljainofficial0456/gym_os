@@ -506,7 +506,7 @@ export default function WorkoutBuilder() {
         <button className="btn-primary" onClick={startNew}>+ New template</button>
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* template list */}
         <Card className="lg:col-span-2 self-start" data-tour="trainer-workouts-templates">
           <Kicker>Your templates</Kicker>

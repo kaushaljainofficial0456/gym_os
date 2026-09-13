@@ -113,7 +113,7 @@ export default function NutritionBuilder() {
         <button className="btn-primary" onClick={startNew}>+ New plan</button>
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <Card className="lg:col-span-2 self-start" data-tour="trainer-nutrition-plans">
           <Kicker>Your plans</Kicker>
           <div className="space-y-1.5">
