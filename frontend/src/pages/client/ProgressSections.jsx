@@ -7,7 +7,7 @@
  * Progress — nothing is rendered unless real rows back it, and no number
  * is fabricated to fill a card.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card } from '../../components/UI.jsx';
@@ -15,6 +15,7 @@ import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 import { useUnits } from '../../unitsContext.jsx';
+import { buildAchievements, achievementSummary, ACHIEVEMENT_GROUPS } from '../../achievements.js';
 
 const n1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 const fmtNum = (v) => (v == null ? '—' : Number(v).toLocaleString());
@@ -707,94 +708,184 @@ function MiniTrend({ values }) {
 /* ══════════════════════════ milestones ══════════════════════════ */
 
 /**
- * Milestones the data has ACTUALLY passed.
+ * MILESTONES — 120 of them, and none awarded for nothing.
  *
- * Nothing aspirational and nothing locked-and-greyed: a wall of un-earned
- * badges is the gamified look this product is explicitly not going for,
- * and it also tells the user what they haven't done, which is the opposite
- * of the point. If none are earned yet the section doesn't render at all.
+ * This was four families and thirteen badges, which is a summary rather
+ * than somewhere to aim. The catalogue lives in achievements.js and every
+ * entry reads the same progress payload the charts on this page read, so
+ * a badge can never disagree with the chart above it.
+ *
+ * WHAT IS SHOWN BY DEFAULT is the part that is actually useful: what you
+ * just earned, and the handful you are closest to. A wall of 120 cards is
+ * a reference document, not a screen -- so the full list is behind a
+ * deliberate tap and grouped, rather than being the first thing you have
+ * to scroll past.
  */
 export function AchievementsSection({ intel, Section }) {
   const u = useUnits();
-  const w = intel.weight?.analysis;
-  const lost = w && w.change != null && w.change < 0 ? Math.abs(w.change) : 0;
-  const trained = intel.consistency?.trainedDays?.length || 0;
-  const prTotal = intel.prs?.total || 0;
-  const best = intel.consistency?.streak?.best || 0;
+  const [open, setOpen] = useState(false);
+  const [group, setGroup] = useState('Training');
 
-  // Each milestone knows its CURRENT value and its TARGET, so an unearned
-  // one can show how far away it is instead of just sitting greyed out.
-  // Showing the not-yet-earned ones was a deliberate change: hiding them
-  // made the section a trophy cabinet, which says nothing about where to
-  // go next. They stay visually quiet so they read as a horizon, not as a
-  // list of failures.
-  const defs = [
-    /* The tiers are defined in kilograms and stay that way -- a milestone
-       is a fixed thing, not something that changes size with a display
-       preference. Only the LABEL converts, so an imperial reader sees
-       "11 lb down" for the same 5 kg badge. */
-    { hue: 'body', icon: 'trending', label: (t) => `${u.fmtWeight(t)} down`, value: lost, tiers: [2, 5, 10],
-      remainingText: (r) => `${u.fmtWeight(r)} to go` },
-    { hue: 'training', icon: 'strength', label: (t) => `${t} training days`, value: trained, tiers: [10, 25, 50, 100],
-      remainingText: (r) => `${Math.round(r)} days to go` },
-    { hue: 'strength', icon: 'bulb', label: (t) => `${t} personal record${t === 1 ? '' : 's'}`, value: prTotal, tiers: [1, 10, 25, 50],
-      remainingText: (r) => `${Math.round(r)} PRs to go` },
-    { hue: 'nutrition', icon: 'target', label: (t) => `${t}-day streak`, value: best, tiers: [3, 7, 14, 30],
-      remainingText: (r) => `${Math.round(r)} day streak to go` },
-  ];
+  /* Volume milestones run to millions; a decimal there reads as false
+     precision ("11023.1 lb"). Body-weight ones are the opposite -- 2.5 kg
+     down is a real distinction. So the split is by magnitude. */
+  const all = useMemo(
+    () => buildAchievements(intel, (kg) => u.fmtWeight(kg, { decimals: Math.abs(kg) >= 1000 ? 0 : 1 })),
+    [intel, u.system],
+  );
+  const { earned, total } = achievementSummary(all);
 
-  const items = [];
-  for (const d of defs) {
-    // The highest tier already cleared, plus the next one to aim at --
-    // never the whole ladder, which would bury the page in badges.
-    const earnedTiers = d.tiers.filter((t) => d.value >= t);
-    const nextTier = d.tiers.find((t) => d.value < t);
-    const top = earnedTiers[earnedTiers.length - 1];
-    if (top != null) items.push({ ...d, tier: top, earned: true, progress: 1 });
-    if (nextTier != null) {
-      items.push({ ...d, tier: nextTier, earned: false, progress: Math.max(0, Math.min(1, d.value / nextTier)), remaining: nextTier - d.value });
+  // The value as a person would say it: weights follow the unit
+  // preference, everything else is a plain count.
+  const amount = (a, v) => (a.isWeight ? u.fmtWeight(v) : `${Math.round(v).toLocaleString()} ${a.unit}`);
+
+  /* The highest tier reached in each family -- one card per idea, not one
+     per rung, so the earned view reads as achievements rather than as a
+     changelog of every threshold crossed. */
+  const latest = useMemo(() => {
+    const byFamily = new Map();
+    for (const a of all) {
+      if (!a.earned) continue;
+      const cur = byFamily.get(a.familyId);
+      if (!cur || a.tier > cur.tier) byFamily.set(a.familyId, a);
     }
-  }
-  if (!items.length) return null;
+    return [...byFamily.values()].sort((x, y) => y.level / y.levels - x.level / x.levels);
+  }, [all]);
+
+  /* Closest to earning: sorted by how nearly done, and only ones actually
+     started. "0 of 500 sessions" is not a near miss, it is the whole
+     ladder, and putting it here would bury the genuine ones. */
+  const nearest = useMemo(() => all
+    .filter((a) => !a.earned && a.progress > 0.15)
+    .sort((x, y) => y.progress - x.progress)
+    .slice(0, 3), [all]);
+
+  if (!all.length) return null;
+
+  const Badge = ({ a, showProgress }) => (
+    <div
+      className="rounded-[var(--r-lg)] p-3"
+      style={{
+        background: a.earned ? `var(--m-${a.hue}-bg)` : 'transparent',
+        border: `1px solid ${a.earned ? 'transparent' : 'var(--line)'}`,
+        opacity: a.earned ? 1 : 0.75,
+      }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className="inline-flex items-center justify-center rounded-full shrink-0"
+          style={{
+            width: 26, height: 26,
+            background: a.earned ? `var(--m-${a.hue})` : 'var(--line)',
+            color: a.earned ? 'var(--bg)' : 'var(--faint)',
+          }}
+        >
+          <Icon name={a.earned ? 'check' : a.icon} size={13} />
+        </span>
+        {a.levels > 1 && (
+          <span className="text-[9px] font-bold tabular-nums shrink-0"
+                style={{ color: a.earned ? `var(--m-${a.hue})` : 'var(--faint)' }}>
+            {a.level}/{a.levels}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1.5 text-[12px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>
+        {a.name}
+      </div>
+      <div className="text-[10px] leading-snug mt-0.5" style={{ color: 'var(--faint)' }}>
+        {a.description}
+      </div>
+
+      {showProgress && !a.earned && (
+        <>
+          <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+            <div className="h-full rounded-full"
+                 style={{ width: `${a.progress * 100}%`, background: `var(--m-${a.hue})`, transition: 'width .6s' }} />
+          </div>
+          <div className="mt-1 text-[9.5px] tabular-nums" style={{ color: 'var(--faint)' }}>
+            {amount(a, a.value)} of {amount(a, a.tier)}
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   return (
-    <Section title="Milestones">
-      <div className="grid grid-cols-2 gap-2.5">
-        {items.map((m, i) => {
-          const color = `var(--m-${m.hue})`;
-          return (
-            <div
-              key={i}
-              className="rounded-[var(--r-lg)] p-3"
-              style={{
-                background: m.earned ? `var(--m-${m.hue}-bg)` : 'transparent',
-                border: `1px solid ${m.earned ? 'transparent' : 'var(--line)'}`,
-                // Unearned tiles sit back without being unreadable --
-                // dimming the whole tile would fail contrast on its text.
-                opacity: m.earned ? 1 : 0.72,
-              }}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <span
-                  className="inline-flex items-center justify-center rounded-full"
-                  style={{ width: 24, height: 24, background: m.earned ? color : 'var(--line)', color: m.earned ? 'var(--bg)' : 'var(--faint)' }}
+    <Section
+      title="Milestones"
+      action={
+        <span className="text-[10.5px] font-semibold tabular-nums" style={{ color: 'var(--accent)' }}>
+          {earned} of {total}
+        </span>
+      }
+    >
+      {latest.length > 0 && (
+        <div className="grid grid-cols-2 gap-2.5 min-[420px]:grid-cols-3">
+          {latest.slice(0, 6).map((a) => <Badge key={a.key} a={a} />)}
+        </div>
+      )}
+
+      {nearest.length > 0 && (
+        <>
+          <div className="text-[10px] font-bold uppercase tracking-[.09em] mt-1" style={{ color: 'var(--faint)' }}>
+            Closest to earning
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 min-[420px]:grid-cols-3">
+            {nearest.map((a) => <Badge key={a.key} a={a} showProgress />)}
+          </div>
+        </>
+      )}
+
+      {!latest.length && !nearest.length && (
+        <Card className="p-4">
+          <div className="text-[12.5px] font-semibold" style={{ color: 'var(--ink)' }}>
+            Your first milestone is one session away
+          </div>
+          <div className="mt-1 text-[11.5px] leading-snug" style={{ color: 'var(--faint)' }}>
+            Log a workout or a day of food and this fills in. There are {total} to find.
+          </div>
+        </Card>
+      )}
+
+      <button className="btn btn-sm w-full" onClick={() => setOpen((v) => !v)}>
+        {open ? 'Hide all milestones' : `Browse all ${total} milestones`}
+      </button>
+
+      {open && (
+        <Card className="p-3">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5" role="tablist" aria-label="Milestone category">
+            {ACHIEVEMENT_GROUPS.map((g) => {
+              const on = g === group;
+              const done = all.filter((a) => a.group === g && a.earned).length;
+              const of = all.filter((a) => a.group === g).length;
+              return (
+                <button
+                  key={g}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setGroup(g)}
+                  className="shrink-0 rounded-full px-3 text-[11px] font-semibold whitespace-nowrap"
+                  style={{
+                    minHeight: 34,
+                    background: on ? 'var(--cta-solid)' : 'transparent',
+                    color: on ? 'var(--cta-ink)' : 'var(--mute)',
+                    border: `1px solid ${on ? 'transparent' : 'var(--line)'}`,
+                  }}
                 >
-                  <Icon name={m.earned ? 'check' : m.icon} size={13} />
-                </span>
-                {!m.earned && (
-                  <Ring value={m.progress} size={24} stroke={3} color={color} label={`${Math.round(m.progress * 100)} percent toward ${m.label(m.tier)}`} />
-                )}
-              </div>
-              <div className="mt-1.5 text-[12.5px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>
-                {m.label(m.tier)}
-              </div>
-              <div className="mt-0.5 text-[9.5px]" style={{ color: m.earned ? color : 'var(--faint)' }}>
-                {m.earned ? 'Achieved' : m.remainingText(m.remaining)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  {g} <span className="tabular-nums opacity-70">{done}/{of}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 mt-3 min-[420px]:grid-cols-3">
+            {all.filter((a) => a.group === group).map((a) => (
+              <Badge key={a.key} a={a} showProgress />
+            ))}
+          </div>
+        </Card>
+      )}
     </Section>
   );
 }
