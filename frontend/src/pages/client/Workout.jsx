@@ -13,6 +13,9 @@ import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
 import { useUnits } from '../../unitsContext.jsx';
+import {
+  ACTIVITIES, ACTIVITY_GROUPS, activityName, activityFields, metFor, estimateKcal, usesEffortLevel, EFFORTS,
+} from '../../cardioActivities.js';
 import WeightInput from '../../components/WeightInput.jsx';
 
 const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
@@ -192,84 +195,33 @@ function clearActiveSession() {
    MET values for common cardio exercises at different intensities.
    Used for client-side calorie estimation: kcal = MET × 3.5 × weight_kg / 200 × duration_min
    Based on Compendium of Physical Activities (Ainsworth et al.). */
-const CARDIO_MET = {
-  treadmill_run: { light: 6.0, moderate: 8.3, hard: 11.0 },
-  running:       { light: 6.0, moderate: 8.3, hard: 11.0 },
-  incline_walk:  { light: 3.5, moderate: 4.3, hard: 5.0 },
-  walking:       { light: 2.8, moderate: 3.5, hard: 4.3 },
-  cycling:       { light: 5.8, moderate: 7.5, hard: 10.0 },
-  rowing_machine:{ light: 4.8, moderate: 7.0, hard: 12.0 },
-  elliptical:    { light: 4.0, moderate: 5.0, hard: 7.0 },
-  stair_climber: { light: 5.0, moderate: 8.0, hard: 11.0 },
-  sprint_intervals:{ light: 8.0, moderate: 10.0, hard: 12.0 },
-  jump_rope:     { light: 8.0, moderate: 10.0, hard: 12.3 },
-  assault_bike:  { light: 7.0, moderate: 9.5, hard: 12.5 },
-  ski_erg:       { light: 5.5, moderate: 8.0, hard: 11.0 },
-  battle_ropes:  { light: 5.0, moderate: 8.0, hard: 10.5 },
-};
-const CARDIO_MET_DEFAULT = { light: 5.0, moderate: 7.0, hard: 10.0 };
+/* The MET table, the parameter config and the effort heuristic that used
+   to live here now come from src/cardioActivities.js.
 
-/** Increase MET slightly when speed/incline/resistance are above moderate defaults.
-    This gives a rough differentiation between light and moderate effort
-    without requiring the user to explicitly rate intensity. */
-function adjustedMet(cardioId, params) {
-  const metTable = CARDIO_MET[cardioId] || CARDIO_MET_DEFAULT;
-  const speed = Number(params?.speed) || 0;
-  const incline = Number(params?.incline) || 0;
-  const resistance = Number(params?.resistance) || 0;
-  const level = Number(params?.level) || 0;
-  // Simple heuristic: above-average values push toward hard tier
-  const effortScore = (incline * 2) + (speed > 12 ? 3 : speed > 8 ? 1 : 0) + resistance + level;
-  if (effortScore >= 14) return metTable.hard;
-  if (effortScore >= 6) return metTable.moderate;
-  return metTable.light;
-}
+   The heuristic was the reason: it summed incline, speed and resistance
+   into one "effort score" and compared it to two magic thresholds, so a
+   2% incline scored the same as a resistance level of 2, and walking at
+   7 km/h and running at 7 km/h -- different activities -- came out
+   identical. Walking, running and inclines now use the published ACSM
+   metabolic equations, which respond continuously to real inputs;
+   everything else uses Compendium MET values, because for badminton
+   there is no equation to apply and inventing one would be less
+   accurate, not more. Sharing the module is also what lets the
+   past-workout logger offer the same activities. */
 
-/** Which parameters each cardio exercise type requires. */
-function cardioExerciseConfig(id) {
-  const configs = {
-    treadmill_run:  [{ key: 'incline', label: 'Incline', unit: '%', placeholder: '5', min: 0, max: 20 },
-                    { key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '8', min: 1, max: 25 }],
-    running:        [{ key: 'speed', label: 'Pace/Speed', unit: 'km/h', placeholder: '10', min: 1, max: 30 },
-                    { key: 'distance', label: 'Distance', unit: 'km', placeholder: '3', min: 0.1, max: 50 }],
-    incline_walk:   [{ key: 'incline', label: 'Incline', unit: '%', placeholder: '10', min: 0, max: 20 },
-                    { key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '5', min: 1, max: 15 }],
-    walking:        [{ key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '5', min: 1, max: 15 },
-                    { key: 'distance', label: 'Distance', unit: 'km', placeholder: '2', min: 0.1, max: 30 }],
-    cycling:        [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 25 },
-                    { key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '25', min: 5, max: 60 }],
-    rowing_machine: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '5', min: 1, max: 20 },
-                    { key: 'pace', label: 'Pace', unit: 'min/500m', placeholder: '2:30', min: 0 }],
-    elliptical:     [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '8', min: 1, max: 25 }],
-    stair_climber:  [{ key: 'level', label: 'Level', unit: '', placeholder: '10', min: 1, max: 25 }],
-    sprint_intervals:[{ key: 'speed', label: 'Speed', unit: 'km/h', placeholder: '15', min: 5, max: 30 }],
-    jump_rope:      [{ key: 'speed', label: 'Speed', unit: 'RPM', placeholder: '120', min: 30, max: 200 }],
-    assault_bike:   [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 20 }],
-    ski_erg:        [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 10 }],
-    battle_ropes:   [{ key: 'speed', label: 'Speed', unit: 'slams/min', placeholder: '30', min: 10, max: 80 }],
-  };
-  return configs[id] || [{ key: 'speed', label: 'Intensity', unit: '', placeholder: '', min: 0, max: 999 }];
-}
 
-/** Calculate calorie burn for a single cardio item using MET formula. */
+/** Calorie burn for one cardio item, through the shared model. */
 function calcCardioCalories(cardioId, durationMin, bodyWeightKg) {
-  const metTable = CARDIO_MET[cardioId] || CARDIO_MET_DEFAULT;
-  const met = metTable.moderate;
-  const weight = Number(bodyWeightKg) || 70;
-  return Math.round(met * 3.5 * weight / 200 * durationMin);
+  return estimateKcal({
+    activityId: cardioId,
+    minutes: durationMin,
+    bodyWeightKg: Number(bodyWeightKg) || 70,
+    params: {},
+  });
 }
 
-/** Get the display name for a cardio exercise by its id. */
-function cardioName(id) {
-  const NAMES = {
-    treadmill_run: 'Treadmill Run', running: 'Running', incline_walk: 'Incline Walk',
-    walking: 'Walking', cycling: 'Cycling', rowing_machine: 'Rowing',
-    elliptical: 'Elliptical', stair_climber: 'Stair Climber',
-    sprint_intervals: 'Sprint Intervals', jump_rope: 'Jump Rope',
-    assault_bike: 'Assault Bike', ski_erg: 'Ski Erg', battle_ropes: 'Battle Ropes',
-  };
-  return NAMES[id] || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const cardioName = activityName;
+const cardioExerciseConfig = activityFields;
 
 /** Format a cardio item's parameters as a summary string. */
 function cardioSummary(item) {
@@ -311,7 +263,7 @@ function calcCardioItemCalories(item, bodyWeightKg) {
   if (!item?.segments?.length) return 0;
   return item.segments.reduce((sum, seg) => {
     const durMin = Math.max(0.1, (seg.durationSec || 0) / 60);
-    const met = adjustedMet(item.id, seg.params);
+    const met = metFor(item.id, seg.params, item.effort);
     const weight = Number(bodyWeightKg) || 70;
     return sum + Math.round(met * 3.5 * weight / 200 * durMin);
   }, 0);
@@ -321,7 +273,7 @@ function calcCardioItemCalories(item, bodyWeightKg) {
 function calcCurrentSegmentCalories(item, elapsedSec, bodyWeightKg) {
   if (!item || elapsedSec <= 0) return 0;
   const durMin = elapsedSec / 60;
-  const met = adjustedMet(item.id, item.currentParams);
+  const met = metFor(item.id, item.currentParams, item.effort);
   const weight = Number(bodyWeightKg) || 70;
   return Math.round(met * 3.5 * weight / 200 * durMin);
 }
@@ -2132,9 +2084,17 @@ export default function Workout() {
                 ) : (
                   /* ── search + cardio exercise list ── */
                   <div className="space-y-2.5">
-                    <input className="input" placeholder="Search cardio exercises…" value={cardioSearch} onChange={(e) => setCardioSearch(e.target.value)} autoFocus />
+                    <input className="input" placeholder="Search machines, running, sports…" value={cardioSearch} onChange={(e) => setCardioSearch(e.target.value)} autoFocus />
+                    {/* Grouped, because "badminton" and "stair climber"
+                        are not the same kind of decision. Sports were
+                        missing entirely -- the list was thirteen gym
+                        machines, so someone who had just played football
+                        for an hour had nothing to log it as. */}
                     <div className="space-y-1.5">
-                      {Object.keys(CARDIO_MET).filter((id) => !cardioSearch || cardioName(id).toLowerCase().includes(cardioSearch.toLowerCase())).map((id, i) => {
+                      {ACTIVITIES
+                        .filter((a) => !cardioSearch || a.name.toLowerCase().includes(cardioSearch.toLowerCase()))
+                        .map((a) => a.id)
+                        .map((id, i) => {
                         const added = cardioItems.some((c) => c.id === id);
                         return (
                           <div key={id}
