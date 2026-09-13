@@ -31,6 +31,7 @@ import { track } from '../services/events.js';
 import { issueEnrollmentToken, verifyEnrollmentToken, consumeEnrollmentToken, revokeEnrollmentToken } from '../services/enterprise/enrollmentToken.js';
 import { getOrgBillingSnapshot, reserveCapacitySlot, releaseCapacitySlot } from '../services/enterprise/subscriptionLifecycle.js';
 import { syncPrimaryMembership } from '../services/enterprise/gymMemberships.js';
+import { isIndependentOrg } from '../services/orgKind.js';
 import { notify, notifyOwners } from '../services/enterprise/notifications.js';
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, registerActivationHandler, registerReleaseHandler } from '../services/payments/paymentActivation.js';
@@ -105,16 +106,63 @@ export async function activateClientMembership(db, order, tx) {
   const userId = enrollmentToken.consumed_by;
   const orgId = enrollmentToken.org_id;
 
-  const alreadyClient = await tx.q1('SELECT id FROM clients WHERE user_id = ?', [userId]);
-  if (alreadyClient) return; // idempotency safety net -- see paymentActivation.js's own guard, this is belt-and-suspenders
-
   const plan = enrollmentToken.membership_plan_id ? await tx.q1('SELECT * FROM packages WHERE id = ?', [enrollmentToken.membership_plan_id]) : null;
-  const clientId = id('cli');
   const nowIso = now();
+
+  /* BRING YOUR ACCOUNT WITH YOU.
+   *
+   * Someone who has used the app alone for six months and then joins a
+   * gym must not have to start again. This used to `return` on finding
+   * an existing client row, which -- combined with /client/join's own
+   * `already_a_client` refusal -- meant the only way into a gym was a
+   * brand new account, abandoning every workout, meal, measurement and
+   * record behind the old one.
+   *
+   * Moving them is a ONE ROW UPDATE. Forty-five tables hang off
+   * clients(id) and none of them mention the org, so changing
+   * clients.org_id carries the entire history across untouched. What
+   * does NOT move is history that belongs to where it happened: past
+   * workouts keep the org they were performed under.
+   */
+  const existing = await tx.q1('SELECT * FROM clients WHERE user_id = ?', [userId]);
+  let clientId;
+
+  if (existing) {
+    // Already in THIS gym: nothing to do. This is the idempotency net
+    // for a webhook replay -- see paymentActivation.js's own guard.
+    if (existing.org_id === orgId) return;
+
+    /* Only an independent client may be moved. Someone who is already a
+     * member of ANOTHER real gym has a relationship, a subscription and
+     * possibly a trainer there; silently transferring them on a QR scan
+     * would end that without anybody deciding to. They leave first. */
+    if (!(await isIndependentOrg(db, existing.org_id))) {
+      const err = new Error('already_in_another_gym');
+      err.code = 'already_in_another_gym';
+      throw err;
+    }
+
+    clientId = existing.id;
+    await tx.run('UPDATE clients SET org_id = ?, status = ? WHERE id = ?', [orgId, 'ON_TRACK', clientId]);
+    await tx.run('UPDATE users SET org_id = ? WHERE id = ?', [orgId, userId]);
+    await tx.run(
+      `INSERT INTO client_gym_periods (id, client_id, org_id, joined_at, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [id('cgp'), clientId, orgId, nowIso, nowIso]);
+    await syncPrimaryMembership(tx, { userId, orgId, role: 'CLIENT' });
+    // Their profile row already exists, with their units, day-start and
+    // targets in it. Leaving it alone is the point.
+    await finishClientMembership(db, tx, { orgId, userId, clientId, plan, order, nowIso, returning: true });
+    return;
+  }
+
+  clientId = id('cli');
   await tx.run('UPDATE users SET org_id = ? WHERE id = ?', [orgId, userId]);
   await tx.run(
     `INSERT INTO clients (id, user_id, org_id, status, goal, created_at) VALUES (?, ?, ?, 'ON_TRACK', 'GENERAL', ?)`,
     [clientId, userId, orgId, nowIso]);
+  await tx.run(
+    `INSERT INTO client_gym_periods (id, client_id, org_id, joined_at, created_at) VALUES (?, ?, ?, ?, ?)`,
+    [id('cgp'), clientId, orgId, nowIso, nowIso]);
   // Phase 2: mirrors the primary org_id/role relationship into
   // gym_memberships too, in the SAME transaction -- see
   // gymMemberships.js's own header comment.
@@ -125,7 +173,16 @@ export async function activateClientMembership(db, order, tx) {
   // transaction right after this activation handler returns -- not
   // here, so success and failure both release through the one path.
   await tx.run(`INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`, [clientId]);
+  await finishClientMembership(db, tx, { orgId, userId, clientId, plan, order, nowIso, returning: false });
+}
 
+/**
+ * The subscription, payment and notifications every new gym membership
+ * gets -- shared by the brand-new client and the existing one who just
+ * brought their account across, so the gym's revenue views and the
+ * owner's alerts cannot see one kind of join and miss the other.
+ */
+async function finishClientMembership(db, tx, { orgId, userId, clientId, plan, order, nowIso, returning }) {
   // Reuse the EXISTING gym-membership tables (subscriptions/payments --
   // see database/schema.sql's note on why these aren't duplicated) so
   // this client's membership shows up correctly in the Business
@@ -144,8 +201,13 @@ export async function activateClientMembership(db, order, tx) {
     [id('pay'), orgId, clientId, subId, order.amount, order.currency, order.provider, nowIso, order.id]);
 
   await notify(db, { orgId, userId, type: 'membership_activated', title: `Welcome! Your ${plan?.name || 'membership'} is active`, data: { subscriptionId: subId } });
-  await notifyOwners(db, orgId, { type: 'client_joined', title: 'New client joined', body: plan?.name ? `via ${plan.name} membership` : undefined, data: { clientId } });
-  await track(db, { type: 'client_enrolled', orgId, userId, data: { clientId, tokenId: enrollmentToken.id } }).catch(() => {});
+  await notifyOwners(db, orgId, {
+    type: 'client_joined',
+    title: returning ? 'New member joined (existing account)' : 'New client joined',
+    body: plan?.name ? `via ${plan.name} membership` : undefined,
+    data: { clientId },
+  });
+  await track(db, { type: 'client_enrolled', orgId, userId, data: { clientId, returning: !!returning } }).catch(() => {});
 }
 
 registerActivationHandler('CLIENT_MEMBERSHIP', activateClientMembership);
@@ -249,9 +311,25 @@ export default function enrollmentRoutes(db) {
 
   /* ================= CLIENT: join + pay ================= */
   r.post('/client/join', clientOnly, scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
-    if (req.user.org) return res.status(409).json({ error: 'already_in_a_gym' });
-    const alreadyClient = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
-    if (alreadyClient) return res.status(409).json({ error: 'already_a_client' });
+    /* AN EXISTING ACCOUNT IS THE NORMAL CASE, not an error.
+     *
+     * This used to refuse anyone who already had a client row
+     * ('already_a_client') and anyone whose token carried an org
+     * ('already_in_a_gym') -- and every independent client has BOTH,
+     * because they live in the shared 'independent' pseudo-org. So the
+     * only way to join a gym was to abandon your account and make a new
+     * one, losing everything you had logged.
+     *
+     * What still has to be refused is joining a SECOND real gym: that
+     * person has a subscription and probably a trainer somewhere, and a
+     * QR scan must not silently end it. */
+    const existingClient = await db.q1('SELECT id, org_id FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (existingClient && !(await isIndependentOrg(db, existingClient.org_id))) {
+      return res.status(409).json({ error: 'already_in_a_gym' });
+    }
+    if (!existingClient && req.user.org && !(await isIndependentOrg(db, req.user.org))) {
+      return res.status(409).json({ error: 'already_in_a_gym' });
+    }
 
     // Consume the token first: its own conditional UPDATE
     // (WHERE status = 'AVAILABLE') is what prevents two scans of the

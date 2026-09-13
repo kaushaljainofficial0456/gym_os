@@ -189,6 +189,8 @@ ALTER TABLE client_profiles    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE client_profiles    FORCE ROW LEVEL SECURITY;
 ALTER TABLE goals              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE goals              FORCE ROW LEVEL SECURITY;
+ALTER TABLE client_gym_periods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_gym_periods FORCE ROW LEVEL SECURITY;
 ALTER TABLE weight_logs        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE weight_logs        FORCE ROW LEVEL SECURITY;
 ALTER TABLE measurements       ENABLE ROW LEVEL SECURITY;
@@ -246,7 +248,11 @@ BEGIN
     'community_reactions','community_comments','community_challenges','community_follows',
     'trainer_attendance','trainer_shifts','trainer_attendance_audit',
     'health_provider_connections','health_records','health_canonical_workouts',
-    'health_energy_intervals','health_daily_summaries'
+    'health_energy_intervals','health_daily_summaries',
+    -- A gym's own record of who belonged to it and when. Scoped by
+    -- org_id like every other gym-owned row: one gym must not be able to
+    -- read another's membership history.
+    'client_gym_periods'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (

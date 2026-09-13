@@ -90,8 +90,35 @@ CREATE TABLE IF NOT EXISTS client_profiles (
   -- night that just happened, not the morning that technically began --
   -- see logDayKey() in utils/time.js. 0 restores plain calendar days.
   day_start_hour   INTEGER NOT NULL DEFAULT 4
-                   CHECK (day_start_hour >= 0 AND day_start_hour <= 12)
+                   CHECK (day_start_hour >= 0 AND day_start_hour <= 12),
+  -- What the person pays US for, independent of any gym. A gym member
+  -- gets the gym's features through their gym; when that ends they fall
+  -- back to this. 'free' is a real, usable product -- see planTiers.js
+  -- for exactly what it includes -- not a lockout.
+  plan_tier        TEXT NOT NULL DEFAULT 'free'
+                   CHECK (plan_tier IN ('free','pro'))
 );
+
+-- Every stretch of time a client belonged to a gym.
+--
+-- The client ROW never moves: 45 tables hang off clients(id), so joining
+-- a gym changes clients.org_id and nothing else, and all six months of
+-- workouts, meals, measurements and records carry straight across. What
+-- this table adds is the history that a single org_id column cannot
+-- hold -- which gym, from when, until when, and why it ended -- so
+-- leaving is a closed period rather than an erased one.
+CREATE TABLE IF NOT EXISTS client_gym_periods (
+  id          TEXT PRIMARY KEY,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  org_id      TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  joined_at   TEXT NOT NULL,
+  left_at     TEXT,                -- NULL while the membership is current
+  end_reason  TEXT,                -- revoked | left | expired
+  ended_by    TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gym_periods_client ON client_gym_periods(client_id, joined_at);
+CREATE INDEX IF NOT EXISTS idx_gym_periods_org ON client_gym_periods(org_id, left_at);
 
 CREATE TABLE IF NOT EXISTS goals (
   id           TEXT PRIMARY KEY,

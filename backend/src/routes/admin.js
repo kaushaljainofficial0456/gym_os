@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole, orgScope } from '../auth.js';
+import { endGymMembership } from '../services/enterprise/gymExit.js';
 import { z } from 'zod';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
@@ -445,6 +446,34 @@ export default function adminRoutes(db) {
     }
     res.json({ ok: true, subscription: result.subscription });
   });
+
+  /* REVOKE — end someone's membership of THIS gym.
+   *
+   * Distinct from cancelling a subscription, which stops the billing but
+   * leaves them a member. This ends the relationship: they stop being
+   * this gym's client and go back to using the app on their own.
+   *
+   * What it deliberately does NOT do is delete anything of theirs. Their
+   * workouts, meals, measurements and records are their own record of
+   * their training, and a gym ending a membership is not grounds for
+   * taking it away -- see services/enterprise/gymExit.js. Payments and
+   * completed sessions stay attached to this gym, because they happened
+   * here and the gym's own books have to keep showing them.
+   */
+  r.post('/members/:clientId/revoke', membershipActionLimit,
+    validate(z.object({ reason: z.string().max(500).optional() })), async (req, res) => {
+      const client = await requireOrgClient(req, res, req.params.clientId);
+      if (!client) return;
+      const result = await endGymMembership(db, {
+        clientId: client.id,
+        reason: 'revoked',
+        endedBy: req.user.sub,
+      });
+      if (!result.ok) {
+        return res.status(result.reason === 'not_in_a_gym' ? 409 : 404).json({ error: result.reason });
+      }
+      res.json({ ok: true, clientId: client.id });
+    });
 
   // ---- refunds (Phase 1 production hardening) ----
   // Deliberately its OWN route, not folded into MEMBERSHIP_ACTIONS above
