@@ -125,7 +125,7 @@ export default function meRoutes(db) {
 
   r.put('/profile', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed } = req.body || {};
+    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed, unit_system } = req.body || {};
     const GOALS = ['FAT_LOSS', 'MUSCLE_GAIN', 'RECOMP', 'STRENGTH', 'GENERAL'];
     const EXP = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
     const SEX = ['MALE', 'FEMALE', 'OTHER'];
@@ -163,12 +163,53 @@ export default function meRoutes(db) {
       params.push(c.id);
       await db.run(`UPDATE clients SET ${sets.join(', ')} WHERE id = ?`, params);
     }
+
+    /* A WEIGHT SAVED HERE HAS TO REACH THE WEIGHT SERIES TOO.
+     *
+     * This route wrote clients.current_weight and nothing else, while
+     * Progress reads weight_logs -- two stores for one number, with no
+     * path between them. The result was a client whose profile said
+     * 75 kg and whose Progress page said 87.4 kg on the same afternoon,
+     * because the last actual log was three weeks old and editing the
+     * profile never appended one. Neither screen was wrong about its own
+     * source; the sources disagreed.
+     *
+     * Saving the profile is the person stating today's weight, so it
+     * lands on today's row -- replacing it if they save twice in a day
+     * rather than stacking duplicate entries for one date. Marked
+     * 'manual' like any other self-reported figure.
+     */
+    if (current_weight !== undefined && current_weight !== null && num(current_weight) != null) {
+      const today = dayKey();
+      const existing = await db.q1(
+        'SELECT id FROM weight_logs WHERE client_id = ? AND date = ? ORDER BY created_at DESC LIMIT 1',
+        [c.id, today]);
+      if (existing) {
+        await db.run('UPDATE weight_logs SET weight = ?, source = ? WHERE id = ?',
+          [num(current_weight), 'manual', existing.id]);
+      } else {
+        await db.run(
+          'INSERT INTO weight_logs (id, client_id, date, weight, source, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [id('wlg'), c.id, today, num(current_weight), 'manual', now()]);
+      }
+    }
     const psets = [];
     const pparams = [];
     if (experience !== undefined) { psets.push('experience = ?'); pparams.push(experience); }
     if (equipment !== undefined) { psets.push('equipment = ?'); pparams.push(JSON.stringify(equipment)); }
     if (water_target_l !== undefined) { psets.push('water_target_l = ?'); pparams.push(num(water_target_l)); }
     if (sleep_target_h !== undefined) { psets.push('sleep_target_h = ?'); pparams.push(num(sleep_target_h)); }
+    /* Display units. Validated against the allowed pair rather than
+       written through: this column has a CHECK constraint, and an
+       unrecognised value would fail at the database with a message no
+       user could act on. Storage itself is unaffected -- everything stays
+       canonical kg/cm regardless of what this is set to. */
+    if (unit_system !== undefined) {
+      if (!['metric', 'imperial'].includes(unit_system)) {
+        return res.status(400).json({ error: "unit_system must be 'metric' or 'imperial'" });
+      }
+      psets.push('unit_system = ?'); pparams.push(unit_system);
+    }
     if (psets.length) {
       const cols = psets.map(s => s.split(' = ')[0]);
       await db.run(

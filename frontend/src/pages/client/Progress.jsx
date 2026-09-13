@@ -31,9 +31,10 @@
  * directly (Workout's "My PRs" action links here).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
+import { useUnits } from '../../unitsContext.jsx';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 import PeriodChart from '../../components/PeriodChart.jsx';
@@ -62,6 +63,23 @@ const PR_TYPE_LABEL = {
   best_reps: 'Most reps',
   est_1rm: 'Est. 1RM',
   best_volume: 'Best set volume',
+};
+
+/* Which PR values are a WEIGHT and must follow the unit preference.
+   best_reps is a count and stays a count; best_volume is weight x reps,
+   so it carries the weight unit even though the old copy never labelled
+   it -- an unlabelled kilogram sitting next to a pound is exactly the
+   mixed-unit trap this preference exists to avoid. */
+const PR_WEIGHT_TYPES = new Set(['heaviest_weight', 'est_1rm', 'best_volume']);
+
+/* The goal kinds the CLIENTS table actually stores. Anything not in here
+   falls back to "Target weight" rather than rendering a raw enum. */
+const GOAL_LABEL = {
+  FAT_LOSS: 'Fat loss target',
+  MUSCLE_GAIN: 'Muscle gain target',
+  RECOMP: 'Recomposition target',
+  STRENGTH: 'Strength target',
+  GENERAL_FITNESS: 'Target weight',
 };
 
 const n1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
@@ -155,6 +173,7 @@ function NeedMore({ need, what }) {
 /* ══════════════════════════ hero ══════════════════════════ */
 
 function Hero({ intel, period }) {
+  const u = useUnits();
   const w = intel.weight?.analysis;
   const lead = intel.insights?.[0];
   const prCount = intel.prs?.recentCount ?? 0;
@@ -194,8 +213,10 @@ function Hero({ intel, period }) {
       <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
         <MetricTile
           label="Weight" hue="body" icon="trending"
-          value={w && !w.insufficient && w.change != null ? `${w.change > 0 ? '+' : ''}${n1(w.change)}` : (w?.current != null ? n1(w.current) : null)}
-          unit="kg" sub={w && !w.insufficient ? `${period}d` : 'current'}
+          value={w && !w.insufficient && w.change != null
+            ? `${w.change > 0 ? '+' : ''}${u.weightNum(w.change, { decimals: 1 })}`
+            : (w?.current != null ? u.weightNum(w.current, { decimals: 1 }) : null)}
+          unit={u.weightUnit} sub={w && !w.insufficient ? `${period}d` : 'current'}
         />
         <MetricTile label="Sessions" hue="training" icon="strength" value={workouts || null} sub={`${period}d`} />
         {/* Adherence is a true percentage, so it earns a ring. Open-ended
@@ -245,15 +266,25 @@ function MetricTile({ label, value, unit, sub, hue = 'energy', icon, ring = null
  *  A metric with no rows never appears as a chip -- the explorer offers
  *  only real choices. */
 function useMetrics(intel) {
+  const u = useUnits();
   return useMemo(() => {
+    /* A weight series is converted HERE, once, before it reaches the
+       chart. Converting inside the chart -- or formatting only the
+       tooltip -- is how an axis ends up in kg while its labels say lb.
+       The unit label travels with the converted data for the same
+       reason. */
+    const asWeight = (series) => (series || []).map((pt) => ({
+      ...pt,
+      value: u.weightNum(pt.value, { decimals: 1 }),
+    }));
     const caps = intel.capabilities || {};
     const out = [];
 
     if (caps.weight?.available) {
       out.push({
-        key: 'weight', label: 'Weight', category: 'body', unit: 'kg', decimals: 1,
-        series: intel.weight.series,
-        goal: intel.weight.target ?? null,
+        key: 'weight', label: 'Weight', category: 'body', unit: u.weightUnit, decimals: 1,
+        series: asWeight(intel.weight.series),
+        goal: u.weightNum(intel.weight.target ?? null, { decimals: 1 }),
         // Every other series takes the hue of its declared category;
         // these two were pinned to the theme accent, so the two most-
         // looked-at charts on the page rendered in whatever colour the
@@ -264,8 +295,9 @@ function useMetrics(intel) {
     const t = intel.training?.sessions || [];
     if (t.length) {
       out.push({
-        key: 'volume', label: 'Volume', category: 'training', unit: 'kg', decimals: 0, fillZero: true,
-        series: t.map((s) => ({ date: s.date, value: s.volume })), color: 'var(--m-training)', variant: 'bar',
+        key: 'volume', label: 'Volume', category: 'training', unit: u.weightUnit, decimals: 0, fillZero: true,
+        series: t.map((s) => ({ date: s.date, value: u.weightNum(s.volume, { decimals: 0 }) })),
+        color: 'var(--m-training)', variant: 'bar',
       });
       out.push({
         key: 'sets', label: 'Sets', category: 'training', unit: '', decimals: 0, fillZero: true,
@@ -333,7 +365,10 @@ function useMetrics(intel) {
     // Energy stays, because SK OS computes it for everyone (BMR plus
     // logged workouts) rather than it being wearable-only.
     return out.filter((m) => m.series && m.series.length);
-  }, [intel]);
+    // u.system belongs here: the series values are converted inside this
+    // memo, so switching units must rebuild them or the chart keeps
+    // drawing kilograms under a "lb" axis label.
+  }, [intel, u.system]);
 }
 
 function localAnalyze(series) {
@@ -639,6 +674,7 @@ function MetricExplorer({ intel, period }) {
 /* ══════════════════════════ personal records ══════════════════════════ */
 
 function PrDetail({ open, onClose, exercise }) {
+  const u = useUnits();
   const hist = useFetch(
     () => (exercise?.exerciseId ? api(`/tracking/me/progress/exercise/${exercise.exerciseId}`) : Promise.resolve({ history: [] })),
     [exercise?.exerciseId],
@@ -648,7 +684,9 @@ function PrDetail({ open, onClose, exercise }) {
   // Estimated 1RM is the fairest single progression line across sets of
   // different weights and reps -- and it is the SAME Epley formula the PR
   // engine already uses, not a second definition invented for this chart.
-  const series = history.filter((h) => h.est1rm != null).map((h) => ({ date: h.date, value: h.est1rm }));
+  const series = history
+    .filter((h) => h.est1rm != null)
+    .map((h) => ({ date: h.date, value: u.weightNum(h.est1rm, { decimals: 1 }) }));
   const prMarkers = history.filter((h) => h.isPr).map((h) => ({ date: h.date }));
   const best = exercise?.records || {};
 
@@ -663,11 +701,11 @@ function PrDetail({ open, onClose, exercise }) {
                   {PR_TYPE_LABEL[type] || type}
                 </div>
                 <div className="mt-0.5 text-[17px] font-black tabular-nums" style={{ color: 'var(--ink)' }}>
-                  {n1(r.value)}
-                  {type === 'heaviest_weight' || type === 'est_1rm' ? <span className="ml-1 text-[10px] font-medium" style={{ color: 'var(--faint)' }}>kg</span> : null}
+                  {PR_WEIGHT_TYPES.has(type) ? u.weightNum(r.value, { decimals: 1 }) : n1(r.value)}
+                  {PR_WEIGHT_TYPES.has(type) ? <span className="ml-1 text-[10px] font-medium" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span> : null}
                 </div>
                 <div className="mt-0.5 text-[9.5px]" style={{ color: 'var(--faint)' }}>
-                  {r.weight != null && r.reps != null ? `${n1(r.weight)} kg × ${n0(r.reps)} · ` : ''}{relDay(r.date)}
+                  {r.weight != null && r.reps != null ? `${u.fmtWeight(r.weight)} × ${n0(r.reps)} · ` : ''}{relDay(r.date)}
                 </div>
               </div>
             ))}
@@ -681,7 +719,7 @@ function PrDetail({ open, onClose, exercise }) {
                 Estimated 1RM progression
               </div>
               <MetricChart
-                points={series} markers={prMarkers} color="var(--m-pr)" unit="kg" decimals={1} height={170}
+                points={series} markers={prMarkers} color="var(--m-pr)" unit={u.weightUnit} decimals={1} height={170}
                 ariaLabel={`Estimated one rep max progression for ${exercise.exercise}`}
               />
               <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
@@ -702,7 +740,7 @@ function PrDetail({ open, onClose, exercise }) {
                   <div key={i} className="flex items-center justify-between text-[11.5px]" style={{ color: 'var(--mute)' }}>
                     <span>{relDay(h.date)}</span>
                     <span className="tabular-nums" style={{ color: 'var(--ink)' }}>
-                      {n1(h.weight)} kg × {n0(h.reps)}{h.sets ? ` × ${h.sets}` : ''}
+                      {u.fmtWeight(h.weight)} × {n0(h.reps)}{h.sets ? ` × ${h.sets}` : ''}
                       {h.isPr && <span className="ml-1.5 text-[9.5px] font-bold" style={{ color: 'var(--m-pr)' }}>PR</span>}
                     </span>
                   </div>
@@ -717,6 +755,7 @@ function PrDetail({ open, onClose, exercise }) {
 }
 
 function PersonalRecords({ intel, sectionRef }) {
+  const u = useUnits();
   const prs = intel.prs || {};
   const [selected, setSelected] = useState(null);
   const [showAll, setShowAll] = useState(false);
@@ -771,7 +810,7 @@ function PersonalRecords({ intel, sectionRef }) {
             {timeline[0].exercise}
           </div>
           <div className="mt-0.5 text-[13px] font-semibold tabular-nums" style={{ color: 'var(--mute)' }}>
-            {n1(timeline[0].weight)} kg × {n0(timeline[0].reps)}
+            {u.fmtWeight(timeline[0].weight)} × {n0(timeline[0].reps)}
           </div>
         </Card>
       )}
@@ -794,9 +833,9 @@ function PersonalRecords({ intel, sectionRef }) {
               <div className="text-[12px] font-bold leading-tight" style={{ color: 'var(--ink)' }}>{ex.exercise}</div>
               <div className="mt-1 flex items-baseline gap-1">
                 <span className="text-[18px] font-black tabular-nums leading-none" style={{ color: 'var(--ink)' }}>
-                  {n1(heaviest?.value ?? orm?.value)}
+                  {u.weightNum(heaviest?.value ?? orm?.value, { decimals: 1 })}
                 </span>
-                <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>kg</span>
+                <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
               </div>
               <div className="mt-0.5 text-[9.5px]" style={{ color: 'var(--faint)' }}>
                 {heaviest?.reps ? `× ${n0(heaviest.reps)} · ` : ''}{relDay(latest.date)}
@@ -821,6 +860,7 @@ function PersonalRecords({ intel, sectionRef }) {
 /* ══════════════════════════ training ══════════════════════════ */
 
 function TrainingSection({ intel, period }) {
+  const u = useUnits();
   const muscles = (intel.training?.byMuscle || []).filter((m) => m.sets > 0);
   const sessions = intel.training?.sessions || [];
   if (!sessions.length) return null;
@@ -834,7 +874,7 @@ function TrainingSection({ intel, period }) {
       <Card className="p-4">
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Sessions" value={sessions.length} sub={`last ${period}d`} />
-          <Stat label="Volume" value={fmtNum(n0(totalVolume))} unit="kg" />
+          <Stat label="Volume" value={fmtNum(u.weightNum(totalVolume, { decimals: 0 }))} unit={u.weightUnit} />
           <Stat label="Sets" value={fmtNum(totalSets)} />
         </div>
 
@@ -1025,9 +1065,25 @@ function ConsistencySection({ intel }) {
  * then measuring the user against it, which is worse than not offering
  * the goal at all — so this renders what exists and grows as real targets
  * are added, rather than shipping placeholder rings.
+ *
+ * GOALS — what you are aiming at, how far along you are, and whether the
+ * trend actually gets you there.
+ *
+ * This was a target number, a bar and a "to go" figure. The question a
+ * goal screen exists to answer is not "what did I type in", it is "am I
+ * going to make it" -- so the pace, the deadline and the one next thing
+ * worth doing are the content now, and the number you typed is context.
+ *
+ * NOTHING HERE IS INVENTED. The target trajectory is drawn only when a
+ * real deadline exists, and it is interpolated between two real dates
+ * rather than extrapolated from a guess. Pace is stated only when the
+ * trend has a direction. If the data cannot answer a question, the
+ * question is not asked.
  */
 function GoalSection({ intel }) {
+  const u = useUnits();
   const g = intel.weight?.goal;
+  const series = intel.weight?.series || [];
   const targets = intel.nutrition?.targets;
   const days = intel.nutrition?.days || [];
 
@@ -1050,11 +1106,241 @@ function GoalSection({ intel }) {
   }
 
   const hasWeightGoal = g && g.target != null;
-  if (!hasWeightGoal && !nutritionGoals.length) return null;
+
+  /* EMPTY STATE (section 30). Rendering nothing meant a client with no
+     target never discovered that goals exist -- the section simply was
+     not on the page. */
+  if (!hasWeightGoal && !nutritionGoals.length) {
+    return (
+      <Section title="Goals">
+        <Card className="p-5">
+          <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Your next milestone</div>
+          <p className="mt-1 text-[11.5px] leading-snug" style={{ color: 'var(--faint)' }}>
+            You haven't set a goal yet. Give yourself a target weight and a date, and this becomes
+            a read on whether your current trend actually gets you there.
+          </p>
+          <Link to="/app/client/profile" className="btn-primary btn-sm mt-3 inline-flex">Set a goal</Link>
+        </Card>
+      </Section>
+    );
+  }
+
   const pct = hasWeightGoal && g.percent != null ? Math.max(0, Math.min(100, g.percent)) : null;
+
+  /* OVERSHOOT IS A REAL OUTCOME, and the common one for a fat-loss
+     client who keeps going. `remaining` is target minus current, so
+     someone who started at 94, targets 82 and is now at 75 has a
+     remaining of +7 -- and the naive reading of that renders "15.4 lb to
+     go" next to a 100% ring and a "behind pace" warning, for a person
+     who beat their goal by seven kilos.
+     Reached means current has passed target in the direction of travel,
+     which is what the Profile journey already says; the two screens have
+     to agree about the same person. */
+  const reached = hasWeightGoal && (
+    Math.abs(g.remaining ?? 0) < 0.25
+    || (g.start != null && g.target !== g.start
+        && Math.sign(g.target - g.current) !== Math.sign(g.target - g.start))
+  );
+  const pastBy = reached && g.start != null ? Math.abs(g.current - g.target) : 0;
+
+  /* PACE. Only computed against a REAL deadline, and only when the trend
+     has a direction to compare against -- "you need 0.4 kg/week" is
+     useful; "you need Infinity kg/week" because the date has passed is
+     not, and neither is a pace judgement with no date at all. */
+  let pace = null;
+  if (hasWeightGoal && g.date && g.remaining != null) {
+    const msLeft = Date.parse(`${g.date}T12:00:00Z`) - Date.now();
+    const weeksLeft = msLeft / (7 * 24 * 3600 * 1000);
+    if (reached) {
+      pace = {
+        tone: 'good',
+        text: pastBy > 0.25
+          ? `Target reached — you're ${u.fmtWeight(pastBy)} past it.`
+          : 'Target reached.',
+      };
+    } else if (weeksLeft <= 0) {
+      pace = { tone: 'warn', text: `Your target date has passed, with ${u.fmtWeight(Math.abs(g.remaining))} still to go.` };
+    } else {
+      const needed = g.remaining / weeksLeft;          // kg per week, signed
+      const actual = intel.weight?.analysis?.ratePerWeek ?? null;
+      const needAbs = u.weightNum(Math.abs(needed), { decimals: 2 });
+      if (actual == null || Math.abs(actual) < 1e-6) {
+        pace = { tone: 'mute', text: `Needs about ${needAbs} ${u.weightUnit}/week to land on ${g.date}.` };
+      } else {
+        // Same sign means the trend is heading the right way.
+        const rightWay = Math.sign(actual) === Math.sign(needed);
+        const onTrack = rightWay && Math.abs(actual) >= Math.abs(needed) * 0.9;
+        pace = {
+          tone: onTrack ? 'good' : 'warn',
+          text: onTrack
+            ? `On pace — you're moving ${u.weightNum(Math.abs(actual), { decimals: 2 })} ${u.weightUnit}/week and need about ${needAbs}.`
+            : `Behind pace — ${needAbs} ${u.weightUnit}/week gets you there; you're at ${u.weightNum(Math.abs(actual), { decimals: 2 })}${rightWay ? '' : ' in the other direction'}.`,
+        };
+      }
+    }
+  }
+
+  /* MILESTONES (section 26), and only where mathematically meaningful:
+     they need a known start, so a client with a target but no declared
+     starting point gets no ladder rather than a fake one. */
+  const milestones = hasWeightGoal && g.start != null && pct != null
+    ? [25, 50, 75, 100].map((m) => ({
+      m,
+      hit: pct >= m,
+      at: g.start + ((g.target - g.start) * m) / 100,
+    }))
+    : [];
+
+  /* TARGET TRAJECTORY (section 24). Drawn ONLY with a real deadline, and
+     interpolated between two real dates -- the first logged weight and
+     the target date -- so every point on it is where you would have to
+     be on that day. No extrapolation, no prediction. */
+  const trajectory = (() => {
+    if (!hasWeightGoal || !g.date || !g.startDate || series.length < 2) return [];
+    const t0 = Date.parse(`${g.startDate}T12:00:00Z`);
+    const t1 = Date.parse(`${g.date}T12:00:00Z`);
+    if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) return [];
+    const from = g.start != null ? g.start : series[0].value;
+    return series.map((p) => {
+      const t = Date.parse(`${p.date}T12:00:00Z`);
+      const r = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
+      return { date: p.date, value: u.weightNum(from + (g.target - from) * r, { decimals: 1 }) };
+    });
+  })();
+
+  const chartPoints = series.map((p) => ({ ...p, value: u.weightNum(p.value, { decimals: 1 }) }));
 
   return (
     <Section title="Goals">
+      {hasWeightGoal && (
+        <Card className="p-4">
+          <div className="flex items-center gap-4">
+            {/* The ring carries the glance. It animates through the
+                design system's Ring, which honours reduced-motion. */}
+            <Ring
+              value={pct != null ? pct / 100 : 0}
+              size={76} stroke={7} color="var(--m-body)"
+              label={pct != null ? `${Math.round(pct)} percent of the way to your target weight` : 'Target weight'}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
+                {GOAL_LABEL[g.kind] || 'Target weight'}
+              </div>
+              <div className="mt-0.5 flex items-baseline gap-1.5">
+                <span className="text-[26px] font-black leading-none tabular-nums tracking-[-.03em]" style={{ color: 'var(--ink)' }}>
+                  {u.weightNum(g.target, { decimals: 1 })}
+                </span>
+                <span className="text-[11px]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
+                {pct != null && (
+                  <span className="ml-1 text-[11px] font-bold tabular-nums" style={{ color: 'var(--m-body)' }}>
+                    {Math.round(pct)}%
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
+                {reached
+                  ? (pastBy > 0.25 ? `${u.fmtWeight(pastBy)} past target` : 'Target reached')
+                  : `${u.fmtWeight(Math.abs(g.remaining))} to go`}
+                {g.date && !reached && <> · by {g.date}</>}
+              </div>
+            </div>
+          </div>
+
+          {/* START → NOW → TARGET, the shape of the journey in one line. */}
+          {g.start != null && (
+            <div className="mt-3 flex items-center justify-between gap-2 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
+              <span>Start {u.fmtWeight(g.start)}</span>
+              <span style={{ color: 'var(--ink)' }}>Now {u.fmtWeight(g.current)}</span>
+              <span>Target {u.fmtWeight(g.target)}</span>
+            </div>
+          )}
+
+          {milestones.length > 0 && (
+            <div className="mt-2 flex gap-1">
+              {milestones.map((ms) => (
+                <div key={ms.m} className="flex-1">
+                  <div
+                    className="h-1.5 rounded-full"
+                    style={{ background: ms.hit ? 'var(--m-body)' : 'var(--line)' }}
+                    role="img"
+                    aria-label={`${ms.m} percent milestone (${u.fmtWeight(ms.at)}) ${ms.hit ? 'reached' : 'not yet reached'}`}
+                  />
+                  <div className="mt-1 text-[8.5px] tabular-nums" style={{ color: ms.hit ? 'var(--m-body)' : 'var(--faint)' }}>
+                    {ms.m}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {pace && (
+            <div
+              className="mt-2.5 text-[11px] leading-snug"
+              style={{ color: pace.tone === 'good' ? 'var(--good)' : pace.tone === 'warn' ? 'var(--warn)' : 'var(--mute)' }}
+            >
+              {pace.text}
+            </div>
+          )}
+
+          {!g.date && (
+            <div className="mt-2.5 text-[11px] leading-snug" style={{ color: 'var(--mute)' }}>
+              Add a target date and this can tell you whether your current trend actually gets you there.{' '}
+              <Link to="/app/client/profile" style={{ color: 'var(--accent)' }}>Set one</Link>
+            </div>
+          )}
+
+          {g.weeksToTarget != null && !g.date && (
+            <div className="mt-1 text-[11px]" style={{ color: 'var(--mute)' }}>
+              About <strong style={{ color: 'var(--ink)' }}>{Math.round(g.weeksToTarget)} weeks</strong> away at your
+              current trend — an estimate that moves as the trend moves.
+            </div>
+          )}
+
+          {chartPoints.length >= 2 && (
+            <div className="mt-3">
+              <div className="text-[10px] font-bold uppercase tracking-[.09em] mb-1" style={{ color: 'var(--faint)' }}>
+                Weight vs target
+                {trajectory.length > 0 && (
+                  <span className="ml-1.5 font-semibold tracking-normal normal-case" style={{ color: 'var(--faint)' }}>
+                    — the pale line is where you'd need to be
+                  </span>
+                )}
+              </div>
+              <MetricChart
+                points={chartPoints}
+                compare={trajectory}
+                goal={u.weightNum(g.target, { decimals: 1 })}
+                color="var(--m-body)"
+                unit={u.weightUnit}
+                decimals={1}
+                height={160}
+                ariaLabel="Your weight against your target"
+              />
+            </div>
+          )}
+
+          <Link to="/app/client/profile" className="btn btn-sm w-full mt-3 inline-flex justify-center">
+            Edit goal
+          </Link>
+        </Card>
+      )}
+
+      {/* A client can have nutrition targets and no weight goal. Showing
+          only the nutrition cards leaves the bigger goal uninvited --
+          the full empty state above only fires when there is nothing at
+          all, so this is the version that fits beside real content. */}
+      {!hasWeightGoal && (
+        <Card className="p-3.5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold" style={{ color: 'var(--ink)' }}>No weight goal set</div>
+            <div className="text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--faint)' }}>
+              Set a target and a date to see whether your trend gets you there.
+            </div>
+          </div>
+          <Link to="/app/client/profile" className="btn-secondary btn-sm shrink-0">Set a goal</Link>
+        </Card>
+      )}
+
       {nutritionGoals.length > 0 && (
         <div className="grid grid-cols-2 gap-2.5">
           {nutritionGoals.map((ng) => (
@@ -1079,39 +1365,6 @@ function GoalSection({ intel }) {
             </Card>
           ))}
         </div>
-      )}
-
-      {hasWeightGoal && (
-      <Card className="p-4">
-        <div className="flex items-end justify-between">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>Target weight</div>
-            <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-[26px] font-black leading-none tabular-nums tracking-[-.03em]" style={{ color: 'var(--ink)' }}>{n1(g.target)}</span>
-              <span className="text-[11px]" style={{ color: 'var(--faint)' }}>kg</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-[15px] font-bold tabular-nums" style={{ color: 'var(--ink)' }}>{Math.abs(n1(g.remaining))} kg</div>
-            <div className="text-[9.5px]" style={{ color: 'var(--faint)' }}>to go</div>
-          </div>
-        </div>
-
-        {pct != null && (
-          <div className="mt-3">
-            <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
-              <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${pct}%`, background: 'var(--m-body)' }} />
-            </div>
-            <div className="mt-1 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>{Math.round(pct)}% of the way from where you started</div>
-          </div>
-        )}
-
-        {g.weeksToTarget != null && (
-          <div className="mt-2.5 text-[11px]" style={{ color: 'var(--mute)' }}>
-            About <strong style={{ color: 'var(--ink)' }}>{Math.round(g.weeksToTarget)} weeks</strong> away at your current trend — an estimate that moves as the trend moves.
-          </div>
-        )}
-      </Card>
       )}
     </Section>
   );
@@ -1213,6 +1466,7 @@ function PhotosSection({ photos }) {
  *  and largest thing on this page, which put data entry ahead of the
  *  progress the user came to see. */
 function LogWeight({ clientId, current, onLogged }) {
+  const u = useUnits();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -1237,13 +1491,19 @@ function LogWeight({ clientId, current, onLogged }) {
     // it forward.
     const raw = value.trim();
     if (!raw) { setMsg({ text: 'Enter a weight first', tone: 'bad' }); return; }
-    const w = parseFloat(raw);
+    // The user types in THEIR unit; the API only ever accepts kilograms.
+    // Converting here -- at the input boundary -- is what keeps a stored
+    // series from silently becoming a mix of kg and lb rows.
+    const w = u.toKg(raw);
     if (!Number.isFinite(w) || w <= 0) { setMsg({ text: 'Enter a valid weight greater than 0', tone: 'bad' }); return; }
+    // The 500 bound is the backend's (schemas.weightLog), so it must be
+    // checked against the CANONICAL value -- 900 lb is under 500 as a
+    // typed number and over it as a weight.
     if (w > 500) { setMsg({ text: 'That weight looks too high — double-check it', tone: 'bad' }); return; }
     setSaving(true);
     try {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });
-      setMsg({ text: `Logged ${w} kg`, tone: 'good' });
+      setMsg({ text: `Logged ${u.fmtWeight(w)}`, tone: 'good' });
       setValue('');
       onLogged?.();
     } catch (err) { setMsg({ text: err.message, tone: 'bad' }); }
@@ -1257,13 +1517,14 @@ function LogWeight({ clientId, current, onLogged }) {
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>Log today's weight</div>
             {current != null && (
-              <div className="mt-0.5 text-[11px]" style={{ color: 'var(--faint)' }}>Last: {n1(current)} kg</div>
+              <div className="mt-0.5 text-[11px]" style={{ color: 'var(--faint)' }}>Last: {u.fmtWeight(current)}</div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <input
               type="number" inputMode="decimal" step="0.1" min="0" value={value}
-              onChange={(e) => setValue(e.target.value)} placeholder="kg" aria-label="Weight in kilograms"
+              onChange={(e) => setValue(e.target.value)} placeholder={u.weightUnit}
+              aria-label={u.isImperial ? 'Weight in pounds' : 'Weight in kilograms'}
               className="input w-20 text-right tabular-nums" style={{ minHeight: 44 }}
             />
             <button type="submit" className="btn-primary btn-sm" disabled={saving} style={{ minHeight: 44 }}>

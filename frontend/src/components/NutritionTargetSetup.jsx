@@ -60,7 +60,9 @@ function AnimatedNumber({ value, t }) {
  * @param {boolean} isEdit - true when editing an existing plan (vs first-time setup)
  */
 export default function NutritionTargetSetup({ open, onComplete, currentPlan = null, isEdit = false }) {
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const t = T[theme] || T.dark;
   const [targets, setTargets] = useState(null);
   const [loading, setLoading] = useState(true);

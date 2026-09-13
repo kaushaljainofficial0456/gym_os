@@ -43,7 +43,7 @@ export default function LegalConsent() {
             </h1>
           </div>
           <p className="text-sm text-[var(--mute)]">
-            Please review these terms before continuing to Gym&nbsp;OS.
+            Please review these terms before continuing to Barbell.
           </p>
         </div>
       </div>
@@ -58,7 +58,7 @@ export default function LegalConsent() {
 
           {/* 1 ─ Acceptance of Terms */}
           <Section num={1} title="Acceptance of Terms">
-            <p>By creating an account, using Gym&nbsp;OS, or selecting &quot;I Agree,&quot; you confirm that you have read, understood, and accepted these Terms &amp; Conditions along with our <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-deep)]">Privacy Policy</a>. If you do not agree, please do not use Gym&nbsp;OS.</p>
+            <p>By creating an account, using Barbell, or selecting &quot;I Agree,&quot; you confirm that you have read, understood, and accepted these Terms &amp; Conditions along with our <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-deep)]">Privacy Policy</a>. If you do not agree, please do not use Barbell.</p>
           </Section>
 
           {/* 2 ─ Account Responsibility */}
@@ -75,9 +75,9 @@ export default function LegalConsent() {
           {/* 3 ─ Fitness & Exercise Disclaimer */}
           <Section num={3} title="Fitness &amp; Exercise Disclaimer">
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg2)] px-4 py-3 mb-2">
-              <p className="font-semibold text-[var(--ink)]">Gym&nbsp;OS is a fitness information tool — it is not a medical professional.</p>
+              <p className="font-semibold text-[var(--ink)]">Barbell is a fitness information tool — it is not a medical professional.</p>
             </div>
-            <p>Workouts, exercises, programs, and training information provided through Gym&nbsp;OS are for general informational and educational purposes. This information is <strong>not</strong> a substitute for advice from:</p>
+            <p>Workouts, exercises, programs, and training information provided through Barbell are for general informational and educational purposes. This information is <strong>not</strong> a substitute for advice from:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>A doctor or healthcare professional</li>
               <li>A physiotherapist or physical therapist</li>
@@ -90,10 +90,10 @@ export default function LegalConsent() {
           {/* 4 ─ Nutrition, Calories & Other Estimates */}
           <Section num={4} title="Nutrition, Calories &amp; Other Estimates">
             <div className="rounded-lg border border-[var(--line)] bg-[var(--bg2)] px-4 py-3 mb-2">
-              <p className="font-semibold text-[var(--ink)]">Many values in Gym&nbsp;OS are estimates, not exact measurements.</p>
+              <p className="font-semibold text-[var(--ink)]">Many values in Barbell are estimates, not exact measurements.</p>
             </div>
             <p>Nutrition information, calorie estimates, macronutrient breakdowns, food recognition, portion estimates, AI-generated food data, workout recommendations, progress calculations, measurements, targets, and similar outputs may be approximate and may contain errors.</p>
-            <p className="mt-2">Actual values can vary based on brand, recipe, preparation method, serving size, ingredient variation, database source, regional differences, and incomplete user input. Never treat Gym&nbsp;OS calculations as medically precise or guaranteed.</p>
+            <p className="mt-2">Actual values can vary based on brand, recipe, preparation method, serving size, ingredient variation, database source, regional differences, and incomplete user input. Never treat Barbell calculations as medically precise or guaranteed.</p>
             <p className="mt-2">Verify important nutritional or health information from reliable sources, product labels, or qualified professionals where appropriate.</p>
           </Section>
 
@@ -106,18 +106,18 @@ export default function LegalConsent() {
               <li>Starting at an appropriate intensity and progressing gradually.</li>
               <li><strong>Stopping immediately</strong> if you experience pain, dizziness, chest discomfort, shortness of breath, or any other concerning symptoms — and seeking professional help.</li>
             </ul>
-            <p className="mt-2">Gym&nbsp;OS does not monitor your physical condition in real time. You exercise at your own risk.</p>
+            <p className="mt-2">Barbell does not monitor your physical condition in real time. You exercise at your own risk.</p>
           </Section>
 
           {/* 6 ─ No Guarantee of Results */}
           <Section num={6} title="No Guarantee of Results">
-            <p>Gym&nbsp;OS does not guarantee any specific fitness, weight-loss, muscle-gain, health, performance, or other results. Individual results vary widely based on genetics, consistency, effort, nutrition, sleep, stress, and many other factors beyond the app&apos;s control.</p>
+            <p>Barbell does not guarantee any specific fitness, weight-loss, muscle-gain, health, performance, or other results. Individual results vary widely based on genetics, consistency, effort, nutrition, sleep, stress, and many other factors beyond the app&apos;s control.</p>
             <p className="mt-2">Any examples, testimonials, or general information shown in the app should not be interpreted as a promise or guarantee of results.</p>
           </Section>
 
           {/* 7 ─ App Information & Accuracy */}
           <Section num={7} title="App Information &amp; Accuracy">
-            <p>While reasonable efforts are made to provide useful and accurate information, Gym&nbsp;OS may contain errors, outdated information, omissions, technical limitations, or estimates. We do not promise that every piece of information will always be completely accurate, complete, or available.</p>
+            <p>While reasonable efforts are made to provide useful and accurate information, Barbell may contain errors, outdated information, omissions, technical limitations, or estimates. We do not promise that every piece of information will always be completely accurate, complete, or available.</p>
             <p className="mt-2">Exercise and nutrition information in the app should be independently verified where accuracy is important to you.</p>
           </Section>
 
@@ -130,7 +130,7 @@ export default function LegalConsent() {
           <Section num={9} title="User Conduct">
             <p>You agree not to:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Use Gym&nbsp;OS for any unlawful or fraudulent purpose.</li>
+              <li>Use Barbell for any unlawful or fraudulent purpose.</li>
               <li>Attempt unauthorized access to the platform, other users&apos; accounts, or related systems.</li>
               <li>Abuse, harass, or harm other users.</li>
               <li>Interfere with or disrupt the platform&apos;s functionality or security.</li>
@@ -142,20 +142,20 @@ export default function LegalConsent() {
 
           {/* 10 ─ Intellectual Property */}
           <Section num={10} title="Intellectual Property">
-            <p>Gym&nbsp;OS, including its original content, branding, interface design, software, features, and materials, is owned by Gym&nbsp;OS or its applicable rights holders and is protected by intellectual property laws.</p>
+            <p>Barbell, including its original content, branding, interface design, software, features, and materials, is owned by Barbell or its applicable rights holders and is protected by intellectual property laws.</p>
             <p className="mt-2">You may not copy, reproduce, redistribute, modify, create derivative works from, or misuse any part of the platform without prior written permission.</p>
           </Section>
 
           {/* 11 ─ Privacy &amp; Cookies */}
           <Section num={11} title="Privacy &amp; Cookies">
-            <p>Your use of Gym&nbsp;OS is also governed by our <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-deep)]">Privacy Policy</a>, which explains how personal data is collected, used, stored, and protected.</p>
+            <p>Your use of Barbell is also governed by our <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-deep)]">Privacy Policy</a>, which explains how personal data is collected, used, stored, and protected.</p>
             <p className="mt-2">Cookie preferences are managed separately and can be adjusted at any time through the app&apos;s cookie settings.</p>
           </Section>
 
           {/* 12 ─ Limitation of Liability */}
           <Section num={12} title="Limitation of Liability">
-            <p>To the maximum extent permitted by applicable law, Gym&nbsp;OS is provided &quot;as is&quot; and &quot;as available&quot; without warranties of any kind, whether express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
-            <p className="mt-2">In no event shall Gym&nbsp;OS, its operators, or contributors be liable for any indirect, incidental, special, consequential, or punitive damages arising from or related to your use of the platform, including but not limited to loss of data, loss of profits, or personal injury.</p>
+            <p>To the maximum extent permitted by applicable law, Barbell is provided &quot;as is&quot; and &quot;as available&quot; without warranties of any kind, whether express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
+            <p className="mt-2">In no event shall Barbell, its operators, or contributors be liable for any indirect, incidental, special, consequential, or punitive damages arising from or related to your use of the platform, including but not limited to loss of data, loss of profits, or personal injury.</p>
             <p className="mt-2">You remain solely responsible for your own decisions regarding exercise, nutrition, and health. Nothing in these terms is intended to limit any rights that cannot legally be waived under applicable law.</p>
           </Section>
 
@@ -168,7 +168,12 @@ export default function LegalConsent() {
           {/* 14 ─ Contact */}
           <Section num={14} title="Contact">
             <p>If you have questions about these Terms &amp; Conditions, please reach out to us:</p>
-            <p className="mt-2"><em>[Contact email — to be supplied by the Gym&nbsp;OS team]</em></p>
+            <p>
+              Email us at{' '}
+              <a href="mailto:skventures1111@gmail.com" className="text-[var(--accent)] underline underline-offset-2 break-all">
+                skventures1111@gmail.com
+              </a>
+            </p>
           </Section>
 
           {/* Bottom spacer so content isn't hidden behind the sticky footer */}

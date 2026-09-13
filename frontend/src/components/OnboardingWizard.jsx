@@ -43,6 +43,7 @@ import { api } from '../api.js';
 import ScrollWheel from './ScrollWheel.jsx';
 import HeightSelector from './HeightSelector.jsx';
 import WeightSelector from './WeightSelector.jsx';
+import { formatWeight, formatLength, formatHeight } from '../units.js';
 import Icon from './Icon.jsx';
 
 const stepVariants = {
@@ -226,7 +227,8 @@ function StepHeight({ form, setForm, t }) {
     <div>
       <StepHead t={t} title="How tall are you?" why="Part of the body-composition baseline your targets start from." />
       <div className="flex justify-center">
-        <HeightSelector value={form.height} onChange={(v) => setForm({ ...form, height: v })} t={t} />
+        <HeightSelector value={form.height} onChange={(v) => setForm({ ...form, height: v })} t={t}
+          unit={form.heightUnit} onUnitChange={(uu) => setForm({ ...form, heightUnit: uu })} />
       </div>
     </div>
   );
@@ -237,7 +239,8 @@ function StepWeight({ form, setForm, t }) {
     <div>
       <StepHead t={t} title="What do you weigh?" why="Your starting point. Log it again whenever you like — nothing here is fixed." />
       <div className="flex justify-center">
-        <WeightSelector value={form.weight} onChange={(v) => setForm({ ...form, weight: v })} t={t} />
+        <WeightSelector value={form.weight} onChange={(v) => setForm({ ...form, weight: v })} t={t}
+          unit={form.weightUnit} onUnitChange={(uu) => setForm({ ...form, weightUnit: uu })} />
       </div>
     </div>
   );
@@ -318,8 +321,11 @@ function StepReview({ form, t, goTo }) {
   const rows = [
     ['Name', form.name, 1],
     ['Sex', sexLabel, 2],
-    ['Height', `${form.height} cm`, 3],
-    ['Weight', `${form.weight} kg`, 4],
+    // The review must echo the unit the person actually picked on the
+    // wheel. Printing "70 kg" back to someone who chose pounds is the
+    // same mixed-unit confusion, just one screen later.
+    ['Height', form.heightUnit === 'cm' ? formatLength(form.height, 'metric') : formatHeight(form.height, 'imperial'), 3],
+    ['Weight', formatWeight(form.weight, form.weightUnit === 'lb' ? 'imperial' : 'metric', { decimals: 0 }), 4],
     ['Age', `${form.age}`, 5],
     ['Goal', goal?.label || '—', 6],
     ['Experience', exp?.label || '—', 7],
@@ -354,7 +360,9 @@ function StepReview({ form, t, goTo }) {
 const STEPS = ['Welcome', 'Name', 'Sex', 'Height', 'Weight', 'Age', 'Goal', 'Experience', 'Review'];
 
 export default function OnboardingWizard({ open, onComplete, initialName = '' }) {
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const t = T[theme] || T.dark;
   const [step, setStep] = useState(0);
   const direction = useRef(1);
@@ -366,6 +374,12 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
     age: 25,
     goal: '',
     experience: 'INTERMEDIATE',
+    /* The wheels' display unit. Storage stays cm/kg; this is only which
+       unit the person is reading -- and it becomes their saved
+       preference below, so the app opens in the unit they signed up in
+       rather than making them find the setting. */
+    heightUnit: 'ft_in',
+    weightUnit: 'kg',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -408,6 +422,7 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
           age: Number(form.age),
           goal: form.goal,
           experience: form.experience,
+          unit_system: form.weightUnit === 'lb' ? 'imperial' : 'metric',
           onboarding_completed: true,
         }),
       });

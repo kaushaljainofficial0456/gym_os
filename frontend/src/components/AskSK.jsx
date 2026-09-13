@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import Icon from './Icon.jsx';
 import { XIcon } from './UI.jsx';
+import { useUnits } from '../unitsContext.jsx';
 
 // Web Speech API — speech recognition when the browser supports it.
 // (Chrome/Edge/Safari ship it; Firefox needs a flag.) Everything else
@@ -46,6 +47,7 @@ function isContextQuestion(text) {
 }
 
 export default function AskSK({ onLogged }) {
+  const u = useUnits();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState('ask'); // ask | label | meal
   const [text, setText] = useState('');
@@ -372,7 +374,7 @@ export default function AskSK({ onLogged }) {
                         {view.data.sets.map((s, i) => (
                           <div key={i} className="flex justify-between rounded-lg border border-line bg-bg/60 px-3 py-1.5 text-[12px]">
                             <span className="text-mute font-grotesk">Set {s.set_number}</span>
-                            <span className="font-grotesk font-semibold">{s.weight || 'BW'} kg × {s.reps} reps</span>
+                            <span className="font-grotesk font-semibold">{s.weight ? u.fmtWeight(s.weight) : 'BW'} × {s.reps} reps</span>
                           </div>
                         ))}
                       </div>

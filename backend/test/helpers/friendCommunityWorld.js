@@ -73,9 +73,11 @@ export async function memDb() {
   raw.exec(schema);
   // Columns scripts/init-db.js adds through its guarded MIGRATIONS list,
   // which this lightweight in-memory database does not run. notify() writes
-  // both, and reaction de-duplication reads data_json.
-  raw.exec('ALTER TABLE notifications ADD COLUMN data_json TEXT');
-  raw.exec("ALTER TABLE notifications ADD COLUMN channel TEXT NOT NULL DEFAULT 'in_app'");
+  // both, and reaction de-duplication reads data_json. Guarded like the other
+  // memDb() helpers: data_json has since moved into schema.sql itself.
+  for (const ddl of ['data_json TEXT', `channel TEXT NOT NULL DEFAULT 'in_app'`]) {
+    try { raw.exec(`ALTER TABLE notifications ADD COLUMN ${ddl}`); } catch {}
+  }
   // The gym community sits behind a platform feature flag that init-db seeds
   // at 100%; without it the gym half of these tests would assert against a
   // switched-off feature.

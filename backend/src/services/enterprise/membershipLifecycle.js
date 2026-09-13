@@ -42,6 +42,37 @@ const COARSE_STATUS_MAP = {
   CANCELLED: 'cancelled', REFUNDED: 'cancelled', TRANSFERRED: 'cancelled',
 };
 
+/**
+ * The status a membership ACTUALLY has right now, given its end date.
+ *
+ * Nothing in this app expires a membership. EXPIRED is in the graph
+ * above and reachable by an explicit transition, but no cron, sweep or
+ * lazy check ever fires it when end_date simply passes -- so a
+ * subscription that lapsed months ago still reports ACTIVE to every
+ * consumer. Observed live: a membership that ended 2026-02-23 was still
+ * being served as ACTIVE in September, and the client's own membership
+ * card showed an "Active" chip directly above the words "This membership
+ * has expired", because the chip read the stored status and the banner
+ * read the date.
+ *
+ * Derived rather than written, deliberately. A write on a GET is a
+ * surprise side effect, and this app has no scheduler to do it properly;
+ * deriving keeps every reader agreeing without one. When a real sweep
+ * exists it can persist the same answer, and this stays correct.
+ *
+ * Only ACTIVE lapses. A PAUSED or SUSPENDED membership past its end date
+ * is still paused or suspended -- that is a deliberate state somebody put
+ * it in, and silently relabelling it would erase their decision.
+ */
+export function effectiveMembershipStatus(row, today = new Date().toISOString().slice(0, 10)) {
+  if (!row) return null;
+  const stored = row.lifecycle_status || 'ACTIVE';
+  if (stored !== 'ACTIVE') return stored;
+  const end = String(row.end_date || '').slice(0, 10);
+  if (!end) return stored;            // no end date means nothing to lapse against
+  return end < today ? 'EXPIRED' : stored;
+}
+
 export function isValidTransition(fromStatus, toStatus) {
   const from = fromStatus || 'ACTIVE';
   return (TRANSITIONS[from] || []).includes(toStatus);

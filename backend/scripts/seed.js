@@ -831,10 +831,20 @@ async function main() {
       await db.run(
         `INSERT INTO measurements (id, client_id, taken_at, weight, waist, chest, arms, thighs, hips, neck)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        /* CENTIMETRES, all of them -- the column's unit and the product's
+           canonical length.
+           The waist figure used to be `wAt * 0.9 * 2.54`: the first half
+           already produces centimetres, and the 2.54 converted it a
+           second time, so a 94 kg client was seeded with a 215 cm waist.
+           The other five ran the opposite way -- ratios tuned for inches
+           and never converted at all, giving a 59 cm chest and a 17 cm
+           bicep. Every one of them is now a plausible adult measurement
+           in cm, which matters because this data is what the measurement
+           charts, the trend engine and every screenshot of them show. */
         [id('mea'), cid, mDates[m] + 'T09:00:00Z', wAt,
-         Math.round(wAt * 0.9 * 2.54 * 10) / 10, Math.round((wAt * 0.5 + 12) * 10) / 10,
-         Math.round((wAt * 0.12 + 6) * 10) / 10, Math.round((wAt * 0.22 + 10) * 10) / 10,
-         Math.round((wAt * 0.32 + 8) * 10) / 10, Math.round((wAt * 0.14 + 5) * 10) / 10]);
+         Math.round((wAt * 0.9) * 10) / 10, Math.round((wAt * 0.55 + 50) * 10) / 10,
+         Math.round((wAt * 0.15 + 20) * 10) / 10, Math.round((wAt * 0.3 + 30) * 10) / 10,
+         Math.round((wAt * 0.45 + 58) * 10) / 10, Math.round((wAt * 0.1 + 29) * 10) / 10]);
     }
 
     // ---- nutrition plan (clone template) ----

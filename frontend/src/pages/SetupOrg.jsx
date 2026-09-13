@@ -21,7 +21,9 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 export default function SetupOrg() {
   const { setupOrg, loginWithGoogleEnterprise } = useAuth();
   const nav = useNavigate();
-  const { theme } = useTheme();
+  // `resolved` (never the raw choice): 'system' is now a storable
+  // value, and every comparison below is against light/dark.
+  const { resolved: theme } = useTheme();
   const [orgName, setOrgName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');

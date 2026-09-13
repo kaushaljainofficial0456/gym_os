@@ -4,6 +4,8 @@ import { useAuth } from '../../auth.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useCookieConsent } from '../../components/CookieConsent.jsx';
 import { api } from '../../api.js';
+import { useTheme } from '../../themeContext.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 import { Toast } from '../../components/UI.jsx';
 
 const SETTINGS_SECTIONS = [
@@ -12,9 +14,9 @@ const SETTINGS_SECTIONS = [
     label: 'Account Information',
     icon: 'user',
     fields: [
-      { key: 'name', label: 'Name', type: 'text', placeholder: 'Your full name' },
-      { key: 'email', label: 'Email', type: 'email', placeholder: 'your@email.com', readOnly: true },
-      { key: 'phone', label: 'Phone Number', type: 'tel', placeholder: '+91 XXXXX XXXXX' },
+      { key: 'name', label: 'Name', type: 'text', placeholder: 'Your full name', autoComplete: 'name' },
+      { key: 'email', label: 'Email', type: 'email', placeholder: 'your@email.com', readOnly: true, autoComplete: 'email' },
+      { key: 'phone', label: 'Phone Number', type: 'tel', placeholder: '+91 XXXXX XXXXX', autoComplete: 'tel' },
     ]
   },
   {
@@ -22,9 +24,12 @@ const SETTINGS_SECTIONS = [
     label: 'Security',
     icon: 'lock',
     fields: [
-      { key: 'current_password', label: 'Current Password', type: 'password', placeholder: '••••••••' },
-      { key: 'new_password', label: 'New Password', type: 'password', placeholder: '••••••••' },
-      { key: 'confirm_password', label: 'Confirm New Password', type: 'password', placeholder: '••••••••' },
+      /* autoComplete matters on a password form: without it a manager
+         cannot tell the current field from the new one, and offers to
+         overwrite the saved entry with whatever is in the first box. */
+      { key: 'current_password', label: 'Current Password', type: 'password', placeholder: '••••••••', autoComplete: 'current-password' },
+      { key: 'new_password', label: 'New Password', type: 'password', placeholder: '••••••••', autoComplete: 'new-password' },
+      { key: 'confirm_password', label: 'Confirm New Password', type: 'password', placeholder: '••••••••', autoComplete: 'new-password' },
     ]
   }
 ];
@@ -87,7 +92,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-gold/40 px-4 py-2 text-sm shadow-card anim-fadeUp"
           style={{ background: 'var(--panel)', color: 'var(--ink)' }}>
@@ -100,83 +105,242 @@ export default function Settings() {
         <div className="text-xs mt-0.5" style={{ color: 'var(--mute)' }}>Manage your account and preferences</div>
       </div>
 
-      {SETTINGS_SECTIONS.map((section) => (
-        <div key={section.id} data-tour={`settings-${section.id}`} className="card p-5">
-          <div className="flex items-center gap-2.5 mb-4">
-            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={18} /></span>
-            <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</span>
-          </div>
+      {/* GROUPED, because eight peer cards in one column is a list, not a
+          structure: nothing told you that Appearance and Units are the
+          same kind of thing as each other and a different kind of thing
+          from your password. The groups are the three questions people
+          actually arrive with -- who am I, how should the app behave,
+          what does it know about me. */}
+      <Group title="Account" hint="Who you are and how you sign in.">
+        {SETTINGS_SECTIONS.map((section) => (
+          <div key={section.id} data-tour={`settings-${section.id}`} className="card p-5">
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name={section.icon} size={18} /></span>
+              <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>{section.label}</span>
+            </div>
 
-          <div className="space-y-3">
-            {section.fields.map((field) => (
-              <label key={field.key} className="block">
-                <span className="text-[10.5px] font-grotesk uppercase tracking-wider font-medium" style={{ color: 'var(--faint)' }}>{field.label}</span>
-                <input
-                  type={field.type}
-                  className="input mt-1.5"
-                  placeholder={field.placeholder}
-                  value={formState[field.key] || ''}
-                  readOnly={field.readOnly}
-                  onChange={(e) => setFormState((s) => ({ ...s, [field.key]: e.target.value }))}
-                />
-                {field.readOnly && (
-                  <span className="text-[9px] mt-0.5 block" style={{ color: 'var(--faint)' }}>This field cannot be changed here</span>
-                )}
-              </label>
-            ))}
-          </div>
+            <div className="space-y-3">
+              {section.fields.map((field) => (
+                <label key={field.key} className="block">
+                  <span className="text-[10.5px] font-grotesk uppercase tracking-wider font-medium" style={{ color: 'var(--faint)' }}>{field.label}</span>
+                  <input
+                    type={field.type}
+                    className="input mt-1.5"
+                    placeholder={field.placeholder}
+                    value={formState[field.key] || ''}
+                    readOnly={field.readOnly}
+                    autoComplete={field.autoComplete}
+                    onChange={(e) => setFormState((s) => ({ ...s, [field.key]: e.target.value }))}
+                  />
+                  {field.readOnly && (
+                    <span className="text-[9px] mt-0.5 block" style={{ color: 'var(--faint)' }}>This field cannot be changed here</span>
+                  )}
+                </label>
+              ))}
+            </div>
 
-          {section.id !== 'security' && (
+            {/* THE BUTTON BELONGS TO THE FIELDS ABOVE IT. "Change
+                Password" used to live in a card of its own, one card
+                below the password fields and directly under an unrelated
+                block -- so the only control that acted on those three
+                inputs appeared to belong to something else. */}
+            {section.id === 'security' ? (
+              <>
+                <button className="btn-primary w-full mt-4" onClick={handlePassword} disabled={busy}>
+                  {busy ? 'Saving…' : 'Change password'}
+                </button>
+                <div className="text-[9px] mt-2 text-center" style={{ color: 'var(--faint)' }}>
+                  Password changes require your current password for verification
+                </div>
+              </>
+            ) : (
+              <button className="btn-primary w-full mt-4" onClick={() => handleSave(section.label)} disabled={busy}>
+                Save changes
+              </button>
+            )}
+          </div>
+        ))}
+
+        <div className="card p-5">
+          <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium mb-3" style={{ color: 'var(--mute)' }}>Account Details</div>
+          <div className="space-y-2.5">
+            <div className="flex justify-between items-center text-sm">
+              <span style={{ color: 'var(--mute)' }}>Account type</span>
+              <span className="font-grotesk font-semibold" style={{ color: 'var(--ink)' }}>Client</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span style={{ color: 'var(--mute)' }}>Status</span>
+              <span className="chip border-good/40 text-good !text-[10px]">Active</span>
+            </div>
+          </div>
+        </div>
+      </Group>
+
+      <Group title="Preferences" hint="How Barbell looks and what it tells you.">
+        <AppearanceCard />
+        <UnitsCard />
+        <NotificationSettingsCard />
+      </Group>
+
+      <Group title="Data & connections" hint="What Barbell reads, stores and remembers.">
+        <PrivacyCard />
+        <div className="card p-5">
+          <div className="flex items-center gap-2.5 mb-1">
+            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="trending" size={18} /></span>
+            <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Health Intelligence</span>
+          </div>
+          <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
+            Connect a wearable so Barbell can combine it with your logged workouts for a more complete burn estimate.
+          </p>
+          <button className="btn w-full" onClick={() => nav('/app/client/health')}>Connected devices</button>
+        </div>
+        <CookieSettingsCard />
+      </Group>
+    </div>
+  );
+}
+
+/**
+ * One labelled group of setting cards.
+ *
+ * The heading is a real landmark, not a decoration: it is the thing a
+ * person scans for when they already know what they want to change, and
+ * an h2 gives screen readers the same shortcut the eye gets.
+ */
+function Group({ title, hint, children }) {
+  return (
+    <section className="space-y-3">
+      <div className="px-0.5">
+        <h2 className="font-grotesk text-[10.5px] uppercase tracking-[.16em] font-bold" style={{ color: 'var(--accent)' }}>
+          {title}
+        </h2>
+        {hint && <p className="text-[11px] mt-0.5" style={{ color: 'var(--faint)' }}>{hint}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * APPEARANCE — theme lived on the Profile page, not in Settings.
+ *
+ * Somebody looking for the theme switch goes to Settings; it was a
+ * toggle buried in the Profile header instead, and Settings -- the
+ * screen literally subtitled "Manage your account and preferences" --
+ * had no appearance section at all.
+ *
+ * Three choices rather than a two-state switch, because "System" is a
+ * real preference and not having it forces a decision the OS has already
+ * made. The choice persists as the CHOICE (see themeContext): storing
+ * the resolved value would silently convert "System" into whichever
+ * appearance happened to be active at the time.
+ */
+function AppearanceCard() {
+  const { theme, resolved, systemTheme, setTheme } = useTheme();
+  const OPTIONS = [
+    ['system', 'System', 'Follows your device'],
+    ['light', 'Light', null],
+    ['dark', 'Dark', null],
+  ];
+  return (
+    <div className="card p-4">
+      <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium mb-3" style={{ color: 'var(--mute)' }}>
+        Appearance
+      </div>
+      <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2">
+        {OPTIONS.map(([value, label, hint]) => {
+          const on = theme === value;
+          return (
             <button
-              className="btn-primary w-full mt-4"
-              onClick={() => handleSave(section.label)}
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setTheme(value)}
+              className="rounded-xl px-2 py-2.5 text-center"
+              style={{
+                background: on ? 'var(--accent-soft)' : 'transparent',
+                border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                color: on ? 'var(--accent)' : 'var(--mute)',
+                minHeight: 56,
+              }}
             >
-              Save {section.label}
+              <div className="text-[12.5px] font-semibold">{label}</div>
+              {hint && <div className="text-[9.5px] mt-0.5" style={{ color: 'var(--faint)' }}>{hint}</div>}
             </button>
-          )}
-        </div>
-      ))}
-
-      <div className="card p-5">
-        <button
-          className="btn-primary w-full"
-          onClick={handlePassword}
-          disabled={busy}
-        >
-          {busy ? 'Saving...' : 'Change Password'}
-        </button>
-        <div className="text-[9px] mt-2 text-center" style={{ color: 'var(--faint)' }}>
-          Password changes require your current password for verification
-        </div>
+          );
+        })}
       </div>
-
-      <div className="card p-5">
-        <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium mb-3" style={{ color: 'var(--mute)' }}>Account Details</div>
-        <div className="space-y-2.5">
-          <div className="flex justify-between items-center text-sm">
-            <span style={{ color: 'var(--mute)' }}>Account type</span>
-            <span className="font-grotesk font-semibold" style={{ color: 'var(--ink)' }}>Client</span>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span style={{ color: 'var(--mute)' }}>Status</span>
-            <span className="chip border-good/40 text-good !text-[10px]">Active</span>
-          </div>
+      {/* Says what "System" currently resolves to, so the choice is not
+          a guess about what the device is going to do. */}
+      {theme === 'system' && (
+        <div className="text-[11px] mt-2.5" style={{ color: 'var(--mute)' }}>
+          Your device is set to <strong style={{ color: 'var(--ink)' }}>{systemTheme}</strong> right now.
         </div>
-      </div>
-
-      <div className="card p-5">
-        <div className="flex items-center gap-2.5 mb-1">
-          <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="trending" size={18} /></span>
-          <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Health Intelligence</span>
+      )}
+      {theme !== 'system' && (
+        <div className="text-[11px] mt-2.5" style={{ color: 'var(--mute)' }}>
+          Showing the {resolved} theme on every device you sign in on.
         </div>
-        <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
-          Connect a wearable so Barbell can combine it with your logged workouts for a more complete burn estimate.
-        </p>
-        <button className="btn w-full" onClick={() => nav('/app/client/health')}>Connected devices</button>
-      </div>
+      )}
+    </div>
+  );
+}
 
-      <NotificationSettingsCard />
-      <CookieSettingsCard />
+/**
+ * UNITS — display preference, not a data migration.
+ *
+ * Switching this changes what is drawn and how typed input is read. Every
+ * weight stays stored in kilograms and every length in centimetres, so
+ * the underlying numbers are byte-identical before and after and nothing
+ * can drift by round-tripping through a display unit. Said plainly on
+ * screen, because "will this change my history?" is the obvious worry and
+ * the honest answer is no.
+ */
+function UnitsCard() {
+  const { system, setSystem, fmtWeight, fmtHeight } = useUnits();
+  const [err, setErr] = useState('');
+  const OPTIONS = [
+    ['metric', 'Metric', 'kg · cm'],
+    ['imperial', 'Imperial', 'lb · ft/in'],
+  ];
+  return (
+    <div className="card p-4">
+      <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-medium mb-3" style={{ color: 'var(--mute)' }}>
+        Units
+      </div>
+      <div role="radiogroup" aria-label="Measurement units" className="grid grid-cols-2 gap-2">
+        {OPTIONS.map(([value, label, hint]) => {
+          const on = system === value;
+          return (
+            <button
+              key={value} type="button" role="radio" aria-checked={on}
+              onClick={async () => {
+                setErr('');
+                try { await setSystem(value); } catch (e) { setErr(e.message || "Couldn't save that"); }
+              }}
+              className="rounded-xl px-2 py-2.5 text-center"
+              style={{
+                background: on ? 'var(--accent-soft)' : 'transparent',
+                border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                color: on ? 'var(--accent)' : 'var(--mute)',
+                minHeight: 56,
+              }}
+            >
+              <div className="text-[12.5px] font-semibold">{label}</div>
+              <div className="text-[9.5px] mt-0.5" style={{ color: 'var(--faint)' }}>{hint}</div>
+            </button>
+          );
+        })}
+      </div>
+      {/* A live example beats an abstract label: it shows the exact
+          formatting the rest of the app will use. */}
+      <div className="text-[11px] mt-2.5" style={{ color: 'var(--mute)' }}>
+        Weights show as <strong style={{ color: 'var(--ink)' }}>{fmtWeight(75)}</strong>,
+        height as <strong style={{ color: 'var(--ink)' }}>{fmtHeight(175)}</strong>.
+        Your recorded data is unchanged — only how it is displayed.
+      </div>
+      {err && <div className="text-[11.5px] mt-2" role="alert" style={{ color: 'var(--bad)' }}>{err}</div>}
     </div>
   );
 }
@@ -418,6 +582,150 @@ function ToggleRow({ label, hint, checked, onChange, disabled, emphasis = false 
         />
       </span>
     </button>
+  );
+}
+
+/**
+ * PRIVACY — who can see what, from the screen people look for it on.
+ *
+ * Both of these settings already existed and already worked. They lived
+ * only inside the Community page, which is the one place a person is not
+ * looking when the question in their head is "what is this app sharing
+ * about me". Settings is where that question gets asked.
+ *
+ * ONLY REAL SETTINGS APPEAR HERE. There is no toggle for sleep, recovery,
+ * heart rate, bodyweight or nutrition sharing, because none of that is
+ * ever put into a community payload in the first place -- a switch
+ * implying it could be would be a worse answer than the sentence below
+ * it, which states the actual behaviour.
+ */
+function PrivacyCard() {
+  const [prefs, setPrefs] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [joined, setJoined] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api('/community/preferences')
+      .then((p) => { if (alive) setPrefs(p); })
+      .catch((e) => { if (alive) setErr(e.message); });
+    api('/community/membership')
+      .then((m) => { if (alive) setJoined(m?.joined ?? null); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const save = async (patch, optimistic) => {
+    const before = prefs;
+    setPrefs((p) => ({ ...p, ...optimistic }));
+    setBusy(true);
+    setErr('');
+    try {
+      // snake_case: this endpoint reads it, even though GET answers in
+      // camelCase. Sending the shape it returns changes nothing.
+      await api('/community/preferences', { method: 'PUT', body: JSON.stringify(patch) });
+    } catch (e) {
+      setPrefs(before);            // never show a setting that is not stored
+      setErr(e.message || 'Could not save that');
+    }
+    setBusy(false);
+  };
+
+  const PR_OPTIONS = [
+    ['everyone', 'Everyone at the gym', 'Your personal records appear in the gym feed and leaderboards.'],
+    ['followers', 'Only my followers', 'People who follow you see your records; nobody else does.'],
+    ['nobody', 'Nobody', 'Your records stay private. You still see them yourself.'],
+  ];
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="lock" size={18} /></span>
+        <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Privacy</span>
+      </div>
+      <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
+        What other people at your gym can see.
+      </p>
+
+      {!prefs && !err && <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Loading…</div>}
+      {err && <div className="text-[11px] mb-2" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+
+      {prefs && (
+        <>
+          <div className="font-grotesk text-[10px] uppercase tracking-[.12em] mb-1.5" style={{ color: 'var(--faint)' }}>
+            Who sees my personal records
+          </div>
+          <div className="space-y-1.5">
+            {PR_OPTIONS.map(([value, label, hint]) => {
+              const on = prefs.prVisibility === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={on}
+                  onClick={() => save({ pr_visibility: value }, { prVisibility: value })}
+                  className="w-full text-left rounded-xl px-3 py-2.5 transition-colors"
+                  style={{
+                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                    background: on ? 'var(--bg2)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[12.5px] font-semibold" style={{ color: 'var(--ink)' }}>{label}</div>
+                  <div className="text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--faint)' }}>{hint}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="font-grotesk text-[10px] uppercase tracking-[.12em] mt-4 mb-1.5" style={{ color: 'var(--faint)' }}>
+            My feed
+          </div>
+          <div className="flex gap-1.5">
+            {[['all', 'Everyone'], ['following', 'Only people I follow']].map(([value, label]) => {
+              const on = prefs.feedScope === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={on}
+                  onClick={() => save({ feed_scope: value }, { feedScope: value })}
+                  className="flex-1 rounded-lg py-2 text-[11.5px] font-semibold transition-colors"
+                  style={{
+                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                    background: on ? 'var(--bg2)' : 'transparent',
+                    color: on ? 'var(--ink)' : 'var(--mute)',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] mt-1.5" style={{ color: 'var(--faint)' }}>
+            This changes what you see, not what others see of you.
+          </p>
+        </>
+      )}
+
+      {/* The statement of what is NEVER shared. It is a sentence rather
+          than a row of switched-off toggles because there is nothing to
+          switch: this data is not put into a community payload at all. */}
+      <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--line)' }}>
+        <div className="text-[11px] leading-snug" style={{ color: 'var(--mute)' }}>
+          Your weight, measurements, food log, sleep, recovery and anything from a connected
+          device are <strong style={{ color: 'var(--ink)' }}>never</strong> shared with your gym's
+          community — only your workouts, personal records and streaks, and only as set above.
+        </div>
+        {joined === false && (
+          <div className="text-[11px] mt-2" style={{ color: 'var(--faint)' }}>
+            You are not currently in your gym's community.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

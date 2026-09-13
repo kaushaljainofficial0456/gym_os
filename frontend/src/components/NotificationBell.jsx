@@ -146,7 +146,11 @@ export default function NotificationBell({
     <div className="relative" ref={ref}>
       <button
         onClick={toggle}
-        className="chrome-btn relative !px-2.5 !py-1.5"
+        /* .tap-target because the drawn button is 36x28 -- well under a
+           thumb. It expands the HIT area by 12px in every direction
+           without moving a pixel of chrome, and the nearest neighbour in
+           this header is 130px away, so nothing overlaps. */
+        className="chrome-btn tap-target relative !px-2.5 !py-1.5"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={unreadCount > 0 ? `Notifications — ${unreadCount} unread` : 'Notifications'}

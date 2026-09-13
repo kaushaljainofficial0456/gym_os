@@ -11,13 +11,20 @@
 import { useMemo, useState } from 'react';
 import Ring from '../Ring.jsx';
 import PeriodChart from '../PeriodChart.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 const nf = new Intl.NumberFormat();
 export const fmt = (n) => nf.format(Math.round(Number(n) || 0));
 
-/** Volume gets tiring to read in full. 18,420 kg -> "18.4k kg". */
-export const fmtVolume = (kg) => {
-  const n = Number(kg) || 0;
+/** Volume gets tiring to read in full. 18,420 kg -> "18.4k".
+ *
+ *  Takes the units helper as an argument rather than calling the hook:
+ *  this is a module-level function shared by several components, and the
+ *  abbreviation threshold has to be applied to the DISPLAYED number --
+ *  40,000 lb should read "40.0k", not be abbreviated off the kilogram
+ *  value and then labelled lb. */
+export const fmtVolume = (kg, u) => {
+  const n = (u ? u.weightNum(kg, { decimals: 0 }) : Number(kg)) || 0;
   if (n >= 100000) return `${Math.round(n / 1000)}k`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return fmt(n);
@@ -138,6 +145,7 @@ export function CommunityPulse({ pulse, onOpenPRs, onOpenMembers }) {
  * week exists.
  */
 export function YourPosition({ position, streak }) {
+  const u = useUnits();
   if (!position) return null;
   const { rank, members, rankDelta, workouts, previousWorkouts, volume, prs } = position;
   const unranked = rank == null;
@@ -200,7 +208,7 @@ export function YourPosition({ position, streak }) {
 
       <div className="grid grid-cols-3 gap-2 mt-3.5 pt-3.5" style={{ borderTop: '1px solid var(--line)' }}>
         <Stat label="workouts" value={fmt(workouts)} />
-        <Stat label="volume" value={volume > 0 ? `${fmtVolume(volume)} kg` : '—'} />
+        <Stat label="volume" value={volume > 0 ? `${fmtVolume(volume, u)} ${u.weightUnit}` : '—'} />
         <Stat label={prs === 1 ? 'PR' : 'PRs'} value={fmt(prs)} />
       </div>
 
@@ -324,11 +332,16 @@ export function ActivityChart({ series, todayKey }) {
 /* ══════════════ CHALLENGES ══════════════ */
 
 export function ChallengeCard({ challenge, onOpen }) {
+  const u = useUnits();
   const c = challenge;
   const isCommunity = c.scope === 'community';
   const shownValue = isCommunity ? c.value : c.yourValue;
   const pct = isCommunity ? c.percent : c.yourPercent;
-  const unit = challengeUnit(c.metric);
+  /* challengeUnit also knows active_days; only volume's unit is a preference. */
+  const unit = c.metric === 'volume' ? u.weightUnit : challengeUnit(c.metric);
+  /* Both the progress figure and the goal convert, so the percentage --
+     which the server computes in kilograms -- stays the same number. */
+  const amount = (v) => (c.metric === 'volume' ? fmtVolume(v, u) : fmt(v));
   const hue = challengeHue(c.metric);
 
   return (
@@ -342,7 +355,7 @@ export function ChallengeCard({ challenge, onOpen }) {
         <div className="min-w-0">
           <div className="font-bold text-[13.5px] truncate" style={{ color: 'var(--ink)' }}>{c.name}</div>
           <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
-            {isCommunity ? 'Everyone together' : 'Your goal'} · {c.metric === 'volume' ? fmtVolume(c.goal) : fmt(c.goal)} {unit}
+            {isCommunity ? 'Everyone together' : 'Your goal'} · {amount(c.goal)} {unit}
           </div>
         </div>
         {c.complete && (
@@ -366,7 +379,7 @@ export function ChallengeCard({ challenge, onOpen }) {
 
       <div className="flex items-center justify-between mt-2 text-[11px]" style={{ color: 'var(--mute)' }}>
         <span className="tabular-nums">
-          {c.metric === 'volume' ? fmtVolume(shownValue) : fmt(shownValue)} / {c.metric === 'volume' ? fmtVolume(c.goal) : fmt(c.goal)}
+          {amount(shownValue)} / {amount(c.goal)}
         </span>
         {/* Both halves are counted, never estimated from one another. */}
         {c.membersParticipating > 0 && (

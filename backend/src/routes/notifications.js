@@ -25,6 +25,7 @@
 // broken.
 // ============================================================
 import { Router } from 'express';
+import { generateNotifications } from '../services/notificationGenerator.js';
 import { requireAuth } from '../auth.js';
 import { now } from '../ids.js';
 
@@ -41,6 +42,10 @@ const DEFAULT_PREFS = {
   tomorrow_workout: 1, rest_day_reminders: 0, incomplete_workout: 1,
   quiet_hours_start: '23:45', quiet_hours_end: '07:00',
 };
+
+/** COUNT() comes back as a bigint STRING on Postgres, and "0" is
+ *  truthy -- an unread badge would render permanently. */
+const int = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
 export default function notificationRoutes(db) {
   const r = Router();
@@ -115,20 +120,65 @@ export default function notificationRoutes(db) {
     ]);
     res.json({
       notifications: notifications.map((n) => ({ ...n, data: n.data_json ? JSON.parse(n.data_json) : null })),
-      unread_count: Number(unreadRow?.n) || 0,
+      /* BOTH SPELLINGS, deliberately and temporarily.
+         This route returned snake_case `unread_count` while the sibling
+         /unread-count route returns camelCase `unreadCount` -- the two
+         disagreed about the name of the same number, which is how the
+         merge surfaced it (tests written against one spelling failed
+         against the other). camelCase is the spelling the rest of this
+         API uses and the one new code should read; unread_count stays so
+         the existing NotificationBell keeps working rather than silently
+         rendering a badge of 0 the moment this deploys. Remove it once
+         that component reads the camelCase key. */
+      unreadCount: int(unreadRow?.n),
+      unread_count: int(unreadRow?.n),
     });
   });
 
+  /* IDEMPOTENT ON PURPOSE -- this used to 404 on an id it could not find.
+     "Mark as read" is an action a client fires optimistically and may
+     retry: the row may already be read, or already gone, and in both
+     cases the caller's intent is satisfied. Erroring gives them nothing
+     to do about it.
+
+     The UPDATE is still scoped by user_id, so this cannot touch another
+     user's notification -- and because it no longer reads first, it also
+     no longer distinguishes "not yours" from "does not exist", which is
+     the right answer to give either way. */
   r.patch('/:id/read', async (req, res) => {
-    const n = await db.q1('SELECT id FROM notifications WHERE id = ? AND user_id = ?', [req.params.id, req.user.sub]);
-    if (!n) return res.status(404).json({ error: 'Notification not found' });
-    await db.run('UPDATE notifications SET read = 1 WHERE id = ?', [n.id]);
+    await db.run('UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.sub]);
     res.json({ ok: true });
   });
 
   r.post('/read-all', async (req, res) => {
     await db.run('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0', [req.user.sub]);
     res.json({ ok: true });
+  });
+
+  /* ---- brought in from the notification-permissions branch ----
+     Both are additive; neither existed on this side. unread-count is the
+     cheap poll the bell uses instead of pulling the whole list, and
+     generate is what the client calls to materialise smart
+     notifications. */
+
+  r.get('/unread-count', async (req, res) => {
+    const row = await db.q1(
+      'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND read = 0',
+      [req.user.sub]);
+    res.json({ unreadCount: int(row?.cnt) });
+  });
+
+  // Never fails the request: a generator error must not stop the app
+  // loading, so it is logged and an empty list returned.
+  r.post('/generate', async (req, res) => {
+    try {
+      const notifications = await generateNotifications(db, req.user.sub, req.user.org);
+      res.json({ ok: true, notifications });
+    } catch (err) {
+      console.error('[notifications] generate error:', err.message);
+      res.json({ ok: true, notifications: [] });
+    }
   });
 
   return r;

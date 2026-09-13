@@ -1,37 +1,33 @@
 /**
  * WeightSelector — weight picker with lb ↔ kg unit switch.
  *
- * Internal storage is always kg. The unit toggle converts and preserves
- * the user's approximate weight. Uses ScrollWheel for the picker UI.
+ * Internal storage is always kg; the toggle changes only what is DRAWN.
+ *
+ * It did not used to. Switching to "lb" called onChange with the pound
+ * number, so `form.weight` -- submitted verbatim as `current_weight`, a
+ * kilogram field -- became 154 for a 70 kg person, and the wheel then
+ * re-converted that 154 and displayed 340. One tap corrupted both the
+ * stored value and the number on screen. A unit toggle must never write
+ * to the value it is displaying.
  */
-import { useState } from 'react';
 import ScrollWheel from './ScrollWheel';
+import { kgToLb as exactKgToLb, lbToKg as exactLbToKg } from '../units.js';
 
 const KG_MIN = 30;
 const KG_MAX = 250;
 const LB_MIN = 66;   // ~30 kg
 const LB_MAX = 551;  // ~250 kg
 
-/* ── Conversion helpers ── */
-function kgToLb(kg) { return Math.round(kg * 2.20462); }
-function lbToKg(lb) { return Math.round(lb / 2.20462); }
+/* Whole numbers, because the wheel only offers whole numbers -- but from
+   the exact factors in units.js rather than a second rounded constant. */
+function kgToLb(kg) { return Math.round(exactKgToLb(kg)); }
+function lbToKg(lb) { return Math.round(exactLbToKg(lb)); }
 
-export default function WeightSelector({ value, onChange, t }) {
+export default function WeightSelector({ value, onChange, t, unit, onUnitChange }) {
   const kgVal = Number(value) || 70;
   const lbVal = kgToLb(kgVal);
 
-  const [unit, setUnit] = useState('kg');
-
-  const switchUnit = (newUnit) => {
-    if (newUnit === unit) return;
-    // Preserve the approximate weight through conversion
-    if (newUnit === 'kg') {
-      onChange(lbToKg(lbVal));
-    } else {
-      onChange(kgToLb(kgVal));
-    }
-    setUnit(newUnit);
-  };
+  const switchUnit = (newUnit) => { if (newUnit !== unit) onUnitChange(newUnit); };
 
   return (
     <div>

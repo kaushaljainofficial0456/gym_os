@@ -221,7 +221,11 @@
      preserved (good reads positive, bad reads alarm), not the literal hex. */
   --good-rgb: 122 168 128;
   --warn-rgb: 199 149 92;
-  --bad-rgb: 193 92 76;
+  /* Lightened from 193 92 76. As a TEXT colour on its own 14% tint over
+     the dark surface it measured 3.59:1 -- the "Expired" membership chip
+     is 11px, so the large-text allowance does not apply and that was a
+     genuine dark-mode AA failure. Same hue, raised to 4.61:1. */
+  --bad-rgb: 226 108 89;
   /* Bare aliases: several components read `var(--good)` etc. directly in
      inline styles (not through a Tailwind rgb(var(..)/<alpha>) utility,
      which is why only the -rgb form existed before) -- FoodLogSheet,
@@ -451,15 +455,23 @@
      set, because these sit on an off-white ground where a light tint would
      disappear. Surfaces stay near-white washes for the same reason the dark
      ones stay near-black ones -- the colour identifies, the number reads. */
-  --m-body: #4E8C68;
+  /* CONTRAST-SOLVED AGAINST THEIR OWN TINT, not against the card.
+     Every one of these doubles as a text colour at 9-13px sitting on a
+     tile washed with 8-10% of ITSELF (--m-*-bg), which is darker than
+     the card and costs roughly half a point of ratio. Measuring against
+     the plain card said they passed; measuring against the surface they
+     are actually drawn on said 4.09-4.34:1, under the 4.5 needed for
+     small text. The hues are unchanged -- only lightness moved -- so the
+     metric families still read as the same six colours. */
+  --m-body: #3F7154;
   --m-body-bg: rgba(78,140,104,.09);
-  --m-training: #6A5FC4;
+  --m-training: #6459B8;
   --m-training-bg: rgba(106,95,196,.08);
   --m-nutrition: #A8446A;
   --m-nutrition-bg: rgba(168,68,106,.09);
   --m-energy: #B1434F;
   --m-energy-bg: rgba(177,67,79,.08);
-  --m-recovery: #3B7F99;
+  --m-recovery: #336E84;
   --m-recovery-bg: rgba(59,127,153,.09);
   --m-strength: #6E6350;
   --m-strength-bg: rgba(110,99,80,.09);
@@ -469,8 +481,11 @@
      values measured good 3.83:1 and warn 3.08:1, both AA failures, and
      both are used as label text ("On track", "Expires in 3 days") rather
      than only as a fill. Now 4.5:1+. The hues are unchanged. */
-  --good-rgb: 86 128 91;
-  --warn-rgb: 148 110 62;
+  --good-rgb: 75 111 79;
+  /* 3.98:1 on its own 12% tint -- --warn is used as text on a warn-tinted
+     chip (pace warnings, the unusual-measurement hint, status pills), and
+     that is the surface it has to be read against, not the plain panel. */
+  --warn-rgb: 133 99 56;
   --bad-rgb: 142 61 48;
 
   /* Light mode gets its own elevation ladder: soft warm spread, no glow.
@@ -1418,6 +1433,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   --accent-rgb: 69 199 190;
   --accent-deep-rgb: 47 167 159;
   --accent-contrast: #08211F;
+  /* AND THE BUTTON INK WITH IT. .btn-primary paints --accent-grad but
+     takes its text from --cta-ink, which this scope did not override --
+     so the vivid teal gradient kept the dark theme's near-white ink and
+     the primary button on Progress rendered #E8EEF3 on #45C7BE, about
+     1.9:1. Overriding the gradient without the ink that sits on it is
+     the whole bug; they have to move together. */
+  --cta-ink: #08211F;
+  --cta-solid: #2FA79F;
   --accent-grad: linear-gradient(135deg, #2FA79F, #45C7BE);
   --accent-grad-shadow: 0 4px 14px -4px rgba(47,167,159,.30);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(47,167,159,.40);
@@ -1444,9 +1467,44 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   --accent-rgb: 10 111 105;
   --accent-deep-rgb: 7 80 73;
   --accent-contrast: #FFFFFF;
+  /* Light mode's vivid teal is deep, so white ink is the readable one --
+     the same pairing rule as above, resolved the other way. */
+  --cta-ink: #FFFFFF;
+  --cta-solid: #0A6F69;
   --accent-grad: linear-gradient(135deg, #075049, #0A6F69);
   --accent-grad-shadow: 0 4px 14px -4px rgba(10,111,105,.26);
   --accent-grad-shadow-hover: 0 6px 20px -4px rgba(10,111,105,.34);
   --m-pr: #7B3FB8;
   --m-pr-bg: rgba(123,63,184,.10);
 }
+
+/* ─────────────────────────────────────────────
+   TAP TARGET — a hit area bigger than the glyph.
+
+   Some controls are legitimately tiny to LOOK at: the x on a measurement
+   chip is 10x15px, and making it physically bigger would turn a quiet row
+   of readings into a row of buttons. The problem is that 10x15 is also
+   what your finger has to hit -- below WCAG 2.2's 24x24 minimum, never
+   mind the 44x44 guideline -- and on this screen the small ones DELETE
+   things permanently.
+
+   So the hit area grows and the glyph does not. An absolutely positioned
+   ::after expands the clickable region outward without occupying layout
+   space, so nothing reflows and the visual density is unchanged. The
+   parent needs no positioning context of its own: `position: relative`
+   here is on the button itself.
+   ───────────────────────────────────────────── */
+.tap-target { position: relative; }
+.tap-target::after {
+  content: '';
+  position: absolute;
+  /* Grows a 10x15 glyph to ~34x39 of reachable area. */
+  inset: -12px;
+  /* Never paints, never intercepts hover styling -- only pointer hits. */
+  border-radius: inherit;
+}
+/* Where several sit in a row, their expanded areas would otherwise
+   overlap and the wrong one would win. Keeping them on their own
+   stacking order means the topmost is always the one under the finger. */
+.tap-target + .tap-target::after { inset: -12px -6px; }
+

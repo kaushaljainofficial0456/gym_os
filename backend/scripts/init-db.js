@@ -34,6 +34,9 @@ const MIGRATIONS = [
   ['gym_settings', 'attendance_mode', `attendance_mode TEXT NOT NULL DEFAULT 'simple'`],
   ['gym_settings', 'attendance_grace_min', `attendance_grace_min INTEGER NOT NULL DEFAULT 10`],
   ['gym_settings', 'attendance_require_qr', `attendance_require_qr INTEGER NOT NULL DEFAULT 1`],
+  // --- Display units. Storage stays canonical kg/cm; this only changes
+  // what is rendered and how typed input is read. ---
+  ['client_profiles', 'unit_system', `unit_system TEXT NOT NULL DEFAULT 'metric'`],
   // --- Community: who sees my PRs, and whose PRs I see ---
   // Defaults preserve exactly today's behaviour: 'everyone' is what every
   // existing member already agreed to when they opted in, so this
@@ -276,6 +279,17 @@ const MIGRATIONS = [
   // feature's first migration, these two columns are additive to it ---
   ['nutrition_balance_adjustments', 'custom_days', `custom_days INTEGER`],
   ['nutrition_balance_adjustments', 'custom_protein_target', `custom_protein_target REAL`],
+  // --- Notification generator deduplication key ---
+  ['notifications', 'dedup_key', `dedup_key TEXT`],
+  // --- Notification preferences: browser permission tracking ---
+  // The table's full shape lives in a CREATE TABLE IF NOT EXISTS below, but
+  // that statement is a no-op wherever the table already exists --
+  // production included -- so it can never add these two columns there.
+  // They must be guarded column additions like every other change to an
+  // existing table, or db:init reports success while db:check keeps
+  // failing every deploy on the columns it never added.
+  ['notification_preferences', 'browser_permission', `browser_permission TEXT NOT NULL DEFAULT 'default'`],
+  ['notification_preferences', 'prompted_at', `prompted_at TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -622,7 +636,8 @@ async function applySqliteMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
   // --- notification-center preferences (also in schema.sql; repeated here
   // for older DBs / parity with the PG path, same as exercise_relations
-  // above) ---
+  // above). Mirrors the merged shape: org_id kept for tenant scoping,
+  // browser_permission/prompted_at added for the permission prompt. ---
   db.exec(`
     CREATE TABLE IF NOT EXISTS notification_preferences (
       user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -639,6 +654,8 @@ async function applySqliteMigrations(db) {
       incomplete_workout  INTEGER NOT NULL DEFAULT 1,
       quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
       quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      browser_permission  TEXT NOT NULL DEFAULT 'default',
+      prompted_at         TEXT,
       updated_at          TEXT NOT NULL
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
@@ -700,7 +717,8 @@ async function applyPgMigrations(pool) {
   // Moved from schema.sql (see comment there): `read` is a guarded migration
   // column, so this index must run after the loop above, not before it.
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read)`);
-  // --- notification-center preferences (also in schema.sql) ---
+  // --- notification-center preferences (also in schema.sql). Same merged
+  // shape as the SQLite path above. ---
   await pool.query(`
     CREATE TABLE IF NOT EXISTS notification_preferences (
       user_id             TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -717,6 +735,8 @@ async function applyPgMigrations(pool) {
       incomplete_workout  INTEGER NOT NULL DEFAULT 1,
       quiet_hours_start   TEXT NOT NULL DEFAULT '23:45',
       quiet_hours_end     TEXT NOT NULL DEFAULT '07:00',
+      browser_permission  TEXT NOT NULL DEFAULT 'default',
+      prompted_at         TEXT,
       updated_at          TEXT NOT NULL
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---

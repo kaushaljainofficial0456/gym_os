@@ -7,12 +7,13 @@
  * Progress — nothing is rendered unless real rows back it, and no number
  * is fabricated to fill a card.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { Card } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 const n1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
 const fmtNum = (v) => (v == null ? '—' : Number(v).toLocaleString());
@@ -25,6 +26,7 @@ const fmtNum = (v) => (v == null ? '—' : Number(v).toLocaleString());
  * without a meaningless "+100%" pinned beside them.
  */
 export function WeekSection({ week, Section, Stat }) {
+  const u = useUnits();
   if (!week) return null;
   if (!week.workouts && !week.nutritionDays && !week.prs) return null;
 
@@ -46,7 +48,7 @@ export function WeekSection({ week, Section, Stat }) {
       <Card className="p-4">
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Workouts" value={week.workouts || 0} />
-          <Stat label="Volume" value={fmtNum(week.volume || 0)} unit="kg" />
+          <Stat label="Volume" value={fmtNum(u.weightNum(week.volume || 0, { decimals: 0 }))} unit={u.weightUnit} />
           <Stat label="Food logged" value={week.nutritionDays || 0} sub="days" />
         </div>
 
@@ -88,9 +90,14 @@ function analyze(series) {
  * with no chest readings is the empty-card problem wearing a different hat.
  */
 export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, clientId, onLogged }) {
+  const u = useUnits();
   const keys = Object.keys(measurements || {}).filter((k) => measurements[k]?.length);
   const [sel, setSel] = useState(null);
   const [logging, setLogging] = useState(false);
+  // Bumped on any save or delete so the history refetches without the
+  // whole Progress page reloading underneath the reader.
+  const [historyKey, setHistoryKey] = useState(0);
+  const changed = () => { setHistoryKey((k) => k + 1); onLogged?.(); };
 
   // Renders even with NOTHING recorded -- previously the whole section
   // vanished when empty, which meant a user had no way to discover that
@@ -105,7 +112,7 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
           </div>
           {clientId && (
             logging
-              ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); onLogged?.(); }} onCancel={() => setLogging(false)} />
+              ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
               : <button className="btn mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
           )}
         </Card>
@@ -117,59 +124,90 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
   const series = measurements[active];
   const a = analyze(series);
 
+  /* EVERY TRACKED SITE AT ONCE, then one of them in detail.
+     A chip row plus a single number answered "what is my waist" but not
+     "what is my shape doing", which is the only reason to measure more
+     than one site. The grid is the section's real content now; selecting
+     a tile swaps which one gets the chart underneath, so the detail is
+     still one tap away and nothing was lost. */
+  const tiles = keys.map((k) => {
+    const s = measurements[k];
+    const st = analyze(s);
+    return { key: k, label: MEASURE_LABEL[k] || k, current: st.current, change: st.count > 1 ? st.change : null };
+  });
+
+  // Direction is stated in words as well as colour -- for most
+  // circumferences down is the wanted direction, and colour alone would
+  // be the only carrier of that for anyone who cannot separate the hues.
+  const toneFor = (change) => (change == null || change === 0 ? 'var(--faint)' : change < 0 ? 'var(--good)' : 'var(--warn)');
+
   return (
     <Section title="Measurements">
       <Card className="p-4">
-        {keys.length > 1 && (
-          <ChipRow
-            options={keys.map((k) => ({ key: k, label: MEASURE_LABEL[k] || k }))}
-            value={active}
-            onChange={setSel}
-            ariaLabel="Body measurement"
-          />
-        )}
-
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
-              {MEASURE_LABEL[active] || active}
-            </div>
-            <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-[26px] font-black leading-none tabular-nums tracking-[-.03em]" style={{ color: 'var(--ink)' }}>
-                {n1(a.current)}
-              </span>
-              <span className="text-[11px]" style={{ color: 'var(--faint)' }}>cm</span>
-            </div>
-          </div>
-          {a.count > 1 && (
-            <div className="text-right">
-              {/* Down is the desirable direction for most circumference
-                  measurements, so a reduction reads as positive. */}
-              <div
-                className="text-[13px] font-bold tabular-nums"
-                style={{ color: a.change < 0 ? 'var(--good)' : a.change > 0 ? 'var(--warn)' : 'var(--faint)' }}
+        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
+          {tiles.map((t) => {
+            const on = t.key === active;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setSel(t.key)}
+                aria-pressed={on}
+                className="rounded-[var(--r-lg)] p-2.5 text-left transition-colors"
+                style={{
+                  border: `1px solid ${on ? 'var(--m-body)' : 'var(--line)'}`,
+                  background: on ? 'var(--m-body-bg)' : 'transparent',
+                  minHeight: 62,
+                }}
               >
-                {a.change > 0 ? '+' : ''}{n1(a.change)} cm
-              </div>
-              <div className="text-[9.5px]" style={{ color: 'var(--faint)' }}>since first</div>
-            </div>
-          )}
+                <div className="text-[9.5px] font-semibold uppercase tracking-[.07em] truncate" style={{ color: 'var(--faint)' }}>
+                  {t.label}
+                </div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-[17px] font-black leading-none tabular-nums" style={{ color: 'var(--ink)' }}>
+                    {u.lengthNum(t.current, { decimals: 1 }) ?? '—'}
+                  </span>
+                  <span className="text-[9.5px]" style={{ color: 'var(--faint)' }}>{u.lengthUnit}</span>
+                </div>
+                <div className="mt-0.5 text-[9.5px] tabular-nums" style={{ color: toneFor(t.change) }}>
+                  {t.change == null
+                    ? 'first reading'
+                    : t.change === 0
+                      ? 'no change'
+                      : `${t.change < 0 ? '−' : '+'}${u.lengthNum(Math.abs(t.change), { decimals: 1 })} ${u.lengthUnit} ${t.change < 0 ? 'down' : 'up'}`}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {clientId && (
           logging
-            ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); onLogged?.(); }} onCancel={() => setLogging(false)} />
+            ? <MeasurementForm clientId={clientId} onDone={() => { setLogging(false); changed(); }} onCancel={() => setLogging(false)} />
             : (
-              <button className="btn btn-sm mt-3 w-full" onClick={() => setLogging(true)}>Add today's measurements</button>
+              <button className="btn btn-sm mt-3 w-full" onClick={() => setLogging(true)}>Add measurements</button>
             )
         )}
+        <MeasurementHistory clientId={clientId} reloadKey={historyKey} onChanged={changed} />
 
         {series.length >= 2 ? (
-          <div className="mt-2">
+          <div className="mt-3">
+            <div className="text-[10px] font-bold uppercase tracking-[.09em] mb-1" style={{ color: 'var(--faint)' }}>
+              {MEASURE_LABEL[active] || active} over time
+              {a.count > 1 && (
+                <span className="ml-1.5 font-semibold tracking-normal normal-case" style={{ color: toneFor(a.change) }}>
+                  {a.change > 0 ? '+' : a.change < 0 ? '−' : ''}
+                  {u.lengthNum(Math.abs(a.change), { decimals: 1 })} {u.lengthUnit} since first
+                </span>
+              )}
+            </div>
             <MetricChart
-              points={series}
+              /* Converted as a SERIES, not per point at render: the axis,
+                 the tooltip and the label all read one array, so they
+                 cannot end up in different units. */
+              points={series.map((p) => ({ ...p, value: u.lengthNum(p.value, { decimals: 1 }) }))}
               color="var(--m-body)"
-              unit="cm"
+              unit={u.lengthUnit}
               decimals={1}
               height={150}
               ariaLabel={`${MEASURE_LABEL[active] || active} measurements over time`}
@@ -185,46 +223,108 @@ export function MeasurementsSection({ measurements, Section, ChipRow, NeedMore, 
   );
 }
 
-
+/* The typical adult range for each site, in centimetres, alongside the
+   label. These are NOT a validation gate -- the server owns that -- they
+   drive a hint next to a value that looks like a mistake, which is the
+   only place a mistake can actually be corrected. Generous on both ends:
+   the point is to catch an inch typed into a centimetre field or a
+   slipped decimal, not to tell anyone their body is out of range. */
 const MEASURE_FIELDS = [
-  { key: 'waist', label: 'Waist' }, { key: 'chest', label: 'Chest' }, { key: 'arms', label: 'Arms' },
-  { key: 'thighs', label: 'Thighs' }, { key: 'hips', label: 'Hips' }, { key: 'neck', label: 'Neck' },
+  { key: 'waist', label: 'Waist', lo: 50, hi: 160 },
+  { key: 'chest', label: 'Chest', lo: 60, hi: 160 },
+  { key: 'arms', label: 'Arms', lo: 18, hi: 60 },
+  { key: 'thighs', label: 'Thighs', lo: 30, hi: 90 },
+  { key: 'hips', label: 'Hips', lo: 60, hi: 170 },
+  { key: 'neck', label: 'Neck', lo: 25, hi: 55 },
 ];
 
-/** Logs a measurement set through the EXISTING POST /clients/:id/measurements
- *  endpoint -- no new backend was added for this. Every field is optional:
- *  someone who only ever tracks their waist should not be forced to invent
- *  a neck measurement to save. */
-function MeasurementForm({ clientId, onDone, onCancel }) {
-  const [vals, setVals] = useState({});
+/** Logs or corrects a measurement set.
+ *
+ *  Creating posts to the EXISTING POST /clients/:id/measurements; editing
+ *  PATCHes the one row. Every field is optional: someone who only ever
+ *  tracks their waist should not have to invent a neck measurement to
+ *  save, and clearing a field on an edit sends an explicit null so the
+ *  one bad reading goes without taking the set with it.
+ */
+function MeasurementForm({ clientId, onDone, onCancel, editing }) {
+  const u = useUnits();
+  const isEdit = !!editing;
+  const [vals, setVals] = useState(() => {
+    if (!editing) return {};
+    const out = {};
+    for (const f of MEASURE_FIELDS) {
+      const cm = editing[f.key];
+      if (cm != null) out[f.key] = String(u.lengthNum(cm, { decimals: u.isImperial ? 1 : 0 }));
+    }
+    return out;
+  });
+  /* THE DATE IS PART OF THE READING. Without it every entry lands on
+     today, so a set measured on Sunday and typed in on Tuesday is
+     recorded two days late -- and the trend line is drawn from these
+     dates. Defaults to today, which is the common case. */
+  const [takenOn, setTakenOn] = useState(() => (editing?.taken_at || new Date().toISOString()).slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
   const submit = async (e) => {
     e.preventDefault();
     const body = {};
+    let any = false;
     for (const f of MEASURE_FIELDS) {
-      const v = parseFloat(vals[f.key]);
-      if (Number.isFinite(v) && v > 0) body[f.key] = v;
+      const raw = vals[f.key];
+      /* The number typed is in the reader's unit; the API stores
+         centimetres. Converting here -- at the one boundary where a human
+         entered it -- is what stops a series from becoming a mix of cm
+         and inch rows, which no later formatter could untangle. */
+      const v = u.toCm(raw);
+      if (Number.isFinite(v) && v > 0) { body[f.key] = v; any = true; }
+      else if (isEdit && editing[f.key] != null && (raw ?? '').trim() === '') {
+        // Emptied a field that had a value: that is a deliberate clear.
+        body[f.key] = null; any = true;
+      }
     }
-    if (!Object.keys(body).length) { setErr('Enter at least one measurement'); return; }
+    if (!any) { setErr(isEdit ? 'Nothing changed' : 'Enter at least one measurement'); return; }
+    // Midday, not midnight: a date-only value parsed as UTC midnight lands
+    // on the previous day for anyone west of Greenwich.
+    body.taken_at = `${takenOn}T12:00:00.000Z`;
     setSaving(true);
     try {
-      await api(`/clients/${clientId}/measurements`, { method: 'POST', body: JSON.stringify(body) });
+      if (isEdit) {
+        await api(`/clients/${clientId}/measurements/${editing.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        await api(`/clients/${clientId}/measurements`, { method: 'POST', body: JSON.stringify(body) });
+      }
       onDone?.();
     } catch (e2) { setErr(e2.message); }
     setSaving(false);
   };
 
+  // Compared in CANONICAL centimetres, so the hint behaves identically
+  // in either unit rather than needing a second set of thresholds.
+  const odd = MEASURE_FIELDS.filter((f) => {
+    const cm = u.toCm(vals[f.key]);
+    return Number.isFinite(cm) && cm > 0 && (cm < f.lo || cm > f.hi);
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+
   return (
     <form onSubmit={submit} className="mt-3 rounded-[var(--r-sm)] p-3" style={{ border: '1px solid var(--line)' }}>
+      <label className="block mb-2.5">
+        <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>Measured on</span>
+        <input
+          type="date" value={takenOn} max={today} aria-label="Date measured"
+          onChange={(e) => setTakenOn(e.target.value)}
+          className="input mt-0.5 w-full text-[13px]" style={{ minHeight: 40 }}
+        />
+      </label>
       <div className="grid grid-cols-3 gap-2">
         {MEASURE_FIELDS.map((f) => (
           <label key={f.key} className="block">
             <span className="text-[9.5px] font-semibold uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{f.label}</span>
             <input
-              type="number" inputMode="decimal" step="0.1" min="0" placeholder="cm"
-              aria-label={`${f.label} in centimetres`}
+              type="number" inputMode="decimal" step="0.1" min="0" placeholder={u.lengthUnit}
+              aria-label={`${f.label} in ${u.isImperial ? 'inches' : 'centimetres'}`}
               value={vals[f.key] || ''}
               onChange={(ev) => setVals((v) => ({ ...v, [f.key]: ev.target.value }))}
               className="input mt-0.5 w-full text-[13px] tabular-nums" style={{ minHeight: 40 }}
@@ -232,13 +332,155 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
           </label>
         ))}
       </div>
+      {/* A value far outside the human range is nearly always a unit
+          mix-up or a slipped decimal, and saying so BEFORE the save is
+          what stops it owning the chart forever. Phrased as a question,
+          not a rejection -- the save still goes through. */}
+      {odd.length > 0 && (
+        <div className="mt-2 text-[11px] leading-snug" style={{ color: 'var(--warn)' }}>
+          {odd.map((f) => f.label).join(' and ')} {odd.length === 1 ? 'looks' : 'look'} unusual for
+          {u.isImperial ? ' inches' : ' centimetres'} — worth a second look before saving.
+        </div>
+      )}
       {err && <div className="mt-2 text-[11px]" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
       <div className="mt-3 flex gap-2">
         <button type="button" className="btn btn-sm flex-1" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn-primary btn-sm flex-1" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn-primary btn-sm flex-1" disabled={saving}>
+          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save'}
+        </button>
       </div>
-      <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>Leave any blank — only what you fill in is saved.</div>
+      <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>
+        {isEdit ? 'Clear a box to remove just that reading.' : 'Leave any blank — only what you fill in is saved.'}
+      </div>
     </form>
+  );
+}
+
+/**
+ * MEASUREMENT HISTORY — every set you have recorded, newest first.
+ *
+ * The charts above answer "which way is this going". This answers "what
+ * did I actually write down, and can I fix it" -- which until now had no
+ * answer at all, because nothing in the product could edit or remove a
+ * measurement once saved. A tape read into the wrong column was
+ * permanent, and it bends a trend line forever.
+ *
+ * Cards rather than a table: six columns of numbers on a 360px phone is
+ * a horizontal scroll pretending to be a data grid.
+ */
+function MeasurementHistory({ clientId, reloadKey, onChanged }) {
+  const u = useUnits();
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open || !clientId) return undefined;
+    let alive = true;
+    setErr(null);
+    api(`/clients/${clientId}/measurements`)
+      .then((r) => { if (alive) setRows(r.measurements || []); })
+      .catch((e) => { if (alive) setErr(e.message); });
+    return () => { alive = false; };
+  }, [clientId, open, reloadKey]);
+
+  const remove = async (row) => {
+    // Confirmed, and named: "are you sure?" over a list of six identical
+    // cards does not tell you WHICH one is about to go.
+    const when = new Date(row.taken_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    if (!window.confirm(`Delete the measurements recorded on ${when}? This cannot be undone.`)) return;
+    setBusyId(row.id);
+    try {
+      await api(`/clients/${clientId}/measurements/${row.id}`, { method: 'DELETE' });
+      setRows((rs) => (rs || []).filter((x) => x.id !== row.id));
+      onChanged?.();
+    } catch (e) { setErr(e.message); }
+    setBusyId(null);
+  };
+
+  if (!clientId) return null;
+
+  if (!open) {
+    return (
+      <button className="btn btn-sm mt-2 w-full" onClick={() => setOpen(true)}>
+        View measurement history
+      </button>
+    );
+  }
+
+  const ordered = [...(rows || [])].sort((a, b) => String(b.taken_at).localeCompare(String(a.taken_at)));
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-[10px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>History</div>
+        <button className="text-[10.5px] font-semibold tap-target" style={{ color: 'var(--accent)' }} onClick={() => { setOpen(false); setEditingId(null); }}>
+          Hide
+        </button>
+      </div>
+
+      {err && <div className="text-[11px] mb-2" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+      {rows === null && !err && <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Loading…</div>}
+      {rows && !ordered.length && (
+        <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Nothing recorded yet.</div>
+      )}
+
+      <div className="space-y-2">
+        {ordered.map((row) => {
+          const present = MEASURE_FIELDS.filter((f) => row[f.key] != null);
+          return (
+            <div key={row.id} className="rounded-[var(--r-sm)] p-2.5" style={{ border: '1px solid var(--line)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11.5px] font-bold" style={{ color: 'var(--ink)' }}>
+                  {new Date(row.taken_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    className="chip !text-[10px] tap-target"
+                    onClick={() => setEditingId(editingId === row.id ? null : row.id)}
+                    aria-label={`Edit the measurements from ${new Date(row.taken_at).toLocaleDateString()}`}
+                  >
+                    {editingId === row.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button
+                    className="chip !text-[10px] !border-bad/40 tap-target"
+                    style={{ color: 'var(--bad)' }}
+                    disabled={busyId === row.id}
+                    onClick={() => remove(row)}
+                    aria-label={`Delete the measurements from ${new Date(row.taken_at).toLocaleDateString()}`}
+                  >
+                    {busyId === row.id ? '…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+
+              {present.length ? (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {present.map((f) => (
+                    <span key={f.key} className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
+                      {f.label} <strong style={{ color: 'var(--ink)' }}>{u.lengthNum(row[f.key], { decimals: 1 })} {u.lengthUnit}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-1 text-[10.5px]" style={{ color: 'var(--faint)' }}>No readings left in this entry.</div>
+              )}
+
+              {editingId === row.id && (
+                <MeasurementForm
+                  clientId={clientId}
+                  editing={row}
+                  onCancel={() => setEditingId(null)}
+                  onDone={() => { setEditingId(null); onChanged?.(); }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -253,6 +495,7 @@ function MeasurementForm({ clientId, onDone, onCancel }) {
  * of the point. If none are earned yet the section doesn't render at all.
  */
 export function AchievementsSection({ intel, Section }) {
+  const u = useUnits();
   const w = intel.weight?.analysis;
   const lost = w && w.change != null && w.change < 0 ? Math.abs(w.change) : 0;
   const trained = intel.consistency?.trainedDays?.length || 0;
@@ -266,10 +509,18 @@ export function AchievementsSection({ intel, Section }) {
   // go next. They stay visually quiet so they read as a horizon, not as a
   // list of failures.
   const defs = [
-    { hue: 'body', icon: 'trending', unit: 'kg', label: (t) => `${t} kg down`, value: lost, tiers: [2, 5, 10] },
-    { hue: 'training', icon: 'strength', unit: 'days', label: (t) => `${t} training days`, value: trained, tiers: [10, 25, 50, 100] },
-    { hue: 'strength', icon: 'bulb', unit: 'PRs', label: (t) => `${t} personal record${t === 1 ? '' : 's'}`, value: prTotal, tiers: [1, 10, 25, 50] },
-    { hue: 'nutrition', icon: 'target', unit: 'day streak', label: (t) => `${t}-day streak`, value: best, tiers: [3, 7, 14, 30] },
+    /* The tiers are defined in kilograms and stay that way -- a milestone
+       is a fixed thing, not something that changes size with a display
+       preference. Only the LABEL converts, so an imperial reader sees
+       "11 lb down" for the same 5 kg badge. */
+    { hue: 'body', icon: 'trending', label: (t) => `${u.fmtWeight(t)} down`, value: lost, tiers: [2, 5, 10],
+      remainingText: (r) => `${u.fmtWeight(r)} to go` },
+    { hue: 'training', icon: 'strength', label: (t) => `${t} training days`, value: trained, tiers: [10, 25, 50, 100],
+      remainingText: (r) => `${Math.round(r)} days to go` },
+    { hue: 'strength', icon: 'bulb', label: (t) => `${t} personal record${t === 1 ? '' : 's'}`, value: prTotal, tiers: [1, 10, 25, 50],
+      remainingText: (r) => `${Math.round(r)} PRs to go` },
+    { hue: 'nutrition', icon: 'target', label: (t) => `${t}-day streak`, value: best, tiers: [3, 7, 14, 30],
+      remainingText: (r) => `${Math.round(r)} day streak to go` },
   ];
 
   const items = [];
@@ -318,9 +569,7 @@ export function AchievementsSection({ intel, Section }) {
                 {m.label(m.tier)}
               </div>
               <div className="mt-0.5 text-[9.5px]" style={{ color: m.earned ? color : 'var(--faint)' }}>
-                {m.earned
-                  ? 'Achieved'
-                  : `${Math.round(m.remaining * 10) / 10} ${m.unit} to go`}
+                {m.earned ? 'Achieved' : m.remainingText(m.remaining)}
               </div>
             </div>
           );
@@ -350,6 +599,7 @@ export function AchievementsSection({ intel, Section }) {
  * Compared on estimated 1RM so 60x10 correctly beats 60x5.
  */
 export function StrengthProgressSection({ progress, Section, onSelect }) {
+  const u = useUnits();
   const [showAll, setShowAll] = useState(false);
   if (!progress?.length) return null;
 
@@ -394,7 +644,7 @@ export function StrengthProgressSection({ progress, Section, onSelect }) {
 
         <div className="mt-1 flex items-baseline justify-between gap-2 text-[10px] tabular-nums" style={{ color: 'var(--faint)' }}>
           <span>
-            {p.from.weight} kg × {p.from.reps} → <span style={{ color: 'var(--mute)' }}>{p.to.weight} kg × {p.to.reps}</span>
+            {u.fmtWeight(p.from.weight)} × {p.from.reps} → <span style={{ color: 'var(--mute)' }}>{u.fmtWeight(p.to.weight)} × {p.to.reps}</span>
           </span>
           <span>{p.spanDays >= 14 ? `${Math.round(p.spanDays / 7)} wks` : `${p.spanDays}d`}</span>
         </div>

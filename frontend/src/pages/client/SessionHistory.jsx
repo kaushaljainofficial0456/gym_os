@@ -20,6 +20,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 const PAGE = 25;
 
@@ -43,10 +44,13 @@ function monthLabel(iso) {
   return sameYear ? MONTHS[d.getUTCMonth()] : `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-const fmtVolume = (kg) => {
-  const n = Number(kg) || 0;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k kg`;
-  return `${Math.round(n)} kg`;
+/* Volume is a weight, so it follows the unit preference. `u` is passed in
+   rather than read here because this is a module-level helper, not a
+   component -- a hook call would be illegal. */
+const fmtVolume = (kg, u) => {
+  const n = u.weightNum(kg, { decimals: 0 }) ?? 0;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k ${u.weightUnit}`;
+  return `${Math.round(n)} ${u.weightUnit}`;
 };
 
 const FILTERS = [['all', 'All'], ['completed', 'Completed'], ['missed', 'Not done']];
@@ -207,13 +211,14 @@ export default function SessionHistory() {
  *  has are rendered -- a "0 kg" on a bodyweight day would be a false
  *  statement about the session rather than a missing value. */
 export function SessionRow({ w, onOpen, compact = false }) {
+  const u = useUnits();
   const done = w.status === 'completed';
   const metrics = [
     // A rounded 0 min reads as a bug; below a minute the duration is
     // not a fact worth stating.
     w.duration_min && Math.round(w.duration_min) >= 1 ? `${Math.round(w.duration_min)} min` : null,
     w.completed_sets ? `${w.completed_sets} ${w.completed_sets === 1 ? 'set' : 'sets'}` : null,
-    w.volume_kg ? fmtVolume(w.volume_kg) : null,
+    w.volume_kg ? fmtVolume(w.volume_kg, u) : null,
     !w.completed_sets && w.exercises?.length
       ? `${w.exercises.length} ${w.exercises.length === 1 ? 'exercise' : 'exercises'}` : null,
   ].filter(Boolean);

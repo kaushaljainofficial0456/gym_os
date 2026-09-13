@@ -16,6 +16,7 @@
 import { useMemo } from 'react';
 import { Avatar } from '../UI.jsx';
 import { fmt, fmtVolume, HUE } from './CommunityPieces.jsx';
+import { useUnits } from '../../unitsContext.jsx';
 
 const TOP_N = 10;
 
@@ -53,8 +54,8 @@ const METRIC_ORDER = ['completedWorkouts', 'activeDays', 'volume', 'streak', 'pr
 
 const PERIOD_LABEL = { day: 'Today', week: 'This week', month: 'This month' };
 
-export function formatMetric(metric, value) {
-  if (metric === 'volume') return `${fmtVolume(value)} kg`;
+export function formatMetric(metric, value, u) {
+  if (metric === 'volume') return `${fmtVolume(value, u)} ${u ? u.weightUnit : 'kg'}`;
   if (metric === 'streak') return `${fmt(value)} ${value === 1 ? 'day' : 'days'}`;
   if (metric === 'activeDays') return `${fmt(value)} ${value === 1 ? 'day' : 'days'}`;
   if (metric === 'prs') return `${fmt(value)} ${value === 1 ? 'record' : 'records'}`;
@@ -64,6 +65,7 @@ export function formatMetric(metric, value) {
 export default function Leaderboard({
   boards, metric, onMetricChange, period, you, onSelectMember, definitions,
 }) {
+  const u = useUnits();
   // A tab per metric that actually has someone on it. Hiding an empty
   // board is not hiding bad news -- an empty board says nothing true.
   const available = useMemo(
@@ -165,7 +167,7 @@ export default function Leaderboard({
                   {isYou ? 'You' : entry.name}
                 </div>
                 <div className="text-[10px] tabular-nums font-semibold" style={{ color: hue.fg }}>
-                  {formatMetric(active, entry.value)}
+                  {formatMetric(active, entry.value, u)}
                 </div>
               </button>
             );
@@ -197,6 +199,7 @@ export default function Leaderboard({
 }
 
 function Row({ entry, metric, hue, isYou, onClick }) {
+  const u = useUnits();
   return (
     <li>
       <button
@@ -217,7 +220,7 @@ function Row({ entry, metric, hue, isYou, onClick }) {
           {isYou ? 'You' : entry.name}
         </span>
         <span className="tabular-nums text-[12px] font-bold shrink-0 whitespace-nowrap" style={{ color: isYou ? hue.fg : 'var(--ink)' }}>
-          {formatMetric(metric, entry.value)}
+          {formatMetric(metric, entry.value, u)}
         </span>
       </button>
     </li>

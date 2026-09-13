@@ -1,10 +1,10 @@
 /**
  * HeightSelector — height picker with ft/in ↔ cm unit switch.
  *
- * Internal storage is always cm. The unit toggle converts and preserves
- * the user's approximate height. Uses ScrollWheel for the picker UI.
+ * Internal storage is always cm; the toggle changes only what is DRAWN.
+ * It used to round-trip the value through ft/in on every switch, which
+ * quietly moved the stored height by up to half an inch each time.
  */
-import { useState } from 'react';
 import ScrollWheel from './ScrollWheel';
 
 const CM_MIN = 120;
@@ -24,23 +24,11 @@ function ftInToCm(ft, inches) {
   return Math.round((ft * 12 + inches) * 2.54);
 }
 
-export default function HeightSelector({ value, onChange, t }) {
+export default function HeightSelector({ value, onChange, t, unit, onUnitChange }) {
   const cmVal = Number(value) || 170;
   const { ft, inches } = cmToFtIn(cmVal);
 
-  const [unit, setUnit] = useState('ft_in');
-
-  const switchUnit = (newUnit) => {
-    if (newUnit === unit) return;
-    // Preserve the approximate height through conversion
-    if (newUnit === 'cm') {
-      onChange(cmVal);
-    } else {
-      const converted = cmToFtIn(cmVal);
-      onChange(ftInToCm(converted.ft, converted.inches));
-    }
-    setUnit(newUnit);
-  };
+  const switchUnit = (newUnit) => { if (newUnit !== unit) onUnitChange(newUnit); };
 
   return (
     <div>

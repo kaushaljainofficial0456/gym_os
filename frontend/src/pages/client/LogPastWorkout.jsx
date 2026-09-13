@@ -16,6 +16,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
+import { useUnits } from '../../unitsContext.jsx';
+import WeightInput from '../../components/WeightInput.jsx';
 
 // Easy -> lots left in the tank; Very hard -> nothing left. These are the
 // RIR values the existing calorie model already reasons about.
@@ -44,6 +46,7 @@ const defaultStartTime = (durationMin) => {
 };
 
 export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLib, toast }) {
+  const u = useUnits();
   const today = new Date();
   const [date, setDate] = useState(localDateKey(today));
   const [startTime, setStartTime] = useState(() => defaultStartTime(60));
@@ -271,7 +274,7 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
                     <button onClick={() => removeRow(i)} className="text-[10px] shrink-0" style={{ color: 'var(--bad)', minHeight: 32 }}>Remove</button>
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
-                    {[['sets', 'Sets'], ['reps', 'Reps'], ['weight', 'kg']].map(([k, label]) => (
+                    {[['sets', 'Sets'], ['reps', 'Reps']].map(([k, label]) => (
                       <label key={k} className="block">
                         <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{label}</span>
                         <input type="number" min="0" value={r[k]} aria-label={`${r.name} ${label}`}
@@ -279,6 +282,15 @@ export default function LogPastWorkout({ open, onClose, onSaved, libList, loadLi
                           className="input w-full text-right tabular-nums" style={{ ...field, minHeight: 40 }} />
                       </label>
                     ))}
+                    {/* Weight is the one field whose stored value and typed
+                        value are not the same number, so it gets the shared
+                        kg-canonical input rather than a raw text box. */}
+                    <label className="block">
+                      <span className="text-[8.5px] uppercase tracking-[.06em]" style={{ color: 'var(--faint)' }}>{u.weightUnit}</span>
+                      <WeightInput valueKg={r.weight} onChangeKg={(kg) => patchRow(i, { weight: kg })}
+                        ariaLabel={`${r.name} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
+                        className="input w-full text-right tabular-nums" style={{ ...field, minHeight: 40 }} />
+                    </label>
                   </div>
                 </div>
               ))}

@@ -15,11 +15,14 @@ import { api } from '../../../api.js';
 import { Modal } from '../../UI.jsx';
 import { Avatar } from '../../UI.jsx';
 import { challengeHue, challengeUnit, fmt, fmtVolume } from '../CommunityPieces.jsx';
+import { useUnits } from '../../../unitsContext.jsx';
 
 const METRICS = [
   { key: 'workouts', label: 'Workouts', hint: 'Completed sessions', goals: [10, 20, 40] },
   { key: 'active_days', label: 'Active days', hint: 'Days with a session', goals: [3, 4, 5] },
-  { key: 'volume', label: 'Volume', hint: 'Kilograms lifted', goals: [10000, 25000, 50000] },
+  // Volume presets are kilograms, like every stored weight. The sheet shows
+  // them in the user's unit and converts the typed target back.
+  { key: 'volume', label: 'Volume', hint: 'Total weight lifted', goals: [10000, 25000, 50000] },
   { key: 'prs', label: 'Records', hint: 'Personal records set', goals: [3, 5, 10] },
 ];
 
@@ -44,14 +47,19 @@ export function CreateChallengeSheet({ communityId, today, onClose, onCreated, t
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
+  const u = useUnits();
   const chosen = METRICS.find((m) => m.key === metric);
   const hue = challengeHue(metric);
-  const unit = challengeUnit(metric);
+  const unit = metric === 'volume' ? u.weightUnit : challengeUnit(metric);
+  /* `goal` holds the number as the user reads and types it -- pounds for an
+     imperial volume target -- and becomes kilograms exactly once, on the
+     way to the server. */
+  const shownPreset = (key, g) => (key === 'volume' ? u.weightNum(g, { decimals: 0 }) : g);
 
   const pickMetric = (key) => {
     setMetric(key);
     const next = METRICS.find((m) => m.key === key);
-    setGoal(next.goals[scope === 'community' ? 1 : 0]);
+    setGoal(shownPreset(key, next.goals[scope === 'community' ? 1 : 0]));
   };
 
   const create = async () => {
@@ -63,7 +71,7 @@ export function CreateChallengeSheet({ communityId, today, onClose, onCreated, t
           name: name.trim(),
           metric,
           scope,
-          goal: Number(goal),
+          goal: metric === 'volume' ? u.toKg(goal) : Number(goal),
           // The server's own "today" travels with the challenge list, so a
           // phone in a different timezone cannot pick a start date the
           // server will reject as being in the past.
@@ -164,28 +172,32 @@ export function CreateChallengeSheet({ communityId, today, onClose, onCreated, t
 
       <Label>Target</Label>
       <div className="flex gap-1.5 mb-2 flex-wrap">
-        {chosen.goals.map((g) => (
-          <button
-            key={g}
-            type="button"
-            onClick={() => setGoal(g)}
-            className="rounded-lg px-3 text-[11.5px] font-semibold tabular-nums"
-            style={{
-              minHeight: 38,
-              background: Number(goal) === g ? hue.bg : 'transparent',
-              border: `1px solid ${Number(goal) === g ? hue.fg : 'var(--line)'}`,
-              color: Number(goal) === g ? hue.fg : 'var(--mute)',
-            }}
-          >
-            {metric === 'volume' ? `${fmtVolume(g)} kg` : `${fmt(g)} ${unit}`}
-          </button>
-        ))}
+        {chosen.goals.map((g) => {
+          const shown = shownPreset(metric, g);
+          const on = Number(goal) === shown;
+          return (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGoal(shown)}
+              className="rounded-lg px-3 text-[11.5px] font-semibold tabular-nums"
+              style={{
+                minHeight: 38,
+                background: on ? hue.bg : 'transparent',
+                border: `1px solid ${on ? hue.fg : 'var(--line)'}`,
+                color: on ? hue.fg : 'var(--mute)',
+              }}
+            >
+              {metric === 'volume' ? `${fmtVolume(g, u)} ${unit}` : `${fmt(g)} ${unit}`}
+            </button>
+          );
+        })}
       </div>
       <input
         value={goal}
         onChange={(e) => setGoal(e.target.value.replace(/[^\d.]/g, ''))}
         inputMode="numeric"
-        aria-label="Challenge target"
+        aria-label={`Challenge target in ${unit}`}
         className="w-full rounded-xl px-3 text-[13px] tabular-nums mb-4"
         style={{ minHeight: 44, background: 'var(--panel2)', border: '1px solid var(--line)', color: 'var(--ink)' }}
       />
@@ -226,6 +238,7 @@ export function CreateChallengeSheet({ communityId, today, onClose, onCreated, t
 }
 
 export function ChallengeDetailSheet({ communityId, challengeId, canManage, onClose, onChanged, toast }) {
+  const u = useUnits();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -254,7 +267,9 @@ export function ChallengeDetailSheet({ communityId, challengeId, canManage, onCl
   const c = data?.challenge;
   const hue = c ? challengeHue(c.metric) : null;
   const unit = c ? challengeUnit(c.metric) : '';
-  const value = (v) => (c?.metric === 'volume' ? `${fmtVolume(v)} kg` : `${fmt(v)} ${unit}`);
+  /* One formatter for the headline, the goal and every standing, so no row
+     on this sheet can be in a different unit from the others. */
+  const value = (v) => (c?.metric === 'volume' ? `${fmtVolume(v, u)} ${u.weightUnit}` : `${fmt(v)} ${unit}`);
   const daysLeft = c ? Math.max(0, Math.round((Date.parse(`${c.endDate}T23:59:59Z`) - Date.now()) / 86400000)) : 0;
 
   return (
