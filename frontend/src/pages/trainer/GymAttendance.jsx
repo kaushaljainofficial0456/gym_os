@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import ShiftEditor from '../../components/trainer/ShiftEditor.jsx';
 import { api } from '../../api.js';
-import { ErrorState, PageSkeleton, Avatar, Toast } from '../../components/UI.jsx';
+import { ErrorState, PageSkeleton, Avatar, Toast, useDialog } from '../../components/UI.jsx';
 import { formatDuration, clockTime, STATUS_TONE } from '../../components/trainer/AttendanceCard.jsx';
 
 /** Statuses the roster can return that have no attendance row behind them.
@@ -440,6 +440,7 @@ function Stat({ label, value, tone }) {
  * use it -- and it is useless once expired.
  */
 function QrDialog({ qr, onClose, onRefresh }) {
+  const panelRef = useDialog(true, onClose);
   const [left, setLeft] = useState(qr.expiresIn);
   useEffect(() => { setLeft(qr.expiresIn); }, [qr]);
   useEffect(() => {
@@ -474,7 +475,7 @@ function QrDialog({ qr, onClose, onRefresh }) {
       onClick={onClose}
       role="dialog" aria-modal="true" aria-label="Trainer attendance codes"
     >
-      <div className="card p-5 w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
+      <div ref={panelRef} className="card p-5 w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-grotesk font-bold text-[14px]" style={{ color: 'var(--ink)' }}>
             Trainer attendance codes

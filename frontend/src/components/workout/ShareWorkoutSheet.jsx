@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import SavingOverlay from '../nutrition/SavingOverlay.jsx';
-import { XIcon } from './../UI.jsx';
+import { XIcon, useDialog } from './../UI.jsx';
 
 /**
  * SHARE WORKOUT SHEET — select exercises from a workout, bundle them into
@@ -23,6 +23,8 @@ export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutNam
   const [shared, setShared] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  // Escape is withheld mid-share for the same reason the backdrop is below.
+  const panelRef = useDialog(open, stage ? null : onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -109,8 +111,9 @@ export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutNam
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center anim-fadeIn"
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={(e) => { if (e.target === e.currentTarget && !stage) onClose(); }}>
-      <div className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
+         onClick={(e) => { if (e.target === e.currentTarget && !stage) onClose(); }}
+         role="dialog" aria-modal="true" aria-label="Share workout">
+      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
         <div className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: 'var(--panel)' }}>
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Share Workout</div>
           <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}><XIcon /></button>

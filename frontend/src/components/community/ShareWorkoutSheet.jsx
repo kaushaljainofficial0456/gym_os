@@ -13,8 +13,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
+import { useDialog } from '../UI.jsx';
 
 export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, toast }) {
+  const panelRef = useDialog(true, onClose);
   const [workouts, setWorkouts] = useState(null);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState('');
@@ -64,6 +66,7 @@ export default function ShareWorkoutSheet({ onClose, onShared, alreadyShared, to
       aria-label="Share a workout"
     >
       <div
+        ref={panelRef}
         className="w-full max-w-lg rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto"
         style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}
         onClick={(e) => e.stopPropagation()}

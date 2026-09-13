@@ -35,7 +35,7 @@ import Icon from './Icon.jsx';
 import BarcodeScanner from './BarcodeScanner.jsx';
 import PortionWheel from './PortionWheel.jsx';
 import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
-import { XIcon } from './UI.jsx';
+import { XIcon, useDialog } from './UI.jsx';
 
 const OIL_LEVELS = [
   ['none', 'None'],
@@ -575,6 +575,11 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, wheelOpen, screen, confirmDiscardOpen, customForm.name, customForm.protein, customForm.carbs, customForm.fat]);
+
+  // Focus containment, focus return and scroll lock -- but NOT Escape
+  // (onClose null): the effect above steps back one screen at a time.
+  const panelRef = useDialog(open, null);
+  const discardRef = useDialog(open && confirmDiscardOpen, null);
 
   if (!open) return null;
 
@@ -1299,7 +1304,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
           past a screenful of blurred backdrop to find the button. The
           header is pinned by its own `shrink-0` now and the body below
           is the only scrolling part. */}
-      <div className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl"
+      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl"
            onClick={(e) => e.stopPropagation()}>
 
         <div className="shrink-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
@@ -2273,7 +2278,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       {confirmDiscardOpen && (
         <div className="fixed inset-0 z-[85] grid place-items-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
              onClick={() => setConfirmDiscardOpen(false)} role="alertdialog" aria-modal="true" aria-label="Discard changes?">
-          <div className="card w-full max-w-xs rounded-2xl p-4 text-center" onClick={(e) => e.stopPropagation()}>
+          <div ref={discardRef} className="card w-full max-w-xs rounded-2xl p-4 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="text-[13px] font-bold" style={{ color: 'var(--ink)' }}>Discard changes?</div>
             <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>This custom food hasn't been saved yet.</div>
             <div className="flex gap-2 mt-3.5">

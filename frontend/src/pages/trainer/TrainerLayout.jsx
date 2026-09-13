@@ -8,7 +8,7 @@ import LineNavList from '../../components/LineNavList.jsx';
 import ThemeSwitch from '../../components/trainer/ThemeSwitch.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
-import { Avatar } from '../../components/UI.jsx';
+import { Avatar, useDialog } from '../../components/UI.jsx';
 import Logo from '../../components/Logo.jsx';
 import '../../components/LineNavList.css';
 
@@ -150,13 +150,9 @@ export default function TrainerLayout() {
   useEffect(() => { reloadUnread({ silent: true }); }, [loc.pathname, reloadUnread]);
 
   // Escape closes it too, for keyboard users; a drawer with no keyboard
-  // exit is a trap.
-  useEffect(() => {
-    if (!navOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setNavOpen(false); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [navOpen]);
+  // exit is a trap. useDialog also keeps Tab inside the open drawer and
+  // hands focus back to the menu button when it closes.
+  const drawerRef = useDialog(navOpen, () => setNavOpen(false));
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
@@ -221,6 +217,7 @@ export default function TrainerLayout() {
         {navOpen && (
           <motion.aside
             key="drawer"
+            ref={drawerRef}
             role="dialog"
             aria-modal="true"
             aria-label="Trainer navigation"

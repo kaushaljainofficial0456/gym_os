@@ -20,7 +20,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Icon from '../Icon.jsx';
 import { createPortal } from 'react-dom';
-import { Avatar } from '../UI.jsx';
+import { Avatar, useDialog } from '../UI.jsx';
 import { api } from '../../api.js';
 import { exerciseLabel } from '../../utils.js';
 import { fmt, fmtVolume, HUE } from './CommunityPieces.jsx';
@@ -571,6 +571,7 @@ export const GYM_COMMENTS = {
 };
 
 export function CommentsSheet({ target, you, onClose, toast, comments: commentsApi = GYM_COMMENTS }) {
+  const panelRef = useDialog(true, onClose);
   const [comments, setComments] = useState(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -629,6 +630,7 @@ export function CommentsSheet({ target, you, onClose, toast, comments: commentsA
       aria-label="Comments"
     >
       <div
+        ref={panelRef}
         className="w-full max-w-lg rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto"
         style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}
         onClick={(e) => e.stopPropagation()}

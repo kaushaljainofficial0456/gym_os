@@ -22,6 +22,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api.js';
+import { useDialog } from '../UI.jsx';
 
 const DAYS = [
   [1, 'Monday'], [2, 'Tuesday'], [3, 'Wednesday'], [4, 'Thursday'],
@@ -42,6 +43,7 @@ const DEFAULT_START = '09:00';
 const DEFAULT_END = '18:00';
 
 export default function ShiftEditor({ trainerId, trainerName, onClose, onChanged }) {
+  const panelRef = useDialog(true, onClose);
   const [shifts, setShifts] = useState(null);
   const [busyDay, setBusyDay] = useState(null);
   const [err, setErr] = useState('');
@@ -106,7 +108,7 @@ export default function ShiftEditor({ trainerId, trainerName, onClose, onChanged
       onClick={onClose}
       role="dialog" aria-modal="true" aria-label={`Shifts for ${trainerName}`}
     >
-      <div className="card p-5 w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
+      <div ref={panelRef} className="card p-5 w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="min-w-0">
             <h2 className="font-grotesk font-bold text-[14px]" style={{ color: 'var(--ink)' }}>

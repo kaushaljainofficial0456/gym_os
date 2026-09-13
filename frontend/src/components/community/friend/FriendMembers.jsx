@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../../api.js';
-import { Avatar } from '../../UI.jsx';
+import { Avatar, useDialog } from '../../UI.jsx';
 import { SectionTitle, HUE, fmt } from '../CommunityPieces.jsx';
 
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: null };
@@ -122,6 +122,7 @@ function MemberCard({ member: m, onClick }) {
 /* ══════════════ MEMBER DETAIL ══════════════ */
 
 export function FriendMemberSheet({ communityId, member, onClose, onChanged, toast }) {
+  const panelRef = useDialog(true, onClose);
   const [profile, setProfile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -181,6 +182,7 @@ export function FriendMemberSheet({ communityId, member, onClose, onChanged, toa
       aria-label={`${member.name} in this community`}
     >
       <div
+        ref={panelRef}
         className="w-full max-w-lg rounded-t-3xl p-5 max-h-[86vh] overflow-y-auto"
         style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}
         onClick={(e) => e.stopPropagation()}

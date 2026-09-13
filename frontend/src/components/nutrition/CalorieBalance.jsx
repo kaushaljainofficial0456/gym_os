@@ -13,7 +13,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api.js';
-import { XIcon } from './../UI.jsx';
+import { XIcon, useDialog } from './../UI.jsx';
 
 const STRATEGY_ORDER = ['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE'];
 const STRATEGY_HINT = {
@@ -35,9 +35,11 @@ function addDaysKey(dateKey, n) {
 }
 
 function ModalShell({ onClose, kicker, title, t, children, wide }) {
+  const panelRef = useDialog(true, onClose);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
-      <div className={`w-full ${wide ? 'max-w-md' : 'max-w-sm'} rounded-3xl overflow-hidden anim-scaleIn max-h-[85vh] flex flex-col`} style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}
+      role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={panelRef} className={`w-full ${wide ? 'max-w-md' : 'max-w-sm'} rounded-3xl overflow-hidden anim-scaleIn max-h-[85vh] flex flex-col`} style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
         <div className="px-5 pt-5 pb-3 flex items-start justify-between shrink-0">
           <div>
             <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>{kicker}</div>

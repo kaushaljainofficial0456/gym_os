@@ -6,7 +6,7 @@ import { useTheme } from '../../themeContext.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import { DASH_CARDS, DEFAULT_ORDER, resolveDashboard, parseDashboardPrefs } from '../../dashboardCards.js';
 import WeightInput, { LengthInput } from '../../components/WeightInput.jsx';
-import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
+import { ErrorState, Ring, XIcon, PageSkeleton, useDialog } from '../../components/UI.jsx';
 // TWO components are called Ring and they mean OPPOSITE things by `label`:
 // UI.jsx's renders it as visible 26px centre text, Ring.jsx's uses it as an
 // aria-label. Writing a call for one while importing the other put a whole
@@ -397,6 +397,7 @@ export default function Profile() {
   const [localAvatar, setLocalAvatar] = useState(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const removeConfirmRef = useDialog(removeConfirmOpen, () => setRemoveConfirmOpen(false));
   // coach memory/preferences
   const coachMem = useFetch(() => api('/intel/coach/memory'));
   const [coachPrefs, setCoachPrefs] = useState({});
@@ -1334,8 +1335,9 @@ Save it anyway?`);
         <input id="avatar-gallery" aria-label="Choose a profile photo from your device" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
         {/* Remove photo confirmation */}
         {removeConfirmOpen && (
-          <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
-            <div className="w-full max-w-xs rounded-2xl p-5 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+          <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+            role="alertdialog" aria-modal="true" aria-label="Remove profile photo?">
+            <div ref={removeConfirmRef} className="w-full max-w-xs rounded-2xl p-5 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
               <div className="text-center mb-4">
                 <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Remove profile photo?</div>
                 <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>Your initial letter will be shown instead.</div>
