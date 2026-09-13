@@ -173,6 +173,29 @@ function MacroBar({ label, value, max, color, t }) {
   );
 }
 
+/**
+ * A TARGET IS A LINE TO CROSS, NOT A CEILING ON WHAT HAPPENED.
+ *
+ * The running total used to be clamped with Math.min(target, ...), so the
+ * moment you reached your goal every further tap computed the number you
+ * already had: the glass didn't move, the figure didn't change, and
+ * nothing said why. Four litres on a hot day recorded three, and a button
+ * labelled "+500 ml" read as broken because tapping it did nothing at all.
+ *
+ * The floor is the same mistake in reverse. Undo is offered whenever
+ * anything is logged, so at 0.1 L it sent -0.15, the API refused it, and
+ * correcting a mis-tap surfaced "Couldn't log water" rather than simply
+ * going back to zero.
+ *
+ * So the only bounds here are the ones the API actually enforces
+ * (0-20 L, schemas.waterLog) -- anything tighter invents a rule the
+ * backend never had and loses a real day's drinking to it.
+ */
+export function nextWaterLitres(current, delta) {
+  const sum = (Number(current) || 0) + (Number(delta) || 0);
+  return Math.min(20, Math.max(0, Math.round(sum * 100) / 100));
+}
+
 /* ════════════════════════════════════════════════════════════════
    HYDRATION — premium water visualization
    ════════════════════════════════════════════════════════════════ */
@@ -667,7 +690,7 @@ export default function Nutrition() {
   };
 
   const addWater = async (litres = 0.25) => {
-    const next = Math.min(data.water.target, Math.round((waterState + litres) * 100) / 100);
+    const next = nextWaterLitres(waterState, litres);
     setWater(next);
     // Same reasoning as toggleMeal above -- a silent revert with no toast
     // reads as "the app randomly undid my tap", not "that failed".
