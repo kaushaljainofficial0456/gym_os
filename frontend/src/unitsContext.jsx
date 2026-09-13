@@ -23,6 +23,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
+import { useAuth } from './auth.jsx';
 import {
   normalizeSystem, formatWeight, formatWeightDelta, formatLength, formatHeight,
   weightUnit, lengthUnit, weightValue, lengthValue,
@@ -34,8 +35,23 @@ const UnitsContext = createContext(null);
 export function UnitsProvider({ children }) {
   const [system, setSystem] = useState('metric');
   const [ready, setReady] = useState(false);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
 
   const load = useCallback(() => {
+    // SIGNED OUT, THERE IS NO PROFILE -- and asking anyway was not harmless.
+    // This provider wraps every route, public ones included, and api()
+    // answers a 401 on anything but the /auth/me probe as a session that
+    // expired mid-use: it signs out and sends the browser to /login. So a
+    // signed-out visitor could not stay on /signup, the legal pages, a
+    // shared workout or an invite link -- each bounced to the login screen
+    // the moment this fetch came back. Keyed on the user, so signing in
+    // loads the preference and signing out resets it.
+    if (!userId) {
+      setSystem('metric');
+      setReady(true);
+      return undefined;
+    }
     let alive = true;
     api('/me/profile')
       .then((r) => { if (alive) setSystem(normalizeSystem(r?.profile?.unit_system)); })
@@ -44,7 +60,7 @@ export function UnitsProvider({ children }) {
       .catch(() => { if (alive) setSystem('metric'); })
       .finally(() => { if (alive) setReady(true); });
     return () => { alive = false; };
-  }, []);
+  }, [userId]);
 
   useEffect(() => load(), [load]);
 
