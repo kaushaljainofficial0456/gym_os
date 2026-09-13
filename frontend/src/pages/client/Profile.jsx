@@ -1103,8 +1103,11 @@ Save it anyway?`);
           )}
         </div>
         {/* Hidden file inputs */}
-        <input id="avatar-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleAvatarUpload} />
-        <input id="avatar-gallery" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
+        {/* Named even though they are visually hidden: a screen reader can
+            still land on a `display:none`-adjacent input in some modes,
+            and "file upload, blank" is not an answer to what it does. */}
+        <input id="avatar-camera" aria-label="Take a profile photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleAvatarUpload} />
+        <input id="avatar-gallery" aria-label="Choose a profile photo from your device" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
         {/* Remove photo confirmation */}
         {removeConfirmOpen && (
           <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>

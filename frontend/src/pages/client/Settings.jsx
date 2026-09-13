@@ -183,6 +183,7 @@ export default function Settings() {
       </Group>
 
       <Group title="Data & connections" hint="What Barbell reads, stores and remembers.">
+        <PrivacyCard />
         <div className="card p-5">
           <div className="flex items-center gap-2.5 mb-1">
             <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="trending" size={18} /></span>
@@ -581,6 +582,150 @@ function ToggleRow({ label, hint, checked, onChange, disabled, emphasis = false 
         />
       </span>
     </button>
+  );
+}
+
+/**
+ * PRIVACY — who can see what, from the screen people look for it on.
+ *
+ * Both of these settings already existed and already worked. They lived
+ * only inside the Community page, which is the one place a person is not
+ * looking when the question in their head is "what is this app sharing
+ * about me". Settings is where that question gets asked.
+ *
+ * ONLY REAL SETTINGS APPEAR HERE. There is no toggle for sleep, recovery,
+ * heart rate, bodyweight or nutrition sharing, because none of that is
+ * ever put into a community payload in the first place -- a switch
+ * implying it could be would be a worse answer than the sentence below
+ * it, which states the actual behaviour.
+ */
+function PrivacyCard() {
+  const [prefs, setPrefs] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [joined, setJoined] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api('/community/preferences')
+      .then((p) => { if (alive) setPrefs(p); })
+      .catch((e) => { if (alive) setErr(e.message); });
+    api('/community/membership')
+      .then((m) => { if (alive) setJoined(m?.joined ?? null); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const save = async (patch, optimistic) => {
+    const before = prefs;
+    setPrefs((p) => ({ ...p, ...optimistic }));
+    setBusy(true);
+    setErr('');
+    try {
+      // snake_case: this endpoint reads it, even though GET answers in
+      // camelCase. Sending the shape it returns changes nothing.
+      await api('/community/preferences', { method: 'PUT', body: JSON.stringify(patch) });
+    } catch (e) {
+      setPrefs(before);            // never show a setting that is not stored
+      setErr(e.message || 'Could not save that');
+    }
+    setBusy(false);
+  };
+
+  const PR_OPTIONS = [
+    ['everyone', 'Everyone at the gym', 'Your personal records appear in the gym feed and leaderboards.'],
+    ['followers', 'Only my followers', 'People who follow you see your records; nobody else does.'],
+    ['nobody', 'Nobody', 'Your records stay private. You still see them yourself.'],
+  ];
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="lock" size={18} /></span>
+        <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Privacy</span>
+      </div>
+      <p className="text-[11px] mb-3" style={{ color: 'var(--mute)' }}>
+        What other people at your gym can see.
+      </p>
+
+      {!prefs && !err && <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Loading…</div>}
+      {err && <div className="text-[11px] mb-2" style={{ color: 'var(--bad)' }} role="alert">{err}</div>}
+
+      {prefs && (
+        <>
+          <div className="font-grotesk text-[10px] uppercase tracking-[.12em] mb-1.5" style={{ color: 'var(--faint)' }}>
+            Who sees my personal records
+          </div>
+          <div className="space-y-1.5">
+            {PR_OPTIONS.map(([value, label, hint]) => {
+              const on = prefs.prVisibility === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={on}
+                  onClick={() => save({ pr_visibility: value }, { prVisibility: value })}
+                  className="w-full text-left rounded-xl px-3 py-2.5 transition-colors"
+                  style={{
+                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                    background: on ? 'var(--bg2)' : 'transparent',
+                  }}
+                >
+                  <div className="text-[12.5px] font-semibold" style={{ color: 'var(--ink)' }}>{label}</div>
+                  <div className="text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--faint)' }}>{hint}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="font-grotesk text-[10px] uppercase tracking-[.12em] mt-4 mb-1.5" style={{ color: 'var(--faint)' }}>
+            My feed
+          </div>
+          <div className="flex gap-1.5">
+            {[['all', 'Everyone'], ['following', 'Only people I follow']].map(([value, label]) => {
+              const on = prefs.feedScope === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={on}
+                  onClick={() => save({ feed_scope: value }, { feedScope: value })}
+                  className="flex-1 rounded-lg py-2 text-[11.5px] font-semibold transition-colors"
+                  style={{
+                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                    background: on ? 'var(--bg2)' : 'transparent',
+                    color: on ? 'var(--ink)' : 'var(--mute)',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] mt-1.5" style={{ color: 'var(--faint)' }}>
+            This changes what you see, not what others see of you.
+          </p>
+        </>
+      )}
+
+      {/* The statement of what is NEVER shared. It is a sentence rather
+          than a row of switched-off toggles because there is nothing to
+          switch: this data is not put into a community payload at all. */}
+      <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--line)' }}>
+        <div className="text-[11px] leading-snug" style={{ color: 'var(--mute)' }}>
+          Your weight, measurements, food log, sleep, recovery and anything from a connected
+          device are <strong style={{ color: 'var(--ink)' }}>never</strong> shared with your gym's
+          community — only your workouts, personal records and streaks, and only as set above.
+        </div>
+        {joined === false && (
+          <div className="text-[11px] mt-2" style={{ color: 'var(--faint)' }}>
+            You are not currently in your gym's community.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

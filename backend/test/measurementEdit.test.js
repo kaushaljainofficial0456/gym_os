@@ -187,3 +187,100 @@ test('a measurement that does not exist is a 404, not a crash', async (t) => {
   assert.equal((await call('PATCH', '/api/clients/c1/measurements/mea_nope', { body: { waist: 88 } })).status, 404);
   assert.equal((await call('DELETE', '/api/clients/c1/measurements/mea_nope')).status, 404);
 });
+
+// ============================================================
+// CLIENT PAYMENT HISTORY — money is the one list that must be scoped by
+// the session, never by anything the request supplies.
+//
+// It also has to keep two facts apart: an order reaching SUCCESS is not
+// the same as an invoice having been issued for it. Reporting one as the
+// other is how a member comes to believe they hold a receipt that does
+// not exist.
+// ============================================================
+
+async function startEnrollmentApi() {
+  const express = (await import('express')).default;
+  const jwt = (await import('jsonwebtoken')).default;
+  const { config } = await import('../src/config.js');
+  const enrollmentRoutes = (await import('../src/routes/enrollment.js')).default;
+
+  const db = await memDb();
+  await db.run('INSERT INTO organizations (id, name, slug, created_at) VALUES (?,?,?,?)', ['o1', 'Gym', 'gym', ts]);
+  for (const [u, c, mail] of [['u1', 'c1', 'a@x.in'], ['u2', 'c2', 'b@x.in']]) {
+    await db.run(`INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at)
+                  VALUES (?,'o1',?,'x','CLIENT','Client',1,?)`, [u, mail, ts]);
+    await db.run('INSERT INTO clients (id, user_id, org_id, created_at) VALUES (?,?,?,?)', [c, u, 'o1', ts]);
+  }
+  const app = express();
+  app.use(express.json());
+  app.use('/api/enrollment', enrollmentRoutes(db));
+  const server = app.listen(0);
+  await new Promise((r) => server.on('listening', r));
+  const port = server.address().port;
+  const call = (url, sub) => fetch(`http://127.0.0.1:${port}${url}`, {
+    headers: { Authorization: `Bearer ${jwt.sign({ sub, role: 'CLIENT', org: 'o1', name: 'C', email: 'a@x.in' }, config.jwtSecret)}` },
+  });
+  const close = () => new Promise((r) => { server.closeAllConnections(); server.close(r); });
+  return { db, call, close };
+}
+
+async function seedOrder(db, { id: oid, clientId, status, amount = 1999, invoice = null }) {
+  await db.run(
+    `INSERT INTO payment_orders (id, subject_type, subject_id, org_id, client_id, amount, currency, provider, status, created_at, updated_at)
+     VALUES (?,'CLIENT_MEMBERSHIP',?,?,?,?,'INR','mock',?,?,?)`,
+    [oid, 'sub_x', 'o1', clientId, amount, status, ts, ts]);
+  if (invoice) {
+    await db.run(
+      `INSERT INTO invoices (id, invoice_number, order_id, org_id, subject_type, amount, currency, status, issued_at, created_at)
+       VALUES (?,?,?,?,'CLIENT_MEMBERSHIP',?, 'INR', ?, ?, ?)`,
+      [`inv_${oid}`, invoice.number, oid, 'o1', amount, invoice.status || 'ISSUED', ts, ts]);
+  }
+}
+
+test('payment history returns only your own charges', async (t) => {
+  const { db, call, close } = await startEnrollmentApi();
+  t.after(() => close());
+  await seedOrder(db, { id: 'po_mine', clientId: 'c1', status: 'SUCCESS' });
+  await seedOrder(db, { id: 'po_theirs', clientId: 'c2', status: 'SUCCESS' });
+
+  const mine = await (await call('/api/enrollment/client/payments', 'u1')).json();
+  assert.deepEqual(mine.payments.map((p) => p.id), ['po_mine']);
+
+  const theirs = await (await call('/api/enrollment/client/payments', 'u2')).json();
+  assert.deepEqual(theirs.payments.map((p) => p.id), ['po_theirs']);
+});
+
+test('a successful payment with no invoice reports no receipt', async (t) => {
+  // The distinction the spec calls out: never show a receipt as issued
+  // merely because the payment succeeded.
+  const { db, call, close } = await startEnrollmentApi();
+  t.after(() => close());
+  await seedOrder(db, { id: 'po_1', clientId: 'c1', status: 'SUCCESS' });
+  const r = await (await call('/api/enrollment/client/payments', 'u1')).json();
+  assert.equal(r.payments[0].status, 'SUCCESS');
+  assert.equal(r.payments[0].invoice, null);
+});
+
+test('an issued invoice comes back with its number', async (t) => {
+  const { db, call, close } = await startEnrollmentApi();
+  t.after(() => close());
+  await seedOrder(db, { id: 'po_1', clientId: 'c1', status: 'SUCCESS', invoice: { number: 'INV-2026-0001' } });
+  const r = await (await call('/api/enrollment/client/payments', 'u1')).json();
+  assert.equal(r.payments[0].invoice.number, 'INV-2026-0001');
+});
+
+test('a voided invoice is not offered as a receipt', async (t) => {
+  const { db, call, close } = await startEnrollmentApi();
+  t.after(() => close());
+  await seedOrder(db, { id: 'po_1', clientId: 'c1', status: 'SUCCESS', invoice: { number: 'INV-VOID', status: 'VOID' } });
+  const r = await (await call('/api/enrollment/client/payments', 'u1')).json();
+  assert.equal(r.payments[0].invoice, null, 'a voided invoice is not a receipt');
+});
+
+test('a client with no orders gets an empty list, not an error', async (t) => {
+  const { call, close } = await startEnrollmentApi();
+  t.after(() => close());
+  const res = await call('/api/enrollment/client/payments', 'u1');
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).payments, []);
+});

@@ -356,6 +356,21 @@ export default function communityRoutes(db) {
   })), async (req, res) => {
     const client = await getClient(req, res);
     if (!client) return;
+    /* A BODY THAT CHANGES NOTHING IS NOT A SUCCESS.
+     *
+     * Both fields are optional, and this endpoint reads snake_case while
+     * GET /preferences returns camelCase -- so a caller that fetched the
+     * preferences, edited them and sent them straight back would have
+     * every key ignored and still receive 200 with the old values. These
+     * are privacy settings: "only my followers can see my records" would
+     * report saved and stay public. Nothing recognised is a client
+     * error, and it says so.
+     */
+    if (req.body.pr_visibility === undefined && req.body.feed_scope === undefined) {
+      return res.status(400).json({
+        error: 'Send pr_visibility and/or feed_scope (snake_case) — nothing in the request was recognised',
+      });
+    }
     const out = await setPreferences(db, client.id, {
       prVisibility: req.body.pr_visibility,
       feedScope: req.body.feed_scope,

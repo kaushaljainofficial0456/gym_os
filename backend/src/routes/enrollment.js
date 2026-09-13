@@ -414,6 +414,54 @@ export default function enrollmentRoutes(db) {
     res.json({ membership, gym: org });
   });
 
+  /* ================= CLIENT: my payment history =================
+   *
+   * There was no client-facing read of this at all. A member could see
+   * what they are subscribed to and a button to renew it, but not one
+   * thing they had ever paid -- which is the first question anyone asks
+   * of a membership screen, and the only way to check a charge.
+   *
+   * PAYMENT STATE AND RECEIPT STATE ARE SEPARATE, deliberately. An order
+   * reaching SUCCESS is not the same fact as an invoice having been
+   * issued for it, and reporting one as the other is how a member ends
+   * up believing they hold a receipt that does not exist. The invoice
+   * fields are null unless a real invoices row is joined, and the client
+   * renders a reference only when they are present.
+   *
+   * Scoped to this client's own orders by client_id, taken from their
+   * own user id -- not from anything the request supplies.
+   */
+  r.get('/client/payments', clientOnly, async (req, res) => {
+    const client = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
+    if (!client) return res.json({ payments: [] });
+
+    const rows = await db.q(
+      `SELECT o.id, o.amount, o.currency, o.status, o.provider, o.created_at, o.updated_at,
+              i.invoice_number, i.issued_at AS invoice_issued_at, i.status AS invoice_status
+         FROM payment_orders o
+         LEFT JOIN invoices i ON i.order_id = o.id AND i.status = 'ISSUED'
+        WHERE o.client_id = ? AND o.subject_type = 'CLIENT_MEMBERSHIP'
+        ORDER BY o.created_at DESC
+        LIMIT 50`,
+      [client.id]);
+
+    res.json({
+      payments: rows.map((r0) => ({
+        id: r0.id,
+        amount: Number(r0.amount),
+        currency: r0.currency,
+        status: r0.status,
+        provider: r0.provider,
+        createdAt: r0.created_at,
+        updatedAt: r0.updated_at,
+        // Present only when an issued invoice actually exists for it.
+        invoice: r0.invoice_number
+          ? { number: r0.invoice_number, issuedAt: r0.invoice_issued_at }
+          : null,
+      })),
+    });
+  });
+
   /* ================= CLIENT: renew ================= */
   // No new capacity slot is reserved here -- the client is already
   // counted in activeClients (see getOrgBillingSnapshot), so renewing
