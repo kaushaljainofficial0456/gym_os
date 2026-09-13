@@ -96,6 +96,20 @@ const page = (El) => <ErrorBoundary><Suspense fallback={PageFallback}><El /></Su
 // authenticated, so bouncing to /login (which looked identical to a real
 // session-expiry) was confusing. Sends them to their own home instead,
 // matching the role-aware redirect the catch-all route below already uses.
+/**
+ * Owner-only area of the trainer workspace.
+ *
+ * Sends a trainer back to their own dashboard rather than rendering a
+ * page that is guaranteed to 403. This is a ROUTING convenience, not the
+ * security boundary -- every one of these endpoints enforces the role
+ * itself, and still would if this component were deleted.
+ */
+function OwnerOnly({ ok, ready, children }) {
+  if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
+  if (!ok) return <Navigate to="/app/trainer" replace />;
+  return children;
+}
+
 function Require({ ready, ok, fallback = '/login', children }) {
   if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
   if (!ok()) return <Navigate to={fallback} replace />;
@@ -139,7 +153,7 @@ function needsGymJoin(user) {
 }
 
 export default function App() {
-  const { ready, user, isTrainer, isClient, termsAccepted } = useAuth();
+  const { ready, user, isTrainer, isClient, isOwner, termsAccepted } = useAuth();
   const authed = !!user;
   const pendingGym = needsGymJoin(user);
   // Must accept terms before accessing the app (but /legal itself must not
@@ -222,18 +236,27 @@ export default function App() {
         <Route path="alerts" element={page(Alerts)} />
         <Route path="reports" element={page(Reports)} />
         <Route path="messages" element={page(Messages)} />
-        <Route path="attendance" element={page(GymAttendance)} />
-        <Route path="trainers" element={page(Trainers)} />
-        <Route path="analytics" element={page(Analytics)} />
-        <Route path="business" element={page(Business)} />
+        <Route path="attendance" element={<OwnerOnly ok={isOwner} ready={ready}>{page(GymAttendance)}</OwnerOnly>} />
+        {/* OWNER-ONLY, GATED AT THE ROUTER.
+            The sidebar already hides these from a trainer, so the only
+            way in is typing the URL -- and doing that mounted the page,
+            which called an owner-only endpoint, took a 403 and landed in
+            the ErrorBoundary. A trainer saw "Something went wrong" (and
+            on Attendance, not even that much) for what is simply a part
+            of the app that is not theirs. The backend was right to
+            refuse; the UI was wrong to render a crash instead of taking
+            them somewhere they can be. */}
+        <Route path="trainers" element={<OwnerOnly ok={isOwner} ready={ready}>{page(Trainers)}</OwnerOnly>} />
+        <Route path="analytics" element={<OwnerOnly ok={isOwner} ready={ready}>{page(Analytics)}</OwnerOnly>} />
+        <Route path="business" element={<OwnerOnly ok={isOwner} ready={ready}>{page(Business)}</OwnerOnly>} />
         {/* Enterprise: SK OS billing THIS gym (packages/QR/upgrades) --
             distinct from Business above (this gym billing ITS OWN
             clients). Owner-only; TrainerLayout only shows the nav link
             to isOwner, but the routes themselves are the real gate. */}
-        <Route path="enterprise" element={page(EnterpriseDashboard)} />
-        <Route path="enterprise/onboarding" element={page(EnterpriseOnboarding)} />
-        <Route path="enterprise/qr" element={page(EnterpriseQR)} />
-        <Route path="enterprise/billing" element={page(EnterpriseBilling)} />
+        <Route path="enterprise" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseDashboard)}</OwnerOnly>} />
+        <Route path="enterprise/onboarding" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseOnboarding)}</OwnerOnly>} />
+        <Route path="enterprise/qr" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseQR)}</OwnerOnly>} />
+        <Route path="enterprise/billing" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseBilling)}</OwnerOnly>} />
       </Route>
       <Route path="/app/client" element={
         <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/trainer') : '/login'}><ClientLayout /></Require>
