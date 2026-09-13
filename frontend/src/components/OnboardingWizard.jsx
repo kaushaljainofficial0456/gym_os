@@ -37,7 +37,7 @@
  * is built on.
  */
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import ScrollWheel from './ScrollWheel.jsx';
@@ -49,7 +49,6 @@ import Icon from './Icon.jsx';
 const stepVariants = {
   enter: (dir) => ({ x: dir >= 0 ? 22 : -22, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: (dir) => ({ x: dir >= 0 ? -22 : 22, opacity: 0 }),
 };
 
 const T = {
@@ -366,6 +365,7 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
   const t = T[theme] || T.dark;
   const [step, setStep] = useState(0);
   const direction = useRef(1);
+  const reduceMotion = useReducedMotion();
   const [form, setForm] = useState({
     name: initialName || '',
     sex: '',
@@ -500,14 +500,21 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
         {/* Sizes to its content. The old fixed 280px floor is what left
             the one-field steps looking half-empty. */}
         <div className="px-6 pt-5 pb-5 overflow-y-auto flex-1" style={{ minHeight: 180 }}>
-          <AnimatePresence mode="wait" custom={direction.current} initial={false}>
+          {/* ENTER-ONLY, keyed on the step. This was AnimatePresence
+              mode="wait", which holds the next step back until the previous
+              one finishes animating out. Get started followed by a quick
+              Continue changed the step twice inside that 260ms exit, and
+              the wizard was left showing the name question under a
+              "2 of 7 · Sex" label with Continue disabled -- stuck on the
+              first screen a new client sees. With no exit to wait on, what
+              is on screen is always the current step. Reduced motion skips
+              the slide entirely. */}
             <motion.div
               key={step}
               custom={direction.current}
               variants={stepVariants}
-              initial="enter"
+              initial={reduceMotion ? false : 'enter'}
               animate="center"
-              exit="exit"
               transition={{ duration: 0.26, ease: [0.22, 0.8, 0.3, 1] }}
             >
               {step === 0 && <StepWelcome t={t} name={form.name} />}
@@ -520,7 +527,6 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
               {step === 7 && <StepActivity form={form} setForm={setForm} t={t} />}
               {step === 8 && <StepReview form={form} t={t} goTo={goTo} />}
             </motion.div>
-          </AnimatePresence>
         </div>
 
         {error && (
