@@ -7,7 +7,7 @@ import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
 import { suggestNextTarget } from '../services/progressiveOverload.js';
 import { evaluatePRs } from '../services/personalRecords.js';
-import { track } from '../services/events.js';
+import { track, trackOnce } from '../services/events.js';
 import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 
@@ -626,6 +626,7 @@ export default function workoutRoutes(db) {
     });
 
     await track(db, { orgId: w.org_id, userId: req.user.sub, type: 'workout_completed', data: { clientId: client.id, workoutId: w.id, prCount: prs.length, durationMin, estimatedKcal: txResult?.estimated_active_kcal ?? null } });
+    await trackOnce(db, { type: 'first_workout_logged', orgId: w.org_id, userId: client.user_id, data: { clientId: client.id, workoutId: w.id } });
     res.json({ ok: true, prs, workoutId: w.id, duration_min: durationMin, calorie: txResult });
   });
 
