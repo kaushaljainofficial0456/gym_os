@@ -18,9 +18,9 @@ import { GradientFallback } from './AmbientBackdrop.jsx';
 // Scenes stay individually lazy so adding a second scene does not make
 // the first one's chunk bigger.
 const AuroraField = lazy(() => import('./scenes/AuroraField.jsx'));
-const AuthOrbit = lazy(() => import('./scenes/AuthOrbit.jsx'));
+const AuthAura = lazy(() => import('./scenes/AuthAura.jsx'));
 
-const SCENES = { aurora: AuroraField, orbit: AuthOrbit };
+const SCENES = { aurora: AuroraField, aura: AuthAura };
 
 export default function AmbientBackdropImpl({
   palette,

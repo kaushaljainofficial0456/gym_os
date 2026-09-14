@@ -83,10 +83,13 @@ export default function AuthStage({ reduced = false, eyebrow, lines = [], footer
       className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden"
       style={{ borderRight: '1px solid var(--line)' }}
     >
-      {/* The rings. Lazy, tier-gated, and behind everything — it decides
-          for itself whether to exist at all. */}
+      {/* Light, not geometry — three very soft blooms drifting behind
+          everything. Rings were tried here first and read as busy: three
+          shapes turning at three rates give the eye something to track,
+          which is the one thing a sign-in background must not do. Lazy
+          and tier-gated; it decides for itself whether to exist at all. */}
       <Suspense fallback={null}>
-        <AmbientBackdrop scene="orbit" intensity={0.9} maxTier="medium" />
+        <AmbientBackdrop scene="aura" intensity={0.9} maxTier="medium" />
       </Suspense>
 
       {/* A vignette so the headline never has to compete with a ring
