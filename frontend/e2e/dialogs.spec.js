@@ -33,6 +33,86 @@ test.describe('food log sheet', () => {
   });
 });
 
+/*
+ * CONFIRMATIONS (useConfirm in UI.jsx replaced window.confirm, e8d71a8).
+ * A browser confirm could not be styled or tested, but it could not be
+ * wired up wrong either. These check the replacement asks the real
+ * question, that saying no changes nothing, and that yes does the thing.
+ */
+test.describe('confirmation: deleting a logged session', () => {
+  test.use({ storageState: storageFor('client') });
+
+  test('asks first; Cancel keeps the session and "Delete workout" removes it', async ({ page }) => {
+    // Seeded sessions are the trainer's and offer no delete, so the client
+    // logs one of their own -- a past session, through the real API.
+    const { exercises } = await (await page.request.get('/api/workouts/exercises')).json();
+    const name = `Confirm check ${Date.now()}`;
+    const date = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+    const created = await page.request.post('/api/me/workouts', {
+      data: { name, date, exercises: [{ exercise_id: exercises[0].id, sets: 3, reps: 8 }] },
+    });
+    expect(created.ok()).toBe(true);
+
+    await page.goto('/app/client/history');
+    const remove = page.getByRole('button', { name: new RegExp(`^Delete ${name} from`) });
+    const dialog = page.getByRole('dialog', { name: 'Delete this workout?' });
+
+    await remove.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(name);
+    await expect.poll(() => focusInside(dialog)).toBe(true);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(remove).toBeVisible();
+
+    await remove.click();
+    await dialog.getByRole('button', { name: 'Delete workout', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(name)).toHaveCount(0);
+
+    // Gone on the server too, not just from this screen's state.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Training history' })).toBeVisible();
+    await expect(page.getByText(name)).toHaveCount(0);
+  });
+});
+
+test.describe('confirmation: allowing self check-in', () => {
+  test.use({ storageState: storageFor('owner') });
+
+  test('asks first; Cancel and Escape leave the policy unchanged', async ({ page }) => {
+    const policyWrites = [];
+    page.on('request', (r) => {
+      if (r.method() === 'PUT' && new URL(r.url()).pathname === '/api/attendance/policy') policyWrites.push(r.url());
+    });
+    await page.goto('/app/trainer/attendance');
+    // Exact, and only used while no dialog is open: the confirmation's own
+    // action button carries the same words.
+    const toggle = page.getByRole('button', { name: 'Allow self check-in', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Allow self check-in?' });
+
+    await toggle.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('self-reported');
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(toggle).toBeVisible();
+
+    // Escape closes the confirmation and nothing else: the page stays,
+    // focus returns to the control that asked, and still no write.
+    await toggle.click();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/app\/trainer\/attendance$/);
+    await expect(toggle).toBeFocused();
+
+    expect(policyWrites).toEqual([]);
+    await expect(page.getByRole('button', { name: 'Require scanning', exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe('trainer navigation drawer', () => {
   test.use({ storageState: storageFor('owner') });
 
