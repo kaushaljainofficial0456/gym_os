@@ -56,11 +56,24 @@ test('issueEnrollmentToken -> verifyEnrollmentToken: a freshly issued token veri
 
 test('the QR itself carries no sensitive data -- only an opaque id.secret pair', async () => {
   const db = await memDb();
-  await seedOrgAndOwner(db);
+  // Its own org, with an id that cannot occur by chance. With the shared
+  // two-character 'o1', this check failed whenever the random characters
+  // happened to contain "o1": measured at 1.22% of payloads, about one run
+  // in 82 -- a false alarm from a leak check.
+  const orgId = 'org_must_not_leak';
+  await db.run('INSERT INTO organizations (id, name, slug, created_at) VALUES (?, ?, ?, ?)', [orgId, 'Gym P', 'gym-p', '2026-01-01T00:00:00Z']);
+  await db.run(`INSERT INTO users (id, org_id, email, password_hash, role, name, active, created_at) VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, 1, ?)`,
+    ['owner_p', orgId, 'owner@p.in', 'x', 'Owner P', '2026-01-01T00:00:00Z']);
   await db.run(`INSERT INTO packages (id, org_id, name, amount, currency, period_days) VALUES (?, ?, ?, ?, ?, ?)`,
-    ['plan_secret_pricing', 'o1', 'Monthly', 1500, 'INR', 30]);
-  const issued = await issueEnrollmentToken(db, { orgId: 'o1', createdBy: 'owner1', purpose: 'CLIENT', membershipPlanId: 'plan_secret_pricing' });
-  assert.ok(!issued.payload.includes('o1'), 'org id must not appear in the QR payload');
+    ['plan_secret_pricing', orgId, 'Monthly', 1500, 'INR', 30]);
+  const issued = await issueEnrollmentToken(db, { orgId, createdBy: 'owner_p', purpose: 'CLIENT', membershipPlanId: 'plan_secret_pricing' });
+  // Structurally nothing but the row id and the secret...
+  const [rowId, secret, ...rest] = issued.payload.split('.');
+  assert.equal(rowId, issued.id);
+  assert.match(secret, /^[A-Za-z0-9_-]+$/);
+  assert.equal(rest.length, 0);
+  // ...and none of the facts behind it.
+  assert.ok(!issued.payload.includes(orgId), 'org id must not appear in the QR payload');
   assert.ok(!issued.payload.includes('plan_secret_pricing'), 'membership plan id must not appear in the QR payload');
   assert.ok(!issued.payload.includes('CLIENT'), 'purpose must not appear in the QR payload');
 });
