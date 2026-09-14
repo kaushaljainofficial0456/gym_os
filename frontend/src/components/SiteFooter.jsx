@@ -30,7 +30,12 @@ export default function SiteFooter({ className = '' }) {
               {i > 0 && <span aria-hidden="true" style={{ color: 'var(--faint)' }}>·</span>}
               <Link
                 to={link.to}
-                className="hover:underline underline-offset-2 transition-colors"
+                /* 16px links in the footer of the FIRST page anyone sees.
+                   tap-target grows the reachable box without changing the
+                   inline layout -- these sit in a wrapped row separated by
+                   interpuncts, so making them 36px tall would break the
+                   line into a list. */
+                className="hover:underline underline-offset-2 transition-colors tap-target"
                 style={{ color: 'var(--mute)' }}
               >
                 {link.label}

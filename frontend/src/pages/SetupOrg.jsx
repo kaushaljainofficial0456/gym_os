@@ -4,6 +4,8 @@ import { useAuth } from '../auth.jsx';
 import { useTheme } from '../themeContext.jsx';
 import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
 import Logo from '../components/Logo.jsx';
+import AuthStage from '../components/auth/AuthStage.jsx';
+import { usePrefersReducedMotion } from '../components/auth/usePrefersReducedMotion.js';
 import BorderGlow from '../components/BorderGlow.jsx';
 import { loadGoogleIdentity } from '../googleIdentity.js';
 import './../components/BorderGlow.css';
@@ -19,6 +21,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 // owner never sees this screen or the wizard again; they land on the
 // normal Business/Enterprise dashboards from here on.
 export default function SetupOrg() {
+  const reduced = usePrefersReducedMotion();
   const { setupOrg, loginWithGoogleEnterprise } = useAuth();
   const nav = useNavigate();
   // `resolved` (never the raw choice): 'system' is now a storable
@@ -93,29 +96,23 @@ export default function SetupOrg() {
 
       <div className="min-h-screen grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
         {/* brand side */}
-        <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ borderRight: '1px solid var(--line)' }}>
-          <div className="absolute -top-32 -left-24 w-96 h-96 rounded-full blur-[110px] anim-fadeIn" style={{ background: 'var(--accent-soft)' }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[100px] anim-fadeIn" style={{ background: 'rgba(160,128,255,.08)', animationDelay: '200ms' }} />
-
-          <div className="flex items-center gap-4 relative">
-            <Logo className="w-14 h-14 rounded-2xl shadow-glow" />
-            <div>
-              <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
-              <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
-            </div>
-          </div>
-
-          <div className="relative">
-            <h1 className="font-display font-bold text-5xl leading-[1.08] tracking-tight" style={{ color: 'var(--ink)' }}>
-              Run your gym.<br />Not spreadsheets.<br />
-              <span className="bg-gradient-to-r from-ember to-gold bg-clip-text text-transparent">Set up in a minute.</span>
-            </h1>
-            <p className="text-sm mt-5 max-w-sm leading-relaxed" style={{ color: 'var(--mute)' }}>
+        {/* Same stage as /login, different words -- one component so the
+            two screens can never drift apart typographically. */}
+        <AuthStage
+          reduced={reduced}
+          eyebrow="Set up your gym"
+          lines={[
+            { text: 'Run your gym.' },
+            { text: 'Not spreadsheets.' },
+            { text: 'Set up in a minute.', accent: true },
+          ]}
+          footer={(
+            <span className="normal-case tracking-normal text-[12.5px] leading-relaxed max-w-sm" style={{ color: 'var(--mute)' }}>
               Members, trainers, plans, payments, renewals and a live coaching workspace for your
               whole team — under one roof, from your very first client.
-            </p>
-          </div>
-        </div>
+            </span>
+          )}
+        />
 
         {/* form side */}
         <div className="flex items-center justify-center p-6">

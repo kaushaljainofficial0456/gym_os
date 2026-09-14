@@ -651,6 +651,68 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* ═══════════════════════════════════════════════
    MOTION KEYFRAMES
    ═══════════════════════════════════════════════ */
+/* ── sign-in choreography ──────────────────────────────────────────
+   The first screen of the product. A word rises into its own mask, so
+   the headline reads as WRITTEN rather than faded in -- and it finishes
+   before anyone could have started reading, which is the difference
+   between composed and something you wait through.
+   Every one of these is opacity + transform only: both run on the
+   compositor, so none of it touches layout or costs a frame on the main
+   thread while the form is painting. Honoured only when the visitor has
+   not asked for reduced motion -- the components check first. */
+@keyframes authWordIn {
+  from { opacity: 0; transform: translateY(105%) skewY(3deg); }
+  to   { opacity: 1; transform: translateY(0) skewY(0); }
+}
+@keyframes authFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* The one nod to typing: it blinks a few times, then retires rather than
+   pulsing forever in the corner of someone's eye. */
+@keyframes authCaret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes authCaretOut { to { opacity: 0; } }
+
+/* A card that answers the pointer: the ring is drawn with a mask so it is
+   one element, not a stack of borders, and it costs nothing until hover. */
+@keyframes authRingIn {
+  from { opacity: 0; transform: scale(.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* The ring itself. `::after` is a conic sweep clipped to a 1.5px annulus
+   by a double mask -- one element, drawn on the compositor, and entirely
+   absent until the pointer or keyboard arrives. `inset: -5px` puts it
+   OUTSIDE the tile so it reads as an orbit rather than a second border. */
+.auth-option__ring::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from 180deg, transparent 0deg, var(--accent) 90deg, transparent 250deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--dur-base) ease;
+  pointer-events: none;
+}
+.auth-option:hover .auth-option__ring::after,
+.auth-option:focus-visible .auth-option__ring::after {
+  opacity: 1;
+  animation: authRingSpin 2.6s linear infinite;
+}
+@keyframes authRingSpin { to { transform: rotate(360deg); } }
+
+/* Someone who asked for less motion still gets the ring -- it is the
+   affordance that says "this responds" -- it simply does not turn. */
+@media (prefers-reduced-motion: reduce) {
+  .auth-option:hover .auth-option__ring::after,
+  .auth-option:focus-visible .auth-option__ring::after { animation: none; }
+}
+
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }

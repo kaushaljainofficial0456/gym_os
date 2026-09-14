@@ -18,14 +18,21 @@ import { GradientFallback } from './AmbientBackdrop.jsx';
 // Scenes stay individually lazy so adding a second scene does not make
 // the first one's chunk bigger.
 const AuroraField = lazy(() => import('./scenes/AuroraField.jsx'));
+const AuthOrbit = lazy(() => import('./scenes/AuthOrbit.jsx'));
+
+const SCENES = { aurora: AuroraField, orbit: AuthOrbit };
 
 export default function AmbientBackdropImpl({
   palette,
   intensity = 0.5,
   maxTier = 'medium',   // a BACKDROP should not claim the high-tier budget;
                         // the interface in front of it needs those frames
+  scene = 'aurora',
   ...rest
 }) {
+  // Each scene keeps its own lazy chunk, so a page that asks for one
+  // never downloads the other.
+  const Scene = SCENES[scene] ?? AuroraField;
   return (
     <Stage
       className="absolute inset-0"
@@ -36,7 +43,7 @@ export default function AmbientBackdropImpl({
       style={{ opacity: intensity }}
       {...rest}
     >
-      <AuroraField color={palette.accent} accentDeep={palette.accentDeep} />
+      <Scene color={palette.accent} accentDeep={palette.accentDeep} />
     </Stage>
   );
 }
