@@ -572,30 +572,6 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   DELETE LOG CONFIRMATION
-   ════════════════════════════════════════════════════════════════ */
-
-function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
-  if (!open || !log) return null;
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
-      <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-        <div className="px-5 pt-5 pb-4 text-center relative">
-          <button className="absolute right-4 top-4 w-8 h-8 rounded-full grid place-items-center text-sm transition-colors" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}><XIcon /></button>
-          <div className="w-12 h-12 mx-auto rounded-full grid place-items-center mb-3" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}30`, color: t.danger }}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg></div>
-          <div className="font-grotesk text-sm font-bold mb-1" style={{ color: t.ink }}>Remove from today's intake?</div>
-          <div className="text-[11px]" style={{ color: t.mute }}>{log.name} · {log.quantity || 100}{log.unit || 'g'} · {log.calories} kcal</div>
-        </div>
-        <div className="px-5 pb-5 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-95" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.mute }}>Cancel</button>
-          <button onClick={() => onConfirm(log.id)} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={{ background: t.danger, color: 'var(--accent-contrast)' }}>Remove</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
    MAIN NUTRITION PAGE
    ════════════════════════════════════════════════════════════════ */
 
@@ -617,8 +593,6 @@ export default function Nutrition() {
   const [targetSetupOpen, setTargetSetupOpen] = useState(false);
   const [editLogOpen, setEditLogOpen] = useState(false);
   const [editLog, setEditLog] = useState(null);
-  const [deleteLogOpen, setDeleteLogOpen] = useState(false);
-  const [deleteLog, setDeleteLog] = useState(null);
   const [supplementsExpanded, setSupplementsExpanded] = useState(false);
   const [mealsExpanded, setMealsExpanded] = useState(false);
   const [showAddSupplement, setShowAddSupplement] = useState(false);
@@ -699,11 +673,18 @@ export default function Nutrition() {
     } catch (e) { setToast(e.message); }
   };
 
-  const deleteLogEntry = async (logId) => {
+  /* Asks through the app's own confirmation (useConfirm). The question
+     used to be a hand-rolled overlay: no dialog role or name, focus left
+     on the page behind it, no Escape and no scroll lock. */
+  const deleteLogEntry = async (log) => {
+    if (!(await confirm({
+      title: "Remove from today's intake?",
+      body: `${log.name} · ${log.quantity || 100}${log.unit || 'g'} · ${log.calories} kcal`,
+      confirmLabel: 'Remove',
+    }))) return;
     try {
-      await api(`/me/meal-logs/${logId}`, { method: 'DELETE' });
+      await api(`/me/meal-logs/${log.id}`, { method: 'DELETE' });
       setToast('Entry removed ✓');
-      setDeleteLogOpen(false); setDeleteLog(null);
       home.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
@@ -902,7 +883,7 @@ export default function Nutrition() {
           editing={todaysEditing}
           onToggle={toggleMeal}
           onEditQty={(m) => { setEditLog(m); setEditLogOpen(true); }}
-          onDelete={(m) => { setDeleteLog(m); setDeleteLogOpen(true); }}
+          onDelete={deleteLogEntry}
           t={t}
         />
         {mealState.length > 2 && (
@@ -1041,7 +1022,6 @@ export default function Nutrition() {
       {/* ══════ MODALS ══════ */}
       {confirmDialog}
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
-      <DeleteLogConfirm open={deleteLogOpen} log={deleteLog} onClose={() => { setDeleteLogOpen(false); setDeleteLog(null); }} onConfirm={deleteLogEntry} t={t} />
 
       {/* ══════ FOOD LOG SHEET (search, barcode, mic, AI estimate) ══════ */}
       <FoodLogSheet

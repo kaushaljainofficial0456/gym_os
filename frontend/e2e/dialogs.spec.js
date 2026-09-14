@@ -113,6 +113,49 @@ test.describe('confirmation: allowing self check-in', () => {
   });
 });
 
+test.describe('confirmation: removing a logged food', () => {
+  test.use({ storageState: storageFor('client') });
+
+  // This one was a hand-rolled overlay with no dialog semantics, so it was
+  // invisible to getByRole('dialog') -- this test could not have passed.
+  test('asks in a real dialog; Escape keeps the entry and Remove deletes it', async ({ page }) => {
+    const { client } = await (await page.request.get('/api/tracking/me/home')).json();
+    const name = `Confirm food ${Date.now()}`;
+    const logged = await page.request.post(`/api/nutrition/clients/${client.id}/meals/log`, {
+      data: { name, slot: 'Snack', calories: 120, protein: 5, carbs: 10, fat: 4, source: 'manual', eaten: true, quantity: 1, unit: 'serving' },
+    });
+    expect(logged.ok()).toBe(true);
+
+    await page.goto('/app/client/nutrition');
+    const meals = page.locator('[data-tour="nutrition-meals"]');
+    // Edit waits for the list to render; only then is "See more" (the list
+    // shows two rows until expanded, and a new entry is last) decidable.
+    await meals.getByRole('button', { name: 'Edit', exact: true }).click();
+    const more = meals.getByRole('button', { name: /^See more/ });
+    if (await more.count()) await more.click();
+
+    const remove = meals.getByRole('button', { name: `Remove ${name}`, exact: true });
+    const dialog = page.getByRole('dialog', { name: "Remove from today's intake?" });
+
+    await remove.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(`${name} · 1serving · 120 kcal`);
+    await expect.poll(() => focusInside(dialog)).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(remove).toBeFocused();
+
+    await remove.click();
+    await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(meals.getByText(name)).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.locator('[data-tour="nutrition-meals"]')).toBeVisible();
+    await expect(page.getByText(name)).toHaveCount(0);
+  });
+});
+
 test.describe('trainer navigation drawer', () => {
   test.use({ storageState: storageFor('owner') });
 
