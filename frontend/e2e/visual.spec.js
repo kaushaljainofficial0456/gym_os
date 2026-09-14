@@ -55,7 +55,10 @@ const SHOTS = [
   ['owner-messages', 'owner', '/app/trainer/messages', DESKTOP],
 ];
 
-const MONTH_OR_DAY = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\b/;
+// A month only beside a day number ("Sep 14", "14 September"), and a weekday
+// only as a whole word. The looser `May[a-z]*` also matched the owner's name,
+// "Maya", and masked it.
+const MONTH_OR_DAY = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b|\b(?:Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)(?:day|nesday|urday)?\b/;
 // Not "today"/"yesterday": the seed is relative to today, so those words
 // label the same data every day -- masking them hid whole dashboard rows.
 const RELATIVE = /\b(\d+\s?(s|m|h|d|w|min|mins|hr|hrs|days?|weeks?)\s?ago|Good (morning|afternoon|evening))\b/i;
@@ -85,8 +88,12 @@ for (const [name, who, path, project, open] of SHOTS) {
       // does not stop; let them land before comparing.
       await page.waitForTimeout(1200);
 
+      // With a sheet or drawer open, it is the subject: mask only inside it.
+      // Masks are painted on top of everything, so masking the dimmed page
+      // behind it covered the drawer's own items and the sheet's search field.
+      const scope = open ? page.getByRole('dialog').last() : page;
       await expect(page).toHaveScreenshot(`${name}.png`, {
-        mask: [page.getByText(MONTH_OR_DAY), page.getByText(RELATIVE), page.locator('time')],
+        mask: [scope.getByText(MONTH_OR_DAY), scope.getByText(RELATIVE), scope.locator('time')],
         maskColor: '#FF00FF',
       });
     });
