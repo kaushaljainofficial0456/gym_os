@@ -81,6 +81,9 @@ export default function AmbientBackdrop({
   className,
   intensity = 0.5,
   maxTier = 'medium',
+  // 'aurora' (the drifting field) | 'orbit' (concentric rings, used by the
+  // sign-in pages). Each scene is its own lazy chunk.
+  scene = 'aurora',
   ...rest
 }) {
   const palette = useThemePalette();
@@ -101,7 +104,7 @@ export default function AmbientBackdrop({
     >
       {use3D ? (
         <Suspense fallback={<GradientFallback palette={palette} />}>
-          <Impl palette={palette} intensity={intensity} maxTier={maxTier} {...rest} />
+          <Impl palette={palette} intensity={intensity} maxTier={maxTier} scene={scene} {...rest} />
         </Suspense>
       ) : (
         <GradientFallback palette={palette} />

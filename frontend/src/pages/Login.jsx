@@ -9,6 +9,8 @@ import BorderGlow from '../components/BorderGlow.jsx';
 import Icon from '../components/Icon.jsx';
 import { PasswordInput } from '../components/UI.jsx';
 import SiteFooter from '../components/SiteFooter.jsx';
+import AuthStage from '../components/auth/AuthStage.jsx';
+import { usePrefersReducedMotion } from '../components/auth/usePrefersReducedMotion.js';
 import './../components/BorderGlow.css';
 
 // The three top-level paths onto SK OS. Each is a genuinely different
@@ -50,7 +52,7 @@ const ROLE_COPY = {
   CLIENT: { heading: 'Welcome back', sub: 'Sign in to your client portal.' },
 };
 
-function OptionCard({ icon, title, desc, onClick, delay = 0 }) {
+function OptionCard({ icon, title, desc, onClick, delay = 0, reduced }) {
   return (
     <button onClick={onClick}
       /* `animation-delay={...}` was passed as a JSX PROP here, which React
@@ -58,9 +60,17 @@ function OptionCard({ icon, title, desc, onClick, delay = 0 }) {
          "animation-delay" — not a style. It has never done anything, so
          all three cards faded up on the same frame and the intended
          stagger was invisible. It belongs in `style`. */
-      className="row row-interactive gap-4 p-4 anim-fadeUp"
-      style={{ borderRadius: 'var(--r-lg)', animationDelay: `${delay}ms` }}>
-      <span className="w-11 h-11 grid place-items-center shrink-0"
+      className="auth-option row row-interactive gap-4 p-4"
+      style={{
+        borderRadius: 'var(--r-lg)',
+        ...(reduced ? {} : { animation: `authFadeUp 620ms cubic-bezier(.22,.8,.3,1) ${delay}ms both` }),
+      }}>
+      {/* THE ICON SITS INSIDE A RING that completes on hover -- the same
+          arc this product draws for every other kind of progress, at the
+          size of a button. Drawn with one conic-gradient mask rather than
+          a stack of borders, so it is a single compositor-friendly
+          element and costs nothing until the pointer arrives. */}
+      <span className="auth-option__ring w-11 h-11 grid place-items-center shrink-0 relative"
         style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .12)', border: '1px solid rgb(var(--accent-rgb) / .2)', color: 'var(--accent)' }}>
         <Icon name={icon} size={20} />
       </span>
@@ -103,6 +113,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  // Asked once here and threaded down, so the stage and the cards agree.
+  const reduced = usePrefersReducedMotion();
 
   const go = (u) => {
     if (u.role === 'CLIENT') {
@@ -167,36 +179,24 @@ export default function Login() {
           animations. The grid itself is unchanged. */}
       <div className="min-h-screen flex flex-col">
       <div className="flex-1 grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
-        {/* brand side */}
-        <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden" style={{ borderRight: '1px solid var(--line)' }}>
-          <div className="absolute -top-32 -left-24 w-96 h-96 rounded-full blur-[110px] anim-fadeIn" style={{ background: 'var(--accent-soft)' }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-[100px] anim-fadeIn" style={{ background: 'rgba(160,128,255,.08)', animationDelay: '200ms' }} />
-
-          <div className="flex items-center gap-4 relative">
-            <Logo className="w-14 h-14 rounded-2xl shadow-glow" />
-            <div>
-              <div className="font-brand font-bold tracking-wide" style={{ color: 'var(--ink)' }}>Barbell</div>
-              <div className="text-[10px] tracking-[.25em] uppercase font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
-            </div>
-          </div>
-
-          <div className="relative">
-            <h1 className="font-display font-bold text-5xl leading-[1.08] tracking-tight" style={{ color: 'var(--ink)' }}>
-              Train smarter.<br />Coach better.<br />
-              <span className="bg-gradient-to-r from-ember to-gold bg-clip-text text-transparent">Prove progress.</span>
-            </h1>
-            <div className="mt-8 flex items-center gap-2 text-[11px] font-grotesk uppercase tracking-[.2em]" style={{ color: 'var(--faint)' }}>
-              {/* The glow was `rgba(52,211,153,.8)` — the neon mint that
-                  --good-rgb was deliberately moved away from (see the
-                  token comment in theme.css). It was the only literal
-                  colour left on this screen, and it didn't match the dot
-                  it was glowing behind. */}
+        {/* brand side -- see components/auth/AuthStage.jsx. The 3D rings
+            live behind it and load themselves, or don't. */}
+        <AuthStage
+          reduced={reduced}
+          eyebrow="Your fitness business, engineered"
+          lines={[
+            { text: 'Train smarter.' },
+            { text: 'Coach better.' },
+            { text: 'Prove progress.', accent: true },
+          ]}
+          footer={(
+            <>
               <span className="w-1.5 h-1.5 rounded-full anim-pulse-soft"
                 style={{ background: 'rgb(var(--good-rgb))', boxShadow: '0 0 8px rgb(var(--good-rgb) / .7)' }} />
               Ironforge Fitness · demo workspace
-            </div>
-          </div>
-        </div>
+            </>
+          )}
+        />
 
         {/* form side */}
         <div className="flex items-center justify-center p-6">
@@ -215,7 +215,7 @@ export default function Login() {
                 <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>How are you using Barbell?</p>
                 <div className="space-y-2.5">
                   {PATHS.map((p, i) => (
-                    <OptionCard key={p.id} icon={p.icon} title={p.title} desc={p.desc} delay={80 + i * 60} onClick={() => pickPath(p.id)} />
+                    <OptionCard reduced={reduced} key={p.id} icon={p.icon} title={p.title} desc={p.desc} delay={80 + i * 60} onClick={() => pickPath(p.id)} />
                   ))}
                 </div>
               </>
@@ -228,7 +228,7 @@ export default function Login() {
                 <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>Which one are you?</p>
                 <div className="space-y-2.5">
                   {ROLES.map((r, i) => (
-                    <OptionCard key={r.id} icon={r.icon} title={r.title} desc={r.desc} delay={80 + i * 60} onClick={() => pickRole(r.id)} />
+                    <OptionCard reduced={reduced} key={r.id} icon={r.icon} title={r.title} desc={r.desc} delay={80 + i * 60} onClick={() => pickRole(r.id)} />
                   ))}
                 </div>
               </>
