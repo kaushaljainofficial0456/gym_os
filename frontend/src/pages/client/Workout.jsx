@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
-import { ErrorState, Bar, Ring, CheckIcon, XIcon, useDialog } from '../../components/UI.jsx';
+import { ErrorState, Bar, Ring, CheckIcon, XIcon, useConfirm, useDialog } from '../../components/UI.jsx';
 import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
@@ -382,6 +382,7 @@ export default function Workout() {
   const weekDayDialogRef = useDialog(!!weekDay, () => setWeekDay(null));
   const cardioDialogRef = useDialog(cardioOpen, () => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); });
   const addExDialogRef = useDialog(addExOpen, () => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); });
+  const [confirm, confirmDialog] = useConfirm();
   const [cardioSearch, setCardioSearch] = useState('');
   const [cardioConfigItem, setCardioConfigItem] = useState(null);
   const [cardioActiveId, setCardioActiveId] = useState(null);  // which exercise is currently running
@@ -571,7 +572,7 @@ export default function Workout() {
   };
 
   const deletePlan = async (w) => {
-    if (!window.confirm(`Delete "${w.name}"?`)) return;
+    if (!(await confirm({ title: `Delete "${w.name}"?`, confirmLabel: 'Delete workout' }))) return;
     try {
       await api(`/me/planner/workouts/${w.id}`, { method: 'DELETE' });
       setToast('Workout deleted');
@@ -1793,6 +1794,8 @@ export default function Workout() {
           toast={setToast}
           onSaved={() => { today.reload({ silent: true }); hist.reload({ silent: true }); }}
         />
+
+        {confirmDialog}
 
         {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
         {plannerOpen && (

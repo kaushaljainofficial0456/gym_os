@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, fmtK, fmt1 } from '../../utils.js';
-import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton } from '../../components/UI.jsx';
+import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import MembersTable from '../../components/trainer/MembersTable.jsx';
 import { TrendChart } from '../../components/charts.jsx';
 import { status } from '../../design/tokens.js';
@@ -22,8 +22,9 @@ const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', mon
 // (suspend/cancel) ask for confirmation, per spec.
 function MembershipActions({ member, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
-  const act = async (action, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+  const [confirm, confirmDialog] = useConfirm();
+  const act = async (action, question) => {
+    if (question && !(await confirm(question))) return;
     setBusy(true);
     try {
       await api(`/admin/members/${member.id}/membership/${action}`, { method: 'POST', body: JSON.stringify({}) });
@@ -34,10 +35,17 @@ function MembershipActions({ member, onChanged, onError }) {
   const s = member.lifecycle_status;
   return (
     <div className="flex gap-1.5 justify-end">
-      {s === 'ACTIVE' && <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('suspend', `Suspend ${member.name}'s membership?`)}>Suspend</button>}
+      {confirmDialog}
+      {s === 'ACTIVE' && <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('suspend', { title: `Suspend ${member.name}'s membership?`, body: 'You can resume it later.', confirmLabel: 'Suspend' })}>Suspend</button>}
       {s === 'SUSPENDED' || s === 'PAUSED' ? <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('resume')}>Resume</button> : null}
       {(s === 'ACTIVE' || s === 'SUSPENDED' || s === 'PAUSED') && (
-        <button className="btn-ghost btn-sm text-bad" disabled={busy} onClick={() => act('cancel', `Cancel ${member.name}'s membership? This cannot be undone.`)}>Cancel</button>
+        <button className="btn-ghost btn-sm text-bad" disabled={busy} onClick={() => act('cancel', {
+          title: `Cancel ${member.name}'s membership?`,
+          body: 'This cannot be undone.',
+          confirmLabel: 'Cancel membership',
+          // Not "Cancel": beside "Cancel membership" that reads as the same action.
+          cancelLabel: 'Keep membership',
+        })}>Cancel</button>
       )}
     </div>
   );

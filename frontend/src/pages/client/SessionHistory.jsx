@@ -19,7 +19,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
-import { ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import { ErrorState, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 
 const PAGE = 25;
@@ -219,6 +219,7 @@ export default function SessionHistory() {
 export function SessionRow({ w, onOpen, compact = false, onDeleted }) {
   const u = useUnits();
   const [busy, setBusy] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const done = w.status === 'completed';
 
   /* Only sessions the CLIENT logged can be removed here. A workout their
@@ -229,20 +230,19 @@ export function SessionRow({ w, onOpen, compact = false, onDeleted }) {
   const remove = async (e) => {
     e.stopPropagation();          // the whole row is a button
     const when = dayLabel(w.scheduled_date);
-    if (!window.confirm(
-      `Delete "${w.name}" from ${when}?
-
-`
-      + 'Its logged sets go too, and any personal record it set is recalculated '
-      + 'from your remaining history. This cannot be undone.',
-    )) return;
+    if (!(await confirm({
+      title: 'Delete this workout?',
+      body: `"${w.name}" from ${when}. Its logged sets go too, and any personal record it set is `
+        + 'recalculated from your remaining history. This cannot be undone.',
+      confirmLabel: 'Delete workout',
+    }))) return;
     setBusy(true);
     try {
       await api(`/me/workouts/${w.id}`, { method: 'DELETE' });
       onDeleted?.(w.id);
     } catch (err) {
-      window.alert(err.message || 'Could not delete that workout');
       setBusy(false);
+      confirm({ title: 'Could not delete that workout', body: err.message || 'Please try again.', confirmLabel: 'OK', cancelLabel: null, danger: false });
     }
   };
   const metrics = [
@@ -316,6 +316,8 @@ export function SessionRow({ w, onOpen, compact = false, onDeleted }) {
           )}
         </span>
       )}
+      {/* Portalled to <body>, and Modal stops its clicks bubbling back into this row. */}
+      {confirmDialog}
     </button>
   );
 }

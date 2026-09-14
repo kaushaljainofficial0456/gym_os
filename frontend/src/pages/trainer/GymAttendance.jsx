@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import ShiftEditor from '../../components/trainer/ShiftEditor.jsx';
 import { api } from '../../api.js';
-import { ErrorState, PageSkeleton, Avatar, Toast, useDialog } from '../../components/UI.jsx';
+import { ErrorState, PageSkeleton, Avatar, Toast, useConfirm, useDialog } from '../../components/UI.jsx';
 import { formatDuration, clockTime, STATUS_TONE } from '../../components/trainer/AttendanceCard.jsx';
 
 /** Statuses the roster can return that have no attendance row behind them.
@@ -55,6 +55,7 @@ export default function GymAttendance() {
   const [busy, setBusy] = useState(null);
   const [qr, setQr] = useState(null);
   const [policyBusy, setPolicyBusy] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
   const [shiftFor, setShiftFor] = useState(null);   // { id, name } | null
 
   const load = useCallback(async (d) => {
@@ -92,9 +93,13 @@ export default function GymAttendance() {
   const toggleRequireQr = async () => {
     const currentlyRequired = data.policy?.requireQr !== false;
     if (currentlyRequired) {
-      const ok = window.confirm(
-        'Allow self check-in?\n\nTrainers will be able to record attendance from anywhere, '
-        + 'without scanning a code at the gym. Hours recorded this way are marked as self-reported.');
+      const ok = await confirm({
+        title: 'Allow self check-in?',
+        body: 'Trainers will be able to record attendance from anywhere, '
+          + 'without scanning a code at the gym. Hours recorded this way are marked as self-reported.',
+        confirmLabel: 'Allow self check-in',
+        danger: false,
+      });
       if (!ok) return;
     }
     setPolicyBusy(true);
@@ -105,7 +110,8 @@ export default function GymAttendance() {
       });
       await load(date);
     } catch (e) {
-      window.alert(e.message || 'Could not change the attendance policy');
+      // Not awaited: the page must come out of its busy state behind the notice.
+      confirm({ title: 'Could not change the attendance policy', body: e.message || 'Please try again.', confirmLabel: 'OK', cancelLabel: null, danger: false });
     }
     setPolicyBusy(false);
   };
@@ -116,10 +122,14 @@ export default function GymAttendance() {
   const toggleMode = async () => {
     const scheduled = data.policy?.mode === 'scheduled';
     if (!scheduled) {
-      const ok = window.confirm(
-        'Use fixed shifts?\n\nTrainers will be marked late or absent against their weekly '
-        + 'shifts. Anyone without shifts set is simply not tracked, so set theirs before '
-        + 'relying on the numbers.');
+      const ok = await confirm({
+        title: 'Use fixed shifts?',
+        body: 'Trainers will be marked late or absent against their weekly '
+          + 'shifts. Anyone without shifts set is simply not tracked, so set theirs before '
+          + 'relying on the numbers.',
+        confirmLabel: 'Use fixed shifts',
+        danger: false,
+      });
       if (!ok) return;
     }
     setPolicyBusy(true);
@@ -130,7 +140,7 @@ export default function GymAttendance() {
       });
       await load(date);
     } catch (e) {
-      window.alert(e.message || 'Could not change the attendance mode');
+      confirm({ title: 'Could not change the attendance mode', body: e.message || 'Please try again.', confirmLabel: 'OK', cancelLabel: null, danger: false });
     }
     setPolicyBusy(false);
   };
@@ -415,6 +425,7 @@ export default function GymAttendance() {
         />
       )}
 
+      {confirmDialog}
       {qr && <QrDialog qr={qr} onClose={() => setQr(null)} onRefresh={openQr} />}
       <Toast message={toast} onDone={() => setToast('')} />
     </div>

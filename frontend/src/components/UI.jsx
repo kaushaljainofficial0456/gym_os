@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
@@ -328,7 +328,10 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
   // above the viewport, until this portal was added.
   return createPortal((
     <div className="scrim z-50 flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
-      onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
+      // stopPropagation: a portal moves the DOM, not the React tree, so a
+      // scrim click still bubbled to whatever rendered this -- a confirmation
+      // opened from inside a clickable row also "clicked" the row.
+      onClick={(e) => { e.stopPropagation(); onClose?.(); }} role="dialog" aria-modal="true" aria-label={title}>
       <div ref={panelRef} className={cls('sheet w-full flex flex-col anim-scaleIn max-h-[92vh] sm:max-h-[90vh] outline-none', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}
         onClick={(e) => e.stopPropagation()}>
         <div className="sheet-handle sm:hidden" />
@@ -351,6 +354,63 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
       </div>
     </div>
   ), document.body);
+}
+
+/**
+ * CONFIRMATION — the app's own dialog in place of window.confirm.
+ *
+ *   const [confirm, confirmDialog] = useConfirm();
+ *   if (!(await confirm({ title: 'Delete this workout?', body: '…', confirmLabel: 'Delete' }))) return;
+ *   // …and render {confirmDialog} once in the component.
+ *
+ * Fourteen actions asked through window.confirm and three reported failures
+ * through window.alert: an unstyled operating-system popup in the middle of a
+ * designed app, outside its focus and Escape handling, and one that some
+ * in-app browsers suppress outright -- which turns a Delete button into one
+ * that silently does nothing. Built on Modal, so it inherits useDialog: focus
+ * starts on Close (the least destructive control), Escape cancels, and
+ * focus returns to the button that asked.
+ *
+ * Keep `title` to the question -- it is a single line -- and put the
+ * consequences in `body`, which wraps and keeps line breaks.
+ *
+ * `cancelLabel: null` makes it a notice with one button, for a failure the
+ * person has to read before carrying on (what window.alert was used for).
+ */
+export function useConfirm() {
+  const [request, setRequest] = useState(null);
+
+  const confirm = useCallback((options) => new Promise((resolve) => {
+    setRequest((previous) => {
+      previous?.resolve(false); // a superseded question is a no
+      return { confirmLabel: 'Confirm', cancelLabel: 'Cancel', danger: true, ...options, resolve };
+    });
+  }), []);
+
+  const settle = (answer) => {
+    request?.resolve(answer);
+    setRequest(null);
+  };
+
+  const dialog = (
+    <Modal
+      open={!!request}
+      onClose={() => settle(false)}
+      title={request?.title || ''}
+      footer={request && (
+        <div className="flex gap-2 justify-end">
+          {request.cancelLabel !== null && (
+            <Button variant="secondary" onClick={() => settle(false)}>{request.cancelLabel}</Button>
+          )}
+          <Button variant={request.danger ? 'danger' : 'primary'} onClick={() => settle(true)}>{request.confirmLabel}</Button>
+        </div>
+      )}
+    >
+      {request?.body && <p className="t-sub" style={{ whiteSpace: 'pre-line' }}>{request.body}</p>}
+    </Modal>
+  );
+
+  return [confirm, dialog];
 }
 
 /**
@@ -393,7 +453,7 @@ export function Sheet({
     <div
       className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
       style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
+      onClick={(e) => { e.stopPropagation(); if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
       role="dialog"
       aria-modal="true"
       aria-label={labelledBy ? undefined : title}

@@ -5,7 +5,7 @@ import ExerciseCard, { prescriptionLine } from '../../components/trainer/Exercis
 import TemplateList from '../../components/trainer/TemplateList.jsx';
 import AssignPreview from '../../components/trainer/AssignPreview.jsx';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, ErrorState, Modal, PageSkeleton, CheckIcon } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, PageSkeleton, CheckIcon, useConfirm } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
@@ -168,6 +168,7 @@ export default function WorkoutBuilder() {
   const [assignClient, setAssignClient] = useState('');
   const [assignDate, setAssignDate] = useState('');
   const [toast, setToast] = useState('');
+  const [confirm, confirmDialog] = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', primary_muscle: '', equipment: 'BW', difficulty: 'BEGINNER', instructions: '', cues: '', animation_key: '' });
   const [addSaving, setAddSaving] = useState(false);
@@ -314,10 +315,15 @@ export default function WorkoutBuilder() {
   /* One gate in front of everything that throws the draft away. It names
      the template at risk, because "you have unsaved changes" is useless
      when a trainer has several on the go. */
-  const confirmDiscard = () => {
+  const confirmDiscard = async () => {
     if (!isDirty()) return true;
     const what = editing.name?.trim() || 'this new template';
-    return window.confirm(`Discard your unsaved changes to "${what}"?`);
+    return confirm({
+      title: 'Discard your unsaved changes?',
+      body: `Your edits to "${what}" have not been saved.`,
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+    });
   };
 
   const load = (draft, id) => {
@@ -326,16 +332,16 @@ export default function WorkoutBuilder() {
     setEditing(draft);
   };
 
-  const startNew = () => {
-    if (!confirmDiscard()) return;
+  const startNew = async () => {
+    if (!(await confirmDiscard())) return;
     load({ id: null, name: '', type: 'Push', notes: '', exercises: [emptyEx()] }, null);
   };
 
-  const openTemplate = (t) => {
+  const openTemplate = async (t) => {
     // Reopening the template already being edited must not offer to
     // discard it -- that is not navigating away, it is a no-op.
     if (t.id === selectedId && editing?.id === t.id) return;
-    if (!confirmDiscard()) return;
+    if (!(await confirmDiscard())) return;
     load({ id: t.id, name: t.name, type: t.type || '', notes: t.notes || '',
       exercises: (t.exercises || []).map((e) => ({ ...e, exercise_id: e.exercise_id || null })) }, t.id);
   };
@@ -448,8 +454,11 @@ export default function WorkoutBuilder() {
      "will this wipe my clients' sessions?" is the question a trainer
      actually has at this moment. */
   const removeTemplate = async (t) => {
-    const ok = window.confirm(
-      `Delete "${t.name}"?\n\nWorkouts already assigned to clients from this template are kept.`);
+    const ok = await confirm({
+      title: `Delete "${t.name}"?`,
+      body: 'Workouts already assigned to clients from this template are kept.',
+      confirmLabel: 'Delete template',
+    });
     if (!ok) return;
     try {
       await api(`/workouts/templates/${t.id}`, { method: 'DELETE' });
@@ -498,6 +507,7 @@ export default function WorkoutBuilder() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-grotesk font-bold text-2xl">Workout builder</h1>

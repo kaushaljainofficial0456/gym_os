@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
 import { useCountUp, useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Ring, Bar, CheckIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
+import { Spinner, ErrorState, Ring, Bar, CheckIcon, XIcon, PageSkeleton, useConfirm, useDialog } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
@@ -518,6 +518,7 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { if (open && log) setQuantity(String(log.quantity || 100)); }, [open, log?.id]);
+  const panelRef = useDialog(open && !!log, onClose);
   if (!open || !log) return null;
 
   const origQty = Number(log.quantity) || 100;
@@ -533,8 +534,9 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
   const handleSave = async () => { setSaving(true); await onSave(log.id, { quantity: newQty, unit: log.unit }); setSaving(false); };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
-      <div className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}
+      role="dialog" aria-modal="true" aria-label={`Edit ${log.name}`}>
+      <div ref={panelRef} className="w-full max-w-sm rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
         <div className="px-5 pt-5 pb-3 flex items-start justify-between">
           <div>
             <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Edit Entry</div>
@@ -543,8 +545,8 @@ function EditLogModal({ open, log, onClose, onSave, t }) {
           <button className="w-8 h-8 rounded-full grid place-items-center text-sm transition-colors shrink-0" onClick={onClose} aria-label="Close" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}><XIcon /></button>
         </div>
         <div className="px-5 pb-4">
-          <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Quantity ({log.unit || 'g'})</label>
-          <input type="number" className="w-full px-4 py-3 rounded-xl font-grotesk text-sm font-bold outline-none" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} value={quantity} onChange={(e) => setQuantity(e.target.value)} autoFocus />
+          <label htmlFor="edit-log-quantity" className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>Quantity ({log.unit || 'g'})</label>
+          <input id="edit-log-quantity" type="number" className="w-full px-4 py-3 rounded-xl font-grotesk text-sm font-bold outline-none" style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} value={quantity} onChange={(e) => setQuantity(e.target.value)} autoFocus />
         </div>
         <div className="px-5 pb-4">
           <div className="rounded-xl p-3" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
@@ -598,6 +600,7 @@ function DeleteLogConfirm({ open, log, onClose, onConfirm, t }) {
    ════════════════════════════════════════════════════════════════ */
 
 export default function Nutrition() {
+  const [confirm, confirmDialog] = useConfirm();
   // `resolved` (never the raw choice): 'system' is now a storable
   // value, and every comparison below is against light/dark.
   const { resolved: theme } = useTheme();
@@ -996,7 +999,7 @@ export default function Nutrition() {
                           </div>
                         </span>
                         <span className="font-grotesk text-[10px] shrink-0" style={{ color: t.mute }}>{s.dose || ''}</span>
-                        <button className="w-6 h-6 rounded-md grid place-items-center text-[9px] shrink-0 transition-colors" onClick={async (e) => { e.stopPropagation(); if (!window.confirm(`Delete "${s.name}"?`)) return; try { await api(`/tracking/clients/${clientId}/supplements/${s.id}`, { method: 'DELETE' }); const r = await api(`/tracking/clients/${clientId}/supplements`); setSupList(r.supplements || []); setToast(`${s.name} removed`); } catch (err) { setToast(err.message || 'Failed to delete supplement'); } }} style={{ color: t.danger + 'AA' }} aria-label={`Delete ${s.name}`}><XIcon /></button>
+                        <button className="w-6 h-6 rounded-md grid place-items-center text-[9px] shrink-0 transition-colors" onClick={async (e) => { e.stopPropagation(); if (!(await confirm({ title: `Delete "${s.name}"?`, confirmLabel: 'Delete supplement' }))) return; try { await api(`/tracking/clients/${clientId}/supplements/${s.id}`, { method: 'DELETE' }); const r = await api(`/tracking/clients/${clientId}/supplements`); setSupList(r.supplements || []); setToast(`${s.name} removed`); } catch (err) { setToast(err.message || 'Failed to delete supplement'); } }} style={{ color: t.danger + 'AA' }} aria-label={`Delete ${s.name}`}><XIcon /></button>
                       </div>
                     );
                   })}
@@ -1036,6 +1039,7 @@ export default function Nutrition() {
       <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }} currentPlan={plan} isEdit={!!plan} />
 
       {/* ══════ MODALS ══════ */}
+      {confirmDialog}
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
       <DeleteLogConfirm open={deleteLogOpen} log={deleteLog} onClose={() => { setDeleteLogOpen(false); setDeleteLog(null); }} onConfirm={deleteLogEntry} t={t} />
 
