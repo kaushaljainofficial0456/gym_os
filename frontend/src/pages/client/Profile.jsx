@@ -1061,7 +1061,9 @@ export default function Profile() {
                     </div>
                   );
                 })}
-                {!metrics.data?.metrics?.length && <div className="text-center text-xs text-mute py-3">No personal metrics yet — create your first one above (e.g. waist, steps, bench press).</div>}
+                {/* A failed load is not an empty list: this would ask someone who
+                    tracks five metrics to create their first. */}
+                {metrics.error ? <ErrorState error={metrics.error} onRetry={metrics.reload} /> : !metrics.loading && !metrics.data?.metrics?.length && <div className="text-center text-xs text-mute py-3">No personal metrics yet — create your first one above (e.g. waist, steps, bench press).</div>}
               </div>
             </div>
           </div>

@@ -32,6 +32,49 @@ test.describe('client', () => {
     await page.goto('/app/client/progress');
     await expectErrorThenRecovery(page, matcher, /anything with a\s+number and a date/);
   });
+
+  test('personal metrics on Profile that fail to load are not "No personal metrics yet"', async ({ page }) => {
+    const matcher = (url) => url.pathname === '/api/me/metrics';
+    await page.route(matcher, (route) => route.fulfill(FAILURE));
+    await page.goto('/app/client/profile?section=metrics');
+    await expectErrorThenRecovery(page, matcher, 'No personal metrics yet');
+  });
+});
+
+test.describe('owner, dashboard and roster', () => {
+  test.use({ storageState: storageFor('owner') });
+
+  test('an attention queue that fails to load does not say "Everyone is on track"', async ({ page }) => {
+    const matcher = (url) => url.pathname === '/api/dashboard/attention';
+    await page.route(matcher, (route) => route.fulfill(FAILURE));
+    await page.goto('/app/trainer');
+    await expectErrorThenRecovery(page, matcher, 'Everyone is on track');
+  });
+
+  test('an adherence trend that fails to load does not say nothing was logged', async ({ page }) => {
+    const matcher = (url) => url.pathname === '/api/dashboard/adherence-trend';
+    await page.route(matcher, (route) => route.fulfill(FAILURE));
+    await page.goto('/app/trainer');
+    await expectErrorThenRecovery(page, matcher, /No adherence logged/);
+  });
+
+  test('a member roster that fails to load is not "No members yet"', async ({ page }) => {
+    const matcher = (url) => url.pathname === '/api/admin/members';
+    await page.route(matcher, (route) => route.fulfill(FAILURE));
+    await page.goto('/app/trainer/business');
+    await expectErrorThenRecovery(page, matcher, 'No members yet');
+  });
+
+  test('membership plans that fail to load are not an empty plan picker', async ({ page }) => {
+    const matcher = (url) => url.pathname === '/api/admin/packages';
+    await page.route(matcher, (route) => route.fulfill(FAILURE));
+    await page.goto('/app/trainer/enterprise/qr');
+    await expect(page.getByRole('alert').filter({ hasText: REASON })).toBeVisible();
+    // No picker that could only ever be empty, and no Generate that could never enable.
+    await expect(page.getByRole('combobox')).toHaveCount(0);
+    await expectErrorThenRecovery(page, matcher, /haven't added any membership plans/);
+    await expect(page.getByRole('combobox')).toHaveCount(1);
+  });
 });
 
 test.describe('owner', () => {

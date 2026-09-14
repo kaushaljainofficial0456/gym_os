@@ -223,7 +223,12 @@ export default function Dashboard() {
                 </Link>
               ))}
             </Stagger>
-            {!(attentionClients.length) && (
+            {/* A queue that failed to load is not "Everyone is on track" --
+                the one false statement here that tells an owner to stop
+                looking. */}
+            {!isTrainerOnly && att.error ? (
+              <ErrorState error={att.error} onRetry={att.reload} />
+            ) : !(attentionClients.length) && (
               <div className="empty-state"><div className="empty-state-icon"><CheckIcon /></div><div className="empty-state-title">Everyone is on track</div><p className="empty-state-body">No client needs attention right now.</p></div>
             )}
           </div>
@@ -239,7 +244,8 @@ export default function Dashboard() {
         <div className="lg:col-span-2 space-y-6">
           <Card className="self-start">
             <Kicker>Adherence trend · 14 days</Kicker>
-            {trendRows.some((t) => t.value > 0)
+            {/* A trend that failed to load is not "no adherence logged". */}
+            {trend.error ? <ErrorState error={trend.error} onRetry={trend.reload} /> : trendRows.some((t) => t.value > 0)
               ? <TrendChart data={trendRows} color="var(--m-training)" />
               : <div className="text-[11.5px] py-6 text-center" style={{ color: 'var(--mute)' }}>
                   No adherence logged in the last 14 days yet.

@@ -487,10 +487,16 @@ function WorkoutsTab({ clientId, history, onChanged }) {
         ))}
         {!history.length && <div className="text-center py-8 text-mute text-sm">No workouts assigned yet.</div>}
       </div>
-      {assignOpen && (
+      {/* Templates that failed to load are not "no templates": the picker
+          opened empty, with Assign disabled and no reason given. */}
+      {assignOpen && (tmpl.error ? (
+        <Modal open onClose={() => setAssignOpen(false)} title="Assign workout">
+          <ErrorState error={tmpl.error} onRetry={tmpl.reload} />
+        </Modal>
+      ) : (
         <AssignWorkout clientId={clientId} templates={tmpl.data?.templates || []} onClose={() => setAssignOpen(false)}
           onDone={() => { setAssignOpen(false); onChanged(); }} />
-      )}
+      ))}
     </Card>
   );
 }

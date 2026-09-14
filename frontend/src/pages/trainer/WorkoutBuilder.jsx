@@ -631,11 +631,14 @@ export default function WorkoutBuilder() {
             {/* The <label> above is a SIBLING with no htmlFor, so it labels
                 this visually and not programmatically -- a screen reader
                 announced an unnamed combo box. */}
-            <select className="input" aria-label="Client for this program"
-                    value={progClient} onChange={(e) => loadProgram(e.target.value)}>
-              <option value="">Choose client…</option>
-              {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-            </select>
+            {/* A client list that failed to load is not a gym with no clients. */}
+            {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
+              <select className="input" aria-label="Client for this program"
+                      value={progClient} onChange={(e) => loadProgram(e.target.value)}>
+                <option value="">Choose client…</option>
+                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
+              </select>
+            )}
           </div>
           <div className="rounded-xl border border-line bg-tint/[.02] p-4">
             {!progClient ? (
@@ -776,11 +779,13 @@ export default function WorkoutBuilder() {
         <div className="space-y-3">
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
-            <select className="input" aria-label="Client to assign this workout to"
-                    value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
-              <option value="">Choose client…</option>
-              {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-            </select>
+            {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
+              <select className="input" aria-label="Client to assign this workout to"
+                      value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
+                <option value="">Choose client…</option>
+                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Schedule date (optional)</label>

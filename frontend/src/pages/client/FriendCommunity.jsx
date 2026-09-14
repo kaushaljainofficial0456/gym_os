@@ -513,7 +513,10 @@ export default function FriendCommunity() {
           {tab === 'members' && (
             members.loading && !members.data
               ? <PageSkeleton />
-              : (
+              // A list that failed to load is not "0 members · No members yet".
+              : members.error && !members.data
+                ? <ErrorState error={members.error} onRetry={members.reload} />
+                : (
                 <FriendMembers
                   members={members.data?.members || []}
                   onSelect={setMemberSheet}

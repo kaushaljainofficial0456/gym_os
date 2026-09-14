@@ -371,16 +371,19 @@ export default function Business() {
       {/* members */}
       <Card>
         <Kicker>Members</Kicker>
-        <MembersTable
-          members={members.data?.members || []}
-          renderActions={(m) => (m.subscription_id ? (
-            <MembershipActions
-              member={m}
-              onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }}
-              onError={(msg) => setToast(msg)}
-            />
-          ) : null)}
-        />
+        {/* A roster that failed to load is not "No members yet". */}
+        {members.error ? <ErrorState error={members.error} onRetry={members.reload} /> : (
+          <MembersTable
+            members={members.data?.members || []}
+            renderActions={(m) => (m.subscription_id ? (
+              <MembershipActions
+                member={m}
+                onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }}
+                onError={(msg) => setToast(msg)}
+              />
+            ) : null)}
+          />
+        )}
       </Card>
 
       <Modal open={pkgOpen} onClose={() => setPkgOpen(false)} title="New package">

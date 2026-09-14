@@ -88,7 +88,11 @@ export default function EnterpriseQR() {
         {purpose === 'CLIENT' && (
           <div>
             <div className="field-label mb-1.5">Membership plan</div>
-            {noPackages ? (
+            {/* Plans that failed to load are not "no plans": the picker sat
+                empty and Generate never enabled, with no reason given. */}
+            {plans.error ? (
+              <ErrorState error={plans.error} onRetry={plans.reload} />
+            ) : noPackages ? (
               <div className="text-sm" style={{ color: 'var(--mute)' }}>
                 You haven't added any membership plans yet — <Link to="/app/trainer/business" className="text-gold hover:underline">add one in Business</Link> to start generating client QR codes.
               </div>
@@ -103,7 +107,7 @@ export default function EnterpriseQR() {
             )}
           </div>
         )}
-        {!noPackages && (
+        {!noPackages && !(purpose === 'CLIENT' && plans.error) && (
           <button className="btn-primary" disabled={busy || status.loading || (purpose === 'CLIENT' && (!planId || capacityKnownZero))} onClick={generate}>
             {busy ? 'Generating…' : status.loading ? 'Checking capacity…' : `Generate ${purpose === 'CLIENT' ? 'client' : 'trainer'} QR`}
           </button>
