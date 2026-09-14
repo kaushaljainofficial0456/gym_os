@@ -19,6 +19,10 @@ test('a new client sets up their profile once, and lands in the guided tour', as
   const wizard = page.getByRole('dialog', { name: 'Set up your profile' });
   await expect(wizard).toBeVisible();
   await expect(wizard.getByRole('heading', { level: 2 })).toContainText('Welcome, Priya');
+  // A real modal: focus is inside it, and Escape cannot skip setting up.
+  await expect.poll(() => wizard.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(wizard).toBeVisible();
 
   await wizard.getByRole('button', { name: 'Get started' }).click();
   const next = wizard.getByRole('button', { name: 'Continue' });

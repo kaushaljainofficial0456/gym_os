@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import Icon from './Icon.jsx';
-import { XIcon } from './UI.jsx';
+import { XIcon, useDialog } from './UI.jsx';
 import { useUnits } from '../unitsContext.jsx';
 
 // Web Speech API — speech recognition when the browser supports it.
@@ -55,6 +55,8 @@ export default function AskSK({ onLogged }) {
   const [view, setView] = useState(null); // { kind: 'food'|'workout'|'program'|'exercises'|'error', data }
   const [toast, setToast] = useState('');
   const [listening, setListening] = useState(false);
+  // Escape does exactly what Close does, including stopping the microphone.
+  const panelRef = useDialog(open, () => { stopVoice(); setOpen(false); setView(null); setText(''); });
   // label scan state
   const fileRef = useRef(null);
   const mealRef = useRef(null);
@@ -255,8 +257,9 @@ export default function AskSK({ onLogged }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-end sm:place-items-center p-0 sm:p-4">
-          <div className="card w-full sm:max-w-lg h-[92vh] sm:h-auto sm:max-h-[86vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl">
+        <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-end sm:place-items-center p-0 sm:p-4"
+          role="dialog" aria-modal="true" aria-label="Ask Barbell">
+          <div ref={panelRef} className="card w-full sm:max-w-lg h-[92vh] sm:h-auto sm:max-h-[86vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl">
             {/* header */}
             <div className="p-4 border-b border-line/60 flex items-center justify-between">
               <div>

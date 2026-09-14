@@ -45,6 +45,7 @@ import HeightSelector from './HeightSelector.jsx';
 import WeightSelector from './WeightSelector.jsx';
 import { formatWeight, formatLength, formatHeight } from '../units.js';
 import Icon from './Icon.jsx';
+import { useDialog } from './UI.jsx';
 
 const stepVariants = {
   enter: (dir) => ({ x: dir >= 0 ? 22 : -22, opacity: 0 }),
@@ -449,6 +450,11 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, canNext, saving, step]);
 
+  // Focus moves in, stays in, and comes back -- but Escape does not dismiss
+  // it (onClose null): setting up the profile is the one step a new client
+  // cannot skip.
+  const panelRef = useDialog(open, null);
+
   if (!open) return null;
 
   const isWelcome = step === 0;
@@ -467,6 +473,7 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
       aria-label="Set up your profile"
     >
       <div
+        ref={panelRef}
         className="w-full max-w-md rounded-3xl overflow-hidden anim-scaleIn flex flex-col"
         style={{
           background: t.bg,

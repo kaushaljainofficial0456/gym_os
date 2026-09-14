@@ -556,7 +556,10 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      if (e.key !== 'Escape' || wheelOpen) return;
+      // defaultPrevented: a dialog opened on top (the barcode scanner, through
+      // useDialog) already handled this Escape; stepping back here as well
+      // would close two layers with one key.
+      if (e.key !== 'Escape' || wheelOpen || e.defaultPrevented) return;
       if (confirmDiscardOpen) { setConfirmDiscardOpen(false); return; }
       if (screen === 'manual') { setManualAdd(false); setManualErr(''); return; }
       if (screen === 'ai') { setAiResult(null); setAiErr(''); setAiEdits([]); setAiAdjusted(null); return; }

@@ -156,6 +156,45 @@ test.describe('confirmation: removing a logged food', () => {
   });
 });
 
+test.describe('dialog layering: the barcode scanner inside the food log sheet', () => {
+  test.use({ storageState: storageFor('client') });
+
+  // Both listen for Escape. Only the top layer may act: the scanner closes,
+  // the sheet stays open, and focus returns to the button that opened it.
+  test('Escape closes the scanner and nothing under it', async ({ page }) => {
+    await page.goto('/app/client/nutrition');
+    await page.getByRole('button', { name: /^Log food/ }).click();
+    const sheet = page.getByRole('dialog', { name: 'Log Food' });
+    await expect(sheet).toBeVisible();
+
+    const scanButton = sheet.getByRole('button', { name: 'Scan barcode' });
+    await scanButton.click();
+    const scanner = page.getByRole('dialog', { name: 'Scan barcode' });
+    await expect(scanner).toBeVisible();
+    await expect.poll(() => focusInside(scanner)).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(scanner).toBeHidden();
+    await expect(sheet).toBeVisible();
+    await expect(scanButton).toBeFocused();
+  });
+});
+
+test.describe('nutrition targets', () => {
+  test.use({ storageState: storageFor('client') });
+
+  // Completed by saving or resetting, so it holds focus but Escape is not a way out.
+  test('holds focus, and Escape does not dismiss it', async ({ page }) => {
+    await page.goto('/app/client/nutrition');
+    await page.getByRole('button', { name: 'Edit calorie target' }).click();
+    const dialog = page.getByRole('dialog', { name: /daily targets$/ });
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => focusInside(dialog)).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+  });
+});
+
 test.describe('trainer navigation drawer', () => {
   test.use({ storageState: storageFor('owner') });
 

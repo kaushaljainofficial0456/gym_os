@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
-import { CheckIcon } from './UI.jsx';
+import { CheckIcon, useDialog } from './UI.jsx';
 // calculateCaloriesFromMacros dropped here (not merge-carried): this side
 // used it to LIVE-recompute calories from the macro inputs as the user
 // typed. manavi-progress-enhancements-v2's edit-mode rewrite below makes
@@ -187,11 +187,15 @@ export default function NutritionTargetSetup({ open, onComplete, currentPlan = n
     setSaving(false);
   };
 
+  // It completes by saving or resetting, so Escape is not a way out (null).
+  const panelRef = useDialog(open, null);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(16px)' }}>
-      <div className="w-full max-w-md rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(16px)' }}
+      role="dialog" aria-modal="true" aria-label={isEdit ? 'Edit daily targets' : 'Your daily targets'}>
+      <div ref={panelRef} className="w-full max-w-md rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
 
         {/* Header */}
         <div className="px-6 pt-6 pb-2">
