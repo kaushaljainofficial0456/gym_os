@@ -136,7 +136,15 @@ The app declares `https://<GymOS host>` links for `/share/`,
 `/workout-share/`, `/invite/` and `/reset-password`, with `autoVerify`.
 
 Android 12+ opens such links in the app by default only after verifying the
-domain. That needs `https://<GymOS host>/.well-known/assetlinks.json` listing
-`com.gymos.app` and the SHA-256 fingerprint of the signing key. Until that
-file is deployed, links still open in the browser; a user can turn on
-*Open supported links* in the app's settings.
+domain against `https://<GymOS host>/.well-known/assetlinks.json`. That file
+is `frontend/public/.well-known/assetlinks.json`: it lists `com.gymos.app`
+and the SHA-256 fingerprint of the release signing key, and ships with the
+web app.
+
+- Verification happens when the app is installed, so it only succeeds once
+  the file is live on the domain.
+- Until then, links open in the browser; a user can turn on *Open supported
+  links* in the app's settings.
+- If the app is signed with another key (for example Google Play App
+  Signing), add that key's fingerprint to the list.
+- Debug builds are signed with a per-machine debug key and are not verified.

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gymos.app",
+      "sha256_cert_fingerprints": [
+        "A8:C7:35:6E:9F:E4:BC:7F:D7:E4:12:85:20:A4:27:E3:F6:4D:68:FB:C2:6F:7E:54:90:52:B0:BE:2A:83:E4:8B"
+      ]
+    }
+  }
+]
