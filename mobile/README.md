@@ -1,5 +1,11 @@
 # GymOS for Android
 
+> **Status (September 2026):** builds and passes its unit tests, and the APKs
+> have been inspected (package, permissions, signature, bundled config).
+> **It has not yet been run on a phone or emulator.** Work through the
+> [on-device acceptance checklist](#on-device-acceptance-checklist) before
+> distributing it, and see [Known limitations](#known-limitations).
+
 The GymOS Android app is a [Capacitor 8](https://capacitorjs.com) shell around
 the **live GymOS web app**. The APK does not contain a copy of the UI: its
 WebView opens the production origin, and a small native layer adds the things
@@ -148,3 +154,74 @@ web app.
 - If the app is signed with another key (for example Google Play App
   Signing), add that key's fingerprint to the list.
 - Debug builds are signed with a per-machine debug key and are not verified.
+
+## Known limitations
+
+- **Google Sign-In** (the *Independent client* screen, and *Continue with
+  Google* when setting up a gym). Google does not allow its sign-in inside
+  embedded WebViews, so these buttons are expected to be refused in the app.
+  This has not yet been confirmed on a device. Email and password sign-in is
+  unaffected.
+  - The fix is native sign-in: Android Credential Manager, posting the same
+    ID token to `/auth/google`.
+  - That fix also needs an Android OAuth client (package `com.gymos.app` plus
+    the signing key's SHA-1) in the Google Cloud project.
+- **Browser notifications.** WebView has no Notification API, so the app's
+  "enable notifications" prompt stays hidden, as in any browser without one.
+  The in-app notification bell works normally. System push notifications
+  would need a native implementation.
+- **Needs a connection to open.** Without one, the offline screen shows until
+  the network returns.
+- **The admin console** (`admin/`) is a separate web app and is not part of
+  this APK.
+- **Naming.** The launcher name is *GymOS*; inside, the product is branded
+  *Barbell*, exactly as on the web.
+
+## On-device acceptance checklist
+
+Install the release APK (`adb install -r GymOS-1.0.0-release.apk`), sign in
+with real test accounts, and confirm each item. For crashes and WebView
+errors, check `adb logcat --pid=$(adb shell pidof com.gymos.app)` throughout.
+
+1. **Install and launch.** The launcher shows *GymOS* with the Barbell mark.
+   A dark splash leads straight into the Barbell welcome screen, with no white
+   flash, and the status bar icons stay legible.
+2. **Sign in** as a client, a trainer and a gym owner; each lands on its home.
+   Force-stop the app and reopen it: still signed in.
+3. **Back.**
+   - The sign-in steps (role, then form) step back one at a time.
+   - An open sheet (for example, log food) closes.
+   - A page with a header Back button steps back.
+   - From a home screen, Back sends the app to the background, and reopening
+     it restores the same screen.
+4. **Navigation.** Bottom tabs, the profile menu, Settings, Help, and the
+   trainer and owner sidebars all load.
+5. **Forms and validation.** Invalid input shows the same field errors as on
+   the web.
+6. **Data persists.** Log food, record a workout set and edit the profile.
+   Pull the data again after reopening the app: the changes are saved.
+7. **Camera.** The food barcode scanner and the gym QR join both ask for
+   camera permission once, then scan. The profile photo's *Take a photo*
+   opens the camera.
+8. **Uploads.** Choosing a profile or progress photo from the gallery
+   uploads it and shows the image.
+9. **Share.** Sharing a meal, a workout or a community invite opens Android's
+   share sheet with the link.
+10. **Downloads.** As an owner, *Enterprise → Billing → invoice* saves the
+    PDF to Downloads and opens it.
+11. **Payments.** Razorpay checkout opens in a sheet over the app. A test
+    payment completes and returns to GymOS.
+12. **Health devices.** *Connect WHOOP* (or Oura) opens the provider sign-in
+    in the app and returns to Connected devices.
+13. **Theme.** Switching light/dark recolours the status and navigation bars.
+14. **Keyboard and rotation.** Focused fields stay above the keyboard, and
+    rotating keeps the current screen and form input.
+15. **Offline.** In airplane mode, opening the app shows the offline screen.
+    Turning the network back on reconnects without a tap.
+16. **External links.** The Contact page's email link opens a mail app; links
+    to other sites open the browser.
+17. **Deep links.**
+    `adb shell am start -a android.intent.action.VIEW -d https://<host>/invite/<code>`
+    opens the invite page inside the app.
+18. **Sign out.** It returns to sign-in, and Back does not re-enter the app.
+19. **Google Sign-In.** Record what happens (see Known limitations).
