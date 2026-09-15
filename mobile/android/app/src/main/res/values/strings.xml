@@ -2,8 +2,6 @@
 <resources>
     <string name="app_name">GymOS</string>
     <string name="title_activity_main">GymOS</string>
-    <string name="package_name">com.gymos.app</string>
-    <string name="custom_url_scheme">com.gymos.app</string>
     <string name="download_saved">Saved to Downloads: %1$s</string>
     <string name="download_failed">Couldn\'t save the file. Try again.</string>
     <string name="no_app_for_link">No app on this phone can open that link.</string>

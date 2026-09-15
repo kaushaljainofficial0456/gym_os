@@ -20,12 +20,12 @@ final class ShellScript {
     private ShellScript() {}
 
     static void install(Context context, WebView webView, Uri server) {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            String origin = server.getScheme() + "://" + server.getEncodedAuthority();
+            WebViewCompat.addDocumentStartJavaScript(webView, read(context), Collections.singleton(origin));
+        } else {
             Logger.warn("GymOSShell", "This WebView cannot run document-start scripts: native share, downloads and dialog-aware Back are off");
-            return;
         }
-        String origin = server.getScheme() + "://" + server.getEncodedAuthority();
-        WebViewCompat.addDocumentStartJavaScript(webView, read(context), Collections.singleton(origin));
     }
 
     private static String read(Context context) {
