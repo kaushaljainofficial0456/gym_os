@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only. The release policy, plus plain HTTP to a local GymOS
+     stack on the host machine, which the emulator reaches as 10.0.2.2
+     (GYMOS_SERVER_URL=http://10.0.2.2:<port> when syncing mobile/). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

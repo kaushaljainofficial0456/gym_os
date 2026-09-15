@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'">
+  <title>GymOS</title>
+  <!--
+    Shown by the Android shell when the GymOS origin cannot be loaded. Set in
+    the web app's own dark-theme tokens (frontend/src/theme.css) and its
+    self-hosted DM Sans, so a dropped connection still looks like GymOS
+    rather than a browser error page.
+  -->
+  <style>
+    @font-face {
+      font-family: 'DM Sans';
+      src: url('fonts/dmsans-var-latin.woff2') format('woff2');
+      font-weight: 400 1000; font-style: normal; font-display: swap;
+    }
+    :root {
+      --bg: #0A0909;
+      --panel: #1A1717;
+      --line: rgba(255,223,221,.08);
+      --ink: #FFDFDD;
+      --mute: rgba(255,223,221,.68);
+      --card-gradient: linear-gradient(168deg, rgba(255,223,221,.03), rgba(255,223,221,.008) 62%);
+      --accent-grad: linear-gradient(135deg, #1F2429, #272E34);
+      --accent-grad-shadow: 0 1px 0 rgba(255,223,221,.06) inset, 0 6px 18px -10px rgba(0,0,0,.85);
+      --cta-ink: #E8EEF3;
+      --cta-edge: rgba(226,238,247,.15);
+    }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      display: grid; place-items: center;
+      min-height: 100vh; padding: 24px; box-sizing: border-box;
+    }
+    main { width: 100%; max-width: 360px; text-align: center; }
+    .logo { display: block; width: 148px; height: auto; margin: 0 auto 28px; }
+    .card {
+      background-color: var(--panel); background-image: var(--card-gradient);
+      border: 1px solid var(--line); border-radius: 16px; padding: 24px 20px;
+    }
+    h1 { margin: 0 0 6px; font-size: 1.0625rem; font-weight: 700; letter-spacing: -.015em; line-height: 1.35; }
+    p { margin: 0 0 20px; font-size: .8125rem; line-height: 1.5; color: var(--mute); }
+    button {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 100%; min-height: 44px; padding: 10px 18px; box-sizing: border-box;
+      font: inherit; font-size: .875rem; font-weight: 700; letter-spacing: .005em;
+      color: var(--cta-ink); background: var(--accent-grad); box-shadow: var(--accent-grad-shadow);
+      border: 1px solid var(--cta-edge); border-radius: 12px;
+      -webkit-tap-highlight-color: transparent; cursor: pointer;
+    }
+    button:active:not(:disabled) { transform: scale(.97); }
+    button:disabled { opacity: .45; }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="logo.png" alt="Barbell">
+    <div class="card" role="alert">
+      <h1 id="title">Can't reach GymOS</h1>
+      <p id="detail">GymOS isn't responding right now. Try again in a moment.</p>
+      <button id="retry" type="button">Try again</button>
+    </div>
+  </main>
+  <script>
+    (function () {
+      var SERVER_URL = __GYMOS_SERVER_URL__;
+      var retry = document.getElementById('retry');
+
+      function reconnect() {
+        retry.disabled = true;
+        retry.textContent = 'Reconnecting…';
+        // A failed load brings the shell straight back to this page.
+        location.replace(SERVER_URL);
+      }
+
+      if (!navigator.onLine) {
+        document.getElementById('title').textContent = "You're offline";
+        document.getElementById('detail').textContent = "Check your internet connection. GymOS reloads as soon as you're back online.";
+      }
+      retry.addEventListener('click', reconnect);
+      window.addEventListener('online', reconnect);
+    })();
+  </script>
+</body>
+</html>
