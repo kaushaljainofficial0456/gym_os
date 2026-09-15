@@ -34,7 +34,7 @@ offline screen that reconnects by itself.
 
 | Area | Plain WebView | GymOS shell |
 | --- | --- | --- |
-| Back button | Closes the app | Closes an open dialog, then steps back through the app. From a home screen (`/app/client`, `/app/trainer`, `/login`, ...) it sends GymOS to the background instead of bouncing onto the sign-in screen. |
+| Back button | Closes the app | Steps back inside the screen first: the open dialog, or the screen's own Back control (such as the sign-in steps). Then it steps back through the app's history. From a home screen (`/app/client`, `/app/trainer`, `/login`, ...) it sends GymOS to the background instead of bouncing onto the sign-in screen. |
 | Share sheets (meal, workout, invite) | No `navigator.share`, so they silently fell back to copy-link | Android share sheet (`@capacitor/share`) |
 | Invoice PDF downloads | `<a download href="blob:">` does nothing | Saved to Downloads, then opened |
 | `window.open` / `target="_blank"` | Replaces the app page, and Razorpay checkout loses its opener | Sheet over the app, with close and Back. Other sites open in the browser. |

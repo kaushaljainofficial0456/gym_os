@@ -10,9 +10,10 @@
  *     back to copy-link. Routed to Android's native share sheet instead.
  *   - Blob downloads (invoice PDFs): WebView ignores <a download href="blob:">.
  *     The blob is handed to the native side, saved to Downloads and opened.
- *   - The Back button: closes an open dialog first, then walks the app's own
- *     history, and leaves the app from a home screen instead of stepping back
- *     onto a sign-in screen that would immediately bounce forward again.
+ *   - The Back button: steps back inside the screen first (the open dialog,
+ *     or the screen's own Back control), then walks the app's own history,
+ *     and leaves the app from a home screen instead of stepping back onto a
+ *     sign-in screen that would immediately bounce forward again.
  *   - Light/dark theme: mirrored onto the status and navigation bars.
  *
  * Also loaded as a CommonJS module by test/shell.test.js, which exercises the
@@ -36,13 +37,16 @@
 
   const DIALOG_SELECTOR = '[aria-modal="true"], [role="dialog"], [role="alertdialog"]';
   const CLOSE_BUTTON_SELECTOR = 'button[aria-label="Close"], button[aria-label^="Close "]';
+  // Filter chips and tabs can read "Back" too: it is a muscle group.
+  const TOGGLE_SELECTOR = '[role="tab"], [role="radio"], [aria-pressed], [aria-selected], .chip';
 
   function normalizePath(pathname) {
     const trimmed = String(pathname || '/').replace(/\/+$/, '');
     return trimmed === '' ? '/' : trimmed;
   }
 
-  function backAction({ pathname, dialogOpen, canGoBack }) {
+  function backAction({ pathname, backControl, dialogOpen, canGoBack }) {
+    if (backControl) return 'press-back';
     if (dialogOpen) return 'close-dialog';
     if (HOME_PATHS.has(normalizePath(pathname))) return 'exit';
     return canGoBack ? 'history' : 'exit';
@@ -58,6 +62,21 @@
     const all = doc.querySelectorAll(DIALOG_SELECTOR);
     for (let i = all.length - 1; i >= 0; i -= 1) {
       if (isShown(all[i])) return all[i];
+    }
+    return null;
+  }
+
+  // The screen's own one-step-back control. PageHeader, Modal and FoodLogSheet
+  // label theirs aria-label="Back"; the sign-in steps, onboarding, the app tour
+  // and a few multi-step forms use a button that just reads "Back". Those steps
+  // have no history entry, so Back has to press the control to land where the
+  // user expects. The last visible one is the innermost step.
+  function findBackControl(scope) {
+    const candidates = scope.querySelectorAll('button, a[href]');
+    for (let i = candidates.length - 1; i >= 0; i -= 1) {
+      const el = candidates[i];
+      const named = el.getAttribute('aria-label') === 'Back' || el.textContent.trim() === 'Back';
+      if (named && !el.disabled && !el.matches(TOGGLE_SELECTOR) && isShown(el)) return el;
     }
     return null;
   }
@@ -79,8 +98,10 @@
 
   function handleBack(win, canGoBack) {
     const dialog = topmostDialog(win.document);
-    const action = backAction({ pathname: win.location.pathname, dialogOpen: !!dialog, canGoBack });
-    if (action === 'close-dialog') closeDialog(win, dialog);
+    const control = findBackControl(dialog || win.document);
+    const action = backAction({ pathname: win.location.pathname, backControl: !!control, dialogOpen: !!dialog, canGoBack });
+    if (action === 'press-back') control.click();
+    else if (action === 'close-dialog') closeDialog(win, dialog);
     else if (action === 'history') win.history.back();
     return action;
   }
@@ -206,5 +227,5 @@
     });
   }
 
-  return { install, backAction, normalizePath, toShareOptions, topmostDialog, HOME_PATHS };
+  return { install, backAction, findBackControl, normalizePath, toShareOptions, topmostDialog, HOME_PATHS };
 });

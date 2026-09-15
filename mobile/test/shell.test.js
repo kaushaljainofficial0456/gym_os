@@ -19,6 +19,35 @@ test('Back walks history from any other screen, and exits when there is none', (
   assert.equal(shell.backAction({ pathname: '/invite/abc123', dialogOpen: false, canGoBack: false }), 'exit');
 });
 
+test("Back presses the screen's own Back control before closing, stepping back or exiting", () => {
+  assert.equal(shell.backAction({ pathname: '/login', backControl: true, dialogOpen: false, canGoBack: true }), 'press-back');
+  assert.equal(shell.backAction({ pathname: '/app/client/workout', backControl: true, dialogOpen: true, canGoBack: true }), 'press-back');
+  assert.equal(shell.backAction({ pathname: '/app/client', backControl: false, dialogOpen: true, canGoBack: false }), 'close-dialog');
+});
+
+function fakeButton({ label = null, text = '', toggle = false, shown = true, disabled = false }) {
+  return {
+    disabled,
+    textContent: text,
+    getAttribute: (name) => (name === 'aria-label' ? label : null),
+    matches: () => toggle,
+    getClientRects: () => (shown ? [{}] : []),
+  };
+}
+
+test('the Back control is a real one-step-back button, never a filter chip named Back', () => {
+  const scope = (buttons) => ({ querySelectorAll: () => buttons });
+  const pageHeader = fakeButton({ label: 'Back', text: 'Back' });
+  const signInStep = fakeButton({ text: '  Back ' });
+  const muscleChip = fakeButton({ text: 'Back', toggle: true });
+  assert.equal(shell.findBackControl(scope([pageHeader, signInStep, muscleChip])), signInStep);
+  assert.equal(shell.findBackControl(scope([pageHeader, muscleChip])), pageHeader);
+  assert.equal(shell.findBackControl(scope([muscleChip])), null);
+  assert.equal(shell.findBackControl(scope([fakeButton({ text: 'Back', shown: false })])), null);
+  assert.equal(shell.findBackControl(scope([fakeButton({ label: 'Back', disabled: true })])), null);
+  assert.equal(shell.findBackControl(scope([fakeButton({ text: 'Back to sign in' })])), null);
+});
+
 test('share data maps onto the native share sheet options', () => {
   assert.deepEqual(
     shell.toShareOptions({ title: 'Leg day on Barbell', text: 'Check out this workout', url: 'https://example.test/workout-share/1' }),
