@@ -33,7 +33,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
-import { useFetch } from '../../utils.js';
+import { useFetch, PR_WEIGHT_TYPES } from '../../utils.js';
+import InfoDot from '../../components/InfoDot.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
@@ -71,7 +72,6 @@ const PR_TYPE_LABEL = {
    so it carries the weight unit even though the old copy never labelled
    it -- an unlabelled kilogram sitting next to a pound is exactly the
    mixed-unit trap this preference exists to avoid. */
-const PR_WEIGHT_TYPES = new Set(['heaviest_weight', 'est_1rm', 'best_volume']);
 
 /* The goal kinds the CLIENTS table actually stores. Anything not in here
    falls back to "Target weight" rather than rendering a raw enum. */
@@ -881,8 +881,14 @@ function TrainingSection({ intel, period }) {
 
         {muscles.length > 0 && (
           <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--line)' }}>
-            <div className="text-[10px] font-bold uppercase tracking-[.09em] mb-2" style={{ color: 'var(--faint)' }}>
-              Where the work went
+            <div className="flex items-center gap-1 mb-2">
+              <div className="text-[10px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
+                Where the work went
+              </div>
+              <InfoDot label="where the work went" title="Where the work went">
+                Sets per muscle group, counted from the exercises you logged over this
+                period — not from what was prescribed.
+              </InfoDot>
             </div>
             <div className="space-y-1.5">
               {muscles.slice(0, 7).map((m) => (
@@ -895,7 +901,7 @@ function TrainingSection({ intel, period }) {
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-[9.5px]" style={{ color: 'var(--faint)' }}>Sets per muscle group, from your logged exercises.</div>
+
           </div>
         )}
       </Card>

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import Icon from './Icon.jsx';
 import { XIcon } from './UI.jsx';
 import { useUnits } from '../unitsContext.jsx';
+import InfoDot from './InfoDot.jsx';
 
 // Web Speech API — speech recognition when the browser supports it.
 // (Chrome/Edge/Safari ship it; Firefox needs a flag.) Everything else
@@ -262,8 +263,13 @@ export default function AskSK({ onLogged }) {
               <div>
                 <div className="font-grotesk font-bold flex items-center gap-2"><span className="inline-flex items-center gap-1.5"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-0.125em' }}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg> Ask Barbell</span>
                   <span className="chip border-line !px-1.5 !py-0 text-[8px] text-mute">intelligence</span>
+                  <InfoDot label="Ask Barbell" title="How this works" size={30}>
+                    Type a food, a set you hit, or a plan you want — or scan a nutrition
+                    label. Everything comes back as a draft you review: nothing is saved
+                    until you confirm it.
+                  </InfoDot>
                 </div>
-                <div className="text-[10px] text-mute mt-0.5">Type it, or scan a nutrition label — nothing is saved without your confirmation.</div>
+
               </div>
               <button className="text-mute hover:text-ink text-lg" onClick={() => { stopVoice(); setOpen(false); setView(null); setText(''); }} aria-label="Close"><XIcon /></button>
             </div>
@@ -484,7 +490,14 @@ export default function AskSK({ onLogged }) {
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-dashed border-line p-6 text-center">
                     <div className="mb-2 grid place-items-center" style={{ color: 'var(--faint)' }}><Icon name="camera" size={28} /></div>
-                    <div className="text-xs text-mute mb-3">Upload a photo of a packaged-food nutrition label. You review and confirm every value — nothing is trusted blindly.</div>
+                    <div className="flex items-center justify-center gap-1 mb-3">
+                      <div className="text-xs text-mute">Upload a photo of a nutrition label</div>
+                      <InfoDot label="label scanning" title="What happens to the photo" size={30}>
+                        We read the numbers off the label and put them in a form for you.
+                        You review and confirm every value before it is stored — nothing is
+                        trusted blindly, and the photo itself is not kept.
+                      </InfoDot>
+                    </div>
                     <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
                       onChange={(e) => scanLabel(e.target.files?.[0])} />
                     <button className="btn-primary" onClick={() => fileRef.current?.click()} disabled={scanning}>
@@ -514,8 +527,14 @@ export default function AskSK({ onLogged }) {
                         <input className="input" type="number" placeholder="Sugar (g)" value={scan.fields.sugar} onChange={(e) => setF('sugar', e.target.value)} />
                         <input className="input" type="number" placeholder="Sodium (mg)" value={scan.fields.sodium} onChange={(e) => setF('sodium', e.target.value)} />
                       </div>
-                      <button className="btn-primary btn-sm btn-block" onClick={saveLabel}>SAVE TO MY FOODS</button>
-                      <div className="text-[9px] text-faint">Stored with source LABEL_SCANNED · quantity logging scales by your serving size (e.g. “I ate 75g”).</div>
+                      <div className="flex items-center gap-1.5">
+                        <button className="btn-primary btn-sm flex-1" onClick={saveLabel}>SAVE TO MY FOODS</button>
+                        <InfoDot label="saving this food" title="Where this is stored" size={30} align="end">
+                          Saved to your own foods, marked as read from a label. When you log
+                          it later, quantities scale from the serving size above — so
+                          &ldquo;I ate 75g&rdquo; is worked out from these numbers.
+                        </InfoDot>
+                      </div>
                     </div>
                   )}
                 </div>

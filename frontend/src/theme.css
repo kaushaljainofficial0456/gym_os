@@ -178,6 +178,9 @@
   --secondary: #FB7185;               /* pink/red */
   --secondary-deep: #F43F5E;
   --secondary-soft: rgba(251,113,133,.10);
+  /* Legacy literals from the pre-terracotta palette. --cyan here is
+     SHADOWED by the theme-following alias further down this block; these
+     are kept only because --purple/--orange have no -rgb counterpart. */
   --cyan: #22D3EE;
   --purple: #7C3AED;
   --orange: #FA541C;
@@ -246,6 +249,23 @@
   --good: rgb(var(--good-rgb));
   --warn: rgb(var(--warn-rgb));
   --bad: rgb(var(--bad-rgb));
+  /* --cyan and --violet join them, for exactly the same reason and one
+     trap worse.
+
+     --violet simply did not exist: only --violet-rgb did, so `var(--violet)`
+     in an inline style resolved to nothing and the element painted
+     TRANSPARENT. Found live -- the Biceps slice of the session recap's
+     muscle-split bar was a hole in the bar.
+
+     --cyan did exist, but as a literal (#22D3EE) left over from the old
+     palette, declared once in the dark block and never re-declared in the
+     light one -- so it was the only colour token that did NOT follow the
+     theme, and any inline style reading it put an electric dark-mode cyan
+     on the near-white light ground. Both now derive from the same channel
+     tokens the cyanx/violetx Tailwind utilities use, so the two forms
+     cannot drift apart. */
+  --cyan: rgb(var(--cyan-rgb));
+  --violet: rgb(var(--violet-rgb));
 
   --tint-rgb: 255 223 221;             /* blush -- was white; drives .btn/.chip/.navlink hover washes */
 
@@ -741,6 +761,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @keyframes confirmPop { 0% { transform: scale(1); } 30% { transform: scale(1.06); } 100% { transform: scale(1); } }
 .anim-confirmPop { animation: confirmPop .35s cubic-bezier(.22,.8,.3,1) both; }
+
+/* The object that weighs what you just moved, arriving on the session
+   recap. It lands from slightly behind and below, settles once, and stops
+   -- a looping float would turn a reward into a fidget on a screen the
+   member reads for ten seconds. */
+@keyframes massIn {
+  0%   { opacity: 0; transform: translateY(10px) scale(.86); }
+  62%  { opacity: 1; transform: translateY(-2px) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.anim-massIn { animation: massIn .62s cubic-bezier(.22,.8,.3,1) 120ms both; }
 
 .shadow-glow { box-shadow: 0 0 18px rgb(var(--accent-rgb) / .4), 0 0 0 1px rgb(var(--accent-rgb) / .22); }
 

@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { XIcon } from './../UI.jsx';
+import InfoDot from '../InfoDot.jsx';
 
 const STRATEGY_ORDER = ['EASY', 'MODERATE', 'AGGRESSIVE', 'INTENSE'];
 const STRATEGY_HINT = {
@@ -304,19 +305,28 @@ export default function CalorieBalance({ balance, t, onToast, baseTarget }) {
                 value={customDaysInput} onChange={(e) => setCustomDaysInput(e.target.value)} autoFocus />
             </div>
             <div>
-              <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-1.5 block" style={{ color: t.mute }}>
-                Protein target, g ({customBounds.minProtein}–{customBounds.maxProtein})
-              </label>
+              <div className="flex items-center gap-1 mb-1.5">
+                <label className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.mute }}>
+                  Protein target, g ({customBounds.minProtein}–{customBounds.maxProtein})
+                </label>
+                <InfoDot label="the protein target" title="This is a floor" size={30}>
+                  Protein is protected: while your plan is active it is never reduced below
+                  this number, whatever else has to move to hit the calorie goal.
+                </InfoDot>
+              </div>
               <input type="number" min={customBounds.minProtein} max={customBounds.maxProtein} className="w-full px-4 py-3 rounded-xl font-grotesk text-sm font-bold outline-none"
                 style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}
                 value={customProteinInput} onChange={(e) => setCustomProteinInput(e.target.value)} />
-              <div className="text-[11px] mt-1" style={{ color: t.mute }}>Protected — never reduced below this while your plan is active.</div>
             </div>
           </div>
-          <div className="text-[11px] mb-3" style={{ color: t.mute }}>
-            If your chosen days would need too big a daily cut, we'll safely extend the plan rather than go past a safe daily limit.
+          <div className="flex items-center gap-2">
+            <button disabled={busy || !customDaysInput || !customProteinInput} onClick={submitCustomForm} className="flex-1 py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={btnPrimary}>Preview</button>
+            <InfoDot label="what Preview does" title="Before anything is saved">
+              Preview shows the plan this would produce — nothing is applied until you
+              confirm it. If your chosen days would need too big a daily cut, the plan is
+              safely extended rather than pushed past a safe daily limit.
+            </InfoDot>
           </div>
-          <button disabled={busy || !customDaysInput || !customProteinInput} onClick={submitCustomForm} className="w-full py-2.5 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-[.97]" style={btnPrimary}>Preview</button>
         </ModalShell>
       )}
 

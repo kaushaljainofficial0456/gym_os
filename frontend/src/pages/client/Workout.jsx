@@ -3,13 +3,15 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
-import { ErrorState, Bar, Ring, CheckIcon, XIcon } from '../../components/UI.jsx';
+import { ErrorState, CheckIcon, XIcon } from '../../components/UI.jsx';
 import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
 const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
+import SessionRecap from '../../components/workout/SessionRecap.jsx';
+import InfoDot from '../../components/InfoDot.jsx';
 import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
 import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
@@ -46,9 +48,6 @@ function buildSets(list) {
 // Progressive-discovery filters for the exercise picker. Region maps to the
 // backend muscles.region model; equipment is a compact subset of the library's
 // equipment vocabulary (functional kit like TRX/rings stays searchable by name).
-/* PR values that are a weight and therefore follow the unit preference;
-   best_reps is a count. Mirrors the same set in Progress.jsx. */
-const PR_WEIGHT_TYPES = new Set(['heaviest_weight', 'est_1rm', 'best_volume']);
 
 const PICKER_REGIONS = [['', 'All'], ['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['arms', 'Arms'], ['legs', 'Legs'], ['core', 'Core']];
 const PICKER_EQUIP = [['', 'All'], ['barbell', 'Barbell'], ['dumbbell', 'Dumbbell'], ['machine', 'Machine'], ['cable', 'Cable'], ['bodyweight', 'Bodyweight'], ['kettlebell', 'Kettlebell'], ['bands', 'Bands']];
@@ -346,6 +345,10 @@ export default function Workout() {
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
   const [intensity, setIntensity] = useState(null);
+  /* Declining the calorie estimate is a real answer, and it has to be
+     distinguishable from not-yet-answered -- otherwise Skip would leave
+     the summary permanently stuck on the question it just dismissed. */
+  const [intensitySkipped, setIntensitySkipped] = useState(false);
   // SK OS Health Intelligence Engine -- best-effort, NEVER blocking. null
   // until (and unless) a background check finds real wearable evidence
   // for this exact session; the summary screen's own "Calories burned"
@@ -890,7 +893,31 @@ export default function Workout() {
       // user just finished. `state` (not `exercises`) is the right source:
       // it's the exact same prescription array already used to build
       // `logs` above, i.e. what this completed session actually was.
-      setResult({ name: workout.name, workoutId: workout.id, exerciseList: state, prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null });
+      /* Per-exercise breakdown, snapshotted HERE for the same reason as
+         `name` below: the recap screen charts it, and `state`/`exSets` are
+         both cleared a few lines down so the session cannot be re-entered.
+         Built from `logs` (what was actually ticked), not from the
+         prescription -- an exercise abandoned mid-session must contribute
+         what it did, not what it was told to.
+
+         setsPlanned is the CHECKLIST length, not the prescribed count:
+         sets added or removed during the session are part of what the
+         member set out to do by the end, and using the prescription would
+         let the completion ring read over 100%. */
+      const breakdown = logs.map((l) => {
+        const ex = state.find((e) => e.id === l.exercise_id) || {};
+        return {
+          id: l.exercise_id,
+          name: ex.name,
+          muscle: ex.primary_muscle || null,
+          sets: l.sets.length,
+          reps: l.sets.reduce((a, st) => a + st.actual_reps, 0),
+          volume: l.sets.reduce((a, st) => a + st.actual_reps * st.actual_weight, 0),
+        };
+      });
+      const setsPlanned = state.reduce((a, e) => a + (exSets[e.id] || []).length, 0);
+      const setsDone = logs.reduce((a, l) => a + l.sets.length, 0);
+      setResult({ name: workout.name, workoutId: workout.id, exerciseList: state, prs: res.prs || [], volume, durationMin, exercises: state.length, calorie: res.calorie || null, breakdown, setsPlanned, setsDone });
       setMode('summary');
 
       /* Calorie burn (skos-cal-v1) needs an intensity rating -- see
@@ -923,6 +950,7 @@ export default function Workout() {
       });
       setBurn(null);
       setIntensity(null);
+      setIntensitySkipped(false);
       today.reload({ silent: true }); hist.reload({ silent: true });
       // Clear local session state so the restore effect cannot
       // re-enter execute mode for a now-completed workout.
@@ -1622,9 +1650,12 @@ export default function Workout() {
           <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
             <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
-                <div>
+                <div className="flex items-center gap-1">
                   <div className="font-grotesk font-bold">Build my workout</div>
-                  <div className="text-[10px] text-mute">Picks any exercises — saves as today's session</div>
+                  <InfoDot label="Build my workout" title="Build my workout">
+                    Pick any exercises you like — what you build here is saved as today&rsquo;s
+                    session, replacing whatever was scheduled.
+                  </InfoDot>
                 </div>
                 <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); }} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
@@ -1856,7 +1887,7 @@ export default function Workout() {
                       );
                     })}
                   </div>
-                  <div className="text-[9.5px] text-faint mt-1.5">Tap any day to assign a workout or make it a rest day.</div>
+
                 </div>
 
                 {/* ── DAY ASSIGNMENT PICKER ── */}
@@ -2654,236 +2685,61 @@ export default function Workout() {
   }
 
   // ================= summary =================
+  /* Two steps, not one screen.
+
+     The old summary asked for intensity in a small panel wedged between the
+     stat tiles and the calorie card, on a screen that also carried the burn
+     range, the model's caveats, a source line, a cardio panel, a totals
+     panel and three full-width buttons. The question was the easiest thing
+     on it to miss, and skipping it is what leaves a session with no calorie
+     figure at all.
+
+     Now the celebration and the three headline numbers render instantly
+     (nothing is withheld to force an answer -- that was the original
+     objection to asking first, and it still stands), the question is the
+     only decision on that screen, and the charted recap follows the tap.
+     Skip is a real answer and lands on the same recap, minus the estimate.
+
+     TunnelBackdrop stays lazy and inside Suspense: it is decoration on a
+     screen that must paint the moment the last set is logged. */
+  const askIntensity = !!burnInput && !intensity && !intensitySkipped;
   return (
     <div className="space-y-4">
-      <div className="card relative overflow-hidden anim-pop">
-        <div className="absolute inset-0" aria-hidden="true"><Suspense fallback={null}><TunnelBackdrop /></Suspense></div>
-        {/* Scrim over the 3D.
-
-            The previous one was `from-bg/55 via-bg/25 to-bg/80` -- a vertical
-            fade whose WEAKEST point (25%) sat exactly in the middle, which is
-            precisely where the heading and the stat tiles are. So the type
-            was fighting the busiest, brightest part of the animation with the
-            least protection, and in light mode a pale veil over a bright
-            scene washed the text out almost completely.
-
-            Now radial and centred: densest behind the content, thinning
-            toward the corners so the 3D still reads as depth at the edges
-            instead of being flatly covered. `--bg-rgb` means one rule serves
-            both themes -- it veils toward peach in light and charcoal in
-            dark, rather than always darkening.
-
-            The blur is doing real work: softening high-frequency detail
-            behind text is what makes it legible without needing a heavier,
-            duller veil. */}
-        <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
-             style={{
-               background: 'radial-gradient(130% 95% at 50% 42%, rgb(var(--bg-rgb) / .93) 0%, rgb(var(--bg-rgb) / .82) 42%, rgb(var(--bg-rgb) / .55) 100%)',
-               backdropFilter: 'blur(3px)',
-               WebkitBackdropFilter: 'blur(3px)',
-             }} />
-        <div className="relative p-6 text-center">
-          <div className="w-12 h-12 mx-auto rounded-full grid place-items-center anim-pop"
-               style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-                 strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+      <SessionRecap
+        result={result}
+        askIntensity={askIntensity}
+        onPickIntensity={pickIntensity}
+        onSkipIntensity={() => setIntensitySkipped(true)}
+        intensity={intensity}
+        burn={burn}
+        burnLoading={burnLoading}
+        burnSource={burnSource}
+        cardioResult={cardioResult}
+        cardioName={cardioName}
+        u={u}
+        backdrop={(
+          <div className="absolute inset-0" aria-hidden="true">
+            <Suspense fallback={null}><TunnelBackdrop /></Suspense>
           </div>
-          <h1 className="font-grotesk font-bold text-2xl mt-3">Workout complete</h1>
-          <div className="text-xs text-mute mt-1">{result?.name}</div>
-          <div className="grid grid-cols-3 gap-2 mt-5">
-            {[
-              ['Duration', result?.durationMin != null ? `${result.durationMin} min` : '—'],
-              ['Volume', result?.volume ? `${Math.round(u.weightNum(result.volume, { decimals: 0 })).toLocaleString()} ${u.weightUnit}` : '—'],
-              ['Exercises', result?.exercises || '—']
-            ].map(([l, v]) => (
-              <div key={l} className="rounded-xl px-2 py-3"
-                   style={{
-                     /* Was bg-tint/[.04]: a white wash, which on the peach
-                        light theme reads as a grey smudge and gives the text
-                        almost no separation from the animation behind it.
-                        A panel-tinted tile with a real border sits correctly
-                        on both grounds. */
-                     background: 'rgb(var(--panel-rgb) / .72)',
-                     border: '1px solid var(--line)',
-                   }}>
-                <div className="font-black text-base tabular-nums" style={{ color: 'var(--ink)' }}>{v}</div>
-                <div className="text-[8px] uppercase tracking-[.14em] mt-0.5" style={{ color: 'var(--faint)' }}>{l}</div>
-              </div>
-            ))}
-          </div>
-          {/* One-tap intensity rating -- required by skos-cal-v1 to estimate
-              calories burned (see finishWorkout above for why this can't
-              just be skipped/defaulted). Asked here rather than blocking the
-              "Workout complete" moment: the summary above renders instantly,
-              this is a small follow-up question underneath it. */}
-          {burnInput && !intensity && (
-            <div className="mt-4 rounded-xl border px-4 py-3 text-left" style={{ borderColor: 'var(--line)', background: 'rgb(var(--panel-rgb) / .72)' }}>
-              <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>How intense was that session?</div>
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {[['light', 'Light'], ['moderate', 'Moderate'], ['hard', 'Hard']].map(([tier, label]) => (
-                  <button key={tier} className="btn btn-sm" onClick={() => pickIntensity(tier)}>{label}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          {burnInput && intensity && burnLoading && (
-            <div className="mt-4 text-center text-[11px]" style={{ color: 'var(--mute)' }}>Estimating calories burned…</div>
-          )}
-          {/* Calorie burn. Shown as a RANGE, not a single figure.
-              skos-cal-v1's interval is genuinely about +-70% of its point
-              estimate, so "597 kcal" would claim a precision the model
-              explicitly does not have. The range is the honest headline;
-              the point estimate is the smaller number inside it. */}
-          {burn && (
-            <div className="mt-4 rounded-xl border px-4 py-3 text-left"
-                 style={{ borderColor: 'var(--line)', background: 'var(--accent-soft)' }}>
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>
-                  Calories burned
-                </div>
-                <div className="text-[9px]" style={{ color: 'var(--faint)' }}>
-                  {burn.model_version}
-                </div>
-              </div>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="font-black text-[24px] tabular-nums tracking-[-.02em]"
-                      style={{ color: 'var(--ink)' }}>
-                  {burn.lower_kcal}–{burn.upper_kcal}
-                </span>
-                <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
-              </div>
-              <div className="mt-0.5 text-[11px]" style={{ color: 'var(--mute)' }}>
-                best estimate ≈{burn.kcal} kcal
-              </div>
-              {/* SK OS Health Intelligence Engine -- see checkWorkoutSource's
-                  own comment. Honest immediately (skos-cal-v1 is genuinely
-                  what produced the number above); upgrades in place if a
-                  connected wearable's own reading for this session arrives. */}
-              <div className="mt-1 text-[10px]" style={{ color: 'var(--faint)' }}>
-                Source: {burnSource || 'Estimated by Barbell'}
-              </div>
-              {/* The model's own caveats, surfaced rather than swallowed. An
-                  estimate it has flagged as shaky must not read as clean. */}
-              {!!burn.notes?.length && (
-                <ul className="mt-2 space-y-1">
-                  {burn.notes.map((n) => (
-                    <li key={n} className="text-[10px] leading-snug" style={{ color: 'var(--faint)' }}>
-                      {n}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {/* ── Cardio calories (if any) ── */}
-          {cardioResult && (
-            <div className="mt-3 rounded-xl border px-4 py-3 text-left"
-                 style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
-              <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Cardio calories</div>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="font-black text-[22px] tabular-nums tracking-[-.02em]" style={{ color: 'var(--accent)' }}>
-                  {cardioResult.totalCalories}
-                </span>
-                <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
-              </div>
-              {cardioResult.items.map((item, i) => (
-                <div key={i} className="mt-2 rounded-lg border border-line/30 p-2">
-                  <div className="text-[11px] font-grotesk font-semibold" style={{ color: 'var(--ink)' }}>{cardioName(item.id)} · {item.calories} kcal</div>
-                  {(item.segments || []).map((seg, j) => (
-                    <div key={j} className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>
-                      Seg {j + 1}: {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Total calories (strength + cardio) ── */}
-          {cardioResult && (
-            <div className="mt-3 rounded-xl border px-4 py-3 text-left"
-                 style={{ borderColor: 'var(--line)', background: 'rgb(var(--panel-rgb) / .72)' }}>
-              <div className="text-[10px] uppercase tracking-[.16em]" style={{ color: 'var(--faint)' }}>Total calories burned</div>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="font-black text-[26px] tabular-nums tracking-[-.02em]" style={{ color: 'var(--ink)' }}>
-                  {(burn?.kcal || 0) + (cardioResult.totalCalories || 0)}
-                </span>
-                <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
-              </div>
-              <div className="mt-1 space-y-0.5">
-                {burn?.kcal && (
-                  <div className="text-[11px]" style={{ color: 'var(--mute)' }}>
-                    Strength training: <span className="font-semibold">≈{burn.kcal} kcal</span>
-                  </div>
-                )}
-                <div className="text-[11px]" style={{ color: 'var(--mute)' }}>
-                  Cardio: <span className="font-semibold">{cardioResult.totalCalories} kcal</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!!result?.prs?.length && (
-            <div className="mt-4 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-widest text-gold font-grotesk mb-1.5">New personal records</div>
-              {result.prs.map((p) => (
-                <div key={p.name + p.records?.map(r => r.type).join() || ''} className="text-sm font-grotesk">
-                  <span className="font-bold">{p.name}</span>
-                  {p.records?.map((r) => (
-                    <span key={r.type} className="block text-xs text-ink/80 mt-0.5">
-                      {r.label}: <span className="text-gold font-semibold">
-                        {PR_WEIGHT_TYPES.has(r.type) ? `${u.weightNum(r.value, { decimals: 1 })} ${u.weightUnit}` : r.value}
-                      </span>
-                      {r.previous !== null && <span className="text-mute"> (prev {r.previous})</span>}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-          {/* The legacy calorie block was here. Removed: it duplicated the
-              skos-cal-v1 range shown above with a bare point estimate plus a
-              "provider: ..." debug line, so the same session reported two
-              different-looking calorie figures a few pixels apart. One
-              honest range beats two numbers that disagree. */}
-
-          {/* Share Workout — personal link sharing.
-              result?.workoutId/name/exerciseList (snapshotted in
-              finishWorkout, not the live workout?.id/name/exercises) --
-              see the comment there: `workout` gets swapped out from under
-              this screen by today.reload() a few lines after this summary
-              is shown, so the live values would share the NEXT session
-              instead of the one just completed. */}
-          {result?.workoutId && (
-            <button
-              className="btn w-full mt-3 flex items-center justify-center gap-2"
-              onClick={() => { setShareSheetData({ workoutId: result.workoutId, workoutName: result.name, exercises: result.exerciseList || [] }); setShareSheetOpen(true); }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-              </svg>
-              Share Workout
-            </button>
-          )}
-          {/* Share to communities — the gym community AND any private
-              communities, chosen per session. Nothing is preselected and
-              nothing is posted until a destination is picked: this used to
-              be a single button that published straight to the gym, which is
-              the wrong default once a member can belong to several places
-              (see ShareToCommunitiesSheet). */}
-          {result?.workoutId && (
-            <button
-              className="btn w-full mt-2 flex items-center justify-center gap-2"
-              onClick={() => setShareCommunitiesFor(result.workoutId)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
-              Share to communities
-            </button>
-          )}
-          <button className="btn w-full mt-3" onClick={() => { clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0); setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setBurn(null); setBurnInput(null); setIntensity(null); setBurnSource(null); setSharing(false); setShareToast(''); setCardioMode('browse'); setCardioResult(null); setCardioItems([]); setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0); }}>Done</button>
-        </div>
-      </div>
+        )}
+        onShareWorkout={() => {
+          /* result.* rather than the live workout.* -- see finishWorkout:
+             `workout` is swapped out from under this screen by today.reload()
+             while the summary is still mounted, so the live values would
+             share the NEXT session instead of the one just completed. */
+          setShareSheetData({ workoutId: result.workoutId, workoutName: result.name, exercises: result.exerciseList || [] });
+          setShareSheetOpen(true);
+        }}
+        onShareCommunities={() => setShareCommunitiesFor(result.workoutId)}
+        onDone={() => {
+          clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0);
+          setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null);
+          setBurn(null); setBurnInput(null); setIntensity(null); setIntensitySkipped(false);
+          setBurnSource(null); setSharing(false); setShareToast('');
+          setCardioMode('browse'); setCardioResult(null); setCardioItems([]);
+          setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0);
+        }}
+      />
       {shareToast && (
         <div className="toast anim-toast">
           <span className="text-good mr-2"><CheckIcon /></span>{shareToast}

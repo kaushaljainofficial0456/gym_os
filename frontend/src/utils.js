@@ -16,6 +16,14 @@ export const daysAgoLabel = (iso) => {
 };
 export const cls = (...xs) => xs.filter(Boolean).join(' ');
 
+/* PR record types whose `value` is a WEIGHT and therefore follows the
+   member's unit preference; best_reps is a count and must not be
+   converted. Lived as an identical private const in both Progress.jsx and
+   Workout.jsx, with a comment in each saying it mirrored the other -- the
+   session recap needed a third copy, which is the point at which a mirror
+   becomes a home. */
+export const PR_WEIGHT_TYPES = new Set(['heaviest_weight', 'est_1rm', 'best_volume']);
+
 /**
  * Turn a machine-shaped name into something a person reads.
  *

@@ -23,6 +23,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
+import InfoDot from './InfoDot.jsx';
 
 const RANGES = [
   { key: 7, label: '7d' },
@@ -128,6 +129,16 @@ export default function EnergyBalanceChart() {
             style={{ minHeight: 34, border: '1px solid var(--line)', color: 'var(--mute)' }}
           >Go</button>
         </form>
+
+        {/* How to read the chart used to sit under it as a permanent
+            caption. It is read once and then it is furniture, so it lives
+            here instead and the caption below is free to say something
+            that is actually about YOUR days. */}
+        <InfoDot label="the balance chart" title="Reading this chart" align="end">
+          Each bar is one day. Above the line you ate more than you burned; below it,
+          less. Tap a bar for that day&rsquo;s intake and burn. Days with nothing logged
+          are left blank rather than counted as zero.
+        </InfoDot>
       </div>
 
       {loading && (
@@ -257,22 +268,22 @@ export default function EnergyBalanceChart() {
             </div>
           )}
 
-          <div className="text-[10px] mt-3 leading-snug" style={{ color: 'var(--faint)' }}>
-            {/* ~7,700 kcal per kg of body fat is the standard figure. Given
-                as a rough consequence, not a prediction -- the inputs are
-                estimates and compounding them into a promise would be
-                dishonest. */}
-            {model.plottable.length >= 3 && Math.abs(model.total) > 3000 ? (
-              <>Over these {model.plottable.length} logged days that's roughly{' '}
-                <strong style={{ color: 'var(--mute)' }}>
-                  {(Math.abs(model.total) / 7700).toFixed(1)} kg
-                </strong>{' '}
-                of {model.total > 0 ? 'gain' : 'loss'} in energy terms — a rough guide, not a promise.
-              </>
-            ) : (
-              <>Bars above the line are days you ate more than you burned; below, less. Tap one for its detail.</>
-            )}
-          </div>
+          {/* ~7,700 kcal per kg of body fat is the standard figure. Given
+              as a rough consequence, not a prediction -- the inputs are
+              estimates and compounding them into a promise would be
+              dishonest. Rendered ONLY when there is enough logged data for
+              the figure to mean anything; the "how to read it" text that
+              used to fill this slot the rest of the time is now behind the
+              (i) in the header. */}
+          {model.plottable.length >= 3 && Math.abs(model.total) > 3000 && (
+            <div className="text-[10px] mt-3 leading-snug" style={{ color: 'var(--faint)' }}>
+              Over these {model.plottable.length} logged days that&rsquo;s roughly{' '}
+              <strong style={{ color: 'var(--mute)' }}>
+                {(Math.abs(model.total) / 7700).toFixed(1)} kg
+              </strong>{' '}
+              of {model.total > 0 ? 'gain' : 'loss'} in energy terms — a rough guide, not a promise.
+            </div>
+          )}
         </>
       )}
     </div>

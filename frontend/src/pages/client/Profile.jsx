@@ -15,6 +15,7 @@ import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
 import ProgressArc from '../../components/Ring.jsx';
 import { AdherenceBreakdown } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
+import InfoDot from '../../components/InfoDot.jsx';
 
 const EQUIPMENT = [
   { id: 'barbell', label: 'Barbell' }, { id: 'dumbbells', label: 'Dumbbells' }, { id: 'cable', label: 'Cable machine' },
@@ -936,7 +937,13 @@ Save it anyway?`);
           <div className="space-y-4 anim-fadeUp">
             <BackButton onClick={goBack} />
             <div className="card p-4">
-              <div className="t-micro mb-3">My Equipment</div>
+              <div className="flex items-center gap-1 mb-3">
+                <div className="t-micro">My Equipment</div>
+                <InfoDot label="My Equipment" title="Why this matters">
+                  Pick what you can actually get to. Your coach plans around it, and the
+                  exercise library stops suggesting kit you do not have.
+                </InfoDot>
+              </div>
               {gForm ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-1.5">
@@ -947,7 +954,6 @@ Save it anyway?`);
                       </button>
                     ))}
                   </div>
-                  <div className="text-[10px] text-faint">Select the equipment you have access to. This helps your coach plan your workouts.</div>
                   <button className="btn-primary w-full" onClick={saveGoal} disabled={savingG}>{savingG ? 'Saving…' : 'Save equipment'}</button>
                 </div>
               ) : (
