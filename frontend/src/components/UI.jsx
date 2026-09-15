@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
@@ -203,18 +203,119 @@ export function Seg({ options, value, onChange }) {
 }
 
 /**
+ * DIALOG BEHAVIOUR — the one implementation of what every modal surface in
+ * the app must do, whatever it looks like.
+ *
+ * Before this, Escape handling was hand-written in nine places, focus was
+ * managed in none, and scroll lock existed in two. So a keyboard or
+ * screen-reader user who opened any dialog stayed focused on the page
+ * BEHIND it -- Tab walked through controls hidden under the scrim -- and on
+ * close landed at the top of the document instead of on the button they
+ * pressed. And because every dialog listened to Escape independently, one
+ * keypress closed a confirmation AND the sheet under it; FoodLogSheet had
+ * to hand-code "topmost layer only" to work around exactly that.
+ *
+ *   const panelRef = useDialog(open, onClose);
+ *   <div ref={panelRef}>…the dialog's own content…</div>
+ *
+ * While open:
+ *   · focus moves inside (left alone if an autoFocus field already took it)
+ *   · Tab and Shift+Tab wrap within the panel
+ *   · Escape closes the TOPMOST open dialog only
+ *   · the page behind cannot scroll (reference-counted, so nesting is safe)
+ * On close, focus returns to whatever had it before opening.
+ *
+ * Pass `onClose` as null when the dialog owns a multi-step Escape of its own
+ * (FoodLogSheet steps back through its screens); it still gets the rest.
+ *
+ * Deliberately Tab-boundary wrapping, not a focusin trap: a focusin trap
+ * would pull focus back out of third-party iframes opened over a dialog
+ * (Razorpay checkout), breaking payment.
+ */
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+const openDialogs = [];
+let scrollLocks = 0;
+let overflowBeforeLock = '';
+
+export function useDialog(open, onClose) {
+  const panelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const token = {};
+    openDialogs.push(token);
+    const isTop = () => openDialogs[openDialogs.length - 1] === token;
+    const restoreTo = document.activeElement;
+
+    if (scrollLocks++ === 0) {
+      overflowBeforeLock = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+
+    // checkVisibility skips controls inside collapsed or display:none parts
+    // of the panel; where it is unsupported every candidate counts.
+    const tabbables = () => [...(panelRef.current?.querySelectorAll(FOCUSABLE) || [])]
+      .filter((el) => (typeof el.checkVisibility === 'function' ? el.checkVisibility() : true));
+    const focusPanel = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
+      panel.focus({ preventScroll: true });
+    };
+
+    if (panelRef.current && !panelRef.current.contains(document.activeElement)) {
+      const first = tabbables()[0];
+      if (first) first.focus({ preventScroll: true }); else focusPanel();
+    }
+
+    const onKey = (e) => {
+      if (!isTop()) return;
+      if (e.key === 'Escape') {
+        if (e.defaultPrevented || !onCloseRef.current) return;
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = tabbables();
+      if (!items.length) { e.preventDefault(); focusPanel(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!panelRef.current?.contains(active)) {
+        e.preventDefault(); first.focus();
+      } else if (e.shiftKey && (active === first || active === panelRef.current)) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      const i = openDialogs.indexOf(token);
+      if (i !== -1) openDialogs.splice(i, 1);
+      if (--scrollLocks === 0) document.body.style.overflow = overflowBeforeLock;
+      if (restoreTo?.isConnected && typeof restoreTo.focus === 'function') {
+        restoreTo.focus({ preventScroll: true });
+      }
+    };
+  }, [open]);
+
+  return panelRef;
+}
+
+/**
  * Modal / sheet. On phones this presents as a bottom sheet (thumb-reachable,
  * with a grab handle); from `sm` up it centres as a dialog. `onBack` adds a
  * one-level-back affordance distinct from close — Part 18's rule that a
  * nested flow must never conflate ← with ✕.
  */
 export function Modal({ open, onClose, title, children, wide, sub, footer, onBack }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const panelRef = useDialog(open, onClose);
   if (!open) return null;
   // Portalled to <body>, for the reason FoodLogSheet.jsx documents at length:
   // ClientLayout.jsx wraps every page in `.anim-fadeUp`, an animation with
@@ -227,8 +328,11 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
   // above the viewport, until this portal was added.
   return createPortal((
     <div className="scrim z-50 flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
-      onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
-      <div className={cls('sheet w-full flex flex-col anim-scaleIn max-h-[92vh] sm:max-h-[90vh]', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}
+      // stopPropagation: a portal moves the DOM, not the React tree, so a
+      // scrim click still bubbled to whatever rendered this -- a confirmation
+      // opened from inside a clickable row also "clicked" the row.
+      onClick={(e) => { e.stopPropagation(); onClose?.(); }} role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={panelRef} className={cls('sheet w-full flex flex-col anim-scaleIn max-h-[92vh] sm:max-h-[90vh] outline-none', wide ? 'sm:max-w-2xl' : 'sm:max-w-md')}
         onClick={(e) => e.stopPropagation()}>
         <div className="sheet-handle sm:hidden" />
         <div className="sheet-header">
@@ -250,6 +354,63 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
       </div>
     </div>
   ), document.body);
+}
+
+/**
+ * CONFIRMATION — the app's own dialog in place of window.confirm.
+ *
+ *   const [confirm, confirmDialog] = useConfirm();
+ *   if (!(await confirm({ title: 'Delete this workout?', body: '…', confirmLabel: 'Delete' }))) return;
+ *   // …and render {confirmDialog} once in the component.
+ *
+ * Fourteen actions asked through window.confirm and three reported failures
+ * through window.alert: an unstyled operating-system popup in the middle of a
+ * designed app, outside its focus and Escape handling, and one that some
+ * in-app browsers suppress outright -- which turns a Delete button into one
+ * that silently does nothing. Built on Modal, so it inherits useDialog: focus
+ * starts on Close (the least destructive control), Escape cancels, and
+ * focus returns to the button that asked.
+ *
+ * Keep `title` to the question -- it is a single line -- and put the
+ * consequences in `body`, which wraps and keeps line breaks.
+ *
+ * `cancelLabel: null` makes it a notice with one button, for a failure the
+ * person has to read before carrying on (what window.alert was used for).
+ */
+export function useConfirm() {
+  const [request, setRequest] = useState(null);
+
+  const confirm = useCallback((options) => new Promise((resolve) => {
+    setRequest((previous) => {
+      previous?.resolve(false); // a superseded question is a no
+      return { confirmLabel: 'Confirm', cancelLabel: 'Cancel', danger: true, ...options, resolve };
+    });
+  }), []);
+
+  const settle = (answer) => {
+    request?.resolve(answer);
+    setRequest(null);
+  };
+
+  const dialog = (
+    <Modal
+      open={!!request}
+      onClose={() => settle(false)}
+      title={request?.title || ''}
+      footer={request && (
+        <div className="flex gap-2 justify-end">
+          {request.cancelLabel !== null && (
+            <Button variant="secondary" onClick={() => settle(false)}>{request.cancelLabel}</Button>
+          )}
+          <Button variant={request.danger ? 'danger' : 'primary'} onClick={() => settle(true)}>{request.confirmLabel}</Button>
+        </div>
+      )}
+    >
+      {request?.body && <p className="t-sub" style={{ whiteSpace: 'pre-line' }}>{request.body}</p>}
+    </Modal>
+  );
+
+  return [confirm, dialog];
 }
 
 /**
@@ -281,22 +442,10 @@ export function Sheet({
   open, onClose, title, sub, children, footer, wide, labelledBy,
   closeLabel = 'Close', dismissOnBackdrop = true,
 }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  /* The page behind must not scroll while a sheet is up: on iOS a touch
-     that starts on the backdrop otherwise drags the page, which is the
-     other half of "I'm scrolling over a blurred screen". */
-  useEffect(() => {
-    if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
+  /* useDialog also locks page scroll: on iOS a touch that starts on the
+     backdrop otherwise drags the page, which is the other half of "I'm
+     scrolling over a blurred screen". */
+  const panelRef = useDialog(open, onClose);
 
   if (!open) return null;
 
@@ -304,15 +453,16 @@ export function Sheet({
     <div
       className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
       style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
+      onClick={(e) => { e.stopPropagation(); if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
       role="dialog"
       aria-modal="true"
       aria-label={labelledBy ? undefined : title}
       aria-labelledby={labelledBy}
     >
       <div
+        ref={panelRef}
         className={cls(
-          'card w-full flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn',
+          'card w-full flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn outline-none',
           'max-h-[88vh] sm:max-h-[90vh]',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
         )}

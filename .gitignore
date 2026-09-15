@@ -35,3 +35,9 @@ Thumbs.db
 .claude/settings.local.json
 .claude/worktrees/
 .vercel
+
+# Playwright (frontend/playwright.config.js): saved sign-in sessions and run
+# output. Screenshot baselines under e2e/__screenshots__ ARE committed.
+frontend/e2e/.auth/
+frontend/e2e/.results/
+frontend/e2e/.report/

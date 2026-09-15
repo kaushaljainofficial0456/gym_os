@@ -713,6 +713,9 @@ function PrDetail({ open, onClose, exercise }) {
           </div>
 
           {hist.loading && <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Loading history…</div>}
+          {/* Without this a failed load drew nothing at all -- no chart, no
+              sessions, and no hint that anything had gone wrong. */}
+          {hist.error && <ErrorState error={hist.error} onRetry={hist.reload} />}
 
           {series.length >= 2 ? (
             <div>
@@ -1025,6 +1028,7 @@ function ConsistencySection({ intel }) {
                       <span
                         key={cell.key}
                         title={fmtCell(cell)}
+                        role="img"
                         aria-label={fmtCell(cell)}
                         className="block rounded-[2px]"
                         style={{ width: 11, height: 11, background: STATE[cell.state].bg, opacity: cell.future ? 0.35 : 1 }}

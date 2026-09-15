@@ -4,7 +4,7 @@ import { api } from '../../api.js';
 import SavingOverlay from './SavingOverlay.jsx';
 import MealFoodRow from './MealFoodRow.jsx';
 import CustomFoodBadge from './CustomFoodBadge.jsx';
-import { CheckIcon, XIcon } from './../UI.jsx';
+import { CheckIcon, XIcon, useDialog } from './../UI.jsx';
 
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
 const makeRowId = () => `row_${Math.random().toString(36).slice(2)}`;
@@ -60,12 +60,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   // step back through one level at a time (unlike FoodLogSheet's portion
   // picker/AI review/barcode confirm); each MealFoodRow's own local state
   // is transient entry-in-progress, not a navigation level.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const panelRef = useDialog(open, onClose);
 
   if (!open) return null;
 
@@ -227,7 +222,7 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
       {/* Flex column so only the body scrolls -- this was one scrolling
           card, which pushed the meal-name field and the save action off
           screen once a few foods had been added. */}
-      <div className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn">
+      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn">
         <div className="shrink-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Create New Meal</div>

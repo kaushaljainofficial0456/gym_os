@@ -86,6 +86,12 @@ export default function EnergyBalanceChart() {
   };
 
   const shown = picked ? model.all.find((d) => d.date === picked) : null;
+  const pickedIdx = picked ? model.all.findIndex((d) => d.date === picked) : -1;
+  // From the period summary, Previous opens the most recent day.
+  const stepDay = (delta) => {
+    const next = model.all[pickedIdx === -1 ? model.all.length - 1 : pickedIdx + delta];
+    if (next) setPicked(next.date);
+  };
 
   return (
     <div className="card p-4">
@@ -177,7 +183,10 @@ export default function EnergyBalanceChart() {
             <div
               className="flex items-stretch gap-[3px]"
               style={{ height: 150, minWidth: Math.max(model.all.length * 10, 260) }}
-              role="img"
+              // group, not img: every bar is a real button, and role="img"
+              // makes its children presentational -- the per-day buttons
+              // vanished for screen readers while staying clickable.
+              role="group"
               aria-label={`Net energy balance for the last ${days} days. ${model.surplusDays} days in surplus, ${model.deficitDays} in deficit.`}
             >
               {model.all.map((d) => {
@@ -225,6 +234,30 @@ export default function EnergyBalanceChart() {
           <div className="flex justify-between text-[9.5px] mt-1.5 tabular-nums" style={{ color: 'var(--faint)' }}>
             <span>{shortDate(model.all[0]?.date)}</span>
             <span>{shortDate(model.all[model.all.length - 1]?.date)}</span>
+          </div>
+
+          {/* ── day stepper ──
+              Each bar is a few pixels wide at 14 days and one or two at 90, far
+              under WCAG 2.2's 24px target size, and a keyboard user had to Tab
+              through every one. These are the equivalent control 2.5.8 asks
+              for: full-size, and one stop each. The bars stay as a shortcut. */}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <button type="button" className="chrome-btn btn-icon justify-center" aria-label="Previous day"
+              disabled={pickedIdx === 0} onClick={() => stepDay(-1)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            </button>
+            {shown ? (
+              <button type="button" className="text-[11px] font-semibold px-2 py-1 rounded-lg" style={{ color: 'var(--mute)', minHeight: 32 }}
+                onClick={() => setPicked(null)}>
+                Back to {days}-day summary
+              </button>
+            ) : (
+              <span className="text-[11px]" style={{ color: 'var(--faint)' }}>Step through days</span>
+            )}
+            <button type="button" className="chrome-btn btn-icon justify-center" aria-label="Next day"
+              disabled={pickedIdx === -1 || pickedIdx === model.all.length - 1} onClick={() => stepDay(1)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+            </button>
           </div>
 
           {/* ── the tapped day, or the period summary ── */}

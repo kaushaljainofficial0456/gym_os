@@ -20,7 +20,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Pressable } from '../design/index.js';
-import { XIcon } from './UI.jsx';
+import { XIcon, useDialog } from './UI.jsx';
 
 const supportsDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
@@ -112,6 +112,8 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
   }, [open]);
 
   useEffect(() => stop, []);
+  // Escape does what Close does, camera included.
+  const panelRef = useDialog(open, () => { stop(); onClose(); });
 
   if (!open) return null;
 
@@ -124,8 +126,9 @@ export default function BarcodeScanner({ open, onClose, onScanned }) {
     // there stops it.
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
          style={{ background: 'rgb(var(--bg-rgb) / .92)' }}
-         onClick={(e) => e.stopPropagation()}>
-      <div className="card w-full max-w-sm p-4">
+         onClick={(e) => e.stopPropagation()}
+         role="dialog" aria-modal="true" aria-label="Scan barcode">
+      <div ref={panelRef} className="card w-full max-w-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Scan barcode</div>
           <button onClick={() => { stop(); onClose(); }} aria-label="Close scanner" style={{ color: 'var(--mute)' }}><XIcon /></button>

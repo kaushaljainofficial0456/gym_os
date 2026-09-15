@@ -15,7 +15,7 @@ import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR }
 import { invalidateDayStart } from '../services/logDay.js';
 import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
-import { track } from '../services/events.js';
+import { track, trackOnce } from '../services/events.js';
 import { computeOccupancy } from '../services/occupancy.js';
 import {
   foodSearch,
@@ -251,6 +251,9 @@ export default function meRoutes(db) {
          ON CONFLICT(client_id) DO UPDATE SET ${psets.join(', ')}`,
         [c.id, ...pparams, ...pparams]);
     }
+    // The first true value is the moment setup finished; later saves that
+    // repeat the flag are not (trackOnce).
+    if (onboarding_completed) await trackOnce(db, { type: 'onboarding_completed', orgId: c.org_id, userId: req.user.sub, data: { client_id: c.id } });
     track(db, 'client_profile_updated', req.user.org, req.user.sub, { client_id: c.id });
     res.json({ ok: true });
   });
@@ -1056,6 +1059,7 @@ export default function meRoutes(db) {
       [lId, c.id, d, m.slot, m.name, Math.round(m.calories * scale), r1(m.protein * scale), r1(m.carbs * scale), r1(m.fat * scale),
        scale, 'serving', m.id]);
     track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'client_custom', servings: scale });
+    await trackOnce(db, { type: 'first_meal_logged', orgId: c.org_id, userId: c.user_id, data: { client_id: c.id, source: 'client_custom' } });
     res.json({ id: lId });
   });
 
@@ -1414,6 +1418,8 @@ export default function meRoutes(db) {
 
     await track(db, { type: 'cardio_logged', orgId: c.org_id, userId: req.user.sub,
       data: { clientId: c.id, activityId: b.activity_id, durationSec: b.duration_sec } }).catch(() => {});
+    // Cardio is training, as it is for the streak.
+    await trackOnce(db, { type: 'first_workout_logged', orgId: c.org_id, userId: c.user_id, data: { clientId: c.id, kind: 'cardio' } });
     res.status(201).json({ ok: true, id: sessionId, date });
   });
 

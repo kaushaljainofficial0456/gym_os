@@ -12,6 +12,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Pressable } from '../design/index.js';
+import { useDialog } from './UI.jsx';
 
 const ROW_H = 40;
 // Fractional near 1 (½ bowl / 1 bowl / 1½ bowls reads naturally for most
@@ -61,12 +62,7 @@ export default function PortionWheel({ open, portion, initialQty = 1, onCancel, 
   // reusable component (not FoodLogSheet-specific), so it owns its own
   // dismiss behavior rather than relying on whatever happens to host it
   // to wire that up.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
+  const panelRef = useDialog(open && !!portion, onCancel);
 
   if (!open || !portion) return null;
 
@@ -100,7 +96,7 @@ export default function PortionWheel({ open, portion, initialQty = 1, onCancel, 
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center sm:justify-center"
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
          onClick={onCancel} role="dialog" aria-modal="true" aria-label={`${portion.label} quantity`}>
-      <div className="card w-full sm:max-w-xs rounded-b-none sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={panelRef} className="card w-full sm:max-w-xs rounded-b-none sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="px-5 pt-5 pb-1 text-center">
           <div className="text-[13px] font-bold" style={{ color: 'var(--ink)' }}>{portion.label}</div>
           <div className="text-[10px] mt-0.5" style={{ color: 'var(--faint)' }}>{portion.grams}g each</div>

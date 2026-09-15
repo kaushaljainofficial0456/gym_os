@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, fmtK, fmt1 } from '../../utils.js';
-import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton } from '../../components/UI.jsx';
+import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import MembersTable from '../../components/trainer/MembersTable.jsx';
 import { TrendChart } from '../../components/charts.jsx';
 import { status } from '../../design/tokens.js';
@@ -22,8 +22,9 @@ const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', mon
 // (suspend/cancel) ask for confirmation, per spec.
 function MembershipActions({ member, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
-  const act = async (action, confirmMsg) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+  const [confirm, confirmDialog] = useConfirm();
+  const act = async (action, question) => {
+    if (question && !(await confirm(question))) return;
     setBusy(true);
     try {
       await api(`/admin/members/${member.id}/membership/${action}`, { method: 'POST', body: JSON.stringify({}) });
@@ -34,10 +35,17 @@ function MembershipActions({ member, onChanged, onError }) {
   const s = member.lifecycle_status;
   return (
     <div className="flex gap-1.5 justify-end">
-      {s === 'ACTIVE' && <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('suspend', `Suspend ${member.name}'s membership?`)}>Suspend</button>}
+      {confirmDialog}
+      {s === 'ACTIVE' && <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('suspend', { title: `Suspend ${member.name}'s membership?`, body: 'You can resume it later.', confirmLabel: 'Suspend' })}>Suspend</button>}
       {s === 'SUSPENDED' || s === 'PAUSED' ? <button className="btn-ghost btn-sm" disabled={busy} onClick={() => act('resume')}>Resume</button> : null}
       {(s === 'ACTIVE' || s === 'SUSPENDED' || s === 'PAUSED') && (
-        <button className="btn-ghost btn-sm text-bad" disabled={busy} onClick={() => act('cancel', `Cancel ${member.name}'s membership? This cannot be undone.`)}>Cancel</button>
+        <button className="btn-ghost btn-sm text-bad" disabled={busy} onClick={() => act('cancel', {
+          title: `Cancel ${member.name}'s membership?`,
+          body: 'This cannot be undone.',
+          confirmLabel: 'Cancel membership',
+          // Not "Cancel": beside "Cancel membership" that reads as the same action.
+          cancelLabel: 'Keep membership',
+        })}>Cancel</button>
       )}
     </div>
   );
@@ -242,7 +250,7 @@ export default function Business() {
             </div>
             <div className="space-y-2.5">
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">DEFAULT CLIENT PERMISSIONS</div>
-              <select className="input" value={setForm.workout_mode_default} onChange={(e) => setSetForm((f) => ({ ...f, workout_mode_default: e.target.value }))}>
+              <select className="input" aria-label="Default workout mode for new clients" value={setForm.workout_mode_default} onChange={(e) => setSetForm((f) => ({ ...f, workout_mode_default: e.target.value }))}>
                 <option value="hybrid">Hybrid — trainer prescribes, client can personalize</option>
                 <option value="prescribed">Prescribed — trainer controls workouts</option>
                 <option value="custom">Custom — clients build their own workouts</option>
@@ -284,7 +292,7 @@ export default function Business() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Kicker>Attendance</Kicker>
           <div className="flex items-center gap-2">
-            <input type="date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
+            <input type="date" aria-label="Attendance date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
             {!attList && <button className="btn btn-sm" onClick={() => loadAttendance()}>Load</button>}
           </div>
         </div>
@@ -363,16 +371,19 @@ export default function Business() {
       {/* members */}
       <Card>
         <Kicker>Members</Kicker>
-        <MembersTable
-          members={members.data?.members || []}
-          renderActions={(m) => (m.subscription_id ? (
-            <MembershipActions
-              member={m}
-              onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }}
-              onError={(msg) => setToast(msg)}
-            />
-          ) : null)}
-        />
+        {/* A roster that failed to load is not "No members yet". */}
+        {members.error ? <ErrorState error={members.error} onRetry={members.reload} /> : (
+          <MembersTable
+            members={members.data?.members || []}
+            renderActions={(m) => (m.subscription_id ? (
+              <MembershipActions
+                member={m}
+                onChanged={() => { members.reload({ silent: true }); setToast('Updated'); }}
+                onError={(msg) => setToast(msg)}
+              />
+            ) : null)}
+          />
+        )}
       </Card>
 
       <Modal open={pkgOpen} onClose={() => setPkgOpen(false)} title="New package">
@@ -389,28 +400,32 @@ export default function Business() {
 
       <Modal open={subOpen} onClose={() => setSubOpen(false)} title="New subscription">
         <div className="space-y-3">
-          <select className="input" value={subForm.client_id} onChange={(e) => setSubForm((f) => ({ ...f, client_id: e.target.value }))}>
+          <select className="input" aria-label="Member" value={subForm.client_id} onChange={(e) => setSubForm((f) => ({ ...f, client_id: e.target.value }))}>
             <option value="">Choose member…</option>
             {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
-          <select className="input" value={subForm.package_id} onChange={(e) => setSubForm((f) => ({ ...f, package_id: e.target.value }))}>
+          <select className="input" aria-label="Package" value={subForm.package_id} onChange={(e) => setSubForm((f) => ({ ...f, package_id: e.target.value }))}>
             <option value="">Choose package…</option>
             {(d.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} · ₹{fmtK(p.amount)}</option>)}
           </select>
-          <input type="date" className="input" value={subForm.start_date} onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))} />
+          {/* A bare date field gave no hint what the date was for. */}
+          <div className="field">
+            <label htmlFor="sub-start-date" className="field-label">Start date</label>
+            <input id="sub-start-date" type="date" className="input mt-1.5" value={subForm.start_date} onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))} />
+          </div>
           <button className="btn-primary w-full" onClick={addSub}>Create subscription</button>
         </div>
       </Modal>
 
       <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Record payment">
         <div className="space-y-3">
-          <select className="input" value={payForm.client_id} onChange={(e) => setPayForm((f) => ({ ...f, client_id: e.target.value }))}>
+          <select className="input" aria-label="Member" value={payForm.client_id} onChange={(e) => setPayForm((f) => ({ ...f, client_id: e.target.value }))}>
             <option value="">Choose member…</option>
             {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
           <div className="grid grid-cols-2 gap-3">
-            <input className="input" type="number" placeholder="Amount ₹" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
-            <select className="input" value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}>
+            <input className="input" type="number" aria-label="Amount in rupees" placeholder="Amount ₹" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
+            <select className="input" aria-label="Payment method" value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}>
               <option value="cash">Cash</option>
               <option value="upi">UPI</option>
               <option value="card">Card</option>

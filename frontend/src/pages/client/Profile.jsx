@@ -6,7 +6,7 @@ import { useTheme } from '../../themeContext.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import { DASH_CARDS, DEFAULT_ORDER, resolveDashboard, parseDashboardPrefs } from '../../dashboardCards.js';
 import WeightInput, { LengthInput } from '../../components/WeightInput.jsx';
-import { ErrorState, Ring, XIcon, PageSkeleton } from '../../components/UI.jsx';
+import { ErrorState, Ring, XIcon, PageSkeleton, useConfirm, useDialog } from '../../components/UI.jsx';
 // TWO components are called Ring and they mean OPPOSITE things by `label`:
 // UI.jsx's renders it as visible 26px centre text, Ring.jsx's uses it as an
 // aria-label. Writing a call for one while importing the other put a whole
@@ -398,6 +398,8 @@ export default function Profile() {
   const [localAvatar, setLocalAvatar] = useState(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const removeConfirmRef = useDialog(removeConfirmOpen, () => setRemoveConfirmOpen(false));
+  const [confirm, confirmDialog] = useConfirm();
   // coach memory/preferences
   const coachMem = useFetch(() => api('/intel/coach/memory'));
   const [coachPrefs, setCoachPrefs] = useState({});
@@ -573,14 +575,11 @@ export default function Profile() {
        to produce. There is no undo and no soft delete behind it, so the
        confirm names the exact reading rather than asking "are you sure?",
        which tells the reader nothing about what is about to vanish. */
-    const ok = window.confirm(
-      label
-        ? `Delete this measurement?
-
-${label}
-
-This cannot be undone.`
-        : 'Delete this measurement? This cannot be undone.');
+    const ok = await confirm({
+      title: 'Delete this measurement?',
+      body: label ? `${label}\n\nThis cannot be undone.` : 'This cannot be undone.',
+      confirmLabel: 'Delete',
+    });
     if (!ok) return;
     try {
       await api(`/me/metrics/${mId}/entries/${eId}`, { method: 'DELETE' });
@@ -615,14 +614,14 @@ This cannot be undone.`
   const deleteMetric = async (mId) => {
     const metric = (metrics.data?.metrics || []).find((x) => x.id === mId);
     const n = metric?.entriesCount ?? (metric?.entries || []).length;
-    const ok = window.confirm(
-      `Delete "${metric?.name || 'this metric'}"?
-
-`
-      + (n > 0
+    const ok = await confirm({
+      title: `Delete "${metric?.name || 'this metric'}"?`,
+      body: (n > 0
         ? `Its ${n} recorded ${n === 1 ? 'measurement' : 'measurements'} will be deleted too. `
         : '')
-      + 'This cannot be undone.');
+        + 'This cannot be undone.',
+      confirmLabel: 'Delete metric',
+    });
     if (!ok) return;
     await api(`/me/metrics/${mId}`, { method: 'DELETE' }).then(() => { metrics.reload({ silent: true }); setToast('Metric deleted'); }).catch((e) => setToast(e.message));
   };
@@ -708,11 +707,13 @@ This cannot be undone.`
           : null;
         if (wrongWay) {
           const label = gForm.goal === 'FAT_LOSS' ? 'fat loss' : 'muscle gain';
-          const ok = window.confirm(
-            `Your target (${units.fmtWeight(targetVal)}) is ${wrongWay} than your starting weight (${units.fmtWeight(compare)}), `
-            + `but your goal is ${label}.
-
-Save it anyway?`);
+          const ok = await confirm({
+            title: 'Save this target anyway?',
+            body: `Your target (${units.fmtWeight(targetVal)}) is ${wrongWay} than your starting weight (${units.fmtWeight(compare)}), `
+              + `but your goal is ${label}.`,
+            confirmLabel: 'Save anyway',
+            danger: false,
+          });
           if (!ok) { setSavingG(false); return; }
         }
       }
@@ -1066,7 +1067,9 @@ Save it anyway?`);
                     </div>
                   );
                 })}
-                {!metrics.data?.metrics?.length && <div className="text-center text-xs text-mute py-3">No personal metrics yet — create your first one above (e.g. waist, steps, bench press).</div>}
+                {/* A failed load is not an empty list: this would ask someone who
+                    tracks five metrics to create their first. */}
+                {metrics.error ? <ErrorState error={metrics.error} onRetry={metrics.reload} /> : !metrics.loading && !metrics.data?.metrics?.length && <div className="text-center text-xs text-mute py-3">No personal metrics yet — create your first one above (e.g. waist, steps, bench press).</div>}
               </div>
             </div>
           </div>
@@ -1338,10 +1341,12 @@ Save it anyway?`);
             and "file upload, blank" is not an answer to what it does. */}
         <input id="avatar-camera" aria-label="Take a profile photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleAvatarUpload} />
         <input id="avatar-gallery" aria-label="Choose a profile photo from your device" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
+        {confirmDialog}
         {/* Remove photo confirmation */}
         {removeConfirmOpen && (
-          <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
-            <div className="w-full max-w-xs rounded-2xl p-5 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+          <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" onClick={(e) => { if (e.target === e.currentTarget) setRemoveConfirmOpen(false); }} style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+            role="alertdialog" aria-modal="true" aria-label="Remove profile photo?">
+            <div ref={removeConfirmRef} className="w-full max-w-xs rounded-2xl p-5 anim-scaleIn" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
               <div className="text-center mb-4">
                 <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Remove profile photo?</div>
                 <div className="text-[11px] mt-1" style={{ color: 'var(--mute)' }}>Your initial letter will be shown instead.</div>

@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api, getStoredUser, setSession, setStoredUser, clearSession, clearStoredUser } from './api.js';
 
+/** Roles that work in the trainer/owner workspace rather than the client app. */
+export const isTrainerRole = (role) => ['GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'].includes(role);
+
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -154,7 +157,7 @@ export function AuthProvider({ children }) {
     return u;
   };
 
-  const isTrainer = user && ['GYM_OWNER', 'TRAINER', 'SUPER_ADMIN'].includes(user.role);
+  const isTrainer = user && isTrainerRole(user.role);
   const isOwner = user && ['GYM_OWNER', 'SUPER_ADMIN'].includes(user.role);
   const isClient = user && user.role === 'CLIENT';
   // /auth/login|register|setup-org|google return camelCase `orgSlug`;

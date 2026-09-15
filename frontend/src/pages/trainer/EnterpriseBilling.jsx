@@ -213,6 +213,9 @@ export default function EnterpriseBilling() {
 
       <Card className="p-5 space-y-3">
         <div className="kicker">Upgrade / renew package</div>
+        {/* Packages that failed to load are not "nothing to upgrade to": the
+            options simply did not render, with no reason given. */}
+        {packages.error && <ErrorState error={packages.error} onRetry={packages.reload} />}
         <div className="grid sm:grid-cols-3 gap-2">
           {(packages.data?.packages || []).filter((p) => p.client_capacity !== currentCapacity).map((p) => (
             <button key={p.id} className="btn" disabled={busy} onClick={() => startUpgrade(p.client_capacity)}>
@@ -233,8 +236,10 @@ export default function EnterpriseBilling() {
       <Card className="p-5 space-y-3">
         <div className="kicker">Buy additional capacity</div>
         <div className="flex gap-2">
-          <select className="input flex-1" value={addonId} onChange={(e) => setAddonId(e.target.value)}>
-            <option value="">Select add-on…</option>
+          {/* Add-ons come from the same request as the packages above: when it
+              failed, say so here too rather than offer an empty list. */}
+          <select className="input flex-1" value={addonId} onChange={(e) => setAddonId(e.target.value)} disabled={!!packages.error}>
+            <option value="">{packages.error ? 'Add-ons could not be loaded' : 'Select add-on…'}</option>
             {(packages.data?.capacityAddons || []).map((a) => <option key={a.id} value={a.id}>+{a.increment} clients — ₹{a.price.toLocaleString('en-IN')}</option>)}
           </select>
           <button className="btn-primary" disabled={busy || !addonId} onClick={startAddon}>Buy</button>
@@ -263,6 +268,10 @@ export default function EnterpriseBilling() {
           <div className="space-y-2" aria-busy="true">
             {[0, 1, 2].map((i) => <div key={i} className="skeleton-row" />)}
           </div>
+        ) : invoices.error ? (
+          // A failed load is not an empty history: 'No receipts yet' would tell
+          // an owner they have never been billed.
+          <Card><ErrorState error={invoices.error} onRetry={invoices.reload} /></Card>
         ) : !invoices.data?.invoices?.length ? (
           <Card>
             <div className="empty-state">

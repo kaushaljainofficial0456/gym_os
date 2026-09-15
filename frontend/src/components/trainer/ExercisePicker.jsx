@@ -25,6 +25,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
+import { useDialog } from '../UI.jsx';
 
 /** Turn a raw identifier into words, for the rare row whose name is a
  *  slug. Never used to REPLACE a real name -- only as a last resort. */
@@ -100,12 +101,7 @@ export default function ExercisePicker({ open, onClose, onAdd, onOpenMuscleMap, 
     setTimeout(() => setJustAdded(null), 900);
   }, [onAdd]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const panelRef = useDialog(open, onClose);
 
   if (!open) return null;
 
@@ -127,6 +123,7 @@ export default function ExercisePicker({ open, onClose, onAdd, onOpenMuscleMap, 
       role="dialog" aria-modal="true" aria-label="Add exercise"
     >
       <div
+        ref={panelRef}
         className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl flex flex-col"
         style={{
           background: 'var(--bg)', border: '1px solid var(--line)',

@@ -16,7 +16,7 @@ import { validate, schemas } from '../validate.js';
 import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
 import { clientLogDay } from '../services/logDay.js';
-import { track } from '../services/events.js';
+import { track, trackOnce } from '../services/events.js';
 import { parseFoodInput } from '../services/intelligence/parseFoods.js';
 import { parseWorkoutInput } from '../services/intelligence/parseWorkout.js';
 import { parseQuantity, foodBase } from '../services/intelligence/units.js';
@@ -160,6 +160,7 @@ export default function intelligenceRoutes(db) {
     await logEvent(db, c.org_id, c.id, 'nutrition', JSON.stringify(entries),
       { committed: committed.map((x) => x.food_id) }, { count: committed.length }, 'confirm');
     await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'intel_food_logged', data: { clientId: c.id, count: committed.length } });
+    await trackOnce(db, { type: 'first_meal_logged', orgId: c.org_id, userId: c.user_id, data: { clientId: c.id, source: 'intel' } });
     res.json({ ok: true, committed, date: d });
   });
 
@@ -269,6 +270,7 @@ export default function intelligenceRoutes(db) {
     await logEvent(db, c.org_id, c.id, 'workout', exercise_name || exercise_id,
       { exercise: name, sets: cleanSets.length }, { workoutId: wId }, 'confirm');
     await track(db, { orgId: c.org_id, userId: req.user.sub, type: 'intel_workout_logged', data: { clientId: c.id, workoutId: wId, estimatedKcal: txResult?.calorie?.estimated_active_kcal ?? null } });
+    await trackOnce(db, { type: 'first_workout_logged', orgId: c.org_id, userId: c.user_id, data: { clientId: c.id, workoutId: wId } });
     res.json({ ok: true, workoutId: wId, name, setsLogged: cleanSets.length, date: d, calorie: txResult?.calorie ?? null });
   });
 

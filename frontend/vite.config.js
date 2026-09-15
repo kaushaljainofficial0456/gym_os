@@ -14,6 +14,15 @@ const PRODUCTION_CSP = "default-src 'self'; script-src 'self' https://checkout.r
 
 export default defineConfig({
   plugins: [react()],
+  // Vitest. Component tests (*.test.jsx) render real React into jsdom; the
+  // pure-function tests (*.test.js) stay in plain Node, which is faster and
+  // proves they need no DOM. Playwright's browser specs live in e2e/ and are
+  // run by Playwright -- `include` keeps Vitest from collecting them.
+  test: {
+    include: ['test/**/*.test.{js,jsx}'],
+    environmentMatchGlobs: [['test/**/*.test.jsx', 'jsdom']],
+    setupFiles: ['./test/setup.js'],
+  },
   build: {
     rollupOptions: {
       output: {

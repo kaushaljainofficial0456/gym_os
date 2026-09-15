@@ -113,7 +113,7 @@ export default function NutritionBuilder() {
         <button className="btn-primary" onClick={startNew}>+ New plan</button>
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <Card className="lg:col-span-2 self-start" data-tour="trainer-nutrition-plans">
           <Kicker>Your plans</Kicker>
           <div className="space-y-1.5">
@@ -200,10 +200,13 @@ export default function NutritionBuilder() {
         <div className="space-y-3">
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
-            <select className="input" value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
-              <option value="">Choose client…</option>
-              {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-            </select>
+            {/* A client list that failed to load is not a gym with no clients. */}
+            {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
+              <select className="input" value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
+                <option value="">Choose client…</option>
+                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
+              </select>
+            )}
           </div>
           <button className="btn-primary w-full" onClick={assign} disabled={saving}>{saving ? 'Assigning…' : 'Assign plan'}</button>
         </div>

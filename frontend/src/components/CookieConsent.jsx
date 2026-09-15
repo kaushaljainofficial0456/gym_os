@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react';
+import { useDialog } from './UI.jsx';
 
 // Cookie categories that the app actually uses:
 //   Essential  — auth tokens (pos_token, sk_token, pos_user). Cannot reject.
@@ -156,6 +157,7 @@ function CookieBanner({ onAcceptAll, onRejectOptional, onManage }) {
 }
 
 function CookiePreferencesModal({ onClose, onSave, current }) {
+  const panelRef = useDialog(true, onClose);
   const [prefs, setPrefs] = useState({
     essential: true,
     preferences: current?.preferences ?? false,
@@ -174,6 +176,7 @@ function CookiePreferencesModal({ onClose, onSave, current }) {
       <div className="scrim !z-0 anim-fadeIn" />
 
       <div
+        ref={panelRef}
         className="relative w-full sm:max-w-lg max-h-[85vh] flex flex-col sheet anim-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >

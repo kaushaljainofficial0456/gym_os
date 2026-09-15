@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card } from '../../components/UI.jsx';
+import { Card, ErrorState, useConfirm } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
@@ -405,6 +405,7 @@ function MeasurementForm({ clientId, onDone, onCancel, editing, previous }) {
  * a horizontal scroll pretending to be a data grid.
  */
 function MeasurementHistory({ clientId, reloadKey, onChanged }) {
+  const [confirm, confirmDialog] = useConfirm();
   const u = useUnits();
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -426,7 +427,11 @@ function MeasurementHistory({ clientId, reloadKey, onChanged }) {
     // Confirmed, and named: "are you sure?" over a list of six identical
     // cards does not tell you WHICH one is about to go.
     const when = new Date(row.taken_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-    if (!window.confirm(`Delete the measurements recorded on ${when}? This cannot be undone.`)) return;
+    if (!(await confirm({
+      title: 'Delete these measurements?',
+      body: `Every reading recorded on ${when} goes. This cannot be undone.`,
+      confirmLabel: 'Delete',
+    }))) return;
     setBusyId(row.id);
     try {
       await api(`/clients/${clientId}/measurements/${row.id}`, { method: 'DELETE' });
@@ -450,6 +455,7 @@ function MeasurementHistory({ clientId, reloadKey, onChanged }) {
 
   return (
     <div className="mt-3">
+      {confirmDialog}
       <div className="flex items-center justify-between mb-1.5">
         <div className="text-[10px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>History</div>
         <button className="text-[10.5px] font-semibold tap-target" style={{ color: 'var(--accent)' }} onClick={() => { setOpen(false); setEditingId(null); }}>
@@ -541,6 +547,7 @@ function MeasurementHistory({ clientId, reloadKey, onChanged }) {
  */
 function CustomMetrics() {
   const metrics = useFetch(() => api('/me/metrics'), []);
+  const [confirm, confirmDialog] = useConfirm();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', unit: '', type: 'number', frequency: 'weekly', target: '' });
   const [busy, setBusy] = useState(false);
@@ -585,9 +592,11 @@ function CustomMetrics() {
   };
 
   const remove = async (m) => {
-    if (!window.confirm(
-      `Delete "${m.name}" and every reading you have recorded for it?\n\nThis cannot be undone.`,
-    )) return;
+    if (!(await confirm({
+      title: `Delete "${m.name}"?`,
+      body: 'Every reading you have recorded for it goes too. This cannot be undone.',
+      confirmLabel: 'Delete metric',
+    }))) return;
     try {
       await api(`/me/metrics/${m.id}`, { method: 'DELETE' });
       metrics.reload({ silent: true });
@@ -596,6 +605,7 @@ function CustomMetrics() {
 
   return (
     <Card className="p-4">
+      {confirmDialog}
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-bold uppercase tracking-[.09em]" style={{ color: 'var(--faint)' }}>
           Anything else you track
@@ -655,7 +665,10 @@ function CustomMetrics() {
         </form>
       )}
 
-      {!rows.length && !adding && (
+      {/* A failed load is not an empty list -- the copy below would tell
+          someone who tracks five metrics that they track none. */}
+      {metrics.error && <ErrorState error={metrics.error} onRetry={metrics.reload} />}
+      {!metrics.error && !rows.length && !adding && (
         <p className="mt-2 text-[11.5px] leading-snug" style={{ color: 'var(--faint)' }}>
           Resting heart rate, sleep hours, step count, a lift you want to watch — anything with a
           number and a date belongs here.
@@ -795,8 +808,10 @@ export function AchievementsSection({ intel, Section }) {
       className="rounded-[var(--r-lg)] p-3"
       style={{
         background: a.earned ? `var(--m-${a.hue}-bg)` : 'transparent',
+        // No opacity on the tile: dimming it to .75 took its description
+        // and level text to 3.8:1, under AA. Unearned already reads as
+        // unearned -- no fill, an outline, and a grey icon instead of a check.
         border: `1px solid ${a.earned ? 'transparent' : 'var(--line)'}`,
-        opacity: a.earned ? 1 : 0.75,
       }}
     >
       <div className="flex items-start justify-between gap-2">

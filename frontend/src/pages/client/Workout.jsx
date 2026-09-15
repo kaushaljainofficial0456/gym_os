@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
-import { ErrorState, CheckIcon, XIcon } from '../../components/UI.jsx';
+import { ErrorState, CheckIcon, XIcon, useConfirm, useDialog } from '../../components/UI.jsx';
 import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
@@ -378,6 +378,14 @@ export default function Workout() {
   const [cardioItems, setCardioItems] = useState([]);
   const [cardioMode, setCardioMode] = useState('browse');      // browse | execute | summary
   const [cardioOpen, setCardioOpen] = useState(false);
+  // Focus, Escape and scroll lock for this page's five modals. Each close
+  // does exactly what that modal's own X button does.
+  const builderDialogRef = useDialog(builderOpen, () => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); });
+  const plannerDialogRef = useDialog(plannerOpen, () => setPlannerOpen(false));
+  const weekDayDialogRef = useDialog(!!weekDay, () => setWeekDay(null));
+  const cardioDialogRef = useDialog(cardioOpen, () => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); });
+  const addExDialogRef = useDialog(addExOpen, () => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); });
+  const [confirm, confirmDialog] = useConfirm();
   const [cardioSearch, setCardioSearch] = useState('');
   const [cardioConfigItem, setCardioConfigItem] = useState(null);
   const [cardioActiveId, setCardioActiveId] = useState(null);  // which exercise is currently running
@@ -567,7 +575,7 @@ export default function Workout() {
   };
 
   const deletePlan = async (w) => {
-    if (!window.confirm(`Delete "${w.name}"?`)) return;
+    if (!(await confirm({ title: `Delete "${w.name}"?`, confirmLabel: 'Delete workout' }))) return;
     try {
       await api(`/me/planner/workouts/${w.id}`, { method: 'DELETE' });
       setToast('Workout deleted');
@@ -1647,8 +1655,8 @@ export default function Workout() {
             bounding rect landed hundreds of pixels above/below the
             visible screen depending on scroll position. */}
         {builderOpen && createPortal((
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
-            <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="Build my workout">
+            <div ref={builderDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <div className="font-grotesk font-bold">Build my workout</div>
@@ -1818,10 +1826,12 @@ export default function Workout() {
           onSaved={() => { today.reload({ silent: true }); hist.reload({ silent: true }); }}
         />
 
+        {confirmDialog}
+
         {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
         {plannerOpen && (
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
-            <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="My workouts">
+            <div ref={plannerDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
                 <div>
                   <div className="font-grotesk font-bold">My workouts</div>
@@ -1848,8 +1858,18 @@ export default function Workout() {
                     workout, rather than toggling between the first one and
                     Rest. ── */}
                 <div>
-                  <div className="flex items-baseline justify-between mb-2">
-                    <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">My week</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1">
+                      <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">My week</div>
+                      {/* The "tap a day to assign" instruction used to sit
+                          under the grid as a permanent line of text below a
+                          row of buttons that already look tappable. */}
+                      <InfoDot label="My week" title="Setting your week" size={28}>
+                        Tap any day to put one of your saved workouts on it, or to make it a
+                        rest day. This is your own schedule — it does not change a plan your
+                        coach has set.
+                      </InfoDot>
+                    </div>
                     <div className="text-[10px] text-faint">
                       {(planner?.schedule || []).filter((x) => x.workout_id).length} training days
                     </div>
@@ -2064,7 +2084,7 @@ export default function Workout() {
         {/* ═══════════ THIS-WEEK DAY PREVIEW MODAL ═══════════ */}
         {weekDay && (
           <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label={`${weekDay.label} — ${weekDay.name}`}>
-            <div className="card w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+            <div ref={weekDayDialogRef} className="card w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-start justify-between gap-3">
                 <div>
                   <div className="kicker">{weekDay.label}{weekDay.day_of_week === todayDow ? ' · today' : ''}</div>
@@ -2099,8 +2119,8 @@ export default function Workout() {
         {/* Same portal fix as the Build Today modal above -- identical
             broken-containing-block bug, same cause, same reason. */}
         {cardioOpen && createPortal((
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
-            <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="Add cardio">
+            <div ref={cardioDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
                 <div>
                   <div className="font-grotesk font-bold">Add Cardio</div>
@@ -2524,8 +2544,8 @@ export default function Workout() {
 
         {/* ═══════════ ADD EXERCISE PICKER (execute mode) ═══════════ */}
         {addExOpen && (
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn">
-            <div className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
+          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="Add exercise">
+            <div ref={addExDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
               <div className="p-4 border-b border-line/60 flex items-center justify-between">
                 <div>
                   <div className="font-grotesk font-bold">Add exercise</div>

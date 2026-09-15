@@ -82,7 +82,14 @@ jobs:
         with:
           node-version: '22'
       - run: npm run setup
+      # Frontend unit + component tests (Vitest). Until this step they ran
+      # nowhere: the root `npm test` is the backend suite only, so a broken
+      # frontend test could merge green. Before the build so it fails fast.
+      - run: npm test --prefix frontend
       # db:check needs a live database and self-skips without DATABASE_URL, so
       # here this only verifies the frontend build. The real schema gate runs
       # in the Vercel build, which does have DATABASE_URL.
       - run: npm run build
+      # Fails if first-paint JS/CSS or any lazy chunk grows past its budget,
+      # or if three.js/recharts get preloaded -- see the script's header.
+      - run: npm run check:bundle --prefix frontend

@@ -17,6 +17,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Icon from './Icon.jsx';
 import { api } from '../api.js';
+import { useDialog } from './UI.jsx';
 
 const STORAGE_KEY = 'notif_prompt_seen';
 
@@ -133,10 +134,14 @@ export default function NotificationPermissionPrompt() {
     setShowPrompt(false);
   }, []);
 
+  // Escape and the backdrop both mean "Not now".
+  const panelRef = useDialog(showPrompt, handleNotNow);
+
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+      role="dialog" aria-modal="true" aria-label="Stay on track with Barbell">
       {/* Backdrop */}
       <div
         className="absolute inset-0 anim-fadeIn"
@@ -146,6 +151,7 @@ export default function NotificationPermissionPrompt() {
 
       {/* Card */}
       <div
+        ref={panelRef}
         className="relative w-full max-w-sm rounded-3xl border p-6 text-center anim-scaleIn"
         style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}
       >

@@ -19,7 +19,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
-import { Avatar } from '../UI.jsx';
+import { Avatar, useDialog } from '../UI.jsx';
 import { SectionTitle, HUE, fmt } from './CommunityPieces.jsx';
 
 const FILTERS = [
@@ -242,6 +242,7 @@ function MemberCard({ member: m, isYou, isFollowing, busy, onToggleFollow, onCli
  * so there is no second endpoint that could widen what is visible.
  */
 export function MemberSheet({ member, isYou, onClose }) {
+  const panelRef = useDialog(!!member, onClose);
   if (!member) return null;
   const last = member.lastActive
     ? new Date(`${member.lastActive}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -259,6 +260,7 @@ export function MemberSheet({ member, isYou, onClose }) {
       aria-label={`${member.name} profile`}
     >
       <div
+        ref={panelRef}
         className="w-full max-w-lg rounded-t-3xl p-5"
         style={{ background: 'var(--bg)', border: '1px solid var(--line)' }}
         onClick={(e) => e.stopPropagation()}

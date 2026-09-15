@@ -5,7 +5,7 @@ import ExerciseCard, { prescriptionLine } from '../../components/trainer/Exercis
 import TemplateList from '../../components/trainer/TemplateList.jsx';
 import AssignPreview from '../../components/trainer/AssignPreview.jsx';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, ErrorState, Modal, PageSkeleton, CheckIcon } from '../../components/UI.jsx';
+import { Card, Kicker, ErrorState, Modal, PageSkeleton, CheckIcon, useConfirm } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
@@ -168,6 +168,7 @@ export default function WorkoutBuilder() {
   const [assignClient, setAssignClient] = useState('');
   const [assignDate, setAssignDate] = useState('');
   const [toast, setToast] = useState('');
+  const [confirm, confirmDialog] = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', primary_muscle: '', equipment: 'BW', difficulty: 'BEGINNER', instructions: '', cues: '', animation_key: '' });
   const [addSaving, setAddSaving] = useState(false);
@@ -314,10 +315,15 @@ export default function WorkoutBuilder() {
   /* One gate in front of everything that throws the draft away. It names
      the template at risk, because "you have unsaved changes" is useless
      when a trainer has several on the go. */
-  const confirmDiscard = () => {
+  const confirmDiscard = async () => {
     if (!isDirty()) return true;
     const what = editing.name?.trim() || 'this new template';
-    return window.confirm(`Discard your unsaved changes to "${what}"?`);
+    return confirm({
+      title: 'Discard your unsaved changes?',
+      body: `Your edits to "${what}" have not been saved.`,
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+    });
   };
 
   const load = (draft, id) => {
@@ -326,16 +332,16 @@ export default function WorkoutBuilder() {
     setEditing(draft);
   };
 
-  const startNew = () => {
-    if (!confirmDiscard()) return;
+  const startNew = async () => {
+    if (!(await confirmDiscard())) return;
     load({ id: null, name: '', type: 'Push', notes: '', exercises: [emptyEx()] }, null);
   };
 
-  const openTemplate = (t) => {
+  const openTemplate = async (t) => {
     // Reopening the template already being edited must not offer to
     // discard it -- that is not navigating away, it is a no-op.
     if (t.id === selectedId && editing?.id === t.id) return;
-    if (!confirmDiscard()) return;
+    if (!(await confirmDiscard())) return;
     load({ id: t.id, name: t.name, type: t.type || '', notes: t.notes || '',
       exercises: (t.exercises || []).map((e) => ({ ...e, exercise_id: e.exercise_id || null })) }, t.id);
   };
@@ -448,8 +454,11 @@ export default function WorkoutBuilder() {
      "will this wipe my clients' sessions?" is the question a trainer
      actually has at this moment. */
   const removeTemplate = async (t) => {
-    const ok = window.confirm(
-      `Delete "${t.name}"?\n\nWorkouts already assigned to clients from this template are kept.`);
+    const ok = await confirm({
+      title: `Delete "${t.name}"?`,
+      body: 'Workouts already assigned to clients from this template are kept.',
+      confirmLabel: 'Delete template',
+    });
     if (!ok) return;
     try {
       await api(`/workouts/templates/${t.id}`, { method: 'DELETE' });
@@ -498,6 +507,7 @@ export default function WorkoutBuilder() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-grotesk font-bold text-2xl">Workout builder</h1>
@@ -506,7 +516,7 @@ export default function WorkoutBuilder() {
         <button className="btn-primary" onClick={startNew}>+ New template</button>
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* template list */}
         <Card className="lg:col-span-2 self-start" data-tour="trainer-workouts-templates">
           <Kicker>Your templates</Kicker>
@@ -621,11 +631,14 @@ export default function WorkoutBuilder() {
             {/* The <label> above is a SIBLING with no htmlFor, so it labels
                 this visually and not programmatically -- a screen reader
                 announced an unnamed combo box. */}
-            <select className="input" aria-label="Client for this program"
-                    value={progClient} onChange={(e) => loadProgram(e.target.value)}>
-              <option value="">Choose client…</option>
-              {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-            </select>
+            {/* A client list that failed to load is not a gym with no clients. */}
+            {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
+              <select className="input" aria-label="Client for this program"
+                      value={progClient} onChange={(e) => loadProgram(e.target.value)}>
+                <option value="">Choose client…</option>
+                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
+              </select>
+            )}
           </div>
           <div className="rounded-xl border border-line bg-tint/[.02] p-4">
             {!progClient ? (
@@ -766,11 +779,13 @@ export default function WorkoutBuilder() {
         <div className="space-y-3">
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
-            <select className="input" aria-label="Client to assign this workout to"
-                    value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
-              <option value="">Choose client…</option>
-              {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-            </select>
+            {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
+              <select className="input" aria-label="Client to assign this workout to"
+                      value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
+                <option value="">Choose client…</option>
+                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Schedule date (optional)</label>
@@ -790,7 +805,9 @@ export default function WorkoutBuilder() {
             <Kicker>{lib.loading ? 'Loading exercise library…' : pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>
             <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
               {lib.loading && <div className="text-center py-8 text-mute text-sm">Loading exercise library…</div>}
-              {!lib.loading && pickMatches.map((ex) => (
+              {/* A library that failed to load is not a muscle with no exercises. */}
+              {!lib.loading && lib.error && <ErrorState error={lib.error} onRetry={lib.reload} />}
+              {!lib.loading && !lib.error && pickMatches.map((ex) => (
                 <button key={ex.id} type="button" onClick={() => addFromPicker(ex)}
                   className="w-full text-left px-3 py-2.5 rounded-xl border border-line bg-tint/[.02] hover:bg-tint/[.05] hover:border-gold/40 transition-colors flex items-center justify-between gap-2">
                   <span className="min-w-0">
