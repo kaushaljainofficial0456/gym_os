@@ -12,6 +12,7 @@
 
 import { id, now } from '../../ids.js';
 import { createProviderOrder, providerName } from './paymentProvider.js';
+import { assertNotDemoOrg } from '../demo/session.js';
 
 /**
  * Creates (or, if idempotencyKey was already used, returns) a
@@ -24,6 +25,11 @@ import { createProviderOrder, providerName } from './paymentProvider.js';
  */
 export async function createPaymentOrder(db, { subjectType, subjectId, orgId, clientId = null, amount, currency = 'INR', idempotencyKey }) {
   if (!(amount > 0)) throw new Error('createPaymentOrder: amount must be a positive number');
+  // A demo tenant must never reach a real payment gateway -- see
+  // assertNotDemoOrg for why this is guarded at the service and not on the
+  // routes. Checked before the idempotency lookup so a demo order cannot
+  // be created even once.
+  await assertNotDemoOrg(db, orgId, 'make payments');
   if (idempotencyKey) {
     const existing = await db.q1('SELECT * FROM payment_orders WHERE idempotency_key = ?', [idempotencyKey]);
     if (existing) return existing;

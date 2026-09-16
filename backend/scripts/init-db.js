@@ -30,6 +30,16 @@ if (process.argv.includes('--force')) {
 // dropped or rewritten — new columns only.
 // ============================================================
 const MIGRATIONS = [
+  // --- Founder-approved interactive demo system ---
+  // Marks an organization as a DEMO TENANT: a real gym row, with real
+  // users/clients/workouts under it, that exists only to be explored by a
+  // prospect. Nothing about the product behaves differently for one --
+  // the flag exists so platform-wide reporting can leave demo gyms out of
+  // its real-customer aggregates (see routes/console.js's /dashboard) and
+  // so the demo seeder can find/rebuild its own tenant without ever
+  // matching a real gym by name. Defaults to 0, so every organization that
+  // already exists stays a normal gym on the day this runs.
+  ['organizations', 'is_demo', `is_demo INTEGER NOT NULL DEFAULT 0`],
   // --- Trainer attendance: gym-configurable rules ---
   ['gym_settings', 'attendance_mode', `attendance_mode TEXT NOT NULL DEFAULT 'simple'`],
   ['gym_settings', 'attendance_grace_min', `attendance_grace_min INTEGER NOT NULL DEFAULT 10`],
@@ -564,6 +574,70 @@ const HEALTH_INTELLIGENCE_SQL = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_health_reconlog_user ON health_reconciliation_log(user_id, created_at)`,
 ];
+// ============================================================
+// Founder-approved demo system (also in database/schema.sql). Same
+// shape as HEALTH_INTELLIGENCE_SQL above: one list of idempotent DDL
+// statements run through both the SQLite and the PostgreSQL migration
+// path, so an EXISTING database gets these tables without needing the
+// whole schema re-applied -- and without the runtime ever needing DDL
+// permissions (this script is the only thing that issues DDL; the app
+// process never does).
+// ============================================================
+const DEMO_SYSTEM_SQL = [
+  `CREATE TABLE IF NOT EXISTS demo_requests (
+    id            TEXT PRIMARY KEY,
+    owner_name    TEXT NOT NULL,
+    gym_name      TEXT NOT NULL,
+    email         TEXT NOT NULL,
+    phone         TEXT NOT NULL,
+    city          TEXT,
+    member_count  INTEGER,
+    message       TEXT,
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','approved','rejected','expired','completed','revoked')),
+    requested_at  TEXT NOT NULL,
+    reviewed_at   TEXT,
+    reviewed_by   TEXT REFERENCES users(id) ON DELETE SET NULL,
+    approved_at   TEXT,
+    rejected_at   TEXT,
+    reject_reason TEXT,
+    expires_at    TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_demo_requests_status ON demo_requests(status, requested_at)`,
+  `CREATE TABLE IF NOT EXISTS demo_sessions (
+    id                TEXT PRIMARY KEY,
+    demo_request_id   TEXT NOT NULL REFERENCES demo_requests(id) ON DELETE CASCADE,
+    demo_org_id       TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    access_token_hash TEXT NOT NULL UNIQUE,
+    status            TEXT NOT NULL DEFAULT 'approved'
+                      CHECK (status IN ('approved','active','expired','completed','revoked')),
+    approved_at       TEXT NOT NULL,
+    started_at        TEXT,
+    expires_at        TEXT,
+    completed_at      TEXT,
+    revoked_at        TEXT,
+    last_activity_at  TEXT,
+    duration_minutes  INTEGER NOT NULL DEFAULT 30,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_demo_sessions_request ON demo_sessions(demo_request_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_demo_sessions_status ON demo_sessions(status, expires_at)`,
+  `CREATE TABLE IF NOT EXISTS demo_events (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES demo_sessions(id) ON DELETE CASCADE,
+    type       TEXT NOT NULL,
+    data_json  TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_demo_events_session ON demo_events(session_id, created_at)`,
+];
+async function applyDemoSystemSchema(exec) {
+  for (const stmt of DEMO_SYSTEM_SQL) await exec(stmt);
+}
+
 async function applyHealthIntelligenceSchema(exec) {
   for (const stmt of HEALTH_INTELLIGENCE_SQL) await exec(stmt);
 }
@@ -662,6 +736,8 @@ async function applySqliteMigrations(db) {
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
   await applyHealthIntelligenceSchema((s) => db.exec(s));
+  // --- Founder-approved demo system (also in schema.sql) ---
+  await applyDemoSystemSchema((s) => db.exec(s));
 }
 
 async function applyPgMigrations(pool) {
@@ -743,6 +819,8 @@ async function applyPgMigrations(pool) {
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
   await applyHealthIntelligenceSchema((s) => pool.query(s));
+  // --- Founder-approved demo system (also in schema.sql) ---
+  await applyDemoSystemSchema((s) => pool.query(s));
 }
 
 if (config.databaseUrl) {

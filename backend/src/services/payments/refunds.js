@@ -38,6 +38,7 @@ import { id, now } from '../../ids.js';
 import { refundProviderPayment } from './paymentProvider.js';
 import { transitionMembership } from '../enterprise/membershipLifecycle.js';
 import { track } from '../events.js';
+import { assertNotDemoOrg } from '../demo/session.js';
 
 /** A fresh CLIENT_MEMBERSHIP join order has client_id NULL at creation
  *  time (the clients row doesn't exist yet -- see enrollment.js's own
@@ -71,6 +72,10 @@ export async function remainingRefundable(db, orderId) {
  * or { ok: false, reason }.
  */
 export async function initiateRefund(db, { orderId, orgId, amount, reason, initiatedBy }) {
+  // Same reasoning as createPaymentOrder: a refund is an outbound call to
+  // the real gateway, and a demo tenant's payments were written by the
+  // seeder and exist nowhere upstream.
+  await assertNotDemoOrg(db, orgId, 'issue refunds');
   const state = await remainingRefundable(db, orderId);
   if (!state || state.order.org_id !== orgId) return { ok: false, reason: 'order_not_found' };
   const { order, remaining } = state;

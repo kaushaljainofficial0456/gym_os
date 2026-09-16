@@ -101,6 +101,12 @@ const DevOnboardingPreview = import.meta.env.DEV
   : null;
 const SharedWorkout = lazy(() => import('./pages/public/SharedWorkout.jsx'));
 const CommunityInvite = lazy(() => import('./pages/public/CommunityInvite.jsx'));
+// The founder-approved demo's three public screens. Split like every
+// other non-entry page: a prospect loads exactly one of them, and nobody
+// signing in normally should pay for any of them.
+const DemoRequest = lazy(() => import('./pages/public/DemoRequest.jsx'));
+const DemoStart = lazy(() => import('./pages/public/DemoStart.jsx'));
+const DemoExpired = lazy(() => import('./pages/public/DemoExpired.jsx'));
 
 const PageFallback = <div className="min-h-screen grid place-items-center"><Spinner /></div>;
 // Small helper so each route below stays a one-liner instead of repeating
@@ -217,6 +223,21 @@ export default function App() {
           asking for a login. Joining still requires auth, enforced by the
           API route it calls, not by this route being gated. */}
       <Route path="/invite/:code" element={page(CommunityInvite)} />
+      {/* ---- Founder-approved interactive demo ----
+          All three are PUBLIC, and deliberately NOT wrapped in GuestOnly
+          like /login and /signup are. A prospect part-way through a demo
+          IS authenticated (they hold a demo session), and bouncing them
+          off their own demo's screens into the app would break both the
+          pre-demo screen on a refresh and the expiry screen entirely --
+          which is the exact moment the conversion CTA has to render.
+
+          /demo/:token only ever READS. Starting the clock is a POST
+          behind a button, and expiry is enforced server-side on every
+          request (backend auth.js), so none of these routes decides
+          anything about access. */}
+      <Route path="/demo" element={page(DemoRequest)} />
+      <Route path="/demo/:token" element={page(DemoStart)} />
+      <Route path="/demo-expired" element={page(DemoExpired)} />
       {/* QR-based gym join -- any authenticated CLIENT or TRAINER with no
           org yet lands here (see needsGymJoin above) instead of a normal
           dashboard, which would otherwise 404/empty-state on every

@@ -677,7 +677,23 @@ export default function authRoutes(db) {
          FROM users u LEFT JOIN organizations o ON o.id = u.org_id
         WHERE u.id = ?`, [req.user.sub]);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user });
+    // Demo context, when this is one. Derived from the SERVER-SIDE
+    // session requireAuth already resolved and validated (req.demoSession)
+    // -- never from anything the client sent, and never stored on the user
+    // row. Present so the app shell knows to render the demo banner and
+    // the role switcher without having to make a second probe request on
+    // every page load; nothing is authorized by these fields.
+    const body = { user };
+    if (req.demoSession) {
+      body.demo = {
+        persona: req.user.persona || 'OWNER',
+        startedAt: req.demoSession.started_at,
+        expiresAt: req.demoSession.expires_at,
+        remainingMs: req.demoRemainingMs ?? null,
+        serverTime: new Date().toISOString(),
+      };
+    }
+    res.json(body);
   });
 
   // ---- logout (F-05) ----
