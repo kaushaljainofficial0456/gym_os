@@ -8,6 +8,10 @@ const GROUPS = [
   {
     label: 'Business', items: [
       { to: '/gyms', label: 'Gyms', icon: 'gyms' },
+      // Sales, not operations: this is where a prospect's demo is approved
+      // and the link handed over, so it sits with the other things that
+      // decide whether someone becomes a customer.
+      { to: '/demos', label: 'Demos', icon: 'sparkle' },
       { to: '/payments', label: 'Payments', icon: 'payments' },
       { to: '/refunds', label: 'Refunds', icon: 'refunds' },
       { to: '/reconciliation', label: 'Reconciliation', icon: 'reconciliation' },

@@ -12,6 +12,7 @@ import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
 import DockNavItem from '../../components/DockNavItem.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
+import DemoBanner from '../../components/DemoBanner.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import NotificationBell from '../../components/NotificationBell.jsx';
 import NotificationPermissionPrompt from '../../components/NotificationPermissionPrompt.jsx';
@@ -325,6 +326,11 @@ export default function ClientLayout() {
           every navigation refetches /me/announcements for no reason (same
           fix TrainerLayout already has; this file just didn't match it). */}
       <div className="pt-4">
+        {/* Same placement and the same reason as AnnouncementBanner
+            just below: outside the pathname-keyed div, so navigating
+            does not remount the countdown. Renders nothing for an
+            ordinary member. */}
+        <DemoBanner />
         <AnnouncementBanner />
         <div key={loc.pathname} className="anim-fadeUp">
           <Outlet context={homeCtx} />
