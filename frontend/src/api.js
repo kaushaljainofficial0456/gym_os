@@ -102,24 +102,90 @@ export async function downloadFile(path, filename) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * `opts.probe` marks a call as a BACKGROUND SESSION-DEPENDENT READ rather
+ * than something the user asked for: its 401 means "not signed in", which
+ * on a public page is the normal state of the world, not an expired
+ * session. Such a call must never redirect.
+ *
+ * This generalises the hard-coded `/auth/me` exemption below, which was
+ * added for exactly this reason and then turned out not to be the only
+ * instance. UnitsProvider is mounted OUTSIDE the router (main.jsx), so it
+ * reads /me/profile on every page load including the unauthenticated
+ * public ones -- and that 401 was sending every anonymous visitor
+ * straight to /login from a community invitation, a shared meal, a shared
+ * workout or a demo link. Confirmed live before fixing: opening
+ * /invite/<code> signed out landed on the login screen, which is the
+ * exact bug the /auth/me exemption exists to prevent, on a second path.
+ *
+ * Deliberately a per-CALL-SITE flag and not a second hard-coded path:
+ * /me/profile is ALSO a real user-initiated read (the Profile page), and
+ * a 401 there genuinely is an expired session that should go to /login.
+ * Which of the two a given call is cannot be told from the path -- only
+ * the caller knows.
+ */
 export async function api(path, opts = {}) {
+  const { probe, ...fetchOpts } = opts;
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  const res = await fetch('/api' + path, { ...opts, headers, credentials: 'include' });
+  const res = await fetch('/api' + path, { ...fetchOpts, headers, credentials: 'include' });
   if (res.status === 401) {
-    // Awaited, not fire-and-forget: the navigation on the next line would
-    // otherwise cancel the logout POST mid-flight (see clearSession).
+    // A DEMO that has ended is not an expired login, and must not be
+    // treated as one. The backend answers `demo_session_ended` (see
+    // auth.js's demo gate) for every request once the 30 minutes are up,
+    // once a founder revokes it, or once the prospect finishes -- and the
+    // right destination is then the demo's own closing screen with its
+    // conversion CTA, not a sign-in form the prospect has no account for.
+    // Same status, distinguished only by the body; cloned so the parse
+    // here cannot consume the body the caller might still want.
+    const demoEnded = await res.clone().json().then((b) => b?.error === 'demo_session_ended', () => false);
+
+    // Awaited, not fire-and-forget: the navigation below would otherwise
+    // cancel the logout POST mid-flight (see clearSession). Runs for a
+    // dead demo too -- its cookie is a spent credential the browser would
+    // otherwise keep presenting on every subsequent request.
     await clearSession();
-    // /auth/me is the SESSION PROBE, not an app action. AuthProvider calls it
-    // on every mount -- including on the PUBLIC pages a signed-out visitor is
-    // meant to be able to read (a community invitation, a shared workout, a
-    // shared meal). Redirecting on ITS 401 sent every one of those straight to
-    // the login screen, so an invite link could not be read without already
-    // having an account, which is exactly backwards. A failed probe is the
-    // caller's to interpret (auth.jsx clears the session and renders the page
-    // signed-out, and App.jsx's own route guards still send a signed-out
-    // visitor away from anything private). A 401 on any OTHER call still means
-    // a live session expired mid-use, and still goes to /login.
-    const isSessionProbe = path === '/auth/me';
+
+    // /auth/me is the SESSION PROBE, not an app action. AuthProvider calls
+    // it on every mount -- including on the PUBLIC pages a signed-out
+    // visitor is meant to be able to read (a community invitation, a
+    // shared workout, a shared meal, a demo link). Redirecting on ITS 401
+    // sent every one of those straight to the login screen, so an invite
+    // link could not be read without already having an account, which is
+    // exactly backwards. A failed probe is the caller's to interpret
+    // (auth.jsx clears the session and renders the page signed-out, and
+    // App.jsx's own route guards still send a signed-out visitor away from
+    // anything private). A 401 on any OTHER call still means a live
+    // session expired mid-use, and still redirects.
+    const isSessionProbe = probe === true || path === '/auth/me';
+
+    if (demoEnded) {
+      // A demo ending is decided by WHERE the visitor is, not by whether
+      // the call was a probe -- and it has to be, because both readings
+      // are wrong on their own:
+      //
+      //   * Redirecting on every `demo_session_ended`, probe included,
+      //     makes a dead demo cookie hijack the whole site. A prospect
+      //     who finished one demo and was later sent a second link still
+      //     holds the first one's cookie, so opening the new
+      //     /demo/<token> fired /auth/me, got this error, and bounced
+      //     them off the welcome screen they had just opened to the
+      //     ending screen of a demo they had already finished. Their new
+      //     link was unusable.
+      //
+      //   * Exempting probes -- the fix for the case above -- means the
+      //     30 minutes running out while they are USING the product
+      //     redirects nowhere, /auth/me just fails, and App.jsx's route
+      //     guards see an unauthenticated user and send them to a LOGIN
+      //     SCREEN they have no account for, instead of the closing
+      //     screen with the CTA this whole feature builds toward.
+      //
+      // Inside /app the demo is what they are doing, so ending it is an
+      // interruption worth navigating for. Anywhere else -- a public
+      // page, a legal page, the demo's own request and welcome screens --
+      // there is nothing to interrupt and the page renders signed-out.
+      if (location.pathname.startsWith('/app')) location.href = '/demo-expired';
+      throw new Error('Demo session ended');
+    }
     if (!isSessionProbe && !location.pathname.startsWith('/login')) location.href = '/login';
     throw new Error('Session expired');
   }

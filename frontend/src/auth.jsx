@@ -25,16 +25,23 @@ export function AuthProvider({ children }) {
   // trusting a locally-assembled user object.
   const [user, setUser] = useState(getStoredUser());
   const [ready, setReady] = useState(false);
+  // The live demo session this browser is inside, or null. Comes from
+  // /auth/me, which derives it SERVER-SIDE from the validated session --
+  // never persisted to localStorage alongside the user, because unlike
+  // the cached user object (a first-paint convenience) a stale demo block
+  // would make the app render a countdown for a demo that is already
+  // over. Absent until /auth/me answers, which is the correct default.
+  const [demo, setDemo] = useState(null);
 
   useEffect(() => {
     api('/auth/me')
-      .then(({ user: u }) => { setStoredUser(u); setUser(u); })
+      .then(({ user: u, demo: d }) => { setStoredUser(u); setUser(u); setDemo(d || null); })
       // clearStoredUser, not clearSession: whatever made /auth/me fail has
       // already been handled at the network layer -- a 401 went through
       // api()'s own 401 branch, which already POSTed the logout, and a
       // transport failure means a second POST would fail too. All that is
       // left to do here is drop this browser's optimistic cached user.
-      .catch(() => { clearStoredUser(); setUser(null); })
+      .catch(() => { clearStoredUser(); setUser(null); setDemo(null); })
       .finally(() => setReady(true));
   }, []);
 
@@ -148,9 +155,13 @@ export function AuthProvider({ children }) {
   // a caller-assembled user object means this can never drift from what
   // the server actually thinks is true.
   const refreshSession = async (_newToken) => {
-    const { user: u } = await api('/auth/me');
+    const { user: u, demo: d } = await api('/auth/me');
     setStoredUser(u);
     setUser(u);
+    // Kept in step with the user it belongs to: the demo role switcher
+    // calls this after changing persona, and the banner reads `demo` to
+    // know which identity is current.
+    setDemo(d || null);
     return u;
   };
 
@@ -180,7 +191,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
+    <AuthCtx.Provider value={{ user, demo, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
       {children}
     </AuthCtx.Provider>
   );

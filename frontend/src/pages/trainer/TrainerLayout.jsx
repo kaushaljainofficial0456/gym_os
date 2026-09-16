@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
 import LineNavList from '../../components/LineNavList.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
+import DemoBanner from '../../components/DemoBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import Logo from '../../components/Logo.jsx';
@@ -231,6 +232,11 @@ export default function TrainerLayout() {
       </AnimatePresence>
 
       <main className="p-4 md:p-8 max-w-7xl mx-auto">
+        {/* Renders nothing unless this session is a demo -- see
+            DemoBanner.jsx. Outside the pathname-keyed div below so the
+            countdown is not remounted (and visibly restarted) on every
+            navigation. */}
+        <DemoBanner />
         <AnnouncementBanner />
         <div key={loc.pathname} className="anim-fadeUp">
           <Outlet />

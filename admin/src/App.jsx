@@ -18,6 +18,7 @@ import Login from './pages/Login.jsx';
 // announcements, system health, audit log) up front for every login.
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const Gyms = lazy(() => import('./pages/Gyms.jsx'));
+const Demos = lazy(() => import('./pages/Demos.jsx'));
 const GymDetail = lazy(() => import('./pages/GymDetail.jsx'));
 const Payments = lazy(() => import('./pages/Payments.jsx'));
 const Refunds = lazy(() => import('./pages/Refunds.jsx'));
@@ -47,6 +48,7 @@ export default function App() {
             <Route index element={page(Dashboard)} />
             <Route path="gyms" element={page(Gyms)} />
             <Route path="gyms/:id" element={page(GymDetail)} />
+            <Route path="demos" element={page(Demos)} />
             <Route path="payments" element={page(Payments)} />
             <Route path="refunds" element={page(Refunds)} />
             <Route path="reconciliation" element={page(Reconciliation)} />
