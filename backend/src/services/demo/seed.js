@@ -429,9 +429,55 @@ export async function seedDemoTenant(db, { log = () => {} } = {}) {
   // in batches -- 87 members x ~12 tables as individual inserts would be
   // ~1,000 round trips before a single workout log exists.
   const exercises = await ensureExerciseLibrary(db);
+  // ---- Resolving a programme's movements against WHATEVER library this
+  // database happens to have ----
+  //
+  // FALLBACK_EXERCISES' animation_key values are only guaranteed to exist
+  // when this seeder installed the library itself. A database seeded by
+  // scripts/seed.js has its own, larger library with its own keys --
+  // production has 209 global exercises, of which only 12 of the 20 keys
+  // below match ('bench_press', not 'barbell_bench_press'; 'seated_row',
+  // not 'seated_cable_row').
+  //
+  // The first version of this fell back to `exercises[0]` for every
+  // unmatched key, which meant eight different movements all resolved to
+  // the SAME exercise row. That is wrong twice over: every workout would
+  // show the same lift, and -- the failure that actually surfaced it --
+  // personal_records carries UNIQUE (client_id, exercise_id, type), so a
+  // programme containing two unmatched movements tried to write the same
+  // PR row twice and aborted the whole seed with a constraint violation.
+  // It never showed up locally, because locally this seeder had installed
+  // the library and every key matched.
+  //
+  // So resolution now tries three things in order, and the third one
+  // guarantees DISTINCTNESS rather than just returning something:
+  //   1. exact animation_key
+  //   2. the exercise's own name (FALLBACK_EXERCISES carries it, and a
+  //      library built by any seeder spells 'Barbell Bench Press' the same)
+  //   3. the next library entry not already claimed by another key
   const exByKey = new Map(exercises.filter((e) => e.animation_key).map((e) => [e.animation_key, e]));
-  const anyExercise = exercises[0] || null;
-  const resolveEx = (key) => exByKey.get(key) || anyExercise;
+  const exByName = new Map(exercises.filter((e) => e.name).map((e) => [e.name.toLowerCase(), e]));
+  const nameForKey = new Map(FALLBACK_EXERCISES.map(([name, , , , , , key]) => [key, name]));
+  const resolveEx = (() => {
+    const resolved = new Map();   // key -> exercise
+    const claimed = new Set();    // exercise ids already standing for some key
+    let cursor = 0;
+    return (key) => {
+      if (resolved.has(key)) return resolved.get(key);
+      let ex = exByKey.get(key);
+      if (!ex) {
+        const name = nameForKey.get(key);
+        if (name) ex = exByName.get(name.toLowerCase());
+      }
+      if (!ex) {
+        while (cursor < exercises.length && claimed.has(exercises[cursor].id)) cursor++;
+        ex = exercises[cursor] || null;
+      }
+      if (ex) claimed.add(ex.id);
+      resolved.set(key, ex || null);
+      return ex || null;
+    };
+  })();
 
   const usedNames = new Set();
   const members = [];
@@ -871,9 +917,15 @@ export async function seedDemoTenant(db, { log = () => {} } = {}) {
     ['id', 'workout_log_id', 'client_id', 'exercise_id', 'set_number', 'prescribed_reps', 'actual_reps',
       'prescribed_weight', 'actual_weight', 'rest_seconds', 'rir', 'completed', 'is_synthesized'],
     setRows);
+  // personal_records carries UNIQUE (client_id, exercise_id, type). The
+  // resolver above already guarantees one exercise per movement, so this
+  // should never drop anything -- it is here so that a future library
+  // whose shape nobody anticipated degrades into slightly fewer PRs rather
+  // than a failed seed. Cheap insurance on the one table whose constraint
+  // can abort the whole rebuild.
   await insertMany(db, 'personal_records',
     ['id', 'client_id', 'exercise_id', 'type', 'value', 'weight', 'reps', 'date', 'created_at', 'previous_value', 'previous_weight', 'previous_reps'],
-    prRows);
+    dedupeByKey(prRows, (r) => `${r[1]}|${r[2]}|${r[3]}`));
 
   // ---- 10. Body metrics, food logs, daily habits ----
   const weightRows = [];
@@ -1077,6 +1129,21 @@ export async function seedDemoTenant(db, { log = () => {} } = {}) {
   };
   log(`  + seeded ${counts.members} members, ${counts.attendance} attendance rows, ${counts.workoutLogs} workout logs`);
   return { orgId, ownerId, counts, today };
+}
+
+/** Drop rows whose key has already been seen, preserving order. Used for
+ *  the tables that carry a UNIQUE constraint the generator could otherwise
+ *  collide on. */
+function dedupeByKey(rows, keyOf) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const k = keyOf(r);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
 }
 
 /** community_reactions carries UNIQUE (target_type, target_id, client_id,
