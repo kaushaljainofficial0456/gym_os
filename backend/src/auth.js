@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { config } from './config.js';
 import { getDb, runWithOrg } from './db.js';
 import { getOrgTzCached, DEFAULT_TZ } from './utils/time.js';
+import { enforceSession, touchSession } from './services/demo/session.js';
 
 // Suspending a gym (SUPER_ADMIN console -> POST /console/gyms/:id/suspend)
 // updated org_billing_state.status but nothing in the actual request path
@@ -52,6 +53,73 @@ export function invalidateOrgBillingCache(orgId) {
   else orgBillingCache.clear();
 }
 
+// Is this org a DEMO TENANT? Same cache/TTL shape as the billing lookup
+// above, for the same reason (one cheap cached read per request rather
+// than a query on every call), and effectively permanent data -- an org
+// is created as a demo or it is not, and nothing in the product flips
+// the flag afterwards.
+//
+// This exists for ONE check in requireAuth: a token whose org is a demo
+// tenant but which carries NO demo-session claim is rejected. Without it
+// the demo tenant would be reachable by any token naming that org --
+// including one minted before a session ended, or by some future code
+// path that calls the ordinary signToken() for a demo user. With it,
+// there is exactly one way to be inside the demo gym: an unexpired,
+// founder-approved demo session, re-verified on every request.
+//
+// FAILS OPEN (treated as "not a demo org") when the lookup itself fails,
+// the same posture as the tz and billing lookups above -- and the choice
+// matters enough to spell out, because the first version of this failed
+// CLOSED and that was a production-outage bug.
+//
+// The `is_demo` column arrives via init-db.js's guarded migrations, so
+// any database that has not been migrated yet does not have it, and
+// `SELECT is_demo` there does not return null -- it THROWS. Failing
+// closed turned that throw into "every org is a demo org", which made
+// this gate reject every authenticated request from every real customer
+// with a 401. Caught by the existing admin-tenant-isolation suite
+// running against a pre-migration database: 10 tests, all of them
+// `401 !== 201`. Deployed in that order -- new code live, migration not
+// yet run -- it would have taken the whole product down, which is
+// exactly the hazard "do not assume columns exist" is about.
+//
+// Failing open is not a weakened control, because this check is not the
+// control. There is no way to hold a non-demo token for a demo org in
+// the first place: every account inside a demo tenant is seeded with an
+// unusable password hash so /auth/login can never authenticate one, and
+// the only thing that mints a token for one is signDemoToken(), which
+// always sets the `demo` claim. This lookup is a third layer under those
+// two. The layer that must NEVER degrade is the session check itself --
+// enforceSession(), which fails closed, and which still runs on every
+// request carrying a demo claim regardless of what this returns.
+const ORG_DEMO_TTL_MS = 5 * 60 * 1000;
+const orgDemoCache = new Map(); // orgId -> { isDemo, at }
+
+export async function isDemoOrgCached(db, orgId) {
+  if (!orgId) return false;
+  const hit = orgDemoCache.get(orgId);
+  const nowMs = Date.now();
+  if (hit && (nowMs - hit.at) < ORG_DEMO_TTL_MS) return hit.isDemo;
+  let isDemo = false;
+  try {
+    const row = await db.q1('SELECT is_demo FROM organizations WHERE id = ?', [orgId]);
+    // A missing row is not a demo org -- it is a token naming an org that
+    // no longer exists, which every downstream org-scoped query will
+    // return nothing for anyway. Only an existing row with the flag set
+    // counts.
+    isDemo = row ? !!Number(row.is_demo) : false;
+  } catch {
+    isDemo = false; // column or table absent, or a transient error -- see above
+  }
+  orgDemoCache.set(orgId, { isDemo, at: nowMs });
+  return isDemo;
+}
+
+export function invalidateOrgDemoCache(orgId) {
+  if (orgId) orgDemoCache.delete(orgId);
+  else orgDemoCache.clear();
+}
+
 // F-12h hardening: bumped from 10 -> 12, OWASP's current recommended
 // bcrypt minimum. Benchmarked on this deployment's target hardware shape
 // before choosing it (see commit message): cost 10 ~75ms, 12 ~263ms,
@@ -96,6 +164,41 @@ export function signToken(user) {
     { sub: user.id, role: user.role, org: user.org_id, name: user.name, email: user.email },
     config.jwtSecret,
     { expiresIn: config.jwtExpiresIn, algorithm: JWT_ALGORITHM }
+  );
+}
+
+// A demo session's token. Same signature, same algorithm, same
+// verification path as every other token in this app -- it is an
+// ORDINARY session for an ordinary user, with two extra claims:
+//
+//   demo    the demo_sessions row id. Its PRESENCE is what makes
+//           requireAuth re-check the server-side clock below; its VALUE
+//           names which session to check.
+//   persona which of the three demo identities this token is for
+//           (OWNER/TRAINER/MEMBER). Display only -- `role` is still the
+//           thing every authorization check in this codebase reads, and
+//           it is copied off the real user row, never from a request.
+//
+// The claims are signed, so a prospect cannot edit `demo` to point at a
+// different session, `org` at a different tenant, or `role` at
+// SUPER_ADMIN, any more than they can forge an ordinary login token.
+//
+// TTL is short and deliberately longer than one demo (45m vs 30m): the
+// JWT expiry is a backstop, not the timer. Making them equal would put
+// two clocks in charge of the same deadline and invite them to disagree;
+// the authoritative one is demo_sessions.expires_at, checked below on
+// every single request. The 7-day default a real login gets would be
+// wrong here for the obvious reason.
+export const DEMO_TOKEN_TTL = '45m';
+
+export function signDemoToken(user, { sessionId, persona }) {
+  return jwt.sign(
+    {
+      sub: user.id, role: user.role, org: user.org_id, name: user.name, email: user.email,
+      demo: sessionId, persona,
+    },
+    config.jwtSecret,
+    { expiresIn: DEMO_TOKEN_TTL, algorithm: JWT_ALGORITHM }
   );
 }
 
@@ -189,11 +292,78 @@ export async function requireAuth(req, res, next) {
   }
   let db;
   try {
-    db = await getDb();
+    // The APP's own database handle when one has been registered
+    // (buildApp does this), falling back to the process-wide singleton.
+    //
+    // This used to be getDb() unconditionally, which is the same object
+    // in production but NOT in tests, where each test builds an Express
+    // app around its own in-memory database -- so requireAuth's lookups
+    // silently ran against a different (empty) database and fell into
+    // their own catch blocks. That was harmless while those lookups were
+    // only timezone and billing status, both of which fail open by
+    // design. It is NOT harmless for the demo-session gate below, which
+    // must fail CLOSED: a gate that cannot read its own table would
+    // either block every demo or, worse, be untestable. Preferring the
+    // app's handle makes the middleware read the same data the routes
+    // mounted beside it do, in every environment.
+    db = (typeof req.app?.get === 'function' ? req.app.get('db') : null) || await getDb();
     req.tz = await getOrgTzCached(db, req.user.org || null);
   } catch {
     req.tz = DEFAULT_TZ;
   }
+  // ---- DEMO SESSION GATE ----
+  // The server-side half of the 30-minute timer, and the reason a
+  // frontend countdown cannot be negotiated with: EVERY request carrying
+  // a demo token re-reads demo_sessions and re-checks its expiry against
+  // the server's own clock before the route ever runs. See
+  // services/demo/session.js for the full list of bypasses this closes
+  // (refresh, second tab, browser restart, device clock, localStorage,
+  // edited JS) -- none of them is a special case here; they all fail for
+  // the same reason, which is that the deadline lives in a row the
+  // client cannot write.
+  //
+  // Placed BEFORE the suspension check below so a demo session gets the
+  // specific "your demo has ended" answer rather than a generic one, and
+  // so the demo's own tenant state can never be confused with a paying
+  // gym's billing state.
+  if (req.user.demo || (req.user.org && db && await isDemoOrgCached(db, req.user.org))) {
+    if (!db) return res.status(503).json({ error: 'demo_unavailable', message: 'Demo is temporarily unavailable.' });
+    // An org-less token (SUPER_ADMIN) never reaches here, so this is
+    // always a demo-tenant token -- and one WITHOUT a demo claim is by
+    // definition not a live session, whatever else it is.
+    if (!req.user.demo) {
+      return res.status(401).json({ error: 'demo_session_ended', reason: 'invalid', message: 'This demo session is no longer valid.' });
+    }
+    const verdict = await enforceSession(db, req.user.demo);
+    if (!verdict.ok) {
+      // 401, not 403: the session is GONE, not insufficient. The frontend
+      // keys off `error` to route to /demo-expired rather than the login
+      // screen -- see frontend/src/api.js.
+      return res.status(401).json({
+        error: 'demo_session_ended',
+        reason: verdict.reason,
+        message: verdict.reason === 'revoked'
+          ? 'This demo has been revoked by the administrator.'
+          : verdict.reason === 'not_started'
+            ? 'This demo has not been started yet.'
+            : 'Your demo session has ended.',
+      });
+    }
+    // The token says which tenant; the SESSION ROW says which tenant it
+    // was actually granted for. They must agree. This is what makes a
+    // re-signed or mis-minted token naming another org useless: the org
+    // claim is checked against server-side state, not trusted.
+    if (verdict.session.demo_org_id !== req.user.org) {
+      return res.status(403).json({ error: 'demo_tenant_mismatch', message: 'This demo session does not grant access to that gym.' });
+    }
+    req.demoSession = verdict.session;
+    req.demoRemainingMs = verdict.remainingMs;
+    // Bookkeeping for the founder's activity readout, at most once a
+    // minute and never awaited -- a demo must not wait on, or fail
+    // because of, an analytics write.
+    touchSession(db, verdict.session).catch(() => {});
+  }
+
   // A SUSPENDED gym (SUPER_ADMIN console) blocks every org-scoped request
   // for that org, at the one place ALL of them already pass through --
   // see getOrgBillingStatusCached's own comment for why this exists and

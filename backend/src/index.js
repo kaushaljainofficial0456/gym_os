@@ -44,6 +44,7 @@ import attendanceRoutes from './routes/attendance.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
 import healthRoutes from './routes/health.js';
+import demoRoutes from './routes/demo.js';
 
 // ---- Minimal cookie parser (no dependency needed) ----
 // Exported as a standalone pure function (rather than inlined in the
@@ -97,6 +98,12 @@ export async function buildApp() {
   dbInstance = await getDb();
   const db = dbInstance;
   const app = express();
+  // Registered as an app setting so middleware that is NOT built by a
+  // router factory -- requireAuth, specifically -- can reach the same
+  // database handle the routes use, instead of reaching for the
+  // process-wide singleton. See auth.js's requireAuth for why that
+  // distinction matters to the demo-session gate.
+  app.set('db', db);
 
   // ---- Minimal cookie parser (no dependency needed) ----
   app.use((_req, _res, next) => {
@@ -266,6 +273,14 @@ if (config.nodeEnv !== 'production') {
 }
 app.use('/api/intel', intelligenceRoutes(db)); // SK Intelligence Engine: NL parsing, search, generation, label scan
 app.use('/api/console', consoleRoutes(db)); // Admin Console (Phase 3): platform-operator API, SUPER_ADMIN only -- see console.js. Deliberately NOT /api/admin (already owned by adminRoutes)
+// Founder-approved interactive demo. PARTLY PUBLIC (the request form, the
+// pre-demo screen, and the one click that starts the 30-minute clock);
+// everything past that needs a live demo session, re-verified against the
+// database on every request by requireAuth -- see routes/demo.js and
+// services/demo/session.js. Approving/revoking a demo is NOT here: it is
+// a SUPER_ADMIN action in consoleRoutes above, so nothing a prospect can
+// reach is able to grant access.
+app.use('/api/demo', demoRoutes(db));
 // Private uploads: served only to the authenticated client who owns them,
 // never via a public static mount. Label scans are stored under
 // data/uploads/tmp/<client_id>/ and cleaned up on save.
@@ -319,6 +334,16 @@ app.use('/uploads', requireAuth, async (req, res) => {
     // error, so one branch covers them all and no route can forget it.
     if (err?.code === 'payments_not_configured') {
       return res.status(503).json({ error: 'payments_not_configured', message: 'Payments are not configured on this deployment.' });
+    }
+    // A demo tenant reached for the real payment gateway (see
+    // services/demo/session.js's assertNotDemoOrg). A deliberate refusal,
+    // not a fault: answered as a 403 with a sentence the prospect can
+    // read, so the demo says "not in the demo" instead of looking broken.
+    if (err?.code === 'demo_payment_blocked') {
+      return res.status(403).json({
+        error: 'demo_payment_blocked',
+        message: 'Payments are disabled in the demo — everything else is live.',
+      });
     }
     // log diagnostics server-side only — never expose SQL/stack/secrets to clients
     console.error(`[error] req=${req.id || '-'}`, err?.message || err);

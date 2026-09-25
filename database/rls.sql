@@ -667,4 +667,57 @@ END $$;
 --                                                the client-scoped policies
 --                                                above would silently drop
 --                                                every other gym's rows.
+--
+--   demo_requests                            -- A PROSPECT'S request form,
+--                                                submitted before any tenant
+--                                                relationship exists -- there
+--                                                is no org to key a policy on
+--                                                (the gym_name they typed is a
+--                                                string, not a tenant). Every
+--                                                read/write path is either the
+--                                                unauthenticated POST that
+--                                                creates one, or a SUPER_ADMIN
+--                                                console route, exactly like
+--                                                admin_audit_logs above.
 -- ============================================================
+
+-- ============================================================
+-- DEMO SYSTEM -- demo_sessions is the one demo table that names a tenant
+-- (demo_org_id: the demo gym a session may see). Deliberately NOT called
+-- org_id: a demo session is not a row BELONGING to that org, it is a
+-- grant of access TO it, and the distinction matters when reading the
+-- org-scoped policies above.
+--
+-- The policy is defense-in-depth only, exactly like every other policy
+-- here: the real control is that requireAuth re-reads the session row and
+-- its expiry on EVERY request (see auth.js's requireDemoSessionValid),
+-- and that a demo JWT's org claim is minted server-side from demo_org_id
+-- and never read from the client. A demo request runs with app.org_id set
+-- to its own demo org, so the org-scoped branch below resolves to exactly
+-- its own row -- one demo can never read another demo's session record,
+-- its expiry, or its event trail.
+-- ============================================================
+ALTER TABLE demo_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE demo_sessions FORCE ROW LEVEL SECURITY;
+ALTER TABLE demo_events   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE demo_events   FORCE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS tenant_isolation ON demo_sessions;
+  CREATE POLICY tenant_isolation ON demo_sessions USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR demo_org_id = current_setting('app.org_id', true)
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR demo_org_id = current_setting('app.org_id', true)
+  );
+
+  DROP POLICY IF EXISTS tenant_isolation ON demo_events;
+  CREATE POLICY tenant_isolation ON demo_events USING (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR session_id IN (SELECT id FROM demo_sessions WHERE demo_org_id = current_setting('app.org_id', true))
+  ) WITH CHECK (
+    NULLIF(current_setting('app.org_id', true), '') IS NULL
+    OR session_id IN (SELECT id FROM demo_sessions WHERE demo_org_id = current_setting('app.org_id', true))
+  );
+END $$;

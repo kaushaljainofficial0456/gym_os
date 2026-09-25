@@ -2722,3 +2722,84 @@ CREATE TABLE IF NOT EXISTS access_alerts (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_access_alerts_live
   ON access_alerts(org_id, alert_key) WHERE status != 'RESOLVED';
 CREATE INDEX IF NOT EXISTS idx_access_alerts_org ON access_alerts(org_id, status, last_seen_at);
+-- ============================================================
+-- FOUNDER-APPROVED INTERACTIVE DEMO SYSTEM
+--
+-- Three tables, and deliberately no more: a demo is a REAL gym (a normal
+-- organizations row flagged is_demo, with normal users/clients/workouts
+-- under it) plus a time-boxed way in. Nothing here duplicates product
+-- data -- see backend/src/services/demo/ for the whole design.
+--
+-- These are PLATFORM tables, not tenant tables: a prospect who has filled
+-- in the request form is not yet a tenant of anything, and the founder
+-- reviewing them is SUPER_ADMIN (org-less). Only demo_sessions carries an
+-- org (the demo tenant it grants access to), which is why it -- and only
+-- it -- gets a tenant_isolation policy in rls.sql.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS demo_requests (
+  id            TEXT PRIMARY KEY,
+  owner_name    TEXT NOT NULL,
+  gym_name      TEXT NOT NULL,
+  email         TEXT NOT NULL,
+  phone         TEXT NOT NULL,
+  city          TEXT,
+  member_count  INTEGER,
+  message       TEXT,
+  -- A request is 'pending' until a founder acts on it. Nothing in the
+  -- application can move it to 'approved' except an authenticated
+  -- SUPER_ADMIN calling the console route -- see routes/console.js.
+  status        TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','approved','rejected','expired','completed','revoked')),
+  requested_at  TEXT NOT NULL,
+  reviewed_at   TEXT,
+  reviewed_by   TEXT REFERENCES users(id) ON DELETE SET NULL,
+  approved_at   TEXT,
+  rejected_at   TEXT,
+  reject_reason TEXT,
+  -- Mirrors the CURRENT session's expiry so the founder list can be
+  -- rendered from one query. demo_sessions.expires_at remains the
+  -- authoritative value every request-time check reads.
+  expires_at    TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_demo_requests_status ON demo_requests(status, requested_at);
+
+CREATE TABLE IF NOT EXISTS demo_sessions (
+  id                TEXT PRIMARY KEY,
+  demo_request_id   TEXT NOT NULL REFERENCES demo_requests(id) ON DELETE CASCADE,
+  -- The demo tenant this session may see, and the ONLY org it may ever
+  -- see. Copied into the minted JWT's org claim, never read from the
+  -- client.
+  demo_org_id       TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  -- SHA-256 of the access token. The raw token is shown to the founder
+  -- exactly once (at approval / re-issue) and is never recoverable from
+  -- this table -- same posture as account_tokens and enrollment_tokens.
+  access_token_hash TEXT NOT NULL UNIQUE,
+  status            TEXT NOT NULL DEFAULT 'approved'
+                    CHECK (status IN ('approved','active','expired','completed','revoked')),
+  approved_at       TEXT NOT NULL,
+  -- NULL until the prospect actually clicks "Start 30-minute demo".
+  -- Approving, generating the link and opening the link all leave this
+  -- NULL on purpose (spec 6): the clock starts when they enter.
+  started_at        TEXT,
+  expires_at        TEXT,
+  completed_at      TEXT,
+  revoked_at        TEXT,
+  last_activity_at  TEXT,
+  duration_minutes  INTEGER NOT NULL DEFAULT 30,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_demo_sessions_request ON demo_sessions(demo_request_id);
+CREATE INDEX IF NOT EXISTS idx_demo_sessions_status ON demo_sessions(status, expires_at);
+
+CREATE TABLE IF NOT EXISTS demo_events (
+  id         TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES demo_sessions(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL,
+  data_json  TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_demo_events_session ON demo_events(session_id, created_at);

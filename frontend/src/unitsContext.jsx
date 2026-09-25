@@ -61,7 +61,13 @@ export function UnitsProvider({ children }) {
       return undefined;
     }
     let alive = true;
-    api('/me/profile')
+    // probe: true -- this runs on EVERY page, including the public ones a
+    // signed-out visitor is meant to be able to read (a community
+    // invitation, a shared meal or workout, a demo link). Without it, its
+    // perfectly ordinary "you are not signed in" 401 redirected every one
+    // of those visitors to the login screen before the page they followed
+    // a link to could render. See api.js's own note on the flag.
+    api('/me/profile', { probe: true })
       .then((r) => { if (alive) setSystem(normalizeSystem(r?.profile?.unit_system)); })
       // A trainer/owner has no client profile. Metric is the right answer,
       // not an error state -- they still read weights in the product.

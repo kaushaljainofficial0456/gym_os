@@ -23,6 +23,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole, invalidateOrgBillingCache } from '../auth.js';
 import { validate } from '../validate.js';
+import { config } from '../config.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
 import { dayKey } from '../utils/time.js';
@@ -39,6 +40,12 @@ import { listFeatureFlags, createFeatureFlag, updateFeatureFlag, deleteFeatureFl
 import { listAnnouncements, listActiveAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../services/platform/announcements.js';
 import { listPlatformErrors, getSystemHealth } from '../services/platform/systemHealth.js';
 import { toCsv } from '../services/platform/csv.js';
+import {
+  newAccessToken, hashToken, evaluateSession, publicSessionView, closeSession,
+  enforceSession, DEMO_DURATION_MINUTES, DEMO_FEATURE_LABELS,
+} from '../services/demo/session.js';
+import { seedDemoTenant, findDemoOrg, listDemoOrgIds, DEMO_ORG_SLUG, DEMO_GYM_NAME } from '../services/demo/seed.js';
+import { sendDemoLinkEmail } from '../services/demo/notify.js';
 
 const safeParse = (json) => { try { return JSON.parse(json || 'null'); } catch { return null; } };
 
@@ -74,11 +81,29 @@ export default function consoleRoutes(db) {
   r.get('/dashboard', async (req, res) => {
     const todayStart = dayKey() + 'T00:00:00.000Z';
     const monthStart = dayKey().slice(0, 7) + '-01T00:00:00.000Z';
+    // Demo tenants are excluded from every REAL-CUSTOMER aggregate below.
+    // A demo gym is a real organizations row carrying 87 real clients, so
+    // without this exclusion approving one demo would move "Total Clients"
+    // by 87 and quietly corrupt the only platform-health numbers anyone
+    // looks at. Demo activity has its own dashboard -- /demos/overview
+    // further down this file -- and belongs there, not mixed into the
+    // figures that describe the paying business.
+    //
+    // Excluded BY ID rather than by naming `is_demo` in each query: the
+    // column is added by a guarded migration, so on a database where that
+    // has not run yet, referencing it is a SQL error -- and referencing it
+    // inside this six-way aggregate would take the founder's entire
+    // dashboard down for the length of the migration window. listDemoOrgIds
+    // absorbs that in one place and returns [] (correctly: an unmigrated
+    // database has no demo tenants).
+    const demoOrgIds = await listDemoOrgIds(db);
+    const notDemo = (col) => (demoOrgIds.length ? `AND ${col} NOT IN (${demoOrgIds.map(() => '?').join(',')})` : '');
+    const demoParams = demoOrgIds.length ? demoOrgIds : [];
     const [gyms, activeGyms, clients, trainers, activeMemberships, revenueToday, revenueMonth, refunds, openIssues, failuresToday, openTickets] = await Promise.all([
-      db.q1(`SELECT COUNT(*) AS n FROM organizations WHERE type = 'gym'`),
-      db.q1(`SELECT COUNT(*) AS n FROM org_billing_state WHERE status = 'ACTIVE'`),
-      db.q1(`SELECT COUNT(*) AS n FROM clients`),
-      db.q1(`SELECT COUNT(*) AS n FROM trainers`),
+      db.q1(`SELECT COUNT(*) AS n FROM organizations WHERE type = 'gym' ${notDemo('id')}`, demoParams),
+      db.q1(`SELECT COUNT(*) AS n FROM org_billing_state WHERE status = 'ACTIVE' ${notDemo('org_id')}`, demoParams),
+      db.q1(`SELECT COUNT(*) AS n FROM clients WHERE 1 = 1 ${notDemo('org_id')}`, demoParams),
+      db.q1(`SELECT COUNT(*) AS n FROM trainers WHERE 1 = 1 ${notDemo('org_id')}`, demoParams),
       db.q1(`SELECT COUNT(*) AS n FROM subscriptions WHERE status = 'active'`),
       db.q1(`SELECT COALESCE(SUM(amount), 0) AS total FROM payment_orders WHERE status = 'SUCCESS' AND created_at >= ?`, [todayStart]),
       db.q1(`SELECT COALESCE(SUM(amount), 0) AS total FROM payment_orders WHERE status = 'SUCCESS' AND created_at >= ?`, [monthStart]),
@@ -106,6 +131,15 @@ export default function consoleRoutes(db) {
   r.get('/gyms', async (req, res) => {
     const search = req.query.search ? `%${String(req.query.search).slice(0, 100)}%` : null;
     const rows = await db.q(
+      // The demo tenant is LABELLED here, not hidden: the founder must be
+      // able to see it in the gym list (it is a real gym they operate) but
+      // must never mistake it for a customer -- unlike the /dashboard
+      // aggregates above, where including it would corrupt a number.
+      //
+      // The flag is applied in JS from listDemoOrgIds rather than selected
+      // as a column, for the same migration-window reason as above: this
+      // list must keep working on a database that does not have `is_demo`
+      // yet, and there it simply labels nothing.
       `SELECT o.id, o.name, o.slug, o.type, o.created_at, bs.status AS billing_status,
               (SELECT COUNT(*) FROM clients c WHERE c.org_id = o.id) AS client_count,
               (SELECT COUNT(*) FROM trainers t WHERE t.org_id = o.id) AS trainer_count
@@ -113,7 +147,8 @@ export default function consoleRoutes(db) {
         WHERE o.type = 'gym' ${search ? 'AND o.name LIKE ?' : ''}
         ORDER BY o.created_at DESC LIMIT 200`,
       search ? [search] : []);
-    res.json({ gyms: rows.map((g) => ({ ...g, client_count: Number(g.client_count || 0), trainer_count: Number(g.trainer_count || 0) })) });
+    const demoIds = new Set(await listDemoOrgIds(db));
+    res.json({ gyms: rows.map((g) => ({ ...g, is_demo: demoIds.has(g.id), client_count: Number(g.client_count || 0), trainer_count: Number(g.trainer_count || 0) })) });
   });
 
   r.get('/gyms/:id', async (req, res) => {
@@ -626,6 +661,397 @@ export default function consoleRoutes(db) {
       logs: rows.map((l) => ({ ...l, before_json: safeParse(l.before_json), after_json: safeParse(l.after_json) })),
       total: Number(totalRow?.n || 0), limit, offset,
     });
+  });
+
+  // ============================================================
+  // DEMO MANAGEMENT (spec 3, 24, 25, 36, 37)
+  //
+  // The founder's whole workflow: see who asked, approve, copy a link,
+  // watch it being used, revoke it, reset the tenant. Every mutating
+  // route writes an admin_audit_logs row like every other dangerous
+  // action in this file.
+  //
+  // This section is the ONLY way a demo is ever granted. Nothing a
+  // prospect can reach (routes/demo.js) can approve, extend, restart or
+  // re-issue anything -- which is what makes "founder approval required"
+  // an architectural property rather than a UI convention.
+  // ============================================================
+
+  // Approving/revoking a demo is as consequential as suspending a gym --
+  // same ceiling as dangerousGymAction above, for the same reason.
+  const demoAction = rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => req.user?.sub || 'anon' });
+
+  /** The CURRENT session for a request (a request may have several over
+   *  its life, if a founder approves a restart). Always the newest. */
+  const currentSessionFor = (requestId) => db.q1(
+    'SELECT * FROM demo_sessions WHERE demo_request_id = ? ORDER BY created_at DESC, id DESC LIMIT 1', [requestId]);
+
+  /** Create a session + a fresh access token for an already-approved
+   *  request. Returns the RAW token, which is the only time it exists in
+   *  readable form anywhere -- only its SHA-256 is stored (see
+   *  services/demo/session.js). A founder who loses the link re-issues,
+   *  they do not recover. */
+  async function issueSession(requestId, demoOrgId) {
+    const raw = newAccessToken();
+    const ts = now();
+    const sessionId = id('dms');
+    await db.run(
+      `INSERT INTO demo_sessions (id, demo_request_id, demo_org_id, access_token_hash, status,
+         approved_at, duration_minutes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'approved', ?, ?, ?, ?)`,
+      [sessionId, requestId, demoOrgId, hashToken(raw), ts, DEMO_DURATION_MINUTES, ts, ts]);
+    return { sessionId, rawToken: raw, approvedAt: ts };
+  }
+
+  /** The prospect-facing URL for a token. Built from config.frontendUrl
+   *  (FRONTEND_URL), the same setting password-reset emails already use
+   *  to build absolute links -- NOT from the request's own Host header.
+   *  A Host header is attacker-controllable, and this link is something
+   *  a founder copies out of the console and sends to a prospect on
+   *  WhatsApp, so it must not be possible to make it point somewhere
+   *  else by sending a crafted request to this endpoint. */
+  const demoLinkFor = (rawToken) => `${config.frontendUrl}/demo/${rawToken}`;
+
+  /** One request + its session, in the shape the admin list renders. */
+  function demoRow(request, session) {
+    const verdict = session ? evaluateSession(session) : null;
+    return {
+      id: request.id,
+      ownerName: request.owner_name, gymName: request.gym_name,
+      email: request.email, phone: request.phone, city: request.city,
+      memberCount: request.member_count, message: request.message,
+      status: request.status,
+      requestedAt: request.requested_at, reviewedAt: request.reviewed_at,
+      approvedAt: request.approved_at, rejectedAt: request.rejected_at,
+      rejectReason: request.reject_reason,
+      reviewedBy: request.reviewed_by, reviewedByName: request.reviewed_by_name || null,
+      session: session ? {
+        id: session.id,
+        state: verdict.state, reason: verdict.reason,
+        startedAt: session.started_at, expiresAt: session.expires_at,
+        completedAt: session.completed_at, revokedAt: session.revoked_at,
+        lastActivityAt: session.last_activity_at,
+        durationMinutes: Number(session.duration_minutes || DEMO_DURATION_MINUTES),
+        remainingMs: verdict.remainingMs,
+        // How much of the 30 minutes was actually used -- the number the
+        // founder reads as interest. Null until it starts.
+        usedMs: session.started_at
+          ? Math.max(0, Math.min(
+            Number(session.duration_minutes || DEMO_DURATION_MINUTES) * 60_000,
+            (session.completed_at || session.revoked_at
+              ? Date.parse(session.completed_at || session.revoked_at)
+              : verdict.ok ? Date.now() : Date.parse(session.expires_at || session.started_at))
+            - Date.parse(session.started_at)))
+          : null,
+      } : null,
+    };
+  }
+
+  // ---- the founder's overview + list ----
+  r.get('/demos', async (req, res) => {
+    const status = req.query.status ? String(req.query.status).slice(0, 20) : null;
+    const requests = await db.q(
+      `SELECT d.*, u.name AS reviewed_by_name FROM demo_requests d
+         LEFT JOIN users u ON u.id = d.reviewed_by
+        ${status ? 'WHERE d.status = ?' : ''}
+        ORDER BY d.requested_at DESC LIMIT 200`, status ? [status] : []);
+    const sessions = await db.q(
+      'SELECT * FROM demo_sessions ORDER BY created_at DESC, id DESC LIMIT 500');
+    const newestByRequest = new Map();
+    for (const s of sessions) if (!newestByRequest.has(s.demo_request_id)) newestByRequest.set(s.demo_request_id, s);
+    res.json({ demos: requests.map((d) => demoRow(d, newestByRequest.get(d.id) || null)) });
+  });
+
+  // ---- top-level demo analytics (spec 25) ----
+  // Every figure is a COUNT or an AVG over real rows. An empty platform
+  // reports zeros, never example numbers -- same rule the main
+  // /dashboard above follows.
+  r.get('/demos/overview', async (req, res) => {
+    const [byStatus, sessions, events, org] = await Promise.all([
+      db.q('SELECT status, COUNT(*) AS n FROM demo_requests GROUP BY status'),
+      db.q('SELECT status, started_at, expires_at, completed_at, revoked_at, duration_minutes FROM demo_sessions'),
+      db.q('SELECT type, COUNT(*) AS n FROM demo_events GROUP BY type'),
+      findDemoOrg(db),
+    ]);
+    const counts = Object.fromEntries(byStatus.map((s) => [s.status, Number(s.n)]));
+    const nowMs = Date.now();
+    let active = 0;
+    const durations = [];
+    for (const s of sessions) {
+      const verdict = evaluateSession(s, nowMs);
+      if (verdict.ok) active++;
+      if (!s.started_at) continue;
+      const endedAt = s.completed_at || s.revoked_at || (verdict.ok ? null : s.expires_at);
+      if (!endedAt) continue;
+      const used = Date.parse(endedAt) - Date.parse(s.started_at);
+      if (Number.isFinite(used) && used > 0) {
+        durations.push(Math.min(used, Number(s.duration_minutes || DEMO_DURATION_MINUTES) * 60_000));
+      }
+    }
+    const avgUsedMs = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+    // "Most viewed feature" ranks only the event types that ARE features
+    // -- demo_started/demo_expired are lifecycle, not something anyone
+    // chose to look at, and including them would put demo_started at the
+    // top of every list forever.
+    const featureRanking = events
+      .filter((e) => DEMO_FEATURE_LABELS[e.type])
+      .map((e) => ({ type: e.type, label: DEMO_FEATURE_LABELS[e.type], views: Number(e.n) }))
+      .sort((a, b) => b.views - a.views);
+    const memberCount = org ? await db.q1('SELECT COUNT(*) AS n FROM clients WHERE org_id = ?', [org.id]) : null;
+    res.json({
+      totalRequests: Object.values(counts).reduce((a, b) => a + b, 0),
+      pending: counts.pending || 0,
+      approved: counts.approved || 0,
+      rejected: counts.rejected || 0,
+      completed: counts.completed || 0,
+      expired: counts.expired || 0,
+      revoked: counts.revoked || 0,
+      activeNow: active,
+      averageUsedMs: avgUsedMs,
+      featureRanking,
+      tenant: org
+        ? { exists: true, orgId: org.id, name: org.name, slug: org.slug, memberCount: Number(memberCount?.n || 0) }
+        : { exists: false, slug: DEMO_ORG_SLUG, name: DEMO_GYM_NAME, memberCount: 0 },
+    });
+  });
+
+  // ---- one demo, with its full activity trail (spec 24) ----
+  r.get('/demos/:id', async (req, res) => {
+    const request = await db.q1(
+      `SELECT d.*, u.name AS reviewed_by_name FROM demo_requests d
+         LEFT JOIN users u ON u.id = d.reviewed_by WHERE d.id = ?`, [req.params.id]);
+    if (!request) return res.status(404).json({ error: 'Demo request not found' });
+    const sessions = await db.q(
+      'SELECT * FROM demo_sessions WHERE demo_request_id = ? ORDER BY created_at DESC, id DESC', [request.id]);
+    const sessionIds = sessions.map((s) => s.id);
+    const events = sessionIds.length
+      ? await db.q(
+        `SELECT * FROM demo_events WHERE session_id IN (${sessionIds.map(() => '?').join(',')})
+          ORDER BY created_at ASC LIMIT 500`, sessionIds)
+      : [];
+    const featuresVisited = [...new Set(events.map((e) => e.type))]
+      .filter((t) => DEMO_FEATURE_LABELS[t])
+      .map((t) => DEMO_FEATURE_LABELS[t]);
+    res.json({
+      ...demoRow(request, sessions[0] || null),
+      sessionHistory: sessions.map((s) => ({
+        id: s.id, state: evaluateSession(s).state,
+        approvedAt: s.approved_at, startedAt: s.started_at, expiresAt: s.expires_at,
+        completedAt: s.completed_at, revokedAt: s.revoked_at, lastActivityAt: s.last_activity_at,
+      })),
+      events: events.map((e) => ({ type: e.type, at: e.created_at, data: safeParse(e.data_json) })),
+      featuresVisited,
+      memberViewUsed: events.some((e) => e.type === 'member_mode_entered'),
+      trainerViewUsed: events.some((e) => e.type === 'trainer_mode_entered'),
+    });
+  });
+
+  // ---- APPROVE ----
+  // The one action that creates access. Requires the demo tenant to
+  // exist FIRST: handing out a link into a gym that was never seeded
+  // would send the prospect to an empty product, which is worse than
+  // making the founder run the seeder.
+  r.post('/demos/:id/approve', demoAction, async (req, res) => {
+    const request = await db.q1('SELECT * FROM demo_requests WHERE id = ?', [req.params.id]);
+    if (!request) return res.status(404).json({ error: 'Demo request not found' });
+    if (request.status !== 'pending') {
+      return res.status(409).json({ error: 'not_pending', message: `This request is already ${request.status}.` });
+    }
+    const org = await findDemoOrg(db);
+    if (!org) {
+      return res.status(409).json({
+        error: 'demo_tenant_missing',
+        message: `The ${DEMO_GYM_NAME} demo tenant has not been created yet. Run "npm run seed:demo" first.`,
+      });
+    }
+    const { sessionId, rawToken, approvedAt } = await issueSession(request.id, org.id);
+    await db.tx(async (tx) => {
+      await tx.run(
+        `UPDATE demo_requests SET status = 'approved', reviewed_at = ?, reviewed_by = ?, approved_at = ?, updated_at = ?
+          WHERE id = ?`, [approvedAt, req.user.sub, approvedAt, approvedAt, request.id]);
+      await writeAuditLog(tx, req, {
+        action: 'demo_approved', entityType: 'demo_request', entityId: request.id,
+        before: { status: request.status },
+        // The token is NEVER written to the audit log -- an audit trail
+        // that contains working credentials is a credential store.
+        after: { status: 'approved', sessionId, gymName: request.gym_name, ownerName: request.owner_name },
+      });
+    });
+    const demoLink = demoLinkFor(rawToken);
+    // Best-effort, and awaited only so the response can report what
+    // happened. A bounced or unconfigured email must never fail an
+    // approval that already succeeded -- the founder has the link on
+    // screen either way, which is the workflow the spec actually calls
+    // for (copy it, send it on WhatsApp).
+    const emailed = await sendDemoLinkEmail(
+      { ownerName: request.owner_name, gymName: request.gym_name, email: request.email },
+      demoLink, { durationMinutes: DEMO_DURATION_MINUTES });
+    res.json({
+      ok: true, sessionId,
+      // Shown once. Everything after this reads the hash.
+      accessToken: rawToken, demoLink,
+      durationMinutes: DEMO_DURATION_MINUTES,
+      emailed,
+    });
+  });
+
+  // ---- REJECT ----
+  r.post('/demos/:id/reject', demoAction, validate(z.object({
+    reason: z.string().trim().max(500).optional(),
+  })), async (req, res) => {
+    const request = await db.q1('SELECT * FROM demo_requests WHERE id = ?', [req.params.id]);
+    if (!request) return res.status(404).json({ error: 'Demo request not found' });
+    if (request.status !== 'pending') {
+      return res.status(409).json({ error: 'not_pending', message: `This request is already ${request.status}.` });
+    }
+    const ts = now();
+    await db.tx(async (tx) => {
+      await tx.run(
+        `UPDATE demo_requests SET status = 'rejected', reviewed_at = ?, reviewed_by = ?, rejected_at = ?,
+           reject_reason = ?, updated_at = ? WHERE id = ?`,
+        [ts, req.user.sub, ts, req.body.reason || null, ts, request.id]);
+      await writeAuditLog(tx, req, {
+        action: 'demo_rejected', entityType: 'demo_request', entityId: request.id,
+        before: { status: request.status }, after: { status: 'rejected', reason: req.body.reason || null },
+      });
+    });
+    res.json({ ok: true });
+  });
+
+  // ---- REVOKE ----
+  // Kills a demo mid-session. Takes effect on the prospect's very next
+  // request (auth.js re-reads the row every time), not on a TTL -- a
+  // founder pressing this expects it to be over now.
+  r.post('/demos/:id/revoke', demoAction, validate(z.object({
+    reason: z.string().trim().max(500).optional(),
+  })), async (req, res) => {
+    const request = await db.q1('SELECT * FROM demo_requests WHERE id = ?', [req.params.id]);
+    if (!request) return res.status(404).json({ error: 'Demo request not found' });
+    const session = await currentSessionFor(request.id);
+    if (!session) return res.status(409).json({ error: 'no_session', message: 'This request has no demo session to revoke.' });
+    if (['revoked', 'completed', 'expired'].includes(session.status)) {
+      return res.status(409).json({ error: 'already_ended', message: `This demo is already ${session.status}.` });
+    }
+    await closeSession(db, session, 'revoked');
+    await writeAuditLog(db, req, {
+      action: 'demo_revoked', entityType: 'demo_session', entityId: session.id,
+      before: { status: session.status }, after: { status: 'revoked', reason: req.body.reason || null },
+    });
+    res.json({ ok: true });
+  });
+
+  // ---- RE-ISSUE / RESTART ----
+  // Covers both "the founder lost the link" (the session never started,
+  // so a fresh token replaces the old one on the SAME session) and the
+  // spec-22 restart ("Request Another Demo" -> a founder deliberately
+  // grants a second 30 minutes). The restart branch creates a NEW session
+  // row, so the old one's timings stay on the record rather than being
+  // rewritten.
+  //
+  // Either way this is a FOUNDER action. There is no prospect-reachable
+  // path to it, which is exactly what stops a demo being farmed for
+  // unlimited half-hours.
+  r.post('/demos/:id/reissue', demoAction, async (req, res) => {
+    const request = await db.q1('SELECT * FROM demo_requests WHERE id = ?', [req.params.id]);
+    if (!request) return res.status(404).json({ error: 'Demo request not found' });
+    if (request.status === 'rejected') {
+      return res.status(409).json({ error: 'request_rejected', message: 'This request was rejected. Approve a new request instead.' });
+    }
+    const org = await findDemoOrg(db);
+    if (!org) {
+      return res.status(409).json({ error: 'demo_tenant_missing', message: `The ${DEMO_GYM_NAME} demo tenant has not been created yet.` });
+    }
+    const existing = await currentSessionFor(request.id);
+    const ts = now();
+    if (existing && !existing.started_at && existing.status === 'approved') {
+      // Never started: rotate the token in place. The old link stops
+      // working the instant this returns, which is the point of
+      // re-issuing after a link has gone somewhere it should not have.
+      const raw = newAccessToken();
+      await db.run('UPDATE demo_sessions SET access_token_hash = ?, updated_at = ? WHERE id = ?',
+        [hashToken(raw), ts, existing.id]);
+      await writeAuditLog(db, req, {
+        action: 'demo_link_reissued', entityType: 'demo_session', entityId: existing.id,
+        before: null, after: { rotated: true },
+      });
+      const rotatedLink = demoLinkFor(raw);
+      const rotatedEmail = await sendDemoLinkEmail(
+        { ownerName: request.owner_name, gymName: request.gym_name, email: request.email },
+        rotatedLink, { durationMinutes: DEMO_DURATION_MINUTES });
+      return res.json({ ok: true, sessionId: existing.id, accessToken: raw, demoLink: rotatedLink, restarted: false, emailed: rotatedEmail });
+    }
+    // Already used (started, expired, completed or revoked) -- this is a
+    // deliberate second demo.
+    const { sessionId, rawToken } = await issueSession(request.id, org.id);
+    await db.tx(async (tx) => {
+      await tx.run(`UPDATE demo_requests SET status = 'approved', approved_at = ?, expires_at = NULL, updated_at = ? WHERE id = ?`,
+        [ts, ts, request.id]);
+      await writeAuditLog(tx, req, {
+        action: 'demo_restarted', entityType: 'demo_request', entityId: request.id,
+        before: { previousSessionId: existing?.id || null, previousStatus: existing?.status || null },
+        after: { sessionId },
+      });
+    });
+    const restartLink = demoLinkFor(rawToken);
+    const restartEmail = await sendDemoLinkEmail(
+      { ownerName: request.owner_name, gymName: request.gym_name, email: request.email },
+      restartLink, { durationMinutes: DEMO_DURATION_MINUTES });
+    res.json({ ok: true, sessionId, accessToken: rawToken, demoLink: restartLink, restarted: true, emailed: restartEmail });
+  });
+
+  // ---- THE DEMO TENANT ITSELF ----
+  r.get('/demos/tenant/status', async (req, res) => {
+    const org = await findDemoOrg(db);
+    if (!org) return res.json({ exists: false, slug: DEMO_ORG_SLUG, name: DEMO_GYM_NAME });
+    const [clients, trainers, workouts, activeSessions] = await Promise.all([
+      db.q1('SELECT COUNT(*) AS n FROM clients WHERE org_id = ?', [org.id]),
+      db.q1('SELECT COUNT(*) AS n FROM trainers WHERE org_id = ?', [org.id]),
+      db.q1('SELECT COUNT(*) AS n FROM workouts WHERE org_id = ?', [org.id]),
+      db.q(`SELECT * FROM demo_sessions WHERE demo_org_id = ? AND status = 'active'`, [org.id]),
+    ]);
+    const live = activeSessions.filter((s) => evaluateSession(s).ok);
+    res.json({
+      exists: true, orgId: org.id, name: org.name, slug: org.slug,
+      memberCount: Number(clients?.n || 0), trainerCount: Number(trainers?.n || 0),
+      workoutCount: Number(workouts?.n || 0),
+      activeSessions: live.length,
+    });
+  });
+
+  // ---- RESET DEMO DATA (spec 29) ----
+  // Re-runs the canonical seed, which is also what created the tenant --
+  // there is no separate "restore" implementation that could drift from
+  // what the seeder produces.
+  //
+  // REFUSES while a demo is live. A reset deletes and recreates every
+  // user row in the tenant, so doing it under an active session would
+  // pull the ground out from under a prospect mid-sentence. The spec
+  // asks for exactly this ("do not interrupt an active demo"), and it is
+  // also what makes the seeder's delete-then-rebuild approach safe.
+  r.post('/demos/tenant/reset', rateLimit({ windowMs: 60_000, max: 3, keyFn: (req) => req.user?.sub || 'anon' }), async (req, res) => {
+    const org = await findDemoOrg(db);
+    if (org) {
+      const activeSessions = await db.q(`SELECT * FROM demo_sessions WHERE demo_org_id = ? AND status = 'active'`, [org.id]);
+      // enforceSession, not a status read: a session whose clock ran out
+      // but which nobody has made a request against since is still marked
+      // 'active' in the table, and must not block a reset.
+      for (const s of activeSessions) {
+        const verdict = await enforceSession(db, s.id);
+        if (verdict.ok) {
+          return res.status(409).json({
+            error: 'demo_in_progress',
+            message: 'A demo is running right now. Revoke it first, or wait for it to finish.',
+          });
+        }
+      }
+    }
+    const t0 = Date.now();
+    const { orgId, counts } = await seedDemoTenant(db);
+    await writeAuditLog(db, req, {
+      action: 'demo_tenant_reset', entityType: 'organization', entityId: orgId,
+      before: null, after: { counts, tookMs: Date.now() - t0 },
+    });
+    res.json({ ok: true, orgId, counts, tookMs: Date.now() - t0 });
   });
 
   return r;
