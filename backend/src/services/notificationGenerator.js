@@ -13,7 +13,7 @@
 // No paid APIs, no push notification services, no cron workers.
 // ============================================================
 import { id, now } from '../ids.js';
-import { dayKey, getOrgTz } from '../utils/time.js';
+import { dayKey, shiftDayKey, getOrgTz } from '../utils/time.js';
 
 const WATER_MESSAGES = [
   'Time for some water 💧',
@@ -186,9 +186,16 @@ export async function generateNotifications(db, userId, orgId) {
 
   // ── 3. TOMORROW'S WORKOUT ──
   if (prefs.tomorrow_workout) {
-    const tomorrow = new Date(nowTs);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+    /* Tomorrow relative to the GYM's today, by plain calendar arithmetic
+       on the day key -- not `new Date()` plus a day read back in UTC.
+       This send window is the local evening, and west of UTC the local
+       evening is already the next UTC day: at 21:00 in New York it is
+       01:00 UTC tomorrow, so "tomorrow" came out as the day AFTER
+       tomorrow. Nothing is scheduled for that date, so the evening
+       reminder did not name the wrong workout -- it silently never
+       arrived, for three hours of every evening, for every gym west of
+       UTC. */
+    const tomorrowKey = shiftDayKey(today, 1);
 
     const hour = parseInt(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: orgTz }).format(nowTs));
 

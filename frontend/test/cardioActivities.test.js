@@ -149,3 +149,76 @@ describe('energy', () => {
     }
   });
 });
+
+/* ── machine parameters actually reach the estimate ──────────────────
+ *
+ * These fields were collected and then discarded: the MET came from a
+ * flat light/moderate/hard table, so resistance 3 and resistance 20 on
+ * the same bike produced identical calories, and the skipping screen
+ * asked for a pace it never read. Reported from the product as "add
+ * more factors in cardio to predict more accurate burns".
+ */
+describe('machine resistance and power change the answer', () => {
+  const KG = 70;
+
+  it('a heavier resistance burns more than a light one', () => {
+    const easy = metFor('cycling', { resistance: 3 }, 'moderate', KG);
+    const hard = metFor('cycling', { resistance: 20 }, 'moderate', KG);
+    expect(hard).toBeGreaterThan(easy);
+  });
+
+  it('stays inside the activity own published anchors', () => {
+    // The interpolation must not invent intensities the source does not
+    // contain -- level 1 is the easy value, the top of the range is hard.
+    expect(metFor('cycling', { resistance: 1 }, 'moderate', KG)).toBeCloseTo(5.8, 1);
+    expect(metFor('cycling', { resistance: 25 }, 'moderate', KG)).toBeCloseTo(10.5, 1);
+  });
+
+  it('prefers measured watts over a resistance level', () => {
+    // 150 W on an ergometer is a known oxygen cost (ACSM); a "level" is
+    // not comparable between two machines, so power wins when given.
+    const byPower = metFor('cycling', { watts: 150, resistance: 1 }, 'light', KG);
+    expect(byPower).toBeGreaterThan(8);
+    expect(byPower).toBeLessThan(10);
+  });
+
+  it('scales power with body mass, as the equation does', () => {
+    const light = metFor('cycling', { watts: 150 }, 'moderate', 55);
+    const heavy = metFor('cycling', { watts: 150 }, 'moderate', 95);
+    expect(light).toBeGreaterThan(heavy);   // same watts costs a smaller person more METs
+  });
+
+  it('rows on the ergometer manufacturer own power relationship', () => {
+    const met = metFor('rowing_machine', { watts: 150 }, 'moderate', KG);
+    expect(met).toBeGreaterThan(9);
+    expect(met).toBeLessThan(14);
+  });
+
+  it('reads the skipping pace it asks for', () => {
+    const slow = metFor('jump_rope', { speed: 100 }, 'moderate', KG);
+    const fast = metFor('jump_rope', { speed: 140 }, 'moderate', KG);
+    expect(fast).toBeGreaterThan(slow);
+    expect(slow).toBeCloseTo(8.8, 1);
+    expect(fast).toBeCloseTo(12.3, 1);
+  });
+
+  it('falls back to the chosen effort when nothing was entered', () => {
+    expect(metFor('cycling', {}, 'light', KG)).toBeCloseTo(5.8, 1);
+    expect(metFor('cycling', {}, 'moderate', KG)).toBeCloseTo(7.0, 1);
+    expect(metFor('cycling', {}, 'hard', KG)).toBeCloseTo(10.5, 1);
+  });
+
+  it('keeps the effort picker for machines whose parameters are optional', () => {
+    // Speed-driven activities hide it (the speed IS the effort); a bike
+    // logged with no resistance still needs somewhere to say how hard.
+    expect(usesEffortLevel('cycling')).toBe(true);
+    expect(usesEffortLevel('rowing_machine')).toBe(true);
+    expect(usesEffortLevel('treadmill_run')).toBe(false);
+  });
+
+  it('turns a different resistance into a different calorie figure', () => {
+    const easy = estimateKcal({ activityId: 'cycling', minutes: 30, bodyWeightKg: KG, params: { resistance: 3 } });
+    const hard = estimateKcal({ activityId: 'cycling', minutes: 30, bodyWeightKg: KG, params: { resistance: 20 } });
+    expect(hard).toBeGreaterThan(easy);
+  });
+});

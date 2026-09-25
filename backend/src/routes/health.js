@@ -257,15 +257,45 @@ async function autoSyncStaleConnections(db, { userId }) {
  * summary was computed. Cheap (one indexed max) and precise: it triggers
  * a recompute exactly when new evidence exists and never otherwise.
  */
-async function hasNewerHealthData(db, { userId, date, computedAt }) {
+async function hasNewerHealthData(db, { userId, clientId = null, date, computedAt }) {
   if (!computedAt) return true;
   const row = await db.q1(
     `SELECT MAX(synced_at) AS newest FROM health_records
       WHERE user_id = ? AND deleted_at IS NULL
         AND start_time >= ? AND start_time < ?`,
     [userId, `${date}T00:00:00Z`, `${date}T23:59:59Z`]);
-  if (!row?.newest) return false;
-  return Date.parse(row.newest) > Date.parse(computedAt);
+  if (row?.newest && Date.parse(row.newest) > Date.parse(computedAt)) return true;
+
+  /* SK OS'S OWN LOGGED WORK COUNTS AS NEW EVIDENCE TOO.
+   *
+   * This asked only whether a WEARABLE had delivered something since the
+   * day was reconciled. Logging a past workout or a past cardio session
+   * touches none of those rows, so a day that had already been opened
+   * once kept serving its cached summary and the work the user had just
+   * recorded never entered that day's burn -- reported from the product
+   * as "log past, and the burn is not added to the day's total".
+   *
+   * created_at is the load-bearing column, not completed_at: a
+   * retroactive workout's completed_at is deliberately in the past (it is
+   * when they trained), while created_at is when they told us. Both are
+   * compared, so a live session completed after the day was reconciled is
+   * caught as well.
+   */
+  if (!clientId) return false;
+  const [own, cardio] = await Promise.all([
+    db.q1(
+      `SELECT MAX(w.created_at) AS created, MAX(w.completed_at) AS completed
+         FROM workouts w
+         JOIN workout_logs l ON l.workout_id = w.id
+        WHERE l.client_id = ? AND l.date = ?`, [clientId, date]),
+    db.q1('SELECT MAX(created_at) AS created FROM cardio_sessions WHERE client_id = ? AND date = ?',
+      [clientId, date]),
+  ]);
+  const newest = [own?.created, own?.completed, cardio?.created]
+    .map((t) => (t ? Date.parse(t) : NaN))
+    .filter(Number.isFinite);
+  if (!newest.length) return false;
+  return Math.max(...newest) > Date.parse(computedAt);
 }
 
 /* Exposed for tests only. syncOneConnection is the one place the
@@ -507,7 +537,7 @@ export default function healthRoutes(db) {
       const cached = await getDailyIntelligence(db, { userId: req.user.sub, date });
       // Same staleness rule as the burn breakdown: a cached day whose
       // wearable data arrived later is not actually up to date.
-      if (cached && !(await hasNewerHealthData(db, { userId: req.user.sub, date, computedAt: cached.computed_at }))) {
+      if (cached && !(await hasNewerHealthData(db, { userId: req.user.sub, clientId: c.id, date, computedAt: cached.computed_at }))) {
         return res.json({ intelligence: cached, cached: true });
       }
     }
@@ -554,7 +584,7 @@ export default function healthRoutes(db) {
     // Recompute when there is no summary at all, OR when wearable data for
     // this day landed after the summary was built (see hasNewerHealthData).
     const stale = breakdown
-      ? await hasNewerHealthData(db, { userId: req.user.sub, date, computedAt: breakdown.computed_at })
+      ? await hasNewerHealthData(db, { userId: req.user.sub, clientId: c.id, date, computedAt: breakdown.computed_at })
       : true;
     if (stale) {
       await reconcileUserDay(db, { userId: req.user.sub, orgId: req.user.org, clientId: c.id, date, tz });

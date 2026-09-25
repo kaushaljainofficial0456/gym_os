@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import AttendanceCard from '../../components/trainer/AttendanceCard.jsx';
 import { TrainerPulse, OwnerPulse } from '../../components/trainer/RosterPulse.jsx';
 import GymPulse from '../../components/trainer/GymPulse.jsx';
+import TrainerCrowdCard from '../../components/trainer/TrainerCrowdCard.jsx';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
@@ -33,6 +34,12 @@ export default function Dashboard() {
      business reading the gym's takings, and gating it in the fetch as
      well as the route means the request is never even made. */
   const pulse = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/pulse')));
+  /* The floor right now, and which of this trainer's own clients are on
+     it. Trainer-only: an owner has the whole Gym Crowd screen. Failures
+     are swallowed to null -- a crowd hiccup must not take the dashboard
+     down with it; the card simply does not render. */
+  const crowd = useFetch(() => (isTrainerOnly ? api('/trainer/crowd').catch(() => null) : Promise.resolve(null)));
+  const crowdClients = useFetch(() => (isTrainerOnly ? api('/trainer/crowd/clients').catch(() => null) : Promise.resolve(null)));
   const trendRows = useMemo(() => (trend.data?.trend || []).map(t => ({ label: t.date.slice(5), value: t.avg ?? 0 })), [trend.data]);
 
   // For trainers, attention data comes from the trainer endpoint response
@@ -44,7 +51,7 @@ export default function Dashboard() {
   // one-row skeleton, so painting the page without it and letting it land
   // afterwards shoved the attention queue ~480px down (layout shift 0.31,
   // e2e/performance.spec.js). The page now appears once, and holds still.
-  if (ov.loading || (!isTrainerOnly && (att.loading || pulse.loading)) || trend.loading) {
+  if (ov.loading || (!isTrainerOnly && (att.loading || pulse.loading)) || (isTrainerOnly && (crowd.loading || crowdClients.loading)) || trend.loading) {
     return (
       <div className="space-y-6">
         <div className="skeleton h-20 w-2/3" />
@@ -155,6 +162,12 @@ export default function Dashboard() {
           those, plus an action centre and the trends behind them, and it
           already contains Active clients -- so showing this row to an
           owner as well would be eight tiles, two of them duplicates. */}
+      {isTrainerOnly && (crowd.data || crowdClients.data) && (
+        <Reveal>
+          <TrainerCrowdCard crowd={crowd.data} clients={crowdClients.data} />
+        </Reveal>
+      )}
+
       {!isTrainerOnly && (
         <Reveal>
           <GymPulse pulse={pulse.data} kpis={k} loading={pulse.loading} error={pulse.error} onRetry={pulse.reload} />

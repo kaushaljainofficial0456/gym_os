@@ -58,11 +58,23 @@ const HALF_WIDTH = new Set(['goal', 'crowd']);
  * colour pure decoration. They now differ, and the values are tokens so
  * they follow the theme.
  */
-const CROWD = {
-  LOW:       { label: 'Quiet',    tone: 'var(--good)' },
-  MODERATE:  { label: 'Moderate', tone: 'var(--accent)' },
-  HIGH:      { label: 'Busy',     tone: 'var(--warn)' },
-  VERY_HIGH: { label: 'Packed',   tone: 'var(--bad)' },
+/* Severity -> colour token. This used to be a map from the legacy
+   LOW/MODERATE/HIGH/VERY_HIGH status to a label AND a colour -- i.e. a
+   second copy of the thresholds, sitting next to the copy in the crowd
+   detail screen. A gym that raised its capacity got a card and a detail
+   view that disagreed about how busy it was.
+
+   The server now decides (services/crowdStatus.js): it sends the label,
+   the description and a severity, respecting the gym's own configured
+   bands. All that is left here is turning a severity into a token, so a
+   threshold change never needs a frontend edit. */
+const CROWD_TONE = {
+  none: 'var(--faint)',
+  info: 'var(--accent)',
+  low: 'var(--good)',
+  medium: 'var(--warn)',
+  high: 'var(--gold)',
+  critical: 'var(--bad)',
 };
 
 /* The local `Label` this file used to define is gone: it was a fourth
@@ -556,30 +568,66 @@ export default function Home() {
           className="card p-4 h-full w-full text-left flex flex-col"
         >
           <span className="t-micro">Gym now</span>
-          <div className="mt-2 flex items-baseline gap-1">
-            <span className="font-black text-[26px] tracking-[-.03em]"
-                  style={{ color: 'var(--ink)' }}>
-              <AnimatedNumber value={crowd.current} />
-            </span>
-            <span className="text-[13px] font-medium" style={{ color: 'var(--mute)' }}>
-              /{crowd.capacity}
-            </span>
-          </div>
+          {/* Count, capacity and percentage all come from the server's
+              crowd status, which omits the head-count entirely when the
+              gym has chosen not to publish it and omits the percentage
+              when no capacity is configured. Neither is reconstructed
+              here -- a bar drawn from an absent percentage is how this
+              card previously rendered `width: undefined%`. */}
+          {/* A closed gym shows when it opens, not a head-count. "1/150"
+              over the words "Gym closed" reads as a contradiction, and the
+              1 is a staff member or a session nobody scanned out of --
+              neither is what a member is asking. */}
+          {crowd.crowd?.status === 'closed' ? (
+            <div className="mt-2">
+              <span className="font-black text-[22px] tracking-[-.03em]" style={{ color: 'var(--ink)' }}>Closed</span>
+              {crowd.hours?.open && (
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>Opens {crowd.hours.open}</div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 flex items-baseline gap-1">
+              <span className="font-black text-[26px] tracking-[-.03em]"
+                    style={{ color: 'var(--ink)' }}>
+                {crowd.crowd?.occupancyCount != null
+                  ? <AnimatedNumber value={crowd.crowd.occupancyCount} />
+                  : (crowd.crowd?.occupancyPercentage != null ? `${crowd.crowd.occupancyPercentage}%` : '—')}
+              </span>
+              {crowd.crowd?.occupancyCount != null && crowd.crowd?.capacity != null && (
+                <span className="text-[13px] font-medium" style={{ color: 'var(--mute)' }}>
+                  /{crowd.crowd.capacity}
+                </span>
+              )}
+            </div>
+          )}
           <div className="mt-auto pt-3">
-            <div className="h-[3px] rounded-full overflow-hidden"
-                 style={{ background: 'var(--line)' }}>
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: CROWD[crowd.status]?.tone || 'var(--accent)' }}
-                initial={{ width: 0 }}
-                animate={{ width: `${crowd.pct}%` }}
-                transition={{ duration: 1, ease: [0.22, 0.8, 0.3, 1], delay: 0.26 }}
-              />
-            </div>
-            <div className="mt-2 text-[10px] font-medium"
-                 style={{ color: CROWD[crowd.status]?.tone || 'var(--mute)' }}>
-              {CROWD[crowd.status]?.label || crowd.status}
-            </div>
+            {crowd.crowd?.occupancyPercentage != null && (
+              <div className="h-[3px] rounded-full overflow-hidden"
+                   style={{ background: 'var(--line)' }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: CROWD_TONE[crowd.crowd?.severity] || 'var(--accent)' }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, crowd.crowd.occupancyPercentage)}%` }}
+                  transition={{ duration: 1, ease: [0.22, 0.8, 0.3, 1], delay: 0.26 }}
+                />
+              </div>
+            )}
+            {/* The closed card already says "Closed" in large type; the
+                label would repeat the same word underneath it. */}
+            {crowd.crowd?.status !== 'closed' && (
+              <div className="mt-2 text-[10px] font-medium"
+                   style={{ color: CROWD_TONE[crowd.crowd?.severity] || 'var(--mute)' }}>
+                {crowd.crowd?.label || '—'}
+              </div>
+            )}
+            {/* "Live" is never the default. The server reports how old the
+                figure is and this shows the word only when it is true. */}
+            {crowd.crowd?.status !== 'closed' && crowd.freshness && !crowd.freshness.isLive && (
+              <div className="mt-0.5 text-[9px]" style={{ color: 'var(--faint)' }}>
+                {crowd.freshness.label}
+              </div>
+            )}
           </div>
         </Pressable>
       </Tilt>

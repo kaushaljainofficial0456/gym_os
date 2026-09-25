@@ -18,8 +18,10 @@
  * ends up matching what is actually stored.
  *
  * SAFE WITHOUT A CLIENT PROFILE. Trainers and owners have no
- * client_profiles row at all; they get metric and a no-op setter rather
- * than an error, so this provider can wrap the whole app.
+ * client_profiles row at all, so the preference is not fetched for them
+ * at all -- they get metric, which is what the failed request used to
+ * resolve to anyway. This provider can therefore wrap the whole app
+ * without putting a guaranteed 404 on every non-client page load.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
@@ -37,6 +39,12 @@ export function UnitsProvider({ children }) {
   const [ready, setReady] = useState(false);
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  /* Only a CLIENT has a client_profiles row to read a preference from.
+     Asking for anyone else guarantees a 404 -- see the catch below, which
+     was silently absorbing one failed request per trainer/owner session
+     and logging it to the console on every page load. Skipping the call
+     is not a behaviour change: the catch already resolved to metric. */
+  const hasProfile = user?.role === 'CLIENT';
 
   const load = useCallback(() => {
     // SIGNED OUT, THERE IS NO PROFILE -- and asking anyway was not harmless.
@@ -47,7 +55,7 @@ export function UnitsProvider({ children }) {
     // shared workout or an invite link -- each bounced to the login screen
     // the moment this fetch came back. Keyed on the user, so signing in
     // loads the preference and signing out resets it.
-    if (!userId) {
+    if (!userId || !hasProfile) {
       setSystem('metric');
       setReady(true);
       return undefined;
@@ -60,7 +68,7 @@ export function UnitsProvider({ children }) {
       .catch(() => { if (alive) setSystem('metric'); })
       .finally(() => { if (alive) setReady(true); });
     return () => { alive = false; };
-  }, [userId]);
+  }, [userId, hasProfile]);
 
   useEffect(() => load(), [load]);
 

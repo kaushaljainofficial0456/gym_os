@@ -27,6 +27,20 @@ export const PERMISSIONS = Object.freeze({
     'trainers.view', 'trainers.manage',
     'branches.view', 'branches.manage',
     'reports.view', 'settings.manage',
+    /* Access control is split into three permissions rather than one,
+       because they are three genuinely different levels of trust:
+
+         access.view    reading the crowd, device health and the event
+                        log -- operational, and safe for a manager.
+         access.manage  adding devices, mapping members, correcting a
+                        presence session. Changes who the building
+                        thinks is inside.
+         access.connect  provider credentials and webhook secrets. This
+                        is the key to the front door, and it is the
+                        owner's alone -- a manager who can add a device
+                        still cannot point the gym at a different
+                        access system. */
+    'access.view', 'access.manage', 'access.connect',
   ],
   MANAGER: [
     'billing.view',
@@ -34,14 +48,22 @@ export const PERMISSIONS = Object.freeze({
     'trainers.view', 'trainers.manage',
     'branches.view',
     'reports.view',
+    'access.view', 'access.manage',
   ],
   STAFF: [
     'members.view',
     'attendance.manage',
+    // Front-desk staff need to see how busy it is and who is inside;
+    // they do not configure the hardware.
+    'access.view',
   ],
   TRAINER: [
     'clients.manage_assigned',
     'workouts.manage', 'nutrition.manage',
+    // The gym's crowd level only -- the aggregate, gated again at the
+    // route by whether the owner has enabled trainer visibility. A
+    // trainer never reaches the device, provider or event surfaces.
+    'access.crowd.view',
   ],
   CLIENT: [
     'self.manage',

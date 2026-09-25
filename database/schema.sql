@@ -622,6 +622,32 @@ CREATE TABLE IF NOT EXISTS gym_settings (
   -- deliberately -- but that is a decision they make, not the default
   -- they get by accident.
   attendance_require_qr    INTEGER NOT NULL DEFAULT 1,
+  -- Gym Crowd Live. The percentage bands that decide what "busy" means,
+  -- configurable because a 40-person studio and a 400-person warehouse do
+  -- not mean the same thing by it. services/crowdStatus.js is the only
+  -- place that reads them, and every client/owner/trainer surface renders
+  -- the label it returns rather than banding a percentage itself.
+  crowd_threshold_quiet    INTEGER NOT NULL DEFAULT 30,
+  crowd_threshold_moderate INTEGER NOT NULL DEFAULT 60,
+  crowd_threshold_busy     INTEGER NOT NULL DEFAULT 80,
+  -- Members see how busy it is; whether they see the head-count itself is
+  -- the gym's call. Enforced server-side -- a component that merely
+  -- declines to render the number still ships it to the browser.
+  crowd_show_exact_count   INTEGER NOT NULL DEFAULT 1,
+  -- Whether the member-facing card exists at all. Distinct from
+  -- crowd_enabled, which switches the occupancy engine off entirely.
+  crowd_client_visible     INTEGER NOT NULL DEFAULT 1,
+  -- Trainers see the aggregate crowd unless the owner switches it off.
+  crowd_trainer_visible    INTEGER NOT NULL DEFAULT 1,
+  -- Opening hours, 24-hour HH:MM in the gym's timezone. Both NULL means
+  -- "not configured", and then the gym is never reported closed -- a
+  -- guessed schedule would tell members a 24-hour gym is shut.
+  crowd_open_time          TEXT,
+  crowd_close_time         TEXT,
+  -- Access control policy.
+  access_auto_close_hours  INTEGER NOT NULL DEFAULT 12,
+  access_grace_days        INTEGER NOT NULL DEFAULT 3,
+  access_sync_enabled      INTEGER NOT NULL DEFAULT 1,
   updated_at   TEXT
 );
 
@@ -2382,3 +2408,317 @@ CREATE TABLE IF NOT EXISTS health_reconciliation_log (
   created_at                  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_health_reconlog_user ON health_reconciliation_log(user_id, created_at);
+
+-- ============================================================
+-- GYM ACCESS CONTROL — provider-neutral entry/exit ingestion.
+--
+-- SK OS NEVER STORES BIOMETRIC DATA. Fingerprint, face and iris
+-- enrollment, template storage and matching all stay inside the access
+-- hardware or the vendor system that drives it. What crosses the boundary
+-- into these tables is a NORMALIZED EVENT: a person reference the vendor
+-- already gave us, a direction, a timestamp, and which door it happened
+-- at. There is no column here that could hold a template, and
+-- access_member_mappings.external_user_id is deliberately an opaque
+-- vendor identifier, not a biometric attribute.
+--
+-- WHY A SECOND EVENT TABLE, alongside attendance_events. The older table
+-- is (org, client, ts, direction) with no device, no provider, no
+-- external id and no dedup key -- so it cannot answer "have I already
+-- processed this webhook", which is the single requirement every access
+-- integration is built on. attendance_events stays exactly as it is and
+-- keeps serving manual check-in; access_events is the provider path.
+-- ============================================================
+
+-- One row per connected provider per gym. Credentials are NOT stored
+-- here -- credentials_ref names a secret held in access_provider_secrets,
+-- which is the only table that ever holds one and is never selected into
+-- an API response.
+CREATE TABLE IF NOT EXISTS access_providers (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id      TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  provider_key   TEXT NOT NULL,          -- demo | generic_webhook | generic_rest | vendor key
+  display_name   TEXT NOT NULL,
+  -- CONFIGURED is a real state and not the same as ACTIVE: a connection
+  -- whose credentials were saved but never successfully tested must not
+  -- be shown as working, and must not be polled.
+  status         TEXT NOT NULL DEFAULT 'CONFIGURED'
+                 CHECK (status IN ('CONFIGURED','ACTIVE','DISABLED','ERROR')),
+  auth_type      TEXT NOT NULL DEFAULT 'none'
+                 CHECK (auth_type IN ('none','api_key','bearer','hmac','basic','oauth2')),
+  credentials_ref TEXT,                  -- -> access_provider_secrets.id
+  config_json    TEXT,                   -- non-secret settings: base URL, field mapping, polling interval
+  capabilities_json TEXT,                -- what this adapter actually implements; drives what the UI offers
+  last_tested_at TEXT,
+  last_test_ok   INTEGER,                -- 1 | 0 | NULL (never tested)
+  last_test_error TEXT,
+  last_event_at  TEXT,
+  -- Polling providers only: the newest occurred_at already fetched, so a
+  -- poll asks for what is new rather than re-reading the whole log.
+  poll_cursor    TEXT,
+  last_polled_at TEXT,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL,
+  UNIQUE (org_id, provider_key, display_name)
+);
+CREATE INDEX IF NOT EXISTS idx_access_providers_org ON access_providers(org_id, status);
+
+-- The ONLY table holding a provider secret. Kept separate from
+-- access_providers so that every ordinary SELECT on a connection -- which
+-- is what the owner dashboard does constantly -- physically cannot return
+-- one. Values are encrypted at rest by services/access/secrets.js.
+CREATE TABLE IF NOT EXISTS access_provider_secrets (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider_id    TEXT NOT NULL REFERENCES access_providers(id) ON DELETE CASCADE,
+  kind           TEXT NOT NULL CHECK (kind IN ('api_key','bearer','client_secret','hmac_secret','webhook_secret','password')),
+  ciphertext     TEXT NOT NULL,
+  -- Last four characters, for the masked display. Never the whole value.
+  hint           TEXT,
+  rotated_at     TEXT,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_secrets_provider ON access_provider_secrets(provider_id, kind);
+
+-- A physical door, turnstile or reader.
+CREATE TABLE IF NOT EXISTS access_devices (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id       TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  provider_id     TEXT REFERENCES access_providers(id) ON DELETE SET NULL,
+  device_name     TEXT NOT NULL,
+  device_identifier TEXT NOT NULL,       -- the id the vendor uses; matched against inbound events
+  device_type     TEXT NOT NULL DEFAULT 'other'
+                  CHECK (device_type IN ('fingerprint','rfid','qr','face','turnstile','manual','other')),
+  -- A single-direction reader tells us what an event MEANS when the
+  -- payload does not say. A both-direction device must send a direction.
+  direction       TEXT NOT NULL DEFAULT 'both' CHECK (direction IN ('entry','exit','both')),
+  status          TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DISABLED','REMOVED')),
+  last_seen_at    TEXT,                  -- last heartbeat OR event, whichever is later
+  last_event_at   TEXT,
+  firmware        TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (org_id, device_identifier)
+);
+CREATE INDEX IF NOT EXISTS idx_access_devices_org ON access_devices(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_access_devices_branch ON access_devices(branch_id, status);
+
+-- Which SK OS person a vendor identifier refers to. This is the whole of
+-- the identity bridge: an opaque external id on one side, our user on the
+-- other. Nothing biometric.
+CREATE TABLE IF NOT EXISTS access_member_mappings (
+  id               TEXT PRIMARY KEY,
+  org_id           TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id          TEXT REFERENCES users(id) ON DELETE CASCADE,
+  client_id        TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  provider_id      TEXT REFERENCES access_providers(id) ON DELETE CASCADE,
+  external_user_id TEXT NOT NULL,
+  access_status    TEXT NOT NULL DEFAULT 'ALLOWED'
+                   CHECK (access_status IN ('ALLOWED','DENIED','PENDING_SYNC','SYNC_FAILED','NOT_SUPPORTED','MANUAL_REVIEW')),
+  sync_status      TEXT NOT NULL DEFAULT 'NEVER'
+                   CHECK (sync_status IN ('NEVER','OK','PENDING','FAILED')),
+  sync_error       TEXT,
+  last_synced_at   TEXT,
+  revoked_at       TEXT,
+  -- What SK OS believes this person's access SHOULD be, derived from their
+  -- membership (see services/access/membershipSync.js). Kept separate from
+  -- access_status, which is what we know the DEVICE has been told -- the
+  -- gap between the two is exactly what an owner needs to see.
+  desired_access   TEXT CHECK (desired_access IN ('ALLOWED','DENIED') OR desired_access IS NULL),
+  -- A human decision that beats the membership rule, with who and why.
+  override_access  TEXT CHECK (override_access IN ('ALLOWED','DENIED') OR override_access IS NULL),
+  override_reason  TEXT,
+  override_by      TEXT REFERENCES users(id) ON DELETE SET NULL,
+  override_at      TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  -- One vendor identity maps to one person per provider. A second mapping
+  -- for the same external id is an identity conflict, not an update.
+  UNIQUE (org_id, provider_id, external_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_access_map_user ON access_member_mappings(org_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_access_map_client ON access_member_mappings(org_id, client_id);
+
+-- The normalized inbound event log. Append-only; processing status is the
+-- only thing that changes after insert.
+CREATE TABLE IF NOT EXISTS access_events (
+  id                 TEXT PRIMARY KEY,
+  org_id             TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id          TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  provider_id        TEXT REFERENCES access_providers(id) ON DELETE SET NULL,
+  device_id          TEXT REFERENCES access_devices(id) ON DELETE SET NULL,
+  -- Kept even when the member is known, because reconciling a vendor own
+  -- log against ours needs their identifier, not ours.
+  external_user_id   TEXT,
+  external_event_id  TEXT,
+  user_id            TEXT REFERENCES users(id) ON DELETE SET NULL,
+  client_id          TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  event_type         TEXT NOT NULL CHECK (event_type IN ('ENTRY','EXIT','DENIED','UNKNOWN')),
+  -- occurred_at is the DOOR time and is what ordering and occupancy use.
+  -- received_at is ours. They differ by hours for a device that was
+  -- offline, and using received_at would put a backfilled morning after
+  -- this evening.
+  occurred_at        TEXT NOT NULL,
+  received_at        TEXT NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+                     CHECK (verification_status IN ('verified','unverified','failed')),
+  source             TEXT NOT NULL DEFAULT 'webhook'
+                     CHECK (source IN ('webhook','poll','manual','import','demo')),
+  processing_status  TEXT NOT NULL DEFAULT 'PENDING'
+                     CHECK (processing_status IN ('PENDING','PROCESSED','IGNORED_DUPLICATE','UNMATCHED','REJECTED','ERROR')),
+  error_reason       TEXT,
+  -- Whether this event moved occupancy. A duplicate scan is recorded and
+  -- deliberately does not.
+  affected_occupancy INTEGER NOT NULL DEFAULT 0,
+  payload_json       TEXT,
+  created_at         TEXT NOT NULL
+);
+-- The dedup key the whole integration rests on. Partial so that events
+-- without a vendor id (manual, some pollers) are not forced into it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_access_events_dedup
+  ON access_events(org_id, provider_id, external_event_id)
+  WHERE external_event_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_access_events_org_time ON access_events(org_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_access_events_branch_time ON access_events(branch_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_access_events_status ON access_events(org_id, processing_status);
+CREATE INDEX IF NOT EXISTS idx_access_events_person ON access_events(org_id, user_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_access_events_device ON access_events(device_id, occurred_at);
+
+-- Someone is inside. One OPEN row per person per branch; occupancy is a
+-- COUNT of these rather than a replay of the day events, so it stays
+-- O(1) as the log grows and survives a day boundary mid-session.
+CREATE TABLE IF NOT EXISTS gym_presence_sessions (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id       TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  user_id         TEXT REFERENCES users(id) ON DELETE CASCADE,
+  client_id       TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  entry_event_id  TEXT REFERENCES access_events(id) ON DELETE SET NULL,
+  exit_event_id   TEXT REFERENCES access_events(id) ON DELETE SET NULL,
+  entered_at      TEXT NOT NULL,
+  exited_at       TEXT,
+  status          TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','CLOSED')),
+  -- WHY it closed, because auto-closed-at-midnight and they-scanned-out
+  -- are not the same fact, and a usage report that treats them alike is
+  -- wrong.
+  closure_reason  TEXT CHECK (closure_reason IN
+                  ('normal_exit','auto_closed','manual_correction','next_entry_reconciliation','provider_correction','unknown')),
+  duration_sec    INTEGER,
+  -- exact only when a real exit scan closed it. Anything reconciled is
+  -- estimated and must be shown as such.
+  confidence      TEXT NOT NULL DEFAULT 'exact' CHECK (confidence IN ('exact','estimated')),
+  -- A session created by the demo provider. Carried on the SESSION and
+  -- not merely inferred from the event, because occupancy is a COUNT of
+  -- these rows and the count has to be able to exclude them without a
+  -- join. Without it, an owner trying the sandbox would inflate the crowd
+  -- figure their members see on the way to the gym.
+  is_demo         INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+-- At most one open session per person per branch. This is the constraint
+-- that makes double-counting structurally impossible rather than a rule
+-- the ingestion code has to remember.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_presence_one_open
+  ON gym_presence_sessions(org_id, branch_id, user_id) WHERE status = 'OPEN';
+CREATE INDEX IF NOT EXISTS idx_presence_open ON gym_presence_sessions(org_id, status, entered_at);
+CREATE INDEX IF NOT EXISTS idx_presence_user ON gym_presence_sessions(user_id, entered_at);
+CREATE INDEX IF NOT EXISTS idx_presence_branch ON gym_presence_sessions(branch_id, status);
+
+-- Periodic occupancy readings, so history does not require replaying the
+-- event log and so a chart can show what we believed at the time.
+CREATE TABLE IF NOT EXISTS occupancy_snapshots (
+  id                  TEXT PRIMARY KEY,
+  org_id              TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id           TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  occupancy_count     INTEGER NOT NULL,
+  configured_capacity INTEGER,
+  occupancy_percentage REAL,
+  calculated_at       TEXT NOT NULL,
+  calculation_version TEXT NOT NULL DEFAULT 'v1'
+);
+CREATE INDEX IF NOT EXISTS idx_occ_snap_org ON occupancy_snapshots(org_id, calculated_at);
+CREATE INDEX IF NOT EXISTS idx_occ_snap_branch ON occupancy_snapshots(branch_id, calculated_at);
+
+-- Long-running provider work: member sync, historical import, access
+-- permission pushes.
+CREATE TABLE IF NOT EXISTS access_sync_jobs (
+  id            TEXT PRIMARY KEY,
+  org_id        TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider_id   TEXT REFERENCES access_providers(id) ON DELETE CASCADE,
+  device_id     TEXT REFERENCES access_devices(id) ON DELETE SET NULL,
+  job_type      TEXT NOT NULL CHECK (job_type IN ('member_sync','event_poll','historical_import','permission_push','health_check')),
+  status        TEXT NOT NULL DEFAULT 'PENDING'
+                CHECK (status IN ('PENDING','RUNNING','SUCCEEDED','FAILED','CANCELLED')),
+  -- Progress is reported honestly: total is null until the provider has
+  -- actually told us how many there are, so a bar never shows 100%
+  -- because the denominator happened to be zero.
+  processed     INTEGER NOT NULL DEFAULT 0,
+  total         INTEGER,
+  retry_count   INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  -- Where to resume. Jobs run in bounded chunks because this deploys to
+  -- serverless functions that do not outlive their request; a job with a
+  -- cursor and status RUNNING has more to do and is continued by the next
+  -- tick or by the owner's screen, never by a background thread.
+  cursor_json   TEXT,
+  result_json   TEXT,
+  started_at    TEXT,
+  completed_at  TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_jobs_org ON access_sync_jobs(org_id, status, created_at);
+
+-- Append-only. Every state change a human caused or a machine made on
+-- their behalf, including the before/after so a dispute can be settled.
+CREATE TABLE IF NOT EXISTS access_audit_logs (
+  id            TEXT PRIMARY KEY,
+  org_id        TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  actor_role    TEXT,
+  action        TEXT NOT NULL,
+  entity_type   TEXT,
+  entity_id     TEXT,
+  branch_id     TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  reason        TEXT,
+  before_json   TEXT,
+  after_json    TEXT,
+  result        TEXT NOT NULL DEFAULT 'OK' CHECK (result IN ('OK','FAILED')),
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_audit_org ON access_audit_logs(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_access_audit_entity ON access_audit_logs(entity_type, entity_id);
+
+-- Operational alerts for the owner. DERIVED, then persisted: each is
+-- raised by services/access/alerts.js from the current state of devices,
+-- providers, events and sessions, upserted by alert_key so the same
+-- condition is one row rather than one row per evaluation, and resolved
+-- automatically when the condition clears. Persisted (rather than
+-- recomputed on every read) so an owner can acknowledge one and so the
+-- history of what went wrong survives the fix.
+CREATE TABLE IF NOT EXISTS access_alerts (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  alert_key       TEXT NOT NULL,
+  kind            TEXT NOT NULL,
+  severity        TEXT NOT NULL CHECK (severity IN ('info','warning','critical')),
+  title           TEXT NOT NULL,
+  detail          TEXT,
+  entity_type     TEXT,
+  entity_id       TEXT,
+  status          TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','ACKNOWLEDGED','RESOLVED')),
+  first_seen_at   TEXT NOT NULL,
+  last_seen_at    TEXT NOT NULL,
+  acknowledged_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  acknowledged_at TEXT,
+  resolved_at     TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+-- One live row per condition. A resolved alert that recurs opens a new
+-- row, so the history shows it happened twice.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_access_alerts_live
+  ON access_alerts(org_id, alert_key) WHERE status != 'RESOLVED';
+CREATE INDEX IF NOT EXISTS idx_access_alerts_org ON access_alerts(org_id, status, last_seen_at);

@@ -292,6 +292,40 @@ const MIGRATIONS = [
   // failing every deploy on the columns it never added.
   ['notification_preferences', 'browser_permission', `browser_permission TEXT NOT NULL DEFAULT 'default'`],
   ['notification_preferences', 'prompted_at', `prompted_at TEXT`],
+  // --- Gym Crowd Live: owner-configurable crowd status + client privacy ---
+  // The bands are DATA, not constants: a 40-person studio and a 400-person
+  // warehouse do not mean the same thing by "busy", and the backend is the
+  // only place that decides a crowd label (see services/crowdStatus.js), so
+  // these are the single source for every surface that shows one.
+  ['gym_settings', 'crowd_threshold_quiet', `crowd_threshold_quiet INTEGER NOT NULL DEFAULT 30`],
+  ['gym_settings', 'crowd_threshold_moderate', `crowd_threshold_moderate INTEGER NOT NULL DEFAULT 60`],
+  ['gym_settings', 'crowd_threshold_busy', `crowd_threshold_busy INTEGER NOT NULL DEFAULT 80`],
+  // Whether members see the head-count itself or only how busy it is. Some
+  // gyms consider the number commercially sensitive; enforced server-side
+  // in getCrowdStatus, because a value the API sends is a value a member
+  // can read out of the network tab whatever the component renders.
+  ['gym_settings', 'crowd_show_exact_count', `crowd_show_exact_count INTEGER NOT NULL DEFAULT 1`],
+  // Whether the client-facing crowd card exists at all for this gym.
+  // Distinct from crowd_enabled, which turns the whole occupancy engine
+  // off: a gym may want the owner dashboard without the member card.
+  ['gym_settings', 'crowd_client_visible', `crowd_client_visible INTEGER NOT NULL DEFAULT 1`],
+  // Demo presence must be countable separately from real presence.
+  ['gym_presence_sessions', 'is_demo', `is_demo INTEGER NOT NULL DEFAULT 0`],
+  ['gym_settings', 'crowd_trainer_visible', `crowd_trainer_visible INTEGER NOT NULL DEFAULT 1`],
+  ['gym_settings', 'crowd_open_time', `crowd_open_time TEXT`],
+  ['gym_settings', 'crowd_close_time', `crowd_close_time TEXT`],
+  ['gym_settings', 'access_auto_close_hours', `access_auto_close_hours INTEGER NOT NULL DEFAULT 12`],
+  ['gym_settings', 'access_grace_days', `access_grace_days INTEGER NOT NULL DEFAULT 3`],
+  ['gym_settings', 'access_sync_enabled', `access_sync_enabled INTEGER NOT NULL DEFAULT 1`],
+  ['access_providers', 'poll_cursor', `poll_cursor TEXT`],
+  ['access_providers', 'last_polled_at', `last_polled_at TEXT`],
+  ['access_member_mappings', 'desired_access', `desired_access TEXT`],
+  ['access_member_mappings', 'override_access', `override_access TEXT`],
+  ['access_member_mappings', 'override_reason', `override_reason TEXT`],
+  ['access_member_mappings', 'override_by', `override_by TEXT`],
+  ['access_member_mappings', 'override_at', `override_at TEXT`],
+  ['access_sync_jobs', 'cursor_json', `cursor_json TEXT`],
+  ['access_sync_jobs', 'result_json', `result_json TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

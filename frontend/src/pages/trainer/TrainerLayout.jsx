@@ -129,6 +129,8 @@ export default function TrainerLayout() {
         { to: '/app/trainer/trainers', label: 'Trainers', icon: 'whistle' },
         { to: '/app/trainer/analytics', label: 'Analytics', icon: 'analytics' },
         { to: '/app/trainer/attendance', label: 'Attendance', icon: 'calendar' },
+        { to: '/app/trainer/crowd', label: 'Gym Crowd', icon: 'people' },
+        { to: '/app/trainer/access', label: 'Access control', icon: 'shield' },
         { to: '/app/trainer/business', label: 'Business', icon: 'business' },
         { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' },
       ]
