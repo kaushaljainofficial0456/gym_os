@@ -51,7 +51,11 @@ describe('UnitsProvider', () => {
   it('does ask for a client, and uses what comes back', async () => {
     const { getByTestId } = renderAs({ id: 'u3', role: 'CLIENT' });
     await waitFor(() => expect(getByTestId('out').textContent).toBe('imperial'));
-    expect(apiMock).toHaveBeenCalledWith('/me/profile');
+    // Asserted on the PATH only: the call also carries options (probe:
+    // true, so a 401 on a public page does not sign the visitor out) and
+    // pinning the whole argument list would fail on an unrelated change
+    // to those, which is not what this test is about.
+    expect(apiMock.mock.calls[0][0]).toBe('/me/profile');
   });
 
   it('asks nothing when signed out', async () => {
