@@ -16,6 +16,7 @@
 // ============================================================
 import { id, now } from '../../ids.js';
 import { track } from '../events.js';
+import { dayKey, DEFAULT_TZ } from '../../utils/time.js';
 
 // Explicit transition graph -- arbitrary status-hopping is rejected.
 // A membership row that has no lifecycle_status yet (pre-migration-
@@ -63,8 +64,22 @@ const COARSE_STATUS_MAP = {
  * Only ACTIVE lapses. A PAUSED or SUSPENDED membership past its end date
  * is still paused or suspended -- that is a deliberate state somebody put
  * it in, and silently relabelling it would erase their decision.
+ *
+ * "TODAY" IS THE GYM'S TODAY, NOT UTC'S. This compared end_date against
+ * `new Date().toISOString().slice(0, 10)`, which is the UTC date, and
+ * end_date is a local calendar date somebody typed. The two disagree for
+ * part of every day in every timezone that is not UTC, and the direction
+ * that hurts is west of it: at 8pm in New York it is already tomorrow in
+ * UTC, so a membership on its LAST paid day reported EXPIRED -- to the
+ * member's own card, to the owner's list, and to anything that reads
+ * either. East of UTC the error runs the other way and a lapsed
+ * membership stays ACTIVE until local mid-morning.
+ *
+ * Callers pass the gym's timezone (req.tz). The default exists only so a
+ * caller without one degrades to the configured default rather than to
+ * UTC, which is nobody's actual timezone.
  */
-export function effectiveMembershipStatus(row, today = new Date().toISOString().slice(0, 10)) {
+export function effectiveMembershipStatus(row, { tz = DEFAULT_TZ, today = dayKey(new Date(), tz) } = {}) {
   if (!row) return null;
   const stored = row.lifecycle_status || 'ACTIVE';
   if (stored !== 'ACTIVE') return stored;

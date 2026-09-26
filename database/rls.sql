@@ -268,6 +268,65 @@ BEGIN
   END LOOP;
 END $$;
 
+-- ---- GYM ACCESS CONTROL ----
+-- Every one of these is org-keyed and none of them is ever read across
+-- tenants: unlike the community tables, there is no feature here that
+-- legitimately needs to see another gym's rows. So they take the plain
+-- tenant_isolation policy with no exception.
+--
+-- access_provider_secrets is on this list for the same reason as the
+-- rest, but it matters more: it holds the encrypted credentials for a
+-- gym's physical doors. Application code already never selects it outside
+-- services/access/secrets.js -- this is the layer that makes a future
+-- miswritten query inside a transaction fail closed instead of returning
+-- another gym's key.
+ALTER TABLE access_providers         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_providers         FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_provider_secrets  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_provider_secrets  FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_devices           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_devices           FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_member_mappings   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_member_mappings   FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_events            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_events            FORCE ROW LEVEL SECURITY;
+ALTER TABLE gym_presence_sessions    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gym_presence_sessions    FORCE ROW LEVEL SECURITY;
+ALTER TABLE occupancy_snapshots      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE occupancy_snapshots      FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_sync_jobs         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_sync_jobs         FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_audit_logs        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_audit_logs        FORCE ROW LEVEL SECURITY;
+ALTER TABLE access_alerts            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_alerts            FORCE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'access_providers',
+    'access_provider_secrets',
+    'access_devices',
+    'access_member_mappings',
+    'access_events',
+    'gym_presence_sessions',
+    'occupancy_snapshots',
+    'access_sync_jobs',
+    'access_audit_logs',
+    'access_alerts'
+  ] LOOP
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (
+      NULLIF(current_setting(''app.org_id'', true), '''') IS NULL
+      OR org_id = current_setting(''app.org_id'', true)
+    ) WITH CHECK (
+      NULLIF(current_setting(''app.org_id'', true), '''') IS NULL
+      OR org_id = current_setting(''app.org_id'', true)
+    )', t);
+  END LOOP;
+END $$;
+
 -- ---- direct org_id WITH global (NULL org) rows ----
 DO $$
 DECLARE t text;

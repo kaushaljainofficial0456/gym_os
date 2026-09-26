@@ -16,7 +16,8 @@ import { invalidateDayStart } from '../services/logDay.js';
 import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
 import { track, trackOnce } from '../services/events.js';
-import { computeOccupancy } from '../services/occupancy.js';
+import { crowdHistory } from '../services/occupancy.js';
+import { liveCrowd } from '../services/access/liveCrowd.js';
 import {
   foodSearch,
   searchFoods as searchFoodModel,
@@ -1459,8 +1460,102 @@ export default function meRoutes(db) {
       return res.json({ enabled: false, reason: 'no_gym' });
     }
     const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
-    const snapshot = await computeOccupancy(db, c.org_id, req.tz, settings);
+    /* The owner can hide the member-facing card entirely, separately from
+       switching the occupancy engine off -- a gym may want the owner
+       dashboard without publishing the crowd to members. */
+    if (settings && settings.crowd_client_visible === 0) {
+      return res.json({ enabled: false, reason: 'not_published' });
+    }
+    /* A branch, when asked for, must be one of THIS gym's branches.
+       Clients see every branch of their own gym (there is no per-branch
+       membership in this schema to narrow it further) and nothing of any
+       other gym -- an unknown or foreign id is refused rather than quietly
+       ignored, so a client can never probe another gym's occupancy. */
+    let branchId = null;
+    if (req.query.branchId) {
+      const b = await db.q1("SELECT id FROM branches WHERE id = ? AND org_id = ? AND status = 'ACTIVE'",
+        [String(req.query.branchId), c.org_id]);
+      if (!b) return res.status(404).json({ error: 'No such branch at your gym.' });
+      branchId = b.id;
+    }
+    /* Via liveCrowd, NOT computeOccupancy directly. With a door panel
+       connected this route reported 0 while the owner dashboard reported
+       3 -- two engines, same building, same second. See liveCrowd.js. */
+    const snapshot = await liveCrowd(db, c.org_id, req.tz, settings, {
+      showExactCount: settings?.crowd_show_exact_count !== 0,
+      branchId,
+    });
     res.json(snapshot);
+  });
+
+  /* Branches a member can pick between on the crowd screen. Names only. */
+  r.get('/crowd/branches', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const rows = await db.q(
+      "SELECT id, name FROM branches WHERE org_id = ? AND status = 'ACTIVE' ORDER BY name", [c.org_id]);
+    res.json({ branches: rows });
+  });
+
+  /* ---------------- crowd history (typical hours, today's curve) ----------
+     Split from /crowd on purpose. The Home card needs the live figure on
+     every poll and nothing else; this replays up to 28 days of events and
+     is fetched once, when the detail screen opens.
+
+     AGGREGATE ONLY. Everything here is a per-hour head-count -- no member,
+     no event, no device, nothing that identifies who was in the building.
+     The occupancy engine is the only thing that ever sees client_id, and
+     it returns counts. */
+  r.get('/crowd/history', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (await isIndependentOrg(db, c.org_id)) {
+      return res.json({ enabled: false, reason: 'no_gym' });
+    }
+    const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
+    if (settings && settings.crowd_enabled === 0) {
+      return res.json({ enabled: false, reason: 'disabled' });
+    }
+    const days = Math.min(90, Math.max(7, parseInt(req.query.days, 10) || 28));
+    const history = await crowdHistory(db, c.org_id, req.tz, { days });
+
+    /* A gym that hides its head-count cannot be handed the same count back
+       one row per hour. But the SHAPE of the day is the whole point of
+       this screen, so the curve is rescaled rather than removed: each hour
+       becomes a percentage of capacity, which answers "when is it busy"
+       without publishing how many people that is.
+
+       With no capacity configured there is nothing to scale against and
+       nothing we are allowed to send, so this reports insufficient data
+       with a reason rather than quietly returning an empty chart. */
+    if (settings?.crowd_show_exact_count === 0) {
+      const cap = Number(settings?.crowd_capacity) || 0;
+      if (cap <= 0) {
+        return res.json({
+          enabled: true, sufficient: false, unit: 'percent',
+          reason: 'counts_hidden_no_capacity',
+          daysOfHistory: history.daysOfHistory, daysRequired: history.daysRequired,
+          typicalByHour: null, todayByHour: null, busiestHours: null, quietestHours: null, byWeekday: null,
+        });
+      }
+      const scale = (rows) => (rows || []).map(({ hour, count }) => ({
+        hour, count: Math.round((count / cap) * 100),
+      }));
+      const scaleWindow = (w) => (w ? { ...w, average: Math.round((w.average / cap) * 100) } : null);
+      return res.json({
+        enabled: true, unit: 'percent',
+        sufficient: history.sufficient,
+        daysOfHistory: history.daysOfHistory,
+        daysRequired: history.daysRequired,
+        typicalByHour: history.typicalByHour ? scale(history.typicalByHour) : null,
+        todayByHour: scale(history.todayByHour),
+        busiestHours: scaleWindow(history.busiestHours),
+        quietestHours: scaleWindow(history.quietestHours),
+        byWeekday: (history.byWeekday || []).map((w) => ({
+          ...w, averagePeak: w.averagePeak == null ? null : Math.round((w.averagePeak / cap) * 100),
+        })),
+      });
+    }
+
+    res.json({ enabled: true, unit: 'people', ...history });
   });
 
   // ---------------- personal workout planner (reusable workouts + weekly schedule) ----------------

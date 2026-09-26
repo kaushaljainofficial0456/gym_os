@@ -977,7 +977,26 @@ async function main() {
       [6, 'Pull Focus', 'BACK, BICEPS', 'Pull A']
     ] }
   ];
+  /* VISUAL-TEST DETERMINISM, second half.
+   *
+   * SEED_DETERMINISTIC_SCHEDULE already pins client_workout_schedule, but
+   * a program client's "today" is materialised from their TRAINING
+   * PROGRAM at runtime (see the workouts loop above, which deliberately
+   * skips today's row for them). Those days map each weekday to a
+   * different session, so the client Home card rendered a different
+   * workout name and muscle list depending on which day the suite ran --
+   * and a screenshot baseline captured on Monday failed on Saturday for
+   * that reason alone, which is exactly what the flag exists to prevent.
+   *
+   * Under the flag every weekday gets the program's FIRST day, so the
+   * card is identical whenever it is captured. The rotation is untouched
+   * in normal seeding, where it is the point. */
+  const pinPrograms = process.env.SEED_DETERMINISTIC_SCHEDULE === '1';
   for (const p of PROGRAMS) {
+    if (pinPrograms && p.days.length) {
+      const [, name, focus, tmplName] = p.days[0];
+      p.days = [0, 1, 2, 3, 4, 5, 6].map((dow) => [dow, name, focus, tmplName]);
+    }
     const pId = id('tpr');
     await db.run(
       `INSERT INTO training_programs (id, org_id, client_id, trainer_id, name, split, goal, days_per_week, active, created_at)
@@ -1437,11 +1456,27 @@ async function main() {
     const backA = await mkWorkout('Back A', ['Lat Pulldown', 'Barbell Row', 'Seated Cable Row', 'Face Pull', 'Dead Hang']);
     const coreA = await mkWorkout('Core A', ['Plank', 'Cable Crunch', 'Hanging Leg Raise', 'Russian Twist', 'Dead Bug']);
     const legsB = await mkWorkout('Legs B', ['Front Squat', 'Leg Press', 'Leg Curl', 'Standing Calf Raise']);
-    // planner schedule: 0=Mon..6=Sun — every training day + dedicated back/core days
-    const sched = [
-      [0, pushA], [1, pullA], [2, legsA], [3, backA],
-      [4, pushA], [5, legsB], [6, coreA]
-    ];
+    /* planner schedule: 0=Mon..6=Sun — every training day + dedicated
+       back/core days.
+
+       DETERMINISTIC MODE exists for the visual-regression suite, and it
+       fixes a real defect in it rather than a cosmetic one. Because this
+       schedule varies by weekday, "today's session" -- which the client
+       home hero, the workout page and everything derived from them render
+       -- is a different workout every day. Screenshot baselines captured
+       on a Monday therefore failed on Tuesday, with a diff that looked
+       like a regression and was only the calendar. Three screens were
+       red on the second day for that reason alone.
+
+       Masking was not the answer: the changing content IS the card under
+       test, and commit 7a2fcd7 deliberately narrowed the masks to dates
+       and times for exactly that reason. Making the data stable is. */
+    const sched = process.env.SEED_DETERMINISTIC_SCHEDULE === '1'
+      ? [[0, pushA], [1, pushA], [2, pushA], [3, pushA], [4, pushA], [5, pushA], [6, pushA]]
+      : [
+        [0, pushA], [1, pullA], [2, legsA], [3, backA],
+        [4, pushA], [5, legsB], [6, coreA]
+      ];
     for (const [dow, wid] of sched) {
       if (wid) await db.run('INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES (?,?,?)', [rahul.id, dow, wid]);
     }

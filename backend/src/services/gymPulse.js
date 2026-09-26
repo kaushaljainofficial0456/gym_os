@@ -24,12 +24,15 @@
 // aggregated — see test/sqlPortability.test.js for why that is a rule
 // and not a preference.
 // ============================================================
-import { dayKey } from '../utils/time.js';
+import { dayKey, shiftDayKey } from '../utils/time.js';
 
-/** YYYY-MM-DD, n days before `from` (default today). */
-function daysBefore(n, from = new Date()) {
-  const d = new Date(from.getTime() - n * 86400000);
-  return d.toISOString().slice(0, 10);
+/** YYYY-MM-DD, n days before `from`, on the GYM's calendar.
+ *  `today` here is already a local day key, so the window edges have to
+ *  be stepped on the same calendar -- deriving them from toISOString()
+ *  mixed the gym's day with UTC's and made the range a day long or short
+ *  for part of every day outside UTC. */
+function daysBefore(n, todayKey) {
+  return shiftDayKey(todayKey, -n);
 }
 
 /** Fills a date-keyed map into a dense day-by-day series.
@@ -53,9 +56,9 @@ const num = (v) => Number(v) || 0;
  */
 export async function gymPulse(db, orgId, { tz = 'Asia/Kolkata', days = 30, now = new Date() } = {}) {
   const today = dayKey(now, tz);
-  const from = daysBefore(days - 1, now);
+  const from = daysBefore(days - 1, today);
   const monthStart = `${today.slice(0, 7)}-01`;
-  const in30 = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10);
+  const in30 = shiftDayKey(today, 30);
 
   const [
     checkInsToday, attendanceRows, trainerRows, trainerPresent,

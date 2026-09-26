@@ -25,6 +25,7 @@ const SCREENS = {
   owner: [
     '/app/trainer', '/app/trainer/clients', '/app/trainer/workouts', '/app/trainer/nutrition',
     '/app/trainer/attendance', '/app/trainer/business', '/app/trainer/analytics', '/app/trainer/messages',
+    '/app/trainer/crowd', '/app/trainer/access',
   ],
 };
 

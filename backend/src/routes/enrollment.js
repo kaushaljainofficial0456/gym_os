@@ -487,7 +487,7 @@ export default function enrollmentRoutes(db) {
        own card. See effectiveMembershipStatus for why this is derived
        rather than written. */
     const membership = subscription
-      ? { ...subscription, lifecycle_status: effectiveMembershipStatus(subscription) }
+      ? { ...subscription, lifecycle_status: effectiveMembershipStatus(subscription, { tz: req.tz }) }
       : null;
     res.json({ membership, gym: org });
   });

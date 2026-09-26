@@ -52,7 +52,12 @@ export default function LogPastCardio({ open, onClose, onSaved, bodyWeightKg, to
   const pickActivity = (id) => {
     setActivityId(id);
     const seeded = {};
-    activityFields(id).forEach((f) => { if (f.placeholder) seeded[f.key] = f.placeholder; });
+    /* Optional fields are NOT seeded. A placeholder is a hint, and an
+       optional one (machine power) outranks the resistance in the energy
+       model -- seeding it would silently estimate every ride at a wattage
+       the user never entered, and quietly ignore the resistance they did
+       set. It stays empty until they type a real figure. */
+    activityFields(id).forEach((f) => { if (f.placeholder && !f.optional) seeded[f.key] = f.placeholder; });
     setParams(seeded);
     setSearch('');
   };

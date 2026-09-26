@@ -34,6 +34,40 @@ const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 
  * and the whole Workout page rendered blank. It closes over no state, so
  * there is no reason for it to live inside the component at all.
  */
+/**
+ * Rebuild the set checklist when a session is resumed.
+ *
+ * `fresh` is the plan (prescribed count, prescribed reps/weight), `draft`
+ * is what was ticked and typed before the page went away.
+ *
+ * THE COUNT IS THE LARGER OF THE TWO, and that is the whole point. This
+ * used to map over the PLAN's rows only, so sets the user added during
+ * the session with "+ Add Set" -- which are saved into the draft like
+ * everything else -- were silently dropped the moment the tab reloaded,
+ * the phone locked, or they switched away and back. A fourth and fifth
+ * set became three again, with the work logged into them gone. Reported
+ * from the product as sets not increasing during a workout, while the
+ * same thing worked in Log Past, which has no resume path to lose them.
+ *
+ * Taking the max keeps both halves honest: a plan edited to add sets
+ * still grows, and sets the user added still survive.
+ */
+export function mergeDraftSets(fresh, draft) {
+  return Object.fromEntries(Object.entries(fresh || {}).map(([exId, rows]) => {
+    const saved = Array.isArray(draft?.[exId]) ? draft[exId] : [];
+    const count = Math.max(rows.length, saved.length);
+    const template = rows[rows.length - 1] || { reps: 0, weight: 0, done: false };
+    const out = [];
+    for (let i = 0; i < count; i += 1) {
+      // Beyond the plan, a row carries the prescription's own numbers as
+      // its starting point -- the same thing addSet() does live.
+      const base = rows[i] || { ...template, done: false };
+      out.push(saved[i] ? { ...base, ...saved[i] } : base);
+    }
+    return [exId, out];
+  }));
+}
+
 function buildSets(list) {
   return Object.fromEntries((list || []).map((e) => [
     e.id,
@@ -520,12 +554,10 @@ export default function Workout() {
     const restoredPausedMs = (restored?.__paused_ms || 0);
     const fresh = buildSets(state);
     // Merge rather than trust the draft wholesale: the plan may have been
-    // edited since, so the prescribed set COUNT comes from the plan and only
-    // the per-set values come from the draft.
-    const merged = Object.fromEntries(Object.entries(fresh).map(([exId, rows]) => [
-      exId,
-      rows.map((row, i) => (restored?.[exId]?.[i] ? { ...row, ...restored[exId][i] } : row)),
-    ]));
+    // edited since. The per-set values come from the draft, and the COUNT
+    // is whichever is larger -- see mergeDraftSets for why taking the
+    // plan's count alone deleted sets the user had added.
+    const merged = mergeDraftSets(fresh, restored);
     setExSets(merged);
     const firstUnfinished = state.find((e) => (merged[e.id] || []).some((r) => !r.done));
     setOpenEx((firstUnfinished || state[0])?.id ?? null);
@@ -2213,7 +2245,11 @@ export default function Workout() {
                                 // search list's quick-log.
                                 const params = {};
                                 cardioExerciseConfig(id).forEach((field) => {
-                                  if (field.placeholder) params[field.key] = field.placeholder;
+                                  // Optional fields stay empty: machine power
+                                  // outranks resistance in the energy model, so
+                                  // seeding it would estimate every session at a
+                                  // wattage nobody entered. See LogPastCardio.
+                                  if (field.placeholder && !field.optional) params[field.key] = field.placeholder;
                                 });
                                 setCardioItems((prev) => [...prev, { id, params, segments: [], currentParams: { ...params } }]);
                                 setToast(`${cardioName(id)} added`);

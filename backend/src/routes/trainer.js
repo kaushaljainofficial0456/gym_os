@@ -6,6 +6,8 @@ import { Router } from 'express';
 import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { evaluateClient } from '../services/atRisk.js';
 import { daysAgoIso, todayKey, round1 } from '../utils/time.js';
+import { liveCrowd } from '../services/access/liveCrowd.js';
+import { localParts } from '../services/access/localTime.js';
 
 export default function trainerRoutes(db) {
   const r = Router();
@@ -24,6 +26,68 @@ export default function trainerRoutes(db) {
   //   - client must belong to the same org
   //   - returns 404 for clients the trainer doesn't own (avoids
   //     leaking existence of other trainers' clients)
+  /* ---------------- gym crowd, trainer view ----------------------------
+     AGGREGATE ONLY, and gated twice.
+
+     A trainer is staff, not an owner: they get the same head-count a
+     member does so they can plan a session around a busy floor, and
+     nothing else. No member-level presence, no device list, no event log,
+     no provider state -- those live behind access.view, which TRAINER
+     does not hold.
+
+     The owner switches this off with crowd_trainer_visible, separately
+     from the member card: a gym may want its floor staff to see the crowd
+     while not publishing it to members, and the reverse. */
+  r.get('/crowd', async (req, res) => {
+    const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
+    if (settings && (settings.crowd_enabled === 0 || settings.crowd_trainer_visible === 0)) {
+      return res.json({ enabled: false, reason: 'not_published' });
+    }
+    const snapshot = await liveCrowd(db, req.orgId, req.tz, settings, {
+      showExactCount: settings?.crowd_show_exact_count !== 0,
+    });
+    res.json(snapshot);
+  });
+
+  /* ---------------- my clients, in the building -----------------------
+     Member-level, so scoped as tightly as the data allows: ONLY this
+     trainer's own assigned clients (clients.trainer_id), ONLY whether they
+     are inside and whether they came in today, and ONLY when the owner has
+     trainer crowd visibility on. No times beyond today, no device, no
+     access ID, nothing about anyone else's clients. Demo sessions never
+     appear -- a trainer must not plan around a simulated client. */
+  r.get('/crowd/clients', async (req, res) => {
+    const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
+    if (settings && (settings.crowd_enabled === 0 || settings.crowd_trainer_visible === 0)) {
+      return res.json({ enabled: false, reason: 'not_published', clients: [] });
+    }
+    /* "Came in today" means the gym's today. A rolling 18-hour window
+       said yes at 9am for a client who trained at 7pm yesterday. The window
+       below is only wide enough to find the latest entry; the day test is
+       done in the gym's timezone. */
+    const since = new Date(Date.now() - 36 * 3600_000).toISOString();
+    const todayLocal = localParts(new Date(), req.tz)?.day;
+    const rows = await db.q(
+      `SELECT c.id, u.name,
+              (SELECT MIN(s.entered_at) FROM gym_presence_sessions s
+                WHERE s.client_id = c.id AND s.org_id = c.org_id AND s.is_demo = 0 AND s.status = 'OPEN') AS inside_since,
+              (SELECT MAX(s.entered_at) FROM gym_presence_sessions s
+                WHERE s.client_id = c.id AND s.org_id = c.org_id AND s.is_demo = 0 AND s.entered_at >= ?) AS last_entry
+         FROM clients c JOIN users u ON u.id = c.user_id
+        WHERE c.org_id = ? AND c.trainer_id = ?
+        ORDER BY u.name`, [since, req.orgId, req.user.sub]);
+    res.json({
+      enabled: true,
+      clients: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        insideNow: !!r.inside_since,
+        insideSince: r.inside_since || null,
+        cameInToday: !!r.last_entry && localParts(r.last_entry, req.tz)?.day === todayLocal,
+      })),
+    });
+  });
+
   r.get('/clients/:clientId/dashboard', async (req, res) => {
     const trainerId = req.user.sub;
     const orgId = req.orgId;

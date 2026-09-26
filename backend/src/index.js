@@ -36,6 +36,7 @@ import paymentsDevRoutes from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 import notificationRoutes from './routes/notifications.js';
+import accessRoutes, { accessWebhookRoutes } from './routes/access.js';
 import communityRoutes from './routes/community.js';
 import communitiesRoutes from './routes/communities.js';
 import communityInviteRoutes from './routes/communityInvite.js';
@@ -199,6 +200,10 @@ export async function buildApp() {
   // route trigger an automatic sync the moment WHOOP pushes new data,
   // instead of the user having to tap "Sync now".
   app.use('/api/health/providers/whoop/webhook', express.raw({ type: 'application/json', limit: '256kb' }));
+  // Access-control door events. Same reasoning again: the HMAC in
+  // providers/builtin.js is computed over the exact bytes the panel sent,
+  // so a re-serialized body would fail a valid signature.
+  app.use('/api/access/hook', express.raw({ type: 'application/json', limit: '512kb' }));
   app.use(express.json({ limit: '1mb' }));
 
 app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.driver, ts: new Date().toISOString() }));
@@ -242,6 +247,8 @@ app.use('/api/me', meRoutes(db));      // client personalization: prefs, metrics
 app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods link (no auth) -- saving it requires auth, see POST /api/me/share/:id/save
 app.use('/api/workout-share', workoutShareRoutes(db)); // PUBLIC: preview a shared workout link (no auth) -- importing requires auth, see POST /api/me/workout-share/:id/import
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
+app.use('/api/access', accessWebhookRoutes(db));   // PUBLIC: signed door events -- see access.js's own header
+app.use(['/api/admin/access', '/api/business/access'], accessRoutes(db)); // owner: providers, devices, mappings, events, audit
 app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/communities', communitiesRoutes(db)); // friend communities: private, invite-only, cross-gym -- see routes/communities.js

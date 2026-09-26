@@ -75,6 +75,8 @@ const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
 const GymAttendance = lazy(() => import('./pages/trainer/GymAttendance.jsx'));
+const GymCrowd = lazy(() => import('./pages/trainer/GymCrowd.jsx'));
+const AccessControl = lazy(() => import('./pages/trainer/AccessControl.jsx'));
 const MyAttendance = lazy(() => import('./pages/trainer/MyAttendance.jsx'));
 const Trainers = lazy(() => import('./pages/trainer/Trainers.jsx'));
 const Analytics = lazy(() => import('./pages/trainer/Analytics.jsx'));
@@ -299,6 +301,11 @@ export default function App() {
             view. Both endpoints were already scoped server-side, so this
             is a UI that finally matches what the API always allowed. */}
         <Route path="attendance" element={isOwner ? page(GymAttendance) : page(MyAttendance)} />
+        {/* Owner-only. A trainer reaching these by URL gets the same
+            403 the API returns -- the route guard is a convenience, the
+            permission check on the server is the control. */}
+        <Route path="crowd" element={isOwner ? page(GymCrowd) : page(MyAttendance)} />
+        <Route path="access" element={isOwner ? page(AccessControl) : page(MyAttendance)} />
         {/* OWNER-ONLY, GATED AT THE ROUTER.
             The sidebar already hides these from a trainer, so the only
             way in is typing the URL -- and doing that mounted the page,

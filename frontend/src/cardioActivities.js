@@ -68,6 +68,81 @@ function runningVo2(speedKmh, gradePct) {
 const metFromVo2 = (vo2) => Math.max(1, vo2 / 3.5);
 
 /**
+ * ACSM leg-ergometer equation. Power in watts, body mass in kg.
+ *
+ * VO2 = 1.8 x work rate / mass + 3.5 + 3.5, with work rate in kg.m/min
+ * (watts x 6.12). This is a real relationship between measured power and
+ * oxygen cost, so when a bike reports watts it beats any MET table --
+ * 80 W and 200 W are not the same ride, and a resistance "level" means
+ * nothing across two different machines.
+ */
+function ergometerMet(watts, kg) {
+  const w = Number(watts) || 0;
+  const mass = Number(kg) || 0;
+  if (w <= 0 || mass <= 0) return null;
+  return metFromVo2((1.8 * (w * 6.12) / mass) + 7);
+}
+
+/**
+ * Concept2's published rowing relationship: kcal/hr = watts x 4 x 0.8604
+ * + 300. That figure is gross (it includes resting), which is the same
+ * basis as MET-derived energy here, and 1 MET is 1 kcal/kg/hr -- so
+ * dividing by body mass converts it. Rowing has no ACSM equation; this
+ * is the ergometer manufacturer's own, which is the next best source.
+ */
+function rowingMet(watts, kg) {
+  const w = Number(watts) || 0;
+  const mass = Number(kg) || 0;
+  if (w <= 0 || mass <= 0) return null;
+  return Math.max(1, ((w * 4 * 0.8604) + 300) / mass);
+}
+
+/**
+ * Position a value inside a range, as 0..1. Used to place an entered
+ * resistance level between a machine's easy and hard anchors.
+ */
+function fraction(value, min, max) {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return null;
+  const lo = Number(min); const hi = Number(max);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return null;
+  return Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
+}
+
+/**
+ * Blend the published light / moderate / hard anchors at position f.
+ *
+ * WHAT THIS IS AND IS NOT. Machine resistance scales are not
+ * standardised -- level 8 on one bike is not level 8 on another, and no
+ * published equation maps them to oxygen cost. So this does not pretend
+ * to convert a level into an absolute intensity. It places the level
+ * between the SAME activity's own published easy and hard values, which
+ * is what makes "I rode at 4" and "I rode at 18" produce different
+ * numbers instead of identical ones. Where the machine reports watts,
+ * the equations above are used instead and this is not consulted.
+ */
+function blendAnchors(table, f) {
+  if (f == null) return null;
+  const { light, moderate, hard } = table;
+  return f <= 0.5
+    ? light + (moderate - light) * (f / 0.5)
+    : moderate + (hard - moderate) * ((f - 0.5) / 0.5);
+}
+
+/**
+ * One machine's MET, in order of how much the input is actually worth:
+ * measured power first, then the entered resistance placed between the
+ * activity's own anchors, then the effort the user chose.
+ */
+function machineMet({ anchors, effort = 'moderate', watts, kg, level, range, power }) {
+  if (power === 'cycling') { const m = ergometerMet(watts, kg); if (m) return m; }
+  if (power === 'rowing') { const m = rowingMet(watts, kg); if (m) return m; }
+  const byLevel = range ? blendAnchors(anchors, fraction(level, range[0], range[1])) : null;
+  if (byLevel != null) return byLevel;
+  return anchors[['light', 'moderate', 'hard'].includes(effort) ? effort : 'moderate'];
+}
+
+/**
  * THE CATALOGUE.
  *
  * `met` is either a {light,moderate,hard} triple, or a function of the
@@ -94,38 +169,93 @@ export const ACTIVITIES = [
   },
   {
     id: 'cycling', kind: MACHINE, name: 'Exercise bike', icon: 'strength',
-    fields: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 25 }],
-    met: { light: 5.8, moderate: 7.0, hard: 10.5 },
+    fields: [
+      { key: 'watts', label: 'Power', unit: 'W', placeholder: '120', min: 10, max: 600, optional: true },
+      { key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 25 },
+    ],
+    usesEffort: true,
+    anchors: { light: 5.8, moderate: 7.0, hard: 10.5 },
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 5.8, moderate: 7.0, hard: 10.5 }, effort: ctx.effort,
+      watts: p.watts, kg: ctx.bodyWeightKg, power: 'cycling',
+      level: p.resistance, range: [1, 25],
+    }),
   },
   {
     id: 'rowing_machine', kind: MACHINE, name: 'Rowing machine', icon: 'strength',
-    fields: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '5', min: 1, max: 20 }],
-    met: { light: 4.8, moderate: 7.0, hard: 12.0 },
+    fields: [
+      { key: 'watts', label: 'Power', unit: 'W', placeholder: '150', min: 10, max: 600, optional: true },
+      { key: 'resistance', label: 'Damper', unit: 'level', placeholder: '5', min: 1, max: 20 },
+    ],
+    usesEffort: true,
+    anchors: { light: 4.8, moderate: 7.0, hard: 12.0 },
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 4.8, moderate: 7.0, hard: 12.0 }, effort: ctx.effort,
+      watts: p.watts, kg: ctx.bodyWeightKg, power: 'rowing',
+      level: p.resistance, range: [1, 20],
+    }),
   },
   {
     id: 'elliptical', kind: MACHINE, name: 'Elliptical', icon: 'strength',
     fields: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '8', min: 1, max: 25 }],
-    met: { light: 4.6, moderate: 5.0, hard: 7.0 },
+    usesEffort: true,
+    anchors: { light: 4.6, moderate: 5.0, hard: 7.0 },
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 4.6, moderate: 5.0, hard: 7.0 }, effort: ctx.effort,
+      level: p.resistance, range: [1, 25],
+    }),
   },
   {
     id: 'stair_climber', kind: MACHINE, name: 'Stair climber', icon: 'strength',
     fields: [{ key: 'level', label: 'Level', unit: '', placeholder: '10', min: 1, max: 25 }],
-    met: { light: 5.0, moderate: 8.0, hard: 11.0 },
+    usesEffort: true,
+    anchors: { light: 5.0, moderate: 8.0, hard: 11.0 },
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 5.0, moderate: 8.0, hard: 11.0 }, effort: ctx.effort,
+      level: p.level, range: [1, 25],
+    }),
   },
   {
     id: 'assault_bike', kind: MACHINE, name: 'Air bike', icon: 'strength',
-    fields: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 20 }],
-    met: { light: 7.0, moderate: 9.5, hard: 12.5 },
+    fields: [
+      { key: 'watts', label: 'Power', unit: 'W', placeholder: '200', min: 10, max: 900, optional: true },
+      { key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 20 },
+    ],
+    usesEffort: true,
+    anchors: { light: 7.0, moderate: 9.5, hard: 12.5 },
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 7.0, moderate: 9.5, hard: 12.5 }, effort: ctx.effort,
+      watts: p.watts, kg: ctx.bodyWeightKg, power: 'cycling',
+      level: p.resistance, range: [1, 20],
+    }),
   },
   {
     id: 'ski_erg', kind: MACHINE, name: 'Ski erg', icon: 'strength',
-    fields: [{ key: 'resistance', label: 'Resistance', unit: 'level', placeholder: '6', min: 1, max: 10 }],
-    met: { light: 5.5, moderate: 8.0, hard: 11.0 },
+    fields: [
+      { key: 'watts', label: 'Power', unit: 'W', placeholder: '120', min: 10, max: 600, optional: true },
+      { key: 'resistance', label: 'Damper', unit: 'level', placeholder: '6', min: 1, max: 10 },
+    ],
+    usesEffort: true,
+    anchors: { light: 5.5, moderate: 8.0, hard: 11.0 },
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 5.5, moderate: 8.0, hard: 11.0 }, effort: ctx.effort,
+      watts: p.watts, kg: ctx.bodyWeightKg, power: 'rowing',
+      level: p.resistance, range: [1, 10],
+    }),
   },
   {
     id: 'jump_rope', kind: MACHINE, name: 'Skipping', icon: 'strength',
     fields: [{ key: 'speed', label: 'Pace', unit: 'RPM', placeholder: '120', min: 30, max: 220 }],
-    met: { light: 8.8, moderate: 11.8, hard: 12.3 },
+    usesEffort: true,
+    anchors: { light: 8.8, moderate: 11.8, hard: 12.3 },
+    /* The Compendium's own rope-skipping entries ARE pace-defined --
+       slow ~100/min, moderate ~120/min, fast ~140/min -- so the RPM this
+       screen already asked for maps onto them directly instead of being
+       collected and thrown away. */
+    met: (p, ctx = {}) => machineMet({
+      anchors: { light: 8.8, moderate: 11.8, hard: 12.3 }, effort: ctx.effort,
+      level: p.speed, range: [100, 140],
+    }),
   },
   {
     id: 'battle_ropes', kind: MACHINE, name: 'Battle ropes', icon: 'strength',
@@ -225,11 +355,14 @@ const DEFAULT_MET = { light: 5.0, moderate: 7.0, hard: 10.0 };
  * different energy cost from running 12 km/h "hard", it is the same run
  * described two ways.
  */
-export function metFor(activityId, params = {}, effort = 'moderate') {
+export function metFor(activityId, params = {}, effort = 'moderate', bodyWeightKg = null) {
   const a = ACTIVITY_BY_ID.get(activityId);
   const table = a?.met ?? DEFAULT_MET;
   if (typeof table === 'function') {
-    const met = Number(table(params || {}));
+    // Body mass reaches the model because the ergometer equations need
+    // it: the same 150 W costs a 60 kg and a 95 kg rider very different
+    // multiples of their own resting rate.
+    const met = Number(table(params || {}, { effort, bodyWeightKg }));
     return Number.isFinite(met) && met > 0 ? met : DEFAULT_MET.moderate;
   }
   const key = ['light', 'moderate', 'hard'].includes(effort) ? effort : 'moderate';
@@ -239,7 +372,15 @@ export function metFor(activityId, params = {}, effort = 'moderate') {
 /** True when this activity's energy comes from a speed/grade equation, so
  *  the UI can hide an effort picker that would mean nothing. */
 export function usesEffortLevel(activityId) {
-  return typeof ACTIVITY_BY_ID.get(activityId)?.met !== 'function';
+  const a = ACTIVITY_BY_ID.get(activityId);
+  if (!a) return true;
+  /* Machines whose parameters only NARROW the estimate still keep the
+     effort picker, because it is what the model falls back to when the
+     user has not entered a resistance or a wattage. Only the activities
+     fully determined by their parameters (speed and gradient) hide it,
+     since there the speed IS the effort. */
+  if (a.usesEffort) return true;
+  return typeof a.met !== 'function';
 }
 
 /**
@@ -255,6 +396,6 @@ export function estimateKcal({ activityId, minutes, bodyWeightKg, params = {}, e
   const mins = Number(minutes) || 0;
   const kg = Number(bodyWeightKg) || 0;
   if (mins <= 0 || kg <= 0) return 0;
-  const met = metFor(activityId, params, effort);
+  const met = metFor(activityId, params, effort, kg);
   return Math.round((met * 3.5 * kg / 200) * mins);
 }

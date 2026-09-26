@@ -5,9 +5,9 @@ import { z } from 'zod';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
-import { dayKey, addDays, daysAgoIso } from '../utils/time.js';
+import { dayKey, shiftDayKey, addDays, daysAgoIso } from '../utils/time.js';
 import { track } from '../services/events.js';
-import { computeOccupancy } from '../services/occupancy.js';
+import { liveCrowd } from '../services/access/liveCrowd.js';
 import { transitionMembership, effectiveMembershipStatus } from '../services/enterprise/membershipLifecycle.js';
 import { runReconciliationSweep, listReconciliationIssues, resolveReconciliationIssue } from '../services/payments/reconciliation.js';
 import { initiateRefund, listRefunds } from '../services/payments/refunds.js';
@@ -51,7 +51,13 @@ export default function adminRoutes(db) {
   r.get('/overview', async (req, res) => {
     const orgId = req.orgId;
     const clients = await db.q('SELECT * FROM clients WHERE org_id = ?', [orgId]);
-    const today = dayKey();
+    /* The GYM's today. dayKey() with no timezone falls back to the
+       configured default (Asia/Kolkata), so every gym outside it saw
+       another country's date on its own dashboard -- "attendance today"
+       counted a day that had not started, or had already ended, for the
+       building the owner was standing in. Line ~331 in this same file
+       already does it correctly; this one was missed. */
+    const today = dayKey(new Date(), req.tz);
     const monthStart = today.slice(0, 7) + '-01';
     // First day of the month 5 months back -- e.g. today in 2026-09 -> 2026-04-01.
     // Widened from `monthStart` alone: a real bug, found live while auditing
@@ -96,7 +102,9 @@ export default function adminRoutes(db) {
       db.q(`SELECT COUNT(*) AS n FROM subscriptions
              WHERE org_id = ? AND status = 'active'
                AND renewal_date IS NOT NULL AND renewal_date >= ? AND renewal_date <= ?`,
-      [orgId, today, addDays(new Date(), 30).toISOString().slice(0, 10)]),
+      // Upper bound stepped on the same calendar as `today`, so the
+      // window is 30 of the gym's days rather than 30 of UTC's.
+      [orgId, today, shiftDayKey(today, 30)]),
       /* Money owed is not only the rows literally labelled 'overdue' --
          a pending or failed payment_status is money the gym has not
          been paid either, and was being reported as nothing owed. */
@@ -513,7 +521,7 @@ export default function adminRoutes(db) {
        told they have expired. */
     res.json({
       members: rows.map((m) => (m.subscription_id
-        ? { ...m, lifecycle_status: effectiveMembershipStatus(m) }
+        ? { ...m, lifecycle_status: effectiveMembershipStatus(m, { tz: req.tz }) }
         : m)),
     });
   });
@@ -648,6 +656,13 @@ export default function adminRoutes(db) {
      one outcome a settings screen must never produce (spec 42/47). */
   const SETTING_KEYS = new Set([
     'brand_name', 'tagline', 'crowd_capacity', 'crowd_enabled', 'workout_mode_default',
+    // Gym Crowd Live. The three thresholds decide what "busy" means for
+    // THIS gym; the two visibility flags decide how much of it members
+    // see. Both are enforced server-side in services/crowdStatus.js --
+    // a value the API sends is a value a member can read out of the
+    // network tab, whatever the component renders.
+    'crowd_threshold_quiet', 'crowd_threshold_moderate', 'crowd_threshold_busy',
+    'crowd_show_exact_count', 'crowd_client_visible',
     'allow_substitute', 'allow_add_exercise', 'allow_edit_targets',
     'community_enabled', 'community_leaderboard_enabled',
     'contact_email', 'contact_phone', 'address', 'city', 'country',
@@ -670,6 +685,8 @@ export default function adminRoutes(db) {
         error: `Unknown setting${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}`,
       });
     }
+    const { crowd_threshold_quiet, crowd_threshold_moderate, crowd_threshold_busy,
+      crowd_show_exact_count, crowd_client_visible } = req.body || {};
     const { brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
       community_enabled, community_leaderboard_enabled,
       contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description } = req.body || {};
@@ -680,12 +697,28 @@ export default function adminRoutes(db) {
     // field here: omit a field to leave it unchanged, explicit null/''
     // to clear it. Never touches organizations.id/slug.
     const pick = (incoming, current) => (incoming !== undefined ? (incoming === null || incoming === '' ? null : String(incoming).slice(0, 300)) : (current ?? null));
+    const clampPct = (incoming, current, fallback) => {
+      if (incoming === undefined) return current ?? fallback;
+      const n = parseInt(incoming, 10);
+      return Number.isFinite(n) ? Math.max(1, Math.min(99, n)) : (current ?? fallback);
+    };
+    // Same three-state convention as every other flag on this row:
+    // omitted means unchanged, false/0 means off, anything else means on.
+    const boolish = (incoming, current) => (
+      incoming === false || incoming === 0 ? 0 : (incoming === undefined ? (current ?? 1) : 1));
     await db.run(
       `INSERT INTO gym_settings (org_id, brand_name, tagline, crowd_capacity, crowd_enabled, workout_mode_default, allow_substitute, allow_add_exercise, allow_edit_targets,
          community_enabled, community_leaderboard_enabled,
-         contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         contact_email, contact_phone, address, city, country, logo_url, website, instagram_url, description,
+         crowd_threshold_quiet, crowd_threshold_moderate, crowd_threshold_busy,
+         crowd_show_exact_count, crowd_client_visible, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(org_id) DO UPDATE SET brand_name=excluded.brand_name, tagline=excluded.tagline,
+         crowd_threshold_quiet=excluded.crowd_threshold_quiet,
+         crowd_threshold_moderate=excluded.crowd_threshold_moderate,
+         crowd_threshold_busy=excluded.crowd_threshold_busy,
+         crowd_show_exact_count=excluded.crowd_show_exact_count,
+         crowd_client_visible=excluded.crowd_client_visible,
          crowd_capacity=excluded.crowd_capacity, crowd_enabled=excluded.crowd_enabled,
          workout_mode_default=excluded.workout_mode_default, allow_substitute=excluded.allow_substitute,
          allow_add_exercise=excluded.allow_add_exercise, allow_edit_targets=excluded.allow_edit_targets,
@@ -708,6 +741,15 @@ export default function adminRoutes(db) {
        pick(contact_email, existing?.contact_email), pick(contact_phone, existing?.contact_phone), pick(address, existing?.address),
        pick(city, existing?.city), pick(country, existing?.country), pick(logo_url, existing?.logo_url),
        pick(website, existing?.website), pick(instagram_url, existing?.instagram_url), pick(description, existing?.description),
+       /* Clamped to 1..99 and stored as given. The ORDERING is repaired at
+          read time in crowdStatus.js rather than here, so a half-finished
+          form cannot lock a gym out of a band -- and so a single place
+          owns the rule. */
+       clampPct(crowd_threshold_quiet, existing?.crowd_threshold_quiet, 30),
+       clampPct(crowd_threshold_moderate, existing?.crowd_threshold_moderate, 60),
+       clampPct(crowd_threshold_busy, existing?.crowd_threshold_busy, 80),
+       boolish(crowd_show_exact_count, existing?.crowd_show_exact_count),
+       boolish(crowd_client_visible, existing?.crowd_client_visible),
        now()]);
     track(db, 'gym_settings_updated', req.orgId, req.user.sub, {});
     res.json({ ok: true });
@@ -716,7 +758,8 @@ export default function adminRoutes(db) {
   // ---- live crowd (attendance events → occupancy engine) ----
   r.get('/crowd', async (req, res) => {
     const settings = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
-    const snapshot = await computeOccupancy(db, req.orgId, req.tz, settings);
+    // Same resolver as the member card, so the two can never disagree.
+    const snapshot = await liveCrowd(db, req.orgId, req.tz, settings);
     res.json(snapshot);
   });
 

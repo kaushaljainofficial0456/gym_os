@@ -13,6 +13,23 @@ export function dayKey(d = new Date(), tz = DEFAULT_TZ) {
 }
 
 /**
+ * The day key `n` days after (or before, if negative) another day key.
+ *
+ * Pure calendar arithmetic on the string, with no timezone involved,
+ * because the input already IS a local day. The alternative that keeps
+ * getting written -- take `new Date()`, add a day, read it back with
+ * toISOString() -- silently answers in UTC, so anywhere the local day and
+ * the UTC day differ it returns the wrong neighbour. That is how the
+ * evening "tomorrow's workout" reminder came to point at the day after
+ * tomorrow for every gym west of UTC.
+ */
+export function shiftDayKey(key, n) {
+  const t = Date.parse(`${String(key).slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(t)) return null;
+  return new Date(t + n * 86400000).toISOString().slice(0, 10);
+}
+
+/**
  * THE LOGGING DAY, which is not the calendar day.
  *
  * A meal eaten at 00:40 belongs to the night that just happened, not to

@@ -81,6 +81,12 @@ export default defineConfig({
         NODE_ENV: 'development',
         JWT_SECRET: 'e2e-only-secret-not-used-anywhere-else',
         CORS_ORIGINS: WEB_ORIGIN,
+        /* Every weekday gets the same session. Without this the seeded
+           schedule rotates by weekday, so "today's workout" differs from
+           one day to the next and every screenshot baseline showing it
+           expires overnight -- a red suite that says nothing about the
+           code. See seed.js's schedule block. */
+        SEED_DETERMINISTIC_SCHEDULE: '1',
       },
     },
     {
