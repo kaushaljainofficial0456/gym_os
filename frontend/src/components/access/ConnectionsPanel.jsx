@@ -76,6 +76,96 @@ function SecretOnce({ value, webhookUrl, onDone }) {
   );
 }
 
+/* ── eSSL / ZKTeco terminal setup ─────────────────────────────────── */
+
+/**
+ * What to type into the terminal itself. ADMS has no URL field -- the
+ * terminal takes a host and a port and always calls /iclock/... -- so the
+ * owner is given exactly those two values, plus the two settings this
+ * connection has (pinned IP, how members punch), editable here.
+ */
+function TerminalSetup({ provider, fresh, onClose, onSaved }) {
+  const cfg = provider.config || {};
+  const [ips, setIps] = useState(cfg.allowed_ips || '');
+  const [mode, setMode] = useState(cfg.punch_mode || 'toggle');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const host = window.location.hostname;
+  const https = window.location.protocol === 'https:';
+
+  const save = async () => {
+    setSaving(true); setError('');
+    try {
+      const res = await api(`/admin/access/providers/${provider.id}`, {
+        method: 'PATCH', body: JSON.stringify({ config: { allowed_ips: ips.trim() || null, punch_mode: mode } }),
+      });
+      onSaved(res.provider);
+    } catch (e) { setError(e.message || 'Could not save.'); }
+    setSaving(false);
+  };
+
+  const Step = ({ n, children }) => (
+    <li className="flex gap-2.5">
+      <span className="w-5 h-5 shrink-0 rounded-full grid place-items-center text-[10.5px] font-bold"
+            style={{ background: 'var(--accent-soft)', color: 'var(--ink)' }}>{n}</span>
+      <div className="text-[12.5px] leading-snug" style={{ color: 'var(--ink)' }}>{children}</div>
+    </li>
+  );
+  const Val = ({ children }) => (
+    <code className="rounded-md px-1.5 py-0.5 text-[11.5px] font-mono"
+          style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--ink)' }}>{children}</code>
+  );
+
+  return (
+    <Modal open onClose={onClose} title={fresh ? 'Connected — now set up the terminal' : 'Terminal setup'} wide>
+      <div className="space-y-4">
+        <ol className="space-y-2.5">
+          <Step n={1}>
+            On the terminal open <b>Menu → Comm. → Cloud Server Setting</b> (some models: <b>ADMS</b>). Set
+            Server address <Val>{host}</Val>, port <Val>{https ? '443' : (window.location.port || '80')}</Val>,
+            {https ? <> turn <b>HTTPS</b> on,</> : null} and enable it.
+          </Step>
+          <Step n={2}>
+            Under <b>Devices</b>, add the terminal with its <b>serial number</b> as the device ID (Menu → System Info →
+            Device Info) and choose this connection. Unregistered serials are refused.
+          </Step>
+          <Step n={3}>
+            Under <b>Members</b>, map each member to their <b>user ID / PIN</b> on the terminal. Punches from
+            unmapped PINs are kept for review, not lost.
+          </Step>
+          <Step n={4}>Press <b>Test connection</b>. It turns green once the terminal has called in.</Step>
+        </ol>
+        {https && (
+          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+            Older terminals can only use plain HTTP. If yours has no HTTPS option it cannot reach this server
+            directly — ask your eSSL dealer for a firmware update.
+          </p>
+        )}
+        <div className="space-y-3 pt-1" style={{ borderTop: '1px solid var(--line)' }}>
+          <Field label="How members punch" help="In and out: each punch alternates — arriving, then leaving. Use it when members press no keys.">
+            <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="toggle">One terminal, in and out</option>
+              <option value="status">Members press In / Out keys</option>
+            </select>
+          </Field>
+          <Field label="Gym public IP (optional)" help="Only accept punches from this address. Comma-separate several.">
+            <input className="input" value={ips} onChange={(e) => setIps(e.target.value)} placeholder="e.g. 203.0.113.7" autoComplete="off" />
+          </Field>
+          <ErrorLine>{error}</ErrorLine>
+          <div className="flex gap-2">
+            <button className="btn flex-1" onClick={onClose}>Close</button>
+            <button className="btn btn-primary flex-1" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          </div>
+        </div>
+        <p className="text-[11px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+          ADMS has no signature, so every punch is recorded as unverified. Pinning your IP is the strongest check
+          available. Fingerprints and faces never leave the terminal.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+
 /* ── the connect wizard ───────────────────────────────────────────── */
 
 function ConnectSheet({ catalogue, branches, onClose, onConnected }) {
@@ -96,7 +186,9 @@ function ConnectSheet({ catalogue, branches, onClose, onConnected }) {
       const config = {};
       for (const f of picked.requiredFields || []) {
         if (f.generated) continue;
-        const v = (fields[f.key] || '').trim();
+        // A choice with nothing picked means its first option.
+        const v = (fields[f.key] || (f.options ? f.options[0][0] : '')).trim();
+        if (!v && f.optional) continue;
         if (!v) { setError(`${f.label} is required.`); setSaving(false); return; }
         if (f.secret) secrets[f.key] = v;
         else if (f.key === 'base_url') config.baseUrl = v;
@@ -168,8 +260,15 @@ function ConnectSheet({ catalogue, branches, onClose, onConnected }) {
           )}
           {(picked.requiredFields || []).filter((f) => !f.generated).map((f) => (
             <Field key={f.key} label={f.label} help={f.help}>
-              <input className="input" type={f.secret ? 'password' : 'text'} autoComplete="off"
-                     value={fields[f.key] || ''} onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
+              {f.options ? (
+                <select className="input" value={fields[f.key] || f.options[0][0]}
+                        onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))}>
+                  {f.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              ) : (
+                <input className="input" type={f.secret ? 'password' : 'text'} autoComplete="off"
+                       value={fields[f.key] || ''} onChange={(e) => setFields((s) => ({ ...s, [f.key]: e.target.value }))} />
+              )}
             </Field>
           ))}
           {picked.capabilities?.supportsWebhooks && (
@@ -552,7 +651,8 @@ function ProviderCard({ p, health, busy, onAction }) {
           {caps.supportsTestConnection && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('test', p)}>Test connection</button>}
           {caps.supportsWebhooks && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('test-event', p)}>Send test event</button>}
           {caps.supportsWebhooks && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('webhook', p)}>Webhook</button>}
-          {p.providerKey !== 'demo' && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('configure', p)}>Configure</button>}
+          {p.providerKey === 'essl' && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('terminal', p)}>Terminal setup</button>}
+          {p.providerKey !== 'demo' && p.providerKey !== 'essl' && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('configure', p)}>Configure</button>}
           {caps.supportsPolling && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('sync', p)}>Sync now</button>}
           {caps.supportsHistoricalImport && p.providerKey === 'generic_rest' && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('import', p)}>Import history</button>}
           {p.providerKey === 'csv_import' && <button className="btn btn-sm" disabled={busy} onClick={() => onAction('csv', p)}>Upload CSV</button>}
@@ -595,7 +695,7 @@ export default function ConnectionsPanel({ onToast, onJob }) {
 
   const act = async (kind, p) => {
     if (kind === 'refresh') return load();
-    if (['configure', 'import', 'csv', 'webhook'].includes(kind)) return setSheet({ kind, provider: p });
+    if (['configure', 'import', 'csv', 'webhook', 'terminal'].includes(kind)) return setSheet({ kind, provider: p });
     setBusy(true);
     try {
       if (kind === 'test') {
@@ -655,6 +755,9 @@ export default function ConnectionsPanel({ onToast, onJob }) {
           onConnected={(res) => {
             if (res.signingSecretShownOnce) {
               setSheet({ kind: 'secret', data: { value: res.signingSecretShownOnce, webhookUrl: res.webhookUrl } });
+            } else if (res.provider?.providerKey === 'essl') {
+              // The connection is only half of it: the terminal needs setting up.
+              setSheet({ kind: 'terminal', provider: res.provider, fresh: true });
             } else { setSheet(null); onToast('Connected. Test it before relying on it.'); }
             load();
           }} />
@@ -678,6 +781,10 @@ export default function ConnectionsPanel({ onToast, onJob }) {
           }} />
       )}
       {sheet?.kind === 'webhook' && <WebhookSheet provider={sheet.provider} onClose={() => setSheet(null)} />}
+      {sheet?.kind === 'terminal' && (
+        <TerminalSetup provider={sheet.provider} fresh={!!sheet.fresh} onClose={() => setSheet(null)}
+          onSaved={() => { setSheet(null); onToast('Terminal settings saved.'); load(); }} />
+      )}
       {confirmDialog}
     </div>
   );

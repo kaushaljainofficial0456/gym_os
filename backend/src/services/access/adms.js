@@ -148,11 +148,27 @@ export function handshakeResponse(sn) {
   ].join('\r\n');
 }
 
-/** The first address in X-Forwarded-For, else the socket's. */
+/**
+ * The address the device connected from, for IP pinning.
+ *
+ * The RIGHTMOST X-Forwarded-For entry, not the first: a proxy appends the
+ * address it saw, so the first entry is whatever the sender chose to write
+ * and the last is the one our own edge added. On Vercel the header holds
+ * only the client's address (the edge overwrites it); behind one appending
+ * proxy the last entry is that proxy's view of the device. With no header
+ * at all it is the socket's. Pinning is defence in depth on top of the
+ * registered serial -- every ADMS event is stored 'unverified' regardless.
+ */
 export function clientIp(req) {
-  const fwd = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
-  const ip = fwd || req.ip || req.socket?.remoteAddress || '';
+  const hops = String(req.headers?.['x-forwarded-for'] || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const ip = hops.at(-1) || req.ip || req.socket?.remoteAddress || '';
   return ip.replace(/^::ffff:/, '');
+}
+
+/** One punch's identity: the device resends a batch until acknowledged, so
+ *  the same serial, PIN and device time must always be the same event. */
+export function punchEventId(sn, punch) {
+  return `adms:${sn}:${punch.pin}:${punch.local}`;
 }
 
 /** allowed_ips from a connection's config: "203.0.113.7, 198.51.100.0" -> Set. */

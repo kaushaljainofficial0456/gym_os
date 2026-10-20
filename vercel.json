@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
     { "source": "/uploads/:path*", "destination": "/api" },
+    { "source": "/iclock/:path*", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {

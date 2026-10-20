@@ -1,6 +1,7 @@
 // Vercel serverless entry point for the UNIFIED SK OS project (frontend +
-// backend deployed together, Root Directory = repo root). Every /api/* and
-// /uploads/* request (see the rewrites in ../vercel.json) lands here;
+// backend deployed together, Root Directory = repo root). Every /api/*,
+// /uploads/* and /iclock/* (eSSL / ZKTeco terminals, see backend/src/routes/
+// adms.js) request (see the rewrites in ../vercel.json) lands here;
 // Express's own router does the real dispatch, unchanged from the
 // traditional-server code path in backend/src/index.js.
 //

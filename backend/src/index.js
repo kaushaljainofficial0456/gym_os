@@ -37,6 +37,7 @@ import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 import notificationRoutes from './routes/notifications.js';
 import accessRoutes, { accessWebhookRoutes } from './routes/access.js';
+import admsRoutes from './routes/adms.js';
 import communityRoutes from './routes/community.js';
 import communitiesRoutes from './routes/communities.js';
 import communityInviteRoutes from './routes/communityInvite.js';
@@ -204,6 +205,9 @@ export async function buildApp() {
   // providers/builtin.js is computed over the exact bytes the panel sent,
   // so a re-serialized body would fail a valid signature.
   app.use('/api/access/hook', express.raw({ type: 'application/json', limit: '512kb' }));
+  // eSSL / ZKTeco terminals post tab-separated attendance lines, labelled
+  // text/plain or not labelled at all -- read every body there as text.
+  app.use('/iclock', express.text({ type: () => true, limit: '1mb' }));
   app.use(express.json({ limit: '1mb' }));
 
 app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.driver, ts: new Date().toISOString() }));
@@ -249,6 +253,7 @@ app.use('/api/workout-share', workoutShareRoutes(db)); // PUBLIC: preview a shar
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/access', accessWebhookRoutes(db));   // PUBLIC: signed door events -- see access.js's own header
 app.use(['/api/admin/access', '/api/business/access'], accessRoutes(db)); // owner: providers, devices, mappings, events, audit
+app.use('/iclock', admsRoutes(db)); // PUBLIC: eSSL / ZKTeco terminals push punches here (ADMS) -- see routes/adms.js
 app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/communities', communitiesRoutes(db)); // friend communities: private, invite-only, cross-gym -- see routes/communities.js

@@ -1,7 +1,7 @@
 // ============================================================
 // THE ADAPTERS THAT ACTUALLY EXIST.
 //
-// Three, and they are chosen so that a gym can be running today without
+// The generic three are chosen so that a gym can be running today without
 // waiting for anyone to write vendor code:
 //
 //   demo             — a sandbox with no hardware. Owner-only, clearly
@@ -14,14 +14,20 @@
 //   generic_rest     — anything with a pollable HTTP endpoint, with the
 //                      owner mapping its field names onto ours.
 //
-// WHAT IS DELIBERATELY ABSENT: named vendor adapters. ZKTeco, ESSL,
-// Matrix, Hikvision and Suprema each need real credentials, a real device
-// on a bench and their actual API documentation to build against. Listing
-// them here with a Connect button, backed by a guess at their payload
-// shape, would be claiming support this codebase does not have -- so they
-// are advertised through listProviders() as unimplemented, with the
-// generic paths offered instead. That is a product decision, not an
-// oversight.
+// One vendor adapter exists, because its protocol is PUBLISHED rather than
+// guessed at: eSSL / ZKTeco terminals push attendance over ZKTeco's ADMS
+// ("iclock") protocol, the same on every model of the last decade (see
+// services/access/adms.js). It ships as beta until a gym's own terminal
+// has handshaked.
+//
+// WHAT IS DELIBERATELY ABSENT: the other named vendor adapters. Matrix,
+// Hikvision, Suprema and ZKTeco's BioTime software each need real
+// credentials, a real device on a bench and their actual API documentation
+// to build against. Listing them here with a Connect button, backed by a
+// guess at their payload shape, would be claiming support this codebase
+// does not have -- so they are advertised through listProviders() as
+// unimplemented, with the generic paths offered instead. That is a product
+// decision, not an oversight.
 //
 // No adapter here touches biometric data. The demo one invents opaque
 // member ids; the generic ones read whatever identifier the vendor sends.
@@ -337,6 +343,80 @@ export function normalizeWithFieldMap(ctx, payload) {
 }
 
 
+/* ── eSSL / ZKTeco terminals (ADMS push) ───────────────────────────── */
+
+/**
+ * The fingerprint / face terminal most Indian gyms already have at the
+ * front desk. These devices call US -- see services/access/adms.js for the
+ * protocol and routes/adms.js for the endpoint -- so there is nothing to
+ * poll and no secret to share: a device is accepted only if its serial is
+ * registered under Devices against one of these connections, optionally
+ * only from the gym's own public IP.
+ *
+ * Built to ZKTeco's published Push protocol and labelled beta until a
+ * gym's own terminal has handshaked: firmware varies between models.
+ */
+const isAdmsDeviceOnline = (lastSeenAt) => !!lastSeenAt && Date.now() - Date.parse(lastSeenAt) < 5 * 60 * 1000;
+
+registerProvider({
+  key: 'essl',
+  name: 'eSSL / ZKTeco terminal (beta)',
+  kind: 'vendor',
+  authType: 'none',
+  description:
+    'Fingerprint and face terminals with a "Cloud Server" (ADMS) setting push every punch to SK OS. '
+    + 'Add each terminal\'s serial number under Devices, then point the terminal at this server. '
+    + 'Fingerprints never leave the device -- SK OS receives the member\'s PIN and the time.',
+  requiredFields: [
+    { key: 'allowed_ips', label: 'Gym public IP (optional)', secret: false, optional: true,
+      help: 'Only accept punches from this address. Comma-separate several. Leave blank to accept any address.' },
+    { key: 'punch_mode', label: 'How members punch', secret: false, optional: true,
+      options: [
+        ['toggle', 'One terminal, in and out'],
+        ['status', 'Members press In / Out keys'],
+      ],
+      help: 'In and out: each punch alternates — arriving, then leaving. Most gyms with one terminal at reception want this.' },
+  ],
+  capabilities: {
+    supportsDeviceStatus: true,
+    supportsEntryExitEvents: true,
+    supportsTestConnection: true,
+    supportsBranchMapping: true,
+  },
+
+  async testConnection(ctx) {
+    // Traffic flows device -> SK OS, so "testing" is reporting what the
+    // devices have actually done, never a success nobody observed.
+    const devices = await ctx.db.q(
+      `SELECT device_name, device_identifier, last_seen_at, last_event_at FROM access_devices
+        WHERE org_id = ? AND provider_id = ? AND status = 'ACTIVE'`, [ctx.orgId, ctx.provider.id]);
+    if (!devices.length) {
+      return { ok: false, message: 'Add the terminal under Devices with its serial number (Menu → System Info → Device Info) first.' };
+    }
+    const seen = devices.filter((d) => d.last_seen_at).sort((a, b) => (a.last_seen_at < b.last_seen_at ? 1 : -1));
+    if (!seen.length) {
+      return {
+        ok: false,
+        message: 'No terminal has connected yet. On the terminal, set Comm → Cloud Server to this server\'s address and enable it.',
+        details: { awaitingFirstHandshake: true },
+      };
+    }
+    const d = seen[0];
+    return {
+      ok: true,
+      message: `${d.device_name || d.device_identifier} last connected ${d.last_seen_at}`
+        + (d.last_event_at ? `; last punch ${d.last_event_at}.` : '; no punch received yet.'),
+    };
+  },
+
+  async getDeviceStatus(ctx, externalId) {
+    const d = await ctx.db.q1(
+      'SELECT last_seen_at FROM access_devices WHERE org_id = ? AND provider_id = ? AND device_identifier = ?',
+      [ctx.orgId, ctx.provider.id, String(externalId)]);
+    return { online: isAdmsDeviceOnline(d?.last_seen_at), lastSeenAt: d?.last_seen_at || null };
+  },
+});
+
 /* ── vendors we do NOT claim to support ────────────────────────────── */
 
 /**
@@ -349,8 +429,10 @@ export function normalizeWithFieldMap(ctx, payload) {
  * only honest option.
  */
 for (const [key, name] of [
-  ['zkteco', 'ZKTeco'],
-  ['essl', 'eSSL'],
+  // ZKTeco terminals with ADMS ("Cloud Server") firmware connect through the
+  // eSSL / ZKTeco adapter above; this entry is ZKTeco's other software
+  // (BioTime, ZKAccess), which still has no adapter.
+  ['zkteco', 'ZKTeco BioTime / ZKAccess'],
   ['matrix', 'Matrix COSEC'],
   ['hikvision', 'Hikvision'],
   ['suprema', 'Suprema BioStar'],

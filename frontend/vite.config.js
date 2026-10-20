@@ -71,6 +71,13 @@ export default defineConfig({
       '/uploads': {
         target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
         changeOrigin: true
+      },
+      // Mirrors vercel.json's "/iclock/:path*" rewrite: eSSL / ZKTeco
+      // terminals call this host at /iclock (backend/src/routes/adms.js),
+      // and Terminal setup tells the owner to point them at this host.
+      '/iclock': {
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
+        changeOrigin: true
       }
     }
   },
@@ -98,6 +105,13 @@ export default defineConfig({
       // showed an image -- while looking, from the app code alone,
       // identical to a correctly working request.
       '/uploads': {
+        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
+        changeOrigin: true
+      },
+      // Mirrors vercel.json's "/iclock/:path*" rewrite: eSSL / ZKTeco
+      // terminals call this host at /iclock (backend/src/routes/adms.js),
+      // and Terminal setup tells the owner to point them at this host.
+      '/iclock': {
         target: process.env.VITE_API_TARGET || 'http://127.0.0.1:4000',
         changeOrigin: true
       }
