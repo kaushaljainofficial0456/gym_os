@@ -139,6 +139,10 @@ export const schemas = {
       unit: z.string().trim().min(1).max(30),
       source: z.enum(['manual', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']).default('manual'),
       confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional(),
+      // Which AI produced an ai_estimated item -- provenance only, the
+      // same two fields the single-item log route already records.
+      ai_provider: z.string().trim().max(40).optional(),
+      ai_model: z.string().trim().max(80).optional(),
     })).min(1).max(30),
   }),
   mealRepeat: z.object({

@@ -138,6 +138,42 @@ export function fromUsual(u) {
   };
 }
 
+/**
+ * An AI estimate (POST /me/foods/ai-estimate) as a plate item: one serving
+ * of the dish as the AI sized it, re-priceable by grams like any other item.
+ * Marked origin 'ai' so it is logged as an estimate -- never as a measured
+ * food -- with the provider that produced it.
+ */
+export function fromAIEstimate(res) {
+  const weight = Number(res?.serving?.estimated_weight_g) || 0;
+  const t = res?.totals || {};
+  const per100 = weight > 0
+    ? { calories: (t.calories || 0) / weight * 100, protein: (t.protein || 0) / weight * 100, carbs: (t.carbs || 0) / weight * 100, fat: (t.fat || 0) / weight * 100 }
+    : null;
+  const serving = { key: 'serving', label: String(res?.serving?.description || 'serving').slice(0, 30) };
+  const units = per100
+    ? [{ ...serving, grams: weight }, { key: 'g', label: 'g', grams: 1 }]
+    : [{ ...serving, perUnit: { calories: t.calories || 0, protein: t.protein || 0, carbs: t.carbs || 0, fat: t.fat || 0 } }];
+  return {
+    id: nextId(),
+    name: res?.food_name || 'AI estimate',
+    sourceName: null,
+    sourceId: null,
+    stapleKey: null,
+    confidence: res?.confidence || 'low',
+    alternatives: [],
+    per100,
+    oil: null,
+    oilKey: null,
+    units,
+    unitKey: 'serving',
+    qty: 1,
+    assumed: false,
+    origin: 'ai',
+    ai: { provider: res?.ai?.provider || null, model: res?.ai?.model || null },
+  };
+}
+
 export const unitOf = (item) => item.units.find((u) => u.key === item.unitKey) || item.units[0];
 
 /** The per-100 g values the item prices from: its oil choice's, if one was
@@ -239,6 +275,20 @@ export function amountLabel(item) {
   return `${q} ${u.label}`;
 }
 
+const CONFIDENCE = new Set(['high', 'medium', 'low', 'unreliable']);
+
+/** Where the numbers came from. An AI estimate stays an estimate in the log,
+ *  and one whose amount the person changed says so. */
+function logSource(it) {
+  if (it.origin !== 'ai') return { source: 'manual' };
+  const asServed = it.unitKey === 'serving' && it.qty === 1;
+  return {
+    source: asServed ? 'ai_estimated' : 'ai_estimated_user_adjusted',
+    ...(it.ai?.provider ? { ai_provider: String(it.ai.provider).slice(0, 40) } : {}),
+    ...(it.ai?.model ? { ai_model: String(it.ai.model).slice(0, 80) } : {}),
+  };
+}
+
 /** The log rows for a plate: what was eaten, how much, and how sure. */
 export function toLogItems(items) {
   return items.map((it) => {
@@ -256,8 +306,8 @@ export function toLogItems(items) {
       quantity: it.qty,
       // The unit the person chose, so "Edit quantity" later scales from it.
       unit: (u?.key === 'g' ? 'g' : u?.label || 'serving').slice(0, 30),
-      source: 'manual',
-      ...(it.confidence ? { confidence: it.confidence } : {}),
+      ...logSource(it),
+      ...(CONFIDENCE.has(it.confidence) ? { confidence: it.confidence } : {}),
     };
   });
 }
