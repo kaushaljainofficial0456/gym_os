@@ -11,14 +11,13 @@ const focusInside = (locator) => locator.evaluate((el) => el.contains(document.a
 test.describe('food log sheet', () => {
   test.use({ storageState: storageFor('client') });
 
-  // The one dialog that owns a layered Escape (it steps back through its
-  // own screens), so it takes useDialog's focus handling without its Escape.
+  // The full logger ("+" beside the mic): search, units, barcode, macros.
   test('holds focus, closes on Escape, and hands focus back to Log food', async ({ page }) => {
     await page.goto('/app/client/nutrition');
     const trigger = page.getByRole('button', { name: /^Log food/ });
     await trigger.click();
 
-    const sheet = page.getByRole('dialog', { name: 'Log Food' });
+    const sheet = page.getByRole('dialog', { name: 'Add food' });
     await expect(sheet).toBeVisible();
     await expect.poll(() => focusInside(sheet)).toBe(true);
     for (let i = 0; i < 12; i += 1) {
@@ -164,9 +163,17 @@ test.describe('dialog layering: the barcode scanner inside the food log sheet', 
   test('Escape closes the scanner and nothing under it', async ({ page }) => {
     await page.goto('/app/client/nutrition');
     await page.getByRole('button', { name: /^Log food/ }).click();
+    // The full logger's Barcode button opens the classic sheet straight into
+    // the scanner.
+    await page.getByRole('dialog', { name: 'Add food' }).getByRole('button', { name: 'Scan a barcode' }).click();
     const sheet = page.getByRole('dialog', { name: 'Log Food' });
+    const autoScanner = page.getByRole('dialog', { name: 'Scan barcode' });
+    await expect(autoScanner).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(autoScanner).toBeHidden();
     await expect(sheet).toBeVisible();
 
+    // And opened from the sheet's own button, focus comes back to it.
     const scanButton = sheet.getByRole('button', { name: 'Scan barcode' });
     await scanButton.click();
     const scanner = page.getByRole('dialog', { name: 'Scan barcode' });

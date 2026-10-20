@@ -1068,11 +1068,14 @@ export default function meRoutes(db) {
         ids.push(lId);
         await tx.run(
           `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat,
-                                  eaten, source, estimate, ai_confidence, quantity, unit)
-           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?)`,
+                                  eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
+           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?)`,
           [lId, c.id, date, slot, it.name, Math.round(it.calories), r1v(it.protein), r1v(it.carbs), r1v(it.fat),
-           // ai_confidence is AI/kNN provenance; a measured match leaves it empty.
-           it.source, ESTIMATED.has(it.source) ? 1 : 0, ESTIMATED.has(it.source) ? (it.confidence ?? null) : null,
+           // The ai_* columns are AI/kNN provenance; a measured match leaves them empty.
+           it.source, ESTIMATED.has(it.source) ? 1 : 0,
+           ESTIMATED.has(it.source) ? (it.ai_provider ?? null) : null,
+           ESTIMATED.has(it.source) ? (it.ai_model ?? null) : null,
+           ESTIMATED.has(it.source) ? (it.confidence ?? null) : null,
            r1v(it.quantity), it.unit]);
       }
     });

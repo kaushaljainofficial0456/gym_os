@@ -262,3 +262,21 @@ test('unauthenticated -> 401', async (t) => {
   const r = await call('POST', '/api/me/nutrition/describe', { text: 'roti' }, '');
   assert.equal(r.status, 401);
 });
+
+test('log-batch: an AI-estimated item keeps its provenance; a measured one has none', async (t) => {
+  const { db, call, close } = await startApp(); t.after(close);
+  const r = await call('POST', '/api/me/nutrition/log-batch', {
+    slot: 'dinner',
+    items: [
+      { name: 'Jollof rice', calories: 520, protein: 11, carbs: 80, fat: 16, quantity: 1, unit: 'plate',
+        source: 'ai_estimated', confidence: 'medium', ai_provider: 'groq', ai_model: 'llama-x' },
+      { name: 'Roti', calories: 162, protein: 5, carbs: 28, fat: 3, quantity: 2, unit: 'roti',
+        confidence: 'high', ai_provider: 'should-not-store' },
+    ],
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  const ai = await db.q1("SELECT * FROM meal_logs WHERE name = 'Jollof rice'");
+  assert.deepEqual([ai.source, ai.estimate, ai.ai_provider, ai.ai_model, ai.ai_confidence], ['ai_estimated', 1, 'groq', 'llama-x', 'medium']);
+  const roti = await db.q1("SELECT * FROM meal_logs WHERE name = 'Roti'");
+  assert.deepEqual([roti.source, roti.estimate, roti.ai_provider, roti.ai_confidence], ['manual', 0, null, null]);
+});

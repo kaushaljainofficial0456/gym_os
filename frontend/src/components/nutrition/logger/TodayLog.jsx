@@ -1,5 +1,5 @@
 /**
- * TODAY — everything eaten today, in one list, with one way to add more.
+ * TODAY — everything eaten today, in one list.
  *
  * This replaced four cards (Breakfast, Lunch, Snacks, Dinner), each with
  * its own "+" and its own "Nothing logged yet". Four boxes to choose
@@ -54,7 +54,7 @@ function Row({ m, first, onToggle, onEdit, onDelete, reduced }) {
         <span className="block font-grotesk text-[13.5px] font-semibold truncate" style={{ color: dim ? 'var(--faint)' : 'var(--ink)' }}>{m.name}</span>
         {(amount(m) || plan) && (
           <span className="block font-grotesk text-[11px] truncate" style={{ color: 'var(--mute)' }}>
-            {plan ? (m.eaten ? 'From your plan' : 'From your plan · tick when eaten') : amount(m)}
+            {plan ? 'Plan' : amount(m)}
           </span>
         )}
       </button>
@@ -71,54 +71,34 @@ function Row({ m, first, onToggle, onEdit, onDelete, reduced }) {
   );
 }
 
-export default function TodayLog({ meals, onAdd, onToggle, onEdit, onDelete }) {
+/**
+ * The list itself, with no heading, count or hint around it: it sits under
+ * the input in the log card (LogCard.jsx), where the day's total is already
+ * the big number in the rings. Empty means nothing is rendered at all.
+ */
+export default function TodayList({ meals, onToggle, onEdit, onDelete }) {
   const reduced = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const day = dayList(meals);
+  if (!day.items.length) return null;
   const shown = expanded ? day.items : day.items.slice(0, FOLD);
   const hidden = day.items.length - shown.length;
 
   return (
-    <section aria-labelledby="today-log" className="rounded-3xl px-4 pt-3.5 pb-2"
-             style={{ background: 'var(--panel)', border: '1px solid var(--line)' }} data-tour="nutrition-meals">
-      <header className="flex items-center gap-2">
-        <div className="min-w-0">
-          <h3 id="today-log" className="font-grotesk text-[15px] font-black" style={{ color: 'var(--ink)' }}>Today</h3>
-          <div className="font-grotesk text-[11.5px] tabular-nums" style={{ color: 'var(--mute)' }}>
-            {day.eatenCount > 0
-              ? `${day.eatenCount} ${day.eatenCount === 1 ? 'food' : 'foods'} · ${Math.round(day.total.calories).toLocaleString()} kcal · P ${Math.round(day.total.protein)} g`
-              : 'Nothing eaten yet'}
-          </div>
-        </div>
-        <button type="button" onClick={() => onAdd()} aria-label="Add food"
-                className="ml-auto h-9 pl-2.5 pr-3.5 -mr-1 rounded-xl flex items-center gap-1.5 font-grotesk text-[12.5px] font-bold transition-transform active:scale-95"
-                style={{ background: 'var(--accent)', color: 'var(--accent-contrast)' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-          Add
-        </button>
-      </header>
-
-      {day.items.length > 0 ? (
-        <>
-          <ul className="mt-1.5">
-            <AnimatePresence initial={false}>
-              {shown.map((m, i) => (
-                <Row key={m.id} m={m} first={i === 0} reduced={reduced} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />
-              ))}
-            </AnimatePresence>
-          </ul>
-          {(hidden > 0 || expanded) && day.items.length > FOLD && (
-            <button type="button" onClick={() => setExpanded((v) => !v)}
-                    className="w-full py-2 font-grotesk text-[12px] font-semibold" style={{ color: 'var(--mute)', borderTop: '1px solid var(--line)' }}>
-              {expanded ? 'Show less' : `Show all ${day.items.length}`}
-            </button>
-          )}
-        </>
-      ) : (
-        <button type="button" onClick={() => onAdd()} className="w-full text-left py-3 font-grotesk text-[12.5px]" style={{ color: 'var(--faint)' }}>
-          Say or type what you ate — “2 roti and dal” is enough.
+    <div className="mt-2 px-1" data-tour="nutrition-meals">
+      <ul aria-label="Eaten today">
+        <AnimatePresence initial={false}>
+          {shown.map((m, i) => (
+            <Row key={m.id} m={m} first={i === 0} reduced={reduced} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </AnimatePresence>
+      </ul>
+      {(hidden > 0 || expanded) && day.items.length > FOLD && (
+        <button type="button" onClick={() => setExpanded((v) => !v)}
+                className="w-full py-2 font-grotesk text-[12px] font-semibold" style={{ color: 'var(--mute)', borderTop: '1px solid var(--line)' }}>
+          {expanded ? 'Show less' : `Show all ${day.items.length}`}
         </button>
       )}
-    </section>
+    </div>
   );
 }

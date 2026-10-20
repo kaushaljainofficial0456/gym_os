@@ -82,39 +82,24 @@ export default function NetEnergyCard({ t, refreshKey }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full text-left px-4 py-3.5 flex items-center gap-3 transition-colors"
-        style={{ background: tone.bg, minHeight: 64 }}
+        className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors"
+        style={{ background: tone.bg, minHeight: 52 }}
       >
-        <div className="min-w-0 flex-1">
-          <div className="text-[9.5px] font-semibold uppercase tracking-[.12em]" style={{ color: t.faint }}>
-            Net energy today
-          </div>
-
+        {/* One line: the figure is the whole answer most of the time. How it
+            is worked out, and that it is an estimate, is in the open card. */}
+        <div className="min-w-0 flex-1 flex items-center justify-between gap-3">
+          <span className="font-grotesk text-[13px] font-semibold" style={{ color: t.mute }}>Net energy</span>
           {known ? (
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="font-grotesk font-black tabular-nums leading-none"
-                    style={{ fontSize: 30, color: tone.fg }}>
+            <span className="flex items-baseline gap-1.5">
+              <span className="font-grotesk text-[18px] font-black tabular-nums leading-none" style={{ color: tone.fg }}>
                 {net > 0 ? '+' : net < 0 ? '−' : ''}{fmt(net)}
               </span>
-              <span className="font-grotesk text-[12px] font-semibold" style={{ color: t.mute }}>
-                kcal {word}
-              </span>
-            </div>
+              <span className="font-grotesk text-[11.5px] font-semibold" style={{ color: t.mute }}>{word}</span>
+            </span>
           ) : (
-            <div className="text-[12.5px] font-semibold mt-1" style={{ color: t.ink }}>
-              Add your {data.missing.slice(0, 2).join(' and ')} to see this
-            </div>
-          )}
-
-          {known && today.partialDay && (
-            <div className="text-[10px] mt-1" style={{ color: t.faint }}>
-              So far today — resting burn is counted as the day passes.
-            </div>
-          )}
-          {!known && (
-            <div className="text-[10px] mt-1 leading-snug" style={{ color: t.faint }}>
-              Your burn can't be estimated without them, and a made-up number is worse than none.
-            </div>
+            <span className="font-grotesk text-[12px] font-semibold text-right" style={{ color: t.ink }}>
+              Add your {data.missing.slice(0, 2).join(' and ')}
+            </span>
           )}
         </div>
 
@@ -155,6 +140,8 @@ export default function NetEnergyCard({ t, refreshKey }) {
           </div>
 
           <p className="text-[10px] mt-3 leading-snug" style={{ color: t.faint }}>
+            {today.partialDay ? 'So far today: resting burn is added as the day passes. ' : ''}
+            {!known ? "Your burn can't be estimated without them, and a made-up number is worse than none. " : ''}
             Every figure here except the food you logged is an ESTIMATE — resting energy from a
             standard formula, exercise from models of effort. Good for comparing your week to your
             last one; not a measurement.

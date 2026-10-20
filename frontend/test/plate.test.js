@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fromPlateItem, fromSearchFood, fromUsual, priceItem, plateTotals, stepQty, switchUnit,
-  amountLabel, toLogItems, dayList, mealGroup, slotForTime, looksLikeMeal, setOil, unitGramsHint,
+  amountLabel, toLogItems, dayList, mealGroup, slotForTime, looksLikeMeal, setOil, unitGramsHint, fromAIEstimate,
 } from '../src/components/nutrition/logger/plate.js';
 
 // Shapes as POST /me/nutrition/describe returns them.
@@ -161,5 +161,34 @@ describe('accuracy aids', () => {
     expect(unitGramsHint({ key: 'typed', label: 'ml', grams: 1.03 })).toBe(null);
     expect(unitGramsHint({ key: 'staple_almond', label: 'almond', grams: 1.2 })).toBe('1.2 g');
     expect(unitGramsHint({ key: 'own', label: 'cup', perUnit: {} })).toBe(null);
+  });
+});
+
+describe('AI estimates on the plate', () => {
+  const res = {
+    ok: true, food_name: 'Jollof rice', confidence: 'medium',
+    serving: { estimated_weight_g: 400, description: 'plate' },
+    totals: { calories: 640, protein: 16, carbs: 112, fat: 14 },
+    ai: { provider: 'groq', model: 'llama-x' },
+  };
+
+  it('is one serving as the AI sized it, re-priceable by grams', () => {
+    const it = fromAIEstimate(res);
+    expect(it.origin).toBe('ai');
+    expect(priceItem(it)).toMatchObject({ grams: 400, calories: 640, protein: 16 });
+    expect(priceItem({ ...it, qty: 0.5 }).calories).toBe(320);
+    expect(priceItem(switchUnit(it, 'g')).calories).toBe(640);
+  });
+
+  it('is logged as an estimate, with the AI that made it', () => {
+    const [row] = toLogItems([fromAIEstimate(res)]);
+    expect(row).toMatchObject({ source: 'ai_estimated', ai_provider: 'groq', ai_model: 'llama-x', confidence: 'medium', quantity: 1, unit: 'plate' });
+    const [half] = toLogItems([{ ...fromAIEstimate(res), qty: 0.5 }]);
+    expect(half.source).toBe('ai_estimated_user_adjusted');
+  });
+
+  it('a measured food is never logged as an estimate', () => {
+    expect(toLogItems([roti])[0]).toMatchObject({ source: 'manual' });
+    expect(toLogItems([roti])[0].ai_provider).toBeUndefined();
   });
 });

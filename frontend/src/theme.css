@@ -1232,6 +1232,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
      without drawing a scrollbar under every row. */
   .no-scrollbar { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
+  /* A text input inside a rounded field: the focus ring goes on the FIELD,
+     following its shape, instead of a square outline drawn inside it. */
+  .pill-field input:focus-visible { outline: none; }
+  .pill-field:focus-within { outline: 2px solid rgb(var(--accent-rgb) / .9); outline-offset: 2px; }
   .segmented-item {
     @apply relative font-grotesk text-center whitespace-nowrap;
     /* `flex: 1 0 auto` not `flex-1`: shrinking to 0 is what let long labels
