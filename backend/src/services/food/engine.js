@@ -130,6 +130,8 @@ export const {
   splitItems,
   parseFragment,
   SOURCE_RANK,
+  describeMeal,
+  plateItemFor,
 } = impl;
 
 // NOTE: the raw string→string `normalize` (reference primitive) is NOT

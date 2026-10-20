@@ -107,6 +107,19 @@ wide where real recipe variance is wide. There are **no point equalities anywher
 
 ## 4. V1 baseline results (`baseline.v1.json`, 324 cases)
 
+> **Re-baselined 2026-10-20 — everyday staples layer** (`backend/src/services/food/staples.js`).
+> A curated list mapping the words people type most ("roti", "chai", "1 katori dal", "2 eggs")
+> to the measured row they mean, with natural units, plus parser fixes ("half a cup of X",
+> "(52g)" pack weights, "tablespoons"). Against the previous floor: weighted overall
+> 73.3 → 78.0 %, portion accuracy 71.3 → 79.9 %, kcal in-range 61.2 → 69.2 %, plausibility FN
+> 9.9 → 7.7 %, fabrication 0.3 → 0.0 %, ECE 0.198 → 0.122. Per case: 50 better, 18 worse, none
+> blocking. The largest drop, `rcv-002` "100g cooked chicken breast", is a ground-truth problem,
+> not an engine one: its band (10.9–18.2 g protein, 1.3–2.2 g carbs per 100 g) does not describe
+> cooked chicken breast, which USDA measures at ~31 g protein and 0 g carbs. Most of the other
+> drops are confidence-band or class-proxy changes of ≤ 0.09.
+>
+> The figures below are the original 2026-08-28 run, kept for history.
+
 Run `2026-08-28`, current production engine (`foodEstimator.js` → `skos-food-v1`, deterministic Tier 1).
 
 ```

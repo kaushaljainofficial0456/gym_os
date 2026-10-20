@@ -1228,6 +1228,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     scroll-snap-type: x proximity;
   }
   .segmented::-webkit-scrollbar { display: none; }
+  /* A sideways chip row (units on a plate item) that scrolls by touch
+     without drawing a scrollbar under every row. */
+  .no-scrollbar { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
   .segmented-item {
     @apply relative font-grotesk text-center whitespace-nowrap;
     /* `flex: 1 0 auto` not `flex-1`: shrinking to 0 is what let long labels

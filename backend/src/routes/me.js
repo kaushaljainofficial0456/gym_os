@@ -11,7 +11,7 @@
 import { Router } from 'express';
 import { requireAuth, orgScope } from '../auth.js';
 import { id, now } from '../ids.js';
-import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR } from '../utils/time.js';
+import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR, shiftDayKey } from '../utils/time.js';
 import { invalidateDayStart } from '../services/logDay.js';
 import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
@@ -24,6 +24,8 @@ import {
   modelAvailable as foodModelAvailable,
   resolveFoodQuantity,
   estimateFoodKnn,
+  describeMeal,
+  plateItemFor,
 } from '../services/food/index.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { validate, schemas } from '../validate.js';
@@ -1005,6 +1007,179 @@ export default function meRoutes(db) {
        LIMIT ?`,
       [c.id, limit]);
     res.json({ recent: rows });
+  });
+
+  // ---------------- the plate logger ----------------
+  //
+  // Logging a meal used to be one food at a time: search, pick, choose a
+  // portion, log, reopen the sheet, repeat -- and every entry landed in
+  // "snack". These four routes are the whole of the faster path:
+  //
+  //   describe   "2 roti, dal and a cup of chai" -> a plate of priced items
+  //   item       one food as a plate item (a swap, or a search pick)
+  //   log-batch  the plate, logged as ONE meal in its slot, atomically
+  //   usuals     what this person actually eats at this time of day
+  //   recent-meals / repeat   "same breakfast as yesterday", one tap
+  //
+  // Nothing here is a second nutrition engine: describe is estimateFood,
+  // and the rows written are the same meal_logs rows every other path writes.
+
+  /** The four meals the day is shown in. Older slot names fold in. */
+  const mealGroup = (slot) => {
+    const s = String(slot || '').toLowerCase();
+    if (s.startsWith('breakfast')) return 'breakfast';
+    if (s.startsWith('lunch')) return 'lunch';
+    if (s.startsWith('dinner') || s === 'before_bed') return 'dinner';
+    return 'snack';
+  };
+
+  const plateLimit = rateLimit({ windowMs: 60_000, max: 40, keyFn: (req) => req.user?.sub || 'anon' });
+
+  r.post('/nutrition/describe', plateLimit, validate(schemas.plateDescribe), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
+    res.json(describeMeal(req.body.text));
+  });
+
+  r.post('/nutrition/item', plateLimit, validate(schemas.plateItem), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
+    const item = plateItemFor(req.body.source_id, { stapleKey: req.body.staple_key || null });
+    if (!item) return res.status(404).json({ error: 'No matching food' });
+    res.json({ item });
+  });
+
+  const ESTIMATED = new Set(['ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']);
+  r.post('/nutrition/log-batch', plateLimit, validate(schemas.mealLogBatch), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = req.tz || 'Asia/Kolkata';
+    const today = await logToday(c.id, tz);
+    const date = req.body.date || today;
+    // A past day can be filled in; a future one cannot be "eaten".
+    if (date > today) return res.status(400).json({ error: 'Cannot log food for a future day' });
+    const slot = req.body.slot;
+    const r1v = (n) => Math.round(Number(n) * 10) / 10;
+    const ids = [];
+    // All or nothing: half a meal in the log is worse than none, because
+    // the person sees "logged" and stops checking.
+    await db.tx(async (tx) => {
+      for (const it of req.body.items) {
+        const lId = id('mlg');
+        ids.push(lId);
+        await tx.run(
+          `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat,
+                                  eaten, source, estimate, ai_confidence, quantity, unit)
+           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?)`,
+          [lId, c.id, date, slot, it.name, Math.round(it.calories), r1v(it.protein), r1v(it.carbs), r1v(it.fat),
+           // ai_confidence is AI/kNN provenance; a measured match leaves it empty.
+           it.source, ESTIMATED.has(it.source) ? 1 : 0, ESTIMATED.has(it.source) ? (it.confidence ?? null) : null,
+           r1v(it.quantity), it.unit]);
+      }
+    });
+    track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'plate', items: ids.length, slot: mealGroup(slot) });
+    await trackOnce(db, { type: 'first_meal_logged', orgId: c.org_id, userId: c.user_id, data: { client_id: c.id, source: 'plate' } });
+    recalculateForEditedDate(db, c, date).catch(() => {});
+    res.status(201).json({ ids, date, slot });
+  });
+
+  // Logs the logger can learn from: the person's own, eaten, one food each.
+  // Plan rows (pre-scheduled) and whole saved meals are not "a food".
+  const ownFoodLogs = (clientId, since) => db.q(
+    `SELECT name, slot, quantity, unit, calories, protein, carbs, fat, date, source
+       FROM meal_logs
+      WHERE client_id = ? AND eaten = 1 AND source != 'plan' AND meal_template_id IS NULL AND date >= ?
+      ORDER BY date DESC
+      LIMIT 800`, [clientId, since]);
+
+  /**
+   * What this person eats at this meal. Ranked by how often it was eaten IN
+   * this slot (a breakfast regular is not a dinner suggestion), then overall,
+   * with the most recent amount -- "2 roti", not "a roti". The amount is the
+   * person's own last log, so a usual is logged exactly as it was before.
+   */
+  r.get('/nutrition/usuals', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = req.tz || 'Asia/Kolkata';
+    const today = await logToday(c.id, tz);
+    const slot = mealGroup(req.query.slot || 'snack');
+    const since = shiftDayKey(today, -90);
+    const rows = await ownFoodLogs(c.id, since);
+    const byName = new Map();
+    for (const row of rows) {
+      const k = String(row.name).trim().toLowerCase();
+      let e = byName.get(k);
+      if (!e) {
+        e = { name: row.name, quantity: row.quantity, unit: row.unit, calories: row.calories,
+              protein: row.protein, carbs: row.carbs, fat: row.fat, last_date: row.date,
+              source: row.source, times: 0, in_slot: 0 };
+        byName.set(k, e);
+      }
+      e.times += 1;
+      if (mealGroup(row.slot) === slot) e.in_slot += 1;
+    }
+    const usuals = [...byName.values()]
+      .filter((e) => e.calories >= 0)
+      // Eaten at this meal before beats eaten more often overall: five
+      // dinners of dal do not make dal a breakfast suggestion.
+      .map((e) => ({ ...e, score: (e.in_slot > 0 ? 1000 : 0) + e.in_slot * 10 + e.times + (e.last_date === today ? 0.5 : 0) }))
+      .sort((a, b) => b.score - a.score || (a.last_date < b.last_date ? 1 : -1))
+      .slice(0, 10)
+      .map(({ score, ...e }) => e);
+    res.json({ slot, usuals });
+  });
+
+  /** Past meals worth repeating: each (day, meal) of the last week, newest first. */
+  r.get('/nutrition/recent-meals', async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = req.tz || 'Asia/Kolkata';
+    const today = await logToday(c.id, tz);
+    const since = shiftDayKey(today, -8);
+    const rows = (await ownFoodLogs(c.id, since)).filter((row) => row.date < today);
+    const groups = new Map();
+    for (const row of rows) {
+      const k = `${row.date}|${mealGroup(row.slot)}`;
+      if (!groups.has(k)) groups.set(k, { date: row.date, slot: mealGroup(row.slot), items: [], total: { calories: 0, protein: 0, carbs: 0, fat: 0 } });
+      const g = groups.get(k);
+      g.items.push({ name: row.name, quantity: row.quantity, unit: row.unit, calories: row.calories });
+      g.total.calories += row.calories; g.total.protein += row.protein;
+      g.total.carbs += row.carbs; g.total.fat += row.fat;
+    }
+    const meals = [...groups.values()]
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      .slice(0, 12)
+      .map((g) => ({ ...g, total: { calories: Math.round(g.total.calories), protein: r1(g.total.protein), carbs: r1(g.total.carbs), fat: r1(g.total.fat) } }));
+    res.json({ today, meals });
+  });
+
+  /** Log a past meal again, today: every food in it, as it was logged. */
+  r.post('/nutrition/repeat', plateLimit, validate(schemas.mealRepeat), async (req, res) => {
+    const c = await getClient(req, res); if (!c) return;
+    const tz = req.tz || 'Asia/Kolkata';
+    const today = await logToday(c.id, tz);
+    const group = mealGroup(req.body.slot);
+    const rows = (await db.q(
+      `SELECT * FROM meal_logs
+        WHERE client_id = ? AND date = ? AND eaten = 1 AND source != 'plan' AND meal_template_id IS NULL`,
+      [c.id, req.body.date])).filter((row) => mealGroup(row.slot) === group);
+    if (!rows.length) return res.status(404).json({ error: 'Nothing was logged for that meal' });
+    const slot = req.body.to_slot || req.body.slot;
+    const ids = [];
+    await db.tx(async (tx) => {
+      for (const row of rows) {
+        const lId = id('mlg');
+        ids.push(lId);
+        await tx.run(
+          `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat,
+                                  eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit, unit_type)
+           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)`,
+          [lId, c.id, today, slot, row.name, row.calories, row.protein, row.carbs, row.fat,
+           row.source, row.estimate ? 1 : 0, row.ai_provider ?? null, row.ai_model ?? null,
+           row.ai_confidence ?? null, row.quantity ?? null, row.unit ?? null, row.unit_type ?? null]);
+      }
+    });
+    track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'repeat', items: ids.length });
+    recalculateForEditedDate(db, c, today).catch(() => {});
+    res.status(201).json({ ids, date: today, slot });
   });
 
   // NOTE: a second, simpler `GET /foods/search` used to be registered here,

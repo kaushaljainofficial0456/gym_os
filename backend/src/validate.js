@@ -117,6 +117,35 @@ export const schemas = {
     quantity: z.number().finite().positive().max(100000).optional(),
     unit: z.string().max(30).optional()
   }),
+  // ---- the plate logger: describe -> adjust -> log, one meal at a time ----
+  plateDescribe: z.object({ text: z.string().trim().min(1).max(300) }),
+  plateItem: z.object({
+    source_id: z.string().min(1).max(80),
+    staple_key: z.string().max(40).optional(),
+  }),
+  // A whole plate logged as one meal. Every item carries its own quantity
+  // and unit: a row written without them cannot be edited honestly later
+  // (PUT /me/meal-logs/:id scales from that baseline).
+  mealLogBatch: z.object({
+    slot: z.string().trim().min(1).max(30),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    items: z.array(z.object({
+      name: z.string().trim().min(1).max(100),
+      calories: z.number().finite().min(0).max(10000),
+      protein: z.number().finite().min(0).max(1000),
+      carbs: z.number().finite().min(0).max(1000),
+      fat: z.number().finite().min(0).max(1000),
+      quantity: z.number().finite().positive().max(100000),
+      unit: z.string().trim().min(1).max(30),
+      source: z.enum(['manual', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']).default('manual'),
+      confidence: z.enum(['high', 'medium', 'low', 'unreliable']).optional(),
+    })).min(1).max(30),
+  }),
+  mealRepeat: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    slot: z.string().trim().min(1).max(30),
+    to_slot: z.string().trim().min(1).max(30).optional(),
+  }),
   // ---- My Diet: saved foods + saved meal templates + today's log entries ----
   // These routes previously did type coercion inline (Number()/String()
   // with manual clamping) rather than a schema. That coercion is still

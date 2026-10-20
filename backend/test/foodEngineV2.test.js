@@ -50,12 +50,16 @@ test('FLAG ON: a clean common meal is unchanged (no gratuitous downgrades / resc
 });
 
 test('FLAG ON: a quarantined drop is RESCUED as a labelled estimate, not a silent zero', () => {
-  const v1 = legacy.estimateFood('81g puri');
+  // The fixture must be a food whose ONLY match is a quarantined row. Plain
+  // "puri" used to be one; it is now a curated staple pointing at a
+  // trustworthy row (services/food/staples.js), so a regional poori that the
+  // staples do not cover stands in.
+  const v1 = legacy.estimateFood('81g bathua poori');
   assert.equal(v1.items.length, 0);
   assert.equal(v1.unresolved.length, 1);
   assert.ok(v1.unresolved[0].matched, 'V1 matched then trust-gated it');
 
-  const v2 = estimateMeal('81g puri', { engine: 'v2' });
+  const v2 = estimateMeal('81g bathua poori', { engine: 'v2' });
   assert.equal(v2.items.length, 1, 'rescued into one item');
   const it = v2.items[0];
   assert.equal(it.estimate_status, 'quarantine_rescue');
@@ -71,8 +75,8 @@ test('FLAG ON: a quarantined drop is RESCUED as a labelled estimate, not a silen
 });
 
 test('FLAG ON: parsing is preserved — the rescue re-parses the SAME fragment', () => {
-  // "81g puri": explicit 81 g must be honoured by the rescue's own grams resolution
-  const v2 = estimateMeal('81g puri', { engine: 'v2' });
+  // "81g bathua poori": explicit 81 g must be honoured by the rescue's own grams resolution
+  const v2 = estimateMeal('81g bathua poori', { engine: 'v2' });
   assert.equal(v2.items[0].grams, 81);
 });
 

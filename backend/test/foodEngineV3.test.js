@@ -102,8 +102,8 @@ test('a simple, non-composite food is never decomposed', () => {
 });
 
 test('v3 still applies Phase 2 (quarantine rescue keeps working underneath Phase 3)', () => {
-  const v2 = estimateMeal('81g puri', { engine: 'v2' });
-  const v3 = estimateMeal('81g puri', { engine: 'v3' });
+  const v2 = estimateMeal('81g bathua poori', { engine: 'v2' });
+  const v3 = estimateMeal('81g bathua poori', { engine: 'v3' });
   assert.equal(v3.items[0].estimate_status, 'quarantine_rescue');
   assert.equal(v3.items[0].calories, v2.items[0].calories, 'v3 must not alter a Phase-2 rescue it does not touch');
 });

@@ -48,6 +48,10 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import { round1 } from '../utils/time.js';
+import {
+  ALL_STAPLES, matchStaples, stapleRow, stapleByKey, stapleUnit,
+  stapleUnitByPortionKey, unitGroup, leadingUnit,
+} from './food/staples.js';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -141,12 +145,129 @@ export function getFoodSearch() {
       // Aliases are an enhancement (regional dish names), not a
       // requirement. Search still works without them.
     }
-    _search = new FoodSearch(db, aliases);
+    _search = withStaples(new FoodSearch(db, aliases));
   } catch (err) {
     _loadError = err;
     _search = null;
   }
   return _search;
+}
+
+/**
+ * The index, with the hand-verified staples (services/food/staples.js)
+ * consulted FIRST.
+ *
+ * Search, the meal parser and the resolve route all reach foods through
+ * `search.search()`, so this one wrapper is the whole integration: a staple
+ * is shaped like an index row and every downstream step -- scaling, the
+ * parser's grams, the picker's portions -- handles it without a second
+ * path. Everything the staples do not cover falls through to the index
+ * exactly as before, which keeps the calibrated ranker and the food
+ * benchmark untouched.
+ *
+ * `staplePrefix: false` turns off type-ahead prefix matching; the meal
+ * parser passes it, because it hands over a complete food name and a
+ * prefix guess there ("cha" -> chai) would be inventing what was eaten.
+ */
+function withStaples(inner) {
+  const rowsById = new Map(inner.foods.map((f) => [f.source_id, f]));
+  const byKey = new Map();          // staple key -> its row
+  const bySourceId = new Map();     // row source_id -> staple key
+  for (const st of ALL_STAPLES) {
+    const row = stapleRow(st, rowsById);
+    if (!row) continue;
+    byKey.set(st.key, row);
+    bySourceId.set(row.source_id, st.key);
+  }
+  // The index row a staple points at must keep its staple UNITS whichever way
+  // it is reached -- by the everyday word ("roti") or by its own name
+  // ("Chapati/Roti", which is what the resolve route searches with). Without
+  // this a portion chosen as "1 roti" could not be resolved for the same food.
+  // Only the units travel: the index's own confidence and match kind stay,
+  // because reaching "Rice, cooked, NFS" from "jollof rice" is a weak match
+  // and must still say so.
+  const decorate = (f) => {
+    const key = bySourceId.get(f.source_id);
+    return key ? { ...f, staple_key: key, staple_name: byKey.get(key).staple_name } : f;
+  };
+  const RANK = { high: 0, medium: 1, low: 2, unreliable: 3 };
+  const lower = (a, b) => ((RANK[a] ?? 3) >= (RANK[b] ?? 3) ? a : b);
+
+  const wrapped = Object.create(inner);
+  wrapped.search = function search(query, opts = {}) {
+    const limit = opts.limit ?? 8;
+    // A staple's own id asked for directly (the resolve route may pass one).
+    const direct = bySourceId.has(String(query)) ? byKey.get(bySourceId.get(String(query))) : null;
+    const hits = matchStaples(query, { limit: 3, allowPrefix: opts.staplePrefix !== false });
+    const stapleIds = new Set(hits.map((h) => byKey.get(h.staple.key)?.source_id).filter(Boolean));
+    // The index's own answer for the same query, when there is room for it.
+    // Where it reached the SAME row the staple points at, its match kind is
+    // kept: "roti" is still an alias_exact hit on "Chapati/Roti", the staple
+    // merely agrees. `staple_match` records that a staple chose the row.
+    const indexHits = (direct ? 1 : 0) + hits.length >= limit ? [] : inner.search(query, opts);
+    const indexKind = new Map(indexHits.filter((f) => stapleIds.has(f.source_id)).map((f) => [f.source_id, f.match_kind]));
+    const staples = [
+      ...(direct ? [{ ...direct, _score: 20000, _matchKind: 'staple_id', match_kind: 'staple_id', staple_match: 'id' }] : []),
+      ...hits.filter((h) => byKey.has(h.staple.key)).map((h) => {
+        const row = byKey.get(h.staple.key);
+        return {
+          ...row,
+          // Above every index score: a staple is always the default answer
+          // when it matches, and never "ambiguous" with an index row.
+          _score: 10000 + h.score,
+          _matchKind: indexKind.get(row.source_id) || `staple_${h.kind}`,
+          match_kind: indexKind.get(row.source_id) || `staple_${h.kind}`,
+          staple_match: h.kind,
+          // An umbrella word ("sabzi", "biryani") or a partial match is the
+          // right staple at medium certainty: a variant is just as likely.
+          confidence: h.vague ? lower(row.confidence, 'medium') : row.confidence,
+        };
+      }),
+    ];
+    const seen = new Set(staples.map((r) => r.source_id));
+    if (staples.length >= limit) return staples.slice(0, limit);
+    const rest = indexHits.filter((f) => !seen.has(f.source_id)).map(decorate);
+    return [...staples, ...rest].slice(0, limit);
+  };
+  /** A staple's row by key (for its curated alternatives). */
+  wrapped.stapleRowByKey = (key) => byKey.get(key) || null;
+  // Lookups by id (the V2/V3 engines, the eval adapter) must find an inline
+  // staple ("staple:chai") as well as the index's own rows.
+  const ids = new Map(inner.bySourceId);
+  for (const row of byKey.values()) if (!ids.has(row.source_id)) ids.set(row.source_id, row);
+  wrapped.bySourceId = ids;
+  return wrapped;
+}
+
+/** True when this row was chosen BY a staple match (not merely decorated). */
+const isStapleHit = (food) => food?.staple_match != null;
+
+/**
+ * The staple's curated "did you mean" list, in the same shape as
+ * ambiguousAlternatives and under the same rule: offered only when the
+ * alternative would change the answer by AMBIGUITY_KCAL_SPREAD or more.
+ * "200ml milk" offers buffalo and full-cream milk; "200g paneer" offers
+ * nothing, because nothing else is what "paneer" means.
+ */
+function stapleAlternatives(food, search) {
+  const st = stapleByKey(food.staple_key);
+  const topKcal = Number(food.energy_kcal);
+  if (!st || !st.alts || !(topKcal > 0) || !search.stapleRowByKey) return [];
+  return st.alts
+    .map((k) => search.stapleRowByKey(k))
+    .filter((r) => r && r.source_id !== food.source_id)
+    .filter((r) => Math.abs(Number(r.energy_kcal) - topKcal) / topKcal >= AMBIGUITY_KCAL_SPREAD)
+    .slice(0, 3)
+    .map((r) => ({
+      source_id: r.source_id,
+      name: r.staple_name || r.food_name,
+      brand: r.brand || null,
+      energy_kcal_per_100g: r.energy_kcal ?? null,
+      protein_g_per_100g: r.protein_g ?? null,
+      source: r.source,
+      confidence: r.confidence,
+      staple_key: r.staple_key,
+    }));
 }
 
 export function getBarcodeIndex() {
@@ -292,7 +413,8 @@ function splitWithConjunction(fragment, search) {
   // recognised.
   const wholePhrase = `${before} with ${after}`;
   const whole = search.search(wholePhrase, { limit: 1 })[0];
-  if (whole && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact')) return null;
+  if (whole && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact'
+                || whole.staple_match === 'exact')) return null;
 
   // Each half must parse to a named food AND that name must retrieve
   // something. Anything less and the split would trade one honest answer for
@@ -343,6 +465,11 @@ function parseQuantity(tokens) {
  * "rajma chawal"    -> { qty: null, unit: null, name: 'rajma chawal' }
  */
 export function parseFragment(fragment) {
+  // A pack size in brackets -- "1 packet potato chips (52g)" -- is the
+  // label's weight for ONE of what was counted. Read before punctuation is
+  // stripped below; the bare "52g" is then dropped from the name as usual.
+  const pack = String(fragment || '').match(/\(\s*(\d+(?:\.\d+)?)\s*(?:g|gm|gms|gram|grams|ml)\s*\)/i);
+  const packGrams = pack ? Number(pack[1]) : null;
   const cleaned = String(fragment || '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s./½¼¾⅓⅔-]/gu, ' ')
@@ -375,6 +502,14 @@ export function parseFragment(fragment) {
 
   const { qty, rest } = parseQuantity(tokens);
   tokens = rest;
+  // "half a cup of almonds", "quarter of a plate": filler between the amount
+  // and its unit. Left in place, the unit check below saw "a" and the cup
+  // was lost.
+  if (qty != null) {
+    while (tokens.length > 2 && (tokens[0] === 'a' || tokens[0] === 'an' || tokens[0] === 'of')) {
+      tokens = tokens.slice(1);
+    }
+  }
 
   let unit = null;
   if (tokens.length) {
@@ -448,7 +583,7 @@ export function parseFragment(fragment) {
   // A fragment that names no food even after that ("2 bowls" alone) is
   // genuinely ambiguous. Report it rather than guessing.
   if (!name) return { qty, unit, name: null, raw: fragment };
-  return { qty, unit, name, raw: fragment };
+  return packGrams ? { qty, unit, name, raw: fragment, packGrams } : { qty, unit, name, raw: fragment };
 }
 
 /* ------------------------------------------------------------------ */
@@ -464,15 +599,80 @@ const DEFAULT_SERVING_G = 100;
  *   3. the food's own measured serving weight, x quantity
  *   4. 100 g, flagged as an assumption
  */
-function resolveGrams(parsed, food) {
+/**
+ * Grams for `n` of a staple unit. Catalogue units (katori, bowl, roti,
+ * idli...) go through portionToGrams, so a katori here is the same katori
+ * as everywhere else and a dish's own measured INDB serving still wins
+ * where the catalogue lets it; fixed units (a 150 ml tea cup, a 32 g
+ * scoop) are what the staple says.
+ */
+function stapleUnitGrams(food, unit, n = 1) {
+  return stapleUnitPortion(food, unit, n)?.grams ?? null;
+}
+
+/** { grams, basis } for `n` of a staple unit -- the catalogue's own basis
+ *  (count / volume / measured_serving) for catalogue units, so a katori of
+ *  dal is described exactly as it is everywhere else; 'staple_unit' for the
+ *  fixed weights the staples module sets. */
+function stapleUnitPortion(food, unit, n = 1) {
+  if (!unit) return null;
+  if (unit.g) return { grams: round1(n * unit.g), basis: 'staple_unit' };
+  const p = portionToGrams(unit.key, n, {
+    foodName: food.food_name, cookingState: food.cooking_state, foodServingGrams: food.serving_grams,
+  });
+  return p && p.grams > 0 ? { grams: p.grams, basis: p.basis } : null;
+}
+
+/** toGrams knows one spelling of some units ("tablespoon", not
+ *  "tablespoons"), and "4 tablespoons rice" fell through to an assumed
+ *  400 g. Try the singular forms too. */
+function massVolumeGrams(qty, unit, foodName) {
+  for (const u of new Set([unit, unit.replace(/es$/i, ''), unit.replace(/s$/i, '')])) {
+    const { grams } = toGrams(qty, u, foodName);
+    if (grams > 0) return grams;
+  }
+  return null;
+}
+
+const isStaple = (food) => food && food.staple_key != null;
+
+function resolveGrams(parsedIn, food) {
+  // "half a cup of almonds": filler between the amount and the unit left the
+  // unit at the front of the name. The name still matches (staples strip it),
+  // but the amount is half a CUP -- not half an almond (0.6 g).
+  const lead = !parsedIn.unit && parsedIn.name ? leadingUnit(parsedIn.name) : null;
+  const parsed = lead ? { ...parsedIn, unit: lead } : parsedIn;
   const qty = parsed.qty == null ? 1 : parsed.qty;
+
+  // A pack weight typed with the food -- "1 packet potato chips (52g)" -- is
+  // a measurement of that pack, from its label. It beats every estimate.
+  if (parsed.packGrams > 0 && !(parsed.unit && MASS_VOLUME.test(parsed.unit))) {
+    return { grams: round1(parsed.packGrams * qty), basis: 'measured', assumed: false,
+             description: `${qty} x ${parsed.packGrams} g pack` };
+  }
+
+  // A hand-verified staple knows its own units ("2 roti" = 80 g, "a cup
+  // of chai" = 150 ml, "10 almonds" = 12 g). Checked BEFORE the mass/volume
+  // path because "cup", "tbsp" and "tsp" are volume words too: that path
+  // read "a cup of chai" as a 240 ml US cup (247 g) when an Indian tea cup
+  // is 150 ml. Real mass and volume units (g, ml, kg) are not staple units,
+  // so they still fall through to measurement below.
+  if (isStaple(food)) {
+    const st = stapleByKey(food.staple_key);
+    const unit = st && stapleUnit(st, parsed.unit, { hadQuantity: parsed.qty != null });
+    const p = unit && stapleUnitPortion(food, unit, qty);
+    if (p) {
+      return { grams: p.grams, basis: p.basis, assumed: !parsed.unit && parsed.qty == null,
+               description: `${qty} x ${unit.label}`, unit_key: unit.key };
+    }
+  }
 
   if (parsed.unit && MASS_VOLUME.test(parsed.unit)) {
     // toGrams returns { grams, method, note } -- NOT a number. Treating the
     // returned object as one meant `g > 0` was always false, so every
     // explicit mass silently fell through to the 100 g assumption and got
     // multiplied by the amount: "150g paneer" logged 15,000 g / 45,810 kcal.
-    const { grams } = toGrams(qty, parsed.unit, food.food_name);
+    const grams = massVolumeGrams(qty, parsed.unit, food.food_name);
     if (grams > 0) {
       return { grams: round1(grams), basis: 'measured', assumed: false,
                description: `${qty} ${parsed.unit}` };
@@ -654,13 +854,13 @@ export function estimateFood(text) {
        several equally good answers. This costs nothing: FoodSearch already
        scores all 21,353 rows on every query and `limit` only slices the
        result, so nothing extra is computed and no second search runs. */
-    const hits = search.search(parsed.name, { limit: 4 });
+    const hits = search.search(parsed.name, { limit: 4, staplePrefix: false });
     if (!hits.length) {
       unresolved.push({ fragment, reason: `no match for "${parsed.name}"` });
       continue;
     }
     const food = hits[0];
-    const alternatives = ambiguousAlternatives(hits);
+    const alternatives = isStapleHit(food) ? stapleAlternatives(food, search) : ambiguousAlternatives(hits);
 
     // A row flagged unreliable must not contribute a NUMBER to a total the
     // user will trust -- see CONTRACT §5. It is reported, not silently
@@ -685,8 +885,13 @@ export function estimateFood(text) {
     if (RANK[food.confidence] > RANK[worst]) worst = food.confidence;
 
     items.push({
-      // Legacy fields the current client renders.
-      name: food.food_name,
+      // Legacy fields the current client renders. A staple shows the name
+      // the person used ("Milk (toned)"), not its measured row's database
+      // title ("Milk, whole"), which would read as a different milk.
+      name: isStapleHit(food) ? food.staple_name : food.food_name,
+      source_name: food.food_name,
+      staple_key: food.staple_key ?? null,
+      unit_key: q.unit_key ?? null,
       unit: q.description,
       qty: parsed.qty == null ? 1 : parsed.qty,
       calories: Math.round(t.energy_kcal ?? 0),
@@ -842,8 +1047,20 @@ export function searchFoods(query, { limit = 8, withPortions = true } = {}) {
 /** listPortions can throw on odd names; a missing portion list must not
  *  take down the search request. */
 function safePortions(food) {
+  if (isStaple(food)) {
+    const st = stapleByKey(food.staple_key);
+    if (st) {
+      return st.units
+        .map((u, i) => ({
+          key: `staple_${u.key}`, unit_key: u.key, label: u.label, group: unitGroup(u),
+          basis: u.g ? 'staple' : 'catalogue', grams: stapleUnitGrams(food, u, 1),
+          default: i === 0, recommended: true,
+        }))
+        .filter((p) => Number(p.grams) > 0);
+    }
+  }
   try {
-    return listPortions(food.food_name, food.cooking_state)
+    return rankPortions(food, listPortions(food.food_name, food.cooking_state)
       .map((p) => ({
         ...p,
         // Prefer the food's OWN measured serving weight when it has one.
@@ -853,10 +1070,63 @@ function safePortions(food) {
       // rendered as "Piece · 0g" / "Slice · 0g" -- a chip that logs
       // nothing, offered next to real ones, which is worse than absent:
       // a per-piece weight only exists for foods that come in pieces.
-      .filter((p) => Number(p.grams) > 0);
+      .filter((p) => Number(p.grams) > 0));
   } catch {
     return [];
   }
+}
+
+/* What a food is, for choosing which units make sense. Order matters:
+   the first match wins, so drinks are tested before dishes ("lassi"). */
+const PORTION_KINDS = [
+  ['beverage', /(tea|chai|coffee|milk|juice|lassi|shake|smoothie|soda|cola|drink|buttermilk|chaas|sharbat|beer|wine|water|latte)/i],
+  ['fat', /(ghee|butter|oil|jam|honey|sugar|syrup|sauce|ketchup|mayonnaise|mayo|chutney|pickle|achar|spread|dressing|cream)/i],
+  ['powder', /(flour|atta|maida|besan|powder|masala|salt|spice|seeds?)/i],
+  ['nut', /(nuts?|almonds?|peanuts?|cashews?|walnuts?|pistachios?|raisins?|chips|namkeen|bhujia|mixture|trail)/i],
+  ['grain', /(rice|biryani|biriyani|pulao|pulav|khichdi|poha|upma|noodles|pasta|maggi|oats|porridge|cereal|muesli)/i],
+  ['dish', /(curry|gravy|dal|daal|sambar|rasam|soup|stew|kadhi|korma|makhani|masala|rajma|chole|sabzi|sabji|bhaji|kheer|halwa|raita|paneer)/i],
+];
+
+// Units that make sense for each kind, best first. Count units for the food
+// itself ("Egg", "Roti / chapati") always lead, whatever the kind.
+const PORTION_PREFS = {
+  beverage: ['tea_cup', 'glass', 'cup', 'mug', 'small_glass'],
+  fat: ['teaspoon', 'tablespoon'],
+  powder: ['teaspoon', 'tablespoon', 'cup'],
+  nut: ['handful', 'tablespoon', 'katori'],
+  grain: ['katori', 'half_plate', 'plate', 'bowl'],
+  dish: ['katori', 'bowl', 'ladle', 'serving_spoon'],
+  solid: ['piece', 'slice', 'katori', 'handful', 'half_plate'],
+};
+
+/**
+ * Put the units that make sense for THIS food first, and flag them.
+ *
+ * listPortions offers all 22 containers for every food -- an egg could be
+ * logged by the "Tall glass", and the one unit anyone uses for it ("Egg,
+ * 50 g") came 23rd of 23. Nothing is removed (the picker can still offer
+ * every unit, and the resolve route still accepts any of them); the order
+ * changes and the relevant ones carry `recommended`, the first `default`.
+ */
+function rankPortions(food, portions) {
+  const name = `${food.food_name || ''} ${food.category || ''}`;
+  const kind = (PORTION_KINDS.find(([, re]) => re.test(name)) || ['solid'])[0];
+  const prefs = PORTION_PREFS[kind];
+  const ownCount = portions.filter((p) => p.group === 'count' && p.key !== 'piece' && p.key !== 'slice');
+  const ranked = [];
+  const seen = new Set();
+  const push = (p, recommended) => {
+    if (!p || seen.has(p.key)) return;
+    seen.add(p.key);
+    ranked.push({ ...p, recommended });
+  };
+  ownCount.forEach((p) => push(p, true));
+  prefs.forEach((k) => push(portions.find((p) => p.key === k), true));
+  portions.forEach((p) => {
+    // A pinch is for spices; anything else gets it last and unflagged.
+    push(p, false);
+  });
+  return ranked.map((p, i) => ({ ...p, default: i === 0 }));
 }
 
 /**
@@ -881,10 +1151,21 @@ export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLev
   let basis = null;
   let label = null;
 
+  const staple = isStaple(food) ? stapleByKey(food.staple_key) : null;
+  const stapleUnitFor = staple && (portionKey
+    ? (stapleUnitByPortionKey(staple, portionKey) || stapleUnit(staple, portionKey))
+    : stapleUnit(staple, null, { hadQuantity: false }));
+
   if (Number(grams) > 0) {
     g = Number(grams);
     basis = 'grams';
     label = `${g} g`;
+  } else if (stapleUnitFor && stapleUnitGrams(food, stapleUnitFor, n)) {
+    // A staple's own unit ("staple_cup", "roti") or, with no portion at
+    // all, its default unit -- 1 cup of chai, not 100 g of it.
+    g = stapleUnitGrams(food, stapleUnitFor, n);
+    basis = 'staple_unit';
+    label = `${n} ${stapleUnitFor.label}`;
   } else if (portionKey) {
     const p = portionToGrams(portionKey, n, {
       foodName: food.food_name,
@@ -1080,4 +1361,161 @@ export function estimateFoodKnn(query, { grams = 100 } = {}) {
     },
     disclaimer: 'No exact or ingredient-based match was found. This is an estimate based on similar measured foods, not a direct measurement.',
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  The plate — what the logger shows before anything is logged        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * A plate item is one food on its way to the log, shaped so the UI can
+ * re-price it INSTANTLY as the person changes "2 roti" to "3 roti" or
+ * "katori" to "bowl", without a round trip per tap:
+ *
+ *   per100   the measured row's own per-100 g values (never re-derived)
+ *   units    natural units with the grams ONE of them weighs, for THIS
+ *            food -- a katori of dal is 150 g, a katori of poha is not
+ *   qty, unit_key, grams   what was understood
+ *
+ * Grams per unit come from the server (portion -> grams depends on the
+ * food's density and measured serving; see /foods/resolve). Scaling by
+ * grams is plain proportion, which is all the client does with them.
+ */
+const G_UNIT = { key: 'g', label: 'g', grams: 1 };
+
+function plateUnits(row) {
+  const seen = new Set();
+  const out = [];
+  for (const p of safePortions(row)) {
+    if (!(Number(p.grams) > 0) || seen.has(p.key)) continue;
+    seen.add(p.key);
+    out.push({ key: p.key, label: p.label, grams: round1(p.grams) });
+    if (out.length >= 6) break;
+  }
+  return [...out, G_UNIT];
+}
+
+const per100Of = (row) => ({
+  calories: row.energy_kcal ?? 0,
+  protein: row.protein_g ?? 0,
+  carbs: row.carb_g ?? 0,
+  fat: row.fat_g ?? 0,
+  fiber: row.fiber_g ?? null,
+});
+
+/** The row a plate item prices against: the staple-decorated row when a
+ *  staple chose it (its units are the staple's), else the index row. */
+function plateRow(search, sourceId, stapleKey) {
+  if (stapleKey && search.stapleRowByKey) {
+    const r = search.stapleRowByKey(stapleKey);
+    if (r && r.source_id === sourceId) return r;
+  }
+  const raw = search.bySourceId.get(sourceId);
+  if (!raw) return null;
+  // A staple's measured row reached by its own name keeps the staple units.
+  const st = ALL_STAPLES.find((s) => s.ref === sourceId);
+  return st ? { ...raw, staple_key: st.key, staple_name: st.name } : raw;
+}
+
+/** One unit the item was understood in, from estimateFood's description. */
+function understoodUnit(it, units) {
+  const qty = Number(it.qty) > 0 ? Number(it.qty) : 1;
+  const grams = Number(it.grams) || 0;
+  if (it.unit_key) {
+    const u = units.find((x) => x.key === `staple_${it.unit_key}`);
+    if (u) return { unit: u, qty, units };
+  }
+  const text = String(it.unit || '').replace(/^[\d./]+\s*(x\s*)?/i, '').trim();
+  if (/^(g|gm|gms|gram|grams|kg)$/i.test(text) || !grams) {
+    return { unit: G_UNIT, qty: grams || 100, units };
+  }
+  // A catalogue portion that weighs exactly what was understood.
+  const match = units.find((u) => u.key !== 'g' && Math.abs(u.grams * qty - grams) <= Math.max(1, grams * 0.01));
+  if (match) return { unit: match, qty, units };
+  // Otherwise keep the words the person used ("200 ml", "4 tablespoons").
+  // Three decimals: 200 ml of milk is 1.03 g per ml, and rounding that to
+  // 1 g would quietly drop 3% when the amount is changed.
+  const typed = { key: 'typed', label: text.replace(/\(assumed\)/, '').trim() || 'serving', grams: Math.round((grams / qty) * 1000) / 1000 };
+  return { unit: typed, qty, units: [typed, ...units] };
+}
+
+function toPlateItem(it, row) {
+  const base = plateUnits(row);
+  const { unit, qty, units } = understoodUnit(it, base);
+  return {
+    name: it.name,
+    source_name: it.source_name ?? row.food_name,
+    source_id: it.source_id,
+    staple_key: it.staple_key ?? row.staple_key ?? null,
+    source: it.source ?? row.source,
+    confidence: it.confidence ?? null,
+    trustworthy: it.trustworthy !== false,
+    ambiguous: !!it.ambiguous,
+    alternatives: it.alternatives || [],
+    matched_from: it.matched_from ?? null,
+    grams_basis: it.grams_basis ?? null,
+    assumed: !!it.grams_assumed,
+    per100: per100Of(row),
+    units,
+    unit_key: unit.key,
+    qty,
+    grams: it.grams,
+    calories: it.calories,
+    protein: it.protein,
+    carbs: it.carbs,
+    fat: it.fat,
+  };
+}
+
+/**
+ * "2 roti, 1 katori dal and a cup of chai" -> plate items. The meal parser
+ * (estimateFood) does the understanding; this only reshapes each item so
+ * it can be adjusted before it is logged. Unresolved fragments pass through
+ * untouched -- the UI must show them, never drop them.
+ */
+export function describeMeal(text) {
+  const est = estimateFood(text);
+  const search = getFoodSearch();
+  if (!search) return { ...est, items: [] };
+  const items = est.items.map((it) => {
+    const row = plateRow(search, it.source_id, it.staple_key);
+    return row ? toPlateItem(it, row) : null;
+  }).filter(Boolean);
+  return { ...est, items };
+}
+
+/**
+ * A plate item for one known food (a swap to an alternative, or a pick from
+ * search), at its natural default unit -- "Buffalo milk" arrives as one
+ * glass, not 100 g.
+ */
+export function plateItemFor(sourceId, { stapleKey = null } = {}) {
+  const search = getFoodSearch();
+  if (!search) return null;
+  const row = plateRow(search, sourceId, stapleKey) || null;
+  if (!row || row.data_quality_flag) return null;
+  const units = plateUnits(row);
+  const unit = units[0];
+  const qty = unit.key === 'g' ? 100 : 1;
+  const grams = round1(unit.grams * qty);
+  const s = scaleNutrition(row, grams);
+  const t = s?.totals || {};
+  return toPlateItem({
+    name: row.staple_name || row.food_name,
+    source_name: row.food_name,
+    source_id: row.source_id,
+    staple_key: row.staple_key ?? null,
+    source: row.source,
+    confidence: row.confidence ?? 'high',
+    trustworthy: true,
+    alternatives: row.staple_key ? stapleAlternatives(row, search) : [],
+    qty,
+    unit: `${qty} x ${unit.label}`,
+    unit_key: unit.key.startsWith('staple_') ? unit.key.slice(7) : null,
+    grams,
+    calories: Math.round(t.energy_kcal ?? 0),
+    protein: t.protein_g,
+    carbs: t.carb_g,
+    fat: t.fat_g,
+  }, row);
 }

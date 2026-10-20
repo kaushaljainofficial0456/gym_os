@@ -1,10 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useTheme } from '../../themeContext.jsx';
 import { api } from '../../api.js';
 import { useCountUp, useFetch } from '../../utils.js';
-import { Spinner, ErrorState, Ring, Bar, CheckIcon, XIcon, PageSkeleton, useConfirm, useDialog } from '../../components/UI.jsx';
-import Icon from '../../components/Icon.jsx';
+import { ErrorState, CheckIcon, XIcon, PageSkeleton, useConfirm, useDialog } from '../../components/UI.jsx';
 import NutritionTargetSetup from '../../components/NutritionTargetSetup.jsx';
 import FoodLogSheet from '../../components/FoodLogSheet.jsx';
 import MyDietCard from '../../components/nutrition/MyDietCard.jsx';
@@ -13,7 +13,15 @@ import NetEnergyCard from '../../components/nutrition/NetEnergyCard.jsx';
 import ShareMealsSheet from '../../components/nutrition/ShareMealsSheet.jsx';
 import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.jsx';
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
-import SavingOverlay from '../../components/nutrition/SavingOverlay.jsx';
+import FuelRings from '../../components/nutrition/FuelRings.jsx';
+import QuickComposer from '../../components/nutrition/logger/QuickComposer.jsx';
+import MealSlots from '../../components/nutrition/logger/MealSlots.jsx';
+import { slotForTime, slotLabel, mealGroup } from '../../components/nutrition/logger/plate.js';
+import { motion, AnimatePresence } from '../../design/motion/index.jsx';
+
+// The logger is the heaviest thing on this page and nobody needs it until
+// they tap: its own chunk, fetched on first open.
+const PlateSheet = lazy(() => import('../../components/nutrition/logger/PlateSheet.jsx'));
 
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -81,64 +89,6 @@ const T = {
     timelineActive: 'rgb(var(--accent-rgb) / .25)',
   },
 };
-
-/* ════════════════════════════════════════════════════════════════
-   ANIMATED RING — premium calorie visualization
-   ════════════════════════════════════════════════════════════════ */
-
-function CalorieRing({ value, max, t }) {
-  const size = 200;
-  const stroke = 14;
-  const r = (size - stroke) / 2;
-  const C = 2 * Math.PI * r;
-  const frac = max > 0 ? Math.min(value / max, 1.5) : 0;
-  const overTarget = value > max && max > 0;
-  const animValue = useCountUp(Math.round(value), 1200);
-  const animMax = useCountUp(Math.round(max || 0), 1200);
-  const uid = useMemo(() => 'cr_' + Math.random().toString(36).slice(2, 8), []);
-
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: `radial-gradient(circle at 50% 50%, ${overTarget ? 'rgb(var(--bad-rgb) / .08)' : t.accentDim}, transparent 65%)`,
-      }} />
-      <svg width={size} height={size} className="-rotate-90 relative z-10">
-        <defs>
-          <linearGradient id={`${uid}_grad`} x1="0" y1="0" x2="1" y2="1">
-            {/* Over-target is a WARNING, so it reads from the semantic
-                token rather than three hardcoded oranges that no theme
-                could reach. */}
-            <stop offset="0%" stopColor={overTarget ? 'var(--bad)' : t.accent} />
-            <stop offset="50%" stopColor={overTarget ? 'rgb(var(--bad-rgb) / .85)' : t.accent} />
-            <stop offset="100%" stopColor={overTarget ? 'rgb(var(--bad-rgb) / .7)' : t.accent} />
-          </linearGradient>
-          <filter id={`${uid}_glow`}>
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={t.ringTrack} strokeWidth={stroke} />
-        <circle
-          cx={size/2} cy={size/2} r={r} fill="none"
-          stroke={`url(#${uid}_grad)`} strokeWidth={stroke} strokeLinecap="round"
-          strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(frac, 1))}
-          filter={`url(#${uid}_glow)`}
-          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(.22,.8,.3,1)' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-        <div className="font-black leading-none" style={{ fontSize: 38, color: t.ink, letterSpacing: '-0.02em' }}>{animValue.toLocaleString()}</div>
-        <div className="font-grotesk text-[11px] mt-1" style={{ color: t.mute, letterSpacing: '0.06em' }}>kcal</div>
-        <div className="mt-1.5 px-3 py-0.5 rounded-full font-grotesk text-[10px] font-semibold" style={{
-          background: overTarget ? 'rgba(255,107,107,0.12)' : t.accentDim,
-          color: overTarget ? t.danger : t.accent,
-        }}>
-          {max > 0 ? `${animMax.toLocaleString()} target` : 'No target'}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ════════════════════════════════════════════════════════════════
    MACRO BAR
@@ -308,113 +258,6 @@ function HydrationCard({ waterState, target, onAdd, t }) {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   TODAY'S EATEN MEALS — the actual log, separate from My Diet's
-   reusable Saved Foods/Meals library. Edit mode reveals [-] remove +
-   [Edit Quantity] per row; removals/edits persist immediately (per-
-   action, same as before) -- "Save Changes" is the confirming exit
-   flourish the spec asks for, not a second write.
-   ════════════════════════════════════════════════════════════════ */
-
-function TodaysEatenList({ meals, editing, onToggle, onEditQty, onDelete, t }) {
-  if (!meals || meals.length === 0) {
-    return (
-      <div className="text-center py-10 px-6">
-        <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center mb-3" style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.mute }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 2v7a3 3 0 0 0 3 3v10M6 2v7M9 2v7M18 2c-1.7 0-3 2.2-3 5s1.3 4 3 4v11"/></svg></div>
-        <div className="font-grotesk text-sm font-semibold" style={{ color: t.ink }}>No foods logged today</div>
-        <div className="text-xs mt-1 max-w-xs mx-auto" style={{ color: t.mute }}>Your nutrition day is waiting to be filled.</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2.5">
-      {meals.map((m) => {
-        // Was `!m.meal_id && m.id && !m.id.startsWith('plan_')` -- checked
-        // for a `meal_id` FIELD that plan meals never carry in the first
-        // place (they're a spread of the `meals` table row, which has no
-        // meal_id column -- that's a meal_logs column) and for an id
-        // prefix ('plan_') this codebase never actually generates (plan
-        // meals use 'mea_', custom logs use 'mlg_' -- see ids.js). Net
-        // effect: isCustomLog was true for EVERY row, plan meals included.
-        // Found live: "Edit Quantity" on a genuine plan meal (Masala Egg
-        // Omelette) sent PUT /me/meal-logs/mea_xxx -- a meals-table id
-        // against an endpoint that only ever looks in meal_logs -- a
-        // guaranteed 404, and the same was true of Remove/DELETE, which
-        // had no isCustomLog gate at all. Checking the actual id prefix is
-        // the reliable signal both PUT/DELETE /me/meal-logs/:logId (which
-        // only ever match meal_logs rows) require.
-        const isCustomLog = !!m.id && m.id.startsWith('mlg_');
-        return (
-          <div key={m.id} className="flex gap-3 items-start group transition-all">
-            {editing ? (
-              isCustomLog ? (
-                <button
-                  onClick={() => onDelete(m)}
-                  aria-label={`Remove ${m.name}`}
-                  className="mt-3 w-6 h-6 rounded-md grid place-items-center shrink-0 text-sm font-bold transition-transform active:scale-90"
-                  style={{ background: `${t.danger}12`, color: t.danger, border: `1px solid ${t.danger}30` }}
-                >−</button>
-              ) : (
-                // Plan meals aren't removable here (they're the trainer's
-                // prescribed plan, not something this control deletes) --
-                // an empty same-size placeholder keeps row alignment
-                // instead of a button whose only possible outcome is a 404.
-                <div className="mt-3 w-6 h-6 shrink-0" aria-hidden="true" />
-              )
-            ) : (
-              <button
-                type="button" role="checkbox" aria-checked={!!m.eaten}
-                aria-label={m.eaten ? `Mark ${m.name} as not eaten` : `Mark ${m.name} as eaten`}
-                onClick={(e) => { e.stopPropagation(); onToggle(m); }}
-                className="mt-3 w-5 h-5 rounded-md border-2 shrink-0 grid place-items-center transition-all duration-200 cursor-pointer"
-                style={{ borderColor: m.eaten ? t.accent : t.border, background: m.eaten ? t.accent : 'transparent' }}
-              >
-                {m.eaten && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-              </button>
-            )}
-
-            {/* min-w-0: a flex item will not shrink below its content by default,
-                so a long meal name pushed this card -- and the page -- past a
-                320px screen. The name wraps instead. */}
-            <div className="flex-1 min-w-0 rounded-xl p-3.5 transition-all duration-200" style={{
-              background: m.eaten ? t.accentDim : t.surface,
-              border: `1px solid ${m.eaten ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}`,
-            }}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-0.5">
-                    <span className="font-grotesk text-sm font-bold break-words min-w-0" style={{ color: t.ink }}>{m.name}</span>
-                    {m.time && <span className="font-grotesk text-[10px] px-1.5 py-px rounded-md" style={{ background: t.glass, color: t.mute }}>{m.time}</span>}
-                  </div>
-                  <div className="font-grotesk text-[10px]" style={{ color: t.mute }}>{m.slot}{m.quantity ? ` · ${m.quantity}${m.unit || 'g'}` : ''}</div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="font-grotesk text-sm font-bold shrink-0" style={{ color: m.eaten ? t.accent : t.mute }}>
-                    {m.calories}<span className="text-[10px] font-normal" style={{ color: t.faint }}> kcal</span>
-                  </div>
-                  {editing && isCustomLog && (
-                    <button onClick={() => onEditQty(m)} className="px-2 py-1 rounded-lg font-grotesk text-[9px] font-bold shrink-0" style={{ background: t.glass, color: t.mute, border: `1px solid ${t.border}` }}>
-                      Edit Quantity
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 mt-1.5">
-                <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.protein }}>P {m.protein}g</span>
-                <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.carbs }}>C {m.carbs}g</span>
-                <span className="font-grotesk text-[10px] font-semibold" style={{ color: t.fat }}>F {m.fat}g</span>
-                {m.eaten && !editing && <span className="ml-auto font-grotesk text-[9px] font-semibold px-2 py-0.5 rounded-full" style={{ background: t.accentDim, color: t.accent }}>Logged</span>}
-              </div>
-              {m.foods && <div className="text-[10px] mt-1 truncate" style={{ color: t.faint }}>{m.foods}</div>}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -594,7 +437,6 @@ export default function Nutrition() {
   const [editLogOpen, setEditLogOpen] = useState(false);
   const [editLog, setEditLog] = useState(null);
   const [supplementsExpanded, setSupplementsExpanded] = useState(false);
-  const [mealsExpanded, setMealsExpanded] = useState(false);
   const [showAddSupplement, setShowAddSupplement] = useState(false);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
   const [foodLogAutoScan, setFoodLogAutoScan] = useState(false);
@@ -607,12 +449,13 @@ export default function Nutrition() {
   // because the prop it requires was never being passed at all.
   const [foodLogMode, setFoodLogMode] = useState('search');
 
-  // Today's Eaten Meals edit mode -- [-]/[Edit Quantity] per row, "Save
-  // Changes" is a confirming exit flourish (each action already persisted
-  // immediately, same as before this redesign).
-  const [todaysEditing, setTodaysEditing] = useState(false);
-  const [savingTodaysEdit, setSavingTodaysEdit] = useState(false);
-  const [todaysSaveStage, setTodaysSaveStage] = useState(null);
+  // The plate logger, and which meal it is logging to. The meal defaults to
+  // the clock ("breakfast" at 8am); "+" on a meal sets it explicitly.
+  const [plate, setPlate] = useState({ open: false, slot: slotForTime(), text: '', seed: null });
+  const [nowSlot, setNowSlot] = useState(slotForTime);
+  const [logTick, setLogTick] = useState(0);
+  // A toast that can take back what just happened (log, remove).
+  const [undo, setUndo] = useState(null);
 
   // Food & Meal Tools sheets
   const [shareOpen, setShareOpen] = useState(false);
@@ -645,6 +488,9 @@ export default function Nutrition() {
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2400); return () => clearTimeout(h); }, [toast]);
+  useEffect(() => { if (!undo) return; const h = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(h); }, [undo]);
+  // The meal the composer offers follows the clock across a long-open tab.
+  useEffect(() => { const h = setInterval(() => setNowSlot(slotForTime()), 5 * 60 * 1000); return () => clearInterval(h); }, []);
 
   if (home.loading) return <PageSkeleton variant="dashboard" label="Loading your fuel plan" />;
   if (home.error) return <ErrorState error={home.error} onRetry={home.reload} />;
@@ -676,24 +522,48 @@ export default function Nutrition() {
   /* Asks through the app's own confirmation (useConfirm). The question
      used to be a hand-rolled overlay: no dialog role or name, focus left
      on the page behind it, no Escape and no scroll lock. */
+  // Removing is immediate, with Undo -- not a dialog in front of every
+  // slip of the thumb. Undo writes the same row back (same meal, amount and
+  // numbers), which is all a meal_logs row is.
   const deleteLogEntry = async (log) => {
-    if (!(await confirm({
-      title: "Remove from today's intake?",
-      body: `${log.name} · ${log.quantity || 100}${log.unit || 'g'} · ${log.calories} kcal`,
-      confirmLabel: 'Remove',
-    }))) return;
     try {
       await api(`/me/meal-logs/${log.id}`, { method: 'DELETE' });
-      setToast('Entry removed ✓');
       home.reload({ silent: true });
+      setUndo({
+        label: `Removed ${log.name}`,
+        run: async () => {
+          await api(`/nutrition/clients/${clientId}/meals/log`, {
+            method: 'POST',
+            body: JSON.stringify({
+              name: log.name, slot: log.slot || 'snack',
+              calories: Math.round(Number(log.calories) || 0),
+              protein: Number(log.protein) || 0, carbs: Number(log.carbs) || 0, fat: Number(log.fat) || 0,
+              eaten: true,
+              source: ['manual', 'ai', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated'].includes(log.source) ? log.source : 'manual',
+              ...(log.quantity != null ? { quantity: Number(log.quantity) } : {}),
+              ...(log.unit ? { unit: String(log.unit).slice(0, 30) } : {}),
+            }),
+          });
+          home.reload({ silent: true });
+        },
+      });
     } catch (e) { setToast(e.message); }
   };
 
-  const finishTodaysEdit = async () => {
-    setSavingTodaysEdit(true); setTodaysSaveStage('saving');
-    await new Promise((res) => setTimeout(res, 300));
-    setTodaysSaveStage('success');
-    setTimeout(() => { setSavingTodaysEdit(false); setTodaysSaveStage(null); setTodaysEditing(false); }, 700);
+  const openPlate = ({ slot, text = '', seed = null } = {}) => {
+    setPlate({ open: true, slot: slot || nowSlot, text, seed });
+  };
+
+  const onPlateLogged = ({ ids, slot, count, calories }) => {
+    home.reload({ silent: true });
+    setLogTick((n) => n + 1);
+    setUndo({
+      label: `${count} ${count === 1 ? 'item' : 'items'} · ${calories} kcal → ${slotLabel(slot)}`,
+      run: async () => {
+        await Promise.all(ids.map((id) => api(`/me/meal-logs/${id}`, { method: 'DELETE' })));
+        home.reload({ silent: true });
+      },
+    });
   };
 
   const addWater = async (litres = 0.25) => {
@@ -731,7 +601,7 @@ export default function Nutrition() {
     await api(`/nutrition/clients/${clientId}/meals/log`, {
       method: 'POST',
       body: JSON.stringify({
-        name: entry.name, slot: 'Snack',
+        name: entry.name, slot: plate.slot || mealGroup(nowSlot),
         calories: Math.round(Number(entry.calories) || 0),
         protein: r1v(entry.protein), carbs: r1v(entry.carbs), fat: r1v(entry.fat),
         source, eaten: true,
@@ -807,7 +677,7 @@ export default function Nutrition() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: t.heroGlow }} />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="shrink-0"><CalorieRing value={eaten.calories} max={effectivePlan?.calories || 0} t={t} /></div>
+            <FuelRings eaten={eaten} target={effectivePlan} size={216} />
             <div className="flex-1 w-full space-y-4">
               <MacroBar label="Protein" value={eaten.protein} max={effectivePlan?.protein || 0} color={t.protein} t={t} />
               <MacroBar label="Carbs" value={eaten.carbs} max={effectivePlan?.carbs || 0} color={t.carbs} t={t} />
@@ -821,32 +691,19 @@ export default function Nutrition() {
       <NutritionInsight plan={effectivePlan} eaten={eaten} t={t} />
 
       {/* ══════ LOG FOOD ══════
-          THE ONLY REASON MOST PEOPLE OPEN THIS PAGE, so it is the first
-          thing under the day's numbers and nothing competes with it.
-          It used to be the fifth card down, behind an activity readout, a
-          quick-add rail, the net-energy card and the balance card -- four
-          things to scroll past before reaching the one you came to do.
-          The card chrome and the "Food & Meal Tools" heading are gone
-          too: a titled container around a single button is a label for
-          something that needs no label. The two settings beneath it are
-          deliberately plain text, because they are not peers of this. */}
-      <button
-        onClick={() => setFoodLogSheetOpen(true)}
-        data-tour="nutrition-tools"
-        className="w-full flex items-center gap-3 rounded-2xl px-4 py-4 transition-all active:scale-[.98]"
-        style={{ background: t.accent, border: `1px solid ${t.accent}`, minHeight: 64, boxShadow: t.cardShadow }}
-      >
-        <span className="shrink-0" style={{ color: 'var(--accent-contrast)' }}><Icon name="plate" size={22} /></span>
-        <span className="min-w-0 text-left">
-          <span className="block font-grotesk text-[15px] font-bold leading-tight" style={{ color: 'var(--accent-contrast)' }}>
-            Log food
-          </span>
-          <span className="block font-grotesk text-[10.5px] leading-tight mt-0.5"
-                style={{ color: 'var(--accent-contrast)', opacity: .78 }}>
-            Search, scan a barcode, or just describe it
-          </span>
-        </span>
-      </button>
+          The one thing most people open this page to do, directly under
+          the day's numbers: say or type the meal, or tap a usual. */}
+      <QuickComposer slot={nowSlot} refreshKey={logTick} onOpen={(o) => openPlate(o)} />
+
+      {/* ══════ TODAY, BY MEAL ══════ */}
+      <MealSlots
+        meals={mealState}
+        currentSlot={nowSlot}
+        onAdd={(slot) => openPlate({ slot })}
+        onToggle={toggleMeal}
+        onEdit={(m) => { setEditLog(m); setEditLogOpen(true); }}
+        onDelete={deleteLogEntry}
+      />
 
       <div className="flex items-center justify-center gap-5 -mt-1">
         {[
@@ -859,44 +716,6 @@ export default function Nutrition() {
             {tool.label}
           </button>
         ))}
-      </div>
-
-      {/* ══════ TODAY'S EATEN MEALS ══════ */}
-      <div data-tour="nutrition-meals" className="relative rounded-3xl p-5" style={{ background: t.surface, border: `1px solid ${t.border}`, boxShadow: t.cardShadow }}>
-        <SectionHeader
-          title="Today's Eaten Meals" kicker
-          subtitle={`${eatenTodayList.length} of ${mealState.length} logged`}
-          t={t}
-          action={
-            <button
-              onClick={() => (todaysEditing ? finishTodaysEdit() : setTodaysEditing(true))}
-              disabled={savingTodaysEdit}
-              className="px-3 py-1.5 rounded-xl font-grotesk text-[10px] font-bold transition-all active:scale-95"
-              style={{ background: todaysEditing ? t.accent : t.glass, color: todaysEditing ? 'var(--accent-contrast)' : t.mute, border: `1px solid ${todaysEditing ? t.accent : t.border}` }}
-            >
-              {todaysEditing ? 'Save Changes' : 'Edit'}
-            </button>
-          }
-        />
-        <TodaysEatenList
-          meals={mealsExpanded ? mealState : mealState.slice(0, 2)}
-          editing={todaysEditing}
-          onToggle={toggleMeal}
-          onEditQty={(m) => { setEditLog(m); setEditLogOpen(true); }}
-          onDelete={deleteLogEntry}
-          t={t}
-        />
-        {mealState.length > 2 && (
-          <button onClick={() => setMealsExpanded(!mealsExpanded)} className="w-full mt-3 py-2 text-center font-grotesk text-[11px] font-semibold rounded-xl transition-colors" style={{ color: t.accent, background: t.accentDim }}>
-            {mealsExpanded ? 'Show less' : `See more (${mealState.length - 2} more)`}
-          </button>
-        )}
-        {mealState.length === 0 && (
-          <button onClick={() => setFoodLogSheetOpen(true)} className="w-full mt-2 py-2.5 rounded-xl font-grotesk text-[12px] font-bold" style={{ background: t.accentDim, color: t.accent }}>
-            Log / Estimate Food
-          </button>
-        )}
-        <SavingOverlay open={savingTodaysEdit} stage={todaysSaveStage} label={todaysSaveStage === 'success' ? 'Changes Saved' : 'Saving changes'} mode="overlay" size="sm" />
       </div>
 
       {/* MyDietCard / Food & Meal Tools already render above, right after
@@ -1014,7 +833,33 @@ export default function Nutrition() {
       </div>
 
       {/* ══════ TOAST ══════ */}
-      {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
+      {/* Portalled to <body>: ClientLayout animates every page with a
+          transform that stays applied, and a transformed ancestor makes
+          `position: fixed` relative to IT -- these toasts measured at
+          y=1240 in an 812px viewport, below the fold, until portalled. */}
+      {createPortal((
+        <>
+          {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-lg anim-toast" style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.ink, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>{toast}</div>}
+          <AnimatePresence>
+            {undo && (
+              <motion.div
+                key={undo.label}
+                role="status" aria-live="polite"
+                initial={{ opacity: 0, y: 16, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 16, x: '-50%' }}
+                className="fixed bottom-24 left-1/2 z-50 flex items-center gap-3 pl-4 pr-1.5 py-1.5 rounded-2xl font-grotesk text-[12.5px] max-w-[calc(100vw-32px)]"
+                style={{ background: 'var(--ink)', color: 'var(--bg)', boxShadow: '0 12px 34px rgba(0,0,0,0.3)' }}
+              >
+                <span className="truncate">{undo.label}</span>
+                <button type="button" className="shrink-0 h-8 px-3 rounded-xl font-bold"
+                        style={{ background: 'color-mix(in srgb, var(--bg) 16%, transparent)', color: 'var(--bg)' }}
+                        onClick={async () => { const u = undo; setUndo(null); try { await u.run(); setToast('Undone'); } catch (e) { setToast(e.message || 'Could not undo'); } }}>
+                  Undo
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      ), document.body)}
 
       {/* ══════ NUTRITION TARGET SETUP ══════ */}
       <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }} currentPlan={plan} isEdit={!!plan} />
@@ -1022,6 +867,26 @@ export default function Nutrition() {
       {/* ══════ MODALS ══════ */}
       {confirmDialog}
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
+
+      {/* ══════ PLATE LOGGER ══════ */}
+      {plate.open && (
+        <Suspense fallback={null}>
+          <PlateSheet
+            open={plate.open}
+            initialSlot={plate.slot}
+            initialText={plate.text}
+            seed={plate.seed}
+            onClose={() => setPlate((p) => ({ ...p, open: false, text: '', seed: null }))}
+            onLogged={onPlateLogged}
+            onClassic={(mode) => {
+              setPlate((p) => ({ ...p, open: false }));
+              setFoodLogMode(mode === 'barcode' ? 'search' : mode);
+              setFoodLogAutoScan(mode === 'barcode');
+              setFoodLogSheetOpen(true);
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* ══════ FOOD LOG SHEET (search, barcode, mic, AI estimate) ══════ */}
       <FoodLogSheet
