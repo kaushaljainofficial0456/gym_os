@@ -65,7 +65,12 @@ test('REGRESSION (pani-puri portion bug): count multiplies PER-PIECE weight, not
   const v3 = estimateMeal('4 pani puri', { engine: 'v3' });
   assert.equal(v3.items.length, 1);
   const it = v3.items[0];
-  assert.equal(it.decomposition.dish_key, 'pani_puri');
+  // Either path is the right dish. V3 decomposes only when V1 has no good
+  // direct answer (Strategy C1 first, below); since the pani puri staple
+  // (services/food/staples.js), V1 answers directly, sized per piece. What
+  // this test exists for -- the per-piece portion -- is checked either way.
+  if (it.decomposition) assert.equal(it.decomposition.dish_key, 'pani_puri');
+  else assert.equal(it.name, 'Pani puri');
   // Ground truth: ~20g/piece -> 4 pieces ~= 80g, not 4 x a 120g plate (480g).
   assert.ok(it.grams >= 60 && it.grams <= 120, `4 pani puri should be ~80g, got ${it.grams}g`);
   assert.ok(it.calories >= 60 && it.calories <= 400, `${it.calories} kcal should fit a small piece-count portion`);

@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../api.js';
 import Icon from '../../Icon.jsx';
 import { motion, useReducedMotion } from '../../../design/motion/index.jsx';
-import { slotLabel, fromUsual } from './plate.js';
+import { fromUsual } from './plate.js';
 import { useSpeech } from './useSpeech.js';
 
 export default function QuickComposer({ slot, onOpen, refreshKey }) {
@@ -39,7 +39,7 @@ export default function QuickComposer({ slot, onOpen, refreshKey }) {
         <button type="button" onClick={() => onOpen({})}
                 className="flex-1 min-w-0 h-11 text-left font-grotesk text-[15px] truncate"
                 style={{ color: speech.listening ? 'var(--ink)' : 'var(--faint)' }}>
-          {speech.listening ? (speech.interim || 'Listening…') : `What did you have for ${slotLabel(slot).toLowerCase()}?`}
+          {speech.listening ? (speech.interim || 'Listening…') : 'What did you eat?'}
         </button>
         {speech.supported && (
           <motion.button type="button" onClick={speech.listening ? speech.stop : speech.start}

@@ -324,7 +324,7 @@ const COMPONENT_PARTS = new Set(['yolk', 'yolks', 'white', 'whites', 'albumen',
 
 // Deli/processed forms sold ready-sliced. "chicken breast" returned an
 // oven-roasted deli slice at 79 kcal against real breast at 168.
-const DELI_FORM_RE = /(deli|luncheon|oven.roasted|honey.roasted|cold cut|processed|reformed|water added)/i;
+const DELI_FORM_RE = /\b(deli|luncheon|oven.roasted|honey.roasted|cold cut|processed|reformed|water added)\b/i;
 
 class FoodSearch {
   /**

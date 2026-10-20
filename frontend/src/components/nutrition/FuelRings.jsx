@@ -15,6 +15,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { hasWebGL } from '../../design/three/webgl.js';
 import { AnimatedNumber } from '../../design/motion/index.jsx';
+import { fitRingNumber } from './ringLabel.js';
 
 const Scene = lazy(() => import('./FuelRingsScene.jsx'));
 
@@ -53,13 +54,20 @@ export function useRingColors(over) {
 
 const frac = (v, max) => (max > 0 ? Math.max(0, Math.min(v / max, 1)) : 0);
 
+/** Radius of the clear hole inside the innermost ring, as a share of the
+ *  dial's size -- the smaller of the flat rings and the tilted 3D ones. */
+export const HOLE = 0.235;
+
 /** The flat version: the fallback, and the whole thing without WebGL. */
 export function SvgRings({ size, progress, over }) {
+  // The macro rings sit close under the calorie ring so the hole in the
+  // middle is wide enough for the label (HOLE below): the number used to
+  // run into the fat ring.
   const rings = [
     { key: 'calories', r: 0.455, w: 0.07, color: over ? 'var(--bad)' : 'var(--ink)' },
-    { key: 'protein', r: 0.36, w: 0.045, color: 'var(--accent)', soft: true },
-    { key: 'carbs', r: 0.295, w: 0.045, color: 'var(--warn)' },
-    { key: 'fat', r: 0.23, w: 0.045, color: 'var(--good)' },
+    { key: 'protein', r: 0.385, w: 0.04, color: 'var(--accent)', soft: true },
+    { key: 'carbs', r: 0.335, w: 0.04, color: 'var(--warn)' },
+    { key: 'fat', r: 0.285, w: 0.04, color: 'var(--good)' },
   ];
   return (
     <svg width={size} height={size} viewBox="0 0 1 1" className="-rotate-90" aria-hidden="true">
@@ -91,6 +99,12 @@ export default function FuelRings({ eaten, target, size = 220 }) {
   };
   const left = Math.round((target?.calories || 0) - eaten.calories);
   const flat = <SvgRings size={size} progress={progress} over={over} />;
+  const hasTarget = target?.calories > 0;
+  const headline = hasTarget ? Math.abs(left) : Math.round(eaten.calories);
+  // Sized for the number actually shown, with the two small lines under it.
+  const numberPx = fitRingNumber(headline.toLocaleString(), {
+    holeRadius: size * HOLE, belowPx: hasTarget ? 30 : 15, max: Math.round(size * 0.125),
+  });
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size, color: 'var(--ink)' }}>
@@ -101,25 +115,16 @@ export default function FuelRings({ eaten, target, size = 220 }) {
       )}
       <div className="absolute inset-0 grid place-items-center pointer-events-none">
         <div className="text-center">
-          {target?.calories > 0 ? (
-            <>
-              <div className="font-grotesk font-black tabular-nums leading-none" style={{ fontSize: size * 0.15, color: over ? 'var(--bad)' : 'var(--ink)', letterSpacing: '-0.03em' }}>
-                <AnimatedNumber value={Math.abs(left)} />
-              </div>
-              <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-bold mt-1" style={{ color: 'var(--mute)' }}>
-                {over ? 'kcal over' : 'kcal left'}
-              </div>
-              <div className="font-grotesk text-[11px] mt-1 tabular-nums" style={{ color: 'var(--faint)' }}>
-                {Math.round(eaten.calories).toLocaleString()} / {Math.round(target.calories).toLocaleString()}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="font-grotesk font-black tabular-nums leading-none" style={{ fontSize: size * 0.15, color: 'var(--ink)' }}>
-                <AnimatedNumber value={Math.round(eaten.calories)} />
-              </div>
-              <div className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-bold mt-1" style={{ color: 'var(--mute)' }}>kcal eaten</div>
-            </>
+          <div className="font-grotesk font-black tabular-nums leading-none" style={{ fontSize: numberPx, color: over ? 'var(--bad)' : 'var(--ink)', letterSpacing: '-0.03em' }}>
+            <AnimatedNumber value={headline} />
+          </div>
+          <div className="font-grotesk text-[9.5px] uppercase tracking-[.14em] font-bold mt-1" style={{ color: 'var(--mute)' }}>
+            {!hasTarget ? 'kcal eaten' : over ? 'kcal over' : 'kcal left'}
+          </div>
+          {hasTarget && (
+            <div className="font-grotesk text-[10px] mt-0.5 tabular-nums" style={{ color: 'var(--faint)' }}>
+              {Math.round(eaten.calories).toLocaleString()} / {Math.round(target.calories).toLocaleString()}
+            </div>
           )}
         </div>
       </div>

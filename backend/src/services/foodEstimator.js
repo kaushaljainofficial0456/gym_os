@@ -510,6 +510,9 @@ export function parseFragment(fragment) {
       tokens = tokens.slice(1);
     }
   }
+  // What was said, before any word is taken as a unit -- see the
+  // whole-dish check below the unit step.
+  const spoken = tokens.filter((t) => !NOISE.has(t)).join(' ');
 
   let unit = null;
   if (tokens.length) {
@@ -573,6 +576,14 @@ export function parseFragment(fragment) {
      "two" counts rotis, not dal -- so the quantity stays with the unit-food
      and the trailing name is emitted as a companion with no quantity of its
      own, which lets it fall through to its own measured serving. */
+  /* ...UNLESS THE TWO WORDS ARE ONE DISH. "egg curry" and "vada pav" begin
+     with a countable food, so the step above read them as "egg" + "curry"
+     and "vada" + "pav" -- a boiled egg plus curry LEAVES, and a medu vada
+     plus a 580 g plate of pav bhaji. When the whole phrase is a curated
+     everyday dish, it is that dish; a leading number counts servings of it. */
+  if (name && unit && name !== unit && isCountableFood(unit) && isStapleName(spoken)) {
+    return { qty, unit: null, name: spoken, raw: fragment };
+  }
   if (name && unit && name !== unit && isCountableFood(unit)) {
     return {
       qty, unit, name: unit, raw: fragment,
@@ -803,10 +814,78 @@ function ambiguousAlternatives(hits) {
  * Kept out of splitItems itself, which is a pure string function used in
  * places where no search index exists.
  */
+/** A complete food name that is one of the curated staples, word for word. */
+function isStapleName(name) {
+  const hit = name ? matchStaples(name, { limit: 1, allowPrefix: false })[0] : null;
+  return hit?.kind === 'exact';
+}
+
+/* The second half of an Indian plate, said as one phrase: "rajma chawal",
+   "dal roti", "sambar rice", "peanut butter toast". */
+const PAIR_TAILS = {
+  chawal: 'rice', chaawal: 'rice', chawel: 'rice', rice: 'rice', bhaat: 'rice', bhat: 'rice',
+  roti: 'roti', rotis: 'roti', chapati: 'roti', chapatis: 'roti', phulka: 'roti', phulkas: 'roti',
+  toast: 'toast',
+};
+const PAIR_WORDS = {
+  rice: /\b(rice|chawal|chaawal|bhaat|bhat|annam|saadam)\b/i,
+  roti: /\b(roti|chapati|chapatti|phulka)\b/i,
+  toast: /\b(toast|bread)\b/i,
+};
+
+/**
+ * "rajma chawal" -> ["rajma", "rice"]: a curry and what it is eaten with,
+ * said as one phrase.
+ *
+ * With nothing to split on, the whole phrase went to search as one name and
+ * matched whatever shared a word with it, always silently:
+ *   "rajma chawal"  -> raw dried kidney beans, 299 kcal / 100 g
+ *   "dal chawal"    -> 33 g of rice-dal porridge, 128 kcal for a plate
+ *   "chole chawal"  -> the chole alone; the rice vanished
+ *   "kadhi chawal"  -> curd rice
+ *
+ * Split only when BOTH halves are curated staples word for word, and never
+ * when the whole phrase is itself a dish -- "curd rice", "jeera rice" and
+ * anything the index knows by exactly that name stay whole, the same guard
+ * splitWithConjunction uses.
+ *
+ * Amounts: a number with rice or toast counts servings of the plate ("2
+ * rajma chawal" is two of each); with roti it counts the rotis, the way
+ * "2 roti dal" already reads. A container ("1 plate ...") describes the
+ * whole plate, so each half takes its own natural serving instead.
+ */
+function splitPairedDish(fragment, search) {
+  const p0 = parseFragment(fragment);
+  if (!p0?.name) return null;
+  // "egg curry rice" arrives as a counted egg plus "curry rice"; the pair is
+  // read from the whole phrase, and the egg curry is then whole again.
+  const p = p0.companion
+    ? { ...p0, unit: null, name: `${p0.name} ${p0.companion.name}` }
+    : p0;
+  const words = p.name.split(' ');
+  if (words.length < 2) return null;
+  const tail = PAIR_TAILS[words.at(-1)];
+  const head = words.slice(0, -1).join(' ');
+  if (!tail || !isStapleName(head) || !isStapleName(tail)) return null;
+  if (isStapleName(p.name)) return null;
+  // The index's word for the whole phrase counts only if that row really is
+  // the pair. Its alias expansion reports "rajma chawal" as an alias_exact
+  // hit on RAW DRIED rajma, and "sambar rice" as an exact hit on plain
+  // sambar -- rows that never mention the rice at all.
+  const whole = search.search(p.name, { limit: 1, staplePrefix: false })[0];
+  if (whole && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact')
+      && PAIR_WORDS[tail].test(String(whole.food_name || ''))) return null;
+  const count = p.qty != null && (!p.unit || isCountableFood(p.unit)) ? `${p.qty} ` : '';
+  if (tail === 'roti') return [head, `${count}${tail}`];
+  return [`${count}${head}`, `${count}${tail}`];
+}
+
 export function expandFragments(text, search = getFoodSearch()) {
   const fragments = splitItems(text);
   if (!search) return fragments;
-  return fragments.flatMap((f) => splitWithConjunction(f, search) || [f]);
+  return fragments
+    .flatMap((f) => splitWithConjunction(f, search) || [f])
+    .flatMap((f) => splitPairedDish(f, search) || [f]);
 }
 
 export function estimateFood(text) {
@@ -1077,14 +1156,26 @@ function safePortions(food) {
 }
 
 /* What a food is, for choosing which units make sense. Order matters:
-   the first match wins, so drinks are tested before dishes ("lassi"). */
+   the first match wins.
+
+     powder    first, but only on words that ARE powders ("rice flour",
+               "milk powder", "garam masala") -- "masala" alone is a dish
+     beverage  before dishes ("lassi", "masala chai")
+     dish, grain   before fat: "Paneer in butter sauce" and "butter
+               chicken" are curries, not spreads to log by the teaspoon
+     fat, nut  what is left: "peanut butter", "mango pickle", "almonds"
+
+   These patterns are word-bounded (\b). They were once written with
+   literal backspace characters where the \b belonged, so none of them
+   ever matched and every food was ranked as a generic "solid" -- a glass
+   of lassi offered by the piece. */
 const PORTION_KINDS = [
-  ['beverage', /(tea|chai|coffee|milk|juice|lassi|shake|smoothie|soda|cola|drink|buttermilk|chaas|sharbat|beer|wine|water|latte)/i],
-  ['fat', /(ghee|butter|oil|jam|honey|sugar|syrup|sauce|ketchup|mayonnaise|mayo|chutney|pickle|achar|spread|dressing|cream)/i],
-  ['powder', /(flour|atta|maida|besan|powder|masala|salt|spice|seeds?)/i],
-  ['nut', /(nuts?|almonds?|peanuts?|cashews?|walnuts?|pistachios?|raisins?|chips|namkeen|bhujia|mixture|trail)/i],
-  ['grain', /(rice|biryani|biriyani|pulao|pulav|khichdi|poha|upma|noodles|pasta|maggi|oats|porridge|cereal|muesli)/i],
-  ['dish', /(curry|gravy|dal|daal|sambar|rasam|soup|stew|kadhi|korma|makhani|masala|rajma|chole|sabzi|sabji|bhaji|kheer|halwa|raita|paneer)/i],
+  ['powder', /\b(flour|atta|maida|besan|powder|garam masala|chaat masala|salt|spices?|seeds?)\b/i],
+  ['beverage', /\b(tea|chai|coffee|milk|juice|lassi|shake|smoothie|soda|cola|drink|buttermilk|chaas|sharbat|beer|wine|water|latte)\b/i],
+  ['dish', /\b(curry|gravy|dal|daal|sambar|rasam|soup|stew|kadhi|korma|makhani|masala|rajma|chole|sabzi|sabji|bhaji|kheer|halwa|raita|paneer|butter chicken|tikka|keema)\b/i],
+  ['grain', /\b(rice|biryani|biriyani|pulao|pulav|khichdi|poha|upma|noodles|pasta|maggi|oats|porridge|cereal|muesli)\b/i],
+  ['fat', /\b(ghee|butter|oil|jam|honey|sugar|syrup|sauce|ketchup|mayonnaise|mayo|chutney|pickle|achar|spread|dressing|cream)\b/i],
+  ['nut', /\b(nuts?|almonds?|peanuts?|cashews?|walnuts?|pistachios?|raisins?|chips|namkeen|bhujia|mixture|trail)\b/i],
 ];
 
 // Units that make sense for each kind, best first. Count units for the food
@@ -1439,6 +1530,68 @@ function understoodUnit(it, units) {
   return { unit: typed, qty, units: [typed, ...units] };
 }
 
+/* Foods whose fat is mostly the oil or ghee they were cooked in -- the only
+   ones where "less oil" / "more oil" means anything. Curries, dals, rice
+   dishes and the fried or griddled breads. Not drinks, nuts, spreads, or a
+   boiled egg: their fat is the food's own, and subtracting it as "oil" would
+   invent a leaner food than exists. */
+const OILY_COOKING = /(paratha|parantha|puri|poori|bhatura|bhature|dosa|uttapam|uthappam|chilla|cheela|pakora|pakoda|bhajji|bhaji|tikki|cutlet|omelette|omelet|bhurji|fry|fried|tadka|tarka)/i;
+
+function oilApplies(row) {
+  const name = `${row.food_name || ''} ${row.staple_name || ''} ${row.category || ''}`;
+  const kind = (PORTION_KINDS.find(([, re]) => re.test(name)) || ['solid'])[0];
+  if (kind === 'beverage' || kind === 'fat' || kind === 'nut' || kind === 'powder') return false;
+  const cooked = row.cooking_state === 'cooked' || row.category === 'indian_dish';
+  return cooked && (kind === 'dish' || kind === 'grain' || OILY_COOKING.test(name));
+}
+
+/**
+ * "Less oil" and "more oil" for a cooked dish, as the per-100 g values the
+ * plate re-prices from.
+ *
+ * The same model and the same baseline as resolveFoodQuantity's oil levels
+ * (adjustOil, with the dish's own fat standing in for its recipe oil), so
+ * the plate and the classic picker can never disagree about a katori of dal
+ * made with less oil. Two choices instead of five absolute levels, because
+ * "how many grams of oil per 100 g" is not a question anyone can answer at
+ * the table -- but each choice IS one of those levels, picked relative to
+ * the dish:
+ *
+ *   less   the next level clearly below this dish's own oil -- never more
+ *          than 70% of its fat removed, because some of it is always the
+ *          food's own (paneer, the dal itself)
+ *   more   the next level clearly above it
+ *
+ * So "less" always lowers and "more" always raises the dish's calories;
+ * absolute levels labelled with relative words could not promise that.
+ */
+export function plateOil(row) {
+  if (!oilApplies(row) || row.energy_kcal == null) return null;
+  const baseline = Number(row.fat_g);
+  // Under 2 g of fat per 100 g nothing was cooked in oil to speak of --
+  // plain rice, a phulka -- and "more oil" would describe a different dish.
+  if (!(baseline >= 2)) return null;
+  const levels = Object.entries(OIL_LEVELS).sort((a, b) => a[1] - b[1]);
+  const less = [...levels].reverse().find(([, g]) => g <= baseline - 1.5 && g >= baseline * 0.3);
+  const more = levels.find(([, g]) => g >= baseline + 2);
+  const at = (level) => {
+    const adj = adjustOil(row, { level, baselineOilG: baseline });
+    if (!adj || adj.adjusted === false || adj.energy_kcal_adjusted == null) return null;
+    return {
+      calories: adj.energy_kcal_adjusted,
+      protein: adj.protein_g_adjusted ?? row.protein_g ?? 0,
+      carbs: adj.carb_g_adjusted ?? row.carb_g ?? 0,
+      fat: adj.fat_g_adjusted ?? row.fat_g ?? 0,
+    };
+  };
+  const options = [];
+  for (const [key, pick] of [['less', less], ['more', more]]) {
+    const per100 = pick && at(pick[0]);
+    if (per100) options.push({ key, level: pick[0], oil_g_per_100g: pick[1], per100 });
+  }
+  return options.length ? { baseline_g_per_100g: round1(baseline), options } : null;
+}
+
 function toPlateItem(it, row) {
   const base = plateUnits(row);
   const { unit, qty, units } = understoodUnit(it, base);
@@ -1456,6 +1609,7 @@ function toPlateItem(it, row) {
     grams_basis: it.grams_basis ?? null,
     assumed: !!it.grams_assumed,
     per100: per100Of(row),
+    oil: plateOil(row),
     units,
     unit_key: unit.key,
     qty,

@@ -160,7 +160,10 @@ export function Ring({ value, max, size = 170, stroke = 12, color, label, sub })
 
 export function Bar({ value, max, color, label, right, height = 'h-2' }) {
   const frac = max > 0 ? Math.min(1, value / max) : 0;
-  const barColor = color || 'var(--accent-grad)';
+  // Not --accent-grad: that is the BUTTON fill, and in the dark theme it is
+  // a near-black grey within a shade of the --line track, so every bar
+  // without its own colour looked empty however full it was.
+  const barColor = color || 'var(--accent)';
   return (
     <div>
       {(label || right) && (

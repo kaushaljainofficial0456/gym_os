@@ -11,8 +11,9 @@
  *   2. Adjust on the plate: − / + in that unit, switch unit, swap to an
  *      alternative ("buffalo milk"), remove. Every change re-prices
  *      instantly from grams the server supplied.
- *   3. Log the plate to its meal, in one write. Undo is a toast, not a
- *      confirmation dialog in the way.
+ *   3. Log the plate in one write. Undo is a toast, not a confirmation
+ *      dialog in the way. The meal it is filed under comes from the clock;
+ *      nobody is asked to pick one.
  *
  * Typing a single food name ("paneer") searches instead of parsing, so the
  * same box is also the search box. Barcode, custom macros and photo
@@ -24,8 +25,8 @@ import { Sheet } from '../../UI.jsx';
 import Icon from '../../Icon.jsx';
 import { motion, AnimatePresence, useReducedMotion, AnimatedNumber } from '../../../design/motion/index.jsx';
 import {
-  SLOTS, slotLabel, fromPlateItem, fromSearchFood, fromUsual, priceItem, plateTotals,
-  stepQty, switchUnit, unitOf, toLogItems, looksLikeMeal, amountLabel,
+  slotLabel, fromPlateItem, fromSearchFood, fromUsual, priceItem, plateTotals,
+  stepQty, switchUnit, unitOf, toLogItems, looksLikeMeal, amountLabel, setOil, unitGramsHint,
 } from './plate.js';
 import { useSpeech } from './useSpeech.js';
 
@@ -56,10 +57,15 @@ function ConfidenceTag({ confidence }) {
   );
 }
 
-function PlateRow({ item, onChange, onRemove, onSwap, swapping, reduced }) {
+const OIL_CHOICES = [['less', 'Less oil'], [null, 'Normal'], ['more', 'More oil']];
+
+function PlateRow({ item, onChange: change, onRemove, onSwap, swapping, reduced }) {
   const p = priceItem(item);
   const unit = unitOf(item);
   const [draft, setDraft] = useState(null);
+  // Any change to the amount or unit is the person setting it: the
+  // "amount guessed" note has done its job.
+  const onChange = (next) => change({ ...next, assumed: false });
   const commitDraft = () => {
     const n = Number(String(draft).replace(',', '.'));
     if (Number.isFinite(n) && n > 0 && n < 10000) onChange({ ...item, qty: Math.round(n * 100) / 100 });
@@ -86,6 +92,13 @@ function PlateRow({ item, onChange, onRemove, onSwap, swapping, reduced }) {
           <div className="font-grotesk text-[11px] mt-0.5 tabular-nums" style={{ color: 'var(--mute)' }}>
             P {p.protein} · C {p.carbs} · F {p.fat}{p.grams != null && unit?.key !== 'g' ? ` · ${p.grams} g` : ''}
           </div>
+          {/* Portion is the biggest error in any food log, and a default
+              nobody chose is the likeliest wrong one. */}
+          {item.assumed && (
+            <div className="font-grotesk text-[11px] mt-1 font-semibold" style={{ color: 'var(--warn)' }}>
+              Amount guessed — set how much you had
+            </div>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="font-grotesk text-[16px] font-black tabular-nums leading-none" style={{ color: 'var(--ink)' }}>
@@ -124,19 +137,45 @@ function PlateRow({ item, onChange, onRemove, onSwap, swapping, reduced }) {
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar min-w-0 py-0.5" role="group" aria-label={`Unit for ${item.name}`}>
           {[unit, ...others].filter(Boolean).map((u) => {
             const on = u.key === item.unitKey;
+            // "katori · 150 g": a unit name alone does not say how big it
+            // is, and picking the wrong-sized one is a silent 60% error.
+            const hint = unitGramsHint(u);
             return (
               <button key={u.key} type="button" aria-pressed={on}
+                      aria-label={hint ? `${u.label}, ${hint} each` : u.label}
                       onClick={() => !on && onChange(switchUnit(item, u.key))}
                       className="shrink-0 px-2.5 h-8 rounded-lg font-grotesk text-[12px] font-semibold whitespace-nowrap transition-colors"
                       style={on
                         ? { background: 'var(--ink)', color: 'var(--bg)' }
                         : { background: 'transparent', color: 'var(--mute)', border: '1px solid var(--line)' }}>
                 {u.label}
+                {hint && <span className="font-normal" style={{ opacity: 0.65 }}> · {hint}</span>}
               </button>
             );
           })}
         </div>
       </div>
+
+      {/* Oil is where home-cooked food differs most from any database row,
+          so a cooked dish gets one honest choice about it. Each option is
+          priced by the server's oil model (see plateOil in the estimator). */}
+      {item.oil && (
+        <div className="mt-2 flex items-center gap-1.5" role="radiogroup" aria-label={`Oil in ${item.name}`}>
+          {OIL_CHOICES.filter(([key]) => key === null || item.oil.some((o) => o.key === key)).map(([key, label]) => {
+            const on = (item.oilKey || null) === key;
+            return (
+              <button key={label} type="button" role="radio" aria-checked={on}
+                      onClick={() => !on && change(setOil(item, key))}
+                      className="px-2.5 h-7 rounded-lg font-grotesk text-[11.5px] font-semibold whitespace-nowrap transition-colors"
+                      style={on
+                        ? { background: 'var(--accent-soft)', color: 'var(--ink)', border: '1px solid var(--ink)' }
+                        : { color: 'var(--mute)', border: '1px solid var(--line)' }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {item.alternatives?.length > 0 && (
         <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
@@ -288,7 +327,8 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
       else if (oldUnit?.grams) kept = { ...next, unitKey: 'g', qty: Math.round(oldUnit.grams * item.qty) };
       // Offer the swapped-out food back, so a wrong tap is one tap to undo.
       kept.alternatives = [{ source_id: item.sourceId, staple_key: item.stapleKey, name: item.name }, ...next.alternatives.filter((a) => a.source_id !== item.sourceId)].filter((a) => a.source_id).slice(0, 3);
-      setItems((cur) => cur.map((x) => (x.id === item.id ? { ...kept, id: item.id } : x)));
+      // The amount came across from the old item, guessed or not.
+      setItems((cur) => cur.map((x) => (x.id === item.id ? { ...kept, id: item.id, assumed: item.assumed } : x)));
     } catch (e) {
       setError(e.message || 'Could not switch food');
     } finally {
@@ -322,7 +362,7 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
     setLogging(true); setError('');
     try {
       const r = await api('/me/nutrition/log-batch', { method: 'POST', body: JSON.stringify({ slot, items: toLogItems(items) }) });
-      finish(`Logged to ${slotLabel(slot)}`, totals.calories, { ids: r.ids, slot, count: items.length, calories: totals.calories });
+      finish('Logged', totals.calories, { ids: r.ids, slot, count: items.length, calories: totals.calories });
     } catch (e) {
       setError(e.message || 'Could not log that meal');
     } finally {
@@ -334,7 +374,7 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
     setLogging(true); setError('');
     try {
       const r = await api('/me/nutrition/repeat', { method: 'POST', body: JSON.stringify({ date: m.date, slot: m.slot, to_slot: slot }) });
-      finish(`${slotLabel(slot)} repeated`, m.total.calories, { ids: r.ids, slot, count: r.ids.length, calories: m.total.calories });
+      finish('Logged again', m.total.calories, { ids: r.ids, slot, count: r.ids.length, calories: m.total.calories });
     } catch (e) {
       setError(e.message || 'Could not repeat that meal');
     } finally {
@@ -364,37 +404,21 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
           ? { background: 'var(--accent)', color: 'var(--accent-contrast)', boxShadow: '0 8px 24px rgb(var(--accent-rgb) / .28)' }
           : { background: 'var(--accent-soft)', color: 'var(--faint)' }}
       >
-        {logging ? 'Logging…' : items.length ? `Log ${items.length} to ${slotLabel(slot)}` : 'Add food to log'}
+        {logging ? 'Logging…' : items.length ? `Log ${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Add food to log'}
       </motion.button>
     </div>
   );
 
   return (
-    <Sheet open={open} onClose={onClose} title="What did you eat?" sub="Say it or type it — adjust, then log the whole meal" footer={footer} wide>
+    <Sheet open={open} onClose={onClose} title="What did you eat?" sub="Say it or type it, check the amounts, log it" footer={footer} wide>
       <div className="relative">
         <AnimatePresence>{done && <LoggedBurst label={done.label} kcal={done.kcal} reduced={reduced} />}</AnimatePresence>
         <div className="sr-only" role="status" aria-live="polite">{announce}</div>
 
-        {/* Which meal */}
-        <div className="grid grid-cols-4 gap-1 p-1 rounded-2xl" style={{ background: 'var(--accent-soft)' }} role="radiogroup" aria-label="Meal">
-          {SLOTS.map((s) => {
-            const on = s.key === slot;
-            return (
-              <button key={s.key} type="button" role="radio" aria-checked={on} onClick={() => setSlot(s.key)}
-                      className="relative h-9 rounded-xl font-grotesk text-[12.5px] font-bold"
-                      style={{ color: on ? 'var(--bg)' : 'var(--mute)' }}>
-                {on && (
-                  <motion.span layoutId={reduced ? undefined : 'plate-slot'} className="absolute inset-0 rounded-xl"
-                               style={{ background: 'var(--ink)' }} transition={{ type: 'spring', stiffness: 500, damping: 38 }} />
-                )}
-                <span className="relative">{s.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Describe / search */}
-        <form onSubmit={submitText} className="mt-3 flex items-center gap-2 rounded-2xl pl-3.5 pr-1.5 py-1.5"
+        {/* Describe / search. There is no meal picker: the meal is filed
+            from the clock (slotForTime), because "which of four boxes" is
+            a question nobody needs to answer to log a samosa. */}
+        <form onSubmit={submitText} className="flex items-center gap-2 rounded-2xl pl-3.5 pr-1.5 py-1.5"
               style={{ background: 'var(--panel)', border: `1.5px solid ${speech.listening ? 'var(--accent)' : 'var(--line)'}` }}>
           <input
             ref={inputRef}
@@ -517,7 +541,7 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
 
             {usuals.length > 0 && (
               <section>
-                <h3 className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-bold mb-2" style={{ color: 'var(--mute)' }}>Your usual {slotLabel(slot).toLowerCase()}</h3>
+                <h3 className="font-grotesk text-[10.5px] uppercase tracking-[.14em] font-bold mb-2" style={{ color: 'var(--mute)' }}>Your usuals</h3>
                 <div className="flex flex-wrap gap-2">
                   {usuals.slice(0, 8).map((u) => (
                     <button key={u.name} type="button" onClick={() => setItems((cur) => [...cur, fromUsual(u)])}

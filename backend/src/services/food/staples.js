@@ -115,7 +115,8 @@ const STAPLES = [
   }),
   S('white_bread', 'Bread (white)', 'bread', {
     ref: 'usda:174924',
-    aliases: ['bread', 'white bread', 'sandwich bread', 'bread slice', 'slice of bread'],
+    aliases: ['bread', 'white bread', 'sandwich bread', 'bread slice', 'slice of bread',
+      'bread slices', 'slices of bread', 'slice bread', 'slices bread'],
     units: [fixCount('slice', 'slice', 25)],
   }),
   S('toast', 'Toast (white bread)', 'bread', {
@@ -677,6 +678,24 @@ const STAPLES = [
     inline: [200, 5.0, 28, 7.5, 2.0], basis: 'recipe', note: 'pav + potato vada + chutney; no measured row',
     aliases: ['vada pav', 'vada pao', 'wada pav'],
     units: [fixCount('piece', 'vada pav', 150)],
+  }),
+  S('pani_puri', 'Pani puri', 'snack', {
+    // Composed from this index's own measured rows, per 25 g piece: 7 g
+    // fried puri shell (usda:2707714), 5 g boiled potato (usda:170114),
+    // 3 g boiled chickpeas (usda:173757), 2.5 g sonth chutney
+    // (indb:ASC281) in 7.5 g spiced water. 6 pieces ~250 kcal, the top of
+    // the published 150-250 range. Without it "4 pani puri" was 400 g.
+    inline: [166, 3.5, 21.7, 7.3, 2.4], basis: 'recipe',
+    note: 'composed from measured shell, filling and pani rows; no measured pani puri row exists',
+    aliases: ['pani puri', 'pani puris', 'panipuri', 'pani poori', 'golgappa', 'golgappe', 'gol gappa', 'gol gappe', 'puchka', 'phuchka'],
+    units: [fixCount('piece', 'pani puri', 25), fix('plate', 'plate (6)', 150)],
+  }),
+  S('spring_roll', 'Spring roll (veg)', 'snack', {
+    ref: 'cnf:6346',                             // INDB spring roll is quarantined (frying bath counted)
+    aliases: ['spring roll', 'spring rolls', 'veg spring roll', 'veg spring rolls', 'vegetable spring roll'],
+    // A street / restaurant spring roll, not the 78 g egg roll the row was
+    // measured as a serving of.
+    units: [fixCount('roll', 'roll', 50)],
   }),
   S('pakora', 'Pakora', 'snack', {
     inline: [282, 6.0, 25, 17.5, 3.0], basis: 'recipe', note: 'besan-battered, deep-fried; USDA "Pakora" (125 kcal) is implausible for a fritter',

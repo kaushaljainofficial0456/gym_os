@@ -15,8 +15,8 @@ import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.js
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import FuelRings from '../../components/nutrition/FuelRings.jsx';
 import QuickComposer from '../../components/nutrition/logger/QuickComposer.jsx';
-import MealSlots from '../../components/nutrition/logger/MealSlots.jsx';
-import { slotForTime, slotLabel, mealGroup } from '../../components/nutrition/logger/plate.js';
+import TodayLog from '../../components/nutrition/logger/TodayLog.jsx';
+import { slotForTime, mealGroup } from '../../components/nutrition/logger/plate.js';
 import { motion, AnimatePresence } from '../../design/motion/index.jsx';
 
 // The logger is the heaviest thing on this page and nobody needs it until
@@ -449,8 +449,8 @@ export default function Nutrition() {
   // because the prop it requires was never being passed at all.
   const [foodLogMode, setFoodLogMode] = useState('search');
 
-  // The plate logger, and which meal it is logging to. The meal defaults to
-  // the clock ("breakfast" at 8am); "+" on a meal sets it explicitly.
+  // The plate logger, and which meal its foods are filed under -- always the
+  // clock's ("breakfast" at 8am). It is never asked for: see TodayLog.jsx.
   const [plate, setPlate] = useState({ open: false, slot: slotForTime(), text: '', seed: null });
   const [nowSlot, setNowSlot] = useState(slotForTime);
   const [logTick, setLogTick] = useState(0);
@@ -554,11 +554,11 @@ export default function Nutrition() {
     setPlate({ open: true, slot: slot || nowSlot, text, seed });
   };
 
-  const onPlateLogged = ({ ids, slot, count, calories }) => {
+  const onPlateLogged = ({ ids, count, calories }) => {
     home.reload({ silent: true });
     setLogTick((n) => n + 1);
     setUndo({
-      label: `${count} ${count === 1 ? 'item' : 'items'} · ${calories} kcal → ${slotLabel(slot)}`,
+      label: `${count} ${count === 1 ? 'item' : 'items'} · ${calories} kcal logged`,
       run: async () => {
         await Promise.all(ids.map((id) => api(`/me/meal-logs/${id}`, { method: 'DELETE' })));
         home.reload({ silent: true });
@@ -695,11 +695,10 @@ export default function Nutrition() {
           the day's numbers: say or type the meal, or tap a usual. */}
       <QuickComposer slot={nowSlot} refreshKey={logTick} onOpen={(o) => openPlate(o)} />
 
-      {/* ══════ TODAY, BY MEAL ══════ */}
-      <MealSlots
+      {/* ══════ TODAY ══════ */}
+      <TodayLog
         meals={mealState}
-        currentSlot={nowSlot}
-        onAdd={(slot) => openPlate({ slot })}
+        onAdd={() => openPlate()}
         onToggle={toggleMeal}
         onEdit={(m) => { setEditLog(m); setEditLogOpen(true); }}
         onDelete={deleteLogEntry}

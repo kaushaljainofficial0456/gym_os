@@ -51,12 +51,14 @@ const FRAG = /* glsl */`
 `;
 
 // The hole inside the fat ring has to hold the centre label (kcal left,
-// eaten / target), so the rings sit wide and the inner tubes are thin.
+// eaten / target), so the macro rings sit close under the calorie ring and
+// the inner tubes are thin. Keep the hole in step with HOLE in
+// FuelRings.jsx, which sizes the label for it.
 const RINGS = [
   { key: 'calories', radius: 1.62, tube: 0.125 },
-  { key: 'protein', radius: 1.36, tube: 0.075 },
-  { key: 'carbs', radius: 1.14, tube: 0.075 },
-  { key: 'fat', radius: 0.92, tube: 0.075 },
+  { key: 'protein', radius: 1.4, tube: 0.068 },
+  { key: 'carbs', radius: 1.21, tube: 0.068 },
+  { key: 'fat', radius: 1.02, tube: 0.068 },
 ];
 
 function Ring({ radius, tube, color, trackColor, target }) {

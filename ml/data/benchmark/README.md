@@ -118,6 +118,17 @@ wide where real recipe variance is wide. There are **no point equalities anywher
 > cooked chicken breast, which USDA measures at ~31 g protein and 0 g carbs. Most of the other
 > drops are confidence-band or class-proxy changes of ≤ 0.09.
 >
+> **Re-baselined again 2026-10-20 — everyday phrases, two new staples, repaired patterns.**
+> "rajma chawal", "dal chawal", "chole chawal", "sambar rice", "peanut butter toast" now log the curry
+> AND its rice or bread (they matched raw dried rajma, 33 g of porridge, or dropped the rice); "egg
+> curry" and "vada pav" stay one dish (a boiled egg plus curry leaves; a medu vada plus 580 g of pav
+> bhaji). New staples: pani puri (composed from measured shell, filling and pani rows -- "4 pani puri"
+> was 400 g) and spring roll (CNF vegetable roll at a 50 g roll). The portion-kind patterns in
+> `foodEstimator.js` and the reference model's deli-meat rule held literal backspace bytes where `\b`
+> belonged and had never matched; both are repaired. V1 weighted overall 78.0 → 78.6 %, 4 cases
+> better (`cmp-064` vada pav, `cmp-061` pani puri, `x-cmp-014` spring roll, `cmp-008` rajma chawal),
+> none worse. V2 79.1 %, composite kcal-in-range 0.671 against V1's 0.687 (inside tolerance).
+>
 > The figures below are the original 2026-08-28 run, kept for history.
 
 Run `2026-08-28`, current production engine (`foodEstimator.js` → `skos-food-v1`, deterministic Tier 1).

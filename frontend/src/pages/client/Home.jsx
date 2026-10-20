@@ -36,6 +36,7 @@ import { useFetch } from '../../utils.js';
 import { ErrorState, Ring, Bar } from '../../components/UI.jsx';
 import GymCrowdDetail from '../../components/GymCrowdDetail.jsx';
 import { sumEatenTotals } from '../../nutritionCalc.js';
+import { fitRingNumber } from '../../components/nutrition/ringLabel.js';
 import { burnSourceLabel } from '../../healthProviderLabels.js';
 import { resolveDashboard, parseDashboardPrefs } from '../../dashboardCards.js';
 import ActivityRings from '../../components/ActivityRings.jsx';
@@ -243,7 +244,14 @@ export default function Home() {
   const overshot = span > 0 && Math.sign(c.currentWeight - c.startWeight) !== Math.sign(c.targetWeight - c.startWeight);
   const goalPct = span > 0 && !overshot ? Math.min(100, (moved / span) * 100) : 0;
   const crowd = crowdFetch.data;
-  const kcalLeft = Math.max(0, (plan?.calories || 0) - eaten.calories);
+  // Over target says so, the same way the Nutrition dial does -- a ring
+  // reading "0 left" at 340 over hid the one thing worth knowing.
+  const kcalDiff = (plan?.calories || 0) - eaten.calories;
+  const kcalOver = !!plan?.calories && kcalDiff < 0;
+  const kcalShown = Math.abs(Math.round(kcalDiff));
+  // Sized to the ring's hole (104 px ring, 8 px stroke), not a fixed 22 px
+  // that filled the ring edge to edge at four digits.
+  const kcalPx = fitRingNumber(kcalShown.toLocaleString(), { holeRadius: (104 - 2 * 8) / 2, belowPx: 15, max: 20 });
 
   /* ── WHICH CARDS, IN WHICH ORDER ───────────────────────────────────
      Read from the preference the Profile customiser writes. Until this
@@ -422,20 +430,20 @@ export default function Home() {
                 size={104}
                 stroke={8}
                 label={
-                  <span className="font-black text-[22px] tracking-[-.02em] tabular-nums"
-                        style={{ color: 'var(--ink)' }}>
-                    <AnimatedNumber value={kcalLeft} />
+                  <span className="font-black tracking-[-.02em] tabular-nums"
+                        style={{ color: kcalOver ? 'var(--bad)' : 'var(--ink)', fontSize: kcalPx }}>
+                    <AnimatedNumber value={kcalShown} />
                   </span>
                 }
                 sub={<span className="text-[9px] tracking-[.1em] uppercase"
-                           style={{ color: 'var(--faint)' }}>left</span>}
+                           style={{ color: 'var(--faint)' }}>{kcalOver ? 'kcal over' : 'kcal left'}</span>}
               />
               <div className="flex-1 space-y-3">
-                <Bar label="Protein" value={eaten.protein} max={plan.protein || 1}
+                <Bar label="Protein" value={eaten.protein} max={plan.protein || 1} color="var(--accent)"
                      right={`${eaten.protein} / ${plan.protein || 0} g`} height="h-1.5" />
-                <Bar label="Carbs" value={eaten.carbs} max={plan.carbs || 1}
+                <Bar label="Carbs" value={eaten.carbs} max={plan.carbs || 1} color="var(--warn)"
                      right={`${eaten.carbs} / ${plan.carbs || 0} g`} height="h-1.5" />
-                <Bar label="Fat" value={eaten.fat} max={plan.fat || 1}
+                <Bar label="Fat" value={eaten.fat} max={plan.fat || 1} color="var(--good)"
                      right={`${eaten.fat} / ${plan.fat || 0} g`} height="h-1.5" />
               </div>
             </div>

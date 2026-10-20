@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fromPlateItem, fromSearchFood, fromUsual, priceItem, plateTotals, stepQty, switchUnit,
-  amountLabel, toLogItems, groupDay, mealGroup, slotForTime, looksLikeMeal,
+  amountLabel, toLogItems, dayList, mealGroup, slotForTime, looksLikeMeal, setOil, unitGramsHint,
 } from '../src/components/nutrition/logger/plate.js';
 
 // Shapes as POST /me/nutrition/describe returns them.
@@ -91,15 +91,22 @@ describe('the day', () => {
       .toEqual(['breakfast', 'lunch', 'snack', 'snack', 'snack', 'dinner', 'dinner', 'snack']);
   });
 
-  it('subtotals only what was eaten', () => {
-    const day = groupDay([
-      { slot: 'breakfast', calories: 300, protein: 10, carbs: 40, fat: 8, eaten: true },
-      { slot: 'breakfast', calories: 200, protein: 5, carbs: 20, fat: 5, eaten: false },
-      { slot: 'dinner', calories: 500, protein: 30, carbs: 50, fat: 15, eaten: true },
+  it('is one list in the order the day happened, totalling only what was eaten', () => {
+    const day = dayList([
+      { id: 'd', slot: 'dinner', calories: 500, protein: 30, carbs: 50, fat: 15, eaten: true },
+      { id: 's1', slot: 'Snack', calories: 90, protein: 3, carbs: 13, fat: 3, eaten: true },
+      { id: 'b1', slot: 'breakfast', calories: 300, protein: 10, carbs: 40, fat: 8, eaten: true },
+      { id: 'b2', slot: 'breakfast', calories: 200, protein: 5, carbs: 20, fat: 5, eaten: false },
+      { id: 's2', slot: 'post_workout', calories: 120, protein: 24, carbs: 3, fat: 1, eaten: true },
     ]);
-    expect(day.map((g) => [g.key, g.items.length, g.total.calories])).toEqual([
-      ['breakfast', 2, 300], ['lunch', 0, 0], ['snack', 0, 0], ['dinner', 1, 500],
-    ]);
+    // Breakfast before snacks before dinner; arrival order kept within a meal.
+    expect(day.items.map((m) => m.id)).toEqual(['b1', 'b2', 's1', 's2', 'd']);
+    expect(day.eatenCount).toBe(4);
+    expect(day.total).toEqual({ calories: 1010, protein: 67, carbs: 106, fat: 27 });
+  });
+
+  it('an empty day is an empty list, not an error', () => {
+    expect(dayList(undefined)).toEqual({ items: [], total: { calories: 0, protein: 0, carbs: 0, fat: 0 }, eatenCount: 0 });
   });
 
   it('guesses the meal from the clock', () => {
@@ -110,5 +117,49 @@ describe('the day', () => {
   it('tells a meal description from a food name', () => {
     expect(looksLikeMeal('2 roti and dal')).toBe(true);
     expect(looksLikeMeal('paneer')).toBe(false);
+  });
+});
+
+describe('accuracy aids', () => {
+  const dal = fromPlateItem({
+    name: 'Dal', per100: { calories: 145, protein: 8.6, carbs: 19.2, fat: 4.31 },
+    oil: { options: [
+      { key: 'less', per100: { calories: 127.5, protein: 8.8, carbs: 19.7, fat: 2 } },
+      { key: 'more', per100: { calories: 185, protein: 8.2, carbs: 18.3, fat: 9.9 } },
+    ] },
+    units: [{ key: 'staple_katori', label: 'katori', grams: 150 }, { key: 'g', label: 'g', grams: 1 }],
+    unit_key: 'staple_katori', qty: 1, assumed: true,
+  });
+
+  it('prices an oil choice from the server-supplied values, at the same grams', () => {
+    expect(priceItem(dal)).toMatchObject({ grams: 150, calories: 218 });
+    expect(priceItem(setOil(dal, 'less'))).toMatchObject({ grams: 150, calories: 191, fat: 3 });
+    expect(priceItem(setOil(dal, 'more')).calories).toBe(278);
+    expect(priceItem(setOil(setOil(dal, 'more'), null)).calories).toBe(218);   // back to as measured
+  });
+
+  it('refuses an oil choice the food does not have', () => {
+    expect(setOil(roti, 'more')).toBe(roti);
+    expect(roti.oil).toBe(null);
+  });
+
+  it('says which dal it was in the logged name', () => {
+    expect(toLogItems([setOil(dal, 'less')])[0].name).toBe('Dal · less oil');
+    expect(toLogItems([dal])[0].name).toBe('Dal');
+  });
+
+  it('marks amounts nobody chose', () => {
+    expect(dal.assumed).toBe(true);
+    expect(roti.assumed).toBe(false);
+    expect(fromSearchFood({ name: 'Banana', calories: 89, portions: [] }).assumed).toBe(true);
+    expect(fromUsual({ name: 'Chai', quantity: 1, unit: 'cup', calories: 90 }).assumed).toBe(false);
+  });
+
+  it('shows what one of a unit weighs, but not for g or ml', () => {
+    expect(unitGramsHint({ key: 'staple_katori', label: 'katori', grams: 150 })).toBe('150 g');
+    expect(unitGramsHint({ key: 'g', label: 'g', grams: 1 })).toBe(null);
+    expect(unitGramsHint({ key: 'typed', label: 'ml', grams: 1.03 })).toBe(null);
+    expect(unitGramsHint({ key: 'staple_almond', label: 'almond', grams: 1.2 })).toBe('1.2 g');
+    expect(unitGramsHint({ key: 'own', label: 'cup', perUnit: {} })).toBe(null);
   });
 });
