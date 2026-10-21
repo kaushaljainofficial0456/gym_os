@@ -7,6 +7,7 @@ import { UnitsProvider } from './unitsContext.jsx';
 import { CookieConsentProvider } from './components/CookieConsent.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import App from './App.jsx';
+import IntroSplash from './components/IntroSplash.jsx';
 import './theme.css';
 
 // Apply dark class immediately to prevent flash
@@ -31,6 +32,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <ErrorBoundary title="Barbell hit an unexpected error" message="The app ran into a problem it couldn't recover from on its own. It's been reported — try reloading.">
             <App />
           </ErrorBoundary>
+          {/* The logo reveal, once per launch, over whatever loads first. */}
+          <IntroSplash />
           </CookieConsentProvider>
           </UnitsProvider>
         </ThemeProvider>

@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../themeContext.jsx';
 import { api } from '../api.js';
 import { useCountUp } from '../utils.js';
-import { CheckIcon, useDialog } from './UI.jsx';
+import { CheckIcon, Sheet } from './UI.jsx';
 // calculateCaloriesFromMacros dropped here (not merge-carried): this side
 // used it to LIVE-recompute calories from the macro inputs as the user
 // typed. manavi-progress-enhancements-v2's edit-mode rewrite below makes
@@ -56,10 +56,11 @@ function AnimatedNumber({ value, t }) {
 /**
  * @param {boolean} open - whether the modal is visible
  * @param {function} onComplete - called after successful save
+ * @param {function} [onClose] - leave without saving (the sheet's close, Escape, swipe)
  * @param {object|null} currentPlan - existing plan { calories, protein, carbs, fat, name } when editing
  * @param {boolean} isEdit - true when editing an existing plan (vs first-time setup)
  */
-export default function NutritionTargetSetup({ open, onComplete, currentPlan = null, isEdit = false }) {
+export default function NutritionTargetSetup({ open, onComplete, onClose, currentPlan = null, isEdit = false }) {
   // `resolved` (never the raw choice): 'system' is now a storable
   // value, and every comparison below is against light/dark.
   const { resolved: theme } = useTheme();
@@ -187,31 +188,42 @@ export default function NutritionTargetSetup({ open, onComplete, currentPlan = n
     setSaving(false);
   };
 
-  // It completes by saving or resetting, so Escape is not a way out (null).
-  const panelRef = useDialog(open, null);
-
-  if (!open) return null;
+  /* A sheet like every other one on the page: it slides up, and it can be
+     left -- close, Escape, a swipe down or a tap outside -- without saving.
+     It used to be a centred card with no way out except Save, rendered in
+     the page instead of over it, so it opened wherever the page's own
+     wrapper happened to be. */
+  const actions = targets && !loading && !confirmed ? (
+    <div className="space-y-2">
+      <button onClick={handleSave} disabled={saving}
+        className="w-full py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"
+        style={{
+          background: saving ? t.surface : t.accent,
+          color: saving ? t.mute : 'var(--accent-contrast)',
+          border: `1px solid ${saving ? t.border : t.accent}`,
+          opacity: saving ? 0.5 : 1,
+          cursor: saving ? 'not-allowed' : 'pointer',
+        }}>
+        {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Confirm targets'}
+      </button>
+      {isEdit && isManual && (
+        <button onClick={handleReset} disabled={saving}
+          className="w-full py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-[.97]"
+          style={{ background: 'transparent', color: t.mute, border: `1px solid ${t.border}` }}>
+          Reset to calculated
+        </button>
+      )}
+    </div>
+  ) : null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 anim-fadeIn" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(16px)' }}
-      role="dialog" aria-modal="true" aria-label={isEdit ? 'Edit daily targets' : 'Your daily targets'}>
-      <div ref={panelRef} className="w-full max-w-md rounded-3xl overflow-hidden anim-scaleIn" style={{ background: t.bg, border: `1px solid ${t.border}`, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
-
-        {/* Header */}
-        <div className="px-6 pt-6 pb-2">
-          <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold" style={{ color: t.accent }}>Nutrition Targets</div>
-          <div className="font-grotesk text-lg font-bold mt-1" style={{ color: t.ink }}>
-            {isEdit ? 'Edit Daily Targets' : 'Your Daily Targets'}
-          </div>
-          <div className="text-[11px] mt-0.5" style={{ color: t.mute }}>
-            {isEdit
-              ? 'Adjust your daily calorie and macro targets.'
-              : 'Calculated from your profile and goal. You can adjust these.'}
-          </div>
-        </div>
-
+    <Sheet open={open} onClose={saving ? undefined : onClose}
+           title={isEdit ? 'Daily target' : 'Your daily target'}
+           sub={isEdit ? undefined : 'Worked out from your profile and goal. Adjust if you like.'}
+           footer={actions}>
+      <div>
         {/* Body */}
-        <div className="px-6 py-5">
+        <div>
           {loading && (
             <div className="text-center py-10">
               <div className="w-8 h-8 mx-auto rounded-full border-2 animate-spin mb-3" style={{ borderColor: t.border, borderTopColor: t.accent }} />
@@ -253,7 +265,7 @@ export default function NutritionTargetSetup({ open, onComplete, currentPlan = n
                     <div className="flex items-center gap-1.5">
                       <input
                         type="number"
-                        className="w-16 text-right px-2 py-1.5 rounded-lg font-grotesk text-sm font-bold outline-none"
+                        className={`${m.unit === 'kcal' ? 'w-20' : 'w-16'} text-right px-2 py-1.5 rounded-lg font-grotesk text-sm font-bold outline-none`}
                         style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}
                         value={m.value}
                         onChange={(e) => m.set(Math.max(m.min || 15, Number(e.target.value) || 0))}
@@ -276,41 +288,11 @@ export default function NutritionTargetSetup({ open, onComplete, currentPlan = n
             <div className="text-center py-8">
               <div className="w-14 h-14 mx-auto rounded-full grid place-items-center text-2xl mb-3" style={{ background: t.accentDim, border: `1px solid ${t.accent}40` }}><CheckIcon /></div>
               <div className="font-grotesk font-bold" style={{ color: t.accent }}>Targets saved!</div>
-              <div className="text-[11px] mt-1" style={{ color: t.mute }}>Redirecting to your nutrition dashboard…</div>
             </div>
           )}
         </div>
 
-        {/* Actions */}
-        {targets && !loading && !confirmed && (
-          <div className="px-6 pb-6 space-y-2">
-            <button onClick={handleSave} disabled={saving}
-              className="w-full py-3 rounded-xl font-grotesk text-sm font-bold transition-all active:scale-[.97]"
-              style={{
-                background: saving ? t.surface : t.accent,
-                color: saving ? t.mute : 'var(--accent-contrast)',
-                border: `1px solid ${saving ? t.border : t.accent}`,
-                opacity: saving ? 0.5 : 1,
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}>
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Confirm Targets'}
-            </button>
-
-            {/* Reset to calculated — only shown in edit mode when plan is manual */}
-            {isEdit && isManual && (
-              <button onClick={handleReset} disabled={saving}
-                className="w-full py-2.5 rounded-xl font-grotesk text-xs font-semibold transition-all active:scale-[.97]"
-                style={{
-                  background: 'transparent',
-                  color: t.mute,
-                  border: `1px solid ${t.border}`,
-                }}>
-                Reset to calculated
-              </button>
-            )}
-          </div>
-        )}
       </div>
-    </div>
+    </Sheet>
   );
 }

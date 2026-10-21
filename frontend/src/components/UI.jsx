@@ -447,48 +447,65 @@ export function Sheet({
 }) {
   /* useDialog also locks page scroll: on iOS a touch that starts on the
      backdrop otherwise drags the page, which is the other half of "I'm
-     scrolling over a blurred screen". */
+     scrolling over a blurred screen". It is bound to `open`, not to what is
+     on screen, so the lock and the focus are released the moment the sheet
+     is closed, while its exit animation is still playing. */
   const panelRef = useDialog(open, onClose);
+  const { mounted, closing } = useExitPresence(open);
+  const drag = useDragToDismiss(panelRef, onClose);
+  // Reopened while still sliding away (or after a drag): start clean.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (open && panel) { panel.style.transform = ''; panel.style.transition = ''; delete panel.dataset.dragged; }
+  }, [open, panelRef]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return createPortal((
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
+      className={cls('fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sm:p-4 sheet-scrim', closing && 'is-closing')}
       style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { e.stopPropagation(); if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
+      onClick={(e) => { e.stopPropagation(); if (!closing && dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
       role="dialog"
-      aria-modal="true"
+      aria-modal={closing ? undefined : 'true'}
+      aria-hidden={closing ? 'true' : undefined}
       aria-label={labelledBy ? undefined : title}
       aria-labelledby={labelledBy}
     >
       <div
         ref={panelRef}
         className={cls(
-          'card w-full flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn outline-none',
-          'max-h-[88vh] sm:max-h-[90vh]',
+          'card w-full flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl outline-none sheet-panel',
+          closing && 'is-closing',
+          'max-h-[92vh] sm:max-h-[90vh]',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sheet-handle sm:hidden" />
-        {(title || sub) && (
-          <div className="shrink-0 px-4 pt-3 pb-3 flex items-start justify-between gap-3"
-               style={{ borderBottom: '1px solid var(--line)' }}>
-            <div className="min-w-0">
-              {title && <div className="font-grotesk font-bold text-[15px] truncate" style={{ color: 'var(--ink)' }}>{title}</div>}
-              {sub && <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{sub}</div>}
+        {/* The handle and the title bar are the grip: drag down to close,
+            the way every phone sheet works. */}
+        <div {...drag} className="shrink-0 touch-none select-none">
+          <div className="sheet-handle sm:hidden" />
+          {(title || sub || onClose) && (
+            <div className="px-4 pt-3 pb-3 flex items-start justify-between gap-3"
+                 style={{ borderBottom: '1px solid var(--line)' }}>
+              <div className="min-w-0">
+                {title && <div className="font-grotesk font-bold text-[15px] truncate" style={{ color: 'var(--ink)' }}>{title}</div>}
+                {sub && <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>{sub}</div>}
+              </div>
+              {onClose && (
+                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={onClose} aria-label={closeLabel}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
-            <button className="chrome-btn btn-icon justify-center shrink-0" onClick={onClose} aria-label={closeLabel}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* The only scrolling region. */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
 
         {/* Pinned, so the action is reachable at any content length. */}
         {footer && (
@@ -499,6 +516,78 @@ export function Sheet({
       </div>
     </div>
   ), document.body);
+}
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Keeps a closed sheet on screen for its exit animation, then removes it.
+ *
+ * A sheet that vanishes the instant it is closed reads as a page glitch;
+ * one that slides away reads as the app. `closing` is the window in which
+ * it is still drawn but no longer open -- not interactive, not announced,
+ * not holding focus or the scroll lock.
+ */
+export function useExitPresence(open, ms = 230) {
+  const [shown, setShown] = useState(open);
+  useEffect(() => {
+    if (open) { setShown(true); return undefined; }
+    if (!shown) return undefined;
+    if (prefersReducedMotion()) { setShown(false); return undefined; }
+    const h = setTimeout(() => setShown(false), ms);
+    return () => clearTimeout(h);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { mounted: open || shown, closing: !open && shown };
+}
+
+/**
+ * Drag a sheet down by its grip to close it.
+ *
+ * Follows the finger, and on release either closes (pulled far enough, or
+ * flicked) or springs back. Presses that start on a control in the grip
+ * (the close button) are left alone, so tapping it still just closes.
+ */
+export function useDragToDismiss(panelRef, onClose) {
+  const drag = useRef(null);
+  const onPointerDown = (e) => {
+    if (!onClose || e.button > 0 || e.target.closest?.('button, a, input, textarea, select')) return;
+    drag.current = { y: e.clientY, t: performance.now(), dy: 0 };
+    const move = (ev) => {
+      const d = drag.current;
+      const panel = panelRef.current;
+      if (!d || !panel) return;
+      d.dy = Math.max(0, ev.clientY - d.y);
+      if (d.dy > 2) {
+        panel.dataset.dragged = 'true';
+        panel.style.transition = 'none';
+        panel.style.transform = `translateY(${d.dy}px)`;
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      const d = drag.current;
+      drag.current = null;
+      const panel = panelRef.current;
+      if (!d || !panel || d.dy <= 2) return;
+      const speed = d.dy / Math.max(1, performance.now() - d.t);
+      if (d.dy > 120 || speed > 0.65) {
+        panel.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
+        panel.style.transform = 'translateY(110%)';
+        onClose();
+      } else {
+        panel.style.transition = 'transform .28s cubic-bezier(.22,.9,.3,1)';
+        panel.style.transform = '';
+        setTimeout(() => { if (panel) delete panel.dataset.dragged; }, 300);
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+  return { onPointerDown };
 }
 
 /** Icon, title, one sentence, one action (Part 20) — never bare space. */

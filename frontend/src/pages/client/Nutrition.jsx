@@ -258,6 +258,10 @@ export default function Nutrition() {
   const [supForm, setSupForm] = useState({ name: '', dose: '' });
   const [savingSup, setSavingSup] = useState(false);
   const [targetSetupOpen, setTargetSetupOpen] = useState(false);
+  // Closed without saving: not offered again until the next visit.
+  const [targetDismissed, setTargetDismissed] = useState(false);
+  // The logger stays mounted after its first open, so it can slide away.
+  const [plateMounted, setPlateMounted] = useState(false);
   const [editLogOpen, setEditLogOpen] = useState(false);
   const [editLog, setEditLog] = useState(null);
   const [foodLogSheetOpen, setFoodLogSheetOpen] = useState(false);
@@ -313,7 +317,7 @@ export default function Nutrition() {
   const balance = useFetch(() => api('/me/nutrition/balance'), []);
   const activePlan = balance.data?.activePlan;
 
-  useEffect(() => { if (data && !plan && !targetSetupOpen) setTargetSetupOpen(true); }, [data, plan]);
+  useEffect(() => { if (data && !plan && !targetSetupOpen && !targetDismissed) setTargetSetupOpen(true); }, [data, plan]); // eslint-disable-line react-hooks/exhaustive-deps
   const mealState = meals || data?.nutrition?.meals || [];
   const waterState = water ?? (data ? data.water.litres : 0);
 
@@ -387,6 +391,7 @@ export default function Nutrition() {
 
   const openPlate = ({ slot, text = '', seed = null, items = null } = {}) => {
     setPlateSeed(items);
+    setPlateMounted(true);
     setPlate({ open: true, slot: slot || nowSlot, text, seed });
   };
 
@@ -631,14 +636,17 @@ export default function Nutrition() {
       ), document.body)}
 
       {/* ══════ NUTRITION TARGET SETUP ══════ */}
-      <NutritionTargetSetup open={targetSetupOpen} onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }} currentPlan={plan} isEdit={!!plan} />
+      <NutritionTargetSetup open={targetSetupOpen}
+                            onComplete={() => { setTargetSetupOpen(false); home.reload({ silent: true }); }}
+                            onClose={() => { setTargetSetupOpen(false); setTargetDismissed(true); }}
+                            currentPlan={plan} isEdit={!!plan} />
 
       {/* ══════ MODALS ══════ */}
       {confirmDialog}
       <EditLogModal open={editLogOpen} log={editLog} onClose={() => { setEditLogOpen(false); setEditLog(null); }} onSave={editLogEntry} t={t} />
 
       {/* ══════ PLATE LOGGER ══════ */}
-      {plate.open && (
+      {plateMounted && (
         <Suspense fallback={null}>
           <PlateSheet
             open={plate.open}
