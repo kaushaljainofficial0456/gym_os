@@ -35,7 +35,7 @@ import Icon from './Icon.jsx';
 import BarcodeScanner from './BarcodeScanner.jsx';
 import PortionWheel from './PortionWheel.jsx';
 import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
-import { XIcon, useDialog } from './UI.jsx';
+import { XIcon, useDialog, useExitPresence } from './UI.jsx';
 
 const OIL_LEVELS = [
   ['none', 'None'],
@@ -584,7 +584,10 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   const panelRef = useDialog(open, null);
   const discardRef = useDialog(open && confirmDiscardOpen, null);
 
-  if (!open) return null;
+  // Slide in, slide away -- the same sheet motion as the rest of the page.
+  // (No drag-to-close here: closing can stop to ask about unsaved input.)
+  const { mounted, closing } = useExitPresence(open);
+  if (!mounted) return null;
 
   // Same "food's own serving, else the bowl group, else its first portion"
   // precedence `pick()` below uses for the full picker's initial
@@ -1297,9 +1300,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
   // transform too, without touching the shared animation CSS (which
   // many other pages also use) at all.
   return createPortal((
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
+    <div className={`fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center sheet-scrim${closing ? ' is-closing' : ''}`}
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={requestClose} role="dialog" aria-modal="true" aria-label={dialogLabel}>
+         onClick={closing ? undefined : requestClose} role="dialog" aria-modal="true" aria-label={dialogLabel}>
       {/* FLEX COLUMN, NOT ONE SCROLLING CARD. This was
           `max-h-[88vh] overflow-y-auto` on the card itself, so at full
           height the whole thing scrolled -- header included, and every
@@ -1307,8 +1310,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
           past a screenful of blurred backdrop to find the button. The
           header is pinned by its own `shrink-0` now and the body below
           is the only scrolling part. */}
-      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl"
+      <div ref={panelRef} className={`card w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl sheet-panel${closing ? ' is-closing' : ''}`}
            onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-handle sm:hidden" />
 
         <div className="shrink-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
           <div className="flex items-center justify-between gap-3">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import SavingOverlay from './SavingOverlay.jsx';
-import { XIcon, useDialog } from './../UI.jsx';
+import { Sheet } from './../UI.jsx';
 
 /**
  * SHARE MEALS — select saved foods/meals, bundle them into one shareable
@@ -21,8 +21,6 @@ export default function ShareMealsSheet({ open, onClose, t }) {
   const [shared, setShared] = useState(false); // persistent: "a link exists, show it" -- independent of the overlay's own lifetime
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
-  // Escape is withheld mid-share for the same reason the backdrop is below.
-  const panelRef = useDialog(open, stage ? null : onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -30,8 +28,6 @@ export default function ShareMealsSheet({ open, onClose, t }) {
     api('/me/meals').then((r) => setMeals(r.meals || [])).catch(() => setMeals([]));
     api('/me/foods').then((r) => setFoods(r.mine || [])).catch(() => setFoods([]));
   }, [open]);
-
-  if (!open) return null;
 
   const toggle = (set, setSet, id) => {
     const next = new Set(set);
@@ -73,18 +69,36 @@ export default function ShareMealsSheet({ open, onClose, t }) {
     catch { /* clipboard unavailable -- link is still visible/selectable in the input */ }
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center anim-fadeIn"
-         style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={(e) => { if (e.target === e.currentTarget && !stage) onClose(); }}
-         role="dialog" aria-modal="true" aria-label="Share meals">
-      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
-        <div className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: 'var(--panel)' }}>
-          <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Share Meals</div>
-          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}><XIcon /></button>
+  // Pinned under the list, so Share is reachable however many meals there are.
+  const footer = meals === null || foods === null ? null : (
+    <div className="space-y-2">
+      {shared && shareUrl && (
+        <div className="rounded-xl p-3 flex items-center gap-2 anim-fadeIn" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
+          <input readOnly value={shareUrl} aria-label="Share link" className="flex-1 min-w-0 bg-transparent font-grotesk text-[11px] outline-none" style={{ color: t.mute }} onFocus={(e) => e.target.select()} />
+          <button onClick={copyLink} className="shrink-0 px-2.5 py-1.5 rounded-lg font-grotesk text-[10px] font-bold" style={{ background: t.accentDim, color: t.accent }}>
+            {copied ? 'Copied ✓' : 'Copy link'}
+          </button>
         </div>
+      )}
+      <button onClick={doShare} disabled={count === 0 || stage === 'sharing'}
+              className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-[.98]"
+              style={{
+                background: count === 0 ? t.surface : t.accent,
+                color: count === 0 ? t.mute : 'var(--accent-contrast)',
+                border: `1px solid ${count === 0 ? t.border : t.accent}`,
+                opacity: count === 0 ? 0.6 : 1, cursor: count === 0 ? 'not-allowed' : 'pointer',
+              }}>
+        {shared ? 'Share again' : `Share${count ? ` (${count})` : ''}`}
+      </button>
+    </div>
+  );
 
-        <div className="px-4 pb-5 space-y-4">
+  // The shared sheet: portalled over the screen, slides up, closes by
+  // button, Escape, swipe or a tap outside -- except mid-share, when the
+  // share is still being made (onClose withheld).
+  return (
+    <Sheet open={open} onClose={stage ? undefined : onClose} title="Share meals" footer={footer}>
+        <div className="space-y-4">
           {meals === null || foods === null ? (
             <div className="space-y-2 py-4">
               {[0, 1, 2].map((i) => <div key={i} className="h-11 rounded-xl anim-pulse-soft" style={{ background: t.glass }} />)}
@@ -140,36 +154,15 @@ export default function ShareMealsSheet({ open, onClose, t }) {
               {meals.length === 0 && foods.length === 0 && (
                 <div className="text-center py-6 font-grotesk text-[12px]" style={{ color: t.mute }}>Save a food or meal first to share it</div>
               )}
-
-              {shared && shareUrl && (
-                <div className="rounded-xl p-3 flex items-center gap-2 anim-fadeIn" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-                  <input readOnly value={shareUrl} className="flex-1 min-w-0 bg-transparent font-grotesk text-[11px] outline-none" style={{ color: t.mute }} onFocus={(e) => e.target.select()} />
-                  <button onClick={copyLink} className="shrink-0 px-2.5 py-1.5 rounded-lg font-grotesk text-[10px] font-bold" style={{ background: t.accentDim, color: t.accent }}>
-                    {copied ? 'Copied ✓' : 'Copy link'}
-                  </button>
-                </div>
-              )}
-
-              <button onClick={doShare} disabled={count === 0 || stage === 'sharing'}
-                      className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-[.98]"
-                      style={{
-                        background: count === 0 ? t.surface : t.accent,
-                        color: count === 0 ? t.mute : 'var(--accent-contrast)',
-                        border: `1px solid ${count === 0 ? t.border : t.accent}`,
-                        opacity: count === 0 ? 0.6 : 1, cursor: count === 0 ? 'not-allowed' : 'pointer',
-                      }}>
-                {shared ? 'Share again' : `Share${count ? ` (${count})` : ''}`}
-              </button>
             </>
           )}
         </div>
-      </div>
 
       <SavingOverlay open={stage === 'sharing' || stage === 'success' || stage === 'error'}
                      stage={stage === 'sharing' ? 'saving' : stage === 'success' ? 'success' : 'error'}
                      label={stage === 'sharing' ? 'Sharing' : stage === 'success' ? 'Meal Shared' : 'Could not share'}
                      sublabel={stage === 'sharing' ? 'Preparing your meal…' : stage === 'success' ? 'Your meal is ready to share.' : 'Please try again'}
                      mode="overlay" />
-    </div>
+    </Sheet>
   );
 }

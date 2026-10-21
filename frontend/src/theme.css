@@ -757,6 +757,28 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .anim-fadeUp { animation: fadeUp .3s cubic-bezier(.22,.8,.3,1) both; }
 .anim-fadeIn { animation: fadeIn .25s ease both; }
 .anim-scaleIn { animation: scaleIn .22s cubic-bezier(.22,.8,.3,1) both; }
+
+/* Sheets open and close like an app's, not like a page element: up from
+   the bottom edge on a phone, back down when closed; a small settle on
+   larger screens where the sheet is a centred card. A sheet being dragged
+   by its grip follows the finger instead (data-dragged), and the CSS
+   animation stands aside for it. */
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheetDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes scaleOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.97); } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+.sheet-scrim { animation: fadeIn .22s ease both; }
+.sheet-scrim.is-closing { animation: fadeOut .22s ease both; pointer-events: none; }
+.sheet-panel { animation: sheetUp .34s cubic-bezier(.22,.9,.3,1) both; will-change: transform; }
+.sheet-panel.is-closing { animation: sheetDown .23s cubic-bezier(.4,0,1,1) both; }
+@media (min-width: 640px) {
+  .sheet-panel { animation: scaleIn .22s cubic-bezier(.22,.8,.3,1) both; }
+  .sheet-panel.is-closing { animation: scaleOut .16s ease-in both; }
+}
+.sheet-panel[data-dragged] { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-scrim, .sheet-panel, .sheet-scrim.is-closing, .sheet-panel.is-closing { animation: none !important; }
+}
 .anim-pop { animation: checkPop .3s cubic-bezier(.22,.8,.3,1) both; }
 .anim-toast { animation: toastIn .28s cubic-bezier(.22,.8,.3,1) both; }
 .anim-pulse-soft { animation: softPulse 1.8s ease-in-out infinite; }

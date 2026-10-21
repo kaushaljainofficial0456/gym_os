@@ -4,7 +4,7 @@ import { api } from '../../api.js';
 import SavingOverlay from './SavingOverlay.jsx';
 import MealFoodRow from './MealFoodRow.jsx';
 import CustomFoodBadge from './CustomFoodBadge.jsx';
-import { CheckIcon, XIcon, useDialog } from './../UI.jsx';
+import { CheckIcon, XIcon, useDialog, useExitPresence, useDragToDismiss } from './../UI.jsx';
 
 const r1 = (n) => Math.round((n || 0) * 10) / 10;
 const makeRowId = () => `row_${Math.random().toString(36).slice(2)}`;
@@ -61,8 +61,12 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   // picker/AI review/barcode confirm); each MealFoodRow's own local state
   // is transient entry-in-progress, not a navigation level.
   const panelRef = useDialog(open, onClose);
+  // Slides up, slides away when closed, and drags down to close -- the same
+  // sheet behaviour as the rest of the page (UI.jsx Sheet).
+  const { mounted, closing } = useExitPresence(open);
+  const drag = useDragToDismiss(panelRef, onClose);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   // Always replaces, never appends -- see the file-header comment on why
   // at most one row is ever live at once.
@@ -215,15 +219,16 @@ export default function CustomizeMealSheet({ open, onClose, onLogged, t, toast }
   // ancestor instead of the true viewport. A portal sidesteps the whole
   // containing-block question without touching the shared animation CSS.
   return createPortal((
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center anim-fadeIn"
+    <div className={`fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sheet-scrim${closing ? ' is-closing' : ''}`}
          style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
          role="dialog" aria-modal="true" aria-label="Create new meal">
       {/* Flex column so only the body scrolls -- this was one scrolling
           card, which pushed the meal-name field and the save action off
           screen once a few foods had been added. */}
-      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[88vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl anim-scaleIn">
-        <div className="shrink-0 z-10 px-4 pt-4 pb-3" style={{ background: 'var(--panel)' }}>
+      <div ref={panelRef} className={`card w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden rounded-b-none sm:rounded-2xl sheet-panel${closing ? ' is-closing' : ''}`}>
+        <div {...drag} className="shrink-0 z-10 px-4 pt-1 pb-3 touch-none" style={{ background: 'var(--panel)' }}>
+          <div className="sheet-handle sm:hidden" />
           <div className="flex items-center justify-between mb-3">
             <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Create New Meal</div>
             <button onClick={onClose} aria-label="Close"
