@@ -11,10 +11,10 @@
 .auth-root {
   --stage-ink: #EFE8E2;
   --stage-mute: rgba(239, 232, 226, .5);
-  --mark: min(50vw, 26svh, 212px);
-  --wm: min(44vw, 188px);
-  --stage-h: max(340px, 52svh);
-  --brand-gap: 28px;
+  --mark: min(36vw, 20svh, 150px);
+  --wm: min(38vw, 160px);
+  --stage-h: max(290px, 40svh);
+  --brand-gap: 26px;
   --auth-ease: cubic-bezier(.22, .8, .3, 1);
   --serif: 'Sentient', Georgia, 'Times New Roman', serif;
   min-height: 100vh;
@@ -53,7 +53,6 @@
     radial-gradient(58% 44% at 50% 38%, rgba(255, 244, 236, .11), transparent 72%),
     radial-gradient(120% 90% at 50% 40%, transparent 50%, rgba(0, 0, 0, .6) 100%);
 }
-.auth-stage > .absolute { z-index: 1; }          /* the 3D canvas */
 
 .auth-stage__grain {
   position: absolute;
@@ -91,9 +90,7 @@
   width: 100%;
   height: 100%;
   color: var(--stage-ink);
-  transition: opacity .45s ease;
 }
-.auth-mark-svg.is-hidden { opacity: 0; }
 .auth-wordmark {
   position: relative;
   z-index: 2;
@@ -137,6 +134,9 @@
 .auth-legal a:hover { color: var(--ink); }
 
 @media (min-width: 1024px) {
+  .auth-aurora::before { background: radial-gradient(closest-side, rgba(150, 40, 64, .42), rgba(150, 40, 64, .12) 55%, transparent 75%); }
+  .auth-row { padding: 22px 2px; }
+  .auth-row__title { font-size: 19px; }
   .auth-root,
   .auth-root[data-variant="compact"] {
     --mark: clamp(210px, 17vw, 280px);
@@ -227,7 +227,7 @@
   margin: 0;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: 38px;
+  font-size: 33px;
   line-height: 1.04;
   letter-spacing: -.02em;
   color: var(--ink);
@@ -250,7 +250,7 @@
   align-items: center;
   gap: 16px;
   width: 100%;
-  padding: 22px 2px;
+  padding: 19px 2px;
   text-align: left;
   border-bottom: 1px solid var(--line);
 }
@@ -268,7 +268,7 @@
 .auth-row:focus-visible { outline: none; }
 .auth-row__body { flex: 1; min-width: 0; transition: transform .45s var(--auth-ease); }
 .auth-row:hover .auth-row__body { transform: translateX(6px); }
-.auth-row__title { display: block; font-size: 19px; font-weight: 600; letter-spacing: -.015em; color: var(--ink); }
+.auth-row__title { display: block; font-size: 17.5px; font-weight: 600; letter-spacing: -.015em; color: var(--ink); }
 .auth-row__sub { display: block; margin-top: 3px; font-size: 13.5px; color: var(--mute); }
 .auth-row__go { flex: none; color: var(--faint); transition: transform .45s var(--auth-ease), color .25s ease; }
 .auth-row:hover .auth-row__go { transform: translateX(4px); color: var(--ink); }
@@ -464,7 +464,13 @@
   opacity: 0;
   animation: bmRing .9s cubic-bezier(.65, 0, .35, 1) .15s forwards;
 }
-@keyframes bmRing { 0% { opacity: 1; stroke-dashoffset: 1; } 100% { opacity: 1; stroke-dashoffset: 0; } }
+/* Solid on the last frame: a finished dash pattern still leaves a hairline
+   seam at 12 o'clock where its end meets its start. */
+@keyframes bmRing {
+  0% { opacity: 1; stroke-dashoffset: 1; }
+  99.9% { opacity: 1; stroke-dashoffset: 0; stroke-dasharray: 1 1; }
+  100% { opacity: 1; stroke-dashoffset: 0; stroke-dasharray: none; }
+}
 .brand-mark--draw .bm-bar,
 .brand-mark--draw .bm-plate { transform-box: fill-box; transform-origin: center; }
 .brand-mark--draw .bm-bar { transform: scaleX(0); animation: bmBar .65s cubic-bezier(.65, 0, .35, 1) .3s forwards; }
@@ -473,6 +479,24 @@
 .brand-mark--draw .bm-plate--small { animation-delay: .66s; }
 @keyframes bmBar { to { transform: scaleX(1); } }
 @keyframes bmPlate { to { transform: scaleY(1); } }
+
+/* One point of light travelling the ring, then a long rest. */
+.bm-glint {
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-dasharray: .045 .955;
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 0 3px rgba(255, 240, 230, .9));
+  animation: bmGlint 7s cubic-bezier(.45, 0, .25, 1) 2.2s infinite;
+}
+@keyframes bmGlint {
+  0% { opacity: 0; transform: rotate(-90deg); }
+  8% { opacity: .95; }
+  46% { opacity: .95; }
+  56%, 100% { opacity: 0; transform: rotate(250deg); }
+}
 
 .wordmark--open .wm-letter {
   transform-box: fill-box;
@@ -492,6 +516,7 @@
   .auth-view, .auth-rise > *, .auth-error, .auth-word > span { animation: none; }
   .brand-mark--draw .bm-ring, .brand-mark--draw .bm-bar, .brand-mark--draw .bm-plate,
   .wordmark--open .wm-letter { animation: none; transform: none; opacity: 1; stroke-dashoffset: 0; }
+  .bm-glint { display: none; }
   .auth-row::after, .auth-row__body, .auth-row__go, .auth-tabs button::after { transition: none; }
 }
 
@@ -512,7 +537,7 @@
 }
 .auth-aurora::before {
   left: 0; top: 6%;
-  background: radial-gradient(closest-side, rgba(150, 40, 64, .42), rgba(150, 40, 64, .12) 55%, transparent 75%);
+  background: radial-gradient(closest-side, rgba(150, 40, 64, .28), rgba(150, 40, 64, .08) 55%, transparent 75%);
   animation: aurA 24s ease-in-out infinite alternate;
 }
 .auth-aurora::after {
@@ -528,13 +553,13 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 46px; height: 46px;
+  width: 42px; height: 42px;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--bg);
-  transition: transform .5s var(--auth-ease);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  transition: border-color .3s ease, background-color .3s ease;
 }
-.auth-row:hover .auth-row__icon { transform: scale(1.06) rotate(-6deg); }
+.auth-row:hover .auth-row__icon { border-color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .auth-aurora::before, .auth-aurora::after { animation: none; }

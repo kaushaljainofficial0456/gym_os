@@ -205,7 +205,7 @@ export default function App() {
     <ArrivalHost />
     <Routes>
       {/* Every signed-out screen shares one AuthLayout, so the stage -- the
-          brand mark and its 3D -- carries on from screen to screen instead
+          brand mark and its draw-in -- carries on from screen to screen instead
           of being torn down and redrawn at every step. */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><Login /></GuestOnly>} />

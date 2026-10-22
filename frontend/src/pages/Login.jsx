@@ -106,7 +106,7 @@ export default function Login() {
     <>
       {view === 'landing' ? (
         <div key="landing" className={stepClass} data-dir={dir}>
-          <AuthTitle eyebrow="Welcome" title="How will you use Barbell?" sub="Workouts, nutrition and your gym, in one place." />
+          <AuthTitle eyebrow="Welcome" title="How will you use Barbell?" />
           <div className="auth-rows auth-rise">
             {PATHS.map((p) => (
               <ChoiceRow key={p.id} icon={p.icon} title={p.title} sub={p.sub} onClick={() => pickPath(p.id)} />

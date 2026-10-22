@@ -2,11 +2,12 @@
  * AUTH SHELL — every screen between opening the app and reaching a home
  * dashboard sits in this frame.
  *
- * THE STAGE continues the intro: the same black, the same ring-and-barbell
- * badge drawing in on the same beats, the same Cinzel wordmark. Where the
- * device can afford it the badge becomes a real-time 3D object (MarkStage);
- * the flat mark underneath is what everyone else sees, and what everyone
- * sees for the moment before the 3D arrives.
+ * THE STAGE continues the intro: the same black, the same fine-line
+ * ring-and-barbell badge drawing in on the same beats, the same Cinzel
+ * wordmark, then a single glint of light travelling the ring. On a desktop,
+ * where there is room, glass cards of the product float around it; a
+ * phone gets the mark alone -- a small screen filled edge to edge is busy,
+ * not premium.
  *
  * THE PANEL is the app: the theme's own ground, one question at a time.
  * On a phone it is a sheet pulled up over the stage; the stage is tall on
@@ -15,22 +16,20 @@
  * one short line of copy, and the panel holds the right.
  *
  * Used two ways: as the persistent layout of the signed-out routes
- * (AuthLayout, so the stage -- and its WebGL context -- survives moving
- * from Welcome to Sign in to Set up), and directly by the signed-in steps
+ * (AuthLayout, so the stage survives moving from Welcome to Sign in to
+ * Set up without redrawing), and directly by the signed-in steps
  * that come before a dashboard (terms, joining a gym).
  */
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../themeContext.jsx';
 import BrandMark from '../brand/BrandMark.jsx';
 import Wordmark from '../brand/Wordmark.jsx';
-import MarkStage from './MarkStage.jsx';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion.js';
 import './auth.css';
 
-// Decorative and late to arrive anyway (its cards fly in after a second),
-// so it stays out of the first download -- and if its file ever fails to
-// load, the stage simply goes without it.
+// Desktop only, decorative, and late to arrive anyway (its cards fly in
+// after a second), so it stays out of the first download -- a phone never
+// fetches it -- and if its file ever fails to load the stage goes without.
 const Showcase = lazy(() => import('./Showcase.jsx').catch(() => ({ default: () => null })));
 
 const LEGAL = [
@@ -60,8 +59,22 @@ function Headline({ lines }) {
   );
 }
 
-/** Pointer, or a phone's tilt, as CSS variables on the stage: the
- *  showcase cards lean by their own depth. Throttled to one write a frame. */
+/** True at desktop widths, where the stage has room for the showcase. */
+function useWide() {
+  const query = '(min-width: 1024px)';
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(query);
+    if (!m) return undefined;
+    const on = () => setWide(m.matches);
+    m.addEventListener?.('change', on);
+    return () => m.removeEventListener?.('change', on);
+  }, []);
+  return wide;
+}
+
+/** The pointer as CSS variables on the stage: the showcase cards lean by
+ *  their own depth. Throttled to one write a frame. */
 function useParallax(ref, off) {
   useEffect(() => {
     const el = ref.current;
@@ -72,48 +85,31 @@ function useParallax(ref, off) {
     const write = () => { raf = 0; el.style.setProperty('--px', x.toFixed(3)); el.style.setProperty('--py', y.toFixed(3)); };
     const queue = () => { if (!raf) raf = requestAnimationFrame(write); };
     const onMove = (e) => { x = (e.clientX / window.innerWidth) * 2 - 1; y = (e.clientY / window.innerHeight) * 2 - 1; queue(); };
-    let base = null;
-    const onTilt = (e) => {
-      if (e.gamma == null || e.beta == null) return;
-      if (!base) base = { g: e.gamma, b: e.beta };
-      x = Math.max(-1, Math.min(1, (e.gamma - base.g) / 20));
-      y = Math.max(-1, Math.min(1, (e.beta - base.b) / 20));
-      queue();
-    };
     window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('deviceorientation', onTilt, { passive: true });
     return () => {
       window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('deviceorientation', onTilt);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [ref, off]);
 }
 
 export default function AuthShell({ variant = 'compact', headline, showcase = 'welcome', children, legal = true }) {
-  const { resolved } = useTheme();
   const reduced = usePrefersReducedMotion();
-  const slotRef = useRef(null);
+  const wide = useWide();
   const stageRef = useRef(null);
-  useParallax(stageRef, reduced);
-  // One clock for the flat mark's CSS draw-in and the 3D one: if the 3D
-  // arrives mid-draw it picks up at the same moment instead of restarting.
-  const [startAt] = useState(() => (typeof performance !== 'undefined' ? performance.now() : 0));
-  const [live, setLive] = useState(false);
-  const onReady = useCallback(() => setLive(true), []);
+  useParallax(stageRef, reduced || !wide);
 
   return (
     <div className="auth-root" data-variant={variant}>
       <section className="auth-stage" ref={stageRef}>
         <div className="auth-aurora" />
-        <MarkStage slotRef={slotRef} startAt={startAt} accent={resolved === 'light' ? '#F0D2C8' : '#CBD6E0'} onReady={onReady} />
         <div className="auth-brand">
-          <div ref={slotRef} className="auth-mark-slot">
-            <BrandMark animate className={`auth-mark-svg${live ? ' is-hidden' : ''}`} />
+          <div className="auth-mark-slot">
+            <BrandMark animate glint className="auth-mark-svg" />
           </div>
           <Wordmark animate delay={900} className="auth-wordmark" />
         </div>
-        {showcase && <Suspense fallback={null}><Showcase set={showcase} /></Suspense>}
+        {showcase && wide && <Suspense fallback={null}><Showcase set={showcase} /></Suspense>}
         {headline && <Headline lines={headline} />}
         <div className="auth-stage__grain" />
       </section>
