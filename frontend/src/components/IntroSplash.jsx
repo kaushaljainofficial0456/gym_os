@@ -13,19 +13,19 @@
  *   - abandoned if the video has not started within START_TIMEOUT_MS (slow
  *     network, blocked autoplay) and capped at MAX_MS whatever happens.
  *
- * The clip is landscape (1280x720). It is shown whole -- never cropped,
- * which would cut "BARBELL" on a phone -- and its top and bottom edges are
- * masked into the black so the frame does not read as a box.
+ * The clip is portrait (1080x1920) on pure black, first frame black and
+ * last frame the still wordmark. It is shown whole, centred on the same
+ * black: on a phone it fills the screen, on a wide screen it sits in the
+ * middle, and either way its own black merges with the backdrop -- there is
+ * no frame edge to see.
  */
 import { useEffect, useRef, useState } from 'react';
 
 const SEEN_KEY = 'barbell-intro-seen';
-const SRC = '/assets/intro/intro.mp4';
+const SRC = '/assets/intro/barbell-intro.mp4';
 const START_TIMEOUT_MS = 2500;
 const MAX_MS = 7000;
 const FADE_MS = 450;
-const FADE_Y = 'linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent)';
-const FADE_X = 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)';
 
 // Decided once per page load. React may run a state initialiser twice (dev
 // StrictMode); the second run would see the "seen" flag the first one set
@@ -95,20 +95,7 @@ export default function IntroSplash() {
         aria-hidden="true"
         onEnded={finish}
         onError={finish}
-        className="pointer-events-none select-none"
-        style={{
-          // The clip's own 16:9 box, as large as the screen allows, so the
-          // fade below lands on the FRAME's edges and not the screen's.
-          width: 'min(100vw, 177.78vh)',
-          aspectRatio: '16 / 9',
-          objectFit: 'cover',
-          // Each edge of the frame fades into the black on its own; the
-          // middle, where the letters are, stays untouched.
-          WebkitMaskImage: `${FADE_Y}, ${FADE_X}`,
-          WebkitMaskComposite: 'source-in',
-          maskImage: `${FADE_Y}, ${FADE_X}`,
-          maskComposite: 'intersect',
-        }}
+        className="pointer-events-none select-none absolute inset-0 w-full h-full object-contain"
       />
       <span className="sr-only">Barbell</span>
     </div>
