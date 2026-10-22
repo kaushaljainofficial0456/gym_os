@@ -1,329 +1,152 @@
-import { useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
+import { ArrowRight, Building2, Dumbbell, UserRound } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
 import { consumeReturnTo } from '../api.js';
-import MotivationalWelcome from '../components/MotivationalWelcome.jsx';
-import SplashCursorLazy from '../components/SplashCursorLazy.jsx';
-import Logo from '../components/Logo.jsx';
-import BorderGlow from '../components/BorderGlow.jsx';
-import Icon from '../components/Icon.jsx';
+import { announceArrival } from '../components/ArrivalHost.jsx';
 import { PasswordInput } from '../components/UI.jsx';
-import SiteFooter from '../components/SiteFooter.jsx';
-import AuthStage from '../components/auth/AuthStage.jsx';
-import { usePrefersReducedMotion } from '../components/auth/usePrefersReducedMotion.js';
-import './../components/BorderGlow.css';
+import { useAuthStage } from '../components/auth/AuthLayout.jsx';
+import { AuthTitle, ChoiceRow, Cta, Divider, ErrorNote, Field, RoleSwitch } from '../components/auth/authKit.jsx';
 
-// The three top-level paths onto SK OS. Each is a genuinely different
+// The three top-level paths onto Barbell. Each is a genuinely different
 // account-creation story, not a cosmetic split of one login form:
 //   - Enterprise: a gym's very first visit, before any account exists ->
 //     /setup-org (POST /auth/setup-org).
 //   - Gym ecosystem: someone whose account already exists under a gym
-//     (trainer, owner, or a gym-code client) -> the role picker below,
-//     then the real email/password form.
+//     (trainer, owner, or a gym-code client) -> the sign-in form below.
 //   - Independent client: no gym at all -> /independent (Google sign-in,
 //     POST /auth/google).
 const PATHS = [
-  { id: 'enterprise', icon: 'clipboard', title: 'Enterprise', desc: "First time here? Set up your gym — code, roster and workspace in one go." },
-  { id: 'ecosystem', icon: 'strength', title: 'Gym ecosystem', desc: 'Trainer, owner or client at a gym already on Barbell.' },
-  { id: 'independent', icon: 'user', title: 'Independent client', desc: 'Training solo, no gym — sign in with Google.' },
+  { id: 'enterprise', icon: Building2, title: 'Enterprise', sub: 'Set up a new gym' },
+  { id: 'ecosystem', icon: Dumbbell, title: 'Gym ecosystem', sub: 'Clients, trainers and owners' },
+  { id: 'independent', icon: UserRound, title: 'Independent client', sub: 'Train solo, no gym needed' },
 ];
 
+/* Sign-in itself does not depend on the role -- the account knows what it
+   is. The switch decides which demo account the demo button opens and
+   where "new here" leads, and it is remembered for next time. */
 const ROLES = [
-  { id: 'TRAINER', icon: 'chart', title: 'Trainer', desc: 'Your coaching workspace.' },
-  { id: 'GYM_OWNER', icon: 'clipboard', title: 'Gym Owner', desc: 'Members, plans and payments.' },
-  { id: 'CLIENT', icon: 'user', title: 'Client', desc: 'Your training portal.' },
+  { id: 'CLIENT', label: 'Client' },
+  { id: 'TRAINER', label: 'Trainer' },
+  { id: 'GYM_OWNER', label: 'Owner' },
 ];
-
-/* Icons were '◧', '₹' and '⌁' — three Unicode glyphs from three different
-   blocks, rendered at three different optical weights, one of which (the
-   rupee sign) is a currency symbol pressed into service as a picture. They
-   now reuse the same Icon names the role cards above them already use, so
-   picking "Trainer" and then seeing the trainer demo shows one icon, not
-   two unrelated ones. */
-const DEMO_BY_ROLE = {
-  TRAINER: { label: 'Trainer', email: 'trainer1@ironforge.in', icon: 'chart', desc: 'Arjun Mehta · coaching workspace' },
-  GYM_OWNER: { label: 'Gym Owner', email: 'owner@ironforge.in', icon: 'clipboard', desc: 'Maya Kapoor · business view' },
-  CLIENT: { label: 'Client', email: 'client1@ironforge.in', icon: 'user', desc: 'Rahul Sharma · client portal' },
+const DEMO = { CLIENT: 'client1@ironforge.in', TRAINER: 'trainer1@ironforge.in', GYM_OWNER: 'owner@ironforge.in' };
+const NEW_HERE = {
+  CLIENT: ['New here?', 'Create an account', '/signup'],
+  TRAINER: ['New trainer?', 'Create an account', '/signup/trainer'],
+  GYM_OWNER: ['New gym?', 'Set it up', '/setup-org'],
 };
+const ROLE_KEY = 'barbell-last-role';
 
-const ROLE_COPY = {
-  TRAINER: { heading: 'Welcome back, coach', sub: 'Sign in to your coaching workspace.' },
-  GYM_OWNER: { heading: 'Welcome back', sub: 'Sign in to your business dashboard.' },
-  CLIENT: { heading: 'Welcome back', sub: 'Sign in to your client portal.' },
-};
-
-function OptionCard({ icon, title, desc, onClick, delay = 0, reduced }) {
-  return (
-    <button onClick={onClick}
-      /* `animation-delay={...}` was passed as a JSX PROP here, which React
-         forwards to the DOM as a literal attribute named
-         "animation-delay" — not a style. It has never done anything, so
-         all three cards faded up on the same frame and the intended
-         stagger was invisible. It belongs in `style`. */
-      className="auth-option row row-interactive gap-4 p-4"
-      style={{
-        borderRadius: 'var(--r-lg)',
-        ...(reduced ? {} : { animation: `authFadeUp 620ms cubic-bezier(.22,.8,.3,1) ${delay}ms both` }),
-      }}>
-      {/* THE ICON SITS INSIDE A RING that completes on hover -- the same
-          arc this product draws for every other kind of progress, at the
-          size of a button. Drawn with one conic-gradient mask rather than
-          a stack of borders, so it is a single compositor-friendly
-          element and costs nothing until the pointer arrives. */}
-      <span className="auth-option__ring w-11 h-11 grid place-items-center shrink-0 relative"
-        style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .12)', border: '1px solid rgb(var(--accent-rgb) / .2)', color: 'var(--accent)' }}>
-        <Icon name={icon} size={20} />
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="block font-grotesk text-sm font-bold" style={{ color: 'var(--ink)' }}>{title}</span>
-        <span className="block text-[12px] mt-0.5 leading-snug" style={{ color: 'var(--mute)' }}>{desc}</span>
-      </span>
-      {/* Was the '›' character — a single-glyph chevron that inherits the
-          body font's weight and sits off the optical centre. */}
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-        className="shrink-0" style={{ color: 'var(--faint)' }}>
-        <path d="m9 18 6-6-6-6" />
-      </svg>
-    </button>
-  );
-}
-
-function BackLink({ onClick, label }) {
-  return (
-    <button onClick={onClick} className="chrome-btn gap-1.5 mb-5 -ml-1.5 px-1.5 py-1 font-grotesk"
-      style={{ fontSize: '.75rem', fontWeight: 600 }}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-      {label}
-    </button>
-  );
+function lastRole() {
+  try {
+    const r = localStorage.getItem(ROLE_KEY);
+    return ROLES.some((x) => x.id === r) ? r : 'CLIENT';
+  } catch { return 'CLIENT'; }
 }
 
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const [view, setView] = useState('landing'); // landing | roles | form
-  const [roleHint, setRoleHint] = useState(null);
+  const location = useLocation();
+  const navType = useNavigationType();
+  // The step lives in history state, not component state, so the phone's
+  // back gesture walks back through the flow instead of leaving it.
+  const view = location.state?.view === 'signin' ? 'signin' : 'landing';
+  const dir = navType === 'POP' ? 'back' : 'fwd';
+  // The route's own entrance already animates the first step; only a
+  // change of step animates here, or the two slides would add up.
+  const firstView = useRef(view);
+  const switched = useRef(false);
+  if (view !== firstView.current) switched.current = true;
+  const stepClass = switched.current ? 'auth-view' : undefined;
+  useAuthStage(view === 'landing' ? 'hero' : 'compact');
+
+  const [role, setRoleState] = useState(lastRole);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [pendingUser, setPendingUser] = useState(null);
-  const [showWelcome, setShowWelcome] = useState(false);
-  // Asked once here and threaded down, so the stage and the cards agree.
-  const reduced = usePrefersReducedMotion();
+
+  const setRole = (r) => {
+    setRoleState(r);
+    try { localStorage.setItem(ROLE_KEY, r); } catch { /* storage blocked */ }
+  };
 
   const go = (u) => {
-    if (u.role === 'CLIENT') {
-      setPendingUser(u);
-      setShowWelcome(true);
-    } else {
-      nav('/app/trainer');
-    }
+    if (u.role !== 'CLIENT') return nav('/app/trainer');
+    announceArrival(u.name);
+    // A shared-meal preview (or similar) that sent this visitor to log in
+    // gets priority over the default client home -- consumed once, never
+    // re-applied to a later, unrelated login. It never auto-completes the
+    // action they were headed toward; it only returns them to that page.
+    // Without one, GuestOnly sends them home (or to the terms first).
+    const back = consumeReturnTo();
+    return back ? nav(back) : undefined;
   };
 
-  const handleWelcomeComplete = useCallback(() => {
-    setShowWelcome(false);
-    if (pendingUser) {
-      // A shared-meal preview (or similar) that sent this visitor to log in
-      // gets priority over the default client home -- consumed once, never
-      // re-applied to a later, unrelated login. Never auto-completes the
-      // action they were headed toward (e.g. saving a shared meal); it only
-      // returns them to the SAME page they were already looking at.
-      nav(consumeReturnTo() || '/app/client');
-      setPendingUser(null);
-    }
-  }, [pendingUser, nav]);
-
-  const submit = async (e) => {
-    e.preventDefault();
+  const run = async (fn) => {
     setBusy(true); setErr('');
-    try { go(await login(email, password)); }
-    catch (ex) { setErr(ex.message); }
-    finally { setBusy(false); }
+    try { go(await fn()); } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
-
-  const quick = async (demoEmail) => {
-    setBusy(true); setErr('');
-    try { go(await login(demoEmail, 'demo1234')); }
-    catch (ex) { setErr(ex.message); }
-    finally { setBusy(false); }
-  };
+  const submit = (e) => { e.preventDefault(); run(() => login(email, password)); };
+  const demo = () => run(() => login(DEMO[role], 'demo1234'));
 
   const pickPath = (id) => {
     if (id === 'enterprise') return nav('/setup-org');
     if (id === 'independent') return nav('/independent');
-    setView('roles');
+    setErr('');
+    return nav('/login', { state: { view: 'signin' } });
   };
+  const back = () => (location.key !== 'default' ? nav(-1) : nav('/login', { replace: true, state: null }));
 
-  const pickRole = (id) => {
-    setRoleHint(id);
-    setErr(''); setEmail(''); setPassword('');
-    setView('form');
-  };
-
-  const copy = ROLE_COPY[roleHint] || ROLE_COPY.CLIENT;
-  const demo = DEMO_BY_ROLE[roleHint];
+  const [newQ, newA, newTo] = NEW_HERE[role];
 
   return (
     <>
-      {showWelcome && <MotivationalWelcome onComplete={handleWelcomeComplete} />}
-      <SplashCursorLazy />
-
-      {/* Flex column wrapper so the public legal footer sits at the very
-          bottom of the page in normal flow — below the fold on desktop,
-          never overlapping the login form or the SplashCursor/ambient
-          animations. The grid itself is unchanged. */}
-      <div className="min-h-screen flex flex-col">
-      <div className="flex-1 grid lg:grid-cols-2" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
-        {/* brand side -- see components/auth/AuthStage.jsx. The 3D rings
-            live behind it and load themselves, or don't. */}
-        <AuthStage
-          reduced={reduced}
-          eyebrow="Your fitness business, engineered"
-          lines={[
-            { text: 'Train smarter.' },
-            { text: 'Coach better.' },
-            { text: 'Prove progress.', accent: true },
-          ]}
-          footer={(
-            <>
-              <span className="w-1.5 h-1.5 rounded-full anim-pulse-soft"
-                style={{ background: 'rgb(var(--good-rgb))', boxShadow: '0 0 8px rgb(var(--good-rgb) / .7)' }} />
-              Ironforge Fitness · demo workspace
-            </>
-          )}
-        />
-
-        {/* form side */}
-        <div className="flex items-center justify-center p-6">
-          <div className="w-full max-w-sm anim-fadeUp">
-            <div className="lg:hidden flex items-center gap-3 mb-8">
-              <Logo className="w-11 h-11 rounded-xl" />
-              <div>
-                <div className="font-brand font-bold text-sm" style={{ color: 'var(--ink)' }}>Barbell</div>
-                <div className="text-[9px] uppercase tracking-[.2em] font-grotesk" style={{ color: 'var(--mute)' }}>Your fitness business, engineered.</div>
-              </div>
-            </div>
-
-            {view === 'landing' && (
-              <>
-                <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Welcome</h2>
-                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>How are you using Barbell?</p>
-                <div className="space-y-2.5">
-                  {PATHS.map((p, i) => (
-                    <OptionCard reduced={reduced} key={p.id} icon={p.icon} title={p.title} desc={p.desc} delay={80 + i * 60} onClick={() => pickPath(p.id)} />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {view === 'roles' && (
-              <>
-                <BackLink onClick={() => setView('landing')} label="Back" />
-                <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>Gym ecosystem</h2>
-                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>Which one are you?</p>
-                <div className="space-y-2.5">
-                  {ROLES.map((r, i) => (
-                    <OptionCard reduced={reduced} key={r.id} icon={r.icon} title={r.title} desc={r.desc} delay={80 + i * 60} onClick={() => pickRole(r.id)} />
-                  ))}
-                </div>
-              </>
-            )}
-
-            {view === 'form' && (
-              <>
-                <BackLink onClick={() => setView('roles')} label="Back" />
-                <h2 className="font-display font-bold text-2xl tracking-tight mb-1" style={{ color: 'var(--ink)' }}>{copy.heading}</h2>
-                <p className="text-sm mb-6" style={{ color: 'var(--mute)' }}>{copy.sub}</p>
-
-                <form onSubmit={submit} className="space-y-3.5">
-                  <div className="field">
-                    <label htmlFor="email" className="field-label">Email</label>
-                    <input id="email" className="input mt-1.5" type="email" value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoComplete="username"
-                      aria-invalid={err ? 'true' : undefined}
-                      placeholder="you@yourgym.com" required autoFocus />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="password" className="field-label">Password</label>
-                    {/* Was an inline copy of the reveal toggle. Extracted to
-                        `PasswordInput` so the four password fields in the
-                        product (here, SignUp, SetupOrg, TrainerSignUp) share
-                        one implementation rather than four that drift. */}
-                    <PasswordInput id="password" className="mt-1.5" value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      aria-invalid={err ? 'true' : undefined}
-                      placeholder="Your password" required />
-                  </div>
-                  {/* Sits directly under the password field, which is where
-                      someone looks the moment they realise they cannot
-                      remember it -- not at the bottom of the page after the
-                      signup links. Without this the reset flow existed but
-                      was unreachable from anywhere in the product. */}
-                  <div className="flex justify-end -mt-1">
-                    <Link to="/forgot-password" className="text-[12.5px]" style={{ color: 'var(--mute)' }}>
-                      Forgot password?
-                    </Link>
-                  </div>
-                  {err && <div className="field-error anim-fadeIn" role="alert" style={{ marginTop: 12 }}>{err}</div>}
-                  <BorderGlow borderRadius={9999} glowRadius={22} className="w-full block">
-                    <button className="btn-primary btn-lg btn-block" data-loading={busy ? 'true' : undefined} disabled={busy}>
-                      Sign in
-                    </button>
-                  </BorderGlow>
-                </form>
-
-                {/* Self-serve signup exists for CLIENT and TRAINER (both
-                    join a gym afterward by scanning its QR code -- see
-                    /signup and /signup/trainer). Owners still only arrive
-                    via Enterprise (/setup-org), never a self-serve form
-                    here -- creating a gym is a genuinely different action. */}
-                {roleHint === 'CLIENT' && (
-                  <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
-                    New to Barbell?{' '}
-                    <Link to="/signup" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
-                  </div>
-                )}
-                {roleHint === 'TRAINER' && (
-                  <div className="mt-5 text-center text-sm" style={{ color: 'var(--mute)' }}>
-                    New to Barbell?{' '}
-                    <Link to="/signup/trainer" className="font-semibold" style={{ color: 'var(--accent)' }}>Get started</Link>
-                  </div>
-                )}
-
-                {demo && (
-                  <>
-                    <div className="my-6 flex items-center gap-3 text-[10px] uppercase tracking-widest" style={{ color: 'var(--faint)' }}>
-                      <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or explore the demo <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
-                    </div>
-                    <button onClick={() => quick(demo.email)} disabled={busy}
-                      className="row row-interactive gap-3 anim-fadeUp">
-                      <span className="w-9 h-9 grid place-items-center shrink-0"
-                        style={{ borderRadius: 'var(--r-sm)', background: 'rgb(var(--accent-rgb) / .12)', border: '1px solid rgb(var(--accent-rgb) / .2)', color: 'var(--accent)' }}>
-                        <Icon name={demo.icon} size={17} />
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{demo.label}</span>
-                        <span className="block text-[11px] truncate" style={{ color: 'var(--mute)' }}>{demo.desc}</span>
-                      </span>
-                      <span className="badge badge-plain shrink-0">demo1234</span>
-                    </button>
-                  </>
-                )}
-              </>
-            )}
+      {view === 'landing' ? (
+        <div key="landing" className={stepClass} data-dir={dir}>
+          <AuthTitle eyebrow="Welcome" title="How will you use Barbell?" sub="Workouts, nutrition and your gym, in one place." />
+          <div className="auth-rows auth-rise">
+            {PATHS.map((p) => (
+              <ChoiceRow key={p.id} icon={p.icon} title={p.title} sub={p.sub} onClick={() => pickPath(p.id)} />
+            ))}
           </div>
         </div>
-      </div>
+      ) : (
+        <div key="signin" className={stepClass} data-dir={dir}>
+          <AuthTitle title="Sign in" onBack={back} />
+          <RoleSwitch label="I'm signing in as" options={ROLES} value={role} onChange={setRole} />
 
-      <SiteFooter />
-      </div>
+          <form onSubmit={submit} className="auth-form">
+            <Field id="email" label="Email">
+              <input id="email" className="input auth-input" type="email" value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username" inputMode="email"
+                aria-invalid={err ? 'true' : undefined}
+                placeholder="you@yourgym.com" required autoFocus />
+            </Field>
+            <Field id="password" label="Password"
+              aside={<Link to="/forgot-password" className="auth-aside">Forgot password?</Link>}>
+              <PasswordInput id="password" className="auth-input" value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                aria-invalid={err ? 'true' : undefined}
+                placeholder="Your password" required />
+            </Field>
+            <ErrorNote>{err}</ErrorNote>
+            <Cta busy={busy}>Sign in</Cta>
+          </form>
+
+          <p className="auth-foot">{newQ} <Link to={newTo}>{newA}</Link></p>
+
+          <Divider />
+          <button type="button" className="auth-ghost" onClick={demo} disabled={busy}>
+            Explore the demo
+            <ArrowRight size={16} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </>
   );
 }

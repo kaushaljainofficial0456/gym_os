@@ -16,6 +16,9 @@ import Login from './pages/Login.jsx';
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'));
 import SignUp from './pages/SignUp.jsx';
+// The signed-out screens' shared frame: eager with Login, which renders in it.
+import AuthLayout from './components/auth/AuthLayout.jsx';
+import ArrivalHost from './components/ArrivalHost.jsx';
 // The two signed-in shells are lazy too. Eager, they put framer-motion and the
 // whole app chrome -- onboarding wizard, app tour, notification bell, coach
 // drawer -- into the entry chunk, so a signed-out visitor on /login downloaded
@@ -123,6 +126,10 @@ const PageFallback = <div className="min-h-screen grid place-items-center"><Spin
 // crash (see ErrorBoundary.jsx). One boundary per route means one page
 // crashing never takes the rest of the app down with it.
 const page = (El) => <ErrorBoundary><Suspense fallback={PageFallback}><El /></Suspense></ErrorBoundary>;
+// Same, for a screen inside AuthLayout: the stage is already on screen, so
+// the wait is a spinner in the panel, not a blank page.
+const PanelFallback = <div className="py-20 grid place-items-center"><Spinner /></div>;
+const authPage = (El) => <ErrorBoundary><Suspense fallback={PanelFallback}><El /></Suspense></ErrorBoundary>;
 
 // `fallback` distinguishes "not logged in" from "logged in, wrong role for
 // this subtree" — e.g. a trainer hitting an /app/client/* URL is still
@@ -162,7 +169,7 @@ function Require({ ready, ok, fallback = '/login', children }) {
 // already use, so this can't drift from what "already signed in" means
 // elsewhere in this file.
 function GuestOnly({ ready, authed, target, children }) {
-  if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
+  if (!ready) return PanelFallback;
   if (authed) return <Navigate to={target} replace />;
   return children;
 }
@@ -195,18 +202,24 @@ export default function App() {
 
   return (
     <ClickSparkLazy>
+    <ArrivalHost />
     <Routes>
-      <Route path="/login" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><Login /></GuestOnly>} />
-      {/* The reset emails already linked to /reset-password; the route
-          did not exist, so every one of them landed on a 404. Both are
-          public on purpose -- someone who cannot sign in is by
-          definition not signed in. */}
-      <Route path="/forgot-password" element={page(ForgotPassword)} />
-      <Route path="/reset-password" element={page(ResetPassword)} />
-      <Route path="/signup" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><SignUp /></GuestOnly>} />
-      <Route path="/signup/trainer" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(TrainerSignUp)}</GuestOnly>} />
-      <Route path="/setup-org" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(SetupOrg)}</GuestOnly>} />
-      <Route path="/independent" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{page(IndependentLogin)}</GuestOnly>} />
+      {/* Every signed-out screen shares one AuthLayout, so the stage -- the
+          brand mark and its 3D -- carries on from screen to screen instead
+          of being torn down and redrawn at every step. */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><Login /></GuestOnly>} />
+        {/* The reset emails already linked to /reset-password; the route
+            did not exist, so every one of them landed on a 404. Both are
+            public on purpose -- someone who cannot sign in is by
+            definition not signed in. */}
+        <Route path="/forgot-password" element={authPage(ForgotPassword)} />
+        <Route path="/reset-password" element={authPage(ResetPassword)} />
+        <Route path="/signup" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}><SignUp /></GuestOnly>} />
+        <Route path="/signup/trainer" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{authPage(TrainerSignUp)}</GuestOnly>} />
+        <Route path="/setup-org" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{authPage(SetupOrg)}</GuestOnly>} />
+        <Route path="/independent" element={<GuestOnly ready={ready} authed={authed} target={authedHome(needsTerms, pendingGym, isTrainer)}>{authPage(IndependentLogin)}</GuestOnly>} />
+      </Route>
       {/* Design-system showcase. Intentionally unauthenticated: it renders
           only static demo data, and needing a login to check a colour token
           is friction that stops people checking. */}

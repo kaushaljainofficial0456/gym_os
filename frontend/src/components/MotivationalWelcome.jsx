@@ -1,64 +1,51 @@
-import { useEffect, useState } from 'react';
+/**
+ * ARRIVAL — the moment between signing in and the home screen.
+ *
+ * The brand's black, the badge drawing itself in, the person's name in the
+ * serif, and one line from the quote rotation. About three seconds, and a
+ * tap anywhere skips it -- a ceremony nobody can hurry is a delay.
+ *
+ * Portalled to <body>: it is opened from inside the sign-in panel, whose
+ * entrance animation transforms it, and a transformed ancestor turns
+ * position:fixed into "fixed to that box".
+ */
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getNextQuote } from '../data/quoteRotation.js';
-import { useTheme } from '../themeContext.jsx';
-import { brand } from '../design/tokens.js';
-import Logo from './Logo.jsx';
+import BrandMark from './brand/BrandMark.jsx';
+import './auth/auth.css';
 
-export default function MotivationalWelcome({ onComplete }) {
+const HOLD_MS = 2600;
+const FADE_MS = 520;
+
+export default function MotivationalWelcome({ name, onComplete }) {
   const [quote] = useState(() => getNextQuote());
-  const [phase, setPhase] = useState('enter');
-  // `resolved` (never the raw choice): 'system' is now a storable
-  // value, and every comparison below is against light/dark.
-  const { resolved: theme } = useTheme();
-  const isDark = theme === 'dark';
+  const [leaving, setLeaving] = useState(false);
+  const done = useRef(onComplete);
+  done.current = onComplete;
+  const first = String(name || '').trim().split(/\s+/)[0];
 
   useEffect(() => {
-    const holdTimer = setTimeout(() => setPhase('hold'), 100);
-    const exitTimer = setTimeout(() => setPhase('exit'), 2800);
-    const doneTimer = setTimeout(() => onComplete?.(), 3600);
-    return () => { clearTimeout(holdTimer); clearTimeout(exitTimer); clearTimeout(doneTimer); };
-  }, [onComplete]);
+    const out = setTimeout(() => setLeaving(true), HOLD_MS);
+    return () => clearTimeout(out);
+  }, []);
+  useEffect(() => {
+    if (!leaving) return undefined;
+    const t = setTimeout(() => done.current?.(), FADE_MS);
+    return () => clearTimeout(t);
+  }, [leaving]);
 
-  const baseTransition = 'transition-all duration-700 ease-out';
-  const opacity = phase === 'enter' ? 'opacity-0' : phase === 'hold' ? 'opacity-100' : 'opacity-0';
-  const transform = phase === 'enter' ? 'translate-y-3 scale-[0.98]' : phase === 'hold' ? 'translate-y-0 scale-100' : '-translate-y-2 scale-[0.99]';
-
-  const bgColor = isDark ? brand.dark.bg : brand.light.bg;
-  const textColor = isDark ? 'rgba(240,244,243,.88)' : 'rgba(61,48,38,.88)';
-  const accentGlow = isDark ? 'rgb(var(--accent-rgb) / .30)' : 'rgba(140,106,77,.12)';
-  const accentGlow2 = isDark ? 'rgb(var(--accent-deep-rgb) / .35)' : 'rgba(177,134,99,.08)';
-
-  return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden"
-         style={{ background: bgColor }}>
-      {/* ambient glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full opacity-20"
-             style={{ background: `radial-gradient(circle, ${accentGlow}, transparent 70%)` }} />
-        <div className="absolute bottom-1/4 left-1/3 w-[300px] h-[300px] rounded-full opacity-10"
-             style={{ background: `radial-gradient(circle, ${accentGlow2}, transparent 70%)` }} />
+  return createPortal(
+    <div className={`arrival${leaving ? ' is-leaving' : ''}`} role="status" aria-live="polite" onClick={() => setLeaving(true)}>
+      <div className="auth-aurora" />
+      <div className="arrival__inner">
+        <BrandMark animate className="arrival__mark" />
+        <h2 className="arrival__hello">
+          <span className="auth-word"><span style={{ animationDelay: '700ms' }}>{first ? `Welcome, ${first}.` : 'Welcome.'}</span></span>
+        </h2>
+        <p className="arrival__quote">&ldquo;{quote}&rdquo;</p>
       </div>
-
-      {/* content */}
-      <div className={`relative z-10 flex flex-col items-center px-8 max-w-md ${baseTransition} ${opacity} ${transform}`}>
-        {/* logo */}
-        <div className="mb-8 flex items-center gap-3 opacity-70">
-          <Logo className="w-10 h-10 rounded-xl" />
-          <span className="font-brand text-sm tracking-wide" style={{ color: textColor }}>Barbell</span>
-        </div>
-
-        {/* quote */}
-        <blockquote className="text-center">
-          <p className="font-display text-lg sm:text-xl leading-relaxed tracking-tight"
-             style={{ color: textColor }}>
-            &ldquo;{quote}&rdquo;
-          </p>
-        </blockquote>
-
-        {/* subtle divider */}
-        <div className="mt-8 w-12 h-[1.5px] rounded-full"
-             style={{ background: `linear-gradient(90deg, transparent, ${isDark ? 'rgb(var(--accent-rgb) / .45)' : 'rgba(140,106,77,.25)'}, transparent)` }} />
-      </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

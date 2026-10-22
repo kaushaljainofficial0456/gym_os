@@ -81,8 +81,7 @@ export default function AmbientBackdrop({
   className,
   intensity = 0.5,
   maxTier = 'medium',
-  // 'aurora' (the drifting field) | 'orbit' (concentric rings, used by the
-  // sign-in pages). Each scene is its own lazy chunk.
+  // 'aurora' (the drifting field). Each scene is its own lazy chunk.
   scene = 'aurora',
   ...rest
 }) {

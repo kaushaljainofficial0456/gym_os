@@ -1,15 +1,9 @@
 /**
- * FORGOT PASSWORD — the half of the flow that was missing.
+ * FORGOT PASSWORD.
  *
- * The server side of password reset was already complete and careful:
- * it issues a one-hour single-use token, answers every request with the
- * same generic message so the response cannot be used to discover which
- * addresses have accounts, and emails a link to
- * `${frontendUrl}/reset-password?token=...`.
- *
- * That route did not exist in this app, and no page linked here. So the
- * emails pointed at a 404 and there was no way to reach the flow at all:
- * a person who forgot their password simply could not get back in.
+ * The server issues a one-hour single-use token, answers every request
+ * with the same generic message so the response cannot be used to discover
+ * which addresses have accounts, and emails a link to /reset-password.
  *
  * THE GENERIC ANSWER IS PRESERVED HERE. The screen says the same thing
  * whether or not the address has an account, because saying "no account
@@ -18,11 +12,17 @@
  * link is on its way.
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { MailCheck } from 'lucide-react';
 import { api } from '../api.js';
-import Logo from '../components/Logo.jsx';
+import { useAuthStage } from '../components/auth/AuthLayout.jsx';
+import { AuthTitle, Cta, ErrorNote, Field } from '../components/auth/authKit.jsx';
+
+const RECOVERY_HEADLINE = [{ text: 'Back in' }, { text: 'a minute.', accent: true }];
 
 export default function ForgotPassword() {
+  useAuthStage('compact', RECOVERY_HEADLINE);
+  const nav = useNavigate();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -45,57 +45,34 @@ export default function ForgotPassword() {
     setBusy(false);
   };
 
-  return (
-    <div className="min-h-screen grid place-items-center px-5 py-10" style={{ background: 'var(--bg)' }}>
-      <div className="w-full max-w-sm">
-        <div className="mb-7 flex justify-center"><Logo /></div>
+  const back = () => nav('/login', { state: { view: 'signin' } });
 
-        {sent ? (
-          <div className="card p-6 text-center">
-            <h1 className="font-display font-bold text-xl mb-2" style={{ color: 'var(--ink)' }}>
-              Check your email
-            </h1>
-            {/* Deliberately does NOT confirm the address exists. */}
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--mute)' }}>
-              If an account exists for <strong style={{ color: 'var(--ink)' }}>{email.trim()}</strong>,
-              a reset link is on its way. It expires in an hour.
-            </p>
-            <p className="text-[12px] mt-3" style={{ color: 'var(--faint)' }}>
-              Nothing arrived? Check spam, then try again — the link is only sent to registered addresses.
-            </p>
-            <Link to="/login" className="btn btn-block mt-5">Back to sign in</Link>
-          </div>
-        ) : (
-          <div className="card p-6">
-            <h1 className="font-display font-bold text-xl mb-1" style={{ color: 'var(--ink)' }}>
-              Reset your password
-            </h1>
-            <p className="text-sm mb-5" style={{ color: 'var(--mute)' }}>
-              Enter the email you sign in with and we'll send you a link.
-            </p>
-
-            <form onSubmit={submit} className="space-y-3.5">
-              <div className="field">
-                <label htmlFor="reset-email" className="field-label">Email</label>
-                <input
-                  id="reset-email" className="input mt-1.5" type="email" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="username" placeholder="you@yourgym.com"
-                  required autoFocus
-                />
-              </div>
-              {err && <div className="field-error anim-fadeIn" role="alert">{err}</div>}
-              <button className="btn-primary btn-lg btn-block" disabled={busy || !email.trim()}>
-                {busy ? 'Sending…' : 'Send reset link'}
-              </button>
-            </form>
-
-            <Link to="/login" className="block text-center text-[12.5px] mt-4" style={{ color: 'var(--mute)' }}>
-              Back to sign in
-            </Link>
-          </div>
-        )}
+  if (sent) {
+    return (
+      <div className="auth-view">
+        <div className="auth-icon"><MailCheck size={22} strokeWidth={1.4} aria-hidden="true" /></div>
+        {/* Deliberately does NOT confirm the address exists. */}
+        <AuthTitle title="Check your email"
+          sub={<>If an account exists for <strong style={{ color: 'var(--ink)' }}>{email.trim()}</strong>, a reset link is on its way. It expires in an hour.</>} />
+        <button type="button" className="auth-ghost" onClick={back}>Back to sign in</button>
+        <p className="auth-foot" style={{ fontSize: 12.5 }}>Nothing arrived? Check spam, then try again.</p>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <>
+      <AuthTitle title="Reset your password" sub="We'll email you a link." onBack={back} />
+      <form onSubmit={submit} className="auth-form">
+        <Field id="reset-email" label="Email">
+          <input id="reset-email" className="input auth-input" type="email" value={email}
+            onChange={(e) => setEmail(e.target.value)} autoComplete="username" inputMode="email"
+            placeholder="you@yourgym.com" required autoFocus />
+        </Field>
+        <ErrorNote>{err}</ErrorNote>
+        <Cta busy={busy} disabled={!email.trim()}>Send reset link</Cta>
+      </form>
+      <p className="auth-foot">Remembered it? <Link to="/login" state={{ view: 'signin' }}>Sign in</Link></p>
+    </>
   );
 }
