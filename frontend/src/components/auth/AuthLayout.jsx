@@ -1,8 +1,7 @@
 /**
  * The signed-out routes' shared frame. One AuthShell for all of them, so
- * the stage -- the 3D mark, its WebGL context, its draw-in -- carries on
- * from Welcome to Sign in to Set up instead of being torn down and redrawn
- * at every step. Each screen tells the stage how tall to be and what line
+ * the stage -- the mark and its draw-in -- carries on from Welcome to Sign
+ * in to Set up instead of being torn down and redrawn at every step. Each screen tells the stage how tall to be and what line
  * to show through useAuthStage.
  */
 import { createContext, useContext, useEffect, useState } from 'react';

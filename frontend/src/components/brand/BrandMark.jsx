@@ -7,9 +7,8 @@
  * on the intro's own beats: the ring sweeps clockwise from 12 o'clock, the
  * bar draws out from the centre, then the plates rise onto it.
  *
- * This is also what stands in for the 3D mark wherever that does not run
- * (no WebGL, reduced motion, a low-end device, while it downloads), so it
- * has to look finished on its own.
+ * With `glint`, once drawn, a single point of light travels the ring every
+ * few seconds -- the only thing on the stage that moves after it settles.
  */
 const STROKE = 7.2;
 const BADGE = 240;
@@ -20,7 +19,7 @@ const PLATES = [
   { id: 'small', x: 51, w: 9, h: 64 },
 ];
 
-export default function BrandMark({ animate = false, className = '', title, ...rest }) {
+export default function BrandMark({ animate = false, glint = false, className = '', title, ...rest }) {
   const c = BADGE / 2;
   return (
     <svg
@@ -36,6 +35,12 @@ export default function BrandMark({ animate = false, className = '', title, ...r
         fill="none" stroke="currentColor" strokeWidth={STROKE}
         pathLength={1} transform={`rotate(-90 ${c} ${c})`}
       />
+      {glint && (
+        <circle
+          className="bm-glint" cx={c} cy={c} r={RING_R}
+          fill="none" strokeWidth={STROKE} pathLength={1}
+        />
+      )}
       <rect className="bm-bar" x={c - BAR / 2} y={c - STROKE / 2} width={BAR} height={STROKE} fill="currentColor" />
       {PLATES.flatMap((p) => [-1, 1].map((side) => (
         <rect
