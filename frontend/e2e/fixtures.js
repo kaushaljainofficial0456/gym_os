@@ -5,7 +5,7 @@ import { expect } from '@playwright/test';
 export const PASSWORD = 'demo1234';
 export const ACCOUNTS = {
   client: { email: 'client1@ironforge.in', card: 'Client', home: '/app/client' },
-  owner: { email: 'owner@ironforge.in', card: 'Gym Owner', home: '/app/trainer' },
+  owner: { email: 'owner@ironforge.in', card: 'Owner', home: '/app/trainer' },
   trainer: { email: 'trainer1@ironforge.in', card: 'Trainer', home: '/app/trainer' },
   // Left un-onboarded on purpose: onboarding.spec.js is its first sign-in.
   newClient: { email: 'client2@ironforge.in', card: 'Client', home: '/app/client' },
@@ -33,7 +33,7 @@ export function markFirstRunSeen() {
   } catch { /* storage unavailable */ }
 }
 
-/** Signs in through the real login screen: path card, role card, form. */
+/** Signs in through the real login screen: path row, role tab, form. */
 export async function signIn(page, who, password = PASSWORD) {
   const account = ACCOUNTS[who];
   await page.goto('/login');

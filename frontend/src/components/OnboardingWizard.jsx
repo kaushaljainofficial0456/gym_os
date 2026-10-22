@@ -46,6 +46,11 @@ import WeightSelector from './WeightSelector.jsx';
 import { formatWeight, formatLength, formatHeight } from '../units.js';
 import Icon from './Icon.jsx';
 import { useDialog } from './UI.jsx';
+import BrandMark from './brand/BrandMark.jsx';
+
+// The sign-in screens' serif, so the last step before the home screen
+// speaks in the same voice as the first.
+const SERIF = "'Sentient', Georgia, serif";
 
 const stepVariants = {
   enter: (dir) => ({ x: dir >= 0 ? 22 : -22, opacity: 0 }),
@@ -56,12 +61,12 @@ const T = {
   dark: {
     bg: 'var(--bg)', surface: 'rgba(255,255,255,0.03)', glass: 'rgba(255,255,255,0.04)',
     border: 'var(--line)', ink: 'var(--ink)', mute: 'var(--mute)', faint: 'var(--faint)',
-    accent: 'var(--accent)', accentDim: 'var(--accent-soft)', danger: 'rgb(var(--bad-rgb))',
+    accent: 'var(--ink)', accentDim: 'rgb(var(--tint-rgb) / .07)', danger: 'rgb(var(--bad-rgb))',
   },
   light: {
     bg: 'var(--bg)', surface: 'var(--panel)', glass: 'var(--panel)',
     border: 'var(--line)', ink: 'var(--ink)', mute: 'var(--mute)', faint: 'var(--faint)',
-    accent: 'var(--accent)', accentDim: 'var(--accent-soft)', danger: 'rgb(var(--bad-rgb))',
+    accent: 'var(--ink)', accentDim: 'rgb(var(--tint-rgb) / .07)', danger: 'rgb(var(--bad-rgb))',
   },
 };
 
@@ -87,7 +92,7 @@ const ACTIVITY = [
 function StepHead({ title, why, t }) {
   return (
     <div className="mb-5">
-      <h2 className="font-grotesk font-bold leading-snug" style={{ fontSize: 21, color: t.ink }}>
+      <h2 className="leading-tight" style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 27, letterSpacing: '-.02em', color: t.ink }}>
         {title}
       </h2>
       {why && (
@@ -130,7 +135,7 @@ function Check({ on, t }) {
       }}
     >
       {on && (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 6L9 17l-5-5" />
         </svg>
       )}
@@ -143,31 +148,23 @@ function Check({ on, t }) {
 function StepWelcome({ t, name }) {
   return (
     <div className="text-center py-2">
-      <div
-        className="mx-auto grid place-items-center rounded-2xl mb-4"
-        style={{ width: 56, height: 56, background: t.accentDim, border: `1px solid ${t.accent}` }}
-      >
-        <Icon name="strength" size={26} />
-      </div>
-      <h2 className="font-grotesk font-black leading-tight" style={{ fontSize: 24, color: t.ink }}>
+      <BrandMark animate className="mx-auto mb-5" style={{ width: 64, height: 64, color: t.ink }} />
+      <h2 className="leading-tight" style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 32, letterSpacing: '-.02em', color: t.ink }}>
         {name ? `Welcome, ${name.split(' ')[0]}` : 'Welcome to Barbell'}
       </h2>
       <p className="text-[13px] mt-2.5 leading-relaxed" style={{ color: t.mute }}>
         Six quick questions so your training and nutrition targets are built around
         you rather than an average. It takes about a minute.
       </p>
-      <ul className="mt-5 space-y-2 text-left">
+      <ul className="mt-6 text-left" style={{ borderTop: `1px solid ${t.border}` }}>
         {[
           ['Calorie and macro targets', 'calculated from your own body and goal'],
           ['A plan that fits your level', 'not a generic beginner template'],
           ['Progress measured against you', 'your starting point, not someone else’s'],
         ].map(([h, s]) => (
-          <li key={h} className="flex items-start gap-2.5">
-            <span className="mt-1.5 shrink-0 rounded-full" style={{ width: 5, height: 5, background: t.accent }} />
-            <span>
-              <span className="text-[12.5px] font-semibold" style={{ color: t.ink }}>{h}</span>
-              <span className="text-[12px]" style={{ color: t.mute }}> — {s}</span>
-            </span>
+          <li key={h} className="py-3" style={{ borderBottom: `1px solid ${t.border}` }}>
+            <span className="block text-[13.5px] font-semibold" style={{ color: t.ink }}>{h}</span>
+            <span className="block text-[12.5px] mt-0.5" style={{ color: t.mute }}>{s}</span>
           </li>
         ))}
       </ul>
@@ -491,7 +488,7 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
                 <div
                   key={i}
                   className="flex-1 rounded-full transition-all duration-500"
-                  style={{ height: 3, background: i <= questionIndex ? t.accent : t.border }}
+                  style={{ height: 2, background: i <= questionIndex ? t.accent : t.border }}
                 />
               ))}
             </div>
@@ -553,8 +550,8 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
             <button
               type="button"
               onClick={handleBack}
-              className="px-4 rounded-2xl font-grotesk text-[12.5px] font-semibold transition-all active:scale-95"
-              style={{ minHeight: 50, background: 'transparent', border: `1px solid ${t.border}`, color: t.mute }}
+              className="px-4 rounded-xl font-grotesk text-[12.5px] font-semibold transition-all active:scale-95"
+              style={{ minHeight: 52, background: 'transparent', border: `1px solid ${t.border}`, color: t.mute }}
             >
               Back
             </button>
@@ -563,11 +560,11 @@ export default function OnboardingWizard({ open, onComplete, initialName = '' })
             type="button"
             onClick={handleNext}
             disabled={!canNext || saving}
-            className="flex-1 rounded-2xl font-grotesk text-[14px] font-bold transition-all active:scale-[.97]"
+            className="flex-1 rounded-xl font-grotesk text-[14.5px] font-semibold transition-all active:scale-[.98]"
             style={{
-              minHeight: 50,
+              minHeight: 52,
               background: canNext && !saving ? t.accent : t.surface,
-              color: canNext && !saving ? 'var(--accent-contrast)' : t.mute,
+              color: canNext && !saving ? 'var(--bg)' : t.mute,
               border: `1px solid ${canNext && !saving ? t.accent : t.border}`,
               opacity: canNext && !saving ? 1 : 0.55,
               cursor: canNext && !saving ? 'pointer' : 'not-allowed',

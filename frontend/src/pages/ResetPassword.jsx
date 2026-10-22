@@ -19,13 +19,23 @@
  */
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { KeyRound } from 'lucide-react';
 import { api } from '../api.js';
 import { PasswordInput } from '../components/UI.jsx';
-import Logo from '../components/Logo.jsx';
+import { useAuthStage } from '../components/auth/AuthLayout.jsx';
+import { AuthTitle, Cta, ErrorNote, Field } from '../components/auth/authKit.jsx';
 
 const MIN_LENGTH = 6;   // matches the server's own z.string().min(6)
+const HEADLINE = [{ text: 'Back in' }, { text: 'a minute.', accent: true }];
+
+function Badge() {
+  return (
+    <div className="auth-icon"><KeyRound size={22} strokeWidth={1.4} aria-hidden="true" /></div>
+  );
+}
 
 export default function ResetPassword() {
+  useAuthStage('compact', HEADLINE);
   const [params] = useSearchParams();
   const nav = useNavigate();
   const token = params.get('token') || '';
@@ -36,20 +46,18 @@ export default function ResetPassword() {
   const [err, setErr] = useState('');
   const [done, setDone] = useState(false);
 
+  const toSignIn = () => nav('/login', { state: { view: 'signin' } });
+
   /* A link with no token at all is its own case: the person most likely
      opened /reset-password directly, and telling them the link is
      "invalid" would be misleading -- there is no link. */
   if (!token) {
     return (
-      <Shell>
-        <h1 className="font-display font-bold text-xl mb-2" style={{ color: 'var(--ink)' }}>
-          This page needs a reset link
-        </h1>
-        <p className="text-sm leading-relaxed" style={{ color: 'var(--mute)' }}>
-          Open the link from your reset email, or request a new one.
-        </p>
-        <Link to="/forgot-password" className="btn-primary btn-block mt-5">Request a reset link</Link>
-      </Shell>
+      <>
+        <Badge />
+        <AuthTitle title="This page needs a reset link" sub="Open the link from your reset email, or request a new one." />
+        <Link to="/forgot-password" className="auth-cta">Request a reset link</Link>
+      </>
     );
   }
 
@@ -59,9 +67,6 @@ export default function ResetPassword() {
   const submit = async (e) => {
     e.preventDefault();
     if (busy) return;
-    // Checked here so the token is not spent on a request that cannot
-    // succeed -- these links are single-use, and burning one on a typo
-    // would mean requesting another email.
     if (password !== confirm) return setErr('Those passwords do not match.');
     if (password.length < MIN_LENGTH) return setErr(`Use at least ${MIN_LENGTH} characters.`);
 
@@ -73,8 +78,6 @@ export default function ResetPassword() {
       });
       setDone(true);
     } catch (e2) {
-      // The server's reasons differ in what to do next, so they are shown
-      // as written rather than flattened to "something went wrong".
       setErr(e2.message || 'This reset link is invalid or has expired.');
     }
     setBusy(false);
@@ -82,88 +85,44 @@ export default function ResetPassword() {
 
   if (done) {
     return (
-      <Shell>
-        <h1 className="font-display font-bold text-xl mb-2" style={{ color: 'var(--ink)' }}>
-          Password changed
-        </h1>
-        <p className="text-sm leading-relaxed" style={{ color: 'var(--mute)' }}>
-          Sign in with your new password.
-        </p>
-        <button className="btn-primary btn-lg btn-block mt-5" onClick={() => nav('/login')}>
-          Go to sign in
-        </button>
-      </Shell>
+      <div className="auth-view">
+        <Badge />
+        <AuthTitle title="Password changed" sub="Sign in with your new password." />
+        <Cta onClick={toSignIn}>Go to sign in</Cta>
+      </div>
     );
   }
 
   return (
-    <Shell>
-      <h1 className="font-display font-bold text-xl mb-1" style={{ color: 'var(--ink)' }}>
-        Choose a new password
-      </h1>
-      <p className="text-sm mb-5" style={{ color: 'var(--mute)' }}>
-        This link works once and expires an hour after it was sent.
-      </p>
-
-      <form onSubmit={submit} className="space-y-3.5">
-        <div className="field">
-          <label htmlFor="new-password" className="field-label">New password</label>
+    <>
+      <AuthTitle title="Choose a new password" sub="This link works once, for an hour." />
+      <form onSubmit={submit} className="auth-form">
+        <Field id="new-password" label="New password">
           <PasswordInput
-            id="new-password" className="mt-1.5" value={password}
+            id="new-password" className="auth-input" value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password" placeholder={`At least ${MIN_LENGTH} characters`}
             aria-invalid={tooShort ? 'true' : undefined}
             required autoFocus
           />
-          {tooShort && (
-            <div className="text-[11.5px] mt-1" style={{ color: 'var(--warn)' }}>
-              At least {MIN_LENGTH} characters.
-            </div>
-          )}
-        </div>
-
-        <div className="field">
-          <label htmlFor="confirm-password" className="field-label">Confirm new password</label>
+          {tooShort && <div className="text-[12px] mt-1.5" style={{ color: 'var(--warn)' }}>At least {MIN_LENGTH} characters.</div>}
+        </Field>
+        <Field id="confirm-password" label="Confirm new password">
           <PasswordInput
-            id="confirm-password" className="mt-1.5" value={confirm}
+            id="confirm-password" className="auth-input" value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             autoComplete="new-password" placeholder="Type it again"
             aria-invalid={mismatch ? 'true' : undefined}
             required
           />
-          {mismatch && (
-            <div className="text-[11.5px] mt-1" style={{ color: 'var(--warn)' }}>
-              These do not match yet.
-            </div>
-          )}
-        </div>
-
-        {err && <div className="field-error anim-fadeIn" role="alert">{err}</div>}
-
-        <button
-          className="btn-primary btn-lg btn-block"
-          disabled={busy || !password || !confirm || mismatch || tooShort}
-        >
-          {busy ? 'Saving…' : 'Set new password'}
-        </button>
+          {mismatch && <div className="text-[12px] mt-1.5" style={{ color: 'var(--warn)' }}>These do not match yet.</div>}
+        </Field>
+        <ErrorNote>{err}</ErrorNote>
+        <Cta busy={busy} disabled={!password || !confirm || mismatch || tooShort}>Set new password</Cta>
       </form>
-
       {/* Every failure from here needs a fresh link, so the way to get
           one is always on screen rather than only after an error. */}
-      <Link to="/forgot-password" className="block text-center text-[12.5px] mt-4" style={{ color: 'var(--mute)' }}>
-        Need a new link?
-      </Link>
-    </Shell>
-  );
-}
-
-function Shell({ children }) {
-  return (
-    <div className="min-h-screen grid place-items-center px-5 py-10" style={{ background: 'var(--bg)' }}>
-      <div className="w-full max-w-sm">
-        <div className="mb-7 flex justify-center"><Logo /></div>
-        <div className="card p-6">{children}</div>
-      </div>
-    </div>
+      <p className="auth-foot"><Link to="/forgot-password">Need a new link?</Link></p>
+    </>
   );
 }
