@@ -1,4 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
+// Route screens: a screen whose code vanished in a deploy reloads into the
+// new version instead of failing (see lazyWithReload.js).
+import { lazyWithReload as lazy } from './lazyWithReload.js';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth, isTrainerRole } from './auth.jsx';
 import { getStoredUser } from './api.js';

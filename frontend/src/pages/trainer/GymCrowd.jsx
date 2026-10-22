@@ -402,7 +402,24 @@ export default function GymCrowd() {
 
       {analytics?.weekly && (
         <div className="card p-4">
-          <div className="text-[10px] uppercase tracking-[.14em] font-grotesk mb-2.5" style={{ color: 'var(--faint)' }}>Typical week</div>
+          <div className="flex items-center justify-between gap-3 mb-2.5">
+            <div className="text-[10px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--faint)' }}>Typical week</div>
+            {analytics.week && (
+              /* Monday to now against last Monday to this time a week ago --
+                 never a part-week against a whole one. */
+              <div className="text-right">
+                <span className="font-grotesk font-bold text-[13px] tabular-nums" style={{ color: 'var(--ink)' }}>
+                  {analytics.week.thisWeekSoFar} visits this week
+                </span>
+                {analytics.week.pctChange != null && (
+                  <span className="font-grotesk text-[11.5px] ml-1.5 tabular-nums"
+                        style={{ color: analytics.week.pctChange >= 0 ? 'var(--good)' : 'var(--warn)' }}>
+                    {analytics.week.pctChange >= 0 ? '+' : '−'}{Math.abs(analytics.week.pctChange)}% vs last week by now
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           {analytics.weekly.sufficient ? <WeeklyHeat weekly={analytics.weekly} /> : (
             <div className="text-[12px]" style={{ color: 'var(--mute)' }}>
               The weekly pattern appears after {analytics.weekly.daysRequired} days of arrivals. There are {analytics.weekly.daysWithData} so far.

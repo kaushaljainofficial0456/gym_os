@@ -145,15 +145,57 @@ function HourBars({ data, compare, max, tone }) {
   );
 }
 
-function Stat({ label, value, sub, info }) {
+function Stat({ label, value, sub, info, wide = false }) {
   return (
-    <div className="rounded-xl p-3" style={{ background: 'var(--bg2)', border: '1px solid var(--line)' }}>
+    <div className={`rounded-xl p-3${wide ? ' col-span-2' : ''}`} style={{ background: 'var(--bg2)', border: '1px solid var(--line)' }}>
       <div className="flex items-center gap-1">
         <div className="font-grotesk text-[9.5px] uppercase tracking-[.14em]" style={{ color: 'var(--faint)' }}>{label}</div>
         {info && <InfoDot label={label} size={26}>{info}</InfoDot>}
       </div>
       <div className="font-grotesk font-bold text-[15px] mt-1" style={{ color: 'var(--ink)' }}>{value}</div>
       {sub && <div className="text-[10px] mt-0.5" style={{ color: 'var(--mute)' }}>{sub}</div>}
+    </div>
+  );
+}
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DOW_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** Seven bars, Monday first: each weekday's usual busiest point. */
+function WeekBars({ days, tone }) {
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const known = days.filter((d) => d.averagePeak != null);
+  if (known.length < 3) return null;
+  const max = Math.max(1, ...known.map((d) => d.averagePeak));
+  const busiest = known.reduce((a, b) => (b.averagePeak > a.averagePeak ? b : a));
+  const quietest = known.reduce((a, b) => (b.averagePeak < a.averagePeak ? b : a));
+  const todayDow = new Date().getDay();
+  return (
+    <div>
+      <div className="flex items-end gap-1.5 h-20" role="img"
+           aria-label={`Busiest on ${DOW_LONG[busiest.dow]}s, quietest on ${DOW_LONG[quietest.dow]}s.`}>
+        {order.map((dow) => {
+          const d = days.find((x) => x.dow === dow);
+          const v = d?.averagePeak;
+          return (
+            <div key={dow} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+              <div className="w-full rounded-t-[4px]"
+                   style={{
+                     height: v == null ? 2 : `${Math.max(6, (v / max) * 100)}%`,
+                     background: v == null ? 'var(--line)' : tone,
+                     opacity: dow === todayDow ? 1 : 0.55,
+                   }} />
+              <span className="text-[9px] font-grotesk"
+                    style={{ color: dow === todayDow ? 'var(--ink)' : 'var(--faint)', fontWeight: dow === todayDow ? 700 : 400 }}>
+                {DOW[dow]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10.5px] mt-1.5 text-center" style={{ color: 'var(--mute)' }}>
+        Busiest on {DOW_LONG[busiest.dow]}s · quietest on {DOW_LONG[quietest.dow]}s
+      </div>
     </div>
   );
 }
@@ -197,6 +239,24 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
     return () => { cancelled = true; };
   }, [open, branchId]);
 
+  /* The live figure keeps itself current while this screen is open: every
+     30 seconds, and only while the tab is visible -- a phone in a pocket
+     should not keep asking. Whole gym or the chosen branch. */
+  const [fresh, setFresh] = useState(null);
+  useEffect(() => {
+    if (!open) { setFresh(null); return undefined; }
+    let cancelled = false;
+    const pull = () => {
+      if (document.visibilityState !== 'visible') return;
+      api(branchId ? `/me/crowd?branchId=${encodeURIComponent(branchId)}` : '/me/crowd')
+        .then((r) => { if (!cancelled && r?.enabled !== false) setFresh({ branchId, data: r }); })
+        .catch(() => {});
+    };
+    const h = setInterval(pull, 30000);
+    document.addEventListener('visibilitychange', pull);
+    return () => { cancelled = true; clearInterval(h); document.removeEventListener('visibilitychange', pull); };
+  }, [open, branchId]);
+
   /* Fetched when the screen opens, not with the Home card: this replays up
      to 28 days of events and the card that links here re-polls for the
      live figure. */
@@ -213,7 +273,8 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
   if (!crowd) return null;
 
   // The figure on screen: the chosen branch's, or the whole gym's.
-  const live = branchId && branchCrowd?.enabled ? branchCrowd : crowd;
+  const base = branchId && branchCrowd?.enabled ? branchCrowd : crowd;
+  const live = fresh && fresh.branchId === branchId ? fresh.data : base;
   const status = live.crowd || null;
   const closed = status?.status === 'closed';
   const tone = TONE[status?.severity] || 'var(--accent)';
@@ -229,6 +290,13 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
   const amount = (n) => (n == null ? '—' : unit === 'percent' ? `${n}% full` : `about ${n} people`);
   const typical = history?.sufficient ? history.typicalByHour : null;
   const today = history?.todayByHour || null;
+  const best = history?.bestTime || null;
+  const nowHour = history?.nowHour;
+  const yesterdayNow = nowHour != null && history?.yesterdayByHour ? history.yesterdayByHour[nowHour]?.count : null;
+  // Now against yesterday at this hour, in the same unit the history uses.
+  const nowValue = unit === 'percent' ? pct : count;
+  const vsYesterday = !closed && nowValue != null && yesterdayNow != null && !branchId
+    ? Math.round(nowValue - yesterdayNow) : null;
   const chartMax = typical
     ? Math.max(1, ...typical.map((d) => d.count), ...(today || []).map((d) => d.count))
     : today ? Math.max(1, ...today.map((d) => d.count)) : 1;
@@ -279,6 +347,31 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
           {!closed && <FreshnessPill freshness={live.freshness} />}
         </div>
 
+        {/* ── when to go: the question most members opened this to ask ── */}
+        {best && !branchId && !closed && (
+          <div className="rounded-2xl p-4 flex items-center gap-3"
+               style={{ background: 'rgb(var(--good-rgb) / .08)', border: '1px solid rgb(var(--good-rgb) / .3)' }}>
+            <span className="w-10 h-10 rounded-xl grid place-items-center shrink-0"
+                  style={{ background: 'rgb(var(--good-rgb) / .16)', color: 'var(--good)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+              </svg>
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="font-grotesk text-[10px] uppercase tracking-[.14em]" style={{ color: 'var(--faint)' }}>
+                {best.when === 'today' ? 'Best time to go today' : 'Best time tomorrow'}
+              </div>
+              <div className="font-grotesk font-bold text-[16px]" style={{ color: 'var(--ink)' }}>{windowLabel(best)}</div>
+              <div className="text-[11px]" style={{ color: 'var(--mute)' }}>Usually {amount(best.average)}</div>
+            </div>
+            <InfoDot label="best time to go" title="How this is picked" size={26} align="end">
+              The quietest two hours still ahead today while your gym is open, from its last few weeks of
+              entries and exits. Late in the evening it shows tomorrow&rsquo;s usual quietest time instead.
+            </InfoDot>
+          </div>
+        )}
+
         {/* ── today's numbers, all measured ── */}
         <div className="grid grid-cols-2 gap-2">
           {/* Absent entirely when the gym hides head-counts -- the server
@@ -292,7 +385,18 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
             sub={live.peak != null && live.peakHour != null ? `around ${hourLabel(live.peakHour)}` : null}
             info="The most people inside at any one time today, counted from entry and exit scans."
           />
+          {vsYesterday != null && (
+            <Stat
+              label="Vs yesterday"
+              value={vsYesterday === 0 ? 'Same'
+                : `${vsYesterday > 0 ? '+' : '−'}${Math.abs(vsYesterday)}${unit === 'percent' ? ' pts' : Math.abs(vsYesterday) === 1 ? ' person' : ' people'}`}
+              sub={`${hourLabel(nowHour)} yesterday: ${unit === 'percent' ? `${yesterdayNow}% full` : yesterdayNow}`}
+              info="Right now against the busiest point of the same hour yesterday."
+            />
+          )}
+          {/* A third card would sit alone in its row: let it take the width. */}
           <Stat
+            wide={vsYesterday != null}
             label="Capacity"
             value={status?.capacity ? `${status.capacity}` : 'Not set'}
             sub={status?.capacity ? 'people' : 'no percentage shown'}
@@ -363,6 +467,14 @@ export default function GymCrowdDetail({ open, onClose, crowd }) {
                 <Stat label="Usually quietest" value={windowLabel(history.quietestHours) || '—'}
                       sub={history.quietestHours ? amount(history.quietestHours.average) : 'not enough range yet'} />
               </div>
+              {history.byWeekday && (
+                <div className="mt-4">
+                  <div className="font-grotesk text-[10px] uppercase tracking-[.14em] mb-2" style={{ color: 'var(--faint)' }}>
+                    Through the week
+                  </div>
+                  <WeekBars days={history.byWeekday} tone={tone} />
+                </div>
+              )}
               <div className="text-[10px] mt-2 text-center" style={{ color: 'var(--faint)' }}>
                 Based on {history.daysOfHistory} days of your gym&rsquo;s attendance.
               </div>

@@ -17,7 +17,7 @@ import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
 import { track, trackOnce } from '../services/events.js';
 import { crowdHistory } from '../services/occupancy.js';
-import { liveCrowd } from '../services/access/liveCrowd.js';
+import { liveCrowd, hasLiveAccessFeed } from '../services/access/liveCrowd.js';
 import {
   foodSearch,
   searchFoods as searchFoodModel,
@@ -1693,7 +1693,9 @@ export default function meRoutes(db) {
       return res.json({ enabled: false, reason: 'disabled' });
     }
     const days = Math.min(90, Math.max(7, parseInt(req.query.days, 10) || 28));
-    const history = await crowdHistory(db, c.org_id, req.tz, { days });
+    // The same source the live figure uses: the door, once it has spoken.
+    const source = (await hasLiveAccessFeed(db, c.org_id)) ? 'door' : 'manual';
+    const history = await crowdHistory(db, c.org_id, req.tz, { days, source, settings });
 
     /* A gym that hides its head-count cannot be handed the same count back
        one row per hour. But the SHAPE of the day is the whole point of
@@ -1711,7 +1713,8 @@ export default function meRoutes(db) {
           enabled: true, sufficient: false, unit: 'percent',
           reason: 'counts_hidden_no_capacity',
           daysOfHistory: history.daysOfHistory, daysRequired: history.daysRequired,
-          typicalByHour: null, todayByHour: null, busiestHours: null, quietestHours: null, byWeekday: null,
+          typicalByHour: null, todayByHour: null, yesterdayByHour: null, busiestHours: null, quietestHours: null,
+          bestTime: null, byWeekday: null,
         });
       }
       const scale = (rows) => (rows || []).map(({ hour, count }) => ({
@@ -1721,12 +1724,16 @@ export default function meRoutes(db) {
       return res.json({
         enabled: true, unit: 'percent',
         sufficient: history.sufficient,
+        source: history.source,
+        nowHour: history.nowHour,
         daysOfHistory: history.daysOfHistory,
         daysRequired: history.daysRequired,
         typicalByHour: history.typicalByHour ? scale(history.typicalByHour) : null,
         todayByHour: scale(history.todayByHour),
+        yesterdayByHour: scale(history.yesterdayByHour),
         busiestHours: scaleWindow(history.busiestHours),
         quietestHours: scaleWindow(history.quietestHours),
+        bestTime: scaleWindow(history.bestTime),
         byWeekday: (history.byWeekday || []).map((w) => ({
           ...w, averagePeak: w.averagePeak == null ? null : Math.round((w.averagePeak / cap) * 100),
         })),

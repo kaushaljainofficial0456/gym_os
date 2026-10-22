@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
+import { lazyWithReload as lazy } from '../../lazyWithReload.js';
 import { useOutletContext } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useTheme } from '../../themeContext.jsx';

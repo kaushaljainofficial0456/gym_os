@@ -11,7 +11,8 @@
 //   * midnight rollover                         → day scoped in the org's timezone
 //   * manual correction                         → insert a synthetic event
 // ============================================================
-import { dayKey, getOrgTz } from '../utils/time.js';
+import { dayKey, getOrgTz, shiftDayKey } from '../utils/time.js';
+import { localParts } from './access/localTime.js';
 import { getCrowdStatus, getFreshness } from './crowdStatus.js';
 
 /**
@@ -174,7 +175,7 @@ function hourlyPeaks(events) {
   const peaks = new Array(24).fill(0);
   let lastHour = null;
   for (const ev of events) {
-    const hour = Number(String(ev.ts).slice(11, 13));
+    const hour = ev.hour ?? Number(String(ev.ts).slice(11, 13));
     if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
 
     // Hours with no events of their own inherit the standing occupancy: a
@@ -200,50 +201,176 @@ function hourlyPeaks(events) {
 }
 
 /**
- * Typical occupancy by hour across the last `days` days, plus today's own
- * curve for comparison. Returns real data or an honest `sufficient: false`.
+ * WHEN a stored timestamp happened, as the GYM'S day and hour.
+ *
+ * Timestamps are stored in UTC ("...Z"). Slicing the hour out of that text
+ * put an Indian gym's 7 AM rush in the 1 AM column and split its evening
+ * across two "days" at 5:30 AM. A zoned string is converted into the gym's
+ * timezone; a naive one (older seed data) is already wall-clock time.
  */
-export async function crowdHistory(db, orgId, tz, { days = 28 } = {}) {
-  const orgTz = tz || await getOrgTz(db, orgId);
-  const today = dayKey(new Date(), orgTz);
-  const from = dayKey(new Date(Date.now() - days * 86400000), orgTz);
+function localWhen(ts, tz) {
+  const s = String(ts || '');
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+    const p = localParts(s, tz);
+    return p ? { day: p.day, hour: p.hour } : null;
+  }
+  const hour = Number(s.slice(11, 13));
+  return Number.isInteger(hour) ? { day: s.slice(0, 10), hour } : null;
+}
 
+/** Manual check-ins (attendance_events): each day's hourly peaks. */
+async function peaksFromCheckins(db, orgId, tz, fromIso) {
   const rows = await db.q(
-    `SELECT client_id, direction, ts, substr(ts, 1, 10) AS day
-       FROM attendance_events
-      WHERE org_id = ? AND substr(ts, 1, 10) >= ? AND substr(ts, 1, 10) <= ?
-      ORDER BY ts, id`, [orgId, from, today]);
-
+    `SELECT client_id, direction, ts FROM attendance_events
+      WHERE org_id = ? AND ts >= ?
+      ORDER BY ts, id`, [orgId, fromIso]);
   const byDay = new Map();
   for (const r of rows) {
-    if (!byDay.has(r.day)) byDay.set(r.day, []);
-    byDay.get(r.day).push(r);
+    const w = localWhen(r.ts, tz);
+    if (!w) continue;
+    if (!byDay.has(w.day)) byDay.set(w.day, []);
+    byDay.get(w.day).push({ ...r, hour: w.hour });
   }
+  const out = new Map();
+  for (const [day, evs] of byDay) out.set(day, hourlyPeaks(evs));
+  return out;
+}
+
+const SLOT_MS = 15 * 60 * 1000;
+const MAX_SESSION_MS = 16 * 60 * 60 * 1000;
+
+/**
+ * Door feed (presence sessions): each day's hourly peaks.
+ *
+ * Counted in 15-minute slots: a session occupies every slot from its entry
+ * to its exit, and an hour's figure is its fullest slot. A session closed
+ * without an exit scan (auto-closed at closing time, or reconciled by the
+ * next entry) has no real exit time and must not be given one -- for the
+ * SHAPE of a typical day it is counted for this gym's own median measured
+ * visit, and never past the moment it was closed.
+ */
+async function peaksFromSessions(db, orgId, tz, fromIso, now) {
+  const rows = await db.q(
+    `SELECT entered_at, exited_at, status, duration_sec, confidence, updated_at
+       FROM gym_presence_sessions
+      WHERE org_id = ? AND is_demo = 0 AND entered_at >= ?`, [orgId, fromIso]);
+  const measured = rows
+    .filter((r) => r.confidence === 'exact' && Number(r.duration_sec) > 0)
+    .map((r) => Number(r.duration_sec))
+    .sort((a, b) => a - b);
+  const typicalMs = (measured.length >= 5 ? measured[Math.floor(measured.length / 2)] : 75 * 60) * 1000;
+
+  const slots = new Map();
+  for (const r of rows) {
+    const start = Date.parse(r.entered_at);
+    if (!Number.isFinite(start)) continue;
+    let end;
+    if (r.exited_at) end = Date.parse(r.exited_at);
+    else if (r.status === 'OPEN') end = now.getTime();
+    else {
+      end = start + typicalMs;
+      const closedAt = Date.parse(r.updated_at);
+      if (Number.isFinite(closedAt) && closedAt > start) end = Math.min(end, closedAt);
+    }
+    if (!Number.isFinite(end) || end <= start) end = start + 1;
+    end = Math.min(end, start + MAX_SESSION_MS);
+    for (let k = Math.floor(start / SLOT_MS); k * SLOT_MS < end; k += 1) slots.set(k, (slots.get(k) || 0) + 1);
+  }
+  const out = new Map();
+  for (const [k, n] of slots) {
+    const p = localParts(new Date(k * SLOT_MS), tz);
+    if (!p) continue;
+    if (!out.has(p.day)) out.set(p.day, new Array(24).fill(0));
+    const arr = out.get(p.day);
+    arr[p.hour] = Math.max(arr[p.hour], n);
+  }
+  return out;
+}
+
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * The best time to go, from here on: the quietest two-hour window still
+ * ahead today while the gym is open -- or, late in the evening, tomorrow's
+ * usual quietest window. Never a time the gym is closed, and never a
+ * window the history has nothing to say about.
+ */
+export function bestTimeToVisit(typical, nowHour, settings, quietest) {
+  const open = HHMM.test(settings?.crowd_open_time || '') ? Number(settings.crowd_open_time.slice(0, 2)) : null;
+  const closeRaw = HHMM.test(settings?.crowd_close_time || '') ? Number(settings.crowd_close_time.slice(0, 2)) : null;
+  const close = closeRaw != null && open != null && closeRaw <= open ? 24 : closeRaw;
+  let best = null;
+  for (let h = nowHour + 1; h + 2 <= 24; h += 1) {
+    if (open != null && h < open) continue;
+    if (close != null && h + 2 > close) continue;
+    // Only hours the gym is actually used, when no hours are configured:
+    // a zero at 3 AM is a closed building, not a quiet one.
+    if (open == null && (typical[h] <= 0 || typical[h + 1] <= 0)) continue;
+    const average = Math.round(((typical[h] + typical[h + 1]) / 2) * 10) / 10;
+    if (!best || average < best.average) best = { startHour: h, endHour: h + 2, average };
+  }
+  if (best) return { ...best, when: 'today' };
+  return quietest ? { ...quietest, when: 'tomorrow' } : null;
+}
+
+/**
+ * Typical occupancy by hour across the last `days` days, plus today's and
+ * yesterday's own curves, the weekly pattern and the best time to go.
+ * Real data or an honest `sufficient: false`.
+ *
+ * `source` is the same choice the live figure makes (liveCrowd.js): a gym
+ * whose door feeds us events is measured from presence sessions; one on
+ * manual check-in from attendance_events. Reading only the manual log meant
+ * a gym on a fingerprint terminal never had a typical day at all, however
+ * many months of scans it had.
+ */
+export async function crowdHistory(db, orgId, tz, { days = 28, source = 'manual', settings = null, now = new Date() } = {}) {
+  const orgTz = tz || await getOrgTz(db, orgId);
+  const today = dayKey(now, orgTz);
+  const yesterday = shiftDayKey(today, -1);
+  const from = shiftDayKey(today, -days);
+  // A day early, so the first local day is complete in any timezone.
+  const fromIso = `${shiftDayKey(from, -1)}T00:00:00.000Z`;
+
+  const peaksByDay = source === 'door'
+    ? await peaksFromSessions(db, orgId, orgTz, fromIso, now)
+    : await peaksFromCheckins(db, orgId, orgTz, fromIso);
+
+  const zeros = () => new Array(24).fill(0);
+  const series = (peaks) => (peaks || zeros()).map((count, hour) => ({ hour, count }));
+  const todayPeaks = peaksByDay.get(today) || zeros();
+  const yesterdayPeaks = peaksByDay.get(yesterday) || zeros();
+  // The gym's hour now, so "today vs yesterday at this hour" is read on the
+  // gym's clock rather than the phone's.
+  const nowHour = localParts(now, orgTz)?.hour ?? null;
 
   // Today is excluded from "typical": a day still in progress would drag
   // every evening hour down to zero and move the apparent peak to lunchtime.
-  const pastDays = [...byDay.keys()].filter((d) => d < today).sort();
-  const todayPeaks = byDay.has(today) ? hourlyPeaks(byDay.get(today)) : new Array(24).fill(0);
+  const pastDays = [...peaksByDay.keys()].filter((d) => d < today && d >= from).sort();
 
   if (pastDays.length < MIN_DAYS_FOR_TYPICAL) {
     return {
       sufficient: false,
+      source,
+      nowHour,
       daysOfHistory: pastDays.length,
       daysRequired: MIN_DAYS_FOR_TYPICAL,
       typicalByHour: null,
       busiestHours: null,
       quietestHours: null,
-      todayByHour: todayPeaks.map((count, hour) => ({ hour, count })),
+      bestTime: null,
+      todayByHour: series(todayPeaks),
+      yesterdayByHour: series(yesterdayPeaks),
       byWeekday: null,
     };
   }
 
   const sums = new Array(24).fill(0);
   for (const d of pastDays) {
-    const peaks = hourlyPeaks(byDay.get(d));
+    const peaks = peaksByDay.get(d);
     for (let h = 0; h < 24; h += 1) sums[h] += peaks[h];
   }
-  const typical = sums.map((s) => Math.round((s / pastDays.length) * 10) / 10);
+  const typical = sums.map((v) => Math.round((v / pastDays.length) * 10) / 10);
 
   /* Busiest and quietest are reported as CONTIGUOUS WINDOWS, because
      "usually busiest 6-8 PM" is what a member can act on, and a single
@@ -256,13 +383,17 @@ export async function crowdHistory(db, orgId, tz, { days = 28 } = {}) {
 
   return {
     sufficient: true,
+    source,
+    nowHour,
     daysOfHistory: pastDays.length,
     daysRequired: MIN_DAYS_FOR_TYPICAL,
-    typicalByHour: typical.map((count, hour) => ({ hour, count })),
-    todayByHour: todayPeaks.map((count, hour) => ({ hour, count })),
+    typicalByHour: series(typical),
+    todayByHour: series(todayPeaks),
+    yesterdayByHour: series(yesterdayPeaks),
     busiestHours: busiest,
     quietestHours: quietest,
-    byWeekday: weekdayAverages(byDay, pastDays, orgTz),
+    bestTime: bestTimeToVisit(typical, nowHour ?? 0, settings, quietest),
+    byWeekday: weekdayAverages(peaksByDay, pastDays),
   };
 }
 
@@ -280,19 +411,18 @@ function windowOf(typical, mode, allowedHours = null) {
   return best;
 }
 
-function weekdayAverages(byDay, pastDays, tz) {
+function weekdayAverages(peaksByDay, pastDays) {
   const sums = new Array(7).fill(0);
   const counts = new Array(7).fill(0);
   for (const d of pastDays) {
     // Midday avoids the date shifting across a timezone boundary.
     const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
-    const peaks = hourlyPeaks(byDay.get(d));
-    sums[dow] += Math.max(...peaks);
+    sums[dow] += Math.max(...peaksByDay.get(d));
     counts[dow] += 1;
   }
-  return sums.map((s, dow) => ({
+  return sums.map((v, dow) => ({
     dow,
-    averagePeak: counts[dow] ? Math.round((s / counts[dow]) * 10) / 10 : null,
+    averagePeak: counts[dow] ? Math.round((v / counts[dow]) * 10) / 10 : null,
     days: counts[dow],
   }));
 }

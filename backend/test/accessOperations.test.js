@@ -27,7 +27,7 @@ import { isOpenNow, lastClosingBefore, localParts } from '../src/services/access
 import { runOrgMaintenance, cronAuthorized } from '../src/services/access/tick.js';
 import { assertSafeUrl, safeFetch } from '../src/services/access/safeUrl.js';
 import { liveCrowd } from '../src/services/access/liveCrowd.js';
-import { hourlyAnalytics } from '../src/services/access/analytics.js';
+import { hourlyAnalytics, weekComparison } from '../src/services/access/analytics.js';
 import '../src/services/access/providers/builtin.js';
 import { registerProvider, effectiveCapabilities, getProvider } from '../src/services/access/providers/index.js';
 
@@ -617,4 +617,28 @@ test('hourly analytics bucket by the gym local hour', async () => {
   const bucket = (local.day === localParts(now, 'Asia/Kolkata').day ? a.today : a.yesterday)[local.hour];
   assert.equal(local.hour, 7);
   assert.equal(bucket.entries, 1, 'counted in the 7am bucket, not 1am');
+});
+
+
+test('this week is compared with last week up to the same moment, not all of it', async () => {
+  const db = await memDb();
+  await gym(db);
+  await provider(db);
+  await map(db, { user: 'u0', ext: 'A1' });
+  // Wednesday 12:00 IST.
+  const now = new Date('2026-03-18T06:30:00Z');
+  const entry = (id, iso) => ingestAccessEvent(db, { orgId: 'o1', providerId: 'p1', externalUserId: 'A1', externalEventId: id, eventType: 'ENTRY', occurredAt: iso });
+  const exit = (id, iso) => ingestAccessEvent(db, { orgId: 'o1', providerId: 'p1', externalUserId: 'A1', externalEventId: id, eventType: 'EXIT', occurredAt: iso });
+  // This week: Monday and Tuesday mornings.
+  await entry('w1', '2026-03-16T01:30:00Z'); await exit('w1x', '2026-03-16T02:30:00Z');
+  await entry('w2', '2026-03-17T01:30:00Z'); await exit('w2x', '2026-03-17T02:30:00Z');
+  // Last week by the same moment: Monday only. Its Thursday visit is AFTER
+  // "this time a week ago", so it must not count.
+  await entry('l1', '2026-03-09T01:30:00Z'); await exit('l1x', '2026-03-09T02:30:00Z');
+  await entry('l2', '2026-03-12T01:30:00Z'); await exit('l2x', '2026-03-12T02:30:00Z');
+  const w = await weekComparison(db, 'o1', 'Asia/Kolkata', { now });
+  assert.equal(w.weekStart, '2026-03-16');
+  assert.equal(w.thisWeekSoFar, 2);
+  assert.equal(w.lastWeekSameTime, 1);
+  assert.equal(w.pctChange, 100);
 });

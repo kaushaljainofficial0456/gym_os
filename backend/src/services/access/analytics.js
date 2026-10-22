@@ -21,6 +21,7 @@
 import { randomUUID } from 'node:crypto';
 import { liveCrowd } from './liveCrowd.js';
 import { localParts } from './localTime.js';
+import { shiftDayKey } from '../../utils/time.js';
 
 const nowIso = () => new Date().toISOString();
 
@@ -177,6 +178,37 @@ export async function hourlyAnalytics(db, orgId, tz, { now = new Date() } = {}) 
     avgVisitMin,
     visitsMeasured: todayVisits.length,
     weekly: await weeklyPattern(db, orgId, tz, { now }),
+    week: await weekComparison(db, orgId, tz, { now }),
+  };
+}
+
+/**
+ * Visits this week so far against last week up to the same moment --
+ * Monday to now versus last Monday to this time a week ago. Like the daily
+ * comparison, never a part-week against a whole one: on a Tuesday morning
+ * a whole-week comparison would report a collapse every week.
+ */
+export async function weekComparison(db, orgId, tz, { now = new Date() } = {}) {
+  const here = localParts(now, tz);
+  if (!here) return null;
+  const weekStart = shiftDayKey(here.day, -((here.dow + 6) % 7));
+  const lastWeekStart = shiftDayKey(weekStart, -7);
+  const { rows } = await eventsBetween(db, orgId, new Date(now.getTime() - 16 * 86400000).toISOString(), now.toISOString());
+  const weekAgo = now.getTime() - 7 * 86400000;
+  let thisWeekSoFar = 0;
+  let lastWeekSameTime = 0;
+  for (const r of rows) {
+    if (r.kind !== 'entry') continue;
+    const day = localParts(r.ts, tz)?.day;
+    if (!day) continue;
+    if (day >= weekStart) thisWeekSoFar += 1;
+    else if (day >= lastWeekStart && Date.parse(r.ts) <= weekAgo) lastWeekSameTime += 1;
+  }
+  return {
+    weekStart,
+    thisWeekSoFar,
+    lastWeekSameTime,
+    pctChange: lastWeekSameTime > 0 ? Math.round(((thisWeekSoFar - lastWeekSameTime) / lastWeekSameTime) * 100) : null,
   };
 }
 

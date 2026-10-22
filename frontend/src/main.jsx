@@ -8,6 +8,13 @@ import { CookieConsentProvider } from './components/CookieConsent.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import App from './App.jsx';
 import IntroSplash from './components/IntroSplash.jsx';
+import { reloadForNewVersion } from './lazyWithReload.js';
+
+// Vite reports a failed preload of a screen's code here. After a deploy that
+// means this tab is running the previous version: reload into the new one.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadForNewVersion()) event.preventDefault();
+});
 import './theme.css';
 
 // Apply dark class immediately to prevent flash
