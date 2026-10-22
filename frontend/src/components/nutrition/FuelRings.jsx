@@ -11,7 +11,8 @@
  * the reason design/three/AmbientBackdrop.jsx documents: importing it here
  * statically would put the whole renderer into the Nutrition page chunk.
  */
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { lazyWithReload as lazy } from '../../lazyWithReload.js';
 import { useReducedMotion } from 'framer-motion';
 import { hasWebGL } from '../../design/three/webgl.js';
 import { AnimatedNumber } from '../../design/motion/index.jsx';
