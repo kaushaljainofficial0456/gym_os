@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { crowdHistory, computeOccupancy, MIN_DAYS_FOR_TYPICAL } from '../src/services/occupancy.js';
+import { crowdHistory, computeOccupancy, MIN_DAYS_FOR_TYPICAL, bestTimeToVisit } from '../src/services/occupancy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.resolve(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8');
@@ -264,4 +264,87 @@ test('hiding the head-count hides it in EVERY field, not just the pretty one', a
   // not just the ones enumerated above.
   assert.ok(!/(^|[^\d.])4([^\d.]|$)/.test(JSON.stringify(hidden.crowd)),
     `head-count leaked into the status payload: ${JSON.stringify(hidden.crowd)}`);
+});
+
+
+/* ── the gym's own clock, the door feed, and the best time to go ─────── */
+
+const IST = 'Asia/Kolkata';
+// A fixed "now": 10:00 IST on a weekday, so local hours are unambiguous.
+const NOW = new Date('2026-03-18T04:30:00Z');
+const istDay = (offsetDays) => {
+  const d = new Date(NOW.getTime() - offsetDays * 86400000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: IST, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+};
+// 18:10 IST is 12:40Z, 20:10 IST is 14:40Z.
+const istToUtc = (day, hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10), h, m) - 330 * 60000).toISOString();
+};
+
+test('check-ins are placed in the GYM\'S hours, not UTC\'s', async () => {
+  const db = await gym(await memDb());
+  for (let d = 1; d <= 8; d += 1) {
+    for (let i = 0; i < 4; i += 1) {
+      await db.run('INSERT INTO attendance_events (id, org_id, client_id, ts, direction) VALUES (?,?,?,?,?)',
+        [`ia${d}${i}`, 'o1', `c${i}`, istToUtc(istDay(d), '18:10'), 'entry']);
+      await db.run('INSERT INTO attendance_events (id, org_id, client_id, ts, direction) VALUES (?,?,?,?,?)',
+        [`ib${d}${i}`, 'o1', `c${i}`, istToUtc(istDay(d), '20:10'), 'exit']);
+    }
+  }
+  const h = await crowdHistory(db, 'o1', IST, { now: NOW });
+  assert.equal(h.sufficient, true);
+  assert.equal(h.busiestHours.startHour, 18, 'the evening rush is 6 PM in Mumbai, not 12 PM UTC');
+  assert.equal(h.typicalByHour[12].count, 0);
+});
+
+async function session(db, id, clientIdx, enteredAt, exitedAt, { status = 'CLOSED', reason = 'normal_exit', confidence = 'exact', updatedAt } = {}) {
+  const dur = exitedAt ? Math.round((Date.parse(exitedAt) - Date.parse(enteredAt)) / 1000) : null;
+  await db.run(
+    `INSERT INTO gym_presence_sessions (id, org_id, user_id, client_id, entered_at, exited_at, status, closure_reason, duration_sec, confidence, is_demo, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)`,
+    [id, 'o1', `u${clientIdx}`, `c${clientIdx}`, enteredAt, exitedAt, status, status === 'CLOSED' ? reason : null, dur, confidence, enteredAt, updatedAt || exitedAt || enteredAt]);
+}
+
+test('a door-fed gym gets a typical day from its presence sessions', async () => {
+  const db = await gym(await memDb());
+  for (let d = 1; d <= 8; d += 1) {
+    for (let i = 0; i < 4; i += 1) {
+      await session(db, `s${d}${i}`, i, istToUtc(istDay(d), '07:00'), istToUtc(istDay(d), '08:20'));
+    }
+  }
+  const h = await crowdHistory(db, 'o1', IST, { source: 'door', now: NOW });
+  assert.equal(h.source, 'door');
+  assert.equal(h.sufficient, true, 'eight days of door sessions are eight days of history');
+  assert.equal(h.typicalByHour[7].count, 4);
+  assert.equal(h.typicalByHour[9].count, 0);
+  assert.deepEqual([h.busiestHours.startHour, h.busiestHours.endHour], [7, 9]);
+  assert.equal(h.yesterdayByHour[7].count, 4, 'yesterday is its own measured curve');
+});
+
+test('a session nobody scanned out of is not counted until midnight', async () => {
+  const db = await gym(await memDb());
+  for (let d = 1; d <= 8; d += 1) {
+    // Five measured hour-long visits a day give the gym its median visit.
+    for (let i = 0; i < 5; i += 1) await session(db, `m${d}${i}`, i, istToUtc(istDay(d), '07:00'), istToUtc(istDay(d), '08:00'));
+    // One forgot to scan out; auto-closed at 23:00 with no exit time.
+    await session(db, `f${d}`, 5, istToUtc(istDay(d), '18:00'), null,
+      { reason: 'auto_closed', confidence: 'estimated', updatedAt: istToUtc(istDay(d), '23:00') });
+  }
+  const h = await crowdHistory(db, 'o1', IST, { source: 'door', now: NOW });
+  assert.equal(h.typicalByHour[18].count, 1, 'counted for a typical visit');
+  assert.equal(h.typicalByHour[21].count, 0, 'not for five hours it is not known to have stayed');
+});
+
+test('the best time to go is still ahead today, while the gym is open', () => {
+  const typical = new Array(24).fill(0);
+  [[6, 8], [7, 12], [8, 9], [9, 4], [10, 3], [11, 3], [12, 5], [13, 6], [14, 2], [15, 2], [16, 6], [17, 10], [18, 14], [19, 9], [20, 4], [21, 1]]
+    .forEach(([h, v]) => { typical[h] = v; });
+  const settings = { crowd_open_time: '06:00', crowd_close_time: '22:00' };
+  assert.deepEqual(bestTimeToVisit(typical, 12, settings, null), { startHour: 14, endHour: 16, average: 2, when: 'today' });
+  // At 9 PM nothing two hours long is left before closing: tomorrow's quiet window.
+  const quietest = { startHour: 14, endHour: 16, average: 2 };
+  assert.deepEqual(bestTimeToVisit(typical, 21, settings, quietest), { ...quietest, when: 'tomorrow' });
+  // Without opening hours, a 3 AM zero is a closed building, not a quiet one.
+  assert.equal(bestTimeToVisit(typical, 21, {}, null), null);
 });
