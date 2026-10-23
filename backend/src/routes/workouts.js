@@ -630,6 +630,82 @@ export default function workoutRoutes(db) {
     res.json({ ok: true, prs, workoutId: w.id, duration_min: durationMin, calorie: txResult });
   });
 
+  // ---- the member's effort, after the session ----
+  // The one question the calorie estimate needs and a finished session
+  // cannot answer by itself: how hard was it? Asked once on the recap
+  // screen. The answer is kept with the session (sessionEffort in
+  // calorieModel.js) and the stored estimate is recomputed from the
+  // session's ACTUAL logged sets and measured duration, through the same
+  // provider pipeline completion uses -- so the number the member is
+  // shown is the number history and the energy balance count, not a
+  // second figure from a different model.
+  r.post('/:id/effort', validate(z.object({ effort: z.enum(['light', 'moderate', 'hard']) })), async (req, res) => {
+    const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [req.params.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    const client = await resolveClient(db, req, res, w.client_id);
+    if (!client) return;
+    if (w.status !== 'completed') return res.status(409).json({ error: 'Rate a session once it is finished' });
+
+    let progress = {};
+    try { progress = w.progress_json ? JSON.parse(w.progress_json) : {}; } catch { progress = {}; }
+    if (!progress || typeof progress !== 'object' || Array.isArray(progress)) progress = {};
+    progress.__effort = req.body.effort;
+    const progressJson = JSON.stringify(progress);
+
+    const sessionExercises = await db.q(
+      `SELECT we.*, el.ex_type, el.movement, el.equipment AS lib_equipment, el.primary_muscle AS lib_primary_muscle,
+              el.animation_key AS lib_animation_key, el.is_global AS lib_is_global
+         FROM workout_exercises we
+         LEFT JOIN exercise_library el ON el.id = we.exercise_id
+        WHERE we.workout_id = ?`, [w.id]);
+    const logs = await db.q('SELECT id, exercise_id FROM workout_logs WHERE workout_id = ?', [w.id]);
+    const sets = logs.length
+      ? await db.q(
+        `SELECT * FROM exercise_set_logs WHERE workout_log_id IN (${logs.map(() => '?').join(',')}) ORDER BY set_number`,
+        logs.map((l) => l.id))
+      : [];
+    const exerciseOfLog = new Map(logs.map((l) => [l.id, l.exercise_id]));
+    const rowOfExercise = new Map(sessionExercises.map((e) => [e.exercise_id, e.id]));
+    const setsByExercise = {};
+    for (const st of sets) {
+      const row = rowOfExercise.get(exerciseOfLog.get(st.workout_log_id));
+      if (row) (setsByExercise[row] ||= []).push(st);
+    }
+
+    try {
+      const calorie = await db.tx(async (tx) => {
+        await tx.run('UPDATE workouts SET progress_json = ? WHERE id = ?', [progressJson, w.id]);
+        const bodyWeightKg = await resolveBodyWeight(tx, client.id, w.scheduled_date || dayKey(new Date(), req.tz || undefined));
+        const input = buildWorkoutCalorieInput({
+          client,
+          workout: { ...w, progress_json: progressJson },
+          exercises: sessionExercises.map((e) => ({
+            id: e.id, exercise_id: e.exercise_id, name: e.name, ex_type: e.ex_type, movement: e.movement,
+            equipment: e.lib_equipment, primary_muscle: e.lib_primary_muscle,
+            library: { ex_type: e.ex_type, movement: e.movement, equipment: e.lib_equipment, primary_muscle: e.lib_primary_muscle }
+          })),
+          setsByExercise,
+          durationSeconds: w.duration_min != null ? w.duration_min * 60 : null,
+          bodyWeightKg,
+          intensity: req.body.effort,
+        });
+        const mlExerciseCanonical = {};
+        for (const e of sessionExercises) {
+          if (!e.exercise_id) continue;
+          const token = mlCanonicalExerciseId({ animationKey: e.lib_animation_key, isGlobal: e.lib_is_global });
+          if (token) mlExerciseCanonical[e.exercise_id] = token;
+        }
+        const result = await estimateWorkoutCalories(input, { mlExerciseCanonical, db: tx, stage: 'completion' });
+        if (result) await persistCalorieResult(tx, w.id, result);
+        return result;
+      });
+      res.json({ ok: true, effort: req.body.effort, calorie });
+    } catch (e) {
+      console.error('[sk-os] effort re-estimate failed', { req: req.id || null, workout: w.id, error: String(e?.message || e).slice(0, 500) });
+      res.status(500).json({ error: 'Could not update the estimate -- try again' });
+    }
+  });
+
   // ---- progressive overload suggestion ----
   r.get('/clients/:id/overload/:exerciseId', trainerOnly, async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);

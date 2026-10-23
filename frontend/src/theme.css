@@ -693,6 +693,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes sheen { 0% { transform: translateX(-260%) skewX(-18deg); } 100% { transform: translateX(360%) skewX(-18deg); } }
 
 .anim-fadeUp { animation: fadeUp .3s cubic-bezier(.22,.8,.3,1) both; }
+/* The page-change fade. NOT `both`: a fill-forwards transform outlives the
+   animation, and a transformed ancestor becomes the containing block of
+   every position:fixed element inside it -- each page's toasts, the
+   workout session's Finish bar -- which then pinned to the bottom of the
+   PAGE, off-screen, instead of the screen. `backwards` drops the
+   transform the moment the page has arrived. */
+.anim-route { animation: fadeUp .3s cubic-bezier(.22,.8,.3,1) backwards; }
 .anim-fadeIn { animation: fadeIn .25s ease both; }
 .anim-scaleIn { animation: scaleIn .22s cubic-bezier(.22,.8,.3,1) both; }
 
@@ -1371,16 +1378,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     padding-bottom: 8px;
     background-color: color-mix(in srgb, rgb(var(--bg-rgb)) 88%, transparent);
     border-bottom: 1px solid var(--line);
-  }
-
-  /* Bottom tab bar. The inset-bottom padding keeps the last row of tab
-     labels off the iOS home indicator — without it the labels sit under
-     the swipe bar and the tab targets lose ~20px of their bottom edge. */
-  .app-tabbar {
-    @apply fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl;
-    background-color: color-mix(in srgb, rgb(var(--bg-rgb)) 90%, transparent);
-    border-top: 1px solid var(--line);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* ═══════════════════════════════════════════

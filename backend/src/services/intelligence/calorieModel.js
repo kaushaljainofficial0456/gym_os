@@ -54,16 +54,47 @@
 import { dayKey } from '../../utils/time.js';
 import { config, CALORIE_PROVIDERS } from '../../config.js';
 import { mlEstimate as skosCalV1Estimate } from './mlModels/skosCalV1.js';
+import { mifflinStJeorBmr } from './restingEnergy.js';
 import { track } from '../events.js';
 
 export const CALORIE_SCHEMA_VERSION = '0.2';
-export const BASELINE_MODEL_VERSION = 'skos-cal-baseline-v1';
+// v2 (2026-10): Compendium 2024 session METs, reported NET of this
+// person's own resting energy. v1 rows (MET 4.5 for a moderate session,
+// gross) stay labelled v1 so history is never silently reinterpreted.
+export const BASELINE_MODEL_VERSION = 'skos-cal-baseline-v2';
 export const MOCK_MODEL_VERSION = 'skos-cal-mock-v1';
 export const DEFAULT_BODY_WEIGHT_KG = 70;
 
-// MET (metabolic equivalent) for resistance training by effort level.
-// Standard references: light ~3.0, moderate ~4.5, vigorous ~6.0.
-export const INTENSITY_MET = { light: 3.0, moderate: 4.5, hard: 6.0 };
+// MET (metabolic equivalent) for a whole resistance-training SESSION, by
+// the effort the member reports, from the 2024 Adult Compendium of
+// Physical Activities (Herrmann et al., J Sport Health Sci 2024;
+// pacompendium.com):
+//   light    3.0  02056 body-weight resistance exercises, general
+//   moderate 3.5  02054 resistance training, multiple exercises, 8-15 reps
+//                 at varied resistance -- an ordinary gym session
+//   hard     6.0  02050 resistance training, power lifting or body
+//                 building, vigorous effort
+//
+// The moderate figure is not only the Compendium's: four independent
+// whole-session calorimetry studies of real gym sessions, rest between
+// sets included, measured 0.059-0.067 kcal/min/kg gross, i.e. 3.4-3.8 MET
+// (Rustaden 2020, Benito 2016, Adeel 2021, Nakagata 2019 -- the
+// external_plausibility_envelope in ml/models/skos-cal-v1/model_v1.json).
+// The previous values (3.0 / 4.5 / 6.0) were hand-picked; 4.5 for an
+// ordinary session sat about 25% above every one of those measurements.
+//
+// A MET is GROSS: 1 MET is merely being alive. baselineEstimate() below
+// subtracts the person's resting energy, because the stored figure is
+// energy ABOVE resting (see calorie-model-contract.md §3, energyBalance.js).
+export const INTENSITY_MET = { light: 3.0, moderate: 3.5, hard: 6.0 };
+
+// The baseline's displayed band. NOT a calibrated interval -- no validated
+// interval exists for a MET estimate of a whole session. It is wider than
+// the +/-6% spread between those four labs' session means, to leave room
+// for the person-to-person variation inside each study, and it is
+// deliberately not the +/-15% this used to claim, which promised more
+// precision than any of the evidence supports.
+const BASELINE_BAND = 0.25;
 
 const pos = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
 const round1 = (v) => Math.round(v * 10) / 10;
@@ -274,11 +305,32 @@ function toMlInput(input, exerciseCanonical) {
 // ------------------------------------------------------------------
 const RESTING_MET = 1.0; // ACSM: 1 MET = resting metabolic rate, by definition
 
+/**
+ * THIS person's resting energy, kcal per minute.
+ *
+ * Mifflin-St Jeor when weight, height and age are known -- the same
+ * formula the nutrition targets and the energy balance use
+ * (restingEnergy.js), so the three can never disagree about how much of a
+ * session was simply being alive. Without them, the standard 1 MET
+ * (3.5 ml O2/kg/min), which measured resting rates sit 10-20% below on
+ * average (Byrne et al. 2005; Kozey et al. 2010) -- an honest fallback,
+ * not a guess at the missing fields.
+ */
+export function restingKcalPerMinute(user = {}) {
+  const bw = pos(user?.body_weight_kg);
+  const bmr = mifflinStJeorBmr({ weightKg: bw, heightCm: user?.height_cm, age: user?.age_years, sex: user?.sex });
+  if (Number.isFinite(bmr) && bmr > 0) return { perMin: bmr / 1440, source: 'mifflin_st_jeor' };
+  if (bw) return { perMin: (RESTING_MET * 3.5 * bw) / 200, source: 'standard_met' };
+  return null;
+}
+
 function toNetOfResting(grossResult, input) {
   const bw = pos(input?.user?.body_weight_kg);
   const durationMin = pos(input?.session?.duration_minutes);
   if (!bw || !durationMin) return grossResult;
-  const restingKcal = ((RESTING_MET * 3.5 * bw) / 200) * durationMin;
+  // The person's own resting rate when their profile allows it, the
+  // standard 1 MET otherwise -- see restingKcalPerMinute.
+  const restingKcal = restingKcalPerMinute(input.user).perMin * durationMin;
   const netify = (v) => {
     if (typeof v !== 'number' || !Number.isFinite(v)) return v; // not a number — let the gate's own type check catch it
     if (v < 0) return v; // already-invalid gross value — never "fixed" here, must still fail validation
@@ -390,25 +442,38 @@ export async function estimateWorkoutCalories(input = {}, { mlExerciseCanonical,
 }
 
 // ------------------------------------------------------------------
-// BASELINE provider — deterministic MET heuristic (labeled, not ML).
-//   active kcal = MET × 3.5 × body_weight_kg ÷ 200 × duration_min
-// Range is ±15%. When a measured duration is absent the duration is
-// estimated from completed sets (never claimed as measured).
+// BASELINE provider — deterministic MET estimate (labeled, not ML).
+//   gross kcal/min  = session MET × 3.5 × body_weight_kg ÷ 200
+//   active kcal     = (gross kcal/min − this person's resting kcal/min)
+//                     × active minutes
+// "Active minutes" is the measured session time with pauses removed.
+// When no duration was measured it is estimated from the completed sets
+// (never claimed as measured).
+//
+// It used to report the GROSS figure as "active" -- resting energy
+// included -- while energyBalance.js adds workouts on top of a full day
+// of resting energy, treating them as energy ABOVE resting as the
+// contract says. Every baseline-estimated session was therefore counting
+// its own resting minutes twice in the member's surplus/deficit.
 // ------------------------------------------------------------------
 export function baselineEstimate(input = {}) {
   const bw = pos(input?.user?.body_weight_kg) || DEFAULT_BODY_WEIGHT_KG;
   const intensity = normalizeIntensity(input?.session?.intensity_rating);
   const met = INTENSITY_MET[intensity] ?? INTENSITY_MET.moderate;
   const durationMin = pos(input?.session?.duration_minutes) ?? estimateDurationMinutes(input);
-  const active = (met * 3.5 * bw) / 200 * durationMin;
+  const grossPerMin = (met * 3.5 * bw) / 200;
+  const rest = restingKcalPerMinute({ ...(input?.user || {}), body_weight_kg: bw });
+  const active = (perMin) => Math.max(0, (perMin - rest.perMin) * durationMin);
+  const restLabel = rest.source === 'mifflin_st_jeor' ? 'Mifflin-St Jeor' : 'standard 1 MET';
   return {
     schema_version: CALORIE_SCHEMA_VERSION,
-    estimated_active_kcal: Math.round(active),
-    lower_kcal: Math.round(active * 0.85),
-    upper_kcal: Math.round(active * 1.15),
+    estimated_active_kcal: Math.round(active(grossPerMin)),
+    lower_kcal: Math.round(active(grossPerMin * (1 - BASELINE_BAND))),
+    upper_kcal: Math.round(active(grossPerMin * (1 + BASELINE_BAND))),
     model_version: BASELINE_MODEL_VERSION,
     provider: 'baseline',
-    method: 'MET heuristic: MET × 3.5 × body_weight_kg ÷ 200 × duration_min (baseline, not ML)'
+    method: 'Compendium 2024 session MET (' + met + ') × 3.5 × kg ÷ 200 per minute, less resting energy ('
+      + restLabel + '), × active minutes (baseline, not ML)'
   };
 }
 
@@ -458,12 +523,17 @@ export function __setMlEstimateForTests(fn) {
 // This function is the SINGLE feature-engineering choke point — routes and
 // services pass raw data here and never compute calorie features themselves.
 // ------------------------------------------------------------------
-export function buildWorkoutCalorieInput({ client, workout, exercises = [], setsByExercise = {}, durationSeconds = null, bodyWeightKg = null } = {}) {
+export function buildWorkoutCalorieInput({ client, workout, exercises = [], setsByExercise = {}, durationSeconds = null, bodyWeightKg = null, intensity = null } = {}) {
   const allSets = [];
   const agg = exercises.map((we) => {
     const lib = we.library || null;
     // ACTUAL completed sets only — incomplete/skipped sets are never features.
-    const completed = (setsByExercise[we.id] || []).filter((s) => s.completed !== 0 && s.completed !== false);
+    // Keyed by the workout_exercises row id at completion, but by the
+    // library exercise id where sets are re-read from workout_logs
+    // (dailyIntelligence.js) -- accept either, or that path saw a session
+    // with no completed sets at all.
+    const rows = setsByExercise[we.id] || (we.exercise_id ? setsByExercise[we.exercise_id] : null) || [];
+    const completed = rows.filter((s) => s.completed !== 0 && s.completed !== false);
     const sets = completed.map((s, i) => ({
       set_number: s.set_number ?? i + 1,
       reps: pos(s.actual_reps) ?? 0,
@@ -523,7 +593,9 @@ export function buildWorkoutCalorieInput({ client, workout, exercises = [], sets
       workout_id: workout?.id || null,
       duration_seconds: pos(durationSeconds),
       duration_minutes: durationMin,
-      intensity_rating: inferIntensity(allSets),
+      // The member's own answer when there is one (asked once, after the
+      // session -- see sessionEffort), RIR-inferred otherwise.
+      intensity_rating: strictIntensity(intensity) || sessionEffort(workout) || inferIntensity(allSets),
       // --- v0.2 session aggregates ---
       exercise_count: performed.length,
       total_sets: totalSets,
@@ -590,9 +662,31 @@ export async function persistCalorieResult(db, workoutId, result) {
      new Date().toISOString(), workoutId]);
 }
 
+/**
+ * The effort a member reported for a finished session ('light' | 'moderate'
+ * | 'hard'), or null. Kept in the session's progress blob beside
+ * __paused_ms rather than a new column, so recording it needs no schema
+ * migration; every later re-estimate (wearable reconciliation included)
+ * reads it from here and agrees with the figure the member was shown.
+ */
+export function sessionEffort(workout) {
+  const raw = workout?.progress_json;
+  if (!raw) return null;
+  try {
+    const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return strictIntensity(p?.__effort);
+  } catch {
+    return null;
+  }
+}
+
 // ------------------------------------------------------------------
 // Internal helpers
 // ------------------------------------------------------------------
+function strictIntensity(rating) {
+  return ['light', 'moderate', 'hard'].includes(rating) ? rating : null;
+}
+
 function normalizeIntensity(rating) {
   const r = String(rating || '').toLowerCase();
   if (['light', 'easy', 'low'].includes(r)) return 'light';
