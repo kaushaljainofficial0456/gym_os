@@ -345,7 +345,7 @@ test('calorie result is persisted with provider + model_version + schema_version
   const w = await db.q1('SELECT estimated_active_kcal, lower_kcal, upper_kcal, model_version, schema_version, calorie_provider, calorie_estimated_at FROM workouts WHERE id = ?', [wId]);
   assert.ok(w.estimated_active_kcal > 0, 'estimate persisted');
   assert.ok(w.lower_kcal <= w.estimated_active_kcal && w.estimated_active_kcal <= w.upper_kcal, 'range wraps midpoint');
-  assert.equal(w.model_version, 'skos-cal-baseline-v1');
+  assert.equal(w.model_version, 'skos-cal-baseline-v2');
   assert.equal(w.schema_version, '0.2');
   assert.equal(w.calorie_provider, 'baseline', 'provider clearly persisted — never mislabeled');
   assert.ok(w.calorie_estimated_at, 'estimated_at persisted');

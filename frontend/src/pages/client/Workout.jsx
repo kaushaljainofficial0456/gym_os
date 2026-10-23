@@ -1,16 +1,19 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { lazyWithReload as lazy } from '../../lazyWithReload.js';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
-import { ErrorState, CheckIcon, XIcon, useConfirm, useDialog } from '../../components/UI.jsx';
+import { ErrorState, CheckIcon, Sheet, Spinner, useConfirm } from '../../components/UI.jsx';
 import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
-import MuscleMap, { regionForMuscle } from '../../components/MuscleMap.jsx';
 import { Pressable } from '../../design/index.js';
-const TunnelBackdrop = lazy(() => import('../../components/TunnelBackdrop.jsx'));
+import {
+  Activity, Check, ChevronLeft, ChevronRight, ClipboardList, HeartPulse, History, Info, ListPlus, Play, Plus, Trophy, X,
+} from 'lucide-react';
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
+import { TodayHero, WeekStrip, ToolGrid, PlanList, SectionLink, planWeight } from '../../components/workout/TodayView.jsx';
+import { PlayerHeader, ExerciseCard } from '../../components/workout/SessionView.jsx';
+import CardioLive, { CardioParamsForm } from '../../components/workout/CardioLive.jsx';
+import '../../components/workout/workout.css';
 import SessionRecap from '../../components/workout/SessionRecap.jsx';
 import InfoDot from '../../components/InfoDot.jsx';
 import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
@@ -19,11 +22,10 @@ import LogPastWorkout from './LogPastWorkout.jsx';
 import LogPastCardio from './LogPastCardio.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import {
-  ACTIVITIES, ACTIVITY_GROUPS, activityName, activityFields, metFor, estimateKcal, usesEffortLevel, EFFORTS,
+  ACTIVITIES, activityName, activityFields, metFor,
 } from '../../cardioActivities.js';
 import WeightInput from '../../components/WeightInput.jsx';
 
-const REGION_IDS = new Set(['chest', 'shoulders', 'biceps', 'forearms', 'core', 'quads', 'calves', 'traps', 'triceps', 'lats', 'lower_back', 'glutes', 'hamstrings']);
 
 /**
  * Seed one editable row per prescribed set.
@@ -246,15 +248,6 @@ function clearActiveSession() {
    past-workout logger offer the same activities. */
 
 
-/** Calorie burn for one cardio item, through the shared model. */
-function calcCardioCalories(cardioId, durationMin, bodyWeightKg) {
-  return estimateKcal({
-    activityId: cardioId,
-    minutes: durationMin,
-    bodyWeightKg: Number(bodyWeightKg) || 70,
-    params: {},
-  });
-}
 
 const cardioName = activityName;
 const cardioExerciseConfig = activityFields;
@@ -285,12 +278,6 @@ function segmentParamsSummary(params) {
   return parts.join(' · ') || '';
 }
 
-/** Format a time in seconds as mm:ss. */
-function fmtTime(sec) {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 
 /** Calculate total calories for a completed cardio item from its segments.
     Each segment uses its own params + duration for calorie calc.
@@ -299,8 +286,11 @@ function calcCardioItemCalories(item, bodyWeightKg) {
   if (!item?.segments?.length) return 0;
   return item.segments.reduce((sum, seg) => {
     const durMin = Math.max(0.1, (seg.durationSec || 0) / 60);
-    const met = metFor(item.id, seg.params, item.effort);
     const weight = Number(bodyWeightKg) || 70;
+    // Body mass reaches metFor so the ergometer equations (watts -> oxygen
+    // cost) can run; without it a ride with power entered fell back to the
+    // generic effort table.
+    const met = metFor(item.id, seg.params, item.effort, weight);
     return sum + Math.round(met * 3.5 * weight / 200 * durMin);
   }, 0);
 }
@@ -309,8 +299,8 @@ function calcCardioItemCalories(item, bodyWeightKg) {
 function calcCurrentSegmentCalories(item, elapsedSec, bodyWeightKg) {
   if (!item || elapsedSec <= 0) return 0;
   const durMin = elapsedSec / 60;
-  const met = metFor(item.id, item.currentParams, item.effort);
   const weight = Number(bodyWeightKg) || 70;
+  const met = metFor(item.id, item.currentParams, item.effort, weight);
   return Math.round(met * 3.5 * weight / 200 * durMin);
 }
 
@@ -336,8 +326,6 @@ export default function Workout() {
   const week = useFetch(() => api('/tracking/me/week'));
   const hist = useFetch(() => api('/tracking/me/workouts'));
   const perms = useFetch(() => api('/me/permissions'));
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const [muscleFilter, setMuscleFilter] = useState(null);
   const [exState, setExState] = useState(null);
   const [toast, setToast] = useState('');
   // build-my-workout — one-shot "save today's session" modal (uses /me/workouts)
@@ -413,13 +401,9 @@ export default function Workout() {
   const [cardioItems, setCardioItems] = useState([]);
   const [cardioMode, setCardioMode] = useState('browse');      // browse | execute | summary
   const [cardioOpen, setCardioOpen] = useState(false);
-  // Focus, Escape and scroll lock for this page's five modals. Each close
-  // does exactly what that modal's own X button does.
-  const builderDialogRef = useDialog(builderOpen, () => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); });
-  const plannerDialogRef = useDialog(plannerOpen, () => setPlannerOpen(false));
-  const weekDayDialogRef = useDialog(!!weekDay, () => setWeekDay(null));
-  const cardioDialogRef = useDialog(cardioOpen, () => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); });
-  const addExDialogRef = useDialog(addExOpen, () => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); });
+  // Focus, Escape, scroll lock and drag-to-dismiss for this page's sheets
+  // come from the shared Sheet (UI.jsx); each one's onClose does exactly
+  // what its own close button does.
   const [confirm, confirmDialog] = useConfirm();
   const [cardioSearch, setCardioSearch] = useState('');
   const [cardioConfigItem, setCardioConfigItem] = useState(null);
@@ -434,19 +418,15 @@ export default function Workout() {
   const workout = session?.workout || null;
   const exercises = workout?.exercises || [];
   const state = exState || exercises;
-  const selected = state[Math.min(selectedIdx, Math.max(0, state.length - 1))];
 
   const focus = session?.focus || [];
   const meta = session?.meta || {};
   const suggestions = session?.suggestions || [];
 
   const equipMap = useMemo(() => Object.fromEntries((session?.equipment || []).map((e) => [e.exercise_id, e])), [session]);
-  const muscles = useMemo(() => [...new Set(exercises.map((e) => e.primary_muscle).filter(Boolean))], [exercises]);
-  const filtered = useMemo(() => {
-    if (!muscleFilter) return exercises;
-    if (REGION_IDS.has(muscleFilter)) return exercises.filter((e) => regionForMuscle(e.primary_muscle) === muscleFilter);
-    return exercises.filter((e) => e.primary_muscle === muscleFilter);
-  }, [exercises, muscleFilter]);
+  // Last session's numbers and the next target, per exercise -- already in
+  // /tracking/me/today, and until now never shown.
+  const suggestionByEx = useMemo(() => Object.fromEntries((session?.suggestions || []).map((x) => [x.exercise_id, x])), [session]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1015,19 +995,28 @@ export default function Workout() {
   // rating skos-cal-v1 needs (see the note in finishWorkout above). A
   // declined/failed estimate leaves `burn` null and the summary simply
   // omits the calorie figure, same as before this was wired up.
+  /* The answer is saved WITH the session and the stored estimate is
+     recomputed from it (POST /workouts/:id/effort), so the figure on this
+     screen is the one history and the energy balance count. This used to
+     ask a separate research model for a number and keep it only on screen,
+     while the session itself stayed estimated as "moderate". */
   const pickIntensity = async (tier) => {
-    if (!burnInput || burnLoading) return;
+    if (!result?.workoutId || burnLoading) return;
     setIntensity(tier);
     setBurnLoading(true);
     try {
-      const res = await api('/intel/workout-burn', {
-        method: 'POST',
-        body: JSON.stringify({ ...burnInput, intensity: tier }),
-      });
-      setBurn(res);
+      const res = await api(`/workouts/${result.workoutId}/effort`, { method: 'POST', body: JSON.stringify({ effort: tier }) });
+      const c = res?.calorie;
+      setBurn(c ? {
+        kcal: c.estimated_active_kcal,
+        lower_kcal: c.lower_kcal,
+        upper_kcal: c.upper_kcal,
+        notes: c.note ? [c.note] : [],
+        model_version: c.model_version,
+      } : null);
       checkWorkoutSource(); // fire-and-forget -- see its own comment
     } catch {
-      setBurn(null); // 422 = model declined; show nothing
+      setBurn(null);
     }
     setBurnLoading(false);
   };
@@ -1047,7 +1036,7 @@ export default function Workout() {
       await api('/health/daily-intelligence?refresh=1');
       const today = new Date().toISOString().slice(0, 10);
       const { workouts: canon } = await api(`/health/workouts?date=${today}`);
-      const match = canon?.find((c) => c.skos_workout_id === workout?.id);
+      const match = canon?.find((c) => c.skos_workout_id === result?.workoutId);
       // Allowlist check (isWearableSource), not a denylist -- a
       // canonical workout's primary_energy_source is either one of the
       // ten real wearable provider keys, OR one of SK OS's OWN internal
@@ -1058,6 +1047,11 @@ export default function Workout() {
       // instead of falling through to the correct default below.
       if (isWearableSource(match?.primary_energy_source)) {
         setBurnSource(burnSourceLabel({ providers: [match.primary_energy_source] }));
+        // A device that measured the session beats any estimate: show what
+        // it recorded, not the model's number under the device's name.
+        if (Number(match.active_kcal) > 0) {
+          setBurn((b) => ({ ...(b || {}), kcal: Math.round(match.active_kcal), lower_kcal: null, upper_kcal: null, notes: [], model_version: null, measured: true }));
+        }
       }
     } catch { /* best-effort only -- the summary already has a real estimate without this */ }
   };
@@ -1189,1554 +1183,689 @@ export default function Workout() {
   const activeCardioCals = activeCardioItem ? calcItemTotalCalories(activeCardioItem, cardioElapsed - (activeCardioItem.segments || []).reduce((s, seg) => s + seg.durationSec, 0), clientWeight) : 0;
   const totalCardioCals = calcAllCardioCalories(cardioItems, activeCardioItem, cardioElapsed - (activeCardioItem?.segments || []).reduce((s, seg) => s + seg.durationSec, 0), clientWeight);
 
-  // ================= browse mode =================
-  if (mode === 'browse') {
-    return (
-      <div className="space-y-5 pb-2">
+  // ---- small view helpers (no hooks below the loading return) ----
+  const openBuilder = () => {
+    if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
+    setSelectedLibEx(null);
+    setBuilderOpen(true);
+  };
+  const closeBuilder = () => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); };
+  const openCardioPicker = () => { setCardioOpen(true); setCardioSearch(''); setCardioConfigItem(null); };
+  const closeCardioPicker = () => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); };
+  const openAddExercise = () => {
+    if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load exercises'));
+    setAddExSelected(null);
+    setAddExSearch('');
+    setAddExOpen(true);
+  };
+  const closeAddExercise = () => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); };
+  const shareToday = () => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); };
+  const askRemoveExercise = async (ex) => {
+    if (await confirm({ title: `Remove ${exerciseLabel(ex.name)}?`, body: 'Sets you have ticked for it are not logged.', confirmLabel: 'Remove' })) removeExercise(ex.id);
+  };
+  const addCardioItem = (id, params) => {
+    setCardioItems((prev) => [...prev, { id, params, segments: [], currentParams: { ...params } }]);
+    setToast(`${cardioName(id)} added`);
+  };
+  const defaultParams = (id) => {
+    const params = {};
+    cardioExerciseConfig(id).forEach((field) => { if (field.placeholder && !field.optional) params[field.key] = field.placeholder; });
+    return params;
+  };
 
-        {/* ── 1. THIS WEEK ── */}
-        {weekRows.length > 0 && (
-          <div className="card p-4 anim-fadeUp" style={{ animationDelay: '0ms' }}>
-            <div className="section-head">
-              <span className="t-micro truncate">This week · {week.data?.program?.name || 'Your plan'}</span>
-              {/* Was `border-gold/30 text-gold` — the bright amber (#FBBF24)
-                  from an earlier palette, still appearing on four elements
-                  in this file alone while the rest of the app had moved to
-                  the terracotta accent. */}
-              <span className="badge badge-accent shrink-0">{weekRows.filter((d) => d.name !== 'Rest').length} training days</span>
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {weekRows.map((d, i) => {
-                const isToday = d.day_of_week === todayDow;
-                const isRest = d.name === 'Rest';
-                return (
-                  <button key={d.day_of_week} onClick={() => { setWeekDay(d); setWeekDayIdx(i); }}
-                    // Was bg-tint/[.02] (+hover:bg-tint/[.05]): a wash this
-                    // faint is invisible against the .card it sits inside on
-                    // the light theme (already solid white), so these pills
-                    // had no visible tile boundary at all -- just floating
-                    // text. --panel2 is a step up from --panel specifically
-                    // for this kind of nesting (see theme.css).
-                    aria-current={isToday ? 'date' : undefined}
-                    aria-label={`${d.label}: ${isRest ? 'Rest day' : d.name}`}
-                    className="rounded-xl border px-1 py-2 text-center transition-all active:scale-95"
-                    style={isToday
-                      ? { borderColor: 'rgb(var(--accent-rgb) / .55)', background: 'rgb(var(--accent-rgb) / .12)' }
-                      : { borderColor: 'var(--line)', background: 'var(--panel2)', opacity: isRest ? .6 : 1 }}>
-                    <div className="text-[8px] uppercase tracking-wider font-grotesk"
-                      style={{ color: isToday ? 'var(--accent)' : 'var(--mute)' }}>{d.label}</div>
-                    <div className="text-[9px] font-grotesk font-semibold mt-0.5 leading-tight truncate"
-                      style={{ color: isToday ? 'var(--accent)' : isRest ? 'var(--faint)' : 'var(--ink)' }}>
-                      {isRest ? 'Rest' : d.name.split(' ').slice(0, 2).join(' ')}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="t-sub mt-2.5" style={{ fontSize: '.6875rem', color: 'var(--faint)' }}>Tap a day to preview its session.</div>
-          </div>
-        )}
+  /* Days of THIS week already trained, from history. scheduled_date is a
+     gym-day string, read as local noon so no timezone can move it to the
+     neighbouring weekday. */
+  const doneDows = (() => {
+    const out = new Set();
+    const now = new Date();
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    const mondayKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    for (const w of hist.data?.workouts || []) {
+      if (w.status !== 'completed' || !w.scheduled_date || w.scheduled_date < mondayKey) continue;
+      out.add(new Date(`${w.scheduled_date}T12:00:00`).getDay());
+    }
+    if (workout?.status === 'completed') out.add(new Date().getDay());
+    return out;
+  })();
 
-        {/* ── 2. MY WORKOUT — 3 action cards ── */}
-        <div className="anim-fadeUp" style={{ animationDelay: '60ms' }}>
-          <div className="t-micro mb-2.5">My workout</div>
-          {/* These three tiles used to wear three different colours —
-              gold, ember and good — for three peer actions with no
-              difference in kind between them. Colour that doesn't encode
-              anything is noise, and here it also implied "My PR" was a
-              success state. One accent treatment for all three; the icon
-              carries the distinction, which is its job.
-              Labels also had hard <br/> breaks mid-phrase ("My<br/>Workout"),
-              which forced a two-line ragged label at every width. */}
-          <div className="grid grid-cols-2 gap-2.5 min-[400px]:grid-cols-5">
-            {[
-              { label: 'My workouts', onClick: openPlanner,
-                path: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></> },
-              { label: 'Build today',
-                onClick: () => {
-                  if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
-                  setSelectedLibEx(null);
-                  setBuilderOpen(true);
-                },
-                path: <path d="M12 5v14M5 12h14"/> },
-              { label: 'My PRs', onClick: () => nav('/app/client/progress?section=prs'),
-                path: <path d="M6 9a6 6 0 0 0 12 0V4H6zM9 21h6M12 15v6"/> },
-              // Trained but forgot to hit start -- by far the most common
-              // reason a real session never makes it into the app.
-              { label: 'Log past', onClick: () => setLogPastOpen(true),
-                path: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></> },
-              // A run or a game is training too, and until cardio was
-              // stored at all there was nowhere to log one after the fact.
-              { label: 'Log cardio', onClick: () => setLogCardioOpen(true),
-                path: <><path d="M13 2 4.5 12.5h6L11 22l8.5-10.5h-6z"/></> },
-            ].map((t) => (
-              <button key={t.label} onClick={t.onClick}
-                className="card card-hover p-4 flex flex-col items-center gap-2.5 text-center active:scale-[.97] transition-all">
-                <div className="w-11 h-11 grid place-items-center"
-                  style={{ borderRadius: 'var(--r-md)', background: 'rgb(var(--accent-rgb) / .10)', border: '1px solid rgb(var(--accent-rgb) / .22)', color: 'var(--accent)' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.path}</svg>
-                </div>
-                <span className="font-grotesk text-[11px] font-semibold leading-tight" style={{ color: 'var(--ink)' }}>{t.label}</span>
-              </button>
-            ))}
-          </div>
-          {locked && (
-            <div className="t-sub mt-2" style={{ fontSize: '.6875rem', color: 'var(--faint)' }}>Your gym has locked workout creation — follow your coach&rsquo;s plan.</div>
-          )}
-        </div>
+  const tools = [
+    canBuild && { key: 'planner', label: 'My workouts', icon: ClipboardList, onClick: openPlanner },
+    canBuild && { key: 'build', label: 'Build today', icon: ListPlus, onClick: openBuilder },
+    { key: 'cardio', label: 'Cardio', icon: Activity, onClick: openCardioPicker },
+    { key: 'past', label: 'Log past', icon: History, onClick: () => setLogPastOpen(true) },
+    { key: 'pastCardio', label: 'Log cardio', icon: HeartPulse, onClick: () => setLogCardioOpen(true) },
+    { key: 'prs', label: 'My PRs', icon: Trophy, onClick: () => nav('/app/client/progress?section=prs') },
+  ].filter(Boolean);
 
-        {/* ── 3. TODAY'S TRAINING ── */}
-        {workout ? (
-          <div className="anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            {/* Share Workout — top-right icon */}
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <div className="kicker">Today's training</div>
-                <h1 className="font-grotesk font-bold text-2xl leading-tight">{workout.name}</h1>
-              </div>
-              <button onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}
-                className="w-10 h-10 rounded-xl grid place-items-center transition-all active:scale-90"
-                style={{ background: 'var(--panel2, var(--panel))', border: '1px solid var(--line)', color: 'var(--ink)' }}
-                aria-label="Share Workout">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                  <path d="M8.6 10.5 15.4 6.5M8.6 13.5 15.4 17.5" />
-                </svg>
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2.5 mt-3">
-              {[
-                /* "Est. burn" removed. It was a static number attached to the
-                   PLAN, computed before a single set was lifted, so it could
-                   not reflect what the user actually did -- and it sat next
-                   to two counts that are facts, which lent it credibility it
-                   had not earned. The real figure now comes from skos-cal-v1
-                   AFTER the session, as a range, on the summary screen.
-                   Estimated duration replaces it: also a prediction, but an
-                   honest one, and the thing a user actually plans around. */
-                ['Exercises', meta.exerciseCount || exercises.length],
-                ['Sets', meta.totalSets || exercises.reduce((s, e) => s + (e.sets || 0), 0)],
-                /* Was "Approx. time" — at .08em tracking in a third of the
-                   screen it wrapped to two lines while its two siblings sat
-                   on one, so the row of three tiles had ragged heights and
-                   misaligned baselines. The value already reads "58 min";
-                   the label doesn't need to repeat the unit. */
-                ['Time', meta.estMinutes ? `${meta.estMinutes} min` : '—']
-              ].map(([l, v]) => (
-                <div key={l} className="card !p-3 text-center">
-                  <div className="font-grotesk font-bold text-lg tabular-nums" style={{ color: 'var(--ink)' }}>{v}</div>
-                  <div className="t-micro mt-0.5 whitespace-nowrap">{l}</div>
-                </div>
-              ))}
-            </div>
-            {/* Three actions now, not two: manavi-progress-enhancements-v2
-                added standalone cardio logging (Add Cardio opens a picker
-                independent of the lifting session below). Share stays
-                icon-only utility, Start session stays the dominant flex-1
-                action (see the comment this pass already left on why), Add
-                Cardio sits as a secondary action between them rather than
-                shouting at equal weight -- "+ ADD CARDIO" in all-caps was
-                the loudest label on the screen for a genuinely optional
-                action. */}
-            <div className="flex gap-2.5 mt-3">
-              <button onClick={() => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); }}
-                className="btn btn-icon shrink-0" aria-label="Share this workout">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
-                </svg>
-              </button>
-              <button
-                onClick={() => {
-                  setCardioOpen(true);
-                  setCardioSearch('');
-                  setCardioConfigItem(null);
-                }}
-                className="btn btn-icon shrink-0" aria-label="Add cardio">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </button>
-              <button data-start-workout className="btn-primary flex-1" data-loading={starting ? 'true' : undefined}
-                onClick={startWorkout} disabled={!exercises.length || starting}>
-                Start session
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="card anim-fadeUp" style={{ animationDelay: '120ms' }}>
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-                </svg>
-              </div>
-              <div className="empty-state-title">Rest day</div>
-              <p className="empty-state-body">
-                No session scheduled for today. Recovery is training too — fuel well and sleep eight hours.
-              </p>
-              {/* Cardio is standalone (its own picker/timer, see the Add
-                  Cardio button above on a training day) -- a rest day is
-                  exactly when someone might still want a walk or a bike
-                  ride logged, so the empty state offers the one action
-                  that's actually relevant here rather than nothing. */}
-              <button
-                onClick={() => {
-                  setCardioOpen(true);
-                  setCardioSearch('');
-                  setCardioConfigItem(null);
-                }}
-                className="btn btn-secondary btn-sm mt-4">
-                Add cardio
-              </button>
-              <div className="t-micro mt-4">Next session appears here tomorrow</div>
-            </div>
-          </div>
-        )}
+  const activeCardioPanel = cardioMode === 'execute' && cardioActiveId && activeCardioItem && (
+    <CardioLive
+      name={cardioName(cardioActiveId)}
+      elapsed={cardioElapsed}
+      kcal={totalCardioCals}
+      fields={cardioExerciseConfig(cardioActiveId)}
+      currentParams={activeCardioItem.currentParams || {}}
+      segments={activeCardioItem.segments || []}
+      summarize={segmentParamsSummary}
+      onAdjust={(p) => {
+        const cur = activeCardioItem.currentParams || {};
+        if (Object.keys(p).some((k) => String(p[k]) !== String(cur[k]))) {
+          adjustCardioSettings(p);
+          setToast('Settings updated — new segment started');
+        }
+      }}
+      onEnd={endCardio}
+    />
+  );
 
-        {/* ── 4. TODAY'S EXERCISES ── */}
-        {state.length > 0 && (
-          <div className="anim-fadeUp" style={{ animationDelay: '180ms' }}>
-            <div className="kicker">Today's exercises</div>
-            <div className="space-y-2">
-              {state.map((ex, i) => (
-                /* The tick used to live here. It was the WRONG place for it:
-                   marking an exercise done from the plan screen records no
-                   reps, no weight and no sets -- it just greys the row out,
-                   while the real logging happens in the session. Two ways to
-                   "complete" an exercise, only one of which produces data,
-                   is a trap. Completion now belongs to the session; this
-                   screen answers "what am I doing, and how?" instead. */
-                <div key={ex.id}
-                  className="card anim-fadeUp transition-colors duration-200"
-                  style={{ animationDelay: `${200 + i * 40}ms` }}>
-                  <div className="p-3.5 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(ex.name)}</span>
-                        {equipMap[ex.id]?.missing?.length > 0 && (
-                          <span className="chip border-warn/40 text-warn bg-warn/10 !px-1.5 !py-0 text-[9px] shrink-0" title={`Needs: ${equipMap[ex.id].required.join(', ')}`}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>equipment</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
-                        {ex.sets} sets · {ex.reps} reps{ex.weight ? ` · ${ex.weight}` : ''}
-                      </div>
-                    </div>
-                    <button
-                      aria-label={`About ${exerciseLabel(ex.name)}`}
-                      aria-expanded={infoEx === ex.id}
-                      onClick={() => setInfoEx(infoEx === ex.id ? null : ex.id)}
-                      className="w-8 h-8 rounded-full border grid place-items-center shrink-0 transition-all active:scale-90"
-                      style={infoEx === ex.id
-                        ? { borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }
-                        : { borderColor: 'var(--line)', color: 'var(--mute)' }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />
-                      </svg>
-                    </button>
-                  </div>
+  const toastEl = toast && <div className="toast anim-toast" role="status">{toast}</div>;
 
-                  {infoEx === ex.id && (
-                    <div className="px-3.5 pb-3.5 -mt-1 space-y-2">
-                      <div className="h-px" style={{ background: 'var(--line)' }} />
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {[ex.primary_muscle, ex.equipment, ex.difficulty]
-                          .filter(Boolean)
-                          .map((t) => (
-                            <span key={t} className="text-[9px] uppercase tracking-[.1em] px-1.5 py-0.5 rounded"
-                                  style={{ color: 'var(--mute)', border: '1px solid var(--line)' }}>
-                              {String(t).replace(/_/g, ' ')}
-                            </span>
-                          ))}
-                      </div>
-                      {/* Coaching cues come from the exercise library and are
-                          already in this payload -- no extra request. Falls
-                          back to a truthful line rather than inventing form
-                          advice, which would be worse than saying nothing. */}
-                      <p className="text-[11px] leading-relaxed" style={{ color: 'var(--mute)' }}>
-                        {ex.cues || ex.notes
-                          || `${ex.sets} sets of ${ex.reps} reps${ex.rest_sec ? `, about ${ex.rest_sec}s rest between sets` : ''}. Your coach has not added form notes for this one yet.`}
-                      </p>
-                      {ex.secondary_muscles && (
-                        <p className="text-[10px]" style={{ color: 'var(--faint)' }}>
-                          Also works: {String(ex.secondary_muscles).replace(/_/g, ' ')}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── 4b. CARDIO SESSION ── */}
-        {cardioMode === 'browse' && (
-          <div className="anim-fadeUp" style={{ animationDelay: '220ms' }}>
-            {/* Cardio items added */}
-            {cardioItems.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="kicker">Cardio session</div>
-                  <button
-                    onClick={() => {
-                      setCardioOpen(true);
-                      setCardioSearch('');
-                      setCardioConfigItem(null);
-                    }}
-                    className="text-[11px] font-grotesk font-semibold active:scale-95"
-                    style={{ color: 'var(--accent)' }}>
-                    + Add more
-                  </button>
-                </div>
-                {cardioItems.map((item, i) => (
-                  <div key={i} className="card !p-3.5 flex items-center gap-3 anim-fadeUp" style={{ animationDelay: `${230 + i * 30}ms` }}>
-                    <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-grotesk text-[13px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{cardioName(item.id)}</div>
-                      <div className="text-[10px]" style={{ color: 'var(--mute)' }}>{cardioSummary(item)}</div>
-                    </div>
-                    <button
-                      onClick={() => setCardioItems((prev) => prev.filter((_, j) => j !== i))}
-                      className="w-7 h-7 rounded-lg grid place-items-center shrink-0 active:scale-90"
-                      style={{ color: 'var(--faint)' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={startCardio}
-                  className="w-full py-2.5 rounded-xl font-grotesk text-[12px] font-bold tracking-wide active:scale-[.97] transition-all"
-                  style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-                  START CARDIO
+  // ---- every sheet this page can open, rendered in whichever mode is up ----
+  const sheets = (
+    <>
+      {/* BUILD TODAY -- saved as today's session (/me/workouts). */}
+      <Sheet open={builderOpen} onClose={closeBuilder} title="Build today" sub="What you build replaces today's session"
+        footer={(
+          <button className="btn-primary btn-block"
+            disabled={savingBuilder || !builderName.trim() || !builderExs.length}
+            onClick={async () => {
+              setSavingBuilder(true);
+              try {
+                await api('/me/workouts', { method: 'POST', body: JSON.stringify({ name: builderName, exercises: builderExs.map((b) => ({ exercise_id: b.exercise_id, sets: b.sets, reps: b.reps, weight: b.weight })) }) });
+                setBuilderOpen(false); setBuilderName(''); setBuilderExs([]); setSelectedLibEx(null); setJustAdded(null);
+                setToast('Your workout is scheduled for today');
+                today.reload({ silent: true }); hist.reload({ silent: true });
+              } catch (e) { setToast(e.message); }
+              setSavingBuilder(false);
+            }}>
+            {savingBuilder ? 'Saving…' : `Save as today's session${builderExs.length ? ` · ${builderExs.length}` : ''}`}
+          </button>
+        )}>
+        <div className="p-4 space-y-3">
+          <input className="input" aria-label="Workout name" placeholder="Name it (e.g. My Upper Day)" value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
+          <div key={selectedLibEx?.id || '__library__'} className="anim-slideUp">
+            {selectedLibEx ? (
+              <div className="space-y-3">
+                <button onClick={() => setSelectedLibEx(null)} className="btn btn-sm">
+                  <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back to library
                 </button>
-              </div>
-            )}
-            {cardioItems.length === 0 && (
-              <button
-                onClick={() => {
-                  setCardioOpen(true);
-                  setCardioSearch('');
-                  setCardioConfigItem(null);
-                }}
-                className="w-full text-center py-3 text-[12px] font-grotesk font-semibold rounded-xl border border-dashed transition-all active:scale-[.98]"
-                style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
-                + Add Cardio
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Cardio summary (after completing) */}
-        {cardioMode === 'summary' && cardioResult && (
-          <div className="card p-4 anim-fadeUp" style={{ animationDelay: '0ms' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[10px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--faint)' }}>Cardio complete</div>
-              <div className="font-grotesk font-bold" style={{ color: 'var(--accent)' }}>{cardioResult.totalCalories} kcal</div>
-            </div>
-            <div className="space-y-3">
-              {cardioResult.items.map((item, i) => {
-                const totalDur = (item.segments || []).reduce((s, seg) => s + seg.durationSec, 0);
-                return (
-                  <div key={i} className="rounded-xl border border-line/40 p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-grotesk text-[12px] font-bold" style={{ color: 'var(--ink)' }}>{cardioName(item.id)}</span>
-                      <span className="font-grotesk text-[11px] font-bold" style={{ color: 'var(--accent)' }}>{item.calories} kcal · {Math.round(totalDur / 60)} min</span>
+                <ExerciseAnim anim={selectedLibEx.animation_key || 'fallback'} muscle={selectedLibEx.primary_muscle} label="" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-grotesk font-bold text-lg leading-tight" style={{ color: 'var(--ink)' }}>{exerciseLabel(selectedLibEx.name)}</div>
+                    <div className="wk-chips mt-1.5">
+                      {[selectedLibEx.primary_muscle, selectedLibEx.secondary_muscles, selectedLibEx.equipment].filter(Boolean).map((t) => (
+                        <span key={t} className="wk-chip">{String(t).replace(/_/g, ' ').toLowerCase()}</span>
+                      ))}
                     </div>
-                    {(item.segments || []).length > 0 && (
-                      <div className="space-y-1 mt-1.5">
-                        {item.segments.map((seg, j) => (
-                          <div key={j} className="flex items-center justify-between text-[10px]" style={{ color: 'var(--faint)' }}>
-                            <span>Segment {j + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-            </div>
-            <button onClick={dismissCardioSummary} className="btn w-full mt-3 !text-xs">Done</button>
-          </div>
-        )}
-
-        {/* ── 4c. ACTIVE CARDIO TIMER (visible in browse mode when cardio is running) ── */}
-        {cardioMode === 'execute' && cardioActiveId && activeCardioItem && (
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Cardio · {cardioName(cardioActiveId)}</div>
-                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
-                  {String(Math.floor(cardioElapsed / 60)).padStart(2, '0')}:{String(cardioElapsed % 60).padStart(2, '0')}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Est. burn</div>
-                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 18, color: 'var(--accent)' }}>
-                  ~{totalCardioCals} <span className="text-[11px]" style={{ color: 'var(--mute)' }}>kcal</span>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-xl p-3" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
-              <div className="text-[10px] uppercase tracking-[.12em] mb-2" style={{ color: 'var(--faint)' }}>Current settings</div>
-              <div className="flex flex-wrap gap-2">
-                {cardioExerciseConfig(cardioActiveId).map((field) => (
-                  <div key={field.key} className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-grotesk" style={{ color: 'var(--mute)' }}>{field.label}:</span>
-                    <span className="text-[11px] font-grotesk font-bold" style={{ color: 'var(--ink)' }}>{activeCardioItem.currentParams?.[field.key] || '—'}</span>
-                    {field.unit && <span className="text-[9px]" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {(activeCardioItem.segments || []).length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Segments ({activeCardioItem.segments.length})</div>
-                {activeCardioItem.segments.map((seg, i) => (
-                  <div key={i} className="flex items-center justify-between text-[10px]" style={{ color: 'var(--faint)' }}>
-                    <span>Seg {i + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div id="cardioAdjustBrowse" className="rounded-xl border border-line p-3 space-y-2">
-              <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Adjust settings</div>
-              <div className="grid grid-cols-2 gap-2">
-                {cardioExerciseConfig(cardioActiveId).map((field) => (
-                  <div key={field.key} className="flex items-center gap-1.5">
-                    <label className="text-[10px] font-grotesk shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      className="input flex-1 !py-1 !text-[11px]"
-                      placeholder={field.placeholder}
-                      defaultValue={activeCardioItem.currentParams?.[field.key] || ''}
-                      id={`adjBrowse_${field.key}`}
-                    />
-                    {field.unit && <span className="text-[9px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  const newParams = {};
-                  cardioExerciseConfig(cardioActiveId).forEach((field) => {
-                    const el = document.getElementById(`adjBrowse_${field.key}`);
-                    if (el && el.value) newParams[field.key] = el.value;
-                  });
-                  const cur = activeCardioItem.currentParams || {};
-                  const changed = Object.keys(newParams).some((k) => String(newParams[k]) !== String(cur[k]));
-                  if (changed) {
-                    adjustCardioSettings(newParams);
-                    setToast('Settings updated — new segment started');
-                  }
-                }}
-                className="w-full py-1.5 rounded-lg text-[10px] font-grotesk font-bold border transition-all active:scale-[.98]"
-                style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }}>
-                ADJUST SETTINGS
-              </button>
-            </div>
-            <button
-              onClick={endCardio}
-              className="w-full py-2.5 rounded-xl text-[12px] font-grotesk font-bold active:scale-[.97] transition-all"
-              style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-              END CARDIO · {Math.round(cardioElapsed / 60)} min
-            </button>
-          </div>
-        )}
-
-        {/* ── 5. RECENT SESSIONS ──
-            Was three flex children with no fixed widths, so the raw ISO
-            date landed wherever the (truncated, variable-length) name
-            happened to end -- a different horizontal position on every
-            row. SessionRow gives the date a fixed right-aligned column and
-            replaces the bare date with what the session actually was.
-            "View all" exists because this list stopped at five with no
-            route to anything older. */}
-        {!!hist.data?.workouts?.length && (
-          <div className="card p-4 anim-fadeUp" style={{ animationDelay: '260ms' }}>
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="t-micro">Recent sessions</div>
-              <button
-                onClick={() => nav('/app/client/history')}
-                className="text-[11px] font-semibold rounded-lg px-2"
-                style={{ minHeight: 30, color: 'var(--accent)' }}
-              >
-                View all →
-              </button>
-            </div>
-            <div className="space-y-1.5">
-              {hist.data.workouts.filter((w) => w.id !== workout?.id).slice(0, 5).map((w) => (
-                <SessionRow key={w.id} w={w} compact onOpen={() => nav(`/app/client/day/${w.scheduled_date}`)} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════ BUILD TODAY MODAL ═══════════ */}
-        {/* Rendered via a portal straight to <body> -- same fix, same
-            reason, as FoodLogSheet.jsx's own portal (see its header
-            comment): this page's cards use `.anim-fadeUp`, whose
-            `animation-fill-mode: both` leaves a non-`none` transform on
-            its own element for as long as it exists, which becomes the
-            containing block for any `position: fixed` DESCENDANT of it --
-            so without a portal, this modal was fixed relative to that
-            ancestor's (much taller, scrolled) box instead of the true
-            viewport. Confirmed live: the modal rendered, but its
-            bounding rect landed hundreds of pixels above/below the
-            visible screen depending on scroll position. */}
-        {builderOpen && createPortal((
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="Build my workout">
-            <div ref={builderDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
-              <div className="p-4 border-b border-line/60 flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <div className="font-grotesk font-bold">Build my workout</div>
-                  <InfoDot label="Build my workout" title="Build my workout">
-                    Pick any exercises you like — what you build here is saved as today&rsquo;s
-                    session, replacing whatever was scheduled.
-                  </InfoDot>
-                </div>
-                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); }} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <input className="input" placeholder="Workout name (e.g. My Upper Day)" value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
-
-                {/* ── keyed wrapper for smooth content transitions ── */}
-                <div key={selectedLibEx?.id || '__library__'} className="anim-slideUp">
-                {selectedLibEx ? (
-                  /* ── exercise detail view ── */
-                  <div className="space-y-3">
-                    <button onClick={() => setSelectedLibEx(null)} className="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to library</button>
-
-                    <div className="anim-slideUp" style={{ animationDelay: '50ms' }}>
-                      <ExerciseAnim anim={selectedLibEx.animation_key || 'fallback'} muscle={selectedLibEx.primary_muscle} label="" />
-                    </div>
-
-                    {/* Exercise name + Add button -- top row. manavi-progress-
-                        enhancements-v2 restructured this into a flex row
-                        with the Add button beside the name (and the trailing
-                        unconditional markup right after this conflict block
-                        already assumes that wrapper exists, closing tags it
-                        opens) -- her shape is kept for that reason, but
-                        ExerciseAnim (the exercise demo visual, entirely
-                        absent from her branch) and exerciseLabel() (this
-                        pass's leg_press -> "Leg Press" title-casing) are
-                        both restored into it. */}
-                    <div className="flex items-start justify-between gap-3 anim-slideUp" style={{ animationDelay: '100ms' }}>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-grotesk font-bold text-lg leading-tight" style={{ color: 'var(--ink)' }}>{exerciseLabel(selectedLibEx.name)}</div>
-                        <div className="flex items-center gap-2 text-[11px] text-mute flex-wrap mt-1">
-                          {selectedLibEx.primary_muscle && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.primary_muscle}</span>}
-                          {selectedLibEx.secondary_muscles && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.secondary_muscles}</span>}
-                          {selectedLibEx.equipment && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{selectedLibEx.equipment}</span>}
-                        </div>
-                      </div>
-                      <button
-                        className={`shrink-0 px-4 py-2 rounded-xl font-grotesk text-xs font-bold transition-all active:scale-95 ${justAdded === selectedLibEx.id ? 'anim-confirmPulse' : ''}`}
-                        style={builderExs.some((b) => b.exercise_id === selectedLibEx.id)
-                          ? { background: 'var(--good)', color: 'var(--bg)' }
-                          : { background: 'var(--accent)', color: 'var(--bg)' }}
-                        disabled={builderExs.some((b) => b.exercise_id === selectedLibEx.id)}
+                  {(() => {
+                    const added = builderExs.some((b) => b.exercise_id === selectedLibEx.id);
+                    return (
+                      <button className={`btn-primary btn-sm shrink-0 ${justAdded === selectedLibEx.id ? 'anim-confirmPulse' : ''}`}
+                        disabled={added}
                         onClick={() => {
                           setJustAdded(selectedLibEx.id);
                           setTimeout(() => setJustAdded(null), 500);
                           setBuilderExs((b) => [...b, { exercise_id: selectedLibEx.id, name: selectedLibEx.name, muscle: selectedLibEx.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
                           setTimeout(() => setSelectedLibEx(null), 350);
                         }}>
-                        {builderExs.some((b) => b.exercise_id === selectedLibEx.id) ? '✓ Added' : '+ Add'}
+                        {added ? 'Added' : 'Add'}
                       </button>
-                    </div>
-
-                    {/* Short description */}
-                    <div className="anim-slideUp" style={{ animationDelay: '100ms' }}>
-                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--mute)' }}>
-                        {selectedLibEx.instructions
-                          || `${selectedLibEx.movement === 'compound' ? 'Compound' : 'Isolation'} ${selectedLibEx.movement?.replace(/_/g, ' ') || ''} movement targeting the ${(selectedLibEx.primary_muscle || '').replace(/_/g, ' ').toLowerCase()}${selectedLibEx.secondary_muscles ? `, also engaging the ${selectedLibEx.secondary_muscles.replace(/,/g, ' ').replace(/_/g, ' ').toLowerCase()}` : ''}.`}
-                      </p>
-                    </div>
-
-                    {/* Primary / Secondary / Equipment */}
-                    <div className="grid grid-cols-3 gap-2 anim-slideUp" style={{ animationDelay: '150ms' }}>
-                      {[
-                        ['Primary', selectedLibEx.primary_muscle || '—'],
-                        ['Secondary', (selectedLibEx.secondary_muscles || '—').replace(/,/g, ' · ')],
-                        ['Equipment', selectedLibEx.equipment || '—']
-                      ].map(([l, v]) => (
-                        <div key={l} className="rounded-xl bg-tint/[.03] border border-line px-2 py-2 text-center">
-                          <div className="t-micro" style={{ fontSize: '.5rem' }}>{l}</div>
-                          <div className="text-[10px] font-grotesk font-semibold mt-0.5 leading-tight">{v}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {selectedLibEx.cues && (
-                      <div className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2.5 text-[11px] leading-relaxed anim-slideUp" style={{ animationDelay: '200ms' }}>
-                        <span className="text-gold font-grotesk font-semibold mr-1.5">FORM CUE</span>{selectedLibEx.cues}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* ── search + region/equipment chips + exercise library list ──
-                     origin/main added this component (real alias-aware
-                     server search + muscle/equipment chip filters) to
-                     replace the plain client-side filter this branch had
-                     here; kept as the strictly better implementation. */
-                  <ExerciseSearchList
-                    fallback={libList}
-                    addedIds={new Set(builderExs.map((b) => b.exercise_id))}
-                    onPick={(x) => setSelectedLibEx(x)}
-                    // Quick-add: identical object shape and justAdded
-                    // feedback as the detail view's own "+ Add" button
-                    // above -- this just skips having to open that view
-                    // first for someone who already knows what they want.
-                    onQuickAdd={(x) => {
-                      setJustAdded(x.id);
-                      setTimeout(() => setJustAdded(null), 500);
-                      setBuilderExs((b) => [...b, { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
-                    }}
-                  />
-
-                )}
+                    );
+                  })()}
                 </div>
-
-                {/* ── MY SESSION — exercises added ── */}
-                {!!builderExs.length && (
-                  <div className="space-y-2 pt-1">
-                    <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">MY SESSION</div>
-                    {builderExs.map((b, i) => (
-                      <div key={b.exercise_id} className="rounded-xl border border-gold/25 bg-gold/5 p-3 anim-slideUp">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-grotesk text-[13px] font-semibold truncate">{i + 1}. {b.name}</span>
-                          <button className="text-[10px] text-bad/80 hover:text-bad shrink-0 active:scale-90" onClick={() => setBuilderExs((x) => x.filter((_, j) => j !== i))}>Remove</button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <input type="number" className="input !py-1.5 !text-xs" aria-label="Sets" value={b.sets} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, sets: e.target.value } : y))} />
-                          <input className="input !py-1.5 !text-xs" aria-label="Reps" value={b.reps} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, reps: e.target.value } : y))} />
-                          <input className="input !py-1.5 !text-xs" aria-label="Weight" value={b.weight} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, weight: e.target.value } : y))} />
-                        </div>
-                        <div className="text-[9px] text-faint mt-1 font-grotesk">sets · reps · weight</div>
-                      </div>
-                    ))}
-                  </div>
+                <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--mute)' }}>
+                  {selectedLibEx.instructions
+                    || `${selectedLibEx.movement === 'compound' ? 'Compound' : 'Isolation'} ${selectedLibEx.movement?.replace(/_/g, ' ') || ''} movement for the ${(selectedLibEx.primary_muscle || '').replace(/_/g, ' ').toLowerCase()}${selectedLibEx.secondary_muscles ? `, also working the ${selectedLibEx.secondary_muscles.replace(/,/g, ' ').replace(/_/g, ' ').toLowerCase()}` : ''}.`}
+                </p>
+                {selectedLibEx.cues && (
+                  <div className="wk-hint"><Info size={15} strokeWidth={2} aria-hidden="true" /><span><b>Form cue</b> · {selectedLibEx.cues}</span></div>
                 )}
               </div>
-              <div className="p-4 border-t border-line/60">
-                <button className="btn-primary w-full active:scale-[.97]"
-                  disabled={savingBuilder || !builderName.trim() || !builderExs.length}
-                  onClick={async () => {
-                    setSavingBuilder(true);
-                    try {
-                      await api('/me/workouts', { method: 'POST', body: JSON.stringify({ name: builderName, exercises: builderExs.map((b) => ({ exercise_id: b.exercise_id, sets: b.sets, reps: b.reps, weight: b.weight })) }) });
-                      setBuilderOpen(false); setBuilderName(''); setBuilderExs([]); setSelectedLibEx(null); setJustAdded(null);
-                      setToast('Your workout is scheduled for today');
-                      today.reload({ silent: true }); hist.reload({ silent: true });
-                    } catch (e) { setToast(e.message); }
-                    setSavingBuilder(false);
-                  }}>
-                  {savingBuilder ? 'Saving…' : 'Save as today\'s session'}
+            ) : (
+              <ExerciseSearchList
+                fallback={libList}
+                addedIds={new Set(builderExs.map((b) => b.exercise_id))}
+                onPick={(x) => setSelectedLibEx(x)}
+                onQuickAdd={(x) => {
+                  setJustAdded(x.id);
+                  setTimeout(() => setJustAdded(null), 500);
+                  setBuilderExs((b) => [...b, { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
+                }}
+              />
+            )}
+          </div>
+          {!!builderExs.length && (
+            <div className="space-y-2 pt-1">
+              <div className="wk-h">Your session</div>
+              {builderExs.map((b, i) => (
+                <div key={b.exercise_id} className="wk-card p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-grotesk text-[13.5px] font-semibold truncate">{i + 1}. {exerciseLabel(b.name)}</span>
+                    <button className="text-[12px] font-semibold shrink-0" style={{ color: 'var(--bad)' }} onClick={() => setBuilderExs((x) => x.filter((_, j) => j !== i))}>Remove</button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="grid gap-1 text-[10.5px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Sets
+                      <input type="number" className="input !py-1.5 !text-sm" value={b.sets} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, sets: e.target.value } : y))} /></label>
+                    <label className="grid gap-1 text-[10.5px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Reps
+                      <input className="input !py-1.5 !text-sm" value={b.reps} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, reps: e.target.value } : y))} /></label>
+                    <label className="grid gap-1 text-[10.5px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Weight
+                      <input className="input !py-1.5 !text-sm" value={b.weight} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, weight: e.target.value } : y))} /></label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Sheet>
+
+      <LogPastCardio
+        open={logCardioOpen}
+        onClose={() => setLogCardioOpen(false)}
+        bodyWeightKg={clientWeight}
+        toast={setToast}
+        onSaved={() => { hist.reload({ silent: true }); today.reload({ silent: true }); }}
+      />
+
+      <LogPastWorkout
+        open={logPastOpen}
+        onClose={() => setLogPastOpen(false)}
+        libList={libList}
+        loadLib={() => api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'))}
+        toast={setToast}
+        onSaved={() => { today.reload({ silent: true }); hist.reload({ silent: true }); }}
+      />
+
+      {confirmDialog}
+
+      {/* MY WORKOUTS -- reusable sessions + the member's own week. */}
+      <Sheet open={plannerOpen} onClose={() => { setPlannerOpen(false); setAssignDow(null); }} title="My workouts" sub="Saved sessions and your week" wide>
+        <div className="p-4 space-y-5">
+          <div>
+            <div className="wk-head !mx-0">
+              <span className="flex items-center gap-1">
+                <span className="wk-h">My week</span>
+                {/* Each cell carries its real day_of_week (Sun=0..Sat=6, the
+                    API's convention) while the row reads Monday first. */}
+                <InfoDot label="My week" title="Setting your week" size={28}>
+                  Tap any day to put one of your saved workouts on it, or to make it a
+                  rest day. This is your own schedule — it does not change a plan your
+                  coach has set.
+                </InfoDot>
+              </span>
+              <span className="wk-head__aside">{(planner?.schedule || []).filter((x) => x.workout_id).length} training days</span>
+            </div>
+            <div className="grid grid-cols-7 gap-1.5">
+              {[{ d: 'Mon', dow: 1 }, { d: 'Tue', dow: 2 }, { d: 'Wed', dow: 3 }, { d: 'Thu', dow: 4 },
+                { d: 'Fri', dow: 5 }, { d: 'Sat', dow: 6 }, { d: 'Sun', dow: 0 }].map(({ d, dow }) => {
+                const sch = (planner?.schedule || []).find((x) => x.day_of_week === dow);
+                const w = planner?.workouts?.find((x) => x.id === sch?.workout_id);
+                return (
+                  <button key={dow} onClick={() => setAssignDow(dow)}
+                    aria-label={`${d}: ${w ? w.name : 'rest day'}. Tap to change.`}
+                    aria-pressed={assignDow === dow}
+                    className="rounded-xl border px-1 py-2 text-center transition-all"
+                    style={{
+                      minHeight: 58,
+                      borderColor: assignDow === dow ? 'var(--ink)' : w ? 'rgb(var(--accent-rgb) / .5)' : 'var(--line)',
+                      background: w ? 'rgb(var(--accent-rgb) / .08)' : 'transparent',
+                      boxShadow: dow === todayDow ? 'inset 0 0 0 1.5px var(--accent)' : 'none',
+                    }}>
+                    <div className="text-[10px] font-semibold" style={{ color: 'var(--mute)' }}>{d}</div>
+                    <div className="text-[10px] font-grotesk font-semibold mt-0.5 leading-tight line-clamp-2"
+                      style={{ color: w ? 'var(--accent)' : 'var(--faint)' }}>
+                      {w ? w.name : 'Rest'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {assignDow != null && (
+            <div className="wk-card p-3 space-y-1.5">
+              <div className="flex items-center justify-between mb-1">
+                <div className="wk-h" style={{ color: 'var(--accent)' }}>
+                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignDow]}
+                </div>
+                <button className="text-[12px] font-semibold" style={{ color: 'var(--mute)' }} onClick={() => setAssignDow(null)}>Cancel</button>
+              </div>
+              <div className="wk-pick">
+                {(planner?.workouts || []).map((w) => {
+                  const current = (planner?.schedule || []).find((x) => x.day_of_week === assignDow)?.workout_id === w.id;
+                  return (
+                    <button key={w.id} className="wk-pick__row" style={current ? { borderColor: 'var(--accent)' } : undefined}
+                      onClick={async () => { await setDayWorkout(assignDow, w.id); setAssignDow(null); }}>
+                      <span className="flex-1 min-w-0">
+                        <span className="wk-pick__name truncate">{w.name}</span>
+                        <span className="wk-pick__meta">
+                          {(w.exercises || []).length} exercises · {(w.exercises || []).reduce((a, e) => a + (Number(e.sets) || 0), 0)} sets
+                        </span>
+                      </span>
+                      {current && <span className="text-[11px] font-bold shrink-0" style={{ color: 'var(--accent)' }}>Assigned</span>}
+                    </button>
+                  );
+                })}
+                <button className="wk-pick__row" onClick={async () => { await setDayWorkout(assignDow, null); setAssignDow(null); }}>
+                  <span className="wk-pick__name" style={{ color: 'var(--mute)' }}>Rest day</span>
                 </button>
               </div>
+              {!(planner?.workouts || []).length && (
+                <div className="text-[12px] py-2" style={{ color: 'var(--faint)' }}>Create a workout first, then you can put it on a day.</div>
+              )}
             </div>
-          </div>
-        ), document.body)}
+          )}
 
-        <LogPastCardio
-          open={logCardioOpen}
-          onClose={() => setLogCardioOpen(false)}
-          bodyWeightKg={clientWeight}
-          toast={setToast}
-          onSaved={() => { hist.reload({ silent: true }); today.reload({ silent: true }); }}
-        />
-
-        <LogPastWorkout
-          open={logPastOpen}
-          onClose={() => setLogPastOpen(false)}
-          libList={libList}
-          loadLib={() => api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'))}
-          toast={setToast}
-          onSaved={() => { today.reload({ silent: true }); hist.reload({ silent: true }); }}
-        />
-
-        {confirmDialog}
-
-        {/* ═══════════ PERSONAL WORKOUT PLANNER MODAL ═══════════ */}
-        {plannerOpen && (
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="My workouts">
-            <div ref={plannerDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
-              <div className="p-4 border-b border-line/60 flex items-center justify-between">
-                <div>
-                  <div className="font-grotesk font-bold">My workouts</div>
-                  <div className="text-[10px] text-mute">Reusable sessions + your weekly plan</div>
-                </div>
-                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setPlannerOpen(false)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          {planForm ? (
+            <div className="wk-card p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="wk-h" style={{ color: 'var(--accent)' }}>{planForm.id ? 'Edit workout' : 'New workout'}</div>
+                <button className="text-[12px] font-semibold" style={{ color: 'var(--mute)' }} onClick={() => setPlanForm(null)}>Cancel</button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* ── WEEKLY SCHEDULE ──
-                    Two bugs lived here.
-
-                    (1) DAY INDEXING. This grid mapped ['Mon','Tue',...]
-                    onto 0..6, i.e. Mon=0. Everything else in this file and
-                    in the API uses the JavaScript convention (Sun=0,
-                    Mon=1..Sat=6) -- todayDow says exactly that in its own
-                    comment. So every assignment rendered one day late, and
-                    tapping what looked like Wednesday wrote to Thursday.
-                    The row still READS Monday-first, because that is how a
-                    training week is read, but each cell now carries its
-                    real day_of_week instead of its position in the row.
-
-                    (2) IT COULD NOT ASSIGN. See setDayWorkout above.
-                    Tapping a day now opens a picker containing every saved
-                    workout, rather than toggling between the first one and
-                    Rest. ── */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1">
-                      <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">My week</div>
-                      {/* The "tap a day to assign" instruction used to sit
-                          under the grid as a permanent line of text below a
-                          row of buttons that already look tappable. */}
-                      <InfoDot label="My week" title="Setting your week" size={28}>
-                        Tap any day to put one of your saved workouts on it, or to make it a
-                        rest day. This is your own schedule — it does not change a plan your
-                        coach has set.
-                      </InfoDot>
-                    </div>
-                    <div className="text-[10px] text-faint">
-                      {(planner?.schedule || []).filter((x) => x.workout_id).length} training days
-                    </div>
+              <input className="input" aria-label="Workout name" placeholder="Name it (e.g. Push A, Legs)" value={planForm.name || ''} onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))} />
+              <ExerciseSearchList
+                dense
+                fallback={libList}
+                addedIds={new Set((planForm.exercises || []).map((b) => b.exercise_id))}
+                onPick={(x) => setPlanForm((f) => ({ ...f, exercises: [...(f.exercises || []), { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW', rest_sec: 90 }] }))}
+              />
+              {(planForm.exercises || []).map((b, i) => (
+                <div key={b.exercise_id} className="rounded-xl border p-2.5" style={{ borderColor: 'var(--line)' }}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-grotesk text-[13px] font-semibold truncate">{i + 1}. {exerciseLabel(b.name)}</span>
+                    <button className="text-[12px] font-semibold shrink-0" style={{ color: 'var(--bad)' }} onClick={() => setPlanForm((f) => ({ ...f, exercises: f.exercises.filter((_, j) => j !== i) }))}>Remove</button>
                   </div>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {[{ d: 'Mon', dow: 1 }, { d: 'Tue', dow: 2 }, { d: 'Wed', dow: 3 }, { d: 'Thu', dow: 4 },
-                      { d: 'Fri', dow: 5 }, { d: 'Sat', dow: 6 }, { d: 'Sun', dow: 0 }].map(({ d, dow }) => {
-                      const sch = (planner?.schedule || []).find((x) => x.day_of_week === dow);
-                      const w = planner?.workouts?.find((x) => x.id === sch?.workout_id);
-                      const isToday = dow === todayDow;
-                      return (
-                        <button
-                          key={dow}
-                          onClick={() => setAssignDow(dow)}
-                          aria-label={`${d}: ${w ? w.name : 'rest day'}. Tap to change.`}
-                          className="rounded-xl border px-1 py-2 text-center transition-all"
-                          style={{
-                            minHeight: 56,
-                            borderColor: w ? 'var(--accent)' : 'var(--line)',
-                            background: w ? 'rgb(var(--accent-rgb) / .10)' : 'transparent',
-                            // Today is outlined rather than filled, so "is
-                            // today" and "has a workout" stay separately
-                            // readable instead of one hiding the other.
-                            boxShadow: isToday ? 'inset 0 0 0 1.5px var(--accent)' : 'none',
-                          }}
-                        >
-                          <div className="t-micro" style={{ fontSize: '.5rem' }}>{d}</div>
-                          <div
-                            className="text-[9px] font-grotesk font-semibold mt-0.5 leading-tight"
-                            style={{ color: w ? 'var(--accent)' : 'var(--faint)' }}
-                          >
-                            {w ? w.name.split(' ').slice(0, 2).join(' ') : 'Rest'}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                </div>
-
-                {/* ── DAY ASSIGNMENT PICKER ── */}
-                {assignDow != null && (
-                  <div className="rounded-xl border p-3 space-y-1.5" style={{ borderColor: 'var(--accent)', background: 'rgb(var(--accent-rgb) / .06)' }}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-[10px] font-grotesk uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
-                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignDow]}
-                      </div>
-                      <button className="section-head-action" style={{ color: 'var(--mute)' }} onClick={() => setAssignDow(null)}>Cancel</button>
-                    </div>
-
-                    {(planner?.workouts || []).map((w) => {
-                      const current = (planner?.schedule || []).find((x) => x.day_of_week === assignDow)?.workout_id === w.id;
-                      return (
-                        <button
-                          key={w.id}
-                          className="w-full rounded-lg border px-3 py-2 text-left flex items-center justify-between gap-2"
-                          style={{ minHeight: 44, borderColor: current ? 'var(--accent)' : 'var(--line)', background: 'var(--bg)' }}
-                          onClick={async () => { await setDayWorkout(assignDow, w.id); setAssignDow(null); }}
-                        >
-                          <span className="min-w-0">
-                            <span className="block font-grotesk text-[12.5px] font-semibold truncate">{w.name}</span>
-                            <span className="block text-[10px] text-mute">
-                              {(w.exercises || []).length} exercises · {(w.exercises || []).reduce((a, e) => a + (Number(e.sets) || 0), 0)} sets
-                            </span>
-                          </span>
-                          {current && <span className="text-[10px] font-bold shrink-0" style={{ color: 'var(--accent)' }}>Assigned</span>}
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      className="w-full rounded-lg border px-3 py-2 text-left font-grotesk text-[12.5px]"
-                      style={{ minHeight: 44, borderColor: 'var(--line)', background: 'var(--bg)', color: 'var(--mute)' }}
-                      onClick={async () => { await setDayWorkout(assignDow, null); setAssignDow(null); }}
-                    >
-                      Rest day
-                    </button>
-
-                    {!(planner?.workouts || []).length && (
-                      <div className="text-[11px] text-faint py-2">Create a workout first, then you can put it on a day.</div>
-                    )}
-                  </div>
-                )}
-
-                {/* plan form (create / edit) */}
-                {planForm ? (
-                  <div className="rounded-xl border border-gold/30 bg-gold/5 p-3 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[10px] text-gold font-grotesk uppercase tracking-wider">{planForm.id ? 'Edit workout' : 'New workout'}</div>
-                      <button className="section-head-action" style={{ color: 'var(--mute)' }} onClick={() => setPlanForm(null)}>Back</button>
-                    </div>
-                    <input className="input" placeholder="Workout name (e.g. Push A, Legs, My Upper Day)" value={planForm.name || ''} onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))} />
-                    <ExerciseSearchList
-                      dense
-                      fallback={libList}
-                      addedIds={new Set((planForm.exercises || []).map((b) => b.exercise_id))}
-                      onPick={(x) => setPlanForm((f) => ({ ...f, exercises: [...(f.exercises || []), { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW', rest_sec: 90 }] }))}
-                    />
-                    {(planForm.exercises || []).map((b, i) => (
-                      <div key={b.exercise_id} className="rounded-lg border border-line bg-bg/50 p-2.5">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-grotesk text-[12px] font-semibold truncate">{i + 1}. {b.name}</span>
-                          <button className="text-[10px] text-bad/80 hover:text-bad shrink-0" onClick={() => setPlanForm((f) => ({ ...f, exercises: f.exercises.filter((_, j) => j !== i) }))}>Remove</button>
-                        </div>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          <input type="number" className="input !py-1 !text-[10px]" aria-label="Sets" value={b.sets} onChange={(e) => setPlanForm((f) => ({ ...f, exercises: f.exercises.map((y, j) => j === i ? { ...y, sets: e.target.value } : y) }))} />
-                          <input className="input !py-1 !text-[10px]" aria-label="Reps" value={b.reps} onChange={(e) => setPlanForm((f) => ({ ...f, exercises: f.exercises.map((y, j) => j === i ? { ...y, reps: e.target.value } : y) }))} />
-                          <input className="input !py-1 !text-[10px]" aria-label="Weight" value={b.weight} onChange={(e) => setPlanForm((f) => ({ ...f, exercises: f.exercises.map((y, j) => j === i ? { ...y, weight: e.target.value } : y) }))} />
-                          <input type="number" className="input !py-1 !text-[10px]" aria-label="Rest sec" value={b.rest_sec} onChange={(e) => setPlanForm((f) => ({ ...f, exercises: f.exercises.map((y, j) => j === i ? { ...y, rest_sec: e.target.value } : y) }))} />
-                        </div>
-                        <div className="text-[8px] text-faint mt-1 font-grotesk">sets · reps · weight · rest(s)</div>
-                      </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[['sets', 'Sets', 'number'], ['reps', 'Reps', 'text'], ['weight', 'Weight', 'text'], ['rest_sec', 'Rest s', 'number']].map(([k, l, t]) => (
+                      <label key={k} className="grid gap-1 text-[10px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>{l}
+                        <input type={t} className="input !py-1 !text-[12.5px]" value={b[k] ?? ''}
+                          onChange={(e) => setPlanForm((f) => ({ ...f, exercises: f.exercises.map((y, j) => j === i ? { ...y, [k]: e.target.value } : y) }))} />
+                      </label>
                     ))}
-                    <button className="btn-primary btn-sm btn-block" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
-                      {savingPlan ? 'Saving…' : (planForm.id ? 'Save changes' : 'Create workout')}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <button className="btn-primary btn-sm btn-touch btn-block" onClick={() => {
-                      if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
-                      setPlanForm({ id: null, name: '', exercises: [], search: '' });
-                    }}>+ Create new workout</button>
-
-                    {/* ── MY REUSABLE WORKOUTS ──
-                        Each row used to say only "5 exercises · 15 sets",
-                        which tells you the SIZE of a workout but not what
-                        it is. "Push A" and "Pull A" are indistinguishable
-                        by that line, so choosing between them meant opening
-                        Edit on each in turn. The exercise names are the
-                        thing you actually pick by, so they are on the card.
-
-                        Each row also now shows which days it is on, which
-                        closes the loop with the week grid above: you can
-                        see at a glance that a workout is scheduled twice,
-                        or never. ── */}
-                    <div className="space-y-2">
-                      {planner?.workouts?.length === 0 && (
-                        <div className="card !p-6 text-center">
-                          <div className="text-xs text-mute">No saved workouts yet — create one, then assign it to your week.</div>
-                        </div>
-                      )}
-                      {(planner?.workouts || []).map((w) => {
-                        const exs = w.exercises || [];
-                        const sets = exs.reduce((a, e) => a + (Number(e.sets) || 0), 0);
-                        const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                        const onDays = (planner?.schedule || [])
-                          .filter((x) => x.workout_id === w.id)
-                          .map((x) => DAY_ABBR[x.day_of_week])
-                          .filter(Boolean);
-                        return (
-                          <div key={w.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="font-grotesk text-[13px] font-semibold truncate">{w.name}</div>
-                                <div className="text-[10px] text-mute mt-0.5">
-                                  {exs.length} exercises · {sets} sets
-                                  {onDays.length > 0 && (
-                                    <span style={{ color: 'var(--accent)' }}> · {onDays.join(', ')}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* What is actually in it. Truncated at four, with
-                                a count for the rest -- enough to recognise the
-                                session without turning the card into a list. */}
-                            {exs.length > 0 && (
-                              <div className="text-[10.5px] text-faint mt-1.5 leading-snug">
-                                {exs.slice(0, 4).map((e) => e.name).filter(Boolean).join(' · ')}
-                                {exs.length > 4 && ` +${exs.length - 4} more`}
-                              </div>
-                            )}
-
-                            <div className="flex gap-1.5 mt-2.5">
-                              <button
-                                className="btn-primary btn-sm btn-touch flex-1"
-                                onClick={() => startPlanToday(w)}
-                              >
-                                Do today
-                              </button>
-                              <button
-                                className="btn btn-sm btn-touch"
-                                onClick={() => {
-                                  setPlanForm({
-                                    id: w.id,
-                                    name: w.name,
-                                    exercises: exs.map((e) => ({
-                                      exercise_id: e.exercise_id, name: e.name, sets: e.sets,
-                                      reps: e.reps, weight: e.weight, rest_sec: e.rest_sec,
-                                    })),
-                                    search: '',
-                                  });
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button className="btn btn-sm btn-touch" onClick={() => duplicatePlan(w)} aria-label={`Duplicate ${w.name}`}>Copy</button>
-                              <button className="btn btn-sm btn-touch text-bad" onClick={() => deletePlan(w)} aria-label={`Delete ${w.name}`}>Del</button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════ THIS-WEEK DAY PREVIEW MODAL ═══════════ */}
-        {weekDay && (
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label={`${weekDay.label} — ${weekDay.name}`}>
-            <div ref={weekDayDialogRef} className="card w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
-              <div className="p-4 border-b border-line/60 flex items-start justify-between gap-3">
-                <div>
-                  <div className="kicker">{weekDay.label}{weekDay.day_of_week === todayDow ? ' · today' : ''}</div>
-                  <div className="font-grotesk font-bold text-lg leading-tight">{weekDay.name}</div>
-                  {weekDay.focus && <div className="text-[10px] text-mute mt-1 font-grotesk">{weekDay.focus}</div>}
-                </div>
-                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => setWeekDay(null)} aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {weekDay.exercises?.length ? weekDay.exercises.map((ex, i) => (
-                  <div key={i} className="rounded-xl border border-line bg-tint/[.02] p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-grotesk text-[13px] font-semibold truncate">{exerciseLabel(ex.name)}</span>
-                    </div>
-                    <div className="text-[11px] text-mute mt-1">{ex.sets} × {ex.reps} · {ex.weight}</div>
-                  </div>
-                )) : (
-                  <div className="text-center py-10 text-mute text-sm">Rest day — no exercises scheduled.</div>
-                )}
-              </div>
-              <div className="p-4 border-t border-line/60 flex gap-2">
-                <button className="btn flex-1" onClick={() => setWeekDay(null)}>Close</button>
-                {weekDay.day_of_week === todayDow && !!workout && (
-                  <button className="btn-primary flex-1" onClick={() => { setWeekDay(null); document.querySelector('[data-start-workout]')?.click(); }}>Start today</button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ────── CARDIO SELECTION MODAL ────── */}
-        {/* Same portal fix as the Build Today modal above -- identical
-            broken-containing-block bug, same cause, same reason. */}
-        {cardioOpen && createPortal((
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="Add cardio">
-            <div ref={cardioDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
-              <div className="p-4 border-b border-line/60 flex items-center justify-between">
-                <div>
-                  <div className="font-grotesk font-bold">Add Cardio</div>
-                  <div className="text-[10px] text-mute">Select a cardio exercise</div>
-                </div>
-                <button className="chrome-btn btn-icon justify-center shrink-0" onClick={() => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); }} aria-label="Close"><XIcon /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {cardioConfigItem ? (
-                  /* ── cardio configuration view ── */
-                  <div className="space-y-3">
-                    <button onClick={() => setCardioConfigItem(null)} className="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to list</button>
-                    <div className="font-grotesk font-bold text-lg" style={{ color: 'var(--ink)' }}>{cardioName(cardioConfigItem)}</div>
-                    <div className="space-y-2.5">
-                      <div className="t-micro">Parameters</div>
-                      {cardioExerciseConfig(cardioConfigItem).map((field) => {
-                        const existing = cardioItems.find((c) => c.id === cardioConfigItem);
-                        return (
-                          <div key={field.key} className="flex items-center gap-3">
-                            <label className="text-[11px] font-grotesk font-semibold w-24 shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              className="input flex-1 !py-1.5 !text-xs"
-                              placeholder={field.placeholder}
-                              defaultValue={existing?.params?.[field.key] || ''}
-                              id={`cardio_${field.key}`}
-                            />
-                            {field.unit && <span className="text-[10px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button
-                      className="btn-primary btn-block active:scale-[.97]"
-                      onClick={() => {
-                        const params = {};
-                        cardioExerciseConfig(cardioConfigItem).forEach((field) => {
-                          const el = document.getElementById(`cardio_${field.key}`);
-                          if (el && el.value) params[field.key] = el.value;
-                        });
-                        setCardioItems((prev) => [...prev, { id: cardioConfigItem, params, segments: [], currentParams: { ...params } }]);
-                        setCardioConfigItem(null);
-                        setCardioOpen(false);
-                        setToast(`${cardioName(cardioConfigItem)} added`);
-                      }}>
-                      + Add to session
-                    </button>
-                  </div>
-                ) : (
-                  /* ── search + cardio exercise list ── */
-                  <div className="space-y-2.5">
-                    <input className="input" placeholder="Search machines, running, sports…" value={cardioSearch} onChange={(e) => setCardioSearch(e.target.value)} autoFocus />
-                    {/* Grouped, because "badminton" and "stair climber"
-                        are not the same kind of decision. Sports were
-                        missing entirely -- the list was thirteen gym
-                        machines, so someone who had just played football
-                        for an hour had nothing to log it as. */}
-                    <div className="space-y-1.5">
-                      {ACTIVITIES
-                        .filter((a) => !cardioSearch || a.name.toLowerCase().includes(cardioSearch.toLowerCase()))
-                        .map((a) => a.id)
-                        .map((id, i) => {
-                        const added = cardioItems.some((c) => c.id === id);
-                        return (
-                          <div key={id}
-                            className={`flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 transition-all anim-fadeUp ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}
-                            style={{ animationDelay: `${40 + i * 25}ms` }}>
-                            <button className="flex-1 min-w-0 text-left" onClick={() => setCardioConfigItem(id)}>
-                              <span className="block text-[13px] font-grotesk font-semibold truncate">{cardioName(id)}</span>
-                              <span className="text-[10px] text-mute">{cardioSummary(cardioItems.find((c) => c.id === id) || { params: {} }) || 'Configure parameters'}</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (added) return;
-                                // Quick-add: skip the parameter-configuration
-                                // screen entirely, using each field's own
-                                // placeholder as its default (the same
-                                // number that would already be pre-filled if
-                                // you opened that screen and accepted it
-                                // as-is). Tapping the row's NAME still opens
-                                // the full config screen for anyone who
-                                // wants to set real numbers first -- this
-                                // "+" is the immediate-add path, matching
-                                // how the food search list's own "+" works.
-                                // Stays open (no setCardioOpen(false)) so
-                                // more than one cardio exercise can be
-                                // quick-added in a row, same as a food
-                                // search list's quick-log.
-                                const params = {};
-                                cardioExerciseConfig(id).forEach((field) => {
-                                  // Optional fields stay empty: machine power
-                                  // outranks resistance in the energy model, so
-                                  // seeding it would estimate every session at a
-                                  // wattage nobody entered. See LogPastCardio.
-                                  if (field.placeholder && !field.optional) params[field.key] = field.placeholder;
-                                });
-                                setCardioItems((prev) => [...prev, { id, params, segments: [], currentParams: { ...params } }]);
-                                setToast(`${cardioName(id)} added`);
-                              }}
-                              className="shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-all active:scale-90"
-                              style={added
-                                ? { color: 'rgb(var(--good-rgb))' }
-                                : { color: 'var(--accent)', border: '1px solid rgb(var(--accent-rgb) / .4)', background: 'rgb(var(--accent-rgb) / .10)' }}
-                              aria-label={added ? `${cardioName(id)} added` : `Add ${cardioName(id)}`}
-                              disabled={added}>
-                              {added ? <CheckIcon /> : (
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ), document.body)}
-
-        {toast && <div className="toast anim-toast">{toast}</div>}
-        <ShareWorkoutSheet
-          open={shareSheetOpen}
-          onClose={() => setShareSheetOpen(false)}
-          workoutId={shareSheetData?.workoutId}
-          workoutName={shareSheetData?.workoutName}
-          exercises={shareSheetData?.exercises || []}
-          t={{}}
-        />
-      </div>
-    );
-  }
-
-  // ================= execute mode =================
-  if (mode === 'execute') {
-    /* EXECUTE MODE — one session clock, one checklist.
-       Rebuilt to the brief: no per-set timer and no rest countdown, a single
-       elapsed clock from START to END, every exercise for the day visible at
-       once, each expanding into editable sets that get ticked off. */
-    const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
-
-    return (
-      <div className="space-y-3 pb-28">
-
-        {/* ── the ONE session clock ── */}
-        <div className="card p-4 sticky top-2 z-20">
-          {pausedAt ? (
-            /* ── paused state ── */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Session paused</div>
-                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)', opacity: 0.5 }}>
-                    {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Sets done</div>
-                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 22, color: 'var(--accent)' }}>
-                    {doneSets}<span className="text-[13px]" style={{ color: 'var(--mute)' }}>/{totalSets}</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={resumeWorkout}
-                className="w-full py-2.5 rounded-xl text-[13px] font-grotesk font-bold tracking-wide active:scale-[.97] transition-all"
-                style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-                â–¶ RESUME
+              ))}
+              <button className="btn-primary btn-block" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
+                {savingPlan ? 'Saving…' : (planForm.id ? 'Save changes' : 'Create workout')}
               </button>
             </div>
           ) : (
-            /* ── active state ── */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Session</div>
-                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
-                    {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Sets done</div>
-                  <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 22, color: 'var(--accent)' }}>
-                    {doneSets}<span className="text-[13px]" style={{ color: 'var(--mute)' }}>/{totalSets}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-                <div className="h-full rounded-full transition-all duration-500"
-                     style={{ width: `${pct}%`, background: 'var(--accent-grad)' }} />
-              </div>
-              <button
-                onClick={pauseWorkout}
-                className="w-full py-2 rounded-xl text-[12px] font-grotesk font-semibold border transition-all active:scale-[.97]"
-                style={{ borderColor: 'var(--line)', color: 'var(--mute)' }}>
-                PAUSE
+            <>
+              <button className="btn-primary btn-block" onClick={() => {
+                if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
+                setPlanForm({ id: null, name: '', exercises: [], search: '' });
+              }}>
+                <Plus size={16} strokeWidth={2.2} aria-hidden="true" />New workout
               </button>
-            </div>
+              <div className="space-y-2">
+                {planner?.workouts?.length === 0 && (
+                  <div className="text-center text-[12.5px] py-6" style={{ color: 'var(--mute)' }}>No saved workouts yet — create one, then put it on your week.</div>
+                )}
+                {(planner?.workouts || []).map((w) => {
+                  const exs = w.exercises || [];
+                  const sets = exs.reduce((a, e) => a + (Number(e.sets) || 0), 0);
+                  const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                  const onDays = (planner?.schedule || []).filter((x) => x.workout_id === w.id).map((x) => DAY_ABBR[x.day_of_week]).filter(Boolean);
+                  return (
+                    <div key={w.id} className="wk-card p-3">
+                      <div className="font-grotesk text-[14px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{w.name}</div>
+                      <div className="text-[12px] mt-0.5" style={{ color: 'var(--mute)' }}>
+                        {exs.length} exercises · {sets} sets
+                        {onDays.length > 0 && <span style={{ color: 'var(--accent)' }}> · {onDays.join(', ')}</span>}
+                      </div>
+                      {exs.length > 0 && (
+                        <div className="text-[11.5px] mt-1.5 leading-snug" style={{ color: 'var(--faint)' }}>
+                          {exs.slice(0, 4).map((e) => exerciseLabel(e.name)).filter(Boolean).join(' · ')}{exs.length > 4 && ` +${exs.length - 4} more`}
+                        </div>
+                      )}
+                      <div className="flex gap-1.5 mt-3">
+                        <button className="btn-primary btn-sm flex-1" onClick={() => startPlanToday(w)}>Do today</button>
+                        <button className="btn btn-sm" onClick={() => setPlanForm({
+                          id: w.id, name: w.name, search: '',
+                          exercises: exs.map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })),
+                        })}>Edit</button>
+                        <button className="btn btn-sm" onClick={() => duplicatePlan(w)} aria-label={`Duplicate ${w.name}`}>Copy</button>
+                        <button className="btn btn-sm" style={{ color: 'var(--bad)' }} onClick={() => deletePlan(w)} aria-label={`Delete ${w.name}`}>Delete</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
+      </Sheet>
 
-        {/* ── every exercise for today; tap to expand ── */}
-        {state.map((ex) => {
-          const sets = exSets[ex.id] || [];
-          const doneCount = sets.filter((x) => x.done).length;
-          const complete = sets.length > 0 && doneCount === sets.length;
-          const open = openEx === ex.id;
-          return (
-            <div key={ex.id} className="card overflow-hidden transition-colors duration-300"
-                 style={complete ? {
-                   /* Completed exercises go green, tinted from the status
-                      token so it holds in both themes.
-
-                      backgroundColor, NOT the `background` shorthand: a
-                      shorthand containing var() becomes a pending
-                      substitution, which left .card's own
-                      `background-color: var(--panel)` winning and the card
-                      stubbornly grey. The longhand applies cleanly. */
-                   backgroundColor: 'rgb(var(--good-rgb) / .10)',
-                   borderColor: 'rgb(var(--good-rgb) / .45)',
-                 } : undefined}>
-              <div className="w-full flex items-center gap-2 p-3.5">
-                <button
-                  onClick={() => setOpenEx(open ? null : ex.id)}
-                  className="flex-1 min-w-0 text-left"
-                  aria-expanded={open}>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>{exerciseLabel(ex.name)}</span>
-                      {complete && (
-                        <span className="text-[9px] font-bold uppercase tracking-[.12em] px-1.5 py-0.5 rounded shrink-0"
-                              style={{ color: 'var(--good)', border: '1px solid rgb(var(--good-rgb) / .5)' }}>
-                          Completed
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
-                      {doneCount}/{sets.length} sets{ex.reps ? ` · ${ex.reps} reps` : ''}
+      {/* A DAY OF THIS WEEK */}
+      <Sheet open={!!weekDay} onClose={() => setWeekDay(null)}
+        title={weekDay ? weekDay.name : ''}
+        sub={weekDay ? `${weekDay.label}${weekDay.day_of_week === todayDow ? ' · today' : ''}${weekDay.focus ? ` · ${weekDay.focus}` : ''}` : ''}
+        footer={weekDay?.day_of_week === todayDow && !!workout && workout.status !== 'completed' ? (
+          <button className="btn-primary btn-block" onClick={() => { setWeekDay(null); startWorkout(); }}>
+            <Play size={15} strokeWidth={2.4} fill="currentColor" aria-hidden="true" />Start today
+          </button>
+        ) : null}>
+        <div className="p-4">
+          {weekDay?.exercises?.length ? (
+            <ol className="wk-card wk-plan">
+              {weekDay.exercises.map((ex, i) => (
+                <li key={i} className="wk-ex">
+                  <div className="wk-ex__row">
+                    <span className="wk-ex__n" aria-hidden="true">{i + 1}</span>
+                    <div className="wk-ex__body">
+                      <div className="wk-ex__name">{exerciseLabel(ex.name)}</div>
+                      <div className="wk-ex__meta">{ex.sets} × {ex.reps}{planWeight(ex.weight, u) ? ` · ${planWeight(ex.weight, u)}` : ''}</div>
                     </div>
                   </div>
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeExercise(ex.id); }}
-                  aria-label={`Remove ${exerciseLabel(ex.name)}`}
-                  className="w-8 h-8 rounded-lg border grid place-items-center shrink-0 transition-all active:scale-90"
-                  style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="text-center py-10 text-[13px]" style={{ color: 'var(--mute)' }}>Rest day — nothing scheduled.</div>
+          )}
+        </div>
+      </Sheet>
+
+      {/* ADD CARDIO */}
+      <Sheet open={cardioOpen} onClose={closeCardioPicker}
+        title={cardioConfigItem ? cardioName(cardioConfigItem) : 'Add cardio'}
+        sub={cardioConfigItem ? 'Set it up — you can change it while it runs' : 'Machines, running and sports'}>
+        <div className="p-4 space-y-3">
+          {cardioConfigItem ? (
+            <>
+              <button onClick={() => setCardioConfigItem(null)} className="btn btn-sm">
+                <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />All activities
+              </button>
+              <CardioParamsForm
+                idPrefix="cardio-new"
+                fields={cardioExerciseConfig(cardioConfigItem)}
+                initial={cardioItems.find((c) => c.id === cardioConfigItem)?.params || {}}
+                submitLabel="Add to session"
+                onSubmit={(params) => { addCardioItem(cardioConfigItem, params); closeCardioPicker(); }}
+              />
+            </>
+          ) : (
+            <>
+              <input className="input" aria-label="Search cardio" placeholder="Search machines, running, sports…" value={cardioSearch} onChange={(e) => setCardioSearch(e.target.value)} autoFocus />
+              <div className="wk-pick">
+                {ACTIVITIES
+                  .filter((a) => !cardioSearch || a.name.toLowerCase().includes(cardioSearch.toLowerCase()))
+                  .map((a) => {
+                    const added = cardioItems.some((c) => c.id === a.id);
+                    return (
+                      <div key={a.id} className="wk-pick__row" aria-disabled={added || undefined}>
+                        <button className="flex-1 min-w-0 text-left" onClick={() => setCardioConfigItem(a.id)}>
+                          <span className="wk-pick__name truncate">{cardioName(a.id)}</span>
+                          <span className="wk-pick__meta">{added ? 'In your session' : cardioSummary({ params: defaultParams(a.id) }) || 'Set it up'}</span>
+                        </button>
+                        <button className="wk-iconbtn wk-iconbtn--sm" disabled={added}
+                          aria-label={added ? `${cardioName(a.id)} added` : `Add ${cardioName(a.id)}`}
+                          onClick={() => { if (!added) addCardioItem(a.id, defaultParams(a.id)); }}>
+                          {added ? <Check size={15} strokeWidth={2.4} aria-hidden="true" style={{ color: 'var(--good)' }} /> : <Plus size={15} strokeWidth={2.2} aria-hidden="true" />}
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
+            </>
+          )}
+        </div>
+      </Sheet>
 
-              {open && (
-                <div className="px-3.5 pb-3.5 space-y-1.5">
-                  <div className="grid grid-cols-[26px_1fr_1fr_32px_32px] gap-2 px-1 text-[9px] uppercase tracking-[.12em]"
-                       style={{ color: 'var(--faint)' }}>
-                    <span>Set</span><span>Reps</span><span>{u.isImperial ? 'Lb' : 'Kg'}</span><span className="text-right">Done</span><span></span>
-                  </div>
-                  {sets.map((st, i) => (
-                    <div key={i}
-                         className="grid grid-cols-[26px_1fr_1fr_32px_32px] gap-2 items-center rounded-lg px-1 py-1"
-                         style={st.done ? { backgroundColor: 'rgb(var(--good-rgb) / .08)' } : undefined}>
-                      <span className="text-[12px] tabular-nums" style={{ color: 'var(--mute)' }}>{i + 1}</span>
-                      {/* Editable mid-workout: what was prescribed and what
-                          actually got lifted routinely differ, and the logged
-                          number has to be the real one. */}
-                      <input type="number" inputMode="numeric" className="input !py-1.5 !text-[13px] tabular-nums"
-                             value={st.reps} aria-label={`Set ${i + 1} reps`}
-                             onChange={(e) => patchSet(ex.id, i, 'reps', e.target.value)} />
-                      <WeightInput
-                        className="input !py-1.5 !text-[13px] tabular-nums"
-                        valueKg={st.weight}
-                        ariaLabel={`Set ${i + 1} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
-                        onChangeKg={(kg) => patchSet(ex.id, i, 'weight', kg)} />
-                      <button
-                        onClick={() => toggleSet(ex.id, i)}
-                        aria-label={`Mark set ${i + 1} ${st.done ? 'not done' : 'done'}`}
-                        aria-pressed={st.done}
-                        className="justify-self-end w-7 h-7 rounded-lg border grid place-items-center transition-all active:scale-90"
-                        style={st.done
-                          ? { backgroundColor: 'var(--good)', borderColor: 'var(--good)', color: 'var(--bg)' }
-                          : { borderColor: 'var(--line)', color: 'var(--faint)' }}>
-                        {st.done && (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                               strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => removeSet(ex.id, i)}
-                        disabled={sets.length <= 1}
-                        aria-label={`Delete set ${i + 1}`}
-                        className="justify-self-end w-7 h-7 rounded-lg border grid place-items-center transition-all active:scale-90 disabled:opacity-30"
-                        style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
+      {/* ADD AN EXERCISE, mid-session */}
+      <Sheet open={addExOpen} onClose={closeAddExercise}
+        title={addExSelected ? exerciseLabel(addExSelected.name) : 'Add exercise'}
+        sub={addExSelected ? 'Added with 3 sets of 10 — change them as you go' : 'Search the exercise library'}
+        footer={addExSelected ? (
+          <button className="btn-primary btn-block" disabled={addExSaving} onClick={() => addExerciseToSession(addExSelected)}>
+            {addExSaving ? 'Adding…' : 'Add to session'}
+          </button>
+        ) : null}>
+        <div className="p-4 space-y-3">
+          {addExSelected ? (
+            <>
+              <button onClick={() => setAddExSelected(null)} className="btn btn-sm">
+                <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back to library
+              </button>
+              <ExerciseAnim anim={addExSelected.animation_key || 'fallback'} muscle={addExSelected.primary_muscle} label="" />
+              <div className="wk-chips">
+                {[addExSelected.primary_muscle, addExSelected.equipment, addExSelected.difficulty].filter(Boolean).map((t) => (
+                  <span key={t} className="wk-chip">{String(t).replace(/_/g, ' ').toLowerCase()}</span>
+                ))}
+              </div>
+              {addExSelected.cues && (
+                <div className="wk-hint"><Info size={15} strokeWidth={2} aria-hidden="true" /><span><b>Form cue</b> · {addExSelected.cues}</span></div>
+              )}
+            </>
+          ) : (
+            <>
+              <input className="input" aria-label="Search exercises" placeholder="Search by name or muscle…" value={addExSearch} onChange={(e) => setAddExSearch(e.target.value)} autoFocus />
+              <div className="wk-pick">
+                {libList == null && <div className="py-6 grid place-items-center"><Spinner /></div>}
+                {(libList || [])
+                  .filter((x) => !addExSearch || (x.name + ' ' + (x.primary_muscle || '')).toLowerCase().includes(addExSearch.toLowerCase()))
+                  .slice(0, 30)
+                  .map((x) => (
+                    <button key={x.id} className="wk-pick__row" onClick={() => setAddExSelected(x)}>
+                      <span className="flex-1 min-w-0">
+                        <span className="wk-pick__name truncate">{exerciseLabel(x.name)}</span>
+                        <span className="wk-pick__meta">{String(x.primary_muscle || '').replace(/_/g, ' ').toLowerCase()}{x.equipment ? ` · ${String(x.equipment).toLowerCase()}` : ''}</span>
+                      </span>
+                      <ChevronRight size={16} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--faint)' }} />
+                    </button>
                   ))}
-                  <button
-                    onClick={() => addSet(ex.id)}
-                    className="w-full text-center py-1.5 text-[11px] font-grotesk font-semibold rounded-lg border border-dashed transition-all active:scale-[.98]"
-                    style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
-                    + Add Set
+              </div>
+            </>
+          )}
+        </div>
+      </Sheet>
+
+      <ShareWorkoutSheet
+        open={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        workoutId={shareSheetData?.workoutId}
+        workoutName={shareSheetData?.workoutName}
+        exercises={shareSheetData?.exercises || []}
+        t={{}}
+      />
+    </>
+  );
+
+  // ================= browse mode =================
+  if (mode === 'browse') {
+    return (
+      <div className="wk">
+        <header>
+          <h1 className="wk-title">Today&rsquo;s Training</h1>
+          <div className="wk-subtitle">
+            {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+            {week.data?.program?.name ? ` · ${week.data.program.name}` : ''}
+          </div>
+        </header>
+
+        {activeCardioPanel}
+
+        <TodayHero
+          workout={workout}
+          meta={meta}
+          focus={focus}
+          suggestions={suggestions}
+          u={u}
+          starting={starting}
+          onStart={startWorkout}
+          onShare={shareToday}
+          onAddCardio={openCardioPicker}
+          onBuild={canBuild ? openBuilder : null}
+        />
+
+        <WeekStrip
+          rows={weekRows}
+          todayDow={todayDow}
+          doneDows={doneDows}
+          programName={null}
+          onPick={(d, i) => { setWeekDay(d); setWeekDayIdx(i); }}
+        />
+
+        <ToolGrid tools={tools} />
+        {locked && (
+          <p className="text-[12px] -mt-2" style={{ color: 'var(--faint)' }}>Your gym follows your coach&rsquo;s plan, so building your own sessions is turned off.</p>
+        )}
+
+        {workout && (
+          <PlanList
+            exercises={state}
+            equipMap={equipMap}
+            suggestionByEx={suggestionByEx}
+            infoEx={infoEx}
+            onToggleInfo={(id) => setInfoEx(infoEx === id ? null : id)}
+            u={u}
+          />
+        )}
+
+        {/* Cardio queued for a session, waiting for Start. */}
+        {cardioMode === 'browse' && cardioItems.length > 0 && (
+          <section aria-label="Cardio session">
+            <div className="wk-head">
+              <span className="wk-h">Cardio session</span>
+              <button className="wk-head__link" onClick={openCardioPicker}>Add more</button>
+            </div>
+            <div className="wk-cardio-list">
+              {cardioItems.map((item, i) => (
+                <div key={`${item.id}${i}`} className="wk-card wk-cardio-item">
+                  <Activity size={18} strokeWidth={1.8} aria-hidden="true" style={{ color: 'var(--accent)', flex: 'none' }} />
+                  <div className="wk-cardio-item__body">
+                    <div className="wk-cardio-item__name truncate">{cardioName(item.id)}</div>
+                    <div className="wk-cardio-item__meta">{cardioSummary(item) || 'Ready'}</div>
+                  </div>
+                  <button className="wk-iconbtn wk-iconbtn--sm" aria-label={`Remove ${cardioName(item.id)}`}
+                    onClick={() => setCardioItems((prev) => prev.filter((_, j) => j !== i))}>
+                    <X size={15} strokeWidth={2} aria-hidden="true" />
                   </button>
                 </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* ── ACTIVE CARDIO (alongside strength workout) ── */}
-        {cardioMode === 'execute' && cardioActiveId && activeCardioItem && (
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Cardio · {cardioName(cardioActiveId)}</div>
-                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 26, color: 'var(--ink)' }}>
-                  {String(Math.floor(cardioElapsed / 60)).padStart(2, '0')}:{String(cardioElapsed % 60).padStart(2, '0')}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Est. burn</div>
-                <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 16, color: 'var(--accent)' }}>
-                  ~{totalCardioCals} <span className="text-[10px]" style={{ color: 'var(--mute)' }}>kcal</span>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-xl p-2.5" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
-              <div className="flex flex-wrap gap-2">
-                {cardioExerciseConfig(cardioActiveId).map((field) => (
-                  <div key={field.key} className="flex items-center gap-1">
-                    <span className="text-[10px] font-grotesk" style={{ color: 'var(--mute)' }}>{field.label}:</span>
-                    <span className="text-[10px] font-grotesk font-bold" style={{ color: 'var(--ink)' }}>{activeCardioItem.currentParams?.[field.key] || '—'}</span>
-                    {field.unit && <span className="text-[8px]" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {(activeCardioItem.segments || []).length > 0 && (
-              <div className="space-y-0.5">
-                <div className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Segments ({activeCardioItem.segments.length})</div>
-                {activeCardioItem.segments.map((seg, i) => (
-                  <div key={i} className="text-[9px]" style={{ color: 'var(--faint)' }}>
-                    Seg {i + 1}: {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div id="cardioAdjustExec" className="rounded-xl border border-line p-2.5 space-y-1.5">
-              <div className="text-[9px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Adjust settings</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {cardioExerciseConfig(cardioActiveId).map((field) => (
-                  <div key={field.key} className="flex items-center gap-1">
-                    <label className="text-[9px] font-grotesk shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      className="input flex-1 !py-0.5 !text-[10px]"
-                      placeholder={field.placeholder}
-                      defaultValue={activeCardioItem.currentParams?.[field.key] || ''}
-                      id={`adjExec_${field.key}`}
-                    />
-                    {field.unit && <span className="text-[8px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  const newParams = {};
-                  cardioExerciseConfig(cardioActiveId).forEach((field) => {
-                    const el = document.getElementById(`adjExec_${field.key}`);
-                    if (el && el.value) newParams[field.key] = el.value;
-                  });
-                  const cur = activeCardioItem.currentParams || {};
-                  const changed = Object.keys(newParams).some((k) => String(newParams[k]) !== String(cur[k]));
-                  if (changed) {
-                    adjustCardioSettings(newParams);
-                    setToast('Settings updated — new segment started');
-                  }
-                }}
-                className="w-full py-1 rounded-lg text-[9px] font-grotesk font-bold border transition-all active:scale-[.98]"
-                style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }}>
-                ADJUST
+              ))}
+              <button className="btn-primary btn-block" onClick={startCardio}>
+                <Play size={15} strokeWidth={2.4} fill="currentColor" aria-hidden="true" />Start cardio
               </button>
             </div>
-            <button
-              onClick={endCardio}
-              className="w-full py-2 rounded-xl text-[11px] font-grotesk font-bold active:scale-[.97] transition-all"
-              style={{ borderColor: 'var(--accent)', color: 'var(--accent)', border: '1px solid var(--accent)' }}>
-              END CARDIO · {Math.round(cardioElapsed / 60)} min
-            </button>
-          </div>
+          </section>
         )}
 
-        {/* ── ADD EXERCISE ── */}
-        <button
-          onClick={() => {
-            if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load exercises'));
-            setAddExSelected(null);
-            setAddExSearch('');
-            setAddExOpen(true);
-          }}
-          className="w-full text-center py-3 text-[12px] font-grotesk font-semibold rounded-xl border border-dashed transition-all active:scale-[.98]"
-          style={{ borderColor: 'var(--line)', color: 'var(--faint)' }}>
-          + Add Exercise
-        </button>
-
-        {/* ── END SESSION ── */}
-        <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3"
-             style={{ background: 'linear-gradient(to top, var(--bg) 65%, transparent)' }}>
-          <Pressable
-            onClick={() => finishWorkout()}
-            disabled={submitting}
-            className="btn-primary btn-lg btn-block text-[13px] tracking-[.02em]">
-            {submitting ? 'Saving…' : doneSets === 0 ? 'End session' : `End session · ${doneSets} sets`}
-          </Pressable>
-        </div>
-
-        {/* ═══════════ ADD EXERCISE PICKER (execute mode) ═══════════ */}
-        {addExOpen && (
-          <div className="fixed inset-0 z-50 bg-bg/80 backdrop-blur-sm grid place-items-center p-4 anim-fadeIn" role="dialog" aria-modal="true" aria-label="Add exercise">
-            <div ref={addExDialogRef} className="card w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden anim-scaleIn">
-              <div className="p-4 border-b border-line/60 flex items-center justify-between">
-                <div>
-                  <div className="font-grotesk font-bold">Add exercise</div>
-                  <div className="text-[10px] text-mute">Search the exercise library</div>
-                </div>
-                <button className="text-mute hover:text-ink text-lg active:scale-90" onClick={() => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); }} aria-label="Close">✕</button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {addExSelected ? (
-                  /* ── exercise detail view ── */
-                  <div className="space-y-3">
-                    <button onClick={() => setAddExSelected(null)} className="btn !text-xs !py-1.5 active:scale-95">← Back to library</button>
-                    <div className="font-grotesk font-bold text-lg">{addExSelected.name}</div>
-                    <div className="flex items-center gap-2 text-[11px] text-mute flex-wrap mt-1">
-                      {addExSelected.primary_muscle && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{addExSelected.primary_muscle}</span>}
-                      {addExSelected.equipment && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{addExSelected.equipment}</span>}
-                      {addExSelected.difficulty && <span className="chip border-line !px-1.5 !py-0 text-[9px]">{addExSelected.difficulty}</span>}
-                    </div>
-                    {addExSelected.cues && (
-                      <div className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2.5 text-[11px] leading-relaxed">
-                        <span className="text-gold font-grotesk font-semibold mr-1.5">FORM CUE</span>{addExSelected.cues}
-                      </div>
-                    )}
-                    <button
-                      className={`btn-primary w-full active:scale-[.97] ${addExSaving ? 'opacity-60' : ''}`}
-                      disabled={addExSaving}
-                      onClick={() => addExerciseToSession(addExSelected)}>
-                      {addExSaving ? 'Adding…' : '+ Add to session'}
-                    </button>
-                  </div>
-                ) : (
-                  /* ── search + list ── */
-                  <div className="space-y-2.5">
-                    <input className="input" placeholder="Search exercises by name or muscle…" value={addExSearch} onChange={(e) => setAddExSearch(e.target.value)} autoFocus />
-                    <div className="space-y-1.5">
-                    {(libList || []).filter((x) => !addExSearch || (x.name + ' ' + (x.primary_muscle || '')).toLowerCase().includes(addExSearch.toLowerCase())).slice(0, 30).map((x, i) => (
-                      <button key={x.id}
-                        className="w-full flex items-center gap-2 rounded-xl border border-line bg-white/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] hover:border-gold/30 anim-fadeUp"
-                        style={{ animationDelay: `${40 + i * 25}ms` }}
-                        onClick={() => setAddExSelected(x)}>
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-[13px] font-grotesk font-semibold truncate">{x.name}</span>
-                          <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-                        </span>
-                      </button>
-                    ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+        {cardioMode === 'summary' && cardioResult && (
+          <section className="wk-card p-4" aria-label="Cardio complete">
+            <div className="flex items-center justify-between mb-3">
+              <span className="wk-kicker">Cardio complete</span>
+              <span className="font-grotesk font-bold tabular-nums" style={{ color: 'var(--accent)' }}>{cardioResult.totalCalories} kcal</span>
             </div>
-          </div>
+            <div className="space-y-2.5">
+              {cardioResult.items.map((item, i) => {
+                const totalDur = (item.segments || []).reduce((s, seg) => s + seg.durationSec, 0);
+                return (
+                  <div key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13.5px] font-semibold" style={{ color: 'var(--ink)' }}>{cardioName(item.id)}</span>
+                      <span className="text-[12.5px] font-semibold tabular-nums" style={{ color: 'var(--mute)' }}>{item.calories} kcal · {Math.round(totalDur / 60)} min</span>
+                    </div>
+                    {(item.segments || []).length > 1 && (
+                      <ol className="wk-segments mt-1.5">
+                        {item.segments.map((seg, j) => (
+                          <li key={j}>Segment {j + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={dismissCardioSummary} className="btn btn-block mt-3">Done</button>
+          </section>
         )}
 
+        {!!hist.data?.workouts?.length && (
+          <section aria-label="Recent sessions">
+            <div className="wk-head">
+              <span className="wk-h">Recent sessions</span>
+              <SectionLink label="History" onClick={() => nav('/app/client/history')} />
+            </div>
+            <div className="wk-card p-2 space-y-1">
+              {hist.data.workouts.filter((w) => w.id !== workout?.id).slice(0, 5).map((w) => (
+                <SessionRow key={w.id} w={w} compact onOpen={() => nav(`/app/client/day/${w.scheduled_date}`)} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {sheets}
+        {toastEl}
       </div>
     );
   }
 
-  // ================= cardio-only mode =================
-  // When the user has started cardio but NOT started a strength workout,
-  // mode is still 'browse'. We render the active cardio session here
-  // independently of the main workout mode.
+  // ================= the session =================
+  if (mode === 'execute') {
+    return (
+      <div className="wk-session">
+        <PlayerHeader
+          name={workout?.name}
+          elapsed={elapsed}
+          paused={!!pausedAt}
+          doneSets={doneSets}
+          totalSets={totalSets}
+          onPause={pauseWorkout}
+          onResume={resumeWorkout}
+        />
+
+        {state.map((ex) => (
+          <ExerciseCard
+            key={ex.id}
+            ex={ex}
+            sets={exSets[ex.id] || []}
+            open={openEx === ex.id}
+            u={u}
+            suggestion={suggestionByEx[ex.id]}
+            onToggleOpen={() => setOpenEx(openEx === ex.id ? null : ex.id)}
+            onPatch={(i, field, value) => patchSet(ex.id, i, field, value)}
+            onToggleSet={(i) => toggleSet(ex.id, i)}
+            onAddSet={() => addSet(ex.id)}
+            onRemoveLast={() => removeSet(ex.id, (exSets[ex.id] || []).length - 1)}
+            onUseTarget={(target) => {
+              // The coach's progression, applied to every set still to do;
+              // ticked sets keep what was actually lifted.
+              (exSets[ex.id] || []).forEach((st, i) => {
+                if (st.done) return;
+                patchSet(ex.id, i, 'weight', target.weight);
+                if (target.reps) patchSet(ex.id, i, 'reps', target.reps);
+              });
+            }}
+            onRemove={() => askRemoveExercise(ex)}
+          />
+        ))}
+
+        {activeCardioPanel}
+
+        <button className="wk-ghost wk-add" onClick={openAddExercise}>
+          <Plus size={16} strokeWidth={2.2} aria-hidden="true" />Add exercise
+        </button>
+
+        <div className="wk-endbar">
+          <Pressable onClick={() => finishWorkout()} disabled={submitting} className="btn-primary btn-lg btn-block">
+            {submitting ? 'Saving…' : doneSets === 0 ? 'End session' : `Finish · ${doneSets} ${doneSets === 1 ? 'set' : 'sets'}`}
+          </Pressable>
+        </div>
+
+        {sheets}
+        {toastEl}
+      </div>
+    );
+  }
+
+  // ================= cardio on its own =================
   if (cardioMode === 'execute' && cardioActiveId && activeCardioItem) {
     return (
-      <div className="space-y-3 pb-28">
-        {/* ── CARDIO TIMER ── */}
-        <div className="card p-4 space-y-3">
-          {/* Timer + current exercise */}
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Cardio · {cardioName(cardioActiveId)}</div>
-              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 30, color: 'var(--ink)' }}>
-                {String(Math.floor(cardioElapsed / 60)).padStart(2, '0')}:{String(cardioElapsed % 60).padStart(2, '0')}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Est. burn</div>
-              <div className="font-black tabular-nums leading-none mt-1" style={{ fontSize: 18, color: 'var(--accent)' }}>
-                ~{totalCardioCals} <span className="text-[11px]" style={{ color: 'var(--mute)' }}>kcal</span>
-              </div>
-            </div>
-          </div>
-          {/* Current settings display */}
-          <div className="rounded-xl p-3" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent)' }}>
-            <div className="text-[10px] uppercase tracking-[.12em] mb-2" style={{ color: 'var(--faint)' }}>Current settings</div>
-            <div className="flex flex-wrap gap-2">
-              {cardioExerciseConfig(cardioActiveId).map((field) => (
-                <div key={field.key} className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-grotesk" style={{ color: 'var(--mute)' }}>{field.label}:</span>
-                  <span className="text-[11px] font-grotesk font-bold" style={{ color: 'var(--ink)' }}>{activeCardioItem.currentParams?.[field.key] || '—'}</span>
-                  {field.unit && <span className="text-[9px]" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Segments so far */}
-          {(activeCardioItem.segments || []).length > 0 && (
-            <div className="space-y-1">
-              <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Segments ({activeCardioItem.segments.length})</div>
-              {activeCardioItem.segments.map((seg, i) => (
-                <div key={i} className="flex items-center justify-between text-[10px]" style={{ color: 'var(--faint)' }}>
-                  <span>Seg {i + 1} · {Math.round(seg.durationSec / 60)} min · {segmentParamsSummary(seg.params)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* ADJUST SETTINGS — inline edit without stopping the timer */}
-          <div id="cardioAdjust" className="rounded-xl border border-line p-3 space-y-2">
-            <div className="text-[10px] uppercase tracking-[.12em]" style={{ color: 'var(--faint)' }}>Adjust settings</div>
-            <div className="grid grid-cols-2 gap-2">
-              {cardioExerciseConfig(cardioActiveId).map((field) => (
-                <div key={field.key} className="flex items-center gap-1.5">
-                  <label className="text-[10px] font-grotesk shrink-0" style={{ color: 'var(--mute)' }}>{field.label}</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="input flex-1 !py-1 !text-[11px]"
-                    placeholder={field.placeholder}
-                    defaultValue={activeCardioItem.currentParams?.[field.key] || ''}
-                    id={`adj_${field.key}`}
-                  />
-                  {field.unit && <span className="text-[9px] shrink-0" style={{ color: 'var(--faint)' }}>{field.unit}</span>}
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                const newParams = {};
-                cardioExerciseConfig(cardioActiveId).forEach((field) => {
-                  const el = document.getElementById(`adj_${field.key}`);
-                  if (el && el.value) newParams[field.key] = el.value;
-                });
-                const cur = activeCardioItem.currentParams || {};
-                const changed = Object.keys(newParams).some((k) => String(newParams[k]) !== String(cur[k]));
-                if (changed) {
-                  adjustCardioSettings(newParams);
-                  setToast('Settings updated — new segment started');
-                }
-              }}
-              className="w-full py-1.5 rounded-lg text-[10px] font-grotesk font-bold border transition-all active:scale-[.98]"
-              style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-soft)' }}>
-              ADJUST SETTINGS
-            </button>
-          </div>
-          {/* Action buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={endCardio}
-              className="flex-1 py-2.5 rounded-xl text-[12px] font-grotesk font-bold active:scale-[.97] transition-all"
-              style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-              END CARDIO · {Math.round(cardioElapsed / 60)} min
-            </button>
-          </div>
-        </div>
+      <div className="wk-session">
+        {activeCardioPanel}
+        {sheets}
+        {toastEl}
       </div>
     );
   }
@@ -2757,9 +1886,9 @@ export default function Workout() {
      only decision on that screen, and the charted recap follows the tap.
      Skip is a real answer and lands on the same recap, minus the estimate.
 
-     TunnelBackdrop stays lazy and inside Suspense: it is decoration on a
-     screen that must paint the moment the last set is logged. */
-  const askIntensity = !!burnInput && !intensity && !intensitySkipped;
+     The backdrop is a CSS glow: decoration on a screen that must paint
+     the moment the last set is logged, so it costs no three.js download. */
+  const askIntensity = !!result?.workoutId && !!burnInput && !intensity && !intensitySkipped;
   return (
     <div className="space-y-4">
       <SessionRecap
@@ -2774,11 +1903,7 @@ export default function Workout() {
         cardioResult={cardioResult}
         cardioName={cardioName}
         u={u}
-        backdrop={(
-          <div className="absolute inset-0" aria-hidden="true">
-            <Suspense fallback={null}><TunnelBackdrop /></Suspense>
-          </div>
-        )}
+        backdrop={<div className="wk-recap-glow" aria-hidden="true" />}
         onShareWorkout={() => {
           /* result.* rather than the live workout.* -- see finishWorkout:
              `workout` is swapped out from under this screen by today.reload()

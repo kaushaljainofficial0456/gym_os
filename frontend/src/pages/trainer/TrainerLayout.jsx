@@ -283,7 +283,7 @@ export default function TrainerLayout() {
             navigation. */}
         <DemoBanner />
         <AnnouncementBanner />
-        <div key={loc.pathname} className="anim-fadeUp">
+        <div key={loc.pathname} className="anim-route">
           <Outlet />
         </div>
       </main>

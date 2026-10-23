@@ -163,7 +163,7 @@ test('invalid ML output falls back to baseline, never persisted raw', () => {
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.match(/OUT:(\{.*\})/)[1]);
   assert.equal(out.provider, 'baseline', 'fallback is truthfully labeled baseline');
-  assert.equal(out.model_version, 'skos-cal-baseline-v1');
+  assert.equal(out.model_version, 'skos-cal-baseline-v2');
   assert.ok(out.est > 0, 'fallback produces a sane positive estimate');
   assert.ok(out.note && out.note.includes('fallback') && out.note.includes('invalid'), 'fallback labeled as invalid-output fallback');
   assert.equal(out.schema_version, CALORIE_SCHEMA_VERSION);
@@ -227,7 +227,7 @@ test('invalid ML output is persisted as provider="baseline" (never raw)', () => 
   const w = JSON.parse(r.stdout.match(/ROW:(\{.*\})/)[1]);
   assert.ok(w.estimated_active_kcal > 0, 'sane baseline estimate persisted, never the invalid ML value');
   assert.ok(w.lower_kcal <= w.estimated_active_kcal && w.estimated_active_kcal <= w.upper_kcal, 'range wraps midpoint');
-  assert.equal(w.model_version, 'skos-cal-baseline-v1');
+  assert.equal(w.model_version, 'skos-cal-baseline-v2');
   assert.equal(w.schema_version, CALORIE_SCHEMA_VERSION);
   assert.equal(w.calorie_provider, 'baseline', 'fallback truthfully persisted as baseline — never mislabeled ml');
 });

@@ -99,9 +99,11 @@ function CookieBanner({ onAcceptAll, onRejectOptional, onManage }) {
   const [lift, setLift] = useState(0);
   const boxRef = useRef(null);
   useEffect(() => {
+    // The bar floats, so what it costs is the distance from its top edge
+    // to the bottom of the screen -- home-indicator inset included.
     const measure = () => {
-      const bar = document.querySelector('.app-tabbar');
-      setLift(bar ? Math.round(bar.getBoundingClientRect().height) : 0);
+      const bar = document.querySelector('.gtb__track');
+      setLift(bar ? Math.max(0, Math.round(window.innerHeight - bar.getBoundingClientRect().top)) : 0);
     };
     measure();
     window.addEventListener('resize', measure);
@@ -136,7 +138,7 @@ function CookieBanner({ onAcceptAll, onRejectOptional, onManage }) {
       className="fixed inset-x-0 z-50 px-3 anim-fadeUp"
       role="region"
       aria-label="Cookie choices"
-      style={{ animationDuration: '0.35s', bottom: `calc(${lift}px + 10px + env(safe-area-inset-bottom, 0px))` }}
+      style={{ animationDuration: '0.35s', bottom: lift ? `${lift + 10}px` : 'calc(10px + env(safe-area-inset-bottom, 0px))' }}
     >
       {/* Narrower and shorter than it was: this is a notice, not a
           dialog, and at full width with a three-line paragraph it read

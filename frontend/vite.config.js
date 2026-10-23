@@ -48,6 +48,13 @@ export default defineConfig({
         // Vite/Rollup bundle without touching how any route loads.
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // three.js gets its own lazy chunk explicitly. It used to land
+          // there only because enough lazy screens imported it for Rollup
+          // to split it out by itself; when one stopped (the workout recap's
+          // 3D backdrop), Rollup folded it into the 3D Stage chunk instead.
+          // Named so scripts/check-bundle.mjs keeps tracking it as the
+          // heavy, must-stay-lazy dependency it is.
+          'three.module': ['three'],
         },
       },
     },

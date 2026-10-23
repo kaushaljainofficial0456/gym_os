@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useMotionValue } from 'framer-motion';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -10,7 +9,7 @@ import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
-import DockNavItem from '../../components/DockNavItem.jsx';
+import GlassTabBar from '../../components/GlassTabBar.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import DemoBanner from '../../components/DemoBanner.jsx';
 import { Avatar } from '../../components/UI.jsx';
@@ -82,10 +81,6 @@ export default function ClientLayout() {
   const units = useUnits();
   const loc = useLocation();
   const nav = useNavigate();
-  // Infinity, not 0: Dock's distance-from-cursor transform maps
-  // out-of-range to baseSize, and 0 would sit inside every item's range
-  // on first paint, before any real pointer position ever arrives.
-  const bottomNavMouseX = useMotionValue(Infinity);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [featurePopup, setFeaturePopup] = useState(null);
@@ -332,7 +327,7 @@ export default function ClientLayout() {
             ordinary member. */}
         <DemoBanner />
         <AnnouncementBanner />
-        <div key={loc.pathname} className="anim-fadeUp">
+        <div key={loc.pathname} className="anim-route">
           <Outlet context={homeCtx} />
         </div>
       </div>
@@ -343,23 +338,10 @@ export default function ClientLayout() {
       {/* ── NOTIFICATION PERMISSION PROMPT ── */}
       <NotificationPermissionPrompt />
 
-      {/* ── BOTTOM NAV — Dock's spring-physics magnify-on-proximity,
-          layered onto the existing full-width tab bar rather than the
-          demo's floating pill: this is a persistent mobile tab bar,
-          not a desktop dock, and it needs to keep working with zero
-          hover capability at all on a touchscreen. ── */}
-      <nav className="app-tabbar" aria-label="Main"
-        onMouseMove={(e) => bottomNavMouseX.set(e.clientX)}
-        onMouseLeave={() => bottomNavMouseX.set(Infinity)}>
-        <div data-tour="bottom-nav" className="max-w-lg mx-auto grid grid-cols-5 gap-1 px-2 pb-1">
-          {NAV.map((l) => (
-            <DockNavItem key={l.to} to={l.to} end={l.end} label={l.label}
-              icon={<Icon name={l.icon} size={20} />}
-              mouseX={bottomNavMouseX} baseSize={20} magnifySize={26} distance={80}
-              spring={{ mass: 0.1, stiffness: 200, damping: 14 }} />
-          ))}
-        </div>
-      </nav>
+      {/* ── BOTTOM NAV — a floating glass pill whose lens slides,
+          stretches and can be dragged between tabs (GlassTabBar.jsx).
+          Built for a thumb first: it needs no hover at all. ── */}
+      <GlassTabBar items={NAV} ariaLabel="Main" tourId="bottom-nav" />
     </div>
   );
 }

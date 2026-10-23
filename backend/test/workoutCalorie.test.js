@@ -147,7 +147,7 @@ test('workout completion persists status, duration and calorie result atomically
   assert.equal(w.estimated_active_kcal, cal.estimated_active_kcal, 'calorie persisted');
   assert.equal(w.lower_kcal, cal.lower_kcal);
   assert.equal(w.upper_kcal, cal.upper_kcal);
-  assert.equal(w.model_version, 'skos-cal-baseline-v1', 'model version persisted');
+  assert.equal(w.model_version, 'skos-cal-baseline-v2', 'model version persisted');
   assert.equal(w.schema_version, '0.2');
   assert.equal(w.calorie_provider, 'baseline');
   assert.ok(w.calorie_estimated_at, 'estimated_at persisted');
@@ -311,11 +311,14 @@ test('baseline estimate scales with body weight and duration', async (t) => {
   const light = await estimateWorkoutCalories({ user: { body_weight_kg: 60 }, session: { duration_minutes: 30, intensity_rating: 'light' }, exercises: [] });
   const hard = await estimateWorkoutCalories({ user: { body_weight_kg: 90 }, session: { duration_minutes: 90, intensity_rating: 'hard' }, exercises: [] });
   assert.ok(hard.estimated_active_kcal > light.estimated_active_kcal, 'heavier/longer/harder burns more');
-  // MET 4.5 × 3.5 × 60 ÷ 200 × 30 = 141.75 → estimate 142; range from the unrounded value
+  // Compendium 2024 moderate session, MET 3.5: gross 3.5 × 3.5 × 60 ÷ 200 =
+  // 3.675 kcal/min. Weight is the only profile field, so resting is the
+  // standard 1 MET (3.5 × 60 ÷ 200 = 1.05 kcal/min). Active = (3.675 − 1.05)
+  // × 30 = 78.75 → 79; the ±25% band is applied to the gross rate.
   const mod = await estimateWorkoutCalories({ user: { body_weight_kg: 60 }, session: { duration_minutes: 30, intensity_rating: 'moderate' }, exercises: [] });
-  assert.equal(mod.estimated_active_kcal, 142);
-  assert.equal(mod.lower_kcal, Math.round(141.75 * 0.85));
-  assert.equal(mod.upper_kcal, Math.round(141.75 * 1.15));
+  assert.equal(mod.estimated_active_kcal, 79);
+  assert.equal(mod.lower_kcal, Math.round((3.675 * 0.75 - 1.05) * 30));
+  assert.equal(mod.upper_kcal, Math.round((3.675 * 1.25 - 1.05) * 30));
 });
 
 // ---------- transaction rollback ----------
