@@ -259,7 +259,14 @@ export function useDialog(open, onClose) {
 
     // checkVisibility skips controls inside collapsed or display:none parts
     // of the panel; where it is unsupported every candidate counts.
+    // FOCUSABLE also matches controls the browser's Tab order skips: a
+    // disabled button that carries a tabindex (framer-motion adds
+    // tabindex="0" to anything with whileTap -- PlateSheet's "Log" while the
+    // plate is empty) and anything set to tabindex="-1". When one of those
+    // was "last", focus never landed on it, the wrap below never fired, and
+    // Tab walked out of the dialog onto the page behind it.
     const tabbables = () => [...(panelRef.current?.querySelectorAll(FOCUSABLE) || [])]
+      .filter((el) => !el.matches(':disabled') && el.tabIndex >= 0)
       .filter((el) => (typeof el.checkVisibility === 'function' ? el.checkVisibility() : true));
     const focusPanel = () => {
       const panel = panelRef.current;

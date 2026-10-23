@@ -112,46 +112,59 @@ test.describe('confirmation: allowing self check-in', () => {
   });
 });
 
-test.describe('confirmation: removing a logged food', () => {
+test.describe('removing a logged food', () => {
   test.use({ storageState: storageFor('client') });
 
-  // This one was a hand-rolled overlay with no dialog semantics, so it was
-  // invisible to getByRole('dialog') -- this test could not have passed.
-  test('asks in a real dialog; Escape keeps the entry and Remove deletes it', async ({ page }) => {
+  // Not a confirmation any more: since the one-list redesign (TodayLog.jsx)
+  // the ✕ removes at once and the toast offers Undo, rather than a dialog in
+  // front of every slip of the thumb. So the safety net to prove is Undo --
+  // it must bring back the same entry, on the server and not just on screen
+  // -- and a removal left alone must really be gone.
+  test('removes at once; Undo restores the same entry, and a kept removal is gone', async ({ page }) => {
     const { client } = await (await page.request.get('/api/tracking/me/home')).json();
-    const name = `Confirm food ${Date.now()}`;
+    const name = `Remove food ${Date.now()}`;
     const logged = await page.request.post(`/api/nutrition/clients/${client.id}/meals/log`, {
       data: { name, slot: 'Snack', calories: 120, protein: 5, carbs: 10, fat: 4, source: 'manual', eaten: true, quantity: 1, unit: 'serving' },
     });
     expect(logged.ok()).toBe(true);
+    // What the server holds for this food, as the page would show it.
+    const onServer = async () => {
+      const { nutrition } = await (await page.request.get('/api/tracking/me/home')).json();
+      return nutrition.meals.filter((m) => m.name === name).map((m) => `${m.quantity} ${m.unit} · ${m.calories} kcal`);
+    };
 
     await page.goto('/app/client/nutrition');
-    const meals = page.locator('[data-tour="nutrition-meals"]');
-    // Edit waits for the list to render; only then is "See more" (the list
-    // shows two rows until expanded, and a new entry is last) decidable.
-    await meals.getByRole('button', { name: 'Edit', exact: true }).click();
-    const more = meals.getByRole('button', { name: /^See more/ });
-    if (await more.count()) await more.click();
+    const today = page.getByRole('list', { name: 'Eaten today' });
+    await expect(today).toBeVisible();
+    // The list folds after six rows and a new snack sorts late, so unfold it
+    // -- only decidable once the list has rendered.
+    const showAll = page.locator('[data-tour="nutrition-meals"]').getByRole('button', { name: /^Show all/ });
+    if (await showAll.count()) await showAll.click();
 
-    const remove = meals.getByRole('button', { name: `Remove ${name}`, exact: true });
-    const dialog = page.getByRole('dialog', { name: "Remove from today's intake?" });
-
-    await remove.click();
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(`${name} · 1serving · 120 kcal`);
-    await expect.poll(() => focusInside(dialog)).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await expect(remove).toBeFocused();
+    const row = today.getByRole('listitem').filter({ hasText: name });
+    const remove = row.getByRole('button', { name: `Remove ${name}`, exact: true });
+    const toast = page.getByRole('status').filter({ hasText: `Removed ${name}` });
+    await expect(row).toContainText('1 serving');
 
     await remove.click();
-    await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(meals.getByText(name)).toHaveCount(0);
+    await expect(row).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(toast).toBeVisible();
+    await expect.poll(onServer).toEqual([]);
 
+    await toast.getByRole('button', { name: 'Undo', exact: true }).click();
+    // Exact: the timestamped name is digits too.
+    await expect(row.getByText('1 serving', { exact: true })).toBeVisible();
+    await expect(row.getByText('120', { exact: true })).toBeVisible();
+    await expect.poll(onServer).toEqual(['1 serving · 120 kcal']);
+
+    await remove.click();
+    await expect(row).toHaveCount(0);
+    await expect.poll(onServer).toEqual([]);
     await page.reload();
-    await expect(page.locator('[data-tour="nutrition-meals"]')).toBeVisible();
-    await expect(page.getByText(name)).toHaveCount(0);
+    await expect(today).toBeVisible();
+    if (await showAll.count()) await showAll.click();
+    await expect(row).toHaveCount(0);
   });
 });
 
@@ -190,15 +203,24 @@ test.describe('dialog layering: the barcode scanner inside the food log sheet', 
 test.describe('nutrition targets', () => {
   test.use({ storageState: storageFor('client') });
 
-  // Completed by saving or resetting, so it holds focus but Escape is not a way out.
-  test('holds focus, and Escape does not dismiss it', async ({ page }) => {
+  // Was a setup wizard whose only way out was Save, so Escape did nothing.
+  // Since cd589b4 it is a sheet like the rest: it holds focus, and Escape
+  // leaves it WITHOUT saving and hands focus back to the rings that opened it.
+  test('holds focus, and Escape leaves it without saving', async ({ page }) => {
+    const saves = [];
+    page.on('request', (r) => {
+      if (r.method() !== 'GET' && new URL(r.url()).pathname.startsWith('/api/me/nutrition/targets')) saves.push(r.url());
+    });
     await page.goto('/app/client/nutrition');
-    await page.getByRole('button', { name: 'Edit calorie target' }).click();
-    const dialog = page.getByRole('dialog', { name: /daily targets$/ });
+    const trigger = page.getByRole('button', { name: 'Edit daily target' });
+    await trigger.click();
+    const dialog = page.getByRole('dialog', { name: 'Daily target' });
     await expect(dialog).toBeVisible();
     await expect.poll(() => focusInside(dialog)).toBe(true);
     await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect(saves).toEqual([]);
   });
 });
 
