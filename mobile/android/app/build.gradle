@@ -21,10 +21,13 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
+    // The Java code keeps its original package (namespace); the app's public
+    // identity on the Play Store and on phones is applicationId. Android lets
+    // the two differ, and applicationId can never change once published.
     namespace = "com.gymos.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.gymos.app"
+        applicationId "com.barbell.gymapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

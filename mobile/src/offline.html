@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'">
-  <title>GymOS</title>
+  <title>Barbell</title>
   <!--
     Shown by the Android shell when the GymOS origin cannot be loaded. Set in
     the web app's own dark-theme tokens (frontend/src/theme.css) and its
@@ -60,8 +60,8 @@
   <main>
     <img class="logo" src="logo.png" alt="Barbell">
     <div class="card" role="alert">
-      <h1 id="title">Can't reach GymOS</h1>
-      <p id="detail">GymOS isn't responding right now. Try again in a moment.</p>
+      <h1 id="title">Can't reach Barbell</h1>
+      <p id="detail">Barbell isn't responding right now. Try again in a moment.</p>
       <button id="retry" type="button">Try again</button>
     </div>
   </main>
@@ -79,7 +79,7 @@
 
       if (!navigator.onLine) {
         document.getElementById('title').textContent = "You're offline";
-        document.getElementById('detail').textContent = "Check your internet connection. GymOS reloads as soon as you're back online.";
+        document.getElementById('detail').textContent = "Check your internet connection. Barbell reloads as soon as you're back online.";
       }
       retry.addEventListener('click', reconnect);
       window.addEventListener('online', reconnect);

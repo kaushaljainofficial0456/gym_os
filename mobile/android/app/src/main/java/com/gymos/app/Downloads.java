@@ -20,7 +20,7 @@ import java.io.OutputStream;
 /** Saves a file the web app downloaded (an invoice PDF) and opens it. */
 final class Downloads {
 
-    static final String FALLBACK_NAME = "GymOS-download";
+    static final String FALLBACK_NAME = "Barbell-download";
     private static final int MAX_NAME_LENGTH = 120;
 
     private Downloads() {}

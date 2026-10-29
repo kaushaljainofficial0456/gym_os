@@ -29,6 +29,6 @@ await copyFile(join(mobileDir, 'src', 'logo.png'), join(www, 'logo.png'));
 // The web app's own self-hosted face, so the offline screen is set in GymOS
 // type even though it has no network to fetch anything from.
 await copyFile(join(frontendPublic, 'fonts', 'dmsans-var-latin.woff2'), join(www, 'fonts', 'dmsans-var-latin.woff2'));
-await writeFile(join(www, 'index.html'), `<!doctype html>\n<meta charset="utf-8">\n<title>GymOS</title>\n<script>location.replace(${serverUrl});</script>\n`);
+await writeFile(join(www, 'index.html'), `<!doctype html>\n<meta charset="utf-8">\n<title>Barbell</title>\n<script>location.replace(${serverUrl});</script>\n`);
 
 console.log(`www built for ${config.server.url}`);

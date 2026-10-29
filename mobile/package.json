@@ -8,6 +8,7 @@
     "sync": "npm run build:www && cap sync android",
     "apk:debug": "npm run sync && node scripts/gradle.mjs assembleDebug",
     "apk:release": "npm run sync && node scripts/gradle.mjs assembleRelease",
+    "aab:release": "npm run sync && node scripts/gradle.mjs bundleRelease",
     "test": "node --test test/*.test.js",
     "test:android": "node scripts/gradle.mjs testDebugUnitTest"
   },
