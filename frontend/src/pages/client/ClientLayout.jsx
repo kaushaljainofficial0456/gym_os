@@ -121,6 +121,11 @@ export default function ClientLayout() {
   const clientData = homeFetch.data?.client;
   const needsOnboarding = clientData && !clientData.onboardingCompleted;
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const showOnboarding = needsOnboarding && !onboardingDone;
+  // The first-visit popup waits until /me/home has answered and nothing else
+  // owns the screen: a brand-new member otherwise got the "Home" popup
+  // stacked on top of the welcome wizard, burying it on the first screen.
+  const showFeaturePopup = featurePopup && clientData && !showOnboarding && !tourActive;
 
   // ClientLayout persists across client-page navigation (Outlet swaps only
   // the page below it), so /tracking/me/home is fetched once here and handed
@@ -282,7 +287,7 @@ export default function ClientLayout() {
       />
 
       {/* ── ONBOARDING WIZARD ── */}
-      {needsOnboarding && !onboardingDone && (
+      {showOnboarding && (
         <OnboardingWizard
           open={true}
           initialName={user?.name || ''}
@@ -333,7 +338,7 @@ export default function ClientLayout() {
       </div>
 
       {/* ── FEATURE POPUP ── */}
-      {featurePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
+      {showFeaturePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
 
       {/* ── NOTIFICATION PERMISSION PROMPT ── */}
       <NotificationPermissionPrompt />
