@@ -41,8 +41,9 @@ import { burnSourceLabel } from '../../healthProviderLabels.js';
 import { resolveDashboard, parseDashboardPrefs } from '../../dashboardCards.js';
 import ActivityRings from '../../components/ActivityRings.jsx';
 import {
-  AmbientBackdrop, Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
+  Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
 } from '../../design/index.js';
+import './Home.css';
 
 // Same rounding convention used everywhere else this app shows a macro
 // total (MyDietCard.jsx, Nutrition.jsx, CustomizeMealSheet.jsx all define
@@ -355,7 +356,7 @@ export default function Home() {
           style={{ color: 'var(--ink)' }}>
         Rest day
       </h1>
-      <p className="mt-2 text-[13px] leading-relaxed max-w-[34ch]"
+      <p className="mt-2.5 text-[14px] leading-[1.6] max-w-[36ch]"
          style={{ color: 'var(--mute)' }}>
         Recovery is training. Eat to your target and sleep eight hours.
       </p>
@@ -375,18 +376,11 @@ export default function Home() {
      an empty burn card or a dead crowd feed off the screen. */
   const CARD = {
     workout: () => (
-      /* The only place 3D appears on this screen. `-mx-4 px-4` lets the
-         ambient field bleed to the device edges while the text stays on
-         the page's normal gutter — a backdrop that stops short of the
-         edge reads as a misaligned card, not as atmosphere. */
+      /* `-mx-4 px-4` lets the light bleed to the device edges while the
+         text stays on the page's normal gutter. `.home-aurora` (Home.css)
+         masks itself out on every side, so there is no seam where it stops. */
       <section data-tour="home-hero" className="relative -mx-4 -mt-2 px-4 pt-6 pb-5 overflow-hidden">
-        <AmbientBackdrop intensity={0.42} maxTier="medium" />
-        {/* Fades the field into the page before the content below starts,
-            so there is no hard horizontal seam where 3D stops. */}
-        <div
-          className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, transparent, var(--bg))' }}
-        />
+        <div className="home-aurora" aria-hidden="true" />
         <div className="relative">
           <Reveal>
             {/* The date, because "today" is the whole premise of this
