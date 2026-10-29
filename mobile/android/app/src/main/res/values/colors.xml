@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The web app's bg, ink and line theme tokens (frontend/src/theme.css). -->
+    <color name="gymos_bg_dark">#0A0909</color>
+    <color name="gymos_bg_light">#FAF5F3</color>
+    <color name="gymos_ink_dark">#FFDFDD</color>
+    <color name="gymos_ink_light">#1E1714</color>
+    <color name="gymos_line_dark">#14FFDFDD</color>
+    <color name="gymos_line_light">#EBDFDA</color>
+</resources>
