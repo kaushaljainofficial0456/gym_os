@@ -9,6 +9,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import App from './App.jsx';
 import IntroSplash from './components/IntroSplash.jsx';
 import { reloadForNewVersion } from './lazyWithReload.js';
+import { registerNotificationWorker } from './reminders.js';
 
 // Vite reports a failed preload of a screen's code here. After a deploy that
 // means this tab is running the previous version: reload into the new one.
@@ -20,6 +21,10 @@ import './theme.css';
 // Apply dark class immediately to prevent flash
 const stored = localStorage.getItem('sk-os-theme');
 document.documentElement.classList.add(stored === 'light' ? 'light' : 'dark');
+
+// Shows reminders as system notifications (public/sw.js). After load, so
+// it never competes with the first paint.
+window.addEventListener('load', registerNotificationWorker, { once: true });
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

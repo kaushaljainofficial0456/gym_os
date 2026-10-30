@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
+import { useAuth } from '../../auth.jsx';
 import { useFetch, daysAgoLabel } from '../../utils.js';
 import { Card, Kicker, ErrorState, Empty, PageSkeleton } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -16,6 +17,9 @@ const FILTERS = [
 ];
 
 export default function Alerts() {
+  const { user, isOwner } = useAuth();
+  // Owners open anyone; a trainer opens their own clients.
+  const canOpen = (a) => isOwner || a.client_trainer_id === user?.id;
   const [filter, setFilter] = useState('all');
   const alerts = useFetch(() => api(`/alerts${filter === 'all' ? '' : `?status=${filter}`}`), [filter]);
 
@@ -69,8 +73,17 @@ export default function Alerts() {
                         reachable box without changing the inline layout --
                         the neighbours here are spans, so there is nothing
                         for the expanded area to overlap and steal. */}
-                    <Link to={`/app/trainer/clients/${a.client_id}`}
-                          className="font-grotesk text-sm font-semibold hover:text-gold transition-colors tap-target">{a.client_name}</Link>
+                    {canOpen(a) ? (
+                      <Link to={`/app/trainer/clients/${a.client_id}`}
+                            className="font-grotesk text-sm font-semibold hover:text-gold transition-colors tap-target">{a.client_name}</Link>
+                    ) : (
+                      /* Alerts are gym-wide, profiles are not: this was a
+                         link to a page that could only answer "not found". */
+                      <span className="font-grotesk text-sm font-semibold">
+                        {a.client_name}
+                        <span className="text-[11px] font-normal text-mute"> · {a.client_trainer_name ? `${a.client_trainer_name}'s client` : 'no trainer assigned'}</span>
+                      </span>
+                    )}
                     <span className={`chip border ${sev[1]}`}>{sev[0]}</span>
                     <span className="text-[10px] text-faint font-grotesk uppercase tracking-wider">{a.type?.replace(/_/g, ' ')}</span>
                     <span className="text-[10px] text-faint font-grotesk">{daysAgoLabel(a.created_at)}</span>

@@ -6,7 +6,7 @@ import { useCookieConsent } from '../../components/CookieConsent.jsx';
 import { api } from '../../api.js';
 import { useTheme } from '../../themeContext.jsx';
 import { useUnits } from '../../unitsContext.jsx';
-import { Toast } from '../../components/UI.jsx';
+import { Sheet, Toast } from '../../components/UI.jsx';
 
 const SETTINGS_SECTIONS = [
   {
@@ -33,6 +33,36 @@ const SETTINGS_SECTIONS = [
     ]
   }
 ];
+
+/** Where reminders show up, and the one switch only the browser holds. */
+function ReminderDelivery() {
+  const supported = typeof Notification !== 'undefined';
+  const [perm, setPerm] = useState(supported ? Notification.permission : 'unsupported');
+  const ask = async () => {
+    try {
+      const result = await Notification.requestPermission();
+      setPerm(result);
+      api('/notifications/preferences', { method: 'PATCH', body: JSON.stringify({ browser_permission: result }) }).catch(() => {});
+    } catch { /* the browser declined to ask */ }
+  };
+  return (
+    <div
+      className="rounded-xl px-3 py-2.5 mb-4 mt-2.5 text-[11.5px] leading-relaxed"
+      style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)', color: 'var(--mute)' }}
+    >
+      Reminders arrive in the bell at the top of the screen
+      {perm === 'granted' ? ', and as notifications on this device while Barbell is open in the background.' : '.'}
+      {perm === 'default' && (
+        <button type="button" onClick={ask} className="btn btn-sm mt-2 w-full">Also show them as notifications on this device</button>
+      )}
+      {perm === 'denied' && (
+        <div className="mt-1.5" style={{ color: 'var(--faint)' }}>
+          Notifications are blocked for Barbell in this browser. Allow them in the browser&rsquo;s site settings to get reminders here too.
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Settings() {
   const { user } = useAuth();
@@ -197,6 +227,103 @@ export default function Settings() {
         </div>
         <CookieSettingsCard />
       </Group>
+
+      <Group title="Your data" hint="A copy of everything, or a clean break.">
+        <YourDataCard email={user?.email} />
+      </Group>
+    </div>
+  );
+}
+
+/**
+ * YOUR DATA -- download a copy, or delete the account, from the app.
+ *
+ * Both used to be "email us" (see the Privacy page). App stores require
+ * in-app deletion for any app with sign-up, and the privacy laws Barbell is
+ * sold under grant both rights; neither should need a support ticket.
+ *
+ * Deletion is the one irreversible thing in Settings, so it says exactly
+ * what goes and what the gym keeps, and asks for the account email typed
+ * out rather than a second tap -- a confirm button is too easy to hit.
+ */
+function YourDataCard({ email }) {
+  const { logout } = useAuth();
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [typed, setTyped] = useState('');
+
+  const download = async () => {
+    setBusy('export'); setErr('');
+    try {
+      const data = await api('/me/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `barbell-my-data-${new Date().toLocaleDateString('en-CA')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) { setErr(e.message || 'Could not prepare your data. Try again.'); }
+    setBusy('');
+  };
+
+  const matches = !!email && typed.trim().toLowerCase() === email.toLowerCase();
+  const remove = async () => {
+    setBusy('delete'); setErr('');
+    try {
+      await api('/me/delete-account', { method: 'POST', body: JSON.stringify({ confirm: typed }) });
+      await logout();
+    } catch (e) { setErr(e.message || 'Could not delete the account. Try again.'); setBusy(''); }
+  };
+
+  return (
+    <div className="card p-5 space-y-3">
+      <div>
+        <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Download my data</div>
+        <p className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
+          Your profile, workouts, food, measurements, payments and connected devices, as one file.
+        </p>
+        <button type="button" className="btn w-full mt-2.5" onClick={download} disabled={!!busy}>
+          {busy === 'export' ? 'Preparing…' : 'Download my data'}
+        </button>
+      </div>
+      <div className="pt-3" style={{ borderTop: '1px solid var(--line)' }}>
+        <div className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Delete account</div>
+        <p className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
+          Permanently removes you and your data from Barbell.
+        </p>
+        <button type="button" className="btn w-full mt-2.5" style={{ color: 'var(--bad)', borderColor: 'rgb(var(--bad-rgb) / .4)' }}
+          onClick={() => { setTyped(''); setErr(''); setDeleting(true); }} disabled={!!busy}>
+          Delete account…
+        </button>
+      </div>
+      {err && !deleting && <p className="text-[11.5px]" role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+
+      <Sheet open={deleting} onClose={() => busy !== 'delete' && setDeleting(false)} title="Delete your account?"
+        sub="This cannot be undone."
+        footer={(
+          <button type="button" className="btn w-full" onClick={remove} disabled={!matches || busy === 'delete'}
+            style={matches ? { background: 'var(--bad)', borderColor: 'var(--bad)', color: '#fff' } : undefined}>
+            {busy === 'delete' ? 'Deleting…' : 'Delete my account'}
+          </button>
+        )}>
+        <div className="space-y-3 text-[12.5px] leading-relaxed" style={{ color: 'var(--mute)' }}>
+          <p><b style={{ color: 'var(--ink)' }}>Erased:</b> your profile, body measurements and weights, progress photos,
+            food and water logs, workouts, wearable connections, coach notes, messages and community posts.</p>
+          <p><b style={{ color: 'var(--ink)' }}>Kept by your gym, without your name:</b> payment receipts, membership
+            history and check-ins &mdash; a gym has to keep its financial records.</p>
+          <p>You may want to download your data first.</p>
+          <label className="block">
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--ink)' }}>Type <b>{email}</b> to confirm</span>
+            <input className="input mt-1.5 w-full" type="email" autoComplete="off" value={typed}
+              onChange={(e) => setTyped(e.target.value)} aria-label="Your account email" />
+          </label>
+          {err && <p role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+        </div>
+      </Sheet>
     </div>
   );
 }
@@ -516,21 +643,12 @@ function NotificationSettingsCard() {
         <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Notifications</span>
       </div>
 
-      {/* HONEST ABOUT DELIVERY. None of the reminders below are actually
-          sent: this codebase has no scheduler and no push/email provider
-          (see backend/src/routes/notifications.js's own header). Letting
-          someone tune nine switches that produce silence, and then wonder
-          why nothing arrives, is a worse experience than a cluttered
-          screen. The preferences are real and are stored, so they apply
-          the day delivery ships -- which is exactly what this says. */}
-      <div
-        className="rounded-xl px-3 py-2.5 mb-4 mt-2.5 text-[11.5px] leading-relaxed"
-        style={{ background: 'var(--accent-soft)', border: '1px solid var(--line)', color: 'var(--mute)' }}
-      >
-        Scheduled reminders are not being sent yet. Your choices here are saved and will
-        apply as soon as they are. Updates from your coach and your gym already appear in
-        the bell at the top of the screen.
-      </div>
+      {/* WHERE REMINDERS ARRIVE, said plainly. They are made while Barbell is
+          open (src/reminders.js) and land in the bell; with device
+          notifications allowed they also reach the lock screen while the app
+          is still open in the background. Nobody should expect a 7am buzz
+          from an app they closed last night, so this does not promise one. */}
+      <ReminderDelivery />
 
       <ToggleRow
         label="All notifications"

@@ -77,7 +77,7 @@ export const schemas = {
   }),
   weightLog: z.object({
     date: z.string().optional(),
-    weight: z.number().positive().max(500),
+    weight: z.number().min(20, 'A body weight under 20 kg looks like a typo').max(500),
     source: z.enum(['manual', 'scale', 'estimate']).default('manual')
   }),
   mealLog: z.object({

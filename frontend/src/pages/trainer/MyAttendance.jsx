@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
 import AttendanceCard, { formatDuration, clockTime, STATUS_TONE } from '../../components/trainer/AttendanceCard.jsx';
 import { Card, Kicker, Sheet } from '../../components/UI.jsx';
+import { localDateKey } from '../../utils.js';
 
 const RANGES = [
   { key: 7, label: 'This week' },
@@ -32,7 +33,7 @@ const RANGES = [
   { key: 90, label: '90 days' },
 ];
 
-const iso = (d) => d.toISOString().slice(0, 10);
+const iso = (d) => localDateKey(d);
 const backDays = (n) => iso(new Date(Date.now() - n * 86400000));
 
 function dayLabel(key) {

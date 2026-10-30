@@ -398,7 +398,7 @@ export default function GymAttendance() {
                   <button
                     type="button"
                     onClick={() => setShiftFor({ id: r.trainerId, name: r.name })}
-                    className="text-[10px] font-semibold mt-0.5"
+                    className="text-[11px] font-semibold min-h-[32px] px-2 -mr-2 rounded-lg"
                     style={{ color: 'var(--accent)' }}
                   >
                     {r.scheduled ? 'Edit shifts' : 'Set shifts'}

@@ -1,7 +1,7 @@
 /**
  * DEVICES — each reader, gate and turnstile, and which door it is.
  *
- * A device matters to SK OS for two reasons: it tells us which BRANCH an
+ * A device matters to Barbell for two reasons: it tells us which BRANCH an
  * event happened at, and a one-way reader tells us what an event MEANS
  * when the payload does not say. Both are set here.
  *
@@ -45,7 +45,7 @@ function DeviceForm({ initial, providers, branches, onClose, onSaved }) {
     setBusy(true); setError('');
     try {
       if (!f.name.trim()) throw new Error('Give the device a name people will recognise, like "Front turnstile".');
-      if (!editing && !f.deviceIdentifier.trim()) throw new Error('The device ID is how SK OS recognises its events. Copy it from your access system.');
+      if (!editing && !f.deviceIdentifier.trim()) throw new Error('The device ID is how Barbell recognises its events. Copy it from your access system.');
       const body = {
         name: f.name.trim(), deviceType: f.deviceType, direction: f.direction, branchId: f.branchId || null,
         ...(editing ? { status: f.status } : { deviceIdentifier: f.deviceIdentifier.trim(), providerId: f.providerId || null }),
@@ -71,7 +71,7 @@ function DeviceForm({ initial, providers, branches, onClose, onSaved }) {
               {TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </Field>
-          <Field label="Direction" help="A one-way reader lets SK OS know what its events mean.">
+          <Field label="Direction" help="A one-way reader lets Barbell know what its events mean.">
             <select className="input" value={f.direction} onChange={set('direction')}>
               {DIRECTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
@@ -178,7 +178,7 @@ export default function DevicesPanel({ onToast, canManage }) {
       )}
       {devices.length === 0 ? (
         <Empty title="No devices yet"
-               hint="Add each reader, turnstile or gate so SK OS knows which door — and which branch — an event came from." />
+               hint="Add each reader, turnstile or gate so Barbell knows which door — and which branch — an event came from." />
       ) : (
         <div className="card" style={{ padding: 0 }}>
           {devices.map((d, i) => (

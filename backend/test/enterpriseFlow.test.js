@@ -434,3 +434,64 @@ test('a FREE (0 amount) membership plan enrolls straight from the QR, with no pa
     assert.equal(billing.reserved_slots, 0, 'the provisional slot reservation is released');
   } finally { await api.close(); }
 });
+
+/** Buys `capacity` for this owner through the real quote -> order -> verify path. */
+async function buyPackage(api, ownerToken, kind, capacity) {
+  const quote = await api.call('POST', '/api/enterprise/billing/quote', { kind, capacity }, ownerToken);
+  assert.equal(quote.status, 200, JSON.stringify(quote.json));
+  const order = await api.call('POST', '/api/enterprise/payment/order', { quoteId: quote.json.quote.id }, ownerToken);
+  assert.equal(order.status, 200, JSON.stringify(order.json));
+  const { paymentId, signature } = mockSimulateCheckout(order.json.order.provider_order_id);
+  const verify = await api.call('POST', '/api/enterprise/payment/verify', { orderId: order.json.order.id, providerPaymentId: paymentId, signature }, ownerToken);
+  assert.equal(verify.status, 200, JSON.stringify(verify.json));
+  return (await api.call('GET', '/api/enterprise/status', undefined, ownerToken)).json;
+}
+
+test('RENEWING EARLY adds a full period after the current one, and never deletes time already paid for', async (t) => {
+  const db = await memDb();
+  await seedPricing(db);
+  const api = await startApp(db);
+  t.after(() => api.close());
+  const signup = await api.call('POST', '/api/auth/setup-org', { orgName: 'Renew Gym', ownerName: 'Owner', email: 'renew@test.in', password: 'ownerpass1' });
+  const ownerToken = signup.json.token;
+
+  const first = await buyPackage(api, ownerToken, 'ORG_PACKAGE', 80);
+  const firstEnd = Date.parse(first.subscription.end_date);
+
+  const renewed = await buyPackage(api, ownerToken, 'ORG_PACKAGE', 80);
+  const year = 365 * 86_400_000;
+  assert.ok(Math.abs(Date.parse(renewed.subscription.end_date) - (firstEnd + year)) < 5_000,
+    `expected the old end date plus a year, got ${renewed.subscription.end_date} from ${first.subscription.end_date}`);
+  assert.equal(renewed.purchasedCapacity, 80);
+  assert.equal(renewed.billingStatus, 'ACTIVE');
+});
+
+test('an UPGRADE starts its period today: its quote already credited the unused time', async (t) => {
+  const db = await memDb();
+  await seedPricing(db);
+  const api = await startApp(db);
+  t.after(() => api.close());
+  const signup = await api.call('POST', '/api/auth/setup-org', { orgName: 'Upgrade Gym', ownerName: 'Owner', email: 'up@test.in', password: 'ownerpass1' });
+  const ownerToken = signup.json.token;
+
+  await buyPackage(api, ownerToken, 'ORG_PACKAGE', 80);
+  const upgraded = await buyPackage(api, ownerToken, 'ORG_UPGRADE', 100);
+  const year = 365 * 86_400_000;
+  assert.ok(Math.abs(Date.parse(upgraded.subscription.end_date) - (Date.now() + year)) < 60_000);
+  assert.equal(upgraded.purchasedCapacity, 100);
+});
+
+test('a refused quote says why in words, not as a code', async (t) => {
+  const db = await memDb();
+  await seedPricing(db);
+  const api = await startApp(db);
+  t.after(() => api.close());
+  const signup = await api.call('POST', '/api/auth/setup-org', { orgName: 'Words Gym', ownerName: 'Owner', email: 'words@test.in', password: 'ownerpass1' });
+  const ownerToken = signup.json.token;
+  await buyPackage(api, ownerToken, 'ORG_PACKAGE', 80);
+
+  const res = await api.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_UPGRADE', capacity: 80 }, ownerToken);
+  assert.equal(res.status, 422);
+  assert.equal(res.json.error, 'same_capacity');
+  assert.match(res.json.message, /Renew current plan/);
+});

@@ -65,6 +65,21 @@ function PulseTile({ to, label, value, sub, tone, ariaSuffix }) {
   );
 }
 
+/* The API lists only months that had payments -- "nothing recorded" and
+   "recorded nothing" are different claims (services/gymPulse.js). On a time
+   axis that absence has to show as a gap: laid side by side, payments from
+   March to August read as six consecutive months right up to now, for a gym
+   that has taken nothing since. */
+function monthAxis(points, endDay, months = 6) {
+  const totals = new Map(points.map((p) => [p.month, p.value]));
+  const [y, m] = endDay.split('-').map(Number);
+  return Array.from({ length: months }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - months + i, 1));
+    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    return { month, value: totals.get(month) ?? 0 };
+  });
+}
+
 /* ── a bar series with no library, so it costs nothing to load ── */
 function MiniBars({ points, label, format, color = 'var(--m-training)', empty }) {
   const vals = points.map((p) => p.value);
@@ -317,7 +332,7 @@ export default function GymPulse({ pulse, kpis, loading, error, onRetry }) {
           <Kicker>Revenue · by month</Kicker>
           <div className="mt-2">
             <MiniBars
-              points={series.revenue} label="Revenue by month"
+              points={monthAxis(series.revenue, today.date)} label="Revenue by month"
               color="var(--m-body)" format={(v) => money(v, m.currency)}
               empty="No payments recorded yet. Revenue appears once payments are logged."
             />

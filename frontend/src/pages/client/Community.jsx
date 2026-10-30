@@ -23,7 +23,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { ErrorState, Toast, PageSkeleton, Avatar } from '../../components/UI.jsx';
+import { ErrorState, Toast, PageSkeleton, Avatar, useConfirm } from '../../components/UI.jsx';
 import {
   CommunityPulse, YourPosition, ConsistencyRing, ActivityChart,
   ChallengeCard, StreakBoard, WeeklyRecap, YouVsYou, CommunityMoment,
@@ -77,6 +77,7 @@ export default function Community() {
 
   const membershipFetch = useFetch(() => api('/community/membership'));
   const joined = !!membershipFetch.data?.membership?.enabled;
+  const [confirm, confirmDialog] = useConfirm();
   const available = membershipFetch.data?.available !== false;
 
   // Every community request is gated on membership, so a client who has
@@ -310,6 +311,17 @@ export default function Community() {
     }
   };
 
+  // One stray tap on a small corner button took a member out of their gym's
+  // community; everything else that removes something in the app asks first.
+  const leave = async () => {
+    const yes = await confirm({
+      title: `Leave ${gymName || 'this community'}?`,
+      body: 'You will drop off the leaderboard and stop seeing the feed. You can join again at any time.',
+      confirmLabel: 'Leave community',
+    });
+    if (yes) setJoined(false);
+  };
+
   /* ---------- render ---------- */
 
   if (membershipFetch.loading) return <PageSkeleton />;
@@ -379,6 +391,7 @@ export default function Community() {
 
   return (
     <div className="page-vivid pb-24">
+      {confirmDialog}
       {/* ── header ── */}
       <header className="mb-4">
         {/* The switcher, not a plain title: a member can belong to this gym
@@ -389,7 +402,7 @@ export default function Community() {
           <CommunitySwitcher current={{ id: 'gym', name: gymName, type: 'gym' }} onNavigate={nav} />
           <button
             type="button"
-            onClick={() => setJoined(false)}
+            onClick={leave}
             className="text-[11.5px] rounded-lg px-3 shrink-0"
             style={{ minHeight: 36, border: '1px solid var(--line)', color: 'var(--mute)' }}
           >

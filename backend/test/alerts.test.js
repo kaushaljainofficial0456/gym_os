@@ -152,6 +152,19 @@ test('POST /api/alerts/:id/action lets any same-org trainer act, even on a clien
   assert.equal(row.status, 'followed_up');
 });
 
+test('GET /api/alerts says whose client each alert is, so the page can link only what the reader can open', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const a = await seedOrgWithClient(db, 'a');
+  await insertAlert(db, { orgId: a.orgId, clientId: a.clientId });
+  const { call, close } = await startApi(db); t.after(() => close());
+
+  const r = await call('GET', '', { token: makeToken(a.trainerId, 'TRAINER', a.orgId) });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.alerts[0].client_trainer_id, a.trainerId);
+  assert.equal(r.json.alerts[0].client_trainer_name, 'Trainer');
+});
+
 test('POST /api/alerts/:id/action lets SUPER_ADMIN act across orgs', async (t) => {
   resetRateLimits();
   const db = await memDb();

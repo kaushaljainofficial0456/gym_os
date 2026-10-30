@@ -6,7 +6,7 @@ import TrainerCrowdCard from '../../components/trainer/TrainerCrowdCard.jsx';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch, fmt1 } from '../../utils.js';
+import { useFetch, fmt1, kg1 } from '../../utils.js';
 import { Card, Kicker, Kpi, ErrorState, StatusChip, Avatar, Skeleton, CheckIcon } from '../../components/UI.jsx';
 import { Reveal, AnimatedNumber } from '../../design/index.js';
 import { TrendChart } from '../../components/charts.jsx';
@@ -228,7 +228,7 @@ export default function Dashboard() {
                         screen for every client with no logged days yet. A
                         missing number is now stated as missing. */}
                     <div className="text-[10px] text-faint mt-0.5 font-grotesk tabular-nums">
-                      {c.goal.replace(/_/g, ' ')} · {c.currentWeight} → {c.targetWeight} kg
+                      {c.goal.replace(/_/g, ' ')} · {kg1(c.currentWeight)} → {kg1(c.targetWeight)} kg
                       {c.adherence == null ? ' · no adherence data yet' : ` · ${fmt1(c.adherence)}% adherence`}
                     </div>
                   </div>

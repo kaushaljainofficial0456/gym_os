@@ -53,6 +53,11 @@ export default function NutritionBuilder() {
 
   const savePlan = async () => {
     if (!editing?.meals?.length) return setToast('Add at least one meal');
+    // Named here, like the workout builder's exercises: the server's answer
+    // to a blank meal was a bare "Validation failed".
+    if (!String(editing.name || '').trim()) return setToast('Give the plan a name');
+    const blank = editing.meals.findIndex((m) => !String(m.name || '').trim());
+    if (blank !== -1) return setToast(`Meal ${blank + 1} still needs a name`);
     if (saving) return;          // a second tap must not create a second plan
     setSaving(true);
     try {

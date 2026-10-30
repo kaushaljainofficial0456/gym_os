@@ -5,7 +5,7 @@
 // hides three separate facts, and the design keeps them separate because
 // collapsing any two of them is how an owner gets misled:
 //
-//   desired_access   what SK OS thinks this person's access SHOULD be,
+//   desired_access   what Barbell thinks this person's access SHOULD be,
 //                    from their membership (or a human override).
 //   access_status    what we know the DEVICE has been told -- ALLOWED or
 //                    DENIED when a push succeeded, or why we could not
@@ -120,7 +120,7 @@ export async function syncMapping(db, mapping, { settings = {}, actorUserId = nu
     accessStatus = 'NOT_SUPPORTED';
     syncStatus = 'NEVER';
     message = desired === 'DENIED'
-      ? 'This connection cannot be updated from SK OS. Remove this person at the device.'
+      ? 'This connection cannot be updated from Barbell. Remove this person at the device.'
       : null;
   } else if (!syncEnabled) {
     // Automatic sync is off: say what SHOULD happen, do not do it.

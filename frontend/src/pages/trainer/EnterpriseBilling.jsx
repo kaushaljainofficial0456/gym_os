@@ -77,10 +77,13 @@ export default function EnterpriseBilling() {
 
   const currentCapacity = status.data?.purchasedCapacity || 0;
 
-  const startUpgrade = async (targetCapacity) => {
+  // A renewal is an ORG_PACKAGE quote at today's capacity: the time it buys
+  // is added after the current period. It used to send ORG_UPGRADE, which
+  // the server refuses at the same capacity, so this button never worked.
+  const startUpgrade = async (targetCapacity, { renew = false } = {}) => {
     setBusy(true); setToast('');
     try {
-      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify({ kind: 'ORG_UPGRADE', capacity: Number(targetCapacity) }) });
+      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify({ kind: renew ? 'ORG_PACKAGE' : 'ORG_UPGRADE', capacity: Number(targetCapacity) }) });
       if (q.quote.total <= 0) {
         await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
         setModal({ quote: q.quote, freeChange: true });
@@ -230,7 +233,7 @@ export default function EnterpriseBilling() {
           </div>
           <button className="btn-primary" disabled={busy || !customCapacity} onClick={() => startUpgrade(customCapacity)}>Get quote</button>
         </div>
-        <button className="btn" disabled={busy} onClick={() => startUpgrade(currentCapacity)}>Renew current plan (same capacity)</button>
+        <button className="btn" disabled={busy} onClick={() => startUpgrade(currentCapacity, { renew: true })}>Renew current plan (same capacity)</button>
       </Card>
 
       <Card className="p-5 space-y-3">

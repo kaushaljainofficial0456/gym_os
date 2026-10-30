@@ -497,7 +497,7 @@ export default function GymCrowd() {
       <div className="card p-4">
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="text-[10px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--faint)' }}>Recent activity</div>
-          <Link to="/app/trainer/access?tab=events" className="text-[11px]" style={{ color: 'var(--accent)' }}>All events</Link>
+          <Link to="/app/trainer/access?tab=events" className="text-[11px] inline-flex items-center min-h-[32px] px-2 -mr-2" style={{ color: 'var(--accent)' }}>All events</Link>
         </div>
         {events == null ? <div className="py-6 text-center text-[12px]" style={{ color: 'var(--faint)' }} role="status">Loading…</div>
           : events.length === 0 ? <Empty title="No door events yet" hint="Once an access device is connected, every entry and exit appears here." />

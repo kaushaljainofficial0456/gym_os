@@ -136,6 +136,26 @@ export function invalidateOrgDemoCache(orgId) {
 // gradually, on their own next login, never all at once and never by a
 // migration script touching every row.
 const BCRYPT_COST = 12;
+// ---- deactivated accounts ----
+// A JWT stays valid until it expires, so switching an account off -- a
+// gym deactivating a member, a member deleting their own account -- used
+// to change nothing for a session already open on someone's phone. One
+// cached read per request (same shape as the billing gate above) closes
+// that. Only an explicit active = 0 blocks: a missing row or a failed
+// lookup passes, like every other gate in requireAuth.
+const userActiveCache = new Map(); // userId -> { off: boolean, at: ms }
+const USER_ACTIVE_TTL_MS = 30_000;
+export async function isUserDeactivatedCached(db, userId) {
+  const hit = userActiveCache.get(userId);
+  if (hit && Date.now() - hit.at < USER_ACTIVE_TTL_MS) return hit.off;
+  const row = await db.q1('SELECT active FROM users WHERE id = ?', [userId]);
+  const off = !!row && (row.active === 0 || row.active === '0' || row.active === false);
+  if (userActiveCache.size > 5000) userActiveCache.clear();
+  userActiveCache.set(userId, { off, at: Date.now() });
+  return off;
+}
+export function invalidateUserActive(userId) { userActiveCache.delete(userId); }
+
 export const hashPassword = (plain) => bcrypt.hash(plain, BCRYPT_COST);
 export const verifyPassword = (plain, hash) => bcrypt.compare(plain, hash);
 /** True when a stored hash was created at a lower cost than BCRYPT_COST
@@ -362,6 +382,17 @@ export async function requireAuth(req, res, next) {
     // minute and never awaited -- a demo must not wait on, or fail
     // because of, an analytics write.
     touchSession(db, verdict.session).catch(() => {});
+  }
+
+  // A switched-off account loses its open sessions on the next request,
+  // not when its token happens to expire (see isUserDeactivatedCached).
+  if (db && req.user.sub && !req.user.demo) {
+    try {
+      if (await isUserDeactivatedCached(db, req.user.sub)) {
+        clearAuthCookie(res);
+        return res.status(401).json({ error: 'This account is no longer active.' });
+      }
+    } catch { /* fail open, like the gates around it */ }
   }
 
   // A SUSPENDED gym (SUPER_ADMIN console) blocks every org-scoped request

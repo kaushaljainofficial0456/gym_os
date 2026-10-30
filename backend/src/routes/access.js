@@ -171,7 +171,7 @@ export default function accessRoutes(db) {
       // The rule from the spec: never offer what does not exist.
       if (adapter.implemented === false) {
         return res.status(400).json({
-          error: `SK OS does not ship a ${adapter.name} adapter yet. `
+          error: `Barbell does not ship a ${adapter.name} adapter yet. `
             + 'Connect it as a Webhook or REST provider instead.',
           code: 'adapter_not_implemented',
         });
@@ -814,14 +814,14 @@ export default function accessRoutes(db) {
           return { index: i, ok: false, problem: 'No member identifier or no timestamp could be found in this record.' };
         }
         const problems = [];
-        if (Number.isNaN(Date.parse(n.occurredAt))) problems.push(`"${n.occurredAt}" is not a timestamp SK OS can read.`);
+        if (Number.isNaN(Date.parse(n.occurredAt))) problems.push(`"${n.occurredAt}" is not a timestamp Barbell can read.`);
         const t = String(n.eventType || '').toUpperCase();
         if (!['ENTRY', 'IN', 'CHECK_IN', 'CHECKIN', 'EXIT', 'OUT', 'CHECK_OUT', 'CHECKOUT', 'DENIED', 'REJECTED', 'FAILED'].includes(t)) {
           problems.push(n.eventType == null
             ? 'No direction found. That is fine for a one-way reader; a two-way device must send one.'
             : `Direction "${n.eventType}" is not recognised. Use entry/exit, in/out or check_in/check_out.`);
         }
-        if (!n.externalEventId) problems.push('No event id found. SK OS will derive one from the scan so repeats are still ignored.');
+        if (!n.externalEventId) problems.push('No event id found. Barbell will derive one from the scan so repeats are still ignored.');
         return { index: i, ok: problems.length === 0, normalized: n, problems };
       });
       res.json({ results, recorded: false });

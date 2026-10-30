@@ -17,22 +17,20 @@ export default function alertRoutes(db) {
     }
     const { status } = req.query;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
-    let rows;
-    if (status) {
-      rows = await db.q(
-        `SELECT a.*, u.name AS client_name FROM alerts a
-           JOIN clients c ON c.id = a.client_id
-           JOIN users u ON u.id = c.user_id
-          WHERE a.org_id = ? AND a.status = ? ORDER BY a.created_at DESC LIMIT ?`,
-        [req.orgId, status, limit]);
-    } else {
-      rows = await db.q(
-        `SELECT a.*, u.name AS client_name FROM alerts a
-           JOIN clients c ON c.id = a.client_id
-           JOIN users u ON u.id = c.user_id
-          WHERE a.org_id = ? ORDER BY a.created_at DESC LIMIT ?`,
-        [req.orgId, limit]);
-    }
+    // Alerts are gym-wide on purpose (see alerts.test.js), but a trainer can
+    // only OPEN their own clients, so each row says whose client it is: the
+    // page links to who it can open and names the trainer for the rest.
+    const conds = ['a.org_id = ?'];
+    const params = [req.orgId];
+    if (status) { conds.push('a.status = ?'); params.push(status); }
+    const rows = await db.q(
+      `SELECT a.*, u.name AS client_name, c.trainer_id AS client_trainer_id, tu.name AS client_trainer_name
+         FROM alerts a
+         JOIN clients c ON c.id = a.client_id
+         JOIN users u ON u.id = c.user_id
+         LEFT JOIN users tu ON tu.id = c.trainer_id
+        WHERE ${conds.join(' AND ')} ORDER BY a.created_at DESC LIMIT ?`,
+      [...params, limit]);
     res.json({ alerts: rows });
   });
 

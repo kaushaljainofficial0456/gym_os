@@ -22,6 +22,42 @@ const int = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/* The settings this endpoint actually applies. Partial updates are
+   deliberate -- omitting a field leaves it unchanged -- but a field
+   nobody recognises is a DIFFERENT thing, and it used to return
+   {"ok":true} while discarding the value. A typo, a stale client, a
+   renamed column: all reported "Saved" and saved nothing, which is the
+   one outcome a settings screen must never produce (spec 42/47). */
+export const SETTING_KEYS = new Set([
+  'brand_name', 'tagline', 'crowd_capacity', 'crowd_enabled', 'workout_mode_default',
+  // Gym Crowd Live. The three thresholds decide what "busy" means for
+  // THIS gym; the two visibility flags decide how much of it members
+  // see. Both are enforced server-side in services/crowdStatus.js --
+  // a value the API sends is a value a member can read out of the
+  // network tab, whatever the component renders.
+  'crowd_threshold_quiet', 'crowd_threshold_moderate', 'crowd_threshold_busy',
+  'crowd_show_exact_count', 'crowd_client_visible',
+  'allow_substitute', 'allow_add_exercise', 'allow_edit_targets',
+  'community_enabled', 'community_leaderboard_enabled',
+  'contact_email', 'contact_phone', 'address', 'city', 'country',
+  'logo_url', 'website', 'instagram_url', 'description',
+  // Returned by GET and echoed back by clients that send the whole
+  // object; accepted and ignored rather than refused, because rejecting
+  // a field we ourselves handed them would be our bug, not theirs.
+  'org_id', 'updated_at',
+  // Read-only here on purpose: these live on the same row but are owned
+  // by PUT /attendance/policy, which validates them properly and writes
+  // an audit trail. GET hands them out, so they must be accepted;
+  // changing them from this endpoint would bypass that.
+  'attendance_mode', 'attendance_grace_min', 'attendance_require_qr',
+  // Same rule for the access-control and opening-hours columns, owned by
+  // PUT /access/settings. They were missing here, so once those columns
+  // existed every "Save gym settings" (which sends back the whole object
+  // GET gave it) was refused with a 422 and nothing saved.
+  'crowd_trainer_visible', 'crowd_open_time', 'crowd_close_time',
+  'access_auto_close_hours', 'access_grace_days', 'access_sync_enabled',
+]);
+
 export default function adminRoutes(db) {
   const r = Router();
   r.use(requireAuth, requireRole('GYM_OWNER', 'SUPER_ADMIN'), orgScope);
@@ -526,6 +562,68 @@ export default function adminRoutes(db) {
     });
   });
 
+  // ---- spreadsheet exports (members, payments) ----
+  // What every gym owner eventually asks for: the roster and the money in
+  // a file their accountant can open. Owner-only, like this whole router.
+  //
+  // Each cell is quoted and escaped, and one that starts with = + - @ (or
+  // a tab/CR) is prefixed with ' -- a member who names themselves
+  // =HYPERLINK(...) must not get a formula run on the owner's machine
+  // when the file opens in Excel. The BOM makes Excel read UTF-8, so
+  // names in any script and the rupee sign survive.
+  const csvCell = (v) => {
+    if (v == null) return '';
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const sendCsv = (res, name, header, rows) => {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.send('﻿' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n');
+  };
+  const exportLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
+
+  r.get('/export/members.csv', exportLimit, async (req, res) => {
+    const rows = await db.q(
+      `SELECT u.name, u.email, u.phone, c.goal, c.status, c.created_at, tu.name AS trainer_name,
+              s.id AS subscription_id, s.plan_name, s.start_date, s.end_date, s.payment_status, s.lifecycle_status
+         FROM clients c
+         JOIN users u ON u.id = c.user_id
+         LEFT JOIN users tu ON tu.id = c.trainer_id
+         LEFT JOIN subscriptions s ON s.client_id = c.id AND s.status = 'active'
+        WHERE c.org_id = ? ORDER BY u.name`, [req.orgId]);
+    sendCsv(res, `members-${dayKey(new Date(), req.tz)}.csv`,
+      ['Name', 'Email', 'Phone', 'Goal', 'Coaching status', 'Trainer', 'Joined', 'Plan', 'Plan start', 'Plan end', 'Payment', 'Membership'],
+      rows.map((m) => [
+        m.name, m.email, m.phone, m.goal, m.status, m.trainer_name, String(m.created_at || '').slice(0, 10),
+        m.plan_name, m.start_date, m.end_date, m.payment_status,
+        m.subscription_id ? effectiveMembershipStatus(m, { tz: req.tz }) : 'No membership',
+      ]));
+  });
+
+  r.get('/export/payments.csv', exportLimit, async (req, res) => {
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const from = day.test(req.query.from || '') ? req.query.from : null;
+    const to = day.test(req.query.to || '') ? req.query.to : null;
+    const conds = ['p.org_id = ?'];
+    const params = [req.orgId];
+    if (from) { conds.push('p.paid_at >= ?'); params.push(from); }
+    if (to) { conds.push('p.paid_at < ?'); params.push(`${to}T23:59:59.999Z`); }
+    const rows = await db.q(
+      `SELECT p.paid_at, p.amount, p.currency, p.method, p.status, p.external_ref, u.name, u.email
+         FROM payments p
+         LEFT JOIN clients c ON c.id = p.client_id
+         LEFT JOIN users u ON u.id = c.user_id
+        WHERE ${conds.join(' AND ')} ORDER BY p.paid_at DESC`, params);
+    sendCsv(res, `payments-${from || 'all'}${to ? `-to-${to}` : ''}.csv`,
+      ['Date', 'Member', 'Email', 'Amount', 'Currency', 'Method', 'Status', 'Reference'],
+      rows.map((p) => [
+        String(p.paid_at || '').slice(0, 10), p.name || 'Unknown member', p.email, Number(p.amount) || 0,
+        p.currency || 'INR', p.method, p.status, p.external_ref,
+      ]));
+  });
+
   // ---- membership lifecycle actions (suspend / resume / cancel) ----
   // "Dangerous actions require confirmation" (spec) is a frontend
   // concern; the backend's own guard is transitionMembership's explicit
@@ -647,36 +745,6 @@ export default function adminRoutes(db) {
     const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
     res.json({ settings: s || { org_id: req.orgId, brand_name: 'Barbell', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
   });
-
-  /* The settings this endpoint actually applies. Partial updates are
-     deliberate -- omitting a field leaves it unchanged -- but a field
-     nobody recognises is a DIFFERENT thing, and it used to return
-     {"ok":true} while discarding the value. A typo, a stale client, a
-     renamed column: all reported "Saved" and saved nothing, which is the
-     one outcome a settings screen must never produce (spec 42/47). */
-  const SETTING_KEYS = new Set([
-    'brand_name', 'tagline', 'crowd_capacity', 'crowd_enabled', 'workout_mode_default',
-    // Gym Crowd Live. The three thresholds decide what "busy" means for
-    // THIS gym; the two visibility flags decide how much of it members
-    // see. Both are enforced server-side in services/crowdStatus.js --
-    // a value the API sends is a value a member can read out of the
-    // network tab, whatever the component renders.
-    'crowd_threshold_quiet', 'crowd_threshold_moderate', 'crowd_threshold_busy',
-    'crowd_show_exact_count', 'crowd_client_visible',
-    'allow_substitute', 'allow_add_exercise', 'allow_edit_targets',
-    'community_enabled', 'community_leaderboard_enabled',
-    'contact_email', 'contact_phone', 'address', 'city', 'country',
-    'logo_url', 'website', 'instagram_url', 'description',
-    // Returned by GET and echoed back by clients that send the whole
-    // object; accepted and ignored rather than refused, because rejecting
-    // a field we ourselves handed them would be our bug, not theirs.
-    'org_id', 'updated_at',
-    // Read-only here on purpose: these live on the same row but are owned
-    // by PUT /attendance/policy, which validates them properly and writes
-    // an audit trail. GET hands them out, so they must be accepted;
-    // changing them from this endpoint would bypass that.
-    'attendance_mode', 'attendance_grace_min', 'attendance_require_qr',
-  ]);
 
   r.put('/settings', async (req, res) => {
     const unknown = Object.keys(req.body || {}).filter((k) => !SETTING_KEYS.has(k));

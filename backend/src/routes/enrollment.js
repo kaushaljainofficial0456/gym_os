@@ -271,7 +271,14 @@ export default function enrollmentRoutes(db) {
     // isolation test for where this is now covered going forward.
     const conds = ['t.org_id = ?']; const params = [req.orgId];
     if (purpose) { conds.push('t.purpose = ?'); params.push(purpose); }
-    if (status) { conds.push('t.status = ?'); params.push(status); }
+    // A token's row stays AVAILABLE after its expiry passes (nothing sweeps
+    // it), so "available" and "expired" are decided by the clock here --
+    // the list used to show an expired code with an AVAILABLE badge and a
+    // Revoke button that could only fail.
+    const nowIso = now();
+    if (status === 'AVAILABLE') { conds.push("t.status = 'AVAILABLE' AND t.expires_at > ?"); params.push(nowIso); }
+    else if (status === 'EXPIRED') { conds.push("(t.status = 'EXPIRED' OR (t.status = 'AVAILABLE' AND t.expires_at <= ?))"); params.push(nowIso); }
+    else if (status) { conds.push('t.status = ?'); params.push(status); }
     const rows = await db.q(
       `SELECT t.*, u.name AS consumed_by_name, p.name AS membership_plan_name
          FROM enrollment_tokens t
@@ -281,7 +288,11 @@ export default function enrollmentRoutes(db) {
     // token_hash is deliberately never returned -- it's a verifier, not
     // display data, and even though it can't be reversed to a working
     // QR, there's no reason to ship it to the client at all.
-    res.json({ tokens: rows.map(({ token_hash, ...t }) => t) });
+    res.json({
+      tokens: rows.map(({ token_hash, ...t }) => (
+        t.status === 'AVAILABLE' && t.expires_at && t.expires_at <= nowIso ? { ...t, status: 'EXPIRED' } : t
+      )),
+    });
   });
 
   r.post('/qr/:id/revoke', ...ownerOnly, qrGenLimit, async (req, res) => {

@@ -8,8 +8,9 @@
 //   * live gym crowd (attendance events → current occupancy)
 // Every entity is scoped to org_id + client_id (tenant + owner safe).
 // ============================================================
+import crypto from 'node:crypto';
 import { Router } from 'express';
-import { requireAuth, orgScope } from '../auth.js';
+import { requireAuth, orgScope, hashPassword, clearAuthCookie, invalidateUserActive } from '../auth.js';
 import { id, now } from '../ids.js';
 import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR, shiftDayKey } from '../utils/time.js';
 import { invalidateDayStart } from '../services/logDay.js';
@@ -93,6 +94,131 @@ export default function meRoutes(db) {
 
   /** Today, as the client's logging day. */
   const logToday = async (clientId, tz) => logDayKey(new Date(), tz, await clientDayStart(clientId));
+
+  // ---------------- download my data ----------------
+  // A copy of everything this person has put into Barbell, as one JSON
+  // file: the right of access and portability the privacy laws we sell
+  // under grant (the Privacy page used to offer it only by email).
+  // Read-only, and only this account's own rows. Secrets -- the password
+  // hash, wearable OAuth tokens, one-time codes -- never leave the server,
+  // whatever table they sit in.
+  const EXPORT_CLIENT_TABLES = ['client_profiles', 'goals', 'weight_logs', 'measurements', 'progress_photos',
+    'meal_logs', 'water_logs', 'sleep_logs', 'supplements', 'workouts', 'workout_logs', 'exercise_set_logs',
+    'cardio_sessions', 'personal_records', 'attendance', 'custom_metrics', 'metric_entries', 'payments',
+    'subscriptions', 'messages'];
+  const EXPORT_USER_TABLES = ['health_provider_connections', 'health_daily_summaries', 'health_canonical_workouts',
+    'notification_preferences'];
+  const SECRET_KEY = /(password|token|secret|hash|api_?key|credential|refresh|cookie|otp|oauth)/i;
+  const scrubRow = (row) => Object.fromEntries(Object.entries(row || {}).filter(([k]) => !SECRET_KEY.test(k)));
+  const exportLimit = rateLimit({ windowMs: 60 * 60_000, max: 6, keyFn: (req) => req.user?.sub || 'anon' });
+  r.get('/export', exportLimit, async (req, res) => {
+    const user = await db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
+    const rowsOf = async (table, col, val) => {
+      try { return (await db.q(`SELECT * FROM ${table} WHERE ${col} = ?`, [val])).map(scrubRow); }
+      catch { return null; } // a table this deployment does not have
+    };
+    const data = {};
+    if (client) {
+      for (const t of EXPORT_CLIENT_TABLES) { const rows = await rowsOf(t, 'client_id', client.id); if (rows) data[t] = rows; }
+    }
+    for (const t of EXPORT_USER_TABLES) { const rows = await rowsOf(t, 'user_id', req.user.sub); if (rows) data[t] = rows; }
+    await track(db, { orgId: req.user.org || null, userId: req.user.sub, type: 'data_exported', data: {} }).catch(() => {});
+    res.setHeader('Content-Disposition', `attachment; filename="barbell-my-data-${dayKey(new Date(), req.tz)}.json"`);
+    res.json({
+      format: 'barbell-export-v1',
+      exportedAt: now(),
+      account: scrubRow(user),
+      member: client ? scrubRow(client) : null,
+      data,
+    });
+  });
+
+  // ---------------- delete my account ----------------
+  // In the app, not by email: app stores require it for any app that lets
+  // people sign up, and the privacy laws we sell under give the right.
+  //
+  // What goes, and what stays, is deliberate:
+  //   * GONE -- everything about the person's body and life: weights,
+  //     measurements, photos (and their stored files), food, water, sleep,
+  //     workouts and their sets, wearable connections (with their tokens),
+  //     coach memory, notifications, community posts, messages.
+  //   * KEPT, ANONYMISED -- the gym's own books: payments, refunds,
+  //     subscriptions, membership history and attendance stay, attached to
+  //     a member now called "Deleted member" with no email, phone, photo or
+  //     body data. A gym is legally required to keep its financial records;
+  //     it is not entitled to keep the person.
+  //
+  // Members only. An owner's account is their gym (deleting it would
+  // orphan every member) and a trainer's belongs to the gym that employs
+  // them -- both are asked to contact support. A demo account belongs to
+  // the demo. Confirmation is the account's own email, typed.
+  const CLIENT_DATA_TABLES = ['weight_logs', 'measurements', 'meal_logs', 'water_logs', 'sleep_logs', 'supplements',
+    'metric_entries', 'custom_metrics', 'goals', 'ai_memory', 'ai_food_feedback', 'ai_feedback', 'coach_insights',
+    'intelligence_events', 'client_meal_templates', 'foods', 'dashboard_preferences', 'personal_records',
+    'cardio_sessions', 'exercise_set_logs', 'workout_logs', 'adherence_records', 'nutrition_balance_adjustments',
+    'nutrition_balance_prompts', 'community_comments', 'community_reactions', 'community_event_comments',
+    'community_event_reactions', 'community_workout_shares', 'community_members', 'community_memberships',
+    'community_invites', 'shared_meals', 'shared_workouts', 'messages', 'access_member_mappings', 'alerts',
+    'client_workout_schedule', 'client_workouts'];
+  const USER_DATA_TABLES = ['health_records', 'health_energy_intervals', 'health_reconciliation_log',
+    'health_canonical_workouts', 'health_daily_summaries', 'health_provider_connections', 'notifications',
+    'notification_preferences', 'account_tokens'];
+  const deleteLimit = rateLimit({ windowMs: 60 * 60_000, max: 5, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/delete-account', deleteLimit, async (req, res) => {
+    if (req.demoSession || req.user.demo) return res.status(403).json({ error: 'Demo accounts cannot be deleted.' });
+    const user = await db.q1('SELECT id, email, role FROM users WHERE id = ?', [req.user.sub]);
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    if (user.role !== 'CLIENT') {
+      return res.status(403).json({
+        error: user.role === 'GYM_OWNER'
+          ? 'A gym owner account holds the whole gym. Contact support to close the gym or hand it over first.'
+          : 'Your account belongs to your gym. Ask your gym owner to remove it, or contact support.',
+      });
+    }
+    const typed = String(req.body?.confirm || '').trim().toLowerCase();
+    if (!typed || typed !== String(user.email).toLowerCase()) {
+      return res.status(422).json({ error: 'Type your account email exactly to confirm.' });
+    }
+    const client = await db.q1('SELECT id FROM clients WHERE user_id = ?', [user.id]);
+    const photos = client
+      ? await db.q('SELECT storage_key FROM progress_photos WHERE client_id = ?', [client.id]).catch(() => [])
+      : [];
+    // Each table on its own savepoint-free statement: a table this
+    // deployment does not have is skipped, never a reason to stop halfway
+    // through someone's deletion.
+    const wipe = async (sql, params) => { try { await db.run(sql, params); } catch { /* table absent */ } };
+    if (client) {
+      await wipe('DELETE FROM progress_photos WHERE client_id = ?', [client.id]);
+      // Posts the member authored, and anything hanging off them.
+      await wipe('DELETE FROM community_event_comments WHERE event_id IN (SELECT id FROM community_events WHERE client_id = ?)', [client.id]);
+      await wipe('DELETE FROM community_event_reactions WHERE event_id IN (SELECT id FROM community_events WHERE client_id = ?)', [client.id]);
+      for (const t of CLIENT_DATA_TABLES) await wipe(`DELETE FROM ${t} WHERE client_id = ?`, [client.id]);
+      await wipe('DELETE FROM community_events WHERE client_id = ?', [client.id]);
+      await wipe("DELETE FROM workouts WHERE client_id = ? AND status <> 'completed'", [client.id]);
+      await wipe('UPDATE workouts SET name = ?, progress_json = NULL WHERE client_id = ?', ['Workout', client.id]);
+      await wipe('DELETE FROM client_profiles WHERE client_id = ?', [client.id]);
+      await wipe(
+        `UPDATE clients SET status = 'INACTIVE', start_weight = NULL, current_weight = NULL, target_weight = NULL,
+                goal_date = NULL, height_cm = NULL, age = NULL, sex = NULL WHERE id = ?`, [client.id]);
+    }
+    for (const t of USER_DATA_TABLES) await wipe(`DELETE FROM ${t} WHERE user_id = ?`, [user.id]);
+    const unusable = await hashPassword(crypto.randomUUID() + crypto.randomUUID());
+    await db.run(
+      `UPDATE users SET name = 'Deleted member', email = ?, phone = NULL, avatar = NULL, password_hash = ?,
+              active = 0, email_verified = 0 WHERE id = ?`,
+      [`deleted-${user.id}@deleted.invalid`, unusable, user.id]);
+    await wipe('UPDATE users SET google_id = NULL WHERE id = ?', [user.id]);
+    // Stored photo files go after the rows: a storage hiccup must not
+    // leave the account half-deleted, and the rows no longer point at them.
+    const { deleteObject } = await import('../storage.js');
+    for (const p of photos) if (p?.storage_key) await deleteObject(p.storage_key).catch(() => {});
+    invalidateUserActive(user.id);
+    await track(db, { orgId: req.user.org || null, userId: null, type: 'account_deleted', data: {} }).catch(() => {});
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  });
 
   // ---------------- avatar (profile photo) ----------------
   // The frontend (Profile.jsx) has called POST/DELETE /me/avatar since it

@@ -161,7 +161,7 @@ export default function Reports() {
               <Kicker>Share</Kicker>
               <button className="btn-primary w-full" onClick={send} disabled={sending}>{sending ? 'Sending…' : 'Send to client'}</button>
               <div className="text-[11px] text-faint leading-relaxed">
-                Sends an in-app notification + message thread entry. WhatsApp Business delivery is a planned integration (channel column ready in the backend).
+                Lands in the client&rsquo;s notification bell and in your message thread with them, so the conversation can carry on from there.
               </div>
             </Card>
           </div>

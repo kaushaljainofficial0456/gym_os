@@ -56,7 +56,7 @@ export function assertSafeUrl(raw) {
   }
   const host = u.hostname.toLowerCase();
   if (PRIVATE_HOST.some((test) => test(host))) {
-    throw new UnsafeUrlError('That address is on a private or internal network, which SK OS will not call.');
+    throw new UnsafeUrlError('That address is on a private or internal network, which Barbell will not call.');
   }
   return u.toString();
 }

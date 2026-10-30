@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
-import { useFetch, GOAL_LABEL, STATUS_META, cls } from '../../utils.js';
+import { useFetch, GOAL_LABEL, STATUS_META, cls, kg1 } from '../../utils.js';
 import { Card, Kicker, ErrorState, Modal, StatusChip, PageSkeleton } from '../../components/UI.jsx';
 
 const STATUS_FILTERS = ['ALL', 'ON_TRACK', 'NEEDS_ATTENTION', 'AT_RISK', 'INACTIVE'];
+
 
 /** MEMBERSHIP, IN WORDS. The roster showed how someone was TRAINING and
  *  nothing about whether they were paid up -- the first thing an owner
@@ -266,9 +267,9 @@ export default function Clients() {
                     </Link>
                   </td>
                   <td className="px-3 py-3 text-xs text-mute font-grotesk">{GOAL_LABEL[c.goal] || c.goal}</td>
-                  <td className="px-3 py-3 font-grotesk font-semibold">{c.currentWeight ?? '—'} <span className="text-[10px] text-faint">/ {c.targetWeight ?? '—'} kg</span></td>
+                  <td className="px-3 py-3 font-grotesk font-semibold tabular-nums">{kg1(c.currentWeight)} <span className="text-[10px] text-faint">/ {kg1(c.targetWeight)} kg</span></td>
                   <td className={cls('px-3 py-3 font-grotesk text-xs', (c.change7 ?? 0) < -0.1 ? 'text-cyanx' : (c.change7 ?? 0) > 0.1 ? 'text-bad' : 'text-mute')}>
-                    {c.change7 === null ? '—' : `${c.change7 > 0 ? '+' : ''}${c.change7}`}
+                    {c.change7 == null ? '—' : `${c.change7 > 0 ? '+' : ''}${kg1(c.change7)}`}
                   </td>
                   {/* An unmeasured client rendered "null%" above a bar
                       drawn at 0% -- indistinguishable from someone who

@@ -69,7 +69,11 @@ export default function enterpriseRoutes(db) {
   r.use(requireAuth, orgScope, ownerOnly);
   // Baseline limiter for the rest of this (entirely owner-authenticated)
   // router -- nothing here had any rate limit before this file existed.
-  r.use(rateLimit({ windowMs: 60_000, max: 60, keyFn: (req) => req.user?.sub || 'anon' }));
+  // 240, not 60: six screens read /enterprise/status, several on every
+  // page change, so an owner moving briskly through the workspace hit the
+  // cap and got error screens. Payments and email keep their own tight
+  // limits below; this one only has to stop a runaway client.
+  r.use(rateLimit({ windowMs: 60_000, max: 240, keyFn: (req) => req.user?.sub || 'anon' }));
 
   // ---- status: the one call the owner dashboard needs to know what to show ----
   r.get('/status', async (req, res) => {
@@ -175,6 +179,17 @@ export default function enterpriseRoutes(db) {
 
   // ---- billing quotes: the ONE place a gym-level price gets locked,
   // before ANY payment_order exists. See quotes.js's header comment.
+  // What the owner reads when a quote is refused: the billing page shows
+  // `message`, and without one it showed the raw code ("same_capacity").
+  const QUOTE_REFUSALS = {
+    same_capacity: 'That is your current capacity. Use Renew current plan to extend it.',
+    no_active_subscription: 'You need an active package before changing it.',
+    capacity_exceeds_configured_range: 'That is above our largest package. Contact us for a custom plan.',
+    no_packages_configured: 'No packages are available right now. Please contact support.',
+    invalid_capacity: 'Enter a whole number of clients.',
+    addon_not_found: 'That add-on is no longer available.',
+  };
+
   r.post('/billing/quote', paymentLimit, validate(z.object({
     kind: z.enum(['ORG_PACKAGE', 'ORG_UPGRADE', 'ORG_CAPACITY_ADDON']),
     capacity: z.number().int().min(1).max(100_000).optional(),
@@ -198,7 +213,7 @@ export default function enterpriseRoutes(db) {
           message: `You currently have ${result.activeClients} active clients. You cannot downgrade to ${result.requestedCapacity} until active membership count is within the new capacity.`,
         });
       }
-      return res.status(422).json({ error: result.reason });
+      return res.status(422).json({ error: result.reason, message: QUOTE_REFUSALS[result.reason] || 'That quote could not be prepared. Please try again.' });
     }
     res.json({ quote: result.quote, direction: result.direction });
   });
