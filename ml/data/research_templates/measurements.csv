@@ -1,0 +1,1 @@
+measurement_id,session_id,device_id,tier,interval,interval_start,interval_end,vo2_l,vco2_l,gross_kcal,reported_kcal_kind,mean_hr_bpm,calibrated_at,qc_status,qc_notes

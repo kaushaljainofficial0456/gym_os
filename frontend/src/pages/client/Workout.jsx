@@ -18,6 +18,7 @@ import SessionRecap from '../../components/workout/SessionRecap.jsx';
 import InfoDot from '../../components/InfoDot.jsx';
 import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
 import { wearableComparisonNote } from '../../healthProviderLabels.js';
+import { describeReliability } from '../../calorieReliability.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
 import LogPastCardio from './LogPastCardio.jsx';
 import { useUnits } from '../../unitsContext.jsx';
@@ -1013,6 +1014,7 @@ export default function Workout() {
         upper_kcal: c.upper_kcal,
         notes: c.note ? [c.note] : [],
         model_version: c.model_version,
+        reliability: describeReliability(c),
       } : null);
       checkWorkoutSource(); // fire-and-forget -- see its own comment
     } catch {

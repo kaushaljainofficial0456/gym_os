@@ -31,6 +31,7 @@ import { searchExercises, searchExercisesByName } from '../services/intelligence
 import { computeNutrition, sumNutrition } from '../services/intelligence/nutrition.js';
 import { generateProgram } from '../services/intelligence/generateProgram.js';
 import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
+import { qualifyCalorie } from '../services/intelligence/calorieReliability.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { todayNutrition, lastPerformance, weightTrend, todayTraining, clientProfileContext } from '../services/intelligence/context.js';
 import { coach as aiCoach, visionLabel, estimateMeal, providerName, isConfigured, ping as aiPing, configSummary, paidProviderDiagnostics } from '../services/intelligence/aiProvider.js';
@@ -257,6 +258,7 @@ export default function intelligenceRoutes(db) {
         }
         calorie = await estimateWorkoutCalories(input, { mlExerciseCanonical, db: tx, stage: 'completion' });
         if (calorie) await persistCalorieResult(tx, wId, calorie);
+        calorie = qualifyCalorie(calorie, { intensity: input.session.intensity_rating, durationMeasured: input.session.duration_minutes != null });
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout logging.
         // Log server-side only with safe correlation metadata (request id,

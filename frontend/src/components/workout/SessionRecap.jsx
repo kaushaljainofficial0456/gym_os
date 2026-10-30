@@ -489,6 +489,11 @@ export default function SessionRecap({
                     would overstate what anyone knows.
                   </p>
                 )}
+                {!!burn?.reliability?.reasons?.length && (
+                  <ul className="space-y-1 list-disc pl-4">
+                    {burn.reliability.reasons.map((n) => <li key={n}>{n}</li>)}
+                  </ul>
+                )}
                 {!!burn?.notes?.length && (
                   <ul className="space-y-1 list-disc pl-4">
                     {burn.notes.map((n) => <li key={n}>{n}</li>)}
@@ -518,7 +523,9 @@ export default function SessionRecap({
               {totalKcal}
             </span>
             <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
-            <span className="text-[11px]" style={{ color: 'var(--mute)' }}>estimated</span>
+            <span className="text-[11px]" style={{ color: 'var(--mute)' }}>
+              {burn?.reliability ? burn.reliability.label.toLowerCase() : 'estimated'}
+            </span>
             {burn && burn.lower_kcal != null && burn.upper_kcal != null && (
               <span className="text-[11px] tabular-nums ml-auto" style={{ color: 'var(--faint)' }}>
                 range {burn.lower_kcal}–{burn.upper_kcal}

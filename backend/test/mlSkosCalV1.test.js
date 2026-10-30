@@ -263,11 +263,15 @@ test('D1. success: real exercise_library row maps + net-of-resting -> persisted 
   assert.equal(workout.schema_version, '0.2', 'item 22');
   assert.ok(workout.estimated_active_kcal > 0);
   assert.ok(workout.lower_kcal <= workout.estimated_active_kcal && workout.estimated_active_kcal <= workout.upper_kcal);
-  // API response shape unchanged (item 23) — same keys todaySession/complete have always returned.
+  // API response shape (item 23): every key todaySession/complete have always
+  // returned, plus exactly the three additive qualifiers documented in
+  // calorie-model-contract.md §6 (basis, reliability, reliability_reasons).
   assert.deepEqual(
     Object.keys(cal).sort(),
-    ['estimated_active_kcal', 'lower_kcal', 'model_version', 'note', 'provider', 'schema_version', 'upper_kcal'].sort()
+    ['estimated_active_kcal', 'lower_kcal', 'model_version', 'note', 'provider', 'schema_version', 'upper_kcal',
+      'basis', 'reliability', 'reliability_reasons'].sort()
   );
+  assert.equal(cal.reliability, 'very_low', 'skos-cal-v1 failed every whole-session check');
   assert.equal(cal.provider, 'ml');
   assert.equal(errors.length, 0, 'no unexpected route-level error');
 });

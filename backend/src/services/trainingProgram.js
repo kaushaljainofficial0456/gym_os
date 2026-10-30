@@ -6,11 +6,12 @@
 // is viewed, so completion/history/progressive-overload flows work
 // exactly as they do for trainer-assigned workouts.
 // ============================================================
+import { qualifyCalorie } from './intelligence/calorieReliability.js';
 import { id, now } from '../ids.js';
 import { dayKey, weekDay, getOrgTz } from '../utils/time.js';
 import { suggestNextTarget } from './progressiveOverload.js';
 import { requiredItems, parseAvailable, suggestAlternatives } from './equipment.js';
-import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, completedSetCount, mlCanonicalExerciseId } from './intelligence/calorieModel.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, completedSetCount, mlCanonicalExerciseId, sessionEffort } from './intelligence/calorieModel.js';
 
 export async function getActiveProgram(db, clientId) {
   return db.q1(
@@ -125,7 +126,7 @@ export async function todaySession(db, clientId, tz) {
   //                never persisted and never treated as actual workload
   let calorie = null;
   if (w.status === 'completed' && w.estimated_active_kcal != null) {
-    calorie = {
+    calorie = qualifyCalorie({
       schema_version: w.schema_version,
       estimated_active_kcal: w.estimated_active_kcal,
       lower_kcal: w.lower_kcal,
@@ -134,7 +135,7 @@ export async function todaySession(db, clientId, tz) {
       provider: w.calorie_provider,
       source: 'persisted',
       estimated_at: w.calorie_estimated_at
-    };
+    }, { intensity: sessionEffort(w), durationMeasured: w.duration_min != null });
   } else {
     const client = await db.q1('SELECT age, sex, height_cm FROM clients WHERE id = ?', [clientId]);
     const bodyWeightKg = await resolveBodyWeight(db, clientId, w.scheduled_date || undefined);
@@ -163,11 +164,11 @@ export async function todaySession(db, clientId, tz) {
       if (token) mlExerciseCanonical[e.exercise_id] = token;
     }
     const previewCalorie = await estimateWorkoutCalories(previewInput, { mlExerciseCanonical, db, stage: 'preview' });
-    calorie = {
+    calorie = qualifyCalorie({
       ...previewCalorie,
       source: 'preview',
       completedSets: completedSetCount(previewInput)
-    };
+    }, { intensity: previewInput.session.intensity_rating, durationMeasured: previewInput.session.duration_minutes != null, preview: true });
   }
   const estKcal = calorie?.estimated_active_kcal ?? null;
 

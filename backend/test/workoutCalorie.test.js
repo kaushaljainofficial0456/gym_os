@@ -139,6 +139,13 @@ test('workout completion persists status, duration and calorie result atomically
   assert.ok(cal.estimated_active_kcal > 0, 'estimate present');
   assert.ok(cal.lower_kcal <= cal.estimated_active_kcal && cal.estimated_active_kcal <= cal.upper_kcal, 'range wraps midpoint');
   assert.equal(cal.provider, 'baseline');
+  // What the figure is and how far to trust it travels with it.
+  assert.equal(cal.basis, 'model_estimate');
+  assert.equal(cal.reliability, 'low');
+  assert.ok(cal.reliability_reasons.some((x) => x.code === 'not_validated'));
+  // Started and completed within the same instant here, so the estimator
+  // had no usable timed duration and estimated one from the sets -- and says so.
+  assert.equal(cal.reliability_reasons.some((x) => x.code === 'duration_estimated'), !(r.json.duration_min > 0));
 
   const w = await db.q1('SELECT * FROM workouts WHERE id = ?', [wId]);
   assert.equal(w.status, 'completed');
@@ -211,6 +218,8 @@ test('re-completing an already completed workout is idempotent (no double loggin
   const second = await api.call('POST', `/workouts/${wId}/complete`, body);
   assert.equal(second.status, 200);
   assert.equal(second.json.alreadyCompleted, true);
+  assert.equal(second.json.calorie.basis, 'model_estimate', 'the persisted view is qualified the same way');
+  assert.ok(second.json.calorie.reliability_reasons.some((x) => x.code === 'duration_estimated'), 'never /start-ed: duration was estimated');
   const logs = await db.q('SELECT * FROM workout_logs WHERE workout_id = ?', [wId]);
   assert.equal(logs.length, 1, 'not doubled');
   const sets = await setsForWorkout(db, wId);

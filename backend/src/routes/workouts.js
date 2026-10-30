@@ -8,7 +8,8 @@ import { dayKey } from '../utils/time.js';
 import { suggestNextTarget } from '../services/progressiveOverload.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { track, trackOnce } from '../services/events.js';
-import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId } from '../services/intelligence/calorieModel.js';
+import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId, sessionEffort } from '../services/intelligence/calorieModel.js';
+import { qualifyCalorie } from '../services/intelligence/calorieReliability.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 
 export default function workoutRoutes(db) {
@@ -619,6 +620,7 @@ export default function workoutRoutes(db) {
         }
         calorie = await estimateWorkoutCalories(input, { mlExerciseCanonical, db: tx, stage: 'completion' });
         if (calorie) await persistCalorieResult(tx, w.id, calorie);
+        calorie = qualifyCalorie(calorie, { intensity: input.session.intensity_rating, durationMeasured: input.session.duration_minutes != null });
       } catch (e) {
         // Calorie estimation/persistence must NEVER fail workout completion.
         // Log server-side only with safe correlation metadata (request id,
@@ -701,7 +703,7 @@ export default function workoutRoutes(db) {
         }
         const result = await estimateWorkoutCalories(input, { mlExerciseCanonical, db: tx, stage: 'completion' });
         if (result) await persistCalorieResult(tx, w.id, result);
-        return result;
+        return qualifyCalorie(result, { intensity: input.session.intensity_rating, durationMeasured: input.session.duration_minutes != null });
       });
       res.json({ ok: true, effort: req.body.effort, calorie });
     } catch (e) {
@@ -725,7 +727,7 @@ export default function workoutRoutes(db) {
 // todaySession's meta.calorie so the client contract stays consistent).
 function calorieView(w) {
   if (!w || w.estimated_active_kcal == null) return null;
-  return {
+  return qualifyCalorie({
     schema_version: w.schema_version,
     estimated_active_kcal: w.estimated_active_kcal,
     lower_kcal: w.lower_kcal,
@@ -734,7 +736,7 @@ function calorieView(w) {
     provider: w.calorie_provider,
     source: 'persisted',
     estimated_at: w.calorie_estimated_at
-  };
+  }, { intensity: sessionEffort(w), durationMeasured: w.duration_min != null });
 }
 
 function z_workoutComplete() {

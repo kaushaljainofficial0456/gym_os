@@ -189,6 +189,15 @@ Order of preference (documented in `docs/TEAM-CONTRACT.md` §4.2):
 for NL-logged sessions. `meta.estKcal` is kept in sync with
 `meta.calorie.estimated_active_kcal` for existing UI compatibility.
 
+Every calorie object above also carries three additive, read-only qualifiers
+(`backend/src/services/intelligence/calorieReliability.js`). They never change a number.
+
+| Field | Values | Meaning |
+|---|---|---|
+| `basis` | `model_estimate` | BARBELL's model produced it. The app measures no energy. A wearable's own figure is reported separately (`docs/WEARABLE_RECONCILIATION_DECISION.md`). |
+| `reliability` | `low` (baseline), `very_low` (ml), `demo` (mock) | There is no higher level until an estimate passes the research gates (`docs/CALORIE_MODEL_RESEARCH_PLAN.md`). |
+| `reliability_reasons` | `[{ code, text }]` | Codes: `not_validated`, `range_not_calibrated`, `hard_may_overestimate`, `ml_unvalidated`, `duration_estimated`, `planned_not_performed`, `demo_values` |
+
 ## 7. Providers & fallback behavior
 
 - `CALORIE_MODEL_PROVIDER=baseline` (default) — deterministic MET heuristic,
