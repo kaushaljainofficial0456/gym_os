@@ -69,6 +69,7 @@ export async function upsertHealthRecord(db, { userId, orgId, connectionId = nul
     source_score: record.source_score ?? null, source_metric: record.source_metric ?? null,
     auto_detected: record.auto_detected ? 1 : 0, user_entered: record.user_entered ? 1 : 0,
     source_confidence: record.source_confidence ?? null,
+    source_device: record.source_device ?? null, source_app: record.source_app ?? null,
     data_quality: record.data_quality || 'good', data_quality_reason: record.data_quality_reason ?? null,
     skos_workout_id: record.skos_workout_id ?? null,
   };

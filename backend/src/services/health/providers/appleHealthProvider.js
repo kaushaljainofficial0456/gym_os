@@ -24,15 +24,22 @@
 // already tracks active/resting/total as separate fields for this exact
 // reason.
 // ============================================================
-import { nativeOnlyProvider } from './baseProvider.js';
+import { nativeOnlyProvider, sourceIdentity } from './baseProvider.js';
 
 /** Expected native-bridge workout payload shape:
  *  { uuid, workoutActivityType, startDate, endDate, duration,
  *    totalEnergyBurned: { unit: 'kcal', value }, totalDistance?: { unit, value },
- *    sourceName? } */
+ *    sourceName?, sourceRevision?: { source: { bundleIdentifier } },
+ *    device?: { name, model, manufacturer } } */
+/** HKSource / HKDevice, as the bridge forwards them -- see sourceIdentity. */
+function appleSource(raw) {
+  return sourceIdentity({ device: raw.device, app: raw.sourceRevision?.source?.bundleIdentifier || raw.sourceName });
+}
+
 function normalizeWorkout(raw) {
   return {
     provider: 'apple_health',
+    ...appleSource(raw),
     provider_record_id: raw.uuid,
     data_type: 'workout',
     activity_type: hkActivityTypeToActivityType(raw.workoutActivityType),
@@ -53,6 +60,7 @@ function normalizeWorkout(raw) {
 function normalizeQuantitySample(raw) {
   const base = {
     provider: 'apple_health',
+    ...appleSource(raw),
     provider_record_id: raw.uuid,
     start_time: raw.startDate,
     end_time: raw.endDate,
@@ -91,6 +99,7 @@ function normalizeSleep(raw) {
   const endMs = Date.parse(raw.endDate);
   return {
     provider: 'apple_health',
+    ...appleSource(raw),
     provider_record_id: raw.uuid,
     data_type: 'sleep',
     start_time: raw.startDate,

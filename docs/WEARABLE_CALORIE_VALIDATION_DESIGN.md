@@ -1,6 +1,9 @@
 # Wearable calorie reconciliation: device-aware validation and calibration
 
-Status: **design only**. Nothing here changes production behaviour. Companion to
+Status: design. **F1, F2 and F3 are now addressed** by the product decision in
+`docs/WEARABLE_RECONCILIATION_DECISION.md` (BARBELL's estimate primary for strength
+sessions; HR-only attribution fixed; device/app identity stored). §4's validation plan is
+still what any future change to that decision would need. Companion to
 `docs/CALORIE_OVERHAUL_REPORT.md`.
 
 ## 1. What the code does today

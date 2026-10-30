@@ -481,6 +481,19 @@ const HEALTH_INTELLIGENCE_SQL = [
     auto_detected          INTEGER NOT NULL DEFAULT 0,
     user_entered            INTEGER NOT NULL DEFAULT 0,
     data_quality             TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+    -- Strength-session reconciliation (docs/WEARABLE_RECONCILIATION_DECISION.md):
+    -- BARBELL's estimate is active_kcal; a wearable's own figure is kept
+    -- beside it, never in its place, with its provenance.
+    energy_basis          TEXT,   -- 'model_estimate' | 'device_estimate' -- what active_kcal is
+    reconciliation_policy TEXT,   -- rule that chose active_kcal, e.g. 'barbell_primary_strength_v1'
+    wearable_active_kcal  REAL,   -- the wearable's reported active energy for the session, as reported
+    wearable_provider     TEXT,
+    wearable_source_device TEXT,  -- device model/name when the integration supplies it
+    wearable_source_app   TEXT,   -- app/package that wrote the record, when supplied
+    wearable_measurement_type TEXT, -- 'device_estimate' (workout record) | 'heart_rate_only'
+    wearable_coverage_ratio REAL, -- 0..1 of the session the wearable's records span
+    disagreement_ratio    REAL,   -- |wearable - barbell| / max(...), same-interval comparison
+    disagreement_flag     INTEGER NOT NULL DEFAULT 0, -- 1 when > 0.4: monitoring only, not a verdict
     matched_at                TEXT,
     created_at                TEXT NOT NULL,
     updated_at                TEXT NOT NULL
@@ -523,6 +536,8 @@ const HEALTH_INTELLIGENCE_SQL = [
     source_metric        TEXT,
     auto_detected       INTEGER NOT NULL DEFAULT 0,
     user_entered         INTEGER NOT NULL DEFAULT 0,
+    source_device       TEXT,
+    source_app          TEXT,
     source_confidence    REAL,
     data_quality         TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
     data_quality_reason  TEXT,
@@ -672,8 +687,28 @@ async function applyDemoSystemSchema(exec) {
   for (const stmt of DEMO_SYSTEM_SQL) await exec(stmt);
 }
 
-async function applyHealthIntelligenceSchema(exec) {
+// Columns added to the health tables after they first shipped. Kept apart
+// from MIGRATIONS because those run BEFORE the health tables are created on
+// a fresh database; these run right after, on both SQLite and PostgreSQL.
+// Nullable or defaulted, so existing rows are never rewritten.
+const HEALTH_COLUMN_MIGRATIONS = [
+  ['health_records', 'source_device', `source_device TEXT`],
+  ['health_records', 'source_app', `source_app TEXT`],
+  ['health_canonical_workouts', 'energy_basis', `energy_basis TEXT`],
+  ['health_canonical_workouts', 'reconciliation_policy', `reconciliation_policy TEXT`],
+  ['health_canonical_workouts', 'wearable_active_kcal', `wearable_active_kcal REAL`],
+  ['health_canonical_workouts', 'wearable_provider', `wearable_provider TEXT`],
+  ['health_canonical_workouts', 'wearable_source_device', `wearable_source_device TEXT`],
+  ['health_canonical_workouts', 'wearable_source_app', `wearable_source_app TEXT`],
+  ['health_canonical_workouts', 'wearable_measurement_type', `wearable_measurement_type TEXT`],
+  ['health_canonical_workouts', 'wearable_coverage_ratio', `wearable_coverage_ratio REAL`],
+  ['health_canonical_workouts', 'disagreement_ratio', `disagreement_ratio REAL`],
+  ['health_canonical_workouts', 'disagreement_flag', `disagreement_flag INTEGER NOT NULL DEFAULT 0`],
+];
+
+async function applyHealthIntelligenceSchema(exec, addColumn) {
   for (const stmt of HEALTH_INTELLIGENCE_SQL) await exec(stmt);
+  for (const [table, col, ddl] of HEALTH_COLUMN_MIGRATIONS) await addColumn(table, col, ddl);
 }
 
 async function applySqliteMigrations(db) {
@@ -769,7 +804,7 @@ async function applySqliteMigrations(db) {
       updated_at          TEXT NOT NULL
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
-  await applyHealthIntelligenceSchema((s) => db.exec(s));
+  await applyHealthIntelligenceSchema((s) => db.exec(s), addCol);
   // --- Founder-approved demo system (also in schema.sql) ---
   await applyDemoSystemSchema((s) => db.exec(s));
 }
@@ -852,7 +887,7 @@ async function applyPgMigrations(pool) {
       updated_at          TEXT NOT NULL
     )`);
   // --- SK OS Health Intelligence Engine (also in schema.sql) ---
-  await applyHealthIntelligenceSchema((s) => pool.query(s));
+  await applyHealthIntelligenceSchema((s) => pool.query(s), (table, _col, ddl) => pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${ddl}`));
   // --- Founder-approved demo system (also in schema.sql) ---
   await applyDemoSystemSchema((s) => pool.query(s));
 }

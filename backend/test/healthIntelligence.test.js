@@ -94,20 +94,22 @@ test('reconcileUserDay estimates with the weight logged nearest the workout day,
   assert.ok(await kcal(logged) > await kcal(profileOnly), 'a heavier logged weight on the day must raise the estimate');
 });
 
-test('TEST 7 -- late-arriving wearable data reconciles an existing SK OS-only estimate, with an audit log entry', async () => {
+test('TEST 7 -- late-arriving wearable data on a strength session is attached beside BARBELL’s estimate, not swapped in', async () => {
   const db = await memDb();
   const date = '2026-01-06';
   const { userId, orgId, clientId } = await seedWorkoutDay(db, { date, startedAt: `${date}T18:00:00Z`, completedAt: `${date}T19:00:00Z` });
 
-  // Pass 1: no wearable data yet -- SK OS estimate only.
+  // Pass 1: no wearable data yet -- BARBELL estimate only.
   const first = await reconcileUserDay(db, { userId, orgId, clientId, date, tz: 'UTC' });
   const firstCanon = await db.q1('SELECT * FROM health_canonical_workouts WHERE skos_workout_id = ?', ['w1']);
   assert.equal(firstCanon.primary_energy_source, 'baseline');
+  assert.equal(firstCanon.wearable_active_kcal, null);
 
-  // Apple Health syncs in late, fully covering the session.
+  // Apple Health syncs in late, fully covering the session, from a named device.
   await upsertHealthRecord(db, { userId, orgId }, {
     provider: 'apple_health', provider_record_id: 'ah-late-1', data_type: 'workout', activity_type: 'strength_training',
     start_time: `${date}T18:00:00Z`, end_time: `${date}T19:00:00Z`, active_kcal: 305, auto_detected: true,
+    source_device: 'Apple Watch Series 9', source_app: 'com.apple.health',
   });
 
   // Pass 2: re-run reconciliation (spec §22 -- must be safe/idempotent to call again).
@@ -115,17 +117,57 @@ test('TEST 7 -- late-arriving wearable data reconciles an existing SK OS-only es
   const secondCanon = await db.q1('SELECT * FROM health_canonical_workouts WHERE skos_workout_id = ?', ['w1']);
 
   assert.equal(secondCanon.id, firstCanon.id, 'must UPDATE the same canonical workout, never create a second one');
-  assert.equal(secondCanon.primary_energy_source, 'apple_health');
-  assert.equal(secondCanon.active_kcal, 305);
-  assert.notEqual(second.active_energy, first.active_energy, 'the daily summary must actually change');
+  assert.equal(secondCanon.primary_energy_source, 'baseline', 'BARBELL’s estimate stays primary for a strength session');
+  assert.equal(secondCanon.active_kcal, firstCanon.active_kcal);
+  assert.equal(secondCanon.energy_basis, 'model_estimate');
+  assert.equal(secondCanon.reconciliation_policy, 'barbell_primary_strength_v1');
+  assert.equal(secondCanon.wearable_active_kcal, 305, 'the wearable figure is preserved separately');
+  assert.equal(secondCanon.wearable_provider, 'apple_health');
+  assert.equal(secondCanon.wearable_source_device, 'Apple Watch Series 9');
+  assert.equal(secondCanon.wearable_source_app, 'com.apple.health');
+  assert.equal(secondCanon.wearable_measurement_type, 'device_estimate');
+  assert.equal(secondCanon.wearable_coverage_ratio, 1);
+  const expectedRatio = Math.abs(305 - firstCanon.active_kcal) / Math.max(305, firstCanon.active_kcal);
+  assert.ok(Math.abs(secondCanon.disagreement_ratio - expectedRatio) < 1e-9);
+  assert.equal(secondCanon.disagreement_flag, expectedRatio > 0.4 ? 1 : 0);
+  assert.equal(secondCanon.confidence_score, firstCanon.confidence_score, 'the wearable does not raise confidence');
+  assert.equal(second.active_energy, first.active_energy, 'the day’s active energy still counts BARBELL’s figure once');
+
+  const rec = await db.q1('SELECT canonical_workout_id, source_device FROM health_records WHERE provider_record_id = ?', ['ah-late-1']);
+  assert.equal(rec.canonical_workout_id, firstCanon.id, 'the wearable record is linked to the session');
+  assert.equal(rec.source_device, 'Apple Watch Series 9');
+
+  const intervals = await db.q('SELECT * FROM health_energy_intervals WHERE canonical_workout_id = ? ORDER BY is_primary DESC', [firstCanon.id]);
+  assert.equal(intervals.length, 2);
+  assert.equal(intervals[0].is_primary, 1);
+  assert.equal(intervals[0].is_estimate, 1);
+  assert.equal(intervals[1].is_primary, 0, 'the wearable figure is stored but never counted');
+  assert.equal(intervals[1].source, 'apple_health');
+  assert.equal(intervals[1].active_kcal, 305);
 
   const allCanon = await db.q('SELECT id FROM health_canonical_workouts WHERE skos_workout_id = ?', ['w1']);
   assert.equal(allCanon.length, 1, 'still exactly ONE canonical workout after reconciling twice');
-
   const log = await db.q('SELECT * FROM health_reconciliation_log WHERE canonical_workout_id = ?', [firstCanon.id]);
-  assert.equal(log.length, 1, 'the source change must be recorded in the audit trail');
-  assert.equal(log[0].previous_source, 'baseline');
-  assert.equal(log[0].new_source, 'apple_health');
+  assert.equal(log.length, 0, 'the stored figure and its source did not change, so there is nothing to audit');
+});
+
+test('heart-rate samples alone never make a wearable the recorded source of a strength session', async () => {
+  const db = await memDb();
+  const date = '2026-01-08';
+  const { userId, orgId, clientId } = await seedWorkoutDay(db, { date, startedAt: `${date}T18:00:00Z`, completedAt: `${date}T19:00:00Z` });
+  await upsertHealthRecord(db, { userId, orgId }, {
+    provider: 'apple_health', provider_record_id: 'hr-1', data_type: 'heart_rate',
+    start_time: `${date}T18:05:00Z`, end_time: `${date}T18:55:00Z`, heart_rate_avg: 128,
+  });
+  await reconcileUserDay(db, { userId, orgId, clientId, date, tz: 'UTC' });
+  const canon = await db.q1('SELECT * FROM health_canonical_workouts WHERE skos_workout_id = ?', ['w1']);
+  assert.equal(canon.primary_energy_source, 'baseline');
+  assert.equal(canon.wearable_measurement_type, 'heart_rate_only');
+  assert.equal(canon.wearable_active_kcal, null);
+  const iv = await db.q('SELECT * FROM health_energy_intervals WHERE canonical_workout_id = ?', [canon.id]);
+  assert.equal(iv.length, 1, 'no wearable energy row: none was reported');
+  assert.equal(iv[0].source, 'baseline');
+  assert.equal(iv[0].is_estimate, 1);
 });
 
 test('an implausibly long workout (started_at/completed_at spanning many hours) is flagged, never fed to the calorie estimator', async () => {

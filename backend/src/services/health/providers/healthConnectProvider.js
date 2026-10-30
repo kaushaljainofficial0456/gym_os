@@ -19,7 +19,13 @@
 // is the reconciliation engine's job (matching.js/reconciliation.js);
 // this file only normalizes each record type independently.
 // ============================================================
-import { nativeOnlyProvider } from './baseProvider.js';
+import { nativeOnlyProvider, sourceIdentity } from './baseProvider.js';
+
+/** Record metadata's dataOrigin (the writing app's package) and device. */
+function hcSource(raw) {
+  const origin = raw.metadata?.dataOrigin;
+  return sourceIdentity({ device: raw.metadata?.device, app: typeof origin === 'string' ? origin : origin?.packageName });
+}
 
 /** ExerciseSessionRecord -> CanonicalHealthRecordInput. Shape assumed:
  *  { metadata: { id }, exerciseType, startTime, endTime, title? }.
@@ -27,6 +33,7 @@ import { nativeOnlyProvider } from './baseProvider.js';
 function normalizeExerciseSession(raw) {
   return {
     provider: 'health_connect',
+    ...hcSource(raw),
     provider_record_id: raw.metadata?.id,
     data_type: 'workout',
     activity_type: hcExerciseTypeToActivityType(raw.exerciseType),
@@ -42,6 +49,7 @@ function normalizeExerciseSession(raw) {
 function normalizeActiveCalories(raw) {
   return {
     provider: 'health_connect',
+    ...hcSource(raw),
     provider_record_id: raw.metadata?.id,
     data_type: 'energy_sample',
     start_time: raw.startTime,
@@ -56,6 +64,7 @@ function normalizeActiveCalories(raw) {
 function normalizeTotalCalories(raw) {
   return {
     provider: 'health_connect',
+    ...hcSource(raw),
     provider_record_id: raw.metadata?.id,
     data_type: 'energy_sample',
     start_time: raw.startTime,
@@ -70,6 +79,7 @@ function normalizeHeartRate(raw) {
   const values = samples.map((s) => Number(s.beatsPerMinute)).filter(Number.isFinite);
   return {
     provider: 'health_connect',
+    ...hcSource(raw),
     provider_record_id: raw.metadata?.id,
     data_type: 'heart_rate',
     start_time: raw.startTime,
@@ -84,6 +94,7 @@ function normalizeHeartRate(raw) {
 function normalizeSteps(raw) {
   return {
     provider: 'health_connect',
+    ...hcSource(raw),
     provider_record_id: raw.metadata?.id,
     data_type: 'steps',
     start_time: raw.startTime,
@@ -98,6 +109,7 @@ function normalizeSleepSession(raw) {
   const endMs = Date.parse(raw.endTime);
   return {
     provider: 'health_connect',
+    ...hcSource(raw),
     provider_record_id: raw.metadata?.id,
     data_type: 'sleep',
     start_time: raw.startTime,

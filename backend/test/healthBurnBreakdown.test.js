@@ -155,12 +155,11 @@ test('getBurnBreakdown itemizes resting, each workout with timestamps, and every
   assert.equal(b.entries[b.entries.length - 1].type, 'resting');
 });
 
-test('when a wearable measured the session, the breakdown keeps the SK OS estimate alongside it for comparison', async () => {
+test('strength session with a wearable: the breakdown counts BARBELL’s estimate and shows the wearable’s beside it', async () => {
   const db = await memDb();
   const date = '2026-01-06';
   const { userId, orgId, clientId } = await seedWorkoutDay(db, { date, startedAt: `${date}T18:00:00Z`, completedAt: `${date}T19:00:00Z` });
-  // WHOOP measured the same session and reported a lower figure than SK OS
-  // would estimate -- the live 420-vs-327 case.
+  // WHOOP reported the same session -- the live 420-vs-327 case.
   await upsertHealthRecord(db, { userId, orgId }, {
     provider: 'whoop', provider_record_id: 'whoop-w1', data_type: 'workout', activity_type: 'strength_training',
     start_time: `${date}T18:00:00Z`, end_time: `${date}T19:00:00Z`, active_kcal: 327, auto_detected: true,
@@ -169,14 +168,18 @@ test('when a wearable measured the session, the breakdown keeps the SK OS estima
   await reconcileUserDay(db, { userId, orgId, clientId, date, tz: 'UTC' });
   const b = await getBurnBreakdown(db, { userId, date });
   const workout = b.entries.find((e) => e.type === 'workout');
+  const canon = await db.q1('SELECT active_kcal FROM health_canonical_workouts WHERE skos_workout_id = ?', ['w1']);
 
-  assert.equal(workout.source, 'whoop', 'the strap wins for a session it measured');
-  assert.equal(Math.round(workout.kcal), 327);
-  assert.equal(workout.isEstimate, false, 'a measured figure is not labelled an estimate');
-  assert.ok(workout.comparison, 'SK OS’s own estimate is retained for comparison, not discarded');
-  assert.ok(workout.comparison.skosEstimateKcal > 0);
-  assert.equal(Math.round(workout.comparison.measuredKcal), 327);
+  assert.equal(workout.source, 'baseline', 'BARBELL’s estimate is the counted figure');
+  assert.equal(workout.kcal, canon.active_kcal);
+  assert.equal(workout.isEstimate, true);
+  assert.equal(workout.energyBasis, 'model_estimate');
+  assert.ok(workout.comparison, 'the wearable figure is shown, not discarded');
+  assert.equal(workout.comparison.primary, 'barbell');
+  assert.equal(workout.comparison.wearableSource, 'whoop');
+  assert.equal(Math.round(workout.comparison.wearableKcal), 327);
+  assert.equal(workout.comparison.barbellKcal, canon.active_kcal);
 
-  // And it must never leak into the totals.
-  assert.equal(Math.round(b.totals.workouts), 327, 'only the winning figure counts toward the day');
+  // And the wearable figure must never leak into the totals.
+  assert.equal(Math.round(b.totals.workouts), Math.round(canon.active_kcal), 'only BARBELL’s figure counts toward the day');
 });

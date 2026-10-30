@@ -11,11 +11,13 @@
  * The honesty rules the design follows:
  *  - resting, workouts and everyday movement are SEPARATE lines that sum
  *    to the total, so the total is never a black box.
- *  - a measured figure and an estimated one never look alike: estimates
- *    carry an explicit "Estimated" tag.
- *  - when a wearable measured a session, SK OS's own estimate is shown
- *    NEXT TO it rather than being silently replaced -- that difference is
- *    information, not an error to hide.
+ *  - every workout figure is an estimate -- Barbell's model or a wearable's
+ *    own algorithm -- and carries an explicit "Estimated" tag. Nothing here
+ *    is a measurement.
+ *  - when a wearable reported a figure for a session, both figures are
+ *    shown side by side and only the counted one says so. For a strength
+ *    session the counted one is Barbell's (docs/WEARABLE_RECONCILIATION_
+ *    DECISION.md); the difference is information, not an error to hide.
  *  - an unknown value renders as "—" with the reason, never as 0.
  */
 import { useState } from 'react';
@@ -104,12 +106,13 @@ function EntryRow({ entry }) {
           {entry.sublabel ? ` · ${entry.sublabel}` : ''}
         </div>
 
-        {/* Both numbers, side by side -- the wearable's measurement and
-            what Barbell would have estimated on its own. */}
-        {entry.comparison && entry.comparison.skosEstimateKcal != null && (
+        {/* Both figures, side by side, each labelled as whose estimate it is. */}
+        {entry.comparison && entry.comparison.wearableKcal != null && entry.comparison.barbellKcal != null && (
           <div className="mt-1.5 text-[10.5px]" style={{ color: 'var(--mute)' }}>
-            {sourceLabel(entry)} measured {Math.round(entry.comparison.measuredKcal)} · Barbell estimated{' '}
-            {Math.round(entry.comparison.skosEstimateKcal)}
+            Barbell estimated {Math.round(entry.comparison.barbellKcal)}
+            {entry.comparison.primary === 'barbell' ? ' (counted)' : ''} ·{' '}
+            {PROVIDER_LABEL[entry.comparison.wearableSource] || 'Wearable'} estimated {Math.round(entry.comparison.wearableKcal)}
+            {entry.comparison.primary === 'wearable' ? ' (counted)' : ''}
           </div>
         )}
 

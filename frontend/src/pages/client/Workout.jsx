@@ -17,7 +17,7 @@ import '../../components/workout/workout.css';
 import SessionRecap from '../../components/workout/SessionRecap.jsx';
 import InfoDot from '../../components/InfoDot.jsx';
 import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
-import { burnSourceLabel, isWearableSource } from '../../healthProviderLabels.js';
+import { wearableComparisonNote } from '../../healthProviderLabels.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
 import LogPastCardio from './LogPastCardio.jsx';
 import { useUnits } from '../../unitsContext.jsx';
@@ -377,7 +377,7 @@ export default function Workout() {
   // for this exact session; the summary screen's own "Calories burned"
   // card above already renders instantly off `burn` regardless of this.
   // See checkWorkoutSource() below for why this is fire-and-forget.
-  const [burnSource, setBurnSource] = useState(null);
+  const [wearableNote, setWearableNote] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [shareToast, setShareToast] = useState(''); // 'light' | 'moderate' | 'hard' — post-session rating, required by the model
   // Workout link sharing (personal share, NOT community)
@@ -1037,22 +1037,11 @@ export default function Workout() {
       const today = new Date().toISOString().slice(0, 10);
       const { workouts: canon } = await api(`/health/workouts?date=${today}`);
       const match = canon?.find((c) => c.skos_workout_id === result?.workoutId);
-      // Allowlist check (isWearableSource), not a denylist -- a
-      // canonical workout's primary_energy_source is either one of the
-      // ten real wearable provider keys, OR one of SK OS's OWN internal
-      // calorie-model provider names ('baseline' | 'ml' | 'mock' -- see
-      // calorieModel.js). A denylist of "not a wearable" names silently
-      // mislabels any internal name it doesn't already know about --
-      // caught live: 'baseline' briefly rendered as "baseline + SK OS"
-      // instead of falling through to the correct default below.
-      if (isWearableSource(match?.primary_energy_source)) {
-        setBurnSource(burnSourceLabel({ providers: [match.primary_energy_source] }));
-        // A device that measured the session beats any estimate: show what
-        // it recorded, not the model's number under the device's name.
-        if (Number(match.active_kcal) > 0) {
-          setBurn((b) => ({ ...(b || {}), kcal: Math.round(match.active_kcal), lower_kcal: null, upper_kcal: null, notes: [], model_version: null, measured: true }));
-        }
-      }
+      // A strength session's figure is always BARBELL's estimate
+      // (docs/WEARABLE_RECONCILIATION_DECISION.md). A wearable's own figure
+      // for the same session is shown beside it -- never swapped in, and
+      // never called "measured": a watch's calories are its own estimate.
+      setWearableNote(wearableComparisonNote(match));
     } catch { /* best-effort only -- the summary already has a real estimate without this */ }
   };
 
@@ -1899,7 +1888,7 @@ export default function Workout() {
         intensity={intensity}
         burn={burn}
         burnLoading={burnLoading}
-        burnSource={burnSource}
+        wearableNote={wearableNote}
         cardioResult={cardioResult}
         cardioName={cardioName}
         u={u}
@@ -1917,7 +1906,7 @@ export default function Workout() {
           clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0);
           setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null);
           setBurn(null); setBurnInput(null); setIntensity(null); setIntensitySkipped(false);
-          setBurnSource(null); setSharing(false); setShareToast('');
+          setWearableNote(null); setSharing(false); setShareToast('');
           setCardioMode('browse'); setCardioResult(null); setCardioItems([]);
           setCardioActiveId(null); setCardioSegStart(0); setCardioElapsed(0);
         }}

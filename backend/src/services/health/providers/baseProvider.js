@@ -106,3 +106,19 @@ export function nativeOnlyProvider({ key, platform, capabilities, normalizers = 
     ...normalizers,
   };
 }
+
+/**
+ * Which device and which app wrote a record, from what a native bridge
+ * passes along -- never inferred from the provider name. Platforms that
+ * aggregate (Apple Health, Health Connect) put records from a watch, a
+ * phone and third-party apps under one provider, and their energy figures
+ * are not equally trustworthy, so reconciliation needs to know which one it
+ * is looking at. Missing fields stay null.
+ */
+export function sourceIdentity({ device, app } = {}) {
+  const clean = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : null);
+  const deviceLabel = device && typeof device === 'object'
+    ? clean([device.manufacturer, device.model || device.name].filter(Boolean).join(' '))
+    : clean(device);
+  return { source_device: deviceLabel, source_app: clean(app) };
+}

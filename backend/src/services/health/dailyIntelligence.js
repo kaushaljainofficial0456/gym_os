@@ -292,6 +292,15 @@ async function upsertCanonicalWorkout(db, { userId, orgId, skosWorkoutId, skosWo
     coverage_ratio: decision.coverageRatio ?? null, confidence_score: decision.confidence?.score ?? null,
     confidence_level: decision.confidence?.level ?? null, match_score: decision.matchScore ?? null, match_reason: decision.matchReason ?? null,
     auto_detected: decision.autoDetected ? 1 : 0, data_quality: decision.dataQualityFlag ? 'flagged' : 'good',
+    // Provenance of the stored figure and of any wearable figure kept
+    // beside it (see reconciliation.js, STRENGTH_POLICY).
+    energy_basis: decision.energyBasis ?? null, reconciliation_policy: decision.policy ?? null,
+    wearable_active_kcal: decision.wearable?.kcal ?? null, wearable_provider: decision.wearable?.provider ?? null,
+    wearable_source_device: decision.wearable?.sourceDevice ?? null, wearable_source_app: decision.wearable?.sourceApp ?? null,
+    wearable_measurement_type: decision.wearable?.measurementType ?? null,
+    wearable_coverage_ratio: decision.wearable?.coverageRatio ?? null,
+    disagreement_ratio: decision.wearable?.disagreementRatio ?? null,
+    disagreement_flag: decision.wearable?.disagreementFlag ? 1 : 0,
   };
   if (existing) {
     // Audit trail (spec §72): only log if the primary source or figure
@@ -337,6 +346,16 @@ async function writeEnergyInterval(db, { userId, orgId, date, interval, decision
   // measured 327, SK OS estimated 420" instead of silently replacing one
   // number with the other. The is_primary column existed for exactly
   // this from the start and was always written as 1.
+  // Strength sessions: BARBELL's estimate is primary, so the secondary row
+  // is the WEARABLE's own figure -- a device estimate, never counted.
+  if (decision.sourceType === 'skos_ml' && decision.wearable?.kcal != null) {
+    await db.run(
+      `INSERT INTO health_energy_intervals (id, user_id, org_id, date, start_time, end_time, active_kcal, resting_kcal, total_kcal, source, activity_type, confidence_score, confidence_level, coverage, is_primary, is_estimate, model_name, model_version, canonical_workout_id, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,0,1,?,?,?,?,?)`,
+      [id('hei'), userId, orgId, date, interval.start_time, interval.end_time, decision.wearable.kcal, decision.wearable.kcal,
+       decision.wearable.provider, interval.activity_type ?? null, null, null, decision.wearable.coverageRatio ?? null,
+       decision.wearable.sourceDevice ?? null, null, canonicalId, now(), now()]);
+  }
   if (decision.secondaryEstimateKcal != null && decision.sourceType !== 'skos_ml') {
     await db.run(
       `INSERT INTO health_energy_intervals (id, user_id, org_id, date, start_time, end_time, active_kcal, resting_kcal, total_kcal, source, activity_type, confidence_score, confidence_level, coverage, is_primary, is_estimate, model_name, model_version, canonical_workout_id, created_at, updated_at)
@@ -514,17 +533,16 @@ export async function getBurnBreakdown(db, { userId, date }) {
       endTime: w.end_time,
       durationSeconds: w.duration_seconds,
       source: w.primary_energy_source,
-      isEstimate: !isWearableKey(w.primary_energy_source),
+      // Every workout figure is an estimate -- BARBELL's model or a
+      // wearable's own algorithm. Nothing in the app measures energy.
+      isEstimate: true,
+      energyBasis: w.energy_basis || (isWearableKey(w.primary_energy_source) ? 'device_estimate' : 'model_estimate'),
       confidenceLevel: w.confidence_level,
       coverageRatio: w.coverage_ratio,
       dataQuality: w.data_quality,
-      // Both numbers, side by side, when they exist -- the wearable's
-      // measurement and what SK OS would have estimated on its own.
-      comparison: secondary ? {
-        skosEstimateKcal: secondary.active_kcal,
-        measuredKcal: w.active_kcal,
-        model: secondary.model_name || null,
-      } : null,
+      // Both figures, side by side, when a wearable reported one. Only
+      // `primary` counts toward the day.
+      comparison: secondary ? breakdownComparison(w, secondary) : null,
     });
   }
 
@@ -574,6 +592,19 @@ export async function getBurnBreakdown(db, { userId, date }) {
 
 const WEARABLE_KEYS = new Set(['apple_health', 'health_connect', 'samsung_health', 'whoop', 'oura', 'garmin', 'fitbit', 'polar', 'coros', 'ultrahuman']);
 function isWearableKey(k) { return !!k && WEARABLE_KEYS.has(k); }
+
+function breakdownComparison(w, secondary) {
+  const wearablePrimary = isWearableKey(w.primary_energy_source);
+  return {
+    primary: wearablePrimary ? 'wearable' : 'barbell',
+    barbellKcal: wearablePrimary ? secondary.active_kcal : w.active_kcal,
+    wearableKcal: wearablePrimary ? w.active_kcal : secondary.active_kcal,
+    wearableSource: wearablePrimary ? w.primary_energy_source : secondary.source,
+    wearableDevice: wearablePrimary ? (w.wearable_source_device ?? null) : (secondary.model_name ?? w.wearable_source_device ?? null),
+    disagreementFlag: !!w.disagreement_flag,
+    model: wearablePrimary ? secondary.model_name || null : null,
+  };
+}
 
 function activityLabel(activityType) {
   if (!activityType) return 'Workout';

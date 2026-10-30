@@ -33,6 +33,114 @@ function median(values) {
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 }
 
+// ------------------------------------------------------------------
+// STRENGTH SESSIONS: BARBELL's estimate is primary.
+//
+// Product decision (docs/WEARABLE_RECONCILIATION_DECISION.md): for a
+// resistance-training session logged in BARBELL, the stored active energy
+// is BARBELL's own estimate. A wearable's figure is kept beside it with its
+// provenance and compared, but never replaces it, is never averaged with it
+// and never raises confidence. No wearable has been validated against
+// calorimetry for lifting (nor has BARBELL's estimate), so a disagreement is
+// flagged for monitoring without either side being treated as right.
+// Non-strength sessions keep the reconciliation below, unchanged.
+// ------------------------------------------------------------------
+export const STRENGTH_POLICY = 'barbell_primary_strength_v1';
+const STRENGTH_ACTIVITY_TYPES = new Set(['strength_training', 'resistance_training', 'weight_training', 'functional_strength_training']);
+// A wearable record that runs this far past the session is measuring more
+// than the session, so its figure is not compared against the session's.
+const COMPARABLE_SPAN_TOLERANCE = 0.1;
+
+export function isStrengthSession(skosWorkout) {
+  return STRENGTH_ACTIVITY_TYPES.has(String(skosWorkout?.activity_type || '').toLowerCase());
+}
+
+const spanSeconds = (r) => (Date.parse(r.end_time || r.start_time) - Date.parse(r.start_time)) / 1000;
+
+async function reconcileStrengthWorkout(skosWorkout, candidates, { estimateMl }) {
+  const durationSeconds = (Date.parse(skosWorkout.end_time) - Date.parse(skosWorkout.start_time)) / 1000;
+  const estimate = durationSeconds > 0 ? await estimateMl(durationSeconds) : null;
+  const barbellKcal = estimate?.kcal ?? null;
+
+  const workoutCandidates = candidates.filter((c) => c.data_type === 'workout');
+  const matched = workoutCandidates.filter((c) => scoreMatch(skosWorkout, c).score >= MATCH_THRESHOLD);
+  const hrSamples = candidates.filter((c) => (c.data_type === 'heart_rate' || c.data_type === 'energy_sample')
+    && Date.parse(c.start_time) < Date.parse(skosWorkout.end_time)
+    && Date.parse(c.end_time || c.start_time) > Date.parse(skosWorkout.start_time));
+
+  let wearable = null;
+  if (matched.length) {
+    const best = findBestMatch(skosWorkout, workoutCandidates);
+    const lead = best?.candidate || matched[0];
+    const coverage = computeCoverage(skosWorkout, matched);
+    const reported = matched.map((c) => c.active_kcal).filter((v) => v != null);
+    const wearableKcal = median(reported);
+    // Same-interval comparison only: BARBELL's estimate for exactly the
+    // seconds the wearable covered, and only when the wearable's records
+    // do not also span time outside the session.
+    const recordSpan = matched.reduce((t, c) => t + Math.max(0, spanSeconds(c)), 0);
+    const comparable = wearableKcal != null && coverage.coveredSeconds > 0
+      && recordSpan <= coverage.coveredSeconds * (1 + COMPARABLE_SPAN_TOLERANCE);
+    const sameIntervalBarbell = comparable
+      ? (coverage.coveredSeconds >= durationSeconds ? barbellKcal : (await estimateMl(coverage.coveredSeconds))?.kcal ?? null)
+      : null;
+    const disagreementRatio = comparable && sameIntervalBarbell != null
+      ? Math.abs(wearableKcal - sameIntervalBarbell) / Math.max(wearableKcal, sameIntervalBarbell, 1)
+      : null;
+    wearable = {
+      kcal: wearableKcal,
+      provider: lead.provider,
+      sourceDevice: lead.source_device ?? null,
+      sourceApp: lead.source_app ?? null,
+      measurementType: wearableKcal != null ? 'device_estimate' : 'device_workout_without_energy',
+      coverageRatio: coverage.coverageRatio,
+      comparedBarbellKcal: sameIntervalBarbell,
+      disagreementRatio,
+      disagreementFlag: disagreementRatio != null && disagreementRatio > DISAGREEMENT_FLAG_THRESHOLD,
+      matchScore: best?.score ?? null,
+      matchReason: best?.matchReason ?? null,
+      recordIds: matched.map((c) => c.id),
+    };
+  } else if (hrSamples.length) {
+    // Heart-rate / energy samples only: evidence that a device was worn,
+    // never the source of the number (no HR model is validated here).
+    const coverage = computeCoverage(skosWorkout, hrSamples);
+    const lead = hrSamples[0];
+    wearable = {
+      kcal: null, provider: lead.provider, sourceDevice: lead.source_device ?? null, sourceApp: lead.source_app ?? null,
+      measurementType: 'heart_rate_only', coverageRatio: coverage.coverageRatio,
+      comparedBarbellKcal: null, disagreementRatio: null, disagreementFlag: false,
+      matchScore: null, matchReason: null, recordIds: hrSamples.map((c) => c.id),
+    };
+  }
+
+  return {
+    activeKcal: barbellKcal,
+    sourceType: 'skos_ml',
+    primarySource: estimate?.provider || 'skos_ml',
+    energyBasis: 'model_estimate',
+    policy: STRENGTH_POLICY,
+    // How much of the session has wearable evidence -- describes the
+    // evidence, not the primary figure, which covers the whole session.
+    coverageRatio: wearable?.coverageRatio ?? 0,
+    matchScore: wearable?.matchScore ?? null, matchReason: wearable?.matchReason ?? null,
+    matchedRecordIds: wearable?.recordIds ?? [],
+    wearable,
+    wearableKcal: wearable?.kcal ?? null,
+    uncoveredEstimateKcal: null,
+    secondaryEstimateKcal: null, secondaryModel: null,
+    estimateModel: estimate ? { name: estimate.modelName, version: estimate.modelVersion } : null,
+    disagreementRatio: wearable?.disagreementRatio ?? null,
+    disagreementFlag: wearable?.disagreementFlag ?? false,
+    // Monitoring flag only: the record's data is not judged bad.
+    dataQualityFlag: false,
+    autoDetected: wearable ? workoutCandidates.some((c) => wearable.recordIds.includes(c.id) && c.auto_detected) : false,
+    // Exactly the confidence BARBELL's estimate gets with no wearable at
+    // all: covering the session or agreeing with it does not validate it.
+    confidence: computeConfidence({ sourceType: 'skos_ml', coverageRatio: 0, dataQuality: 'good' }),
+  };
+}
+
 /**
  * Reconciles ONE SK OS-logged workout against candidate wearable
  * records for the same day (spec's TEST 1-4, 14, 15).
@@ -49,6 +157,7 @@ function median(values) {
  * @returns the full reconciliation decision for this workout.
  */
 export async function reconcileWorkout(skosWorkout, candidates, { estimateMl }) {
+  if (isStrengthSession(skosWorkout)) return reconcileStrengthWorkout(skosWorkout, candidates, { estimateMl });
   const workoutCandidates = candidates.filter((c) => c.data_type === 'workout');
   const physioCandidates = candidates.filter((c) => c.data_type === 'energy_sample' || c.data_type === 'heart_rate');
 
@@ -94,9 +203,17 @@ export async function reconcileWorkout(skosWorkout, candidates, { estimateMl }) 
       dataQuality: flagged ? 'flagged' : 'good', matchScore: best?.score ?? null, disagreementRatio,
     });
 
+    const lead = best?.candidate || matchedCandidates[0];
     return {
       activeKcal, sourceType,
-      primarySource: best?.candidate?.provider || matchedCandidates[0].provider,
+      primarySource: lead.provider,
+      energyBasis: 'device_estimate',
+      policy: 'wearable_primary_non_strength',
+      wearable: {
+        kcal: wearableKcal, provider: lead.provider, sourceDevice: lead.source_device ?? null, sourceApp: lead.source_app ?? null,
+        measurementType: wearableKcal != null ? 'device_estimate' : 'device_workout_without_energy',
+        coverageRatio: coverage.coverageRatio, disagreementRatio, disagreementFlag: flagged,
+      },
       coverageRatio: coverage.coverageRatio,
       matchScore: best?.score ?? null, matchReason: best?.matchReason ?? null,
       matchedRecordIds: matchedCandidates.map((c) => c.id),
@@ -117,17 +234,25 @@ export async function reconcileWorkout(skosWorkout, candidates, { estimateMl }) 
     return Number.isFinite(cs) && cs < se && ce > ss;
   });
 
-  const sourceType = overlappingPhysio.length > 0 ? 'wearable_physiological' : 'skos_ml';
+  // The number here is always SK OS's own estimate: heart-rate samples are
+  // not converted to energy anywhere, so they are recorded as evidence
+  // that a device was worn and never named as the figure's source, nor
+  // allowed to raise its confidence.
+  const sourceType = 'skos_ml';
   const activeKcal = secondary?.kcal ?? null;
-  const confidence = computeConfidence({
-    sourceType, coverageRatio: overlappingPhysio.length > 0 ? 1 : 0, dataQuality: 'good',
-  });
+  const confidence = computeConfidence({ sourceType, coverageRatio: 0, dataQuality: 'good' });
+  const physioCoverage = overlappingPhysio.length ? computeCoverage(skosWorkout, overlappingPhysio).coverageRatio : 0;
 
   return {
     activeKcal, sourceType,
-    primarySource: sourceType === 'wearable_physiological' ? overlappingPhysio[0].provider : (secondary?.provider || 'skos_ml'),
-    coverageRatio: overlappingPhysio.length > 0 ? 1 : 0,
+    primarySource: secondary?.provider || 'skos_ml',
+    coverageRatio: physioCoverage,
     matchScore: null, matchReason: null, matchedRecordIds: overlappingPhysio.map((c) => c.id),
+    wearable: overlappingPhysio.length ? {
+      kcal: null, provider: overlappingPhysio[0].provider, sourceDevice: overlappingPhysio[0].source_device ?? null,
+      sourceApp: overlappingPhysio[0].source_app ?? null, measurementType: 'heart_rate_only', coverageRatio: physioCoverage,
+      disagreementRatio: null, disagreementFlag: false,
+    } : null,
     wearableKcal: null, uncoveredEstimateKcal: null,
     secondaryEstimateKcal: secondary?.kcal ?? null, secondaryModel: secondary ? { name: secondary.modelName, version: secondary.modelVersion } : null,
     disagreementRatio: null, dataQualityFlag: false,
@@ -144,6 +269,7 @@ export async function reconcileWorkout(skosWorkout, candidates, { estimateMl }) 
 export function buildExternalWorkoutCandidate(record) {
   const confidence = computeConfidence({ sourceType: 'wearable_direct', coverageRatio: 1, dataQuality: record.data_quality === 'suspicious' ? 'suspicious' : 'good' });
   return {
+    energyBasis: 'device_estimate', policy: 'wearable_only',
     skosWorkoutId: null,
     activityType: record.activity_type,
     startTime: record.start_time,

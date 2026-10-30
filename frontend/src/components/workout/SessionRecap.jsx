@@ -184,7 +184,7 @@ export default function SessionRecap({
   intensity,
   burn,
   burnLoading = false,
-  burnSource,
+  wearableNote = null,
   cardioResult,
   cardioName = (x) => x,
   u,
@@ -480,10 +480,13 @@ export default function SessionRecap({
               <div className="space-y-2">
                 {burn && (
                   <p>
-                    Best estimate <strong>{burn.kcal} kcal</strong>, and the honest range is{' '}
-                    <strong>{burn.lower_kcal}–{burn.upper_kcal} kcal</strong>. Burn models are
-                    genuinely this imprecise; a single clean-looking number would be a
-                    made-up one.
+                    Barbell estimates <strong>{burn.kcal} kcal</strong>
+                    {burn.lower_kcal != null && burn.upper_kcal != null && (
+                      <>, somewhere in <strong>{burn.lower_kcal}–{burn.upper_kcal} kcal</strong></>
+                    )}
+                    . It is an estimate, not a measurement: calorie burn in the gym has not
+                    been measured for sessions like yours, so a single clean-looking number
+                    would overstate what anyone knows.
                   </p>
                 )}
                 {!!burn?.notes?.length && (
@@ -491,8 +494,16 @@ export default function SessionRecap({
                     {burn.notes.map((n) => <li key={n}>{n}</li>)}
                   </ul>
                 )}
+                {wearableNote && (
+                  <p>
+                    {wearableNote.label} estimated {wearableNote.kcal} kcal for this session.
+                    Watches estimate lifting calories with their own algorithms, which have not
+                    been validated for weight training either, so Barbell keeps its own figure
+                    in your totals and shows theirs alongside.
+                  </p>
+                )}
                 <p style={{ color: 'var(--faint)' }}>
-                  Source: {burnSource || 'Estimated by Barbell'}
+                  Source: Barbell estimate
                   {burn?.model_version ? ` · ${burn.model_version}` : ''}
                 </p>
               </div>
@@ -507,12 +518,18 @@ export default function SessionRecap({
               {totalKcal}
             </span>
             <span className="text-[12px]" style={{ color: 'var(--mute)' }}>kcal</span>
-            {burn && (
+            <span className="text-[11px]" style={{ color: 'var(--mute)' }}>estimated</span>
+            {burn && burn.lower_kcal != null && burn.upper_kcal != null && (
               <span className="text-[11px] tabular-nums ml-auto" style={{ color: 'var(--faint)' }}>
                 range {burn.lower_kcal}–{burn.upper_kcal}
               </span>
             )}
           </div>
+          {wearableNote && (
+            <div className="text-[11px] mt-2" style={{ color: 'var(--mute)' }}>
+              {wearableNote.label}: <span className="tabular-nums">{wearableNote.kcal}</span> kcal (its own estimate, not counted)
+            </div>
+          )}
 
           {/* The split only appears when there genuinely are two parts. */}
           {strengthKcal > 0 && cardioKcal > 0 && (

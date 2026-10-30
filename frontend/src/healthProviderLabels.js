@@ -34,3 +34,26 @@ export function burnSourceLabel(sourceSummary) {
   const labels = [...new Set(providers.map((p) => PROVIDER_LABEL[p]))];
   return labels.length > 1 ? `${labels.join(' + ')} + Barbell` : `${labels[0]} + Barbell`;
 }
+
+/**
+ * What a wearable reported for a strength session BARBELL logged, for
+ * display BESIDE BARBELL's own estimate -- never in place of it
+ * (docs/WEARABLE_RECONCILIATION_DECISION.md). Reads a canonical-workout row
+ * from GET /health/workouts. Rows reconciled before that decision carry the
+ * wearable figure as their primary; both shapes resolve to the same note.
+ * Returns null when no wearable reported energy for the session.
+ */
+export function wearableComparisonNote(canonical) {
+  if (!canonical) return null;
+  const provider = canonical.wearable_provider
+    || (isWearableSource(canonical.primary_energy_source) ? canonical.primary_energy_source : null);
+  const kcal = canonical.wearable_active_kcal
+    ?? (isWearableSource(canonical.primary_energy_source) ? canonical.active_kcal : null);
+  if (!provider || !(Number(kcal) > 0)) return null;
+  const name = PROVIDER_LABEL[provider] || 'Your wearable';
+  return {
+    kcal: Math.round(Number(kcal)),
+    label: canonical.wearable_source_device ? `${name} (${canonical.wearable_source_device})` : name,
+    flagged: Number(canonical.disagreement_flag) === 1,
+  };
+}

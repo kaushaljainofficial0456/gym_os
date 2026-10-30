@@ -2262,6 +2262,19 @@ CREATE TABLE IF NOT EXISTS health_canonical_workouts (
   auto_detected          INTEGER NOT NULL DEFAULT 0,
   user_entered            INTEGER NOT NULL DEFAULT 0,
   data_quality             TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
+  -- Strength-session reconciliation (docs/WEARABLE_RECONCILIATION_DECISION.md):
+  -- BARBELL's estimate is active_kcal; a wearable's own figure is kept
+  -- beside it, never in its place, with its provenance.
+  energy_basis          TEXT,   -- 'model_estimate' | 'device_estimate' -- what active_kcal is
+  reconciliation_policy TEXT,   -- rule that chose active_kcal, e.g. 'barbell_primary_strength_v1'
+  wearable_active_kcal  REAL,   -- the wearable's reported active energy for the session, as reported
+  wearable_provider     TEXT,
+  wearable_source_device TEXT,  -- device model/name when the integration supplies it
+  wearable_source_app   TEXT,   -- app/package that wrote the record, when supplied
+  wearable_measurement_type TEXT, -- 'device_estimate' (workout record) | 'heart_rate_only'
+  wearable_coverage_ratio REAL, -- 0..1 of the session the wearable's records span
+  disagreement_ratio    REAL,   -- |wearable - barbell| / max(...), same-interval comparison
+  disagreement_flag     INTEGER NOT NULL DEFAULT 0, -- 1 when > 0.4: monitoring only, not a verdict
   matched_at                TEXT,
   created_at                TEXT NOT NULL,
   updated_at                TEXT NOT NULL
@@ -2310,6 +2323,8 @@ CREATE TABLE IF NOT EXISTS health_records (
   source_metric        TEXT,             -- what source_score actually is, e.g. 'recovery' | 'strain' | 'readiness'
   auto_detected       INTEGER NOT NULL DEFAULT 0,
   user_entered         INTEGER NOT NULL DEFAULT 0,
+  source_device       TEXT,              -- device that recorded it (e.g. HealthKit device model), when the integration supplies it
+  source_app          TEXT,              -- app/package that wrote it (HealthKit source, Health Connect dataOrigin), when supplied
   source_confidence    REAL,             -- the PROVIDER's own confidence, when it reports one -- distinct from SK OS's own confidence engine output
   data_quality         TEXT NOT NULL DEFAULT 'good' CHECK (data_quality IN ('good','flagged','suspicious')),
   data_quality_reason  TEXT,
