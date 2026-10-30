@@ -26,8 +26,13 @@ Status: **draft for an ethics committee and a partner lab.**
 - A net value computed from a predicted resting rate is allowed, but is labelled `predicted`
   (`ml/src/research/energy.py`).
 
-**Known limit of the criterion:** indirect calorimetry under-counts the anaerobic share of
-lifting (about 2–6% in circuit work). This is reported, not corrected.
+**Known limit of the criterion:** indirect calorimetry misses the anaerobic (glycolytic) share
+of lifting.
+- **Size:** a 2024 systematic scoping review (Mitchell et al., Sports Med) puts it at possibly
+  over 40%, depending on training variables. Benito 2016's 2–6% was for light circuit work only.
+- **Pending amendment** (`docs/CALORIE_ENGINE_PROPOSAL.md` §3.3): add 30–60 min post-session
+  calorimetry and pre/post capillary blood lactate, so EPOC and the anaerobic share are measured
+  as separate components.
 
 ## 2. What is captured (schema: `ml/src/research/schema.py`)
 
