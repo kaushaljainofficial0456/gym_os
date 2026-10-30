@@ -1,200 +1,212 @@
-# Workout calorie estimation — overhaul report
+# Workout calorie estimation: overhaul report (stage 2)
 
-Date: 2026-10-30. Scope: the 12-phase calorie overhaul. Definition held fixed throughout:
-`estimated_active_kcal` is energy **above resting** for the session (contract §3).
+Date: 2026-10-30. Branch: `calorie-overhaul` (not merged, not deployed).
 
-## 1. Summary
+Stage 2 replaces stage 1's conclusions where they differ. The main correction: the
+density-gated rule's apparent gain rests on **one protocol arm of one study**, so it is
+not evidence of better accuracy.
 
-- The deployed estimate (`skos-cal-baseline-v2`, Compendium session MET by reported effort,
-  net of Mifflin-St Jeor resting) stays the default. No candidate passed the validation gates.
-- `skos-cal-v1` (the `ml` provider) does worse than the baseline on whole sessions. It
-  stays opt-in and must stay off in production.
-- The main error is the **`hard` tier**. Heavy straight sets with normal rests use energy at
-  the same rate as a moderate session, measured at 3.2–3.4 MET against the 6.0 the
-  baseline uses. Only dense, circuit-style sessions reach 6–9 MET. What sets the energy rate
-  is **work density** (how quickly sets follow each other), not effort.
-- A density-gated tier cut the baseline's error from 34% to 14% on the arms it could
-  score. It still fails because only two independent studies report set counts. One more
-  such study, or Rustaden 2020's set counts, would let it be tested properly (§9).
-- Fixed: the legacy route that bypassed the provider gate was removed, wearable
-  reconciliation now uses the same body weight and exercise mapping as completion, and the
-  stale contract text was corrected.
+Definition held fixed throughout: `estimated_active_kcal` is energy **above resting** for
+the session (contract §3).
 
-## 2. System audit (phase 1)
+## 1. Conclusions
 
-| Path | Calls `estimateWorkoutCalories`? | Notes |
+1. **The evidence is insufficient to change the production estimator.** No candidate has
+   been tested on data it was not designed from. The deployed `skos-cal-baseline-v2`
+   stays, unchanged.
+2. **The density-gated "hard" rule is not supported.**
+   - Every gain over the baseline comes from a single arm (Joao 2021, 6×5 @ 90% 1RM).
+     Remove that arm, or the Joao study, and the rule equals the baseline.
+   - Its preferred cut-off (0.75 sets/min) depends on a disputed duration in Benito 2016.
+     With the abstract's 45 min, the rule is *worse* than the baseline at 0.75.
+3. **One finding is consistent across two independent studies:** a heavy-load session
+   with normal rests ran at 3.2–3.4 MET (Joao 90%, Rustaden heavy). That is far below the
+   6.0 the baseline uses for "hard".
+   - But both "hard" labels were assigned by me, not reported by the participants, and the
+     values are unverified transcriptions (§2).
+   - It is a credible **hypothesis** that "hard" over-credits long-rest heavy sessions. It
+     is not a validated correction.
+4. **skos-cal-v1 (`ml` provider) is worse than the baseline in every scenario** (MAPE
+   53–75% vs 23–51%). It stays opt-in and off in production.
+5. **Wearable energy should not be trusted for resistance training by default.** Today it
+   always wins when matched, at the highest confidence (0.95). See
+   `docs/WEARABLE_CALORIE_VALIDATION_DESIGN.md`. A provenance-labelling bug was also found
+   there (F2).
+
+## 2. Verified dataset coverage
+
+**Network constraint:** Europe PMC, PMC, PLOS, Frontiers, Crossref and doi.org are
+unreachable from this cloud environment, so **no value could be checked against a
+full-text table, and no page or table number could be confirmed**. Only a web search was
+available, and it returns summaries of abstracts and full-text snippets, not the papers.
+
+Verification levels used in `ml/data/processed/session_calorimetry_arms_v1.csv`:
+- **L2** — value checked against the paper's table: **none**.
+- **L1** — design or value confirmed by the abstract (via search results).
+- **L0** — transcribed in the earlier local session, not re-checked.
+
+| Study (DOI) | Arms | n | Design | Values | What changed in stage 2 |
+|---|---|---|---|---|---|
+| Joao 2021 (10.3389/fspor.2021.797604, CC BY) | 60/75/90% 1RM, 8 machine exercises | 15 men, same people in all arms | L1: abstract confirms 2×15 / 3×10 / 6×5 and that per-minute EE was highest at 60% | L0: total O2 (L) and session minutes | The paper's VO2 table conflicts with total O2/time. A search index lists a later erratum, which was not read. |
+| Rustaden 2020 (10.3389/fphys.2020.00570, CC BY) | BodyPump, heavy RE | **10 and 8 different women** | L1: abstract confirms 302±67 and 289±69 kcal, loads lifted | L0: VO2 12.3 / 12.0, minutes 53 / 57.7 | **Between-subjects**, not one cohort (v0 was wrong). Set counts not transcribed. The abstract's 4.7 kcal/min implies about 64 min, not 53. |
+| Benito 2016 (10.1371/journal.pone.0164349, CC BY 4.0) | machine, free weight, combined circuits | 29 (14 women), same people | L1: 3 laps × 8 exercises, 15 reps @ 70% 15RM, 45 s work / 15 s change | L1: VO2 **20.4 / 24.2 / 29.9** (abstract); L0: 20.9 / 24.4 / 31.2 (earlier transcription, source unknown) | **Duration dispute:** abstract "45min 15s" vs full text 23 min 15 s (about 24 × 60 s, which supports 23:15). The **combined arm includes aerobic exercise**, so it is excluded from the primary analysis. |
+| PMC5801711 (CC BY-NC-ND) | one session | ? | L0 | L0 | Paper could not be re-identified. Validation-only, non-commercial. |
+| PMC5801710 | one session | ? | L0 | L0 | Paper could not be re-identified. |
+| PMC10553797 | rest-interval arms | ? | not found by search | L0 | Direction only. Never scored. |
+
+Primary analysis set: **3 independent studies, 7 arms, 5 independent participant
+groups** (Joao, Rustaden ×2, Benito). Only Joao and Benito report set counts.
+
+## 3. Validation methodology
+
+- **Target:** net kcal per kg per minute, with resting = 1 MET. Arms lack height and age,
+  so Mifflin-St Jeor, which production uses, cannot be applied. This shifts every model
+  equally.
+- **No model below was fitted to these data.** The baseline is a published Compendium
+  table. The gated rule and its cut-off were **designed after seeing these arms**, so
+  every number here is **in-sample**. Leave-one-study-out cannot rescue that, because the
+  design choice used all studies. Nothing here measures generalisation.
+- **Aggregation:** error per arm, averaged within study, then across studies. A
+  three-arm study counts once.
+- **Every evaluation reports its number of studies and arms**
+  (`ml/docs/_stage2_validation_output_v1.txt`).
+- **Effort labels are analyst-assigned.** No source reports what participants would
+  answer to the app's light/moderate/hard question.
+- **Not re-run:** the fitted models from stage 1 (linear density, ridge, XGBoost, LightGBM,
+  CatBoost). Only two studies report the needed features, so under study-grouped
+  validation each fold trains on one study. They are **not identifiable**, and no score is
+  reported for them.
+
+## 4. Baseline comparison: error and bias
+
+Net-kcal MAPE and mean signed bias (+ = over-estimate). Format: studies / arms.
+
+| Scenario | baseline_v2 | all moderate | v1 tiers | density-gated 0.75 | baseline on gated's arms |
+|---|---|---|---|---|---|
+| **Primary** (abstract VO2, 23.25 min, resistance-only) | 3/7: 37.4, **+32.0** | 3/7: 21.8, −13.7 | 3/7: 53.4, +48.3 | 2/5: 10.1, +2.4 | 2/5: 29.4, +21.7 |
+| v0 values (incl. combined, PMC refs) | 5/10: 34.1, +26.9 | 5/10: 24.2, +0.6 | 5/10: 63.7, +56.6 | 2/6: 14.3, −3.4 | 2/6: 33.6, +15.9 |
+| Benito at 45.25 min | 3/7: 37.4, +32.0 | 3/7: 21.8, −13.7 | 3/7: 53.4, +48.3 | 2/5: **31.9**, −21.1 | 2/5: 29.4, +21.7 |
+| Drop Benito | 2/5: 51.3, +51.0 | 2/5: 6.2, +6.0 | 2/5: 75.4, +75.4 | 1/3: 10.7 | 1/3: 49.4 |
+| Drop Joao | 2/4: 31.4, +23.4 | 2/4: 27.4, −25.9 | 2/4: 41.0, +33.3 | 1/2: 9.5 | 1/2: 9.5 (identical) |
+| Drop arm joao2021_90 | 3/6: 23.6, +18.3 | 3/6: 21.0, −14.5 | 3/6: 44.5, +39.3 | 2/4: 8.8 | 2/4: 8.8 (identical) |
+
+Per-study baseline error (primary):
+
+| Study | Baseline error | Direction |
 |---|---|---|
-| `POST /workouts/:id/complete` | yes | dated weight, canonical map, persisted |
-| `POST /workouts/:id/effort` | yes | re-estimate after the post-session effort question |
-| `POST /intel/confirm-workout` | yes | NL-logged sessions |
-| `trainingProgram` preview | yes | `stage: 'preview'`, never persisted |
-| `dailyIntelligence` reconciliation | yes | **was** using `clients.current_weight` and no canonical map — fixed |
-| `POST /intel/workout-burn` | **no** (called skos-cal-v1 directly) | bypassed provider gate, returned gross kcal, no client called it — **removed** |
+| Joao | 49% | over: hard label on the 90% arm |
+| Rustaden | 53% | over: hard label on the heavy arm |
+| Benito | 10% | — |
 
-Provider default is `baseline` in every environment (`config.js`). The ml provider's output
-is converted gross → net in `toNetOfResting`, and every provider passes `validateCalorieResult`.
+**Bias is the actionable signal.** The baseline over-estimates in every scenario
+(+18 to +51%), and nearly all of that comes from "hard" = 6.0 applied to long-rest sessions.
 
-## 3. Scientific evidence (phase 2)
+**Threshold sensitivity** (gated MAPE vs baseline MAPE on the same arms):
 
-- **Whole-session calorimetry, rest included,** is the right ground truth for a session
-  figure. Single-exercise bouts (reis 2017/2019, the whole of v1's training data) measure
-  something else: a 26–56 s set to failure is not a sustainable per-minute rate.
-- **Ordinary gym sessions with about 2 min of rest:** 2.75–3.5 MET gross across four
-  cohorts, two countries, both sexes (table §4). The Compendium code 02054 (3.5) fits.
-- **Effort does not move the rate:** Joao 2021 ran the same 8 exercises at 60, 75 and 90%
-  1RM with equal rests. Total time grew from 44 to 116 min, but the rate stayed at
-  3.33 / 3.30 / 3.16 MET. A harder session costs more because it **lasts longer**, and
-  duration is already measured.
-- **Density moves the rate:** Benito 2016 used a circuit with 15 s rests and reached
-  6.0–8.9 MET. PMC10553797 is one exercise with rest as the only variable: 60 → 180 s rest
-  dropped squat VO2 from 19.0 to 12.9 ml/kg/min. The paper reports work rate r = .96 with
-  VO2 and a weak link with RPE.
-- **Perceived effort is a poor proxy for absolute cost:** Adeel 2021 found trained lifters
-  burned about 2× the energy at the same RPE (`ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md`).
-- **Wearables over-read lifting** (PMC13120158/PMC13701894: calorimetry 141 kcal against
-  Apple 299, Garmin 305, Galaxy 258, Fitbit 146 over 34 min). The reconciliation layer
-  currently prefers wearable kcal when one covers the session (`reconciliation.js`). That
-  trust ordering should be reviewed (§10, risk R3).
-- **Lytle 2019 (MSSE)** gives net kcal from height, age, fat and lean mass, and training
-  volume (R .773, SEE 28.5 kcal). The app has no body-composition data and the TV unit is
-  unverified, so it **could not be evaluated** without inventing inputs. It is recorded as a
-  reference, not a candidate.
+| Scenario | Cut-off range | Result |
+|---|---|---|
+| Primary | 0.45–1.00 | 10 vs 29 |
+| Primary | ≤ 0.40 | 29 vs 29: identical |
+| Primary | ≥ 1.05 | 32 vs 29: worse |
+| Benito at 45.25 min | 0.45–0.50 | gains |
+| Benito at 45.25 min | ≥ 0.55 | worse |
+| Without joao2021_90 | ≤ 1.00 | never better than baseline |
 
-## 4. Dataset audit (phase 3)
+**The cut-off is not identified by the data.** Any value between the two observed density
+clusters gives the same result.
 
-- v1's 1,001 rows are 560 unique cells: 441 are reis2017/reis2019 duplicates of the same
-  14 men. They are single-exercise bouts at 12–24% and 80% 1RM, with no individual body
-  weights and **zero whole sessions**. "Moderate" in v1 means 20–24% 1RM.
-- v1's plausibility envelope uses Benito 2016 as 270 kcal / 64 min. Those 64 min include
-  warm-up; the measured circuit lasts 23.25 min. The envelope is wrong low for circuits.
-- New file `ml/data/processed/session_calorimetry_arms_v0.csv`: 18 published arm means
-  (10 usable for scoring), each with source, licence, derivation and caveat. **No
-  participant-level session data exists in any source we may train on.**
-  - PMC12307640 has 29 participant-level rows but is CC BY-NC-ND and its sheets contain
-    participant names. It is excluded until the licence is resolved, and the names must
-    never be copied.
-  - PMC5801711 is non-commercial and is used as a validation point only.
-- **Verification status:** Europe PMC (`www.ebi.ac.uk`) is blocked in this cloud
-  environment, so the values were transcribed in the earlier local session and could not
-  be re-read here. Every row is marked `read_prior_session_pending_reverify`. Re-check them
-  against the papers before any of them drives a production number.
+## 5. Feature separability
 
-## 5. Features (phase 4)
+| Feature | Varies within a study? | What the data says |
+|---|---|---|
+| External load (%1RM) | Joao only | 60 → 90% with rest fixed: rate 3.33 → 3.16 MET (flat or slightly down). Total kcal rose because the session **took longer** (44 → 116 min). Load should not raise the per-minute rate. |
+| Rest between sets | no (Joao 120 s, Benito 15 s) | Confounded with lab, sex mix, cadence, exercise mode. PMC10553797 (unverified) varies rest within one study and reports VO2 falling as rest grows, which is the expected direction. |
+| Density (sets/min) | no (Joao 0.36–0.41, Benito 1.03) | Same confound as rest. Density and rest are two views of the same quantity, given set duration. |
+| Exercise mode | Benito (machine vs free weight) | Same people, same density: free weight is about 19% higher. Mode is a real, separate effect. |
+| Perceived effort | not reported in any scored arm | Adeel 2021 (in repo): trained lifters burn about 2× the energy at the same RPE. Effort is not a proxy for absolute cost. |
 
-What the app actually records per session: duration (one timer, pauses removed), completed
-sets/reps/load per exercise, exercise type, and body weight (dated), plus height, age and
-sex when the profile has them, and post-session effort.
+**These are separate features, not interchangeable predictors:**
+- **Duration** carries the load-driven increase in total kcal.
+- **Rest/density** should set the per-minute rate.
+- **Effort** should at most modulate it.
+- **Mode** is its own term.
 
-The useful feature is `sets_per_minute` (= `session.sets_per_minute` in contract 0.2,
-already computed). Volume and relative load carry little signal in this data: Joao's three
-arms hold total reps constant while load rises 60 → 90% and the rate does not move.
-Tempo and time under tension cannot be captured today.
+The current baseline uses only effort to pick the rate, which collapses all of this into
+the weakest proxy. But the available data **cannot estimate** the separate effects across
+studies: density, rest and mode are confounded between the only two studies with set
+counts. Any coefficients would be fitted to the lab, not the feature.
 
-## 6. Candidates (phase 5)
+## 6. Limitations
 
-Scored against the deployed baseline: baseline with every session treated as moderate;
-v1's tier METs; a constant session MET; a linear density model; a density-gated effort
-tier; and ridge, XGBoost, LightGBM and CatBoost on sets/min and reps/min.
-`ml/scripts/session_model_experiment.py` (dependencies in `ml/requirements-model.txt`).
+- No L2-verified values. Every number used is an abstract value or an unverified
+  transcription.
+- Arm means, not individuals: 3 studies, 5 participant groups, 62 people in total (15 + 10 + 8 + 29).
+  The scoring is in-sample by construction.
+- Effort labels are analyst-assigned. Resting is assumed to be 1 MET. No older adults and
+  no novices in session form.
+- Indirect calorimetry misses part of the anaerobic cost (Benito reports 2–6%), which
+  biases all ground truth slightly low.
+- The PMC12307640 participant-level data stays excluded: CC BY-NC-ND, and its sheets
+  contain participant names.
 
-## 7. Validation (phase 6) — gates fixed before running
+## 7. Production recommendations
 
-Target: net kcal/kg/min, with resting at 1 MET (the papers lack per-arm height and age).
-Validation: leave-one-**study**-out, because arms of one study share participants.
-- **G1** mean absolute % error ≤ 0.80 × baseline's
-- **G2** no study more than 10 points worse than baseline
-- **G3** fitted on ≥ 3 independent studies holding every feature it uses, and covers every arm
-- **G4** all predictions within 1.5–12 gross MET
+1. **Do not change `estimateWorkoutCalories` or `INTENSITY_MET` now.**
+2. Merge this branch's non-estimator fixes only after the blockers below are cleared:
+   - removal of the ungated, gross `/intel/workout-burn` route;
+   - reconciliation using dated body weight and canonical exercise IDs, with a test;
+   - contract and handover docs.
+3. **Wearables:** follow `docs/WEARABLE_CALORIE_VALIDATION_DESIGN.md`:
+   - fix the F2 labelling bug in a separate change;
+   - record device identity;
+   - demote wearable strength-session energy to "corroborating" only once that design is
+     approved.
+4. **Collect what would settle the "hard" question:** BARBELL sessions with portable
+   calorimetry, the full set log (which already gives density) and the member's own
+   post-session effort answer. This is the Phase 9 cohort. **That**, not more public arm
+   means, is the path to a validated change.
 
-| Candidate | Arms scored | MAPE | Gates | Verdict |
-|---|---|---|---|---|
-| **baseline_v2 (deployed)** | 10 | 35.8 | — | reference |
-| baseline, all moderate | 10 | 26.2 | G2 ✗ (Benito 59 vs 18) | fail |
-| v1 tier METs | 10 | 58.3 | G1 ✗ G2 ✗ | fail |
-| constant session MET | 10 | 50.1 | G1 ✗ G2 ✗ | fail |
-| density-gated effort tier | 6 | **14.3** | G3 ✗ (2 studies) | fail — leading candidate |
-| linear density / ridge / XGBoost / LightGBM / CatBoost | 0 | — | G3 ✗ | not identifiable: under LOSO only one study with set counts remains to fit on |
+## 8. Remaining blockers
 
-## 8. Error analysis (phase 7)
+| # | Blocker | Owner action |
+|---|---|---|
+| B1 | Full texts unreachable: `www.ebi.ac.uk`, `europepmc.org`, `journals.plos.org`, `www.frontiersin.org`, `doi.org` | Allow them in the environment's network settings, or verify §2 locally. Resolve Benito's duration and VO2, Joao's O2 totals and the erratum, and Rustaden's set counts and duration. |
+| B2 | API removal: `/intel/workout-burn` | The web client never called it (verified). **The Android app's 7 commits are not on GitHub and could not be checked.** Confirm it does not call this route before merging. |
+| B3 | No participant-level session data | Phase 9 calibration cohort. |
+| B4 | Wearable device identity not stored | Schema migration (owner sign-off). |
+| B5 | Rustaden set counts | Needed before any density rule could reach 3 studies. |
 
-Baseline errors come almost entirely from `hard`:
+## 9. Tests run on this branch
 
-| Arm | Measured gross MET | Baseline MET | Net error |
-|---|---|---|---|
-| Joao 6×5 @ 90% (hard) | 3.16 | 6.0 | +131% |
-| Rustaden heavy (hard) | 3.43 | 6.0 | +106% |
-| Benito circuits (hard) | 5.97–8.91 | 6.0 | −36% to +1% |
-| Joao 60/75%, Rustaden pump (moderate) | 3.30–3.51 | 3.5 | ≤ 10% |
+| Suite | Result |
+|---|---|
+| Backend `node --test` | 1,885 tests: 1,883 pass, 0 fail, 2 skipped |
+| The 2 skipped (`communityPg`, `financialRls`) | They need `TEST_DATABASE_URL`. Run against a scratch local PostgreSQL 16: **22/22 pass** when run one at a time. Running both at once against one database makes them race on the shared migration (15 failures), which is an artefact of the parallel run. They do not touch calorie code. |
+| Frontend `vitest` | 179/179 pass; production build succeeds |
+| Playwright e2e (desktop; preinstalled Chromium instead of the configured Chrome channel) | **125/125 pass**. No e2e spec finishes a workout, so the calorie path is covered by backend route tests (`workoutCalorie`, `healthIntelligence`), not by e2e. |
+| ML `pytest` | 136 pass |
+| `skos-cal-v1` / `skos-food-v1` node tests | pass |
 
-A member who reports "hard" after a heavy session with long rests is currently credited
-with about twice the energy they used. That is the largest known bias in the shipped number.
+## 10. Branch audit vs `main`
 
-## 9. Decision
+`git diff origin/main...calorie-overhaul`. One earlier commit plus this stage. No file
+outside the calorie, health, docs and ml scope is touched.
 
-1. Keep `skos-cal-baseline-v2` as the default. No production behaviour change from modelling.
-2. Keep `ml` (skos-cal-v1) opt-in, dev/staging only. It fails every whole-session gate.
-3. **Next experiment:** the density-gated tier. `hard` should get 6.0 only when the session
-   averaged at least ~0.75 sets/min; otherwise it stays at 3.5. It needs set counts from a
-   third independent study. Rustaden 2020's protocol tables are the quickest source once
-   Europe PMC is reachable. If G1–G4 then pass, ship it as `skos-cal-baseline-v3` behind
-   the existing provider gate. That needs no new inputs: `sets_per_minute` is already in
-   the contract.
-4. Longer term: participant-level whole-session data (the Phase 9 calibration cohort,
-   `ml/docs/PHASE9_STUDY_PROTOCOL.md`) is the only route to a real model. No public dataset
-   fills that gap.
+- **Deleted functionality:** `POST /intel/workout-burn` and `burnEstimator.js` only. No
+  other importer existed, and the `ml/models/skos-cal-v1` files it loaded remain, still
+  used by the `ml` provider and its tests. `frontend/HANDOVER_MANAVI.md` documented the
+  route and is updated.
+- **API compatibility:** all other routes are unchanged. Completion, effort and
+  confirm-workout response shapes are untouched. Reconciliation now uses the weight logged
+  nearest the workout day (completion's rule), so reconciled kcal can differ from before
+  for members whose profile weight differs from their logged weight. That is the intended
+  fix.
+- **Estimator:** `calorieModel.js` is unchanged from `main`.
 
-## 10. Production architecture
-
-Unchanged: one entry point (`estimateWorkoutCalories`) → provider gate → timeout → gross→net
-(ml only) → `validateCalorieResult` → persistence by the backend only. With the legacy route
-gone, this is the only path. Risks:
-- **R1** `hard` over-credit (§8): known, documented in contract §7, fix gated on data.
-- **R2** the band (±25% of the gross rate) is not calibrated.
-- **R3** reconciliation prefers wearable kcal, which over-reads lifting by up to about 2×.
-  This needs a separate review.
-
-## 11. Changes in this branch
-
-- `backend/src/routes/intelligence.js`, `backend/src/services/burnEstimator.js`: removed
-  `POST /intel/workout-burn` (unused, ungated, gross).
-- `backend/src/services/health/dailyIntelligence.js`: reconciliation uses
-  `resolveBodyWeight` (the weight logged nearest the workout day) and the ml exercise
-  canonicalization, matching completion.
-- `backend/test/healthIntelligence.test.js`: regression test (fails before the fix).
-- `docs/calorie-model-contract.md` §6–7: baseline-v2 formula, net-of-resting, ±25% band,
-  `hard` caveat, single-path note.
-- `ml/data/processed/session_calorimetry_arms_v0.csv`, `ml/scripts/session_model_experiment.py`,
-  `ml/data/processed/session_model_experiment_v0.csv`, `ml/requirements-model.txt`.
-
-## 12. Tests
-
-`node --test` for the calorie, health, intelligence, reconciliation, workout-calorie and
-energy-balance suites: all pass, including the new test. No test was weakened or removed.
-
-## 13. Workout page
-
-No UI change. The single timer and the one post-session effort question stay. When the
-density gate ships, the effort answer will still be used; it will just stop raising the
-rate for low-density sessions.
-
-## 14. Limitations
-
-The data is arm means, not individuals, from 5 studies: 10 scored arms, 3 of them sharing one
-cohort. Resting is set to 1 MET for scoring. No women-only circuit data and no older adults
-in session form. Values are pending re-verification (§4).
-
-## 15. Reproduce
+## 11. Reproduce
 
 ```
 pip install -r ml/requirements-model.txt
-python -I ml/scripts/session_model_experiment.py
-cd backend && node --test test/healthIntelligence.test.js
+python -I ml/scripts/session_validation_stage2.py   # stage 2 (this report)
+python -I ml/scripts/session_model_experiment.py    # stage 1, superseded, kept for history
 ```
-
-## 16. Sources and licences
-
-Joao 2021 (PMC8714826, CC BY); Rustaden 2020 (PMC7298122, CC BY); Benito 2016 (PMC5104360,
-CC BY 4.0); PMC5801711 (CC BY-NC-ND, validation only); PMC5801710; PMC10553797 (direction
-only); PMC13120158 / PMC13701894 (wearable comparison); PMC11164431 (sets-only, excluded);
-Adeel 2021 (CC BY 4.0); Lytle 2019 MSSE (reference); 2024 Adult Compendium (Herrmann et al.).
-Facts reported in papers are used; no paper text or participant data is copied.

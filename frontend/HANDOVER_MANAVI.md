@@ -251,11 +251,14 @@ do not log it silently.
 
 ### Workout burn
 
-`POST /intel/workout-burn` → `{ kcal, lower_kcal, upper_kcal, notes[] }`
+`POST /intel/workout-burn` was removed (it bypassed the backend's calorie
+provider gate and returned a gross figure). The calorie estimate now comes
+only from `POST /workouts/:id/complete` and `POST /workouts/:id/effort`, as
+`calorie: { estimated_active_kcal, lower_kcal, upper_kcal, ... }` -- see
+`docs/calorie-model-contract.md` §6.
 
-**Show the range, not the bare number.** The interval is roughly ±70% of
-the estimate and the model flags its own assumptions in `notes`. A lone
-"597 kcal" claims precision the model explicitly disclaims.
+**Show the range, not the bare number.** The band is not a calibrated
+interval, and a lone figure claims precision the estimate does not have.
 
 ---
 

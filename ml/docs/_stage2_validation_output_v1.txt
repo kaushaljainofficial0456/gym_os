@@ -1,0 +1,108 @@
+============================================================================================
+1. ARMS (primary scenario).  L0 = unverified transcription, L1 = design confirmed by abstract
+============================================================================================
+arm                   study              n    MET  sets/min   effort*  design/value
+joao2021_60           joao2021          15   3.33      0.36  moderate  L1/L0
+joao2021_75           joao2021          15   3.30      0.39  moderate  L1/L0
+joao2021_90           joao2021          15   3.16      0.41      hard  L1/L0
+rustaden2020_pump     rustaden2020      10   3.51         -  moderate  L1/L0
+rustaden2020_heavy    rustaden2020       8   3.43         -      hard  L1/L0
+benito2016_machine    benito2016        29   5.83      1.03      hard  L1/L1 (abstract VO2) / L0 (duration)
+benito2016_free       benito2016        29   6.91      1.03      hard  L1/L1 (abstract VO2) / L0 (duration)
+* effort is the label an analyst assigned to the protocol, NOT what participants reported.
+
+============================================================================================
+2. BASELINE COMPARISON — every evaluation states its studies and arms (in-sample, no fitting)
+============================================================================================
+
+[primary (abstract VO2, 23.25 min, resistance-only)]
+  baseline_v2 (deployed)        3 st / 7 arms  MAPE   37.4  bias  +32.0   joao2021 49, rustaden2020 53, benito2016 10
+  all moderate                  3 st / 7 arms  MAPE   21.8  bias  -13.7   joao2021 11, rustaden2020 2, benito2016 53
+  v1 tier METs                  3 st / 7 arms  MAPE   53.4  bias  +48.3   joao2021 78, rustaden2020 73, benito2016 10
+  density-gated (0.75)          2 st / 5 arms  MAPE   10.1  bias   +2.4   joao2021 11, benito2016 10
+  baseline, same arms as gated  2 st / 5 arms  MAPE   29.4  bias  +21.7
+  arms where gated differs from baseline: ['joao2021_90']
+
+[v0 values (earlier transcription, incl. combined)]
+  baseline_v2 (deployed)        5 st / 10 arms  MAPE   34.1  bias  +26.9   joao2021 49, rustaden2020 53, benito2016 18, pmc5801711 43, pmc5801710 7
+  all moderate                  5 st / 10 arms  MAPE   24.2  bias   +0.6   joao2021 11, rustaden2020 2, benito2016 59, pmc5801711 43, pmc5801710 7
+  v1 tier METs                  5 st / 10 arms  MAPE   63.7  bias  +56.6   joao2021 78, rustaden2020 73, benito2016 18, pmc5801711 100, pmc5801710 49
+  density-gated (0.75)          2 st / 6 arms  MAPE   14.3  bias   -3.4   joao2021 11, benito2016 18
+  baseline, same arms as gated  2 st / 6 arms  MAPE   33.6  bias  +15.9
+  arms where gated differs from baseline: ['joao2021_90']
+
+[Benito duration per abstract (45.25 min)]
+  baseline_v2 (deployed)        3 st / 7 arms  MAPE   37.4  bias  +32.0   joao2021 49, rustaden2020 53, benito2016 10
+  all moderate                  3 st / 7 arms  MAPE   21.8  bias  -13.7   joao2021 11, rustaden2020 2, benito2016 53
+  v1 tier METs                  3 st / 7 arms  MAPE   53.4  bias  +48.3   joao2021 78, rustaden2020 73, benito2016 10
+  density-gated (0.75)          2 st / 5 arms  MAPE   31.9  bias  -21.1   joao2021 11, benito2016 53
+  baseline, same arms as gated  2 st / 5 arms  MAPE   29.4  bias  +21.7
+  arms where gated differs from baseline: ['joao2021_90', 'benito2016_machine', 'benito2016_free']
+
+[drop Benito]
+  baseline_v2 (deployed)        2 st / 5 arms  MAPE   51.3  bias  +51.0   joao2021 49, rustaden2020 53
+  all moderate                  2 st / 5 arms  MAPE    6.2  bias   +6.0   joao2021 11, rustaden2020 2
+  v1 tier METs                  2 st / 5 arms  MAPE   75.4  bias  +75.4   joao2021 78, rustaden2020 73
+  density-gated (0.75)          1 st / 3 arms  MAPE   10.7  bias  +10.7   joao2021 11
+  baseline, same arms as gated  1 st / 3 arms  MAPE   49.4  bias  +49.4
+  arms where gated differs from baseline: ['joao2021_90']
+
+[drop Joao]
+  baseline_v2 (deployed)        2 st / 4 arms  MAPE   31.4  bias  +23.4   rustaden2020 53, benito2016 10
+  all moderate                  2 st / 4 arms  MAPE   27.4  bias  -25.9   rustaden2020 2, benito2016 53
+  v1 tier METs                  2 st / 4 arms  MAPE   41.0  bias  +33.3   rustaden2020 73, benito2016 10
+  density-gated (0.75)          1 st / 2 arms  MAPE    9.5  bias   -6.0   benito2016 10
+  baseline, same arms as gated  1 st / 2 arms  MAPE    9.5  bias   -6.0
+  arms where gated differs from baseline: none
+
+[drop arm joao2021_90 only]
+  baseline_v2 (deployed)        3 st / 6 arms  MAPE   23.6  bias  +18.3   joao2021 8, rustaden2020 53, benito2016 10
+  all moderate                  3 st / 6 arms  MAPE   21.0  bias  -14.5   joao2021 8, rustaden2020 2, benito2016 53
+  v1 tier METs                  3 st / 6 arms  MAPE   44.5  bias  +39.3   joao2021 51, rustaden2020 73, benito2016 10
+  density-gated (0.75)          2 st / 4 arms  MAPE    8.8  bias   +1.1   joao2021 8, benito2016 10
+  baseline, same arms as gated  2 st / 4 arms  MAPE    8.8  bias   +1.1
+  arms where gated differs from baseline: none
+
+============================================================================================
+3. THRESHOLD SENSITIVITY — density-gated rule vs baseline on the same arms
+============================================================================================
+
+[primary (abstract VO2, 23.25 min, resistance-only)]
+  0.30:29/29  0.35:29/29  0.40:29/29  0.45:10/29  0.50:10/29  0.55:10/29  0.60:10/29
+  0.65:10/29  0.70:10/29  0.75:10/29  0.80:10/29  0.85:10/29  0.90:10/29  0.95:10/29
+  1.00:10/29  1.05:32/29  1.10:32/29  1.15:32/29  1.20:32/29  1.25:32/29  1.30:32/29
+  (cut: gated MAPE / baseline MAPE)
+
+[Benito duration per abstract (45.25 min)]
+  0.30:29/29  0.35:29/29  0.40:29/29  0.45:10/29  0.50:10/29  0.55:32/29  0.60:32/29
+  0.65:32/29  0.70:32/29  0.75:32/29  0.80:32/29  0.85:32/29  0.90:32/29  0.95:32/29
+  1.00:32/29  1.05:32/29  1.10:32/29  1.15:32/29  1.20:32/29  1.25:32/29  1.30:32/29
+  (cut: gated MAPE / baseline MAPE)
+
+[drop Benito]
+  0.30:49/49  0.35:49/49  0.40:49/49  0.45:11/49  0.50:11/49  0.55:11/49  0.60:11/49
+  0.65:11/49  0.70:11/49  0.75:11/49  0.80:11/49  0.85:11/49  0.90:11/49  0.95:11/49
+  1.00:11/49  1.05:11/49  1.10:11/49  1.15:11/49  1.20:11/49  1.25:11/49  1.30:11/49
+  (cut: gated MAPE / baseline MAPE)
+
+[drop arm joao2021_90 only]
+  0.30:9/9  0.35:9/9  0.40:9/9  0.45:9/9  0.50:9/9  0.55:9/9  0.60:9/9
+  0.65:9/9  0.70:9/9  0.75:9/9  0.80:9/9  0.85:9/9  0.90:9/9  0.95:9/9
+  1.00:9/9  1.05:31/9  1.10:31/9  1.15:31/9  1.20:31/9  1.25:31/9  1.30:31/9
+  (cut: gated MAPE / baseline MAPE)
+
+============================================================================================
+4. FEATURE SEPARABILITY — which features vary WITHIN a study (testable) vs only between studies
+============================================================================================
+  external load (%1RM)  joao2021: varies 60/75/90 | benito2016: fixed 70% 15RM | rustaden2020: between groups
+  rest between sets     joao2021: fixed 120 s | benito2016: fixed 15 s | rustaden2020: not transcribed
+  density (sets/min)    joao2021: 0.36-0.41 (narrow) | benito2016: fixed 1.03 | rustaden2020: unknown
+  reported effort       joao2021: not used | benito2016: not used | rustaden2020: not used
+  exercise mode         joao2021: machines | benito2016: machine vs free weight | rustaden2020: class vs heavy
+
+  Within Joao (same men, load 60 -> 90% 1RM, rest fixed): MET 3.33 -> 3.30 -> 3.16; duration 44 -> 116 min.
+  Within Benito (same people, same density): machine 5.83 vs free weight 6.91 MET -> exercise mode alone moves the rate ~19%.
+  Density and rest differ only BETWEEN Joao and Benito, together with sex mix, mode, cadence and lab:
+  their effect on rate is confounded and cannot be attributed to density alone from these data.
+
+wrote ml/data/processed/session_validation_stage2_v1.csv
