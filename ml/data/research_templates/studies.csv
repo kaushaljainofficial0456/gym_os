@@ -1,1 +1,1 @@
-study_id,site,protocol_version,ethics_reference,licence,is_synthetic
+study_id,site,protocol_version,ethics_reference,licence,is_synthetic,lactate_o2_equiv_ml_per_kg_per_mmol,lactate_kcal_per_l_o2,lactate_conversion_source

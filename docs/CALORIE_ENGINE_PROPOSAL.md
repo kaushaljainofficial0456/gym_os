@@ -111,7 +111,7 @@ Every statement is tagged:
 | # | Statement | Tag / strength |
 |---|---|---|
 | S1 | A set's energy is supplied aerobically during the set, anaerobically (glycolysis), and repaid as elevated O₂ uptake after the set. In one study of five lifts, during-set O₂ was ~18%, anaerobic ~31% and post-set O₂ ~51% of each set's cost. | [EVIDENCE] small lab studies, Scott group ([Knausenberger et al. 2014](https://wnus.usz.edu.pl/cejssm/an/issue/22/article/175)) |
-| S2 | Indirect calorimetry alone likely **underestimates** resistance-exercise cost because it misses the glycolytic part, which may exceed 40% depending on training variables. Best current practice is calorimetry during and after exercise **plus** pre/post blood lactate. No accepted standard exists. | [EVIDENCE] systematic scoping review, 166 studies ([Mitchell et al. 2024, Sports Med](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11393209/)) |
+| S2 | Indirect calorimetry alone likely **underestimates** resistance-exercise cost because it misses the glycolytic part. The review reports that this part **can exceed 40% under some training conditions** (load, sets, rest); it is protocol-dependent, not a typical value, and not a correction factor (`docs/CALORIE_ENERGY_DEFINITIONS.md` §4). Best current practice is calorimetry during and after exercise **plus** pre/post blood lactate. No accepted standard exists. | [EVIDENCE] systematic scoping review, 166 studies ([Mitchell et al. 2024, Sports Med](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11393209/)) |
 | S3 | Per-set cost tracks mechanical work (load × displacement × reps) within an exercise, with a different slope per exercise. At equal work, time under tension also matters. | [EVIDENCE] small studies ([Knausenberger 2014](https://wnus.usz.edu.pl/cejssm/an/issue/22/article/175); a 2012 bench-press cadence study, [APNM](https://www.ingentaconnect.com/content/cndscipub/apnm/2012/00000037/00000002/art00008;jsessionid=1ipm1cq0jdhlc.x-ic-live-03)) |
 | S4 | Larger active muscle mass → higher cost. | [EVIDENCE] review-level statement ([Adeel 2021, Appl Sci](https://www.mdpi.com/2076-3417/11/18/8773/html)); no validated muscle-mass equation found |
 | S5 | Whole-session rate is driven by density / work rate. In one study, longer rests lowered session VO₂ (work rate r = .96 with VO₂; RPE weak). | [EVIDENCE] stage 2; values unverified (PMC10553797) |
@@ -180,8 +180,9 @@ Each fallback widens the interval. None invents a value.
 
 ### 3.3 Definition decision (needed before any data collection)
 
-What should "calories burned in the workout" include? [FACT: today, active minutes only; S1/S2
-say this omits a large share.]
+**Decided 2026-10-30:** displayed = net energy attributable to the session (aerobic + anaerobic,
+minus resting), excluding post-exercise recovery. See `docs/CALORIE_ENERGY_DEFINITIONS.md`.
+Options considered:
 
 | Option | Includes | Criterion needed |
 |---|---|---|

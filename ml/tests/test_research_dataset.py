@@ -18,7 +18,7 @@ SRC = os.path.join(os.path.dirname(__file__), '..', 'src')
 sys.path.insert(0, SRC)
 
 from research import load_dataset  # noqa: E402
-from research.energy import gross_kcal_from_gas, net_kcal  # noqa: E402
+from research.energy import anaerobic_kcal, gross_kcal_from_gas, net_kcal, session_components  # noqa: E402
 from research.features import build_session_table, eligible_participants  # noqa: E402
 from research.models import check_gate, evaluate  # noqa: E402
 from research.quality import distribution_shift, psi, quality_report  # noqa: E402
@@ -36,7 +36,9 @@ def make_dataset(people=6, sessions_each=2, studies=('S1',), seed=0, scopes='col
     rng = np.random.default_rng(seed)
     t = {k: [] for k in TABLES}
     for st in studies:
-        t['studies'].append(dict(study_id=st, site=f'site-{st}', protocol_version='1.0', ethics_reference='SYNTH-0', licence='test', is_synthetic=1))
+        # Conversion values are arbitrary test numbers, labelled as such.
+        t['studies'].append(dict(study_id=st, site=f'site-{st}', protocol_version='1.0', ethics_reference='SYNTH-0', licence='test', is_synthetic=1,
+                                 lactate_o2_equiv_ml_per_kg_per_mmol=3.0, lactate_kcal_per_l_o2=5.0, lactate_conversion_source='SYNTHETIC TEST VALUE'))
     t['devices'] += [dict(device_id='CART', tier='criterion_portable', make_model='synthetic analyser'),
                      dict(device_id='WATCH', tier='wearable_estimate', make_model='synthetic watch')]
     n = 0
@@ -77,7 +79,11 @@ def make_dataset(people=6, sessions_each=2, studies=('S1',), seed=0, scopes='col
                          vco2_l=0.0036 * mass * 10 * 0.82, calibrated_at=iso(rest_a - timedelta(minutes=30)), qc_status='pass'),
                     dict(measurement_id=f'M{sid}S', session_id=sid, device_id='CART', tier='criterion_portable', interval='session',
                          interval_start=iso(start), interval_end=iso(end), vo2_l=vo2, vco2_l=vco2,
-                         gross_kcal=gross_kcal_from_gas(vo2, vco2), calibrated_at=iso(rest_a - timedelta(minutes=30)), qc_status='pass'),
+                         gross_kcal=gross_kcal_from_gas(vo2, vco2), calibrated_at=iso(rest_a - timedelta(minutes=30)), qc_status='pass',
+                         lactate_pre_mmol=1.2, lactate_post_mmol=1.2 + float(rng.uniform(1, 6)), lactate_post_delay_min=3.0, lactate_method='synthetic'),
+                    dict(measurement_id=f'M{sid}E', session_id=sid, device_id='CART', tier='criterion_portable', interval='recovery_epoc',
+                         interval_start=iso(end), interval_end=iso(end + timedelta(minutes=20)), vo2_l=0.005 * mass * 20,
+                         vco2_l=0.005 * mass * 20 * 0.85, calibrated_at=iso(rest_a - timedelta(minutes=30)), qc_status='pass'),
                     dict(measurement_id=f'M{sid}W', session_id=sid, device_id='WATCH', tier='wearable_estimate', interval='session',
                          interval_start=iso(start), interval_end=iso(end), gross_kcal=300.0, reported_kcal_kind='net_active', qc_status='not_checked'),
                 ]
@@ -187,6 +193,60 @@ class EnergyAndFeatureTests(unittest.TestCase):
         self.assertEqual(r['wearable_estimate_kcal'], 300.0, 'wearable kept as a comparison column')
         self.assertEqual(r['wearable_estimate_kind'], 'net_active')
         self.assertNotEqual(r['target_net_kcal'], 300.0, 'the target is never the wearable figure')
+
+    def test_components_and_product_definition(self):
+        c = session_components(session_vo2_l=40, session_vco2_l=36, session_minutes=40, resting_kcal_per_min=1.2,
+                               anaerobic=20.0, recovery_vo2_l=8, recovery_vco2_l=7, recovery_minutes=20)
+        aerobic_gross = 3.941 * 40 + 1.106 * 36
+        self.assertAlmostEqual(c['aerobic_gross'], aerobic_gross)
+        self.assertAlmostEqual(c['resting'], 48)
+        self.assertAlmostEqual(c['aerobic_net'], aerobic_gross - 48)
+        self.assertAlmostEqual(c['workout_net'], aerobic_gross - 48 + 20, msg='anaerobic is part of the workout')
+        self.assertAlmostEqual(c['workout_gross'], aerobic_gross + 20, msg='resting is not subtracted from gross')
+        self.assertAlmostEqual(c['post_exercise'], 3.941 * 8 + 1.106 * 7 - 1.2 * 20)
+        self.assertNotAlmostEqual(c['workout_net'], c['workout_net'] + c['post_exercise'], msg='post-exercise kept out')
+        self.assertFalse(c['rer_above_1'])
+
+    def test_missing_anaerobic_means_no_workout_target_not_aerobic_only(self):
+        c = session_components(session_vo2_l=40, session_vco2_l=36, session_minutes=40, resting_kcal_per_min=1.2)
+        self.assertIsNone(c['workout_net'])
+        self.assertIsNotNone(c['aerobic_net'])
+
+    def test_rer_above_one_is_flagged_not_corrected(self):
+        c = session_components(session_vo2_l=40, session_vco2_l=44, session_minutes=40, resting_kcal_per_min=1.2, anaerobic=0.0)
+        self.assertTrue(c['rer_above_1'])
+        self.assertAlmostEqual(c['aerobic_gross'], 3.941 * 40 + 1.106 * 44)
+
+    def test_lactate_conversion_has_no_default(self):
+        with self.assertRaises(ValueError):
+            anaerobic_kcal(1.0, 5.0, 80, None, 5.0, 'x')
+        with self.assertRaises(ValueError):
+            anaerobic_kcal(1.0, 5.0, 80, 3.0, 5.0, '')
+        kcal, _ = anaerobic_kcal(1.0, 5.0, 80, 3.0, 5.0, 'test')
+        self.assertAlmostEqual(kcal, 4 * 3.0 * 80 / 1000 * 5.0)
+        self.assertEqual(anaerobic_kcal(5.0, 4.0, 80, 3.0, 5.0, 'test'), (0.0, 'lactate fell over the session'))
+
+    def test_session_table_targets(self):
+        ds = make_dataset(people=1, sessions_each=1)
+        r = build_session_table(ds, validate(ds)).iloc[0]
+        self.assertAlmostEqual(r['target_net_kcal'], r['target_aerobic_net_kcal'] + r['target_anaerobic_kcal'])
+        self.assertGreater(r['target_post_exercise_kcal'], 0)
+        self.assertAlmostEqual(r['target_gross_kcal'], r['target_aerobic_gross_kcal'] + r['target_anaerobic_kcal'])
+
+    def test_lactate_without_a_stated_conversion_is_an_error(self):
+        ds = make_dataset(people=1, sessions_each=1)
+        ds['studies']['lactate_conversion_source'] = None
+        self.assertIn('lactate_conversion_missing', rules(validate(ds)))
+
+    def test_no_lactate_leaves_no_product_target(self):
+        ds = make_dataset(people=1, sessions_each=1)
+        m = ds['measurements']
+        m.loc[m['interval'] == 'session', ['lactate_pre_mmol', 'lactate_post_mmol']] = None
+        issues = validate(ds)
+        self.assertIn('no_lactate', {i.rule for i in issues})
+        r = build_session_table(ds, issues).iloc[0]
+        self.assertTrue(pd.isna(r['target_net_kcal']))
+        self.assertFalse(pd.isna(r['target_aerobic_net_kcal']))
 
     def test_failed_qc_gives_no_target(self):
         ds = make_dataset(people=1, sessions_each=1)

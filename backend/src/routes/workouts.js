@@ -10,6 +10,8 @@ import { evaluatePRs } from '../services/personalRecords.js';
 import { track, trackOnce } from '../services/events.js';
 import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, persistCalorieResult, mlCanonicalExerciseId, sessionEffort } from '../services/intelligence/calorieModel.js';
 import { qualifyCalorie } from '../services/intelligence/calorieReliability.js';
+import { analyzeSessionTiming } from '../services/workoutTiming.js';
+import { buildSessionFeatures, runShadowEngine, calorieProfileGaps } from '../services/intelligence/calorieEngineShadow.js';
 import { searchExercises, searchExercisesByName } from '../services/intelligence/exerciseSearch.js';
 
 export default function workoutRoutes(db) {
@@ -528,8 +530,12 @@ export default function workoutRoutes(db) {
     if (unknown) return res.status(422).json({ error: 'exercise_id does not belong to this workout', exercise_id: unknown.exercise_id });
 
     const prs = [];
+    let profileGaps = [];
     const txResult = await db.tx(async (tx) => {
       const allCompletedSets = []; // { exercise, set } — ACTUAL completed sets only
+      // Pass 1: normalize every log's sets, so set timing can be checked
+      // across exercises (supersets interleave them) before anything is written.
+      const normalized = [];
       for (const log of req.body.logs) {
         const ex = byId.get(log.exercise_id);
         if (!ex) continue;
@@ -537,11 +543,17 @@ export default function workoutRoutes(db) {
         let sets = [];
         let synthesized = 0;
         if (Array.isArray(log.sets) && log.sets.length) {
-          sets = log.sets.map((s) => ({
+          sets = log.sets.map((s, i) => ({
             actual_weight: Number(s.actual_weight ?? parseFloat(ex.weight) ?? 0),
             actual_reps: Number(s.actual_reps ?? parseFloat(ex.reps) ?? 0),
             rir: s.rir ?? null,
-            completed: s.completed === false ? 0 : 1
+            completed: s.completed === false ? 0 : 1,
+            // Measured capture (docs/CALORIE_DATA_CAPTURE.md). Kept off the
+            // calorie input: buildWorkoutCalorieInput reads none of these.
+            timing_key: `${log.exercise_id}#${i}`,
+            client_started_at: s.started_at ?? null,
+            client_completed_at: s.completed_at ?? null,
+            reported_rir: s.reported_rir ?? null
           }));
         } else {
           // legacy aggregate shape → synthesized rows, excluded from ML training
@@ -552,6 +564,20 @@ export default function workoutRoutes(db) {
           sets = Array.from({ length: n }, () => ({ actual_weight: wgt, actual_reps: reps, rir: log.rir ?? null, completed: 1 }));
         }
         if (!sets.length) continue;
+        normalized.push({ log, ex, sets, synthesized });
+      }
+
+      const timing = analyzeSessionTiming({
+        sets: normalized.flatMap(({ sets }) => sets.filter((s) => s.timing_key && s.completed)
+          .map((s) => ({ key: s.timing_key, started_at: s.client_started_at, completed_at: s.client_completed_at }))),
+        pauses: req.body.pauses || [],
+        clientWindow: req.body.client_started_at ? { started_at: req.body.client_started_at, finished_at: req.body.client_finished_at } : null,
+        serverWindow: { started_at: startedAt, completed_at: completedAt },
+        activeSeconds: req.body.duration_seconds ?? (durationMin != null ? durationMin * 60 : null),
+      });
+
+      // Pass 2: write.
+      for (const { log, ex, sets, synthesized } of normalized) {
         const wgtBest = Math.max(...sets.map((s) => Number(s.actual_weight) || 0));
         const repsBest = Math.max(...sets.map((s) => Number(s.actual_reps) || 0));
         const logId = id('wlg');
@@ -566,13 +592,21 @@ export default function workoutRoutes(db) {
         const prescWgt = parseFloat(ex.weight);
         for (let i = 0; i < sets.length; i++) {
           const s = sets[i];
+          const t = (s.completed && s.timing_key && timing.perSet.get(s.timing_key)) || {};
+          // Planned rest goes to prescribed_rest_seconds; the legacy
+          // rest_seconds column (which only ever held planned rest) is no
+          // longer written, so it can never be mistaken for rest taken.
           await tx.run(
-            `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, rir, completed, is_synthesized)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, rir, completed, is_synthesized,
+                                            prescribed_rest_seconds, set_started_at, set_completed_at, actual_rest_seconds, tick_interval_seconds, timing_flags, reported_rir)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [id('stl'), logId, client.id, ex.exercise_id || null, i + 1,
              Number.isFinite(prescReps) ? prescReps : null, s.actual_reps,
              Number.isFinite(prescWgt) ? prescWgt : null, s.actual_weight,
-             ex.rest_sec || null, s.rir, s.completed, synthesized]);
+             s.rir, s.completed, synthesized,
+             ex.rest_sec ?? null, t.set_started_at ?? null, t.set_completed_at ?? null,
+             t.actual_rest_seconds ?? null, t.tick_interval_seconds ?? null, t.timing_flags ?? null,
+             s.reported_rir ?? null]);
           if (s.completed !== 0 && s.completed !== false) allCompletedSets.push({ exercise: ex, set: s });
         }
         await tx.run('UPDATE workout_exercises SET done = 1 WHERE id = ?', [ex.id]);
@@ -587,6 +621,8 @@ export default function workoutRoutes(db) {
         // actually was.
         `UPDATE workouts SET status = 'completed', started_at = ?, completed_at = ?, duration_min = ? WHERE id = ?`,
         [startedAt, completedAt, durationMin, w.id]);
+
+      await tx.run('UPDATE workouts SET session_timing_json = ? WHERE id = ?', [JSON.stringify(timing.session), w.id]);
 
       // Calorie estimate from ACTUAL completed sets — never planned workload
       // (skipped exercises contribute 0 sets / 0 reps / 0 workload).
@@ -628,12 +664,36 @@ export default function workoutRoutes(db) {
         calorie = null;
         console.error('[sk-os] calorie estimate failed', { req: req.id || null, workout: w.id, error: String(e?.message || e).slice(0, 500) });
       }
+
+      // HIDDEN MODE (calorieEngineShadow.js): log the engine's inputs and
+      // its 'not_fitted' status. Never displayed, never an estimate, and --
+      // like the estimate above -- never allowed to fail completion.
+      try {
+        const latestLog = await tx.q1('SELECT date FROM weight_logs WHERE client_id = ? AND date <= ? ORDER BY date DESC LIMIT 1', [client.id, d]);
+        profileGaps = calorieProfileGaps({ client, latestWeightLogDate: latestLog?.date || null, workoutDate: d });
+        const featureSets = normalized.flatMap(({ ex, sets }) => sets.filter((s) => s.completed).map((s) => ({
+          reps: s.actual_reps, load_kg: s.actual_weight, reported_rir: s.reported_rir ?? null,
+          ...(s.timing_key ? timing.perSet.get(s.timing_key) : {}),
+          movement: ex.movement || null, primary_muscle: ex.lib_primary_muscle || null, ex_type: ex.ex_type || null, equipment: ex.lib_equipment || null,
+        })));
+        const features = buildSessionFeatures(featureSets, {
+          activeMinutes: durationMin, bodyMassKg: await resolveBodyWeight(tx, client.id, d),
+          profile: { height_cm: client.height_cm ?? null, age_years: client.age ?? null, sex: client.sex ?? null },
+          profileGaps, timing: timing.session,
+        });
+        await tx.run('UPDATE workouts SET calorie_features_json = ? WHERE id = ?',
+          [JSON.stringify({ features, engine: runShadowEngine(features) }), w.id]);
+      } catch (e) {
+        console.error('[sk-os] calorie feature logging failed', { req: req.id || null, workout: w.id, error: String(e?.message || e).slice(0, 500) });
+      }
       return calorie;
     });
 
     await track(db, { orgId: w.org_id, userId: req.user.sub, type: 'workout_completed', data: { clientId: client.id, workoutId: w.id, prCount: prs.length, durationMin, estimatedKcal: txResult?.estimated_active_kcal ?? null } });
     await trackOnce(db, { type: 'first_workout_logged', orgId: w.org_id, userId: client.user_id, data: { clientId: client.id, workoutId: w.id } });
-    res.json({ ok: true, prs, workoutId: w.id, duration_min: durationMin, calorie: txResult });
+    // profile_gaps: what the member could fill in so the estimate's existing
+    // inputs are truer next time. Informational; this session's figure is final.
+    res.json({ ok: true, prs, workoutId: w.id, duration_min: durationMin, calorie: txResult, profile_gaps: profileGaps });
   });
 
   // ---- the member's effort, after the session ----
@@ -749,7 +809,14 @@ function z_workoutComplete() {
         actual_reps: z.number().min(0).max(200).optional(),
         actual_weight: z.number().min(0).max(1000).optional(),
         rir: z.number().int().min(0).max(5).optional(),
-        completed: z.boolean().optional()
+        completed: z.boolean().optional(),
+        // Measured capture, phone clock (validated server-side, see
+        // services/workoutTiming.js). Optional: absent = not measured.
+        started_at: z.string().datetime().optional(),
+        completed_at: z.string().datetime().optional(),
+        // Optional per-set reps-in-reserve the member entered. Research
+        // capture only -- unlike `rir` above it never reaches the estimator.
+        reported_rir: z.number().int().min(0).max(10).optional()
       })).max(20).optional(),
       // legacy aggregate shape (still accepted)
       sets_done: z.number().int().min(0).max(20).optional(),
@@ -776,6 +843,11 @@ function z_workoutComplete() {
     // Accumulated paused time in milliseconds — stored for analytics but
     // does NOT influence duration_min or calorie calculation when
     // duration_seconds is supplied.
-    paused_ms: z.number().min(0).max(86400000).optional()
+    paused_ms: z.number().min(0).max(86400000).optional(),
+    // Pause intervals and the phone's own session window, so set timing can
+    // be checked against one clock and rests exclude paused time.
+    pauses: z.array(z.object({ started_at: z.string().datetime(), ended_at: z.string().datetime().optional() })).max(200).optional(),
+    client_started_at: z.string().datetime().optional(),
+    client_finished_at: z.string().datetime().optional()
   });
 }

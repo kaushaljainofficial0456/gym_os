@@ -11,7 +11,7 @@
  *
  * Presentation only -- every change goes back through Workout.jsx.
  */
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Check, Ellipsis, Minus, Pause, Play, Plus, TrendingUp } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
 import WeightInput from '../WeightInput.jsx';
@@ -61,16 +61,27 @@ export function PlayerHeader({ name, elapsed, paused, doneSets, totalSets, onPau
   );
 }
 
-function SetRow({ index, set, onPatch, onToggle, u }) {
+function SetRow({ index, set, onPatch, onToggle, onStart, u }) {
   const tick = () => {
     if (!set.done) {
       try { navigator.vibrate?.(12); } catch { /* not supported */ }
     }
     onToggle();
   };
+  const started = !set.done && Number(set.startedAt) > 0;
   return (
-    <div className={`wk-setrow${set.done ? ' is-done' : ''}`}>
-      <span className="wk-setrow__n">{index + 1}</span>
+    <div className={`wk-setrow${set.done ? ' is-done' : ''}${started ? ' is-started' : ''}`}>
+      {/* Optional: tapping the set number marks when the set began, so the
+          rest before it can be measured (docs/CALORIE_DATA_CAPTURE.md).
+          Skipping it changes nothing else. */}
+      {onStart && !set.done ? (
+        <button type="button" className="wk-setrow__n wk-setrow__start" onClick={onStart} aria-pressed={started}
+          aria-label={started ? `Set ${index + 1} started` : `Start set ${index + 1}`}>
+          {index + 1}
+        </button>
+      ) : (
+        <span className="wk-setrow__n">{index + 1}</span>
+      )}
       <input type="number" inputMode="numeric" min={0} className="input wk-setrow__in"
         value={set.reps} aria-label={`Set ${index + 1} reps`}
         onChange={(e) => onPatch('reps', e.target.value)} />
@@ -85,7 +96,24 @@ function SetRow({ index, set, onPatch, onToggle, u }) {
   );
 }
 
-export function ExerciseCard({ ex, sets = [], open, onToggleOpen, onPatch, onToggleSet, onAddSet, onRemoveLast, onRemove, onUseTarget, suggestion, u }) {
+/* Optional reps-in-reserve after a ticked set. Research capture only: the
+   calorie estimate never reads it. Leaving it blank is a normal answer. */
+const RIR_CHOICES = [0, 1, 2, 3, 4, 5];
+function RirPicker({ index, value, onPick }) {
+  return (
+    <div className="wk-rir" role="group" aria-label={`Set ${index + 1}: reps left in the tank (optional)`}>
+      <span className="wk-rir__label">Reps left?</span>
+      {RIR_CHOICES.map((n) => (
+        <button key={n} type="button" className="wk-rir__chip" aria-pressed={value === n}
+          onClick={() => onPick(value === n ? null : n)}>
+          {n === 5 ? '5+' : n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ExerciseCard({ ex, sets = [], open, onToggleOpen, onPatch, onToggleSet, onStartSet, onReportRir, onAddSet, onRemoveLast, onRemove, onUseTarget, suggestion, u }) {
   const [menu, setMenu] = useState(false);
   const done = sets.filter((s) => s.done).length;
   const complete = sets.length > 0 && done === sets.length;
@@ -139,9 +167,15 @@ export function ExerciseCard({ ex, sets = [], open, onToggleOpen, onPatch, onTog
             <span>Set</span><span>Reps</span><span>{u.isImperial ? 'lb' : 'kg'}</span><span />
           </div>
           {sets.map((st, i) => (
-            <SetRow key={i} index={i} set={st} u={u}
-              onPatch={(field, value) => onPatch(i, field, value)}
-              onToggle={() => onToggleSet(i)} />
+            <Fragment key={i}>
+              <SetRow index={i} set={st} u={u}
+                onPatch={(field, value) => onPatch(i, field, value)}
+                onToggle={() => onToggleSet(i)}
+                onStart={onStartSet ? () => onStartSet(i) : null} />
+              {st.done && onReportRir && (
+                <RirPicker index={i} value={st.reportedRir ?? null} onPick={(v) => onReportRir(i, v)} />
+              )}
+            </Fragment>
           ))}
           <div className="wk-sets__actions">
             <button type="button" className="wk-ghost" onClick={onAddSet}>

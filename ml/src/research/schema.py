@@ -49,6 +49,11 @@ TABLES = {
         col('ethics_reference', 'text', True, note='approval number from the ethics committee; no data without one'),
         col('licence', 'text', True, note='terms under which BARBELL may use the data'),
         col('is_synthetic', 'bool', True, note='1 only for test fixtures; never counted as evidence'),
+        # Lactate -> energy conversion, fixed per study BEFORE analysis and
+        # reported with results (energy.anaerobic_kcal has no default).
+        col('lactate_o2_equiv_ml_per_kg_per_mmol', 'float', lo=0.5, hi=10, note='O2-equivalent of a 1 mmol/L blood-lactate rise, per kg'),
+        col('lactate_kcal_per_l_o2', 'float', lo=4.0, hi=5.5),
+        col('lactate_conversion_source', 'text', note='citation for both values above'),
     ],
     'participants': [
         col('participant_id', 'pseudonym', True, note='random code; the key linking it to a person stays with the site'),
@@ -117,6 +122,10 @@ TABLES = {
         col('gross_kcal', 'float', lo=0, hi=5000, unit='kcal', note='criterion: computed by energy.py from VO2/VCO2; others: as reported'),
         col('reported_kcal_kind', 'enum', allowed=('gross', 'net_active', 'unknown'), note='what a device/user figure claims to be'),
         col('mean_hr_bpm', 'float', lo=30, hi=230),
+        col('lactate_pre_mmol', 'float', lo=0.3, hi=30, unit='mmol/L', note='capillary blood, immediately before the first working set'),
+        col('lactate_post_mmol', 'float', lo=0.3, hi=30, unit='mmol/L', note='peak of the post-session samples'),
+        col('lactate_post_delay_min', 'float', lo=0, hi=15, note='minutes after the last set at which the peak was taken'),
+        col('lactate_method', 'text', note='analyser make/model'),
         col('calibrated_at', 'datetime', note='gas and flow calibration before this session (criterion tiers)'),
         col('qc_status', 'enum', True, allowed=QC_STATUS),
         col('qc_notes', 'text'),

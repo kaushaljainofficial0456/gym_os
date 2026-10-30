@@ -336,6 +336,18 @@ const MIGRATIONS = [
   ['access_member_mappings', 'override_at', `override_at TEXT`],
   ['access_sync_jobs', 'cursor_json', `cursor_json TEXT`],
   ['access_sync_jobs', 'result_json', `result_json TEXT`],
+  // --- Workout data capture (docs/CALORIE_DATA_CAPTURE.md) ---
+  // Planned vs actual rest kept apart; measured set timing; optional per-set
+  // RIR for research. None of these is read by the calorie estimator.
+  ['exercise_set_logs', 'prescribed_rest_seconds', `prescribed_rest_seconds INTEGER`],
+  ['exercise_set_logs', 'set_started_at', `set_started_at TEXT`],
+  ['exercise_set_logs', 'set_completed_at', `set_completed_at TEXT`],
+  ['exercise_set_logs', 'actual_rest_seconds', `actual_rest_seconds REAL`],
+  ['exercise_set_logs', 'tick_interval_seconds', `tick_interval_seconds REAL`],
+  ['exercise_set_logs', 'timing_flags', `timing_flags TEXT`],
+  ['exercise_set_logs', 'reported_rir', `reported_rir INTEGER`],
+  ['workouts', 'session_timing_json', `session_timing_json TEXT`],
+  ['workouts', 'calorie_features_json', `calorie_features_json TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -349,6 +361,16 @@ function backfillSetLogs(exec, idExpr) {
       JOIN (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) s ON s.n <= COALESCE(wl.sets_done, 1)
      WHERE NOT EXISTS (SELECT 1 FROM exercise_set_logs es WHERE es.workout_log_id = wl.id);
   `);
+}
+
+// exercise_set_logs.rest_seconds only ever held the PLANNED rest copied onto
+// each set (every writer took it from workout_exercises.rest_sec, or wrote
+// NULL). Copy it into prescribed_rest_seconds, where it is labelled for what
+// it is. Idempotent and non-destructive: rest_seconds itself is left as it
+// was, and new rows no longer write it.
+function labelLegacyPlannedRest(exec) {
+  return exec(`UPDATE exercise_set_logs SET prescribed_rest_seconds = rest_seconds
+                WHERE prescribed_rest_seconds IS NULL AND rest_seconds IS NOT NULL`);
 }
 
 // Seeds SK OS's OWN default package tiers + additional-client pricing
@@ -751,6 +773,7 @@ async function applySqliteMigrations(db) {
   // Backfill created_at for existing workout_logs (best-effort: date-based).
   db.exec(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => db.exec(sql), `'stl_' || lower(hex(randomblob(8)))`);
+  labelLegacyPlannedRest((sql) => db.exec(sql));
   // Backfill: existing clients already in the system are considered onboarded
   db.exec(`UPDATE clients SET onboarding_completed = 1 WHERE onboarding_completed = 0`);
   // One-time backfill of subscriptions.lifecycle_status from the
@@ -845,6 +868,7 @@ async function applyPgMigrations(pool) {
   `);
   await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
   backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
+  await labelLegacyPlannedRest((sql) => pool.query(sql));
   // See the SQLite branch's identical backfill above for why this is
   // safe to run on every startup (guarded by IS NULL).
   await pool.query(`

@@ -410,3 +410,15 @@
   .wk-ring__fill, .wk-check, .wk-tool, .wk-iconbtn { transition: none; }
   .wk-check[aria-pressed="true"] { animation: none; }
 }
+
+/* Optional measured capture (docs/CALORIE_DATA_CAPTURE.md): tap the set
+   number to mark a set's start; reps-in-reserve chips after a tick. */
+.wk-setrow__start { align-self: stretch; min-height: 46px; border-radius: 10px; border: 1px dashed transparent; background: none; }
+.wk-setrow__start:hover { border-color: var(--line); }
+.wk-setrow__start:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-setrow.is-started .wk-setrow__start { color: var(--accent); border-color: rgb(var(--tint-rgb) / .35); }
+.wk-rir { display: flex; align-items: center; gap: 6px; padding: 0 0 6px 34px; flex-wrap: wrap; }
+.wk-rir__label { font-size: 11px; color: var(--faint); margin-right: 2px; }
+.wk-rir__chip { min-width: 32px; min-height: 28px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--mute); background: none; }
+.wk-rir__chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.wk-rir__chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }

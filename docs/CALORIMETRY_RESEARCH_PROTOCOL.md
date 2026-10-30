@@ -26,13 +26,12 @@ Status: **draft for an ethics committee and a partner lab.**
 - A net value computed from a predicted resting rate is allowed, but is labelled `predicted`
   (`ml/src/research/energy.py`).
 
-**Known limit of the criterion:** indirect calorimetry misses the anaerobic (glycolytic) share
-of lifting.
-- **Size:** a 2024 systematic scoping review (Mitchell et al., Sports Med) puts it at possibly
-  over 40%, depending on training variables. Benito 2016's 2–6% was for light circuit work only.
-- **Pending amendment** (`docs/CALORIE_ENGINE_PROPOSAL.md` §3.3): add 30–60 min post-session
-  calorimetry and pre/post capillary blood lactate, so EPOC and the anaerobic share are measured
-  as separate components.
+**Energy components and definitions:** see `docs/CALORIE_ENERGY_DEFINITIONS.md`.
+- **Measured per session:** aerobic energy over the session window, anaerobic (glycolytic)
+  energy from pre/post capillary blood lactate, and post-exercise recovery energy. The last is
+  recorded separately and is not part of the displayed figure.
+- **Anaerobic share:** it varies by protocol. The 2024 review reports it can exceed 40% under
+  some conditions, so it is measured and never assumed.
 
 ## 2. What is captured (schema: `ml/src/research/schema.py`)
 
@@ -44,7 +43,8 @@ of lifting.
 | `devices` | tier, make/model, firmware, published validation reference |
 | `sessions` | date, **body mass measured that day**, session kind (straight sets / supersets / circuit / mixed), first and last working-set times, session RPE (CR-10, asked 30 min after), fasting hours, caffeine |
 | `sets` | exercise name and category, warm-up flag, reps, external load, **set start and end timestamps**, RIR, set RPE |
-| `measurements` | device, tier, interval (`resting_baseline` / `session` / `recovery_epoc`), interval times, VO₂ and VCO₂ totals, gross kcal, what a non-criterion figure claims to be (gross / net), mean HR, calibration time, QC status |
+| `measurements` | device, tier, interval (`resting_baseline` / `session` / `recovery_epoc`), interval times, VO₂ and VCO₂ totals, gross kcal, what a non-criterion figure claims to be (gross / net), mean HR, **pre/post blood lactate, post-sample delay, lactate analyser**, calibration time, QC status |
+| `studies` (conversion) | the lactate→energy O₂-equivalent and kcal/L O₂, **with source**, fixed before analysis |
 
 Rest duration and density are **derived** from set timestamps, never typed in.
 
@@ -120,7 +120,10 @@ without consent scope.
    set's start and end on a tablet form that writes the `sets` table directly; the app's own
    log is kept for comparison. The analyser runs continuously.
 6. **After.**
-   - 10 min seated recovery (`recovery_epoc`, recorded but not part of the session target);
+   - Capillary lactate at 1, 3 and 5 min after the last set; the peak is `lactate_post_mmol`.
+     The pre-session sample is taken immediately before the first working set.
+   - 30 min seated recovery with the analyser on (`recovery_epoc`, recorded but not part of
+     the displayed definition);
    - post-session analyser drift check;
    - session RPE asked at 30 min;
    - the wearable's session figure is exported as reported, stating whether it is gross or

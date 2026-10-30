@@ -166,6 +166,11 @@ def _measurements(ds, out):
     dev_tier = dict(zip(devices.get('device_id', []), devices.get('tier', [])))
     sessions = ds.get('sessions', pd.DataFrame())
     sess = {r['session_id']: r for _, r in sessions.iterrows()}
+    studies = ds.get('studies', pd.DataFrame())
+    lactate_conversion = {
+        r['study_id']: not any(_blank(r.get(c)) for c in ('lactate_o2_equiv_ml_per_kg_per_mmol', 'lactate_kcal_per_l_o2', 'lactate_conversion_source'))
+        for _, r in studies.iterrows()
+    }
     for _, m in meas.iterrows():
         k = m['measurement_id']
         tier = m.get('tier')
@@ -206,6 +211,14 @@ def _measurements(ds, out):
                 out.append(Issue('measurements', k, 'calibration', 'error', 'calibration must be within 6 h before the interval'))
             if m.get('qc_status') != 'pass':
                 out.append(Issue('measurements', k, 'qc', 'warning', f'criterion QC status {m.get("qc_status")}: not ground truth'))
+            if m.get('interval') == 'session':
+                has_lac = not _blank(m.get('lactate_pre_mmol')) and not _blank(m.get('lactate_post_mmol'))
+                if not has_lac:
+                    out.append(Issue('measurements', k, 'no_lactate', 'warning',
+                                     'no pre/post lactate: aerobic components only, no workout-net target'))
+                elif m.get('session_id') in sess and not lactate_conversion.get(sess[m['session_id']].get('study_id')):
+                    out.append(Issue('measurements', k, 'lactate_conversion_missing', 'error',
+                                     "lactate present but the study has not stated its lactate->energy conversion and source"))
         else:
             if _blank(m.get('reported_kcal_kind')):
                 out.append(Issue('measurements', k, 'kcal_kind', 'error', 'non-criterion figure must say whether it is gross or net'))

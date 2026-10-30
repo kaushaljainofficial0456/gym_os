@@ -10,7 +10,7 @@ comparison columns, never as targets.
 """
 import pandas as pd
 
-from .energy import gross_kcal_from_gas, mifflin_st_jeor_kcal_per_min, net_kcal
+from .energy import anaerobic_kcal, gross_kcal_from_gas, mifflin_st_jeor_kcal_per_min, session_components
 from .schema import CRITERION_TIERS, EXERCISE_CATEGORIES
 from .validate import errors
 
@@ -39,6 +39,7 @@ def build_session_table(ds, issues, use='research'):
     synthetic = set(ds['studies'].loc[ds['studies']['is_synthetic'].astype(int) == 1, 'study_id'])
 
     parts = ds['participants'].set_index('participant_id')
+    studies = ds['studies'].set_index('study_id')
     sets = ds['sets']
     meas = ds['measurements']
     rows = []
@@ -73,21 +74,43 @@ def build_session_table(ds, issues, use='research'):
         crit = own[own['tier'].isin(CRITERION_TIERS) & (own['qc_status'] == 'pass')]
         sess_m = crit[crit['interval'] == 'session']
         base_m = crit[crit['interval'] == 'resting_baseline']
-        row['target_net_kcal'] = None
-        row['resting_source'] = None
-        row['criterion_tier'] = None
+        # Targets (docs/CALORIE_ENERGY_DEFINITIONS.md). target_net_kcal is
+        # the product definition -- aerobic net + anaerobic during the
+        # session -- and is None unless BOTH were measured; it is never
+        # replaced by the aerobic part alone. Post-exercise energy is kept
+        # as its own column and is not part of the product target.
+        for c in ('target_net_kcal', 'target_gross_kcal', 'target_aerobic_net_kcal', 'target_aerobic_gross_kcal',
+                  'target_anaerobic_kcal', 'target_post_exercise_kcal', 'resting_source', 'criterion_tier',
+                  'measured_resting_kcal_min', 'session_rer', 'rer_above_1'):
+            row[c] = None
         if len(sess_m) == 1:
             m = sess_m.iloc[0]
-            gross = gross_kcal_from_gas(float(m['vo2_l']), float(m['vco2_l']))
             measured_rest = None
             if len(base_m):
                 b = base_m.iloc[0]
                 bmin = (_ts(b['interval_end']) - _ts(b['interval_start'])).total_seconds() / 60
                 measured_rest = gross_kcal_from_gas(float(b['vo2_l']), float(b['vco2_l'])) / bmin
             predicted = mifflin_st_jeor_kcal_per_min(row['body_mass_kg'], row['height_cm'], row['age_years'], row['sex'])
-            net, source = net_kcal(gross, minutes, measured_rest, predicted)
-            row.update(target_gross_kcal=gross, target_net_kcal=net, resting_source=source,
-                       criterion_tier=m['tier'], measured_resting_kcal_min=measured_rest)
+            study = studies.loc[s['study_id']]
+            anaerobic = None
+            if pd.notna(m.get('lactate_pre_mmol')) and pd.notna(m.get('lactate_post_mmol')) and pd.notna(study.get('lactate_o2_equiv_ml_per_kg_per_mmol')):
+                anaerobic, _ = anaerobic_kcal(float(m['lactate_pre_mmol']), float(m['lactate_post_mmol']), row['body_mass_kg'],
+                                              float(study['lactate_o2_equiv_ml_per_kg_per_mmol']), float(study['lactate_kcal_per_l_o2']),
+                                              study['lactate_conversion_source'])
+            rec = crit[crit['interval'] == 'recovery_epoc']
+            rec_kw = {}
+            if len(rec):
+                r = rec.iloc[0]
+                rec_kw = dict(recovery_vo2_l=float(r['vo2_l']), recovery_vco2_l=float(r['vco2_l']),
+                              recovery_minutes=(_ts(r['interval_end']) - _ts(r['interval_start'])).total_seconds() / 60)
+            comp = session_components(session_vo2_l=float(m['vo2_l']), session_vco2_l=float(m['vco2_l']), session_minutes=minutes,
+                                      resting_kcal_per_min=measured_rest, predicted_resting_kcal_per_min=predicted,
+                                      anaerobic=anaerobic, **rec_kw)
+            row.update(target_net_kcal=comp['workout_net'], target_gross_kcal=comp['workout_gross'],
+                       target_aerobic_net_kcal=comp['aerobic_net'], target_aerobic_gross_kcal=comp['aerobic_gross'],
+                       target_anaerobic_kcal=comp['anaerobic'], target_post_exercise_kcal=comp['post_exercise'],
+                       resting_source=comp['resting_source'], criterion_tier=m['tier'], measured_resting_kcal_min=measured_rest,
+                       session_rer=comp['session_rer'], rer_above_1=comp['rer_above_1'])
         for tier in ('wearable_estimate', 'user_reported', 'model_estimate'):
             other = own[(own['tier'] == tier) & (own['interval'] == 'session')]
             row[f'{tier}_kcal'] = float(other['gross_kcal'].iloc[0]) if len(other) and pd.notna(other['gross_kcal'].iloc[0]) else None

@@ -306,6 +306,8 @@ CREATE TABLE IF NOT EXISTS workouts (
   schema_version        TEXT,     -- calorie input contract version (e.g. '0.1')
   calorie_provider      TEXT,     -- baseline | mock | ml — which provider produced the estimate (never exposed to the frontend)
   calorie_estimated_at  TEXT,     -- UTC ISO-8601 when the estimate was computed
+  session_timing_json   TEXT,     -- set-timing quality: flags, pause intervals, client clock window (no effect on duration or calories)
+  calorie_features_json TEXT,     -- hidden-mode engine inputs + engine status, logged only; never displayed
   source        TEXT NOT NULL DEFAULT 'program',  -- program | trainer | gym_template | client_custom | ai
   notes         TEXT,
   created_at    TEXT NOT NULL
@@ -368,8 +370,23 @@ CREATE TABLE IF NOT EXISTS exercise_set_logs (
   rest_seconds     INTEGER,
   rir              INTEGER,
   completed        INTEGER NOT NULL DEFAULT 1,
-  is_synthesized   INTEGER NOT NULL DEFAULT 0   -- 1 => derived from a legacy aggregate log, NOT user-entered per-set data. ML training must filter these.
+  is_synthesized   INTEGER NOT NULL DEFAULT 0,  -- 1 => derived from a legacy aggregate log; NOT user-entered per-set data. ML training must filter these.
+  prescribed_rest_seconds INTEGER,  -- planned rest from the workout plan
+  set_started_at    TEXT,           -- member tapped start set (phone clock and validated) or NULL
+  set_completed_at  TEXT,           -- member ticked the set done (phone clock and validated)
+  actual_rest_seconds REAL,         -- previous set completion to this set start minus paused time or NULL
+  tick_interval_seconds REAL,       -- previous set completion to this set completion minus paused time
+  timing_flags      TEXT,           -- pipe-joined data-quality flags for this set timing
+  reported_rir      INTEGER
 );
+-- reported_rir: optional per-set reps-in-reserve the member entered. Research
+-- capture only: the calorie estimator never reads it (it reads rir).
+-- exercise_set_logs.rest_seconds is LEGACY: it only ever held the PLANNED rest
+-- (workout_exercises.rest_sec) copied onto each set -- never rest actually
+-- taken. New rows leave it NULL. Planned rest is prescribed_rest_seconds and
+-- measured rest is actual_rest_seconds; never read one as the other.
+-- (Comments between these columns carry no commas: SQLite's DROP COLUMN
+-- rewrite takes a comma inside a comment for a column separator.)
 CREATE INDEX IF NOT EXISTS idx_setlogs_log ON exercise_set_logs(workout_log_id);
 CREATE INDEX IF NOT EXISTS idx_setlogs_client ON exercise_set_logs(client_id, exercise_id, workout_log_id);
 

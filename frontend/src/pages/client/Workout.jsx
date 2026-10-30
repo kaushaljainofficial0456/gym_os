@@ -19,6 +19,7 @@ import InfoDot from '../../components/InfoDot.jsx';
 import ShareToCommunitiesSheet from '../../components/community/friend/ShareToCommunitiesSheet.jsx';
 import { wearableComparisonNote } from '../../healthProviderLabels.js';
 import { describeReliability } from '../../calorieReliability.js';
+import { startSet, toggleSetDone, setReportedRir, setPayload, beginPause, endPause, pausesPayload } from '../../workoutCapture.js';
 import LogPastWorkout from './LogPastWorkout.jsx';
 import LogPastCardio from './LogPastCardio.jsx';
 import { useUnits } from '../../unitsContext.jsx';
@@ -391,6 +392,7 @@ export default function Workout() {
   const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   const [pausedAt, setPausedAt] = useState(0); // timestamp when pause began (0 = not paused)
   const [accumulatedPausedMs, setAccumulatedPausedMs] = useState(0); // total paused time so far
+  const [pauses, setPauses] = useState([]); // [{ start, end|null }] ms -- so rests can exclude paused time (workoutCapture.js)
   // this week preview
   const [weekDay, setWeekDay] = useState(null); // { label, name, focus, exercises }
   const [weekDayIdx, setWeekDayIdx] = useState(0);
@@ -452,12 +454,12 @@ export default function Workout() {
       api(`/workouts/${workout.id}/progress`, {
         method: 'PUT',
         body: JSON.stringify({
-          progress: { ...exSets, __paused_ms: accumulatedPausedMs },
+          progress: { ...exSets, __paused_ms: accumulatedPausedMs, __pauses: pauses },
         }),
       }).catch(() => {});
     }, 800);
     return () => clearTimeout(h);
-  }, [exSets, accumulatedPausedMs, mode, workout?.id]);
+  }, [exSets, accumulatedPausedMs, pauses, mode, workout?.id]);
 
   // session elapsed timer — ticks every second during execute mode
   // Paused time is excluded: the timer freezes visually and the
@@ -545,6 +547,9 @@ export default function Workout() {
     setOpenEx((firstUnfinished || state[0])?.id ?? null);
     // Restore accumulated paused time from the persisted draft
     setAccumulatedPausedMs(restoredPausedMs);
+    // A pause still open in the draft ended when the page was reloaded:
+    // the restored session resumes running, as it always has.
+    setPauses(endPause(Array.isArray(restored?.__pauses) ? restored.__pauses : []));
     setElapsed(0);
     // Reconstruct elapsed time from server started_at
     // Prefer the local session's startedAt (browser clock) over the server
@@ -724,6 +729,7 @@ export default function Workout() {
     setStartedAt(now);
     setPausedAt(0);
     setAccumulatedPausedMs(0);
+    setPauses([]);
     setMode('execute');
     setStarting(false);
     saveActiveSession(workout.id, now);
@@ -741,7 +747,7 @@ export default function Workout() {
   const toggleSet = (exId, i) => setExSets((prev) => {
     const rows = [...(prev[exId] || [])];
     if (!rows[i]) return prev;
-    rows[i] = { ...rows[i], done: !rows[i].done };
+    rows[i] = toggleSetDone(rows[i]); // stamps / clears the tick time
     const next = { ...prev, [exId]: rows };
     // Auto-advance to the next unfinished exercise once this one is fully
     // ticked, so the next thing to do is already open rather than requiring
@@ -754,6 +760,20 @@ export default function Workout() {
       setOpenEx(following ? following.id : null);
     }
     return next;
+  });
+
+  const markSetStarted = (exId, i) => setExSets((prev) => {
+    const rows = [...(prev[exId] || [])];
+    if (!rows[i]) return prev;
+    rows[i] = startSet(rows[i]);
+    return { ...prev, [exId]: rows };
+  });
+
+  const reportRir = (exId, i, value) => setExSets((prev) => {
+    const rows = [...(prev[exId] || [])];
+    if (!rows[i]) return prev;
+    rows[i] = setReportedRir(rows[i], value);
+    return { ...prev, [exId]: rows };
   });
 
   // ---- remove exercise from active session ----
@@ -836,13 +856,17 @@ export default function Workout() {
   // ---- pause / resume active session ----
   const pauseWorkout = () => {
     if (pausedAt) return; // already paused
-    setPausedAt(Date.now());
+    const now = Date.now();
+    setPausedAt(now);
+    setPauses((p) => beginPause(p, now));
   };
 
   const resumeWorkout = () => {
     if (!pausedAt) return; // not paused
-    const pauseDuration = Date.now() - pausedAt;
+    const now = Date.now();
+    const pauseDuration = now - pausedAt;
     setAccumulatedPausedMs((prev) => prev + pauseDuration);
+    setPauses((p) => endPause(p, now));
     setPausedAt(0);
   };
 
@@ -861,11 +885,9 @@ export default function Workout() {
         if (!rows.length) return null;
         return {
           exercise_id: e.id,
-          sets: rows.map((r, i) => ({
-            set_number: i + 1,
-            actual_reps: Number(r.reps) || 0,
-            actual_weight: Number(r.weight) || 0,
-          })),
+          // Reps, weight, and -- when measured -- tick/start times and
+          // reps-in-reserve (workoutCapture.js).
+          sets: rows.map((r, i) => setPayload(r, i)),
         };
       }).filter(Boolean);
       if (!logs.length) {
@@ -888,6 +910,9 @@ export default function Workout() {
           logs,
           duration_seconds: activeDurationSec,
           paused_ms: Math.round(finalPausedMs),
+          pauses: pausesPayload(pauses),
+          client_started_at: new Date(startedAt).toISOString(),
+          client_finished_at: new Date().toISOString(),
         }),
       });
       const volume = logs.reduce((s, l) => s + l.sets.reduce((a, st) => a + (st.actual_reps * st.actual_weight), 0), 0);
@@ -981,6 +1006,7 @@ export default function Workout() {
       setStartedAt(0);
       setPausedAt(0);
       setAccumulatedPausedMs(0);
+      setPauses([]);
       setElapsed(0);
       setExState(null);
 
@@ -1817,6 +1843,8 @@ export default function Workout() {
             onToggleOpen={() => setOpenEx(openEx === ex.id ? null : ex.id)}
             onPatch={(i, field, value) => patchSet(ex.id, i, field, value)}
             onToggleSet={(i) => toggleSet(ex.id, i)}
+            onStartSet={(i) => markSetStarted(ex.id, i)}
+            onReportRir={(i, v) => reportRir(ex.id, i, v)}
             onAddSet={() => addSet(ex.id)}
             onRemoveLast={() => removeSet(ex.id, (exSets[ex.id] || []).length - 1)}
             onUseTarget={(target) => {
