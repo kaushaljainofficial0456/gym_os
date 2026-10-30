@@ -49,8 +49,8 @@ const T = {
     protein: 'var(--accent)',
     carbs: 'var(--warn)',
     fat: 'var(--good)',
-    water: '#5B9AA3',
-    waterDim: 'rgba(91,154,163,0.10)',
+    water: 'var(--m-recovery)',
+    waterDim: 'var(--m-recovery-bg)',
     danger: '#F87171',
     glass: 'rgba(255,255,255,0.04)',
     glassBorder: 'rgba(255,255,255,0.08)',
@@ -78,8 +78,11 @@ const T = {
     protein: 'var(--accent)',
     carbs: 'var(--warn)',
     fat: 'var(--good)',
-    water: '#3E7B85',
-    waterDim: 'rgba(62,123,133,0.10)',
+    // Water's hue everywhere else (charts, reports), and solved for AA as
+    // text on its own tint. #3E7B85 on a 10% wash of itself was 4.2:1 --
+    // the "+250" / "+500" labels failed the light-theme axe scan.
+    water: 'var(--m-recovery)',
+    waterDim: 'var(--m-recovery-bg)',
     danger: '#D44',
     glass: 'rgba(255,255,255,0.6)',
     glassBorder: 'rgba(0,0,0,0.08)',

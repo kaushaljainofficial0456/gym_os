@@ -73,6 +73,26 @@ describe('useDialog focus', () => {
     expect(document.activeElement).toBe(save);
   });
 
+  // PlateSheet's footer "Log" is a motion.button with whileTap, which gets
+  // tabindex="0" even while disabled. The browser skips it; the wrap must too.
+  it('wraps past a disabled last control that still carries a tabindex', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button>Behind the scrim</button>
+        <Modal open title="Add food" onClose={() => {}}>
+          <button>Macros</button>
+          <button disabled tabIndex={0}>Log</button>
+        </Modal>
+      </>,
+    );
+    const close = screen.getByRole('button', { name: 'Close' });
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Macros' }));
+    await user.tab();
+    expect(document.activeElement).toBe(close);
+  });
+
   it('focuses the panel itself when it holds nothing focusable', () => {
     function Bare() {
       const ref = useDialog(true, () => {});
