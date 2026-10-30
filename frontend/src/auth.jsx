@@ -112,6 +112,18 @@ export function AuthProvider({ children }) {
     return full;
   };
 
+  // Sign in screen's Google option -- signs an EXISTING account in, any
+  // role, and never creates one (POST /auth/google/signin). Without it an
+  // account made with Google had no way back in from Sign in.
+  const signInWithGoogle = async (credential) => {
+    const res = await api('/auth/google/signin', { method: 'POST', body: JSON.stringify({ credential }) });
+    setSession(res);
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
+  };
+
   // "Enterprise" screen's Google option -- same ID-token verification as
   // above, but a SEPARATE backend route (POST /auth/google/enterprise):
   // an existing GYM_OWNER logs straight in; a brand-new signup creates a
@@ -194,7 +206,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, demo, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
+    <AuthCtx.Provider value={{ user, demo, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, signInWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
       {children}
     </AuthCtx.Provider>
   );

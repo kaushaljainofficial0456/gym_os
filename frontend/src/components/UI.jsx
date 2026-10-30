@@ -55,9 +55,14 @@ export function PageHeader({ title, sub, right, className, eyebrow, onBack }) {
  * its own avatar markup purely because this component couldn't show one,
  * which is how the header ended up with a stale gradient of its own.
  */
-export function Avatar({ name, src, size = 'w-10 h-10', className, glow }) {
+export function Avatar({ name, src: srcProp, size = 'w-10 h-10', className, glow }) {
   const numeric = typeof size === 'number';
   const initial = name?.[0]?.toUpperCase() || '?';
+  // A photo that cannot load (blocked, expired, offline) falls back to the
+  // initial, not to an empty circle -- Google profile photos were blocked
+  // by the site's CSP and every Google user's avatar rendered blank.
+  const [failed, setFailed] = useState(null);
+  const src = srcProp && failed !== srcProp ? srcProp : null;
   return (
     <div className={cls('rounded-full grid place-items-center font-grotesk font-bold border shrink-0 overflow-hidden',
       !numeric && size, glow && 'shadow-glow', className)}
@@ -73,7 +78,7 @@ export function Avatar({ name, src, size = 'w-10 h-10', className, glow }) {
         ...(numeric ? { width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.4)) } : { fontSize: '.875rem' }),
       }}
       aria-hidden="true">
-      {src ? <img src={src} alt="" className="w-full h-full object-cover" /> : initial}
+      {src ? <img src={src} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={() => setFailed(src)} /> : initial}
     </div>
   );
 }

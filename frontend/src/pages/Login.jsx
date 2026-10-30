@@ -6,7 +6,7 @@ import { consumeReturnTo } from '../api.js';
 import { announceArrival } from '../components/ArrivalHost.jsx';
 import { PasswordInput } from '../components/UI.jsx';
 import { useAuthStage } from '../components/auth/AuthLayout.jsx';
-import { AuthTitle, ChoiceRow, Cta, Divider, ErrorNote, Field, RoleSwitch } from '../components/auth/authKit.jsx';
+import { AuthTitle, ChoiceRow, Cta, Divider, ErrorNote, Field, GoogleButton, RoleSwitch, googleConfigured } from '../components/auth/authKit.jsx';
 
 // The three top-level paths onto Barbell. Each is a genuinely different
 // account-creation story, not a cosmetic split of one login form:
@@ -46,7 +46,7 @@ function lastRole() {
 }
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, signInWithGoogle } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const navType = useNavigationType();
@@ -67,6 +67,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleErr, setGoogleErr] = useState('');
 
   const setRole = (r) => {
     setRoleState(r);
@@ -89,8 +90,15 @@ export default function Login() {
     setBusy(true); setErr('');
     try { go(await fn()); } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
-  const submit = (e) => { e.preventDefault(); run(() => login(email, password)); };
+  const submit = (e) => { e.preventDefault(); setGoogleErr(''); run(() => login(email, password)); };
   const demo = () => run(() => login(DEMO[role], 'demo1234'));
+  // An account made with Google has no password: this is its way back in.
+  // Its error is its own (googleErr) -- shown under the button, never as
+  // a red mark on an email and password that had nothing to do with it.
+  const google = async (credential) => {
+    setBusy(true); setErr(''); setGoogleErr('');
+    try { go(await signInWithGoogle(credential)); } catch (ex) { setGoogleErr(ex.message); } finally { setBusy(false); }
+  };
 
   const pickPath = (id) => {
     if (id === 'enterprise') return nav('/setup-org');
@@ -137,6 +145,14 @@ export default function Login() {
             <ErrorNote>{err}</ErrorNote>
             <Cta busy={busy}>Sign in</Cta>
           </form>
+
+          {googleConfigured && (
+            <>
+              <Divider />
+              <GoogleButton onCredential={google} onError={setGoogleErr} text="signin_with" />
+              {googleErr && <div className="mt-3"><ErrorNote>{googleErr}</ErrorNote></div>}
+            </>
+          )}
 
           <p className="auth-foot">{newQ} <Link to={newTo}>{newA}</Link></p>
 

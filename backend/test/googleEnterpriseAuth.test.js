@@ -69,8 +69,11 @@ async function startApp(db) {
   return { call, close };
 }
 
+// A real Google ID token carries email_verified; tests that need an
+// unverified address say so explicitly.
 function mockGoogleIdentity(payload) {
-  return mock.method(OAuth2Client.prototype, 'verifyIdToken', async () => ({ getPayload: () => payload }));
+  const full = { email_verified: true, ...payload };
+  return mock.method(OAuth2Client.prototype, 'verifyIdToken', async () => ({ getPayload: () => full }));
 }
 
 test.beforeEach(() => { resetRateLimits(); });
@@ -123,6 +126,18 @@ test('POST /auth/google/enterprise: an existing GYM_OWNER logs straight in via G
 
   const orgs = await db.q('SELECT * FROM organizations');
   assert.equal(orgs.length, 1, 'logging in via Google must never create a second organization for an existing owner');
+});
+
+test('POST /auth/google/enterprise: an address Google has not verified cannot sign in to an existing owner account', async (t) => {
+  const db = await memDb();
+  const api = await startApp(db); t.after(() => api.close());
+  const signup = await api.call('POST', '/api/auth/setup-org', { orgName: 'Owned Gym', ownerName: 'Real Owner', email: 'realowner@test.com', password: 'ownerpass1' });
+  assert.equal(signup.status, 201);
+
+  mockGoogleIdentity({ email: 'realowner@test.com', name: 'Impostor', email_verified: false });
+  const res = await api.call('POST', '/api/auth/google/enterprise', { credential: 'fake-credential-token-000000' });
+  assert.equal(res.status, 403);
+  assert.equal(res.json.token, undefined, 'no session for an unverified address');
 });
 
 test('POST /auth/google/enterprise: an email already registered as a CLIENT is rejected, never silently promoted to GYM_OWNER', async (t) => {

@@ -291,6 +291,38 @@ export default function authRoutes(db) {
     googleClient = new OAuth2Client(googleClientId);
   }
 
+  // Who Google says just signed in -- or null, once the request has been
+  // answered. Shared by every Google route below so they verify the same
+  // way. `verified` is Google's own email_verified claim: a Google account
+  // can carry an address Google never confirmed, and signing such an
+  // account into an EXISTING Barbell account with that address would hand
+  // it to whoever typed the address. Only the routes know whether an
+  // existing account is involved, so they decide what `verified` gates.
+  async function googleIdentity(req, res) {
+    if (!googleClient) {
+      res.status(503).json({ error: 'Google sign-in is not configured on this server yet.' });
+      return null;
+    }
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({ idToken: req.body.credential, audience: googleClientId });
+      payload = ticket.getPayload();
+    } catch {
+      res.status(401).json({ error: 'Could not verify Google sign-in. Please try again.' });
+      return null;
+    }
+    if (!payload?.email) {
+      res.status(401).json({ error: 'Google did not share an email for this account.' });
+      return null;
+    }
+    return {
+      ...payload,
+      email: payload.email.toLowerCase().trim(),
+      verified: payload.email_verified === true || payload.email_verified === 'true',
+    };
+  }
+  const GOOGLE_UNVERIFIED = 'Google has not verified this email address, so it cannot sign in to an existing account. Sign in with your password instead.';
+
   // All independent clients share one pseudo-organization rather than a
   // schema change to make clients.org_id nullable -- `organizations.type`
   // already had an 'independent' value reserved (see the setup-org schema
@@ -328,18 +360,9 @@ export default function authRoutes(db) {
 
   r.post('/google', rateLimit({ windowMs: 60_000, max: 20 }),
     validate(z.object({ credential: z.string().min(20) })), async (req, res) => {
-    if (!googleClient) {
-      return res.status(503).json({ error: 'Google sign-in is not configured on this server yet.' });
-    }
-    let payload;
-    try {
-      const ticket = await googleClient.verifyIdToken({ idToken: req.body.credential, audience: googleClientId });
-      payload = ticket.getPayload();
-    } catch {
-      return res.status(401).json({ error: 'Could not verify Google sign-in. Please try again.' });
-    }
-    if (!payload?.email) return res.status(401).json({ error: 'Google did not share an email for this account.' });
-    const email = payload.email.toLowerCase().trim();
+    const payload = await googleIdentity(req, res);
+    if (!payload) return;
+    const email = payload.email;
 
     const existing = await db.q1('SELECT * FROM users WHERE email = ?', [email]);
     if (existing) {
@@ -349,6 +372,7 @@ export default function authRoutes(db) {
         // fail rather than silently cross role boundaries.
         return res.status(409).json({ error: 'This email is registered to a staff account. Sign in from the Gym ecosystem option instead.' });
       }
+      if (!payload.verified) return res.status(403).json({ error: GOOGLE_UNVERIFIED });
       if (!existing.active) return res.status(403).json({ error: 'Account disabled' });
       const org = existing.org_id ? await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [existing.org_id]) : null;
       const token = signToken(existing);
@@ -370,13 +394,12 @@ export default function authRoutes(db) {
       const passwordHash = await hashPassword(crypto.randomUUID() + crypto.randomUUID());
       await db.tx(async (tx) => {
         await tx.run(
-          // F-10: email_verified = 1 -- Google's own OAuth flow already
-          // proved this account controls the address (that's what the
-          // verified ID token itself attests), so issuing this app's own
-          // separate verification email would be redundant, not safer.
+          // F-10: email_verified mirrors Google's own claim -- when Google
+          // has confirmed the address (nearly always), issuing this app's
+          // own separate verification email would be redundant, not safer.
           `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, email_verified, created_at)
-           VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1, 1, ?)`,
-          [userId, orgId, email, passwordHash, name, payload.picture || null, now()]);
+           VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1, ?, ?)`,
+          [userId, orgId, email, passwordHash, name, payload.picture || null, payload.verified ? 1 : 0, now()]);
         await tx.run(
           `INSERT INTO clients (id, user_id, org_id, status, goal, created_at)
            VALUES (?, ?, ?, 'ON_TRACK', 'GENERAL', ?)`,
@@ -424,18 +447,9 @@ export default function authRoutes(db) {
   // behavior, or vice versa.
   r.post('/google/enterprise', rateLimit({ windowMs: 60_000, max: 20 }),
     validate(z.object({ credential: z.string().min(20), orgName: z.string().min(2).max(80).optional() })), async (req, res) => {
-    if (!googleClient) {
-      return res.status(503).json({ error: 'Google sign-in is not configured on this server yet.' });
-    }
-    let payload;
-    try {
-      const ticket = await googleClient.verifyIdToken({ idToken: req.body.credential, audience: googleClientId });
-      payload = ticket.getPayload();
-    } catch {
-      return res.status(401).json({ error: 'Could not verify Google sign-in. Please try again.' });
-    }
-    if (!payload?.email) return res.status(401).json({ error: 'Google did not share an email for this account.' });
-    const email = payload.email.toLowerCase().trim();
+    const payload = await googleIdentity(req, res);
+    if (!payload) return;
+    const email = payload.email;
 
     const existing = await db.q1('SELECT * FROM users WHERE email = ?', [email]);
     if (existing) {
@@ -447,6 +461,7 @@ export default function authRoutes(db) {
         // /google route's own reverse-direction check).
         return res.status(409).json({ error: 'This email is registered to a different kind of account. Sign in from the right option on the login screen.' });
       }
+      if (!payload.verified) return res.status(403).json({ error: GOOGLE_UNVERIFIED });
       if (!existing.active) return res.status(403).json({ error: 'Account disabled' });
       const org = existing.org_id ? await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [existing.org_id]) : null;
       const token = signToken(existing);
@@ -489,11 +504,11 @@ export default function authRoutes(db) {
       await db.tx(async (tx) => {
         await tx.run('INSERT INTO organizations (id, name, slug, type, created_at) VALUES (?, ?, ?, ?, ?)', [orgId, orgName, slug, 'gym', now()]);
         await tx.run(
-          // F-10: email_verified = 1 -- see the /auth/google route's own
-          // identical comment; the same reasoning applies here.
+          // F-10: email_verified mirrors Google's claim -- see the
+          // /auth/google route's own comment.
           `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, email_verified, created_at)
-           VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, ?, 1, 1, ?)`,
-          [userId, orgId, email, passwordHash, name, payload.picture || null, now()]);
+           VALUES (?, ?, ?, ?, 'GYM_OWNER', ?, ?, 1, ?, ?)`,
+          [userId, orgId, email, passwordHash, name, payload.picture || null, payload.verified ? 1 : 0, now()]);
         // Enterprise (gym) signups start in SETUP, exactly like
         // /setup-org's own gym-type branch.
         await tx.run(`INSERT INTO org_billing_state (org_id, status, updated_at) VALUES (?, 'SETUP', ?)`, [orgId, now()]);
@@ -511,6 +526,40 @@ export default function authRoutes(db) {
       if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
       throw e;
     }
+  });
+
+  // "Continue with Google" on the Sign in screen: signs an EXISTING
+  // account in -- client, trainer or owner -- and never creates one.
+  // Without it, anyone who signed up with Google had no way back in from
+  // Sign in (they have no password), and a Google-made gym owner could
+  // only get in by pretending to set up a new gym. Creating accounts
+  // stays with the two routes above, which know which kind to create.
+  const GOOGLE_SIGNIN_ROLES = ['CLIENT', 'TRAINER', 'GYM_OWNER'];
+  r.post('/google/signin', rateLimit({ windowMs: 60_000, max: 20 }),
+    validate(z.object({ credential: z.string().min(20) })), async (req, res) => {
+    const payload = await googleIdentity(req, res);
+    if (!payload) return;
+    const user = await db.q1('SELECT * FROM users WHERE email = ?', [payload.email]);
+    if (!user || !GOOGLE_SIGNIN_ROLES.includes(user.role)) {
+      // The address is the caller's own, just proven by Google, so saying
+      // there is no account for it discloses nothing about anyone else.
+      return res.status(404).json({
+        error: `There's no Barbell account for ${payload.email} yet. To create one, go back and choose Independent client, or Enterprise for a new gym.`,
+        code: 'NO_ACCOUNT',
+      });
+    }
+    if (!payload.verified) return res.status(403).json({ error: GOOGLE_UNVERIFIED });
+    if (!user.active) return res.status(403).json({ error: 'Account disabled' });
+    const org = user.org_id ? await db.q1('SELECT id, name, slug FROM organizations WHERE id = ?', [user.org_id]) : null;
+    const token = signToken(user);
+    setAuthCookie(res, token);
+    res.json({
+      token,
+      user: {
+        id: user.id, name: user.name, email: user.email, role: user.role,
+        orgId: user.org_id, orgName: org?.name || null, orgSlug: org?.slug || null
+      }
+    });
   });
 
   // Create a new organization + owner (multi-tenant onboarding). This is
