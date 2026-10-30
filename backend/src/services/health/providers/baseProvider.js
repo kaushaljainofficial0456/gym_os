@@ -63,7 +63,7 @@ export class ProviderNotConfiguredError extends Error {
 
 export class RequiresNativeAppError extends Error {
   constructor(provider, platform) {
-    super(`${provider} requires the SK OS ${platform} app -- it cannot be connected from a web browser`);
+    super(`${provider} requires the Barbell ${platform} app -- it cannot be connected from a web browser`);
     this.name = 'RequiresNativeAppError';
     this.code = 'REQUIRES_NATIVE_APP';
     this.provider = provider;

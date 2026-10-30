@@ -421,7 +421,7 @@ export function SettingsPanel({ onToast, canEdit }) {
           </Field>
         </div>
         <Toggle k="access_sync_enabled" label="Update door access automatically when memberships change"
-                help="Only works with connections that accept access updates. Off: SK OS shows who should be removed and leaves it to you." />
+                help="Only works with connections that accept access updates. Off: Barbell shows who should be removed and leaves it to you." />
       </div>
 
       <ErrorLine>{error}</ErrorLine>

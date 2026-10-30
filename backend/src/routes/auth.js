@@ -677,7 +677,9 @@ export default function authRoutes(db) {
     const user = await db.q1('SELECT * FROM users WHERE id = ?', [req.user.sub]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!(await verifyPassword(req.body.current_password, user.password_hash))) {
-      return res.status(401).json({ error: 'Current password is incorrect' });
+      // 403, never 401: the app reads any 401 as an expired session and signs
+      // out, so one mistyped password threw the member back to the login page.
+      return res.status(403).json({ error: 'Current password is incorrect' });
     }
     await db.run('UPDATE users SET password_hash = ? WHERE id = ?',
       [await hashPassword(req.body.new_password), user.id]);
@@ -732,7 +734,12 @@ export default function authRoutes(db) {
     // row. Present so the app shell knows to render the demo banner and
     // the role switcher without having to make a second probe request on
     // every page load; nothing is authorized by these fields.
-    const body = { user };
+    // camelCase twins of the org fields: every other auth route (login,
+    // register, google, setup-org) answers orgId/orgName/orgSlug, and the
+    // app shell reads those -- after a page refresh, which goes through
+    // here, the workspace header lost the gym's name and showed
+    // "Workspace", and Billing sent no gym name to the payment sheet.
+    const body = { user: { ...user, orgId: user.org_id, orgName: user.org_name, orgSlug: user.org_slug } };
     if (req.demoSession) {
       body.demo = {
         persona: req.user.persona || 'OWNER',

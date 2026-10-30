@@ -130,7 +130,10 @@ export default function Privacy() {
 
       <Section num={10} title="Account Deletion and Data Deletion Requests">
         <p>
-          You can request deletion of your account and personal data by contacting us at{' '}
+          Members can download a copy of their data, and delete their account and personal data, at any
+          time in the app under Settings &rarr; Your data. Deletion is immediate; payment and membership
+          records your gym is required to keep are retained without your name or contact details. You
+          can also request deletion of your account and personal data by contacting us at{' '}
           <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[var(--accent)] underline underline-offset-2 break-all">
             {SUPPORT_EMAIL}
           </a>{' '}

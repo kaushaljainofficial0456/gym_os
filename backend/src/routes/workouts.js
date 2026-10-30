@@ -141,17 +141,21 @@ export default function workoutRoutes(db) {
     const t = await db.q1('SELECT * FROM workout_templates WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
     if (!t) return res.status(404).json({ error: 'Template not found' });
     const tId = id('wkt');
-    await db.run(
-      `INSERT INTO workout_templates (id, org_id, trainer_id, name, type, notes, is_global, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-      [tId, req.orgId, req.user.sub, t.name + ' (copy)', t.type, t.notes, now()]);
     const exs = await db.q('SELECT * FROM workout_exercises WHERE template_id = ? ORDER BY position', [t.id]);
-    for (const ex of exs) {
-      await db.run(
-        `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id('wxe'), tId, ex.exercise_id, ex.position, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
-    }
+    // One transaction: a failure halfway must not leave a copy with half
+    // its exercises for a trainer to assign without noticing.
+    await db.tx(async (tx) => {
+      await tx.run(
+        `INSERT INTO workout_templates (id, org_id, trainer_id, name, type, notes, is_global, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+        [tId, req.orgId, req.user.sub, t.name + ' (copy)', t.type, t.notes, now()]);
+      for (const ex of exs) {
+        await tx.run(
+          `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id('wxe'), tId, ex.exercise_id, ex.position, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
+      }
+    });
     res.status(201).json({ id: tId });
   });
 

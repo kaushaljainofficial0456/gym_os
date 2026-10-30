@@ -20,6 +20,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api.js';
 import { Avatar, useDialog } from '../UI.jsx';
+import { localDateKey } from '../../utils.js';
 import { SectionTitle, HUE, fmt } from './CommunityPieces.jsx';
 
 const FILTERS = [
@@ -87,7 +88,7 @@ export default function CommunityMembers({ you, onSelect, onFollowChange }) {
     const q = query.trim().toLowerCase();
     if (q) list = list.filter((m) => m.name.toLowerCase().includes(q));
     if (filter === 'active') {
-      const cutoff = new Date(Date.now() - ACTIVE_DAYS * 86400000).toISOString().slice(0, 10);
+      const cutoff = localDateKey(new Date(Date.now() - ACTIVE_DAYS * 86400000));
       list = list.filter((m) => m.lastActive && m.lastActive >= cutoff);
     }
     if (filter === 'top') list = list.filter((m) => m.workoutsThisMonth > 0).slice(0, 20);

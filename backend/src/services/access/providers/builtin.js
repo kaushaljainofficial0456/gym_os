@@ -101,7 +101,7 @@ registerProvider({
   authType: 'hmac',
   description:
     'Any access system or gym software that can POST a JSON event to a URL. '
-    + 'SK OS gives you an endpoint and a signing secret; you map your fields to ours.',
+    + 'Barbell gives you an endpoint and a signing secret; you map your fields to ours.',
   requiredFields: [
     { key: 'webhook_secret', label: 'Signing secret', secret: true, generated: true,
       help: 'Used to sign each request. Generated for you — copy it once; it is never shown again.' },
@@ -188,11 +188,11 @@ registerProvider({
   kind: 'rest',
   authType: 'api_key',
   description:
-    'Any access system with an HTTP endpoint that lists events. SK OS polls it on a schedule '
+    'Any access system with an HTTP endpoint that lists events. Barbell polls it on a schedule '
     + 'and maps its fields onto ours. Use this when your provider cannot send webhooks.',
   requiredFields: [
     { key: 'base_url', label: 'Events endpoint URL', secret: false,
-      help: 'Full URL SK OS should call, e.g. https://panel.example.com/api/v1/events' },
+      help: 'Full URL Barbell should call, e.g. https://panel.example.com/api/v1/events' },
     { key: 'api_key', label: 'API key', secret: true,
       help: 'Sent as a bearer token. Stored encrypted and never shown again.' },
   ],
@@ -222,12 +222,12 @@ registerProvider({
     try {
       const res = await safeFetch(url, { headers: await authHeaders(ctx) });
       if (res.redirected) {
-        return { ok: false, message: `The endpoint answered with a redirect (HTTP ${res.status}). Use the final URL; SK OS does not follow redirects.` };
+        return { ok: false, message: `The endpoint answered with a redirect (HTTP ${res.status}). Use the final URL; Barbell does not follow redirects.` };
       }
       if (!res.ok) return { ok: false, message: `The endpoint answered ${res.status}. Check the URL and the API key.` };
       const events = extractEvents(res.json, ctx.provider.config.eventsPath);
       if (!events) {
-        return { ok: false, message: 'The endpoint answered, but not with a list of events SK OS can read. Set the path to the event list.' };
+        return { ok: false, message: 'The endpoint answered, but not with a list of events Barbell can read. Set the path to the event list.' };
       }
       return { ok: true, message: `Endpoint reachable. It returned ${events.length} event${events.length === 1 ? '' : 's'}.` };
     } catch (e) {
@@ -249,7 +249,7 @@ registerProvider({
     if (until) u.searchParams.set(cfg.untilParam || 'until', until);
     if (cfg.limitParam) u.searchParams.set(cfg.limitParam, String(limit));
     const res = await safeFetch(u.toString(), { headers: await authHeaders(ctx), timeoutMs: 10000 });
-    if (res.redirected) throw Object.assign(new Error('Endpoint redirected; SK OS does not follow redirects.'), { code: 'redirect' });
+    if (res.redirected) throw Object.assign(new Error('Endpoint redirected; Barbell does not follow redirects.'), { code: 'redirect' });
     if (!res.ok) throw Object.assign(new Error(`Endpoint answered ${res.status}.`), { code: 'http_error', status: res.status });
     const raw = extractEvents(res.json, cfg.eventsPath);
     if (!raw) throw Object.assign(new Error('Response did not contain an event list.'), { code: 'bad_shape' });
@@ -364,9 +364,9 @@ registerProvider({
   kind: 'vendor',
   authType: 'none',
   description:
-    'Fingerprint and face terminals with a "Cloud Server" (ADMS) setting push every punch to SK OS. '
+    'Fingerprint and face terminals with a "Cloud Server" (ADMS) setting push every punch to Barbell. '
     + 'Add each terminal\'s serial number under Devices, then point the terminal at this server. '
-    + 'Fingerprints never leave the device -- SK OS receives the member\'s PIN and the time.',
+    + 'Fingerprints never leave the device -- Barbell receives the member\'s PIN and the time.',
   requiredFields: [
     { key: 'allowed_ips', label: 'Gym public IP (optional)', secret: false, optional: true,
       help: 'Only accept punches from this address. Comma-separate several. Leave blank to accept any address.' },
@@ -385,7 +385,7 @@ registerProvider({
   },
 
   async testConnection(ctx) {
-    // Traffic flows device -> SK OS, so "testing" is reporting what the
+    // Traffic flows device -> Barbell, so "testing" is reporting what the
     // devices have actually done, never a success nobody observed.
     const devices = await ctx.db.q(
       `SELECT device_name, device_identifier, last_seen_at, last_event_at FROM access_devices
@@ -444,7 +444,7 @@ for (const [key, name] of [
     authType: 'api_key',
     implemented: false,
     description:
-      `${name} devices are commonly used in gyms, but SK OS does not ship a ${name}-specific `
+      `${name} devices are commonly used in gyms, but Barbell does not ship a ${name}-specific `
       + 'adapter yet. If your panel can send webhooks or expose a REST endpoint, connect it '
       + 'through the generic options above — that works today.',
     requiredFields: [],

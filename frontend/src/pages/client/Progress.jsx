@@ -33,10 +33,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
-import { useFetch, PR_WEIGHT_TYPES } from '../../utils.js';
+import { useFetch, PR_WEIGHT_TYPES, localDateKey, weightJump } from '../../utils.js';
 import InfoDot from '../../components/InfoDot.jsx';
 import { useUnits } from '../../unitsContext.jsx';
-import { ErrorState, Card, Modal, Empty } from '../../components/UI.jsx';
+import { ErrorState, Card, Modal, Empty, useConfirm } from '../../components/UI.jsx';
 import MetricChart from '../../components/MetricChart.jsx';
 import PeriodChart from '../../components/PeriodChart.jsx';
 import { WeekSection, MeasurementsSection, AchievementsSection, StrengthProgressSection } from './ProgressSections.jsx';
@@ -586,7 +586,7 @@ function MetricExplorer({ intel, period }) {
                   color={active.color}
                   unit={active.unit}
                   decimals={active.decimals}
-                  todayKey={new Date().toISOString().slice(0, 10)}
+                  todayKey={localDateKey()}
                   ariaLabel={`${active.label} for each of the last ${period} days`}
                 />
               ) : (
@@ -1478,6 +1478,7 @@ function PhotosSection({ photos }) {
  *  progress the user came to see. */
 function LogWeight({ clientId, current, onLogged }) {
   const u = useUnits();
+  const [confirm, confirmDialog] = useConfirm();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -1511,6 +1512,15 @@ function LogWeight({ clientId, current, onLogged }) {
     // checked against the CANONICAL value -- 900 lb is under 500 as a
     // typed number and over it as a weight.
     if (w > 500) { setMsg({ text: 'That weight looks too high — double-check it', tone: 'bad' }); return; }
+    if (w < 20) { setMsg({ text: 'That weight looks too low — double-check it', tone: 'bad' }); return; }
+    const jump = weightJump(w, current);
+    if (jump != null && !(await confirm({
+      title: `Log ${u.fmtWeight(w)}?`,
+      body: `That is ${u.fmtWeight(Math.abs(jump))} ${jump < 0 ? 'below' : 'above'} your last weigh-in of ${u.fmtWeight(current)}. It will become your current weight.`,
+      confirmLabel: 'Yes, log it',
+      cancelLabel: 'Fix it',
+      danger: false,
+    }))) return;
     setSaving(true);
     try {
       await api(`/clients/${clientId}/weights`, { method: 'POST', body: JSON.stringify({ weight: w, source: 'manual' }) });
@@ -1523,6 +1533,7 @@ function LogWeight({ clientId, current, onLogged }) {
 
   return (
     <Card className="p-4">
+      {confirmDialog}
       <form onSubmit={submit}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">

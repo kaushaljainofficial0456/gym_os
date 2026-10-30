@@ -214,7 +214,30 @@ export async function activateOrgSubscription(db, tx, { orgId, subscriptionId })
   if (!subscription) return null; // defensive -- should be unreachable if the caller's own order/quote creation is correct
   const pkg = await tx.q1('SELECT * FROM sk_packages WHERE id = ?', [subscription.package_id]);
   const startDate = now();
-  const endDate = new Date(Date.now() + (pkg?.duration_days || 365) * 86_400_000).toISOString();
+  const durationMs = (pkg?.duration_days || 365) * 86_400_000;
+
+  /* RENEWING EARLY ADDS TIME; IT DOES NOT REPLACE IT. A same-capacity
+     purchase while the current period is still running is a renewal, and
+     it carries no credit for the unused time (an upgrade's quote does, so
+     an upgrade rightly starts its period today). Counting from today would
+     charge a full year and quietly delete whatever was left of the old
+     one. Capacity includes add-ons, because that is what the renewal is
+     priced on and what the gym has now. */
+  let periodFrom = Date.now();
+  const running = await tx.q1(
+    `SELECT id, client_capacity, end_date FROM org_subscriptions
+      WHERE org_id = ? AND status = 'ACTIVE' AND id != ? ORDER BY created_at DESC LIMIT 1`,
+    [orgId, subscription.id]);
+  if (running && Date.parse(running.end_date) > periodFrom) {
+    const addons = await tx.q1(
+      `SELECT COALESCE(SUM(ocp.increment), 0) AS total
+         FROM org_capacity_purchases ocp
+         LEFT JOIN payment_orders po ON po.id = ocp.payment_order_id
+        WHERE ocp.subscription_id = ? AND (po.status IS NULL OR po.status != 'REFUNDED')`, [running.id]);
+    const runningCapacity = Number(running.client_capacity) + Number(addons?.total || 0);
+    if (Number(subscription.client_capacity) === runningCapacity) periodFrom = Date.parse(running.end_date);
+  }
+  const endDate = new Date(periodFrom + durationMs).toISOString();
 
   await tx.run(`UPDATE org_subscriptions SET status = 'SUPERSEDED', updated_at = ? WHERE org_id = ? AND status = 'ACTIVE' AND id != ?`,
     [now(), orgId, subscription.id]);

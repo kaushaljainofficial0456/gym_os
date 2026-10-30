@@ -14,15 +14,12 @@
 // user's), and preferences are additionally scoped to req.user.org on
 // creation so a lazily-created row always carries the right org_id.
 //
-// WHAT THIS DOES NOT DO: generate reminders. workout_reminders/
-// water_reminders/daily_summary/etc. are real, persisted user PREFERENCES
-// -- the actual scheduled delivery of a "log your workout" push/email
-// needs a cron/scheduler and a delivery provider, neither of which exists
-// anywhere in this codebase (see notifications.js's own file comment:
-// "no email/SMS provider is configured"). Building that is a separate,
-// larger piece of work; this route makes the toggles and the in-app list
-// genuinely functional rather than 404ing, which is what was actually
-// broken.
+// REMINDERS are made by POST /generate (services/notificationGenerator.js),
+// which the notification bell calls when the app opens, when it returns to
+// the foreground, and every few minutes while open. They land in this list
+// and, where the browser allows it, as a system notification on the device.
+// Delivery while the app is fully closed would need a push provider and a
+// scheduler, which this deployment does not have.
 // ============================================================
 import { Router } from 'express';
 import { generateNotifications } from '../services/notificationGenerator.js';
@@ -95,6 +92,21 @@ export default function notificationRoutes(db) {
       if (!Number.isFinite(v) || v <= 0) return res.status(400).json({ error: 'water_interval_h must be a positive number' });
       sets.push('water_interval_h = ?');
       params.push(v);
+    }
+    // What the browser answered when asked for notification permission.
+    // NotificationPermissionPrompt and Settings have always sent it; it was
+    // not on this list, so every save came back 400 and was dropped.
+    if (body.browser_permission !== undefined) {
+      if (!['default', 'granted', 'denied'].includes(body.browser_permission)) {
+        return res.status(400).json({ error: 'browser_permission must be default, granted or denied' });
+      }
+      sets.push('browser_permission = ?');
+      params.push(body.browser_permission);
+    }
+    if (body.prompted_at !== undefined) {
+      if (Number.isNaN(Date.parse(body.prompted_at))) return res.status(400).json({ error: 'prompted_at must be a timestamp' });
+      sets.push('prompted_at = ?');
+      params.push(new Date(body.prompted_at).toISOString());
     }
     for (const key of PREF_TIME_FIELDS) {
       if (body[key] === undefined) continue;

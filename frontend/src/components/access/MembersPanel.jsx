@@ -4,11 +4,11 @@
  *
  * Two columns of status on purpose, because they are two different facts:
  *
- *   Should be   what SK OS thinks from the membership (or an override).
+ *   Should be   what Barbell thinks from the membership (or an override).
  *   Door        what the access system has actually been told.
  *
  * When they differ, that difference is the thing an owner needs to act
- * on -- most often a lapsed member at a door SK OS cannot update, which
+ * on -- most often a lapsed member at a door Barbell cannot update, which
  * has to be fixed at the device by hand. Showing one merged status would
  * hide exactly that case.
  *
@@ -47,7 +47,7 @@ function MapForm({ unmapped, providers, onClose, onSaved }) {
             {unmapped.map((u) => <option key={u.id} value={u.id}>{u.name}{u.role && u.role !== 'CLIENT' ? ` (${u.role.toLowerCase()})` : ''}</option>)}
           </select>
         </Field>
-        <Field label="Access ID" help="The card number, badge ID or user ID your access system uses for this person. Not a fingerprint — SK OS never stores one.">
+        <Field label="Access ID" help="The card number, badge ID or user ID your access system uses for this person. Not a fingerprint — Barbell never stores one.">
           <input className="input font-mono" value={externalUserId} onChange={(e) => setExt(e.target.value)} placeholder="GYM-0042" autoComplete="off" />
         </Field>
         {providers.length > 0 && (
@@ -191,7 +191,7 @@ export default function MembersPanel({ onToast, canManage }) {
       {(counts.mismatch > 0 || counts.failed > 0) && (
         <div className="rounded-xl p-3 text-[12px]" style={{ border: '1px solid var(--warn)', background: 'var(--bg2)', color: 'var(--ink)' }}>
           {counts.mismatch > 0 && <div>{counts.mismatch} {counts.mismatch === 1 ? 'person whose membership has lapsed may' : 'people whose memberships have lapsed may'} still open the door.</div>}
-          {counts.failed > 0 && <div>{counts.failed} access {counts.failed === 1 ? 'update' : 'updates'} failed; SK OS retries on the next check.</div>}
+          {counts.failed > 0 && <div>{counts.failed} access {counts.failed === 1 ? 'update' : 'updates'} failed; Barbell retries on the next check.</div>}
         </div>
       )}
 
@@ -201,7 +201,7 @@ export default function MembersPanel({ onToast, canManage }) {
             <InfoDot label="the two statuses" title="Should be vs door" size={26} align="end">
               &ldquo;Should be&rdquo; comes from the membership: an end date past its grace period, or a paused,
               suspended or transferred membership, means denied. &ldquo;Door&rdquo; is what the access system has
-              been told. If your system cannot be updated from SK OS, the door column says so and the person
+              been told. If your system cannot be updated from Barbell, the door column says so and the person
               has to be removed at the device.
             </InfoDot>
           }>Mapped ({data.mappings.length})</Label>

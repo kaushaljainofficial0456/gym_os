@@ -113,7 +113,7 @@ export default function demoRoutes(db) {
     // is a founder getting in touch.
     res.status(201).json({
       ok: true,
-      message: 'Thanks — your request is with the SK OS team. You will get your demo link shortly.',
+      message: 'Thanks — your request is with the Barbell team. You will get your demo link shortly.',
     });
   });
 

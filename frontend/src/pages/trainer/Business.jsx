@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../api.js';
+import { api, downloadFile } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch, fmtK, fmt1 } from '../../utils.js';
+import { useFetch, fmtK, fmt1, localDateKey } from '../../utils.js';
 import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import MembersTable from '../../components/trainer/MembersTable.jsx';
 import { TrendChart } from '../../components/charts.jsx';
@@ -51,6 +51,21 @@ function MembershipActions({ member, onChanged, onError }) {
   );
 }
 
+/** Downloads one of the owner spreadsheets (members, payments). */
+function ExportButton({ path, filename, label }) {
+  const [state, setState] = useState('');
+  const go = async () => {
+    setState('busy');
+    try { await downloadFile(path, filename); setState(''); }
+    catch { setState('failed'); setTimeout(() => setState(''), 4000); }
+  };
+  return (
+    <button type="button" className="btn btn-sm" onClick={go} disabled={state === 'busy'} aria-label={label} title={label}>
+      {state === 'busy' ? 'Exporting…' : state === 'failed' ? 'Export failed — retry' : 'Export CSV'}
+    </button>
+  );
+}
+
 export default function Business() {
   const { user } = useAuth();
   const ov = useFetch(() => api('/admin/overview'));
@@ -70,7 +85,7 @@ export default function Business() {
   const [subForm, setSubForm] = useState({ client_id: '', package_id: '', start_date: '' });
   const [payOpen, setPayOpen] = useState(false);
   const [payForm, setPayForm] = useState({ client_id: '', amount: '', method: 'cash' });
-  const [attDate, setAttDate] = useState(new Date().toISOString().slice(0, 10));
+  const [attDate, setAttDate] = useState(localDateKey());
   const [attList, setAttList] = useState(null);
   const [loadingAtt, setLoadingAtt] = useState(false);
 
@@ -242,8 +257,8 @@ export default function Business() {
               <input className="input" placeholder="e.g. Train hard, recover smarter" value={setForm.tagline || ''} onChange={(e) => setSetForm((f) => ({ ...f, tagline: e.target.value }))} />
               <div className="grid grid-cols-2 gap-2">
                 <input className="input" type="number" placeholder="Crowd capacity (e.g. 60)" value={setForm.crowd_capacity} onChange={(e) => setSetForm((f) => ({ ...f, crowd_capacity: e.target.value }))} />
-                <label className="flex items-center gap-2 text-xs text-mute">
-                  <input type="checkbox" className="accent-cyanx" checked={!!setForm.crowd_enabled} onChange={(e) => setSetForm((f) => ({ ...f, crowd_enabled: e.target.checked ? 1 : 0 }))} />
+                <label className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
+                  <input type="checkbox" className="accent-cyanx w-[18px] h-[18px] shrink-0" checked={!!setForm.crowd_enabled} onChange={(e) => setSetForm((f) => ({ ...f, crowd_enabled: e.target.checked ? 1 : 0 }))} />
                   Show live crowd
                 </label>
               </div>
@@ -260,18 +275,18 @@ export default function Business() {
                 ['allow_add_exercise', 'Clients may add exercises'],
                 ['allow_edit_targets', 'Clients may edit sets / reps / weight']
               ].map(([k, label]) => (
-                <label key={k} className="flex items-center gap-2 text-xs text-mute">
-                  <input type="checkbox" className="accent-ember" checked={!!setForm[k]} onChange={(e) => setSetForm((f) => ({ ...f, [k]: e.target.checked ? 1 : 0 }))} />
+                <label key={k} className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
+                  <input type="checkbox" className="accent-ember w-[18px] h-[18px] shrink-0" checked={!!setForm[k]} onChange={(e) => setSetForm((f) => ({ ...f, [k]: e.target.checked ? 1 : 0 }))} />
                   {label}
                 </label>
               ))}
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mt-3">COMMUNITY</div>
-              <label className="flex items-center gap-2 text-xs text-mute">
-                <input type="checkbox" className="accent-gold" checked={!!setForm.community_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_enabled: e.target.checked ? 1 : 0 }))} />
+              <label className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
+                <input type="checkbox" className="accent-gold w-[18px] h-[18px] shrink-0" checked={!!setForm.community_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_enabled: e.target.checked ? 1 : 0 }))} />
                 Enable gym community
               </label>
-              <label className="flex items-center gap-2 text-xs text-mute">
-                <input type="checkbox" className="accent-gold" checked={!!setForm.community_leaderboard_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_leaderboard_enabled: e.target.checked ? 1 : 0 }))} />
+              <label className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
+                <input type="checkbox" className="accent-gold w-[18px] h-[18px] shrink-0" checked={!!setForm.community_leaderboard_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_leaderboard_enabled: e.target.checked ? 1 : 0 }))} />
                 Enable leaderboards
               </label>
               <button className="btn-primary w-full" disabled={savingSet} onClick={async () => {
@@ -314,9 +329,12 @@ export default function Business() {
 
       {/* payments */}
       <Card>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <Kicker>Payments</Kicker>
-          <button className="btn btn-sm" onClick={() => setPayOpen(true)}>+ Record payment</button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <ExportButton path="/admin/export/payments.csv" filename="payments.csv" label="Export all payments as a spreadsheet" />
+            <button className="btn btn-sm" onClick={() => setPayOpen(true)}>+ Record payment</button>
+          </div>
         </div>
         {(d.recentPayments || []).length > 0 ? (
           <div className="overflow-x-auto mt-2">
@@ -370,7 +388,10 @@ export default function Business() {
 
       {/* members */}
       <Card>
-        <Kicker>Members</Kicker>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <Kicker>Members</Kicker>
+          <ExportButton path="/admin/export/members.csv" filename="members.csv" label="Export the member list as a spreadsheet" />
+        </div>
         {/* A roster that failed to load is not "No members yet". */}
         {members.error ? <ErrorState error={members.error} onRetry={members.reload} /> : (
           <MembersTable

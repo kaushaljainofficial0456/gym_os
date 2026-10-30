@@ -19,6 +19,11 @@ function timeLeft(iso) {
 }
 
 const STATUS_TONE = { AVAILABLE: 'text-good border-good/40 bg-good/10', CONSUMED: 'text-mute border-line bg-tint/5', EXPIRED: 'text-warn border-warn/40 bg-warn/10', REVOKED: 'text-bad border-bad/40 bg-bad/10' };
+const STATUS_LABEL = { AVAILABLE: 'Available', CONSUMED: 'Used', EXPIRED: 'Expired', REVOKED: 'Revoked' };
+// A stored AVAILABLE outlives its expiry; the clock decides (the API does
+// the same) so an expired code never offers a Revoke that can only fail.
+const effectiveStatus = (t) => (t.status === 'AVAILABLE' && Date.parse(t.expires_at) <= Date.now() ? 'EXPIRED' : t.status);
+const shortDate = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
 export default function EnterpriseQR() {
   const [purpose, setPurpose] = useState('CLIENT');
@@ -128,20 +133,23 @@ export default function EnterpriseQR() {
           <Empty title="No QR codes yet" hint="Generate one above to onboard your first person this way." />
         ) : (
           <div className="space-y-2">
-            {list.data.tokens.map((t) => (
+            {list.data.tokens.map((t) => { const st = effectiveStatus(t); return (
               <Card key={t.id} className="p-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-grotesk font-semibold truncate">{t.membership_plan_name || (purpose === 'TRAINER' ? 'Trainer' : 'No plan')}</div>
                   <div className="text-[11px]" style={{ color: 'var(--faint)' }}>
-                    {t.status === 'CONSUMED' ? `Joined by ${t.consumed_by_name || 'someone'}` : t.status === 'AVAILABLE' ? timeLeft(t.expires_at) : t.status}
+                    {st === 'CONSUMED' ? `Joined by ${t.consumed_by_name || 'someone'}`
+                      : st === 'AVAILABLE' ? timeLeft(t.expires_at)
+                      : st === 'EXPIRED' ? `Expired ${shortDate(t.expires_at)}`
+                      : `Revoked · made ${shortDate(t.created_at)}`}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={`chip border ${STATUS_TONE[t.status] || ''}`}>{t.status}</span>
-                  {t.status === 'AVAILABLE' && <button className="btn-ghost" onClick={() => revoke(t.id)}>Revoke</button>}
+                  <span className={`chip border ${STATUS_TONE[st] || ''}`}>{STATUS_LABEL[st] || st}</span>
+                  {st === 'AVAILABLE' && <button className="btn-ghost" onClick={() => revoke(t.id)}>Revoke</button>}
                 </div>
               </Card>
-            ))}
+            ); })}
           </div>
         )}
       </div>

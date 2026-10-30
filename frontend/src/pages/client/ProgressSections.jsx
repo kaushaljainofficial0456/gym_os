@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
-import { useFetch } from '../../utils.js';
+import { useFetch, localDateKey } from '../../utils.js';
 import { Card, ErrorState, useConfirm } from '../../components/UI.jsx';
 import Icon from '../../components/Icon.jsx';
 import Ring from '../../components/Ring.jsx';
@@ -321,7 +321,7 @@ function MeasurementForm({ clientId, onDone, onCancel, editing, previous }) {
     return Number.isFinite(cm) && cm > 0 && (cm < f.lo || cm > f.hi);
   });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
 
   return (
     <form onSubmit={submit} className="mt-3 rounded-[var(--r-sm)] p-3" style={{ border: '1px solid var(--line)' }}>

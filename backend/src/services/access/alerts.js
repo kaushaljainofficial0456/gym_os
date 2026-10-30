@@ -125,7 +125,7 @@ export async function detectConditions(db, orgId, { settings = {}, crowd = null,
     out.push({
       key: 'access_sync_failed', kind: 'access_sync', severity: 'warning',
       title: `Access could not be updated for ${failed.n} ${Number(failed.n) === 1 ? 'member' : 'members'}`,
-      detail: 'The access system refused or did not answer. Their door access is unchanged; SK OS will retry.',
+      detail: 'The access system refused or did not answer. Their door access is unchanged; Barbell will retry.',
     });
   }
 
@@ -140,7 +140,7 @@ export async function detectConditions(db, orgId, { settings = {}, crowd = null,
     out.push({
       key: 'access_revoke_manual', kind: 'access_sync', severity: 'warning',
       title: `${manual.n} ${Number(manual.n) === 1 ? 'member has' : 'members have'} a lapsed membership but may still open the door`,
-      detail: 'Your access system cannot be updated from SK OS. Remove them at the device.',
+      detail: 'Your access system cannot be updated from Barbell. Remove them at the device.',
     });
   }
 

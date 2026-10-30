@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { Modal, Empty, useConfirm } from '../UI.jsx';
+import { localDateKey } from '../../utils.js';
 import InfoDot from '../InfoDot.jsx';
 import { Pill, Label, Field, ErrorLine, Loading, When, PROVIDER_STATE } from './shared.jsx';
 
@@ -226,12 +227,11 @@ function ConnectSheet({ catalogue, branches, onClose, onConnected }) {
             <div>
               <div className="flex items-center gap-1 mb-2">
                 <div className="text-[10px] uppercase tracking-[.14em] font-grotesk" style={{ color: 'var(--faint)' }}>
-                  Recognised, not yet built
+                  Coming soon
                 </div>
-                <InfoDot label="unbuilt providers" title="Why these are greyed out" size={26}>
-                  A vendor-specific adapter needs that vendor&rsquo;s API documentation, real credentials and a
-                  device to test against. Rather than offer a button backed by a guess, SK OS says so — most of
-                  these panels can send webhooks or expose an HTTP endpoint, which works today.
+                <InfoDot label="upcoming providers" title="Connect one of these today" size={26}>
+                  A dedicated connector for each of these brands is on the way. Most of these panels can already
+                  send webhooks or expose an HTTP endpoint &mdash; choose Webhook or REST above to connect one now.
                 </InfoDot>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -240,8 +240,8 @@ function ConnectSheet({ catalogue, branches, onClose, onConnected }) {
             </div>
           )}
           <p className="text-[11px] leading-relaxed" style={{ color: 'var(--faint)' }}>
-            SK OS never stores fingerprints, face scans or any biometric template. Matching stays inside your
-            access hardware; SK OS receives only a member reference, a direction and a time. Take legal advice
+            Barbell never stores fingerprints, face scans or any biometric template. Matching stays inside your
+            access hardware; Barbell receives only a member reference, a direction and a time. Take legal advice
             before enabling biometric access in production.
           </p>
         </div>
@@ -274,7 +274,7 @@ function ConnectSheet({ catalogue, branches, onClose, onConnected }) {
           {picked.capabilities?.supportsWebhooks && (
             <div className="rounded-xl p-3 text-[11px] leading-snug"
                  style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--mute)' }}>
-              A signing secret is generated for you and shown once. SK OS rejects anything unsigned, wrongly
+              A signing secret is generated for you and shown once. Barbell rejects anything unsigned, wrongly
               signed, or older than five minutes.
             </div>
           )}
@@ -347,7 +347,7 @@ function ConfigureSheet({ provider, onClose, onSaved }) {
         {isRest && (
           <div className="space-y-3">
             <Label>Endpoints</Label>
-            <Field label="Events endpoint URL" help="SK OS calls this with GET. Private and internal addresses are refused, and redirects are not followed.">
+            <Field label="Events endpoint URL" help="Barbell calls this with GET. Private and internal addresses are refused, and redirects are not followed.">
               <input className="input" value={urls.baseUrl} onChange={(e) => setUrls((u) => ({ ...u, baseUrl: e.target.value }))} placeholder="https://panel.example.com/api/events" />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -362,7 +362,7 @@ function ConfigureSheet({ provider, onClose, onSaved }) {
               </Field>
             </div>
             <Field label="Access permission endpoint (optional)"
-                   help='When set, SK OS POSTs {"external_user_id": "…", "access": "allow" | "deny"} here when a membership lapses or renews. Leave blank if your system cannot accept it.'>
+                   help='When set, Barbell POSTs {"external_user_id": "…", "access": "allow" | "deny"} here when a membership lapses or renews. Leave blank if your system cannot accept it.'>
               <input className="input" value={urls.permissionUrl} onChange={(e) => setUrls((u) => ({ ...u, permissionUrl: e.target.value }))} placeholder="https://panel.example.com/api/access" />
             </Field>
           </div>
@@ -371,8 +371,8 @@ function ConfigureSheet({ provider, onClose, onSaved }) {
         <div>
           <Label right={
             <InfoDot label="field mapping" title="What this does" size={26} align="end">
-              Tell SK OS where each piece of information lives in your system&rsquo;s JSON. A dotted path reaches
-              into nested objects. Leave a field blank and SK OS tries common names. Nothing here can run code —
+              Tell Barbell where each piece of information lives in your system&rsquo;s JSON. A dotted path reaches
+              into nested objects. Leave a field blank and Barbell tries common names. Nothing here can run code —
               it is a list of field names.
             </InfoDot>
           }>Field mapping</Label>
@@ -392,7 +392,7 @@ function ConfigureSheet({ provider, onClose, onSaved }) {
           <textarea className="input font-mono text-[11.5px]" rows={7} value={sample}
                     onChange={(e) => setSample(e.target.value)} spellCheck={false} aria-label="Sample JSON" />
           <button className="btn btn-sm mt-2" onClick={runPreview} disabled={!!busy}>
-            {busy === 'preview' ? 'Checking…' : 'Preview what SK OS reads'}
+            {busy === 'preview' ? 'Checking…' : 'Preview what Barbell reads'}
           </button>
           {preview && (
             <div className="mt-2 space-y-1.5" aria-live="polite">
@@ -452,8 +452,8 @@ function StagesSheet({ title, result, onClose }) {
 }
 
 function ImportSheet({ provider, onClose, onStarted }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [from, setFrom] = useState(new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
+  const today = localDateKey();
+  const [from, setFrom] = useState(localDateKey(new Date(Date.now() - 7 * 86400000)));
   const [to, setTo] = useState(today);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -741,7 +741,7 @@ export default function ConnectionsPanel({ onToast, onJob }) {
       {providers.length === 0 ? (
         <Empty
           title="No access system connected"
-          hint="Connect your door controller, turnstile or attendance software and SK OS starts tracking who is inside. Try the Demo connection first to see how it behaves."
+          hint="Connect your door controller, turnstile or attendance software and Barbell starts tracking who is inside. Try the Demo connection first to see how it behaves."
           action={<button className="btn btn-primary" onClick={() => setSheet({ kind: 'connect' })}>Connect one</button>}
         />
       ) : (

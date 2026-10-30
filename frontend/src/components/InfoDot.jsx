@@ -48,6 +48,7 @@ export default function InfoDot({
   const [pos, setPos] = useState(null);   // null until measured
   const btnRef = useRef(null);
   const panelRef = useRef(null);
+  const anchorAt = useRef(null);   // where the trigger was when placed
   const panelId = useId();
 
   const close = useCallback(() => {
@@ -65,6 +66,7 @@ export default function InfoDot({
     if (!open || !btnRef.current || !panelRef.current) return;
     const t = btnRef.current.getBoundingClientRect();
     const p = panelRef.current.getBoundingClientRect();
+    anchorAt.current = { top: t.top, left: t.left };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
@@ -94,21 +96,31 @@ export default function InfoDot({
       if (panelRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
       setOpen(false); setPos(null);   // outside click: no focus yank
     };
-    // Any scroll invalidates the anchor. Re-measuring on every scroll frame
-    // would be the other option; closing is the honest one for a panel this
-    // small, and it is what a tap elsewhere means anyway.
-    const onScroll = () => { setOpen(false); setPos(null); };
+    // A scroll that MOVES the trigger invalidates the anchor; closing is the
+    // honest answer for a panel this small. Only one that moves it, though:
+    // this listener hears every scroll on the page, including the panel's
+    // own (it scrolls when its text is long -- reading it closed it) and the
+    // tail end of a momentum scroll or scroll-into-view still settling as
+    // the dot is tapped (it opened and vanished in the same moment).
+    const onScroll = (e) => {
+      if (panelRef.current?.contains(e.target)) return;
+      const t = btnRef.current?.getBoundingClientRect();
+      const a = anchorAt.current;
+      if (t && a && Math.abs(t.top - a.top) < 4 && Math.abs(t.left - a.left) < 4) return;
+      setOpen(false); setPos(null);
+    };
+    const onResize = () => { setOpen(false); setPos(null); };
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('mousedown', onDown, true);
     document.addEventListener('touchstart', onDown, true);
     window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('mousedown', onDown, true);
       document.removeEventListener('touchstart', onDown, true);
       window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
     };
   }, [open, close]);
 

@@ -1,5 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+/** `d` as YYYY-MM-DD on the device's own calendar. Never
+ *  d.toISOString().slice(0, 10): that is the UTC date, which in India stays
+ *  yesterday until 5:30am -- "today" marked the wrong day, and a date picker
+ *  opened on yesterday. */
+export const localDateKey = (d = new Date()) => (
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+);
+
+/** How far a new weigh-in is from the last one, or null if it is believable.
+ *  Catches the classic slip -- 22.7 typed for 82.7 -- which otherwise sets
+ *  "current weight" and tells the member they beat their goal by 36 kg. */
+export function weightJump(kg, lastKg, limit = 0.15) {
+  const last = Number(lastKg);
+  if (!Number.isFinite(last) || last <= 0 || !Number.isFinite(kg)) return null;
+  const diff = kg - last;
+  return Math.abs(diff) / last > limit ? diff : null;
+}
+
+/** A body weight for display: one decimal, what a scale shows. Stored values
+ *  are raw floats (a pound entry converts to 45.31387776300001). */
+export const kg1 = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : String(Math.round(Number(v) * 10) / 10));
+
 export const fmtK = (n) => Number(n || 0).toLocaleString('en-US');
 export const fmt1 = (n) => (Math.round(Number(n || 0) * 10) / 10).toFixed(1);
 export const fmtDate = (iso) => {

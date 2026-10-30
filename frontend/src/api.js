@@ -99,7 +99,9 @@ export async function downloadFile(path, filename) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Not in the same tick as the click: some browsers cancel a download
+  // whose object URL is revoked before they have started reading it.
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 /**

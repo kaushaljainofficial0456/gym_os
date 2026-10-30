@@ -16,14 +16,17 @@
  * there is actually more than one kind present -- a chip row over three
  * notifications is chrome pretending to be a feature.
  *
- * HONEST ABOUT WHAT'S EMPTY: nothing in this codebase schedules reminder
- * notifications (no cron exists -- see notifications.js), so for a client
- * account this list is often genuinely empty. That is the correct state,
- * not a bug; owner-facing events DO write real rows via notify().
+ * REMINDERS. This is also what makes a member's reminders arrive: it asks
+ * the server for anything now due when the app opens, when it returns to
+ * the foreground and every few minutes, and keeps the badge current
+ * (see reminders.js). It used to read the count once, at mount, so a
+ * coach's message only showed up after a reload.
  */
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
+import { GENERATE_EVERY_MS, UNREAD_POLL_MS, generateReminders, reminderLink } from '../reminders.js';
 
 function timeAgo(iso) {
   const then = new Date(iso).getTime();
@@ -71,9 +74,29 @@ export default function NotificationBell({
       .finally(() => setLoading(false));
   };
 
+  const { isClient } = useAuth();
   useEffect(() => {
-    api('/notifications?limit=1').then((r) => setUnreadCount(r.unread_count || 0)).catch(() => {});
-  }, []);
+    let alive = true;
+    const refreshCount = () => api('/notifications/unread-count')
+      .then((r) => { if (alive) setUnreadCount(r.unreadCount || 0); })
+      .catch(() => {});
+    // Reminders are a member's; staff only need the badge kept current.
+    const generate = () => (isClient ? generateReminders() : Promise.resolve()).finally(refreshCount);
+    generate();
+    // Generation keeps running in a background tab -- that is when a
+    // system notification is the point -- while the cheap count poll only
+    // runs while someone is looking.
+    const gen = setInterval(generate, GENERATE_EVERY_MS);
+    const poll = setInterval(() => { if (document.visibilityState === 'visible') refreshCount(); }, UNREAD_POLL_MS);
+    const onVisible = () => { if (document.visibilityState === 'visible') generate(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      clearInterval(gen);
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isClient]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -99,7 +122,7 @@ export default function NotificationBell({
   // dead end.
   const openNotification = (n) => {
     markRead(n);
-    const link = n.data?.link;
+    const link = reminderLink(n);
     if (!link) return;
     setOpen(false);
     navigate(link);

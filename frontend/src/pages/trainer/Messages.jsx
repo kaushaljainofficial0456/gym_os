@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch } from '../../utils.js';
+import { useFetch, localDateKey } from '../../utils.js';
 import { Card, Kicker, ErrorState, Empty, PageSkeleton } from '../../components/UI.jsx';
 
 const TYPES = [
@@ -86,14 +86,16 @@ export default function Messages() {
      "02:10 AM" against a message from last month is actively
      misleading. The separator is inserted where the DAY changes, which
      is the only place the reader needs telling. */
-  const dayOf = (iso) => String(iso || '').slice(0, 10);
+  // The reader's own calendar day: a message sent at 00:30 in India is
+  // still "yesterday" in UTC, so slicing the timestamp filed it a day early.
+  const dayOf = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : localDateKey(d); };
   const dayLabel = (iso) => {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
     const today = new Date();
     const key = dayOf(iso);
-    const todayKey = today.toISOString().slice(0, 10);
-    const yest = new Date(today.getTime() - 86400000).toISOString().slice(0, 10);
+    const todayKey = localDateKey(today);
+    const yest = localDateKey(new Date(today.getTime() - 86400000));
     if (key === todayKey) return 'Today';
     if (key === yest) return 'Yesterday';
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -119,7 +121,7 @@ export default function Messages() {
           <p className="text-mute text-sm">
             {unreadTotal > 0
               ? `${unreadTotal} unread ${unreadTotal === 1 ? 'message' : 'messages'} waiting on a reply.`
-              : 'Direct line to each client. WhatsApp Business delivery is a planned integration.'}
+              : 'A direct line to each client. Messages land in their app and notification bell.'}
           </p>
         </div>
         {/* Waiting clients FIRST, with the count in the label. The picker

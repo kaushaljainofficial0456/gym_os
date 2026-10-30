@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch, GOAL_LABEL, fmt1, fmtK, cls } from '../../utils.js';
-import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg, CheckIcon, XIcon, PageSkeleton } from '../../components/UI.jsx';
+import { useFetch, GOAL_LABEL, fmt1, fmtK, cls, localDateKey, weightJump } from '../../utils.js';
+import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg, CheckIcon, XIcon, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import Logo from '../../components/Logo.jsx';
@@ -350,6 +350,7 @@ function TrainingTab({ clientId }) {
 
 /* ---------------- Overview ---------------- */
 function OverviewTab({ client, profile, adherence, rules, weights, measurements, onChanged }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [w, setW] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
@@ -360,6 +361,15 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
   }, [toast]);
   const logWeight = async () => {
     if (!w) return;
+    const kg = Number(w);
+    const jump = weightJump(kg, client.current_weight ?? client.currentWeight);
+    if (jump != null && !(await confirm({
+      title: `Log ${fmt1(kg)} kg?`,
+      body: `That is ${fmt1(Math.abs(jump))} kg ${jump < 0 ? 'below' : 'above'} ${client.name}'s last weigh-in. It will become their current weight.`,
+      confirmLabel: 'Yes, log it',
+      cancelLabel: 'Fix it',
+      danger: false,
+    }))) return;
     setBusy(true);
     try {
       await api(`/clients/${client.id}/weights`, { method: 'POST', body: JSON.stringify({ weight: Number(w) }) });
@@ -375,6 +385,7 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
 
   return (
     <div className="grid lg:grid-cols-3 gap-5">
+      {confirmDialog}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-card border"
           style={{ background: 'var(--panel)', color: 'var(--ink)', borderColor: 'var(--accent-soft)' }}>
@@ -503,7 +514,7 @@ function WorkoutsTab({ clientId, history, onChanged }) {
 
 function AssignWorkout({ clientId, templates, onClose, onDone }) {
   const [templateId, setTemplateId] = useState(templates[0]?.id || '');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(localDateKey());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const t = templates.find((x) => x.id === templateId);

@@ -274,3 +274,15 @@ test('Google-registered accounts are pre-verified (email_verified = 1 at creatio
   const row = await db.q1('SELECT email_verified FROM users WHERE id = ?', ['gu1']);
   assert.equal(row.email_verified, 1);
 });
+
+test('change-password: a wrong current password is 403, never 401 -- the app signs out on any 401', async (t) => {
+  const db = await memDb();
+  const api = await startApp(db);
+  t.after(() => api.close());
+  const reg = await api.call('POST', '/api/auth/register-trainer', { name: 'Typo Trainer', email: 'typo@x.in', password: 'password123' });
+  assert.equal(reg.status, 201);
+
+  const res = await api.call('POST', '/api/auth/change-password', { current_password: 'not-my-password', new_password: 'password456' }, reg.json.token);
+  assert.equal(res.status, 403);
+  assert.equal(res.json.error, 'Current password is incorrect');
+});
