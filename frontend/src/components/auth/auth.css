@@ -456,6 +456,10 @@
 }
 
 .auth-google { display: flex; justify-content: center; min-height: 44px; }
+/* Google's button is a light document in an iframe. In the dark theme the
+   frame inherited color-scheme: dark, and a mismatch makes the browser paint
+   an opaque white canvas behind the document: a bright box around the pill. */
+.auth-google iframe { color-scheme: light; }
 
 /* ── brand mark & wordmark draw-in ─────────────────────────────────── */
 .brand-mark--draw .bm-ring {
