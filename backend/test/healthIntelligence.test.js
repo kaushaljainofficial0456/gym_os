@@ -76,6 +76,24 @@ test('reconcileUserDay: no wearable data at all -> SK OS baseline estimate, real
   assert.equal(interval.is_estimate, 1);
 });
 
+test('reconcileUserDay estimates with the weight logged nearest the workout day, as completion does -- not the profile weight', async () => {
+  const date = '2026-01-07';
+  const at = { date, startedAt: `${date}T18:00:00Z`, completedAt: `${date}T19:00:00Z` };
+
+  const profileOnly = await memDb();
+  const ids = await seedWorkoutDay(profileOnly, at); // clients.current_weight = 78
+  await reconcileUserDay(profileOnly, { ...ids, date, tz: 'UTC' });
+
+  const logged = await memDb();
+  await seedWorkoutDay(logged, at);
+  await logged.run('INSERT INTO weight_logs (id, client_id, date, weight, created_at) VALUES (?,?,?,?,?)',
+    ['wt1', 'c1', date, 95, `${date}T07:00:00Z`]);
+  await reconcileUserDay(logged, { ...ids, date, tz: 'UTC' });
+
+  const kcal = async (db) => (await db.q1('SELECT active_kcal FROM health_canonical_workouts WHERE skos_workout_id = ?', ['w1'])).active_kcal;
+  assert.ok(await kcal(logged) > await kcal(profileOnly), 'a heavier logged weight on the day must raise the estimate');
+});
+
 test('TEST 7 -- late-arriving wearable data reconciles an existing SK OS-only estimate, with an audit log entry', async () => {
   const db = await memDb();
   const date = '2026-01-06';

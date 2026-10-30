@@ -20,7 +20,6 @@ import { track, trackOnce } from '../services/events.js';
 import { parseFoodInput } from '../services/intelligence/parseFoods.js';
 import { parseWorkoutInput } from '../services/intelligence/parseWorkout.js';
 import { parseQuantity, foodBase } from '../services/intelligence/units.js';
-import { estimateBurn, burnModelAvailable } from '../services/burnEstimator.js';
 import {
   searchFoods as searchFoodModel,
   modelAvailable as foodModelAvailable,
@@ -279,39 +278,6 @@ export default function intelligenceRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const foods = await searchFoods(db, c.org_id, c.id, req.query.q || '', { limit: parseInt(req.query.limit, 10) || 8 });
     res.json({ foods });
-  });
-
-  // ---------------- workout calorie burn (skos-cal-v1) ----------------
-  // POST because a session is a body of sets, not a query string.
-  //
-  // Returns 422 rather than a number when the model refuses. It hard-
-  // requires a body weight and a duration, and inventing either would
-  // produce a confident figure with nothing behind it -- so a missing
-  // weight is reported as something the user can fix.
-  r.post('/workout-burn', async (req, res) => {
-    const c = await getClient(req, res); if (!c) return;
-    if (!burnModelAvailable()) {
-      return res.status(503).json({ error: 'Burn model not available on this deployment' });
-    }
-    const b = req.body || {};
-    const bodyWeightKg = Number(b.body_weight_kg) || Number(c.current_weight) || null;
-    const result = estimateBurn({
-      bodyWeightKg,
-      durationMinutes: Number(b.duration_minutes),
-      intensity: b.intensity,
-      exercises: b.exercises || [],
-    });
-    if (!result) {
-      return res.status(422).json({
-        error: !bodyWeightKg
-          ? 'Add your body weight to estimate calories burned'
-          : 'Session is outside what this model can estimate',
-        needs: !bodyWeightKg ? 'body_weight_kg' : 'duration_minutes',
-      });
-    }
-    // The interval and notes go out with the number, never stripped: the
-    // model's uncertainty is part of its answer (see burnEstimator.js).
-    res.json(result);
   });
 
   // Live external lookups only happen on a genuine local+cache miss, but a

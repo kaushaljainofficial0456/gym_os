@@ -1,0 +1,101 @@
+candidate,arm_id,pred_gross_met
+baseline_v2 (deployed),joao2021_60,3.5
+baseline_v2 (deployed),joao2021_75,3.5
+baseline_v2 (deployed),joao2021_90,6.0
+baseline_v2 (deployed),rustaden2020_pump,3.5
+baseline_v2 (deployed),rustaden2020_heavy,6.0
+baseline_v2 (deployed),benito2016_machine,6.0
+baseline_v2 (deployed),benito2016_free,6.0
+baseline_v2 (deployed),benito2016_combined,6.0
+baseline_v2 (deployed),pmc5801711,3.5
+baseline_v2 (deployed),pmc5801710,3.5
+baseline_v2 all-moderate,joao2021_60,3.5
+baseline_v2 all-moderate,joao2021_75,3.5
+baseline_v2 all-moderate,joao2021_90,3.5
+baseline_v2 all-moderate,rustaden2020_pump,3.5
+baseline_v2 all-moderate,rustaden2020_heavy,3.5
+baseline_v2 all-moderate,benito2016_machine,3.5
+baseline_v2 all-moderate,benito2016_free,3.5
+baseline_v2 all-moderate,benito2016_combined,3.5
+baseline_v2 all-moderate,pmc5801711,3.5
+baseline_v2 all-moderate,pmc5801710,3.5
+v1 tiers (unmapped exercises),joao2021_60,4.5
+v1 tiers (unmapped exercises),joao2021_75,4.5
+v1 tiers (unmapped exercises),joao2021_90,6.0
+v1 tiers (unmapped exercises),rustaden2020_pump,4.5
+v1 tiers (unmapped exercises),rustaden2020_heavy,6.0
+v1 tiers (unmapped exercises),benito2016_machine,6.0
+v1 tiers (unmapped exercises),benito2016_free,6.0
+v1 tiers (unmapped exercises),benito2016_combined,6.0
+v1 tiers (unmapped exercises),pmc5801711,4.5
+v1 tiers (unmapped exercises),pmc5801710,4.5
+constant session MET (LOSO),joao2021_60,4.211
+constant session MET (LOSO),joao2021_75,4.211
+constant session MET (LOSO),joao2021_90,4.211
+constant session MET (LOSO),rustaden2020_pump,4.159
+constant session MET (LOSO),rustaden2020_heavy,4.159
+constant session MET (LOSO),benito2016_machine,3.205
+constant session MET (LOSO),benito2016_free,3.205
+constant session MET (LOSO),benito2016_combined,3.205
+constant session MET (LOSO),pmc5801711,4.34
+constant session MET (LOSO),pmc5801710,4.191
+density: MET = a + b*sets/min,joao2021_60,
+density: MET = a + b*sets/min,joao2021_75,
+density: MET = a + b*sets/min,joao2021_90,
+density: MET = a + b*sets/min,rustaden2020_pump,
+density: MET = a + b*sets/min,rustaden2020_heavy,
+density: MET = a + b*sets/min,benito2016_machine,
+density: MET = a + b*sets/min,benito2016_free,
+density: MET = a + b*sets/min,benito2016_combined,
+density: MET = a + b*sets/min,pmc5801711,
+density: MET = a + b*sets/min,pmc5801710,
+density-gated effort tier,joao2021_60,3.5
+density-gated effort tier,joao2021_75,3.5
+density-gated effort tier,joao2021_90,3.5
+density-gated effort tier,rustaden2020_pump,
+density-gated effort tier,rustaden2020_heavy,
+density-gated effort tier,benito2016_machine,6.0
+density-gated effort tier,benito2016_free,6.0
+density-gated effort tier,benito2016_combined,6.0
+density-gated effort tier,pmc5801711,
+density-gated effort tier,pmc5801710,
+"ridge (sets/min, reps/min)",joao2021_60,
+"ridge (sets/min, reps/min)",joao2021_75,
+"ridge (sets/min, reps/min)",joao2021_90,
+"ridge (sets/min, reps/min)",rustaden2020_pump,
+"ridge (sets/min, reps/min)",rustaden2020_heavy,
+"ridge (sets/min, reps/min)",benito2016_machine,
+"ridge (sets/min, reps/min)",benito2016_free,
+"ridge (sets/min, reps/min)",benito2016_combined,
+"ridge (sets/min, reps/min)",pmc5801711,
+"ridge (sets/min, reps/min)",pmc5801710,
+xgboost,joao2021_60,
+xgboost,joao2021_75,
+xgboost,joao2021_90,
+xgboost,rustaden2020_pump,
+xgboost,rustaden2020_heavy,
+xgboost,benito2016_machine,
+xgboost,benito2016_free,
+xgboost,benito2016_combined,
+xgboost,pmc5801711,
+xgboost,pmc5801710,
+lightgbm,joao2021_60,
+lightgbm,joao2021_75,
+lightgbm,joao2021_90,
+lightgbm,rustaden2020_pump,
+lightgbm,rustaden2020_heavy,
+lightgbm,benito2016_machine,
+lightgbm,benito2016_free,
+lightgbm,benito2016_combined,
+lightgbm,pmc5801711,
+lightgbm,pmc5801710,
+catboost,joao2021_60,
+catboost,joao2021_75,
+catboost,joao2021_90,
+catboost,rustaden2020_pump,
+catboost,rustaden2020_heavy,
+catboost,benito2016_machine,
+catboost,benito2016_free,
+catboost,benito2016_combined,
+catboost,pmc5801711,
+catboost,pmc5801710,

@@ -20,7 +20,7 @@
 import { id, now } from '../../ids.js';
 import { dayKey, iso, DEFAULT_TZ } from '../../utils/time.js';
 import { mifflinStJeorBmr, composeDailyEnergy, elapsedSecondsOfDay, restingEnergyForSeconds } from '../intelligence/restingEnergy.js';
-import { buildWorkoutCalorieInput, estimateWorkoutCalories, resolveBodyWeight } from '../intelligence/calorieModel.js';
+import { buildWorkoutCalorieInput, estimateWorkoutCalories, resolveBodyWeight, mlCanonicalExerciseId } from '../intelligence/calorieModel.js';
 import { reconcileWorkout, buildExternalWorkoutCandidate, clusterWearableWorkouts, reconcileDailyEnergy } from './reconciliation.js';
 import { computeTrainingLoad } from './trainingLoad.js';
 import { computeRecovery, computeReadiness } from './recovery.js';
@@ -40,7 +40,8 @@ async function fetchSkosWorkouts(db, clientId, date) {
   const wIds = workouts.map((w) => w.id);
   const exercises = await db.q(
     `SELECT we.*, el.ex_type AS lib_ex_type, el.movement AS lib_movement,
-            el.primary_muscle AS lib_primary_muscle, el.equipment AS lib_equipment
+            el.primary_muscle AS lib_primary_muscle, el.equipment AS lib_equipment,
+            el.animation_key AS lib_animation_key, el.is_global AS lib_is_global
        FROM workout_exercises we LEFT JOIN exercise_library el ON el.id = we.exercise_id
       WHERE we.workout_id IN (${wIds.map(() => '?').join(',')})`, wIds);
   const logs = await db.q(
@@ -100,11 +101,23 @@ async function fetchHealthRecords(db, userId, date, tz) {
  *  expects, bound to ONE specific SK OS workout's real exercises/sets. */
 function makeEstimateMl(db, client, workoutBundle) {
   return async (durationSeconds) => {
+    // Same inputs as completion (routes/workouts.js): the weight logged
+    // nearest the workout day rather than today's profile weight, and the
+    // ml provider's exercise canonicalization -- otherwise a reconciled
+    // figure could disagree with the one the member was shown at completion.
+    const { workout } = workoutBundle;
+    const bodyWeightKg = await resolveBodyWeight(db, client?.id, workout.scheduled_date);
     const input = buildWorkoutCalorieInput({
-      client, workout: workoutBundle.workout, exercises: workoutBundle.exercises,
-      setsByExercise: workoutBundle.setsByExercise, durationSeconds, bodyWeightKg: client?.current_weight,
+      client, workout, exercises: workoutBundle.exercises,
+      setsByExercise: workoutBundle.setsByExercise, durationSeconds, bodyWeightKg,
     });
-    const result = await estimateWorkoutCalories(input, { db, stage: 'health_intelligence' });
+    const mlExerciseCanonical = {};
+    for (const e of workoutBundle.exercises) {
+      if (!e.exercise_id) continue;
+      const token = mlCanonicalExerciseId({ animationKey: e.lib_animation_key, isGlobal: e.lib_is_global });
+      if (token) mlExerciseCanonical[e.exercise_id] = token;
+    }
+    const result = await estimateWorkoutCalories(input, { mlExerciseCanonical, db, stage: 'health_intelligence' });
     return { kcal: result.estimated_active_kcal, modelName: 'skos-cal', modelVersion: result.model_version, provider: result.provider || 'skos_ml' };
   };
 }

@@ -173,10 +173,10 @@ Order of preference (documented in `docs/TEAM-CONTRACT.md` §4.2):
 ```jsonc
 {
   "schema_version": "0.2",
-  "estimated_active_kcal": 285,
-  "lower_kcal": 250,
-  "upper_kcal": 320,
-  "model_version": "skos-cal-baseline-v1",
+  "estimated_active_kcal": 160,
+  "lower_kcal": 107,   // 78 kg, 178 cm, 30 y male, 45 min, moderate
+  "upper_kcal": 214,
+  "model_version": "skos-cal-baseline-v2",
   "provider": "baseline",
   "source": "preview" | "persisted",   // preview = planned estimate (never persisted);
                                        // persisted = actual-set estimate from completion
@@ -191,11 +191,19 @@ for NL-logged sessions. `meta.estKcal` is kept in sync with
 
 ## 7. Providers & fallback behavior
 
-- `CALORIE_MODEL_PROVIDER=baseline` (default) — deterministic MET heuristic:
-  `MET × 3.5 × body_weight_kg ÷ 200 × duration_min`, `MET ∈ {light 3.0, moderate 4.5,
-  hard 6.0}`, range ±15%. Explicitly **not ML**. This is the only provider running in
-  production today, and remains the default in every environment unless
-  `CALORIE_MODEL_PROVIDER=ml` is explicitly set — `ml` is opt-in, never automatic.
+- `CALORIE_MODEL_PROVIDER=baseline` (default) — deterministic MET heuristic,
+  `skos-cal-baseline-v2`: `(MET × 3.5 × body_weight_kg ÷ 200 − resting kcal/min) ×
+  active_min`, `MET ∈ {light 3.0, moderate 3.5, hard 6.0}` (2024 Adult Compendium codes
+  02056 / 02054 / 02050). Resting is Mifflin-St Jeor ÷ 1440 when weight, height, age and
+  sex are known, otherwise the standard 1 MET — so the figure is **net of resting**, as
+  §3 defines. The band is the gross rate × (1 ± 0.25), netted the same way; it is **not**
+  a calibrated interval. Rows written by `skos-cal-baseline-v1` (moderate 4.5, gross,
+  ±15%) keep that label and are never reinterpreted. Explicitly **not ML**. This is the
+  only provider running in production today, and remains the default in every
+  environment unless `CALORIE_MODEL_PROVIDER=ml` is explicitly set — `ml` is opt-in,
+  never automatic. Known weakness, measured in `docs/CALORIE_OVERHAUL_REPORT.md`: `hard`
+  (6.0) overstates heavy straight-set sessions with long rests, whose measured rate
+  matches `moderate`; 6.0 fits only dense circuit-style sessions.
 - `CALORIE_MODEL_PROVIDER=mock` — fixed demo values (300/250/350), clearly labeled.
 - `CALORIE_MODEL_PROVIDER=ml` — **implemented (Phase 3B Step 3).** Sambhav's
   `skos-cal-v1` artifact, ported into
@@ -208,6 +216,12 @@ for NL-logged sessions. `meta.estKcal` is kept in sync with
   failure (exception, timeout, or invalid output) still falls back to `baseline` and
   marks a `note` explaining why — that fallback behavior is unchanged from before this
   provider was implemented.
+- **One estimation path.** Every calorie figure comes from `estimateWorkoutCalories`
+  (completion, `/workouts/:id/effort`, `/intel/confirm-workout`, the training-program
+  preview and wearable reconciliation in `dailyIntelligence.js`), so all of them share
+  the provider gate, validation and net-of-resting definition. The old
+  `POST /intel/workout-burn` route, which called skos-cal-v1 directly, bypassed the gate
+  and returned a gross figure, was removed (no client called it).
 - **Provider honesty:** the persisted result always records the provider actually used
   (`workouts.calorie_provider`) — a baseline result never appears to be an ML
   prediction, and the provider is never exposed to the frontend.

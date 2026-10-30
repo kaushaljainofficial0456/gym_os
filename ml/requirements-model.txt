@@ -1,0 +1,12 @@
+# Modelling phase (calorie overhaul, see docs/CALORIE_OVERHAUL_REPORT.md).
+# Kept apart from requirements.txt, as that file's header asks.
+# Used by scripts/session_model_experiment.py, which compares the boosted
+# models against the deployed baseline under leave-one-study-out
+# validation. They failed the gates; they are listed here so the
+# comparison can be reproduced, not because any of them is deployed.
+-r requirements.txt
+scipy>=1.13
+statsmodels>=0.14
+xgboost>=2.0
+lightgbm>=4.3
+catboost>=1.2
