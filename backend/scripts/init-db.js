@@ -40,6 +40,9 @@ const MIGRATIONS = [
   // matching a real gym by name. Defaults to 0, so every organization that
   // already exists stays a normal gym on the day this runs.
   ['organizations', 'is_demo', `is_demo INTEGER NOT NULL DEFAULT 0`],
+  // Tournaments: how a co-host is found across gyms, and the way to opt out.
+  ['users', 'username', `username TEXT`],
+  ['users', 'findable', `findable INTEGER NOT NULL DEFAULT 1`],
   // --- Trainer attendance: gym-configurable rules ---
   ['gym_settings', 'attendance_mode', `attendance_mode TEXT NOT NULL DEFAULT 'simple'`],
   ['gym_settings', 'attendance_grace_min', `attendance_grace_min INTEGER NOT NULL DEFAULT 10`],
@@ -738,6 +741,7 @@ async function applySqliteMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);
@@ -823,6 +827,7 @@ async function applyPgMigrations(pool) {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_template ON meal_logs(meal_template_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_trainer ON clients(trainer_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(org_id)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts(client_id, status)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_workouts_client_status_date ON workouts(client_id, status, scheduled_date)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten)`);

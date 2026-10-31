@@ -2803,3 +2803,149 @@ CREATE TABLE IF NOT EXISTS demo_events (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_demo_events_session ON demo_events(session_id, created_at);
+
+-- ============================================================
+-- TOURNAMENTS: gym wars, intra- and inter-gym competitions.
+--
+-- Deliberately keyed on USERS, not clients: a trainer, an owner or an
+-- independent member can host or compete, and a walk-in or a name typed by
+-- the host has no account at all (tournament_entrants.user_id is NULL).
+--
+-- CROSS-GYM BY DESIGN, so these tables have no org_id column and no RLS
+-- policy: one tournament can hold people from many gyms. Visibility is
+-- enforced in services/tournaments/access.js on every read. host_org_id
+-- only records whose gym it is, for gym-only reach.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS tournaments (
+  id            TEXT PRIMARY KEY,
+  host_org_id   TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  created_by    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  tagline       TEXT,
+  venue         TEXT,
+  prize         TEXT,
+  rules         TEXT,
+  theme         TEXT NOT NULL DEFAULT 'ember',
+  status        TEXT NOT NULL DEFAULT 'upcoming' CHECK (status IN ('upcoming','live','completed','cancelled')),
+  -- public: join directly. private: listed, but the host accepts each request.
+  visibility    TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public','private')),
+  -- gym: only the host's gym can see it. everyone: anyone on Barbell (inter-gym).
+  reach         TEXT NOT NULL DEFAULT 'gym' CHECK (reach IN ('gym','everyone')),
+  -- staff: trainers and owners only; never shown to a client.
+  audience      TEXT NOT NULL DEFAULT 'everyone' CHECK (audience IN ('everyone','staff')),
+  code          TEXT NOT NULL UNIQUE,
+  capacity      INTEGER,
+  overall_positions      INTEGER NOT NULL DEFAULT 3,
+  registration_opens_at  TEXT,
+  registration_closes_at TEXT,
+  withdraw_closes_at     TEXT,
+  starts_at     TEXT,
+  started_at    TEXT,
+  completed_at  TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status, starts_at);
+CREATE INDEX IF NOT EXISTS idx_tournaments_org ON tournaments(host_org_id, status);
+
+-- The prime host (role 'prime') plus co-hosts, who only count once they accept.
+CREATE TABLE IF NOT EXISTS tournament_hosts (
+  tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL DEFAULT 'cohost' CHECK (role IN ('prime','cohost')),
+  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined')),
+  invited_by    TEXT,
+  created_at    TEXT NOT NULL,
+  responded_at  TEXT,
+  PRIMARY KEY (tournament_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tournament_hosts_user ON tournament_hosts(user_id, status);
+
+-- One competition inside a tournament: squats, plank, tug of war.
+CREATE TABLE IF NOT EXISTS tournament_events (
+  id            TEXT PRIMARY KEY,
+  tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  code          TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  kind          TEXT NOT NULL DEFAULT 'custom',
+  -- reps/time_high/weight/distance/wins: higher wins. time_low: lower wins.
+  metric        TEXT NOT NULL CHECK (metric IN ('reps','time_high','time_low','weight','distance','wins')),
+  attempts      INTEGER NOT NULL DEFAULT 1,
+  time_cap_sec  INTEGER,
+  win_positions INTEGER NOT NULL DEFAULT 3,
+  capacity      INTEGER,
+  is_team       INTEGER NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL DEFAULT 'upcoming' CHECK (status IN ('upcoming','live','completed')),
+  position      INTEGER NOT NULL DEFAULT 0,
+  started_at    TEXT,
+  finished_at   TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tournament_events_t ON tournament_events(tournament_id, position);
+
+CREATE TABLE IF NOT EXISTS tournament_teams (
+  id         TEXT PRIMARY KEY,
+  event_id   TEXT NOT NULL REFERENCES tournament_events(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (event_id, name)
+);
+
+-- A person in a tournament. user_id NULL: a name the host typed, or a guest
+-- who joined from the QR without an account. guest_key_hash lets that guest
+-- see their own results, and claim them if they sign up later.
+CREATE TABLE IF NOT EXISTS tournament_entrants (
+  id            TEXT PRIMARY KEY,
+  tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  user_id       TEXT REFERENCES users(id) ON DELETE SET NULL,
+  name          TEXT NOT NULL,
+  gym_label     TEXT,
+  body_weight   REAL,
+  gender        TEXT,
+  status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','pending','declined','withdrawn')),
+  source        TEXT NOT NULL DEFAULT 'manual',
+  guest_key_hash TEXT,
+  added_by      TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL,
+  UNIQUE (tournament_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tournament_entrants_user ON tournament_entrants(user_id, status);
+
+-- Which competitions an entrant is in.
+CREATE TABLE IF NOT EXISTS tournament_entries (
+  id         TEXT PRIMARY KEY,
+  event_id   TEXT NOT NULL REFERENCES tournament_events(id) ON DELETE CASCADE,
+  entrant_id TEXT NOT NULL REFERENCES tournament_entrants(id) ON DELETE CASCADE,
+  team_id    TEXT REFERENCES tournament_teams(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (event_id, entrant_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tournament_entries_entrant ON tournament_entries(entrant_id);
+
+-- A recorded attempt. subject_id is an entrant, or a team in a team event.
+-- Only hosts can write here; self_recorded marks a host scoring themselves.
+CREATE TABLE IF NOT EXISTS tournament_results (
+  id            TEXT PRIMARY KEY,
+  event_id      TEXT NOT NULL REFERENCES tournament_events(id) ON DELETE CASCADE,
+  subject_id    TEXT NOT NULL,
+  attempt       INTEGER NOT NULL DEFAULT 1,
+  value         REAL NOT NULL,
+  valid         INTEGER NOT NULL DEFAULT 1,
+  self_recorded INTEGER NOT NULL DEFAULT 0,
+  recorded_by   TEXT,
+  recorded_at   TEXT NOT NULL,
+  UNIQUE (event_id, subject_id, attempt)
+);
+
+-- Who changed what. In a contest where the host's word is final, a score that
+-- was edited has to leave a trace.
+CREATE TABLE IF NOT EXISTS tournament_audit (
+  id            TEXT PRIMARY KEY,
+  tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  actor_id      TEXT,
+  action        TEXT NOT NULL,
+  detail        TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tournament_audit_t ON tournament_audit(tournament_id, created_at);

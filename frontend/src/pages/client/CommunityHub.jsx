@@ -15,7 +15,7 @@
  *  - It will not bury the way in. Create and Join sit on the first screen,
  *    because a private community is useless until the friends are in it.
  */
-import { useState, useCallback, useEffect } from 'react';
+import { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -23,6 +23,9 @@ import { ErrorState, Toast, PageSkeleton } from '../../components/UI.jsx';
 import { IdentityMark, MemberStack, TypeChip, themeOf, GYM_THEME } from '../../components/community/identity.jsx';
 import CreateCommunitySheet from '../../components/community/friend/CreateCommunitySheet.jsx';
 import JoinWithCodeSheet from '../../components/community/friend/JoinWithCodeSheet.jsx';
+
+// Loaded after the page, with its height held so the list below never jumps.
+const TournamentPulse = lazy(() => import('../../components/TournamentPulse.jsx').catch(() => ({ default: () => null })));
 
 const nf = new Intl.NumberFormat();
 const fmt = (n) => nf.format(Math.round(Number(n) || 0));
@@ -82,6 +85,8 @@ export default function CommunityHub() {
           Your gym, and the people you train with wherever they train.
         </p>
       </header>
+
+      <div className="mb-4" style={{ minHeight: 64 }}><Suspense fallback={null}><TournamentPulse /></Suspense></div>
 
       {/* ── invitations, first: they are the only thing here that expires ── */}
       {invites.length > 0 && (
