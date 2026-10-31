@@ -124,6 +124,9 @@ export default function meRoutes(db) {
       for (const t of EXPORT_CLIENT_TABLES) { const rows = await rowsOf(t, 'client_id', client.id); if (rows) data[t] = rows; }
     }
     for (const t of EXPORT_USER_TABLES) { const rows = await rowsOf(t, 'user_id', req.user.sub); if (rows) data[t] = rows; }
+    data.tournaments = await db.q(
+      `SELECT t.name, t.starts_at, p.gym_label, p.body_weight, p.status, p.created_at
+         FROM tournament_entrants p JOIN tournaments t ON t.id = p.tournament_id WHERE p.user_id = ?`, [req.user.sub]).catch(() => []);
     await track(db, { orgId: req.user.org || null, userId: req.user.sub, type: 'data_exported', data: {} }).catch(() => {});
     res.setHeader('Content-Disposition', `attachment; filename="barbell-my-data-${dayKey(new Date(), req.tz)}.json"`);
     res.json({
@@ -210,6 +213,11 @@ export default function meRoutes(db) {
               active = 0, email_verified = 0 WHERE id = ?`,
       [`deleted-${user.id}@deleted.invalid`, unusable, user.id]);
     await wipe('UPDATE users SET google_id = NULL WHERE id = ?', [user.id]);
+    // Past leaderboards keep their shape, not the person: the place stays,
+    // the name and body weight go. Hosting ends with the account.
+    await wipe(`UPDATE tournament_entrants SET name = 'Deleted member', gym_label = NULL, body_weight = NULL, gender = NULL WHERE user_id = ?`, [user.id]);
+    await wipe(`DELETE FROM tournament_hosts WHERE user_id = ? AND role <> 'prime'`, [user.id]);
+    await wipe('UPDATE users SET username = NULL, findable = 0 WHERE id = ?', [user.id]);
     // Stored photo files go after the rows: a storage hiccup must not
     // leave the account half-deleted, and the rows no longer point at them.
     const { deleteObject } = await import('../storage.js');

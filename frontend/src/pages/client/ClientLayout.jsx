@@ -62,6 +62,7 @@ const PROFILE_MENU = [
     { to: '/app/client/profile?section=goal', label: 'Goals', icon: 'target' },
   ],
   [
+    { to: '/app/client/tournaments', label: 'Tournaments', icon: 'trophy' },
     { to: '/app/client/nutrition-tracker', label: 'Nutrition tracker', icon: 'food' },
     { to: '/app/client/membership', label: 'Membership', icon: 'clipboard' },
   ],

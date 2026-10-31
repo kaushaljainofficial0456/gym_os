@@ -109,6 +109,8 @@ const DevOnboardingPreview = import.meta.env.DEV
   : null;
 const SharedWorkout = lazy(() => import('./pages/public/SharedWorkout.jsx'));
 const CommunityInvite = lazy(() => import('./pages/public/CommunityInvite.jsx'));
+const TournamentPublicArea = lazy(() => import('./pages/public/TournamentArea.jsx'));
+const TournamentArea = lazy(() => import('./pages/tournaments/Area.jsx'));
 // The founder-approved demo's three public screens. Split like every
 // other non-entry page: a prospect loads exactly one of them, and nobody
 // signing in normally should pay for any of them.
@@ -241,6 +243,10 @@ export default function App() {
           asking for a login. Joining still requires auth, enforced by the
           API route it calls, not by this route being gated. */}
       <Route path="/invite/:code" element={page(CommunityInvite)} />
+      {/* Tournament QR — PUBLIC on purpose (see TournamentPublic.jsx): most
+          people scanning it have no account, and they can still read the
+          board and enter. The /screen view is for the gym TV. */}
+      <Route path="/t/:code/*" element={page(TournamentPublicArea)} />
       {/* ---- Founder-approved interactive demo ----
           All three are PUBLIC, and deliberately NOT wrapped in GuestOnly
           like /login and /signup are. A prospect part-way through a demo
@@ -296,6 +302,8 @@ export default function App() {
         <Require ready={ready} ok={() => authed && isTrainer && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/client') : '/login'}>{page(TrainerLayout)}</Require>
       }>
         <Route index element={page(Dashboard)} />
+        {/* The same screens for every role: anyone can host or compete. */}
+        <Route path="tournaments/*" element={page(TournamentArea)} />
         <Route path="clients" element={page(Clients)} />
         <Route path="clients/:id" element={page(ClientProfile)} />
         <Route path="workouts" element={page(WorkoutBuilder)} />
@@ -347,6 +355,7 @@ export default function App() {
         <Require ready={ready} ok={() => authed && isClient && !pendingGym} fallback={authed ? (pendingGym ? '/join' : needsTerms ? '/legal' : '/app/trainer') : '/login'}>{page(ClientLayout)}</Require>
       }>
         <Route index element={page(Home)} />
+        <Route path="tournaments/*" element={page(TournamentArea)} />
         <Route path="workout" element={page(Workout)} />
         <Route path="nutrition" element={page(Nutrition)} />
         <Route path="nutrition-tracker" element={page(NutritionTracker)} />

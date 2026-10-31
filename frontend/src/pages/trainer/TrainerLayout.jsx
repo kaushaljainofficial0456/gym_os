@@ -21,6 +21,7 @@ const NAV = [
   { to: '/app/trainer/alerts', label: 'Alerts', icon: 'alert' },
   { to: '/app/trainer/reports', label: 'Reports', icon: 'chart' },
   { to: '/app/trainer/messages', label: 'Messages', icon: 'mail' },
+  { to: '/app/trainer/tournaments', label: 'Tournaments', icon: 'trophy' },
   /* A TRAINER'S OWN HOURS. This was absent from their nav entirely --
      /app/trainer/attendance was owner-only, so the whole self-service
      side (history, totals, correction requests) existed on the server
@@ -41,6 +42,7 @@ const ICON_PATHS = {
   alert: 'M12 3 2 20h20L12 3ZM12 9v5M12 17h.01',
   chart: 'M4 20V13M11 20V6M18 20v-9',
   mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
+  trophy: 'M8 21h8M12 16v5M7 4h10v6a5 5 0 0 1-10 0zM7 6H4v1a4 4 0 0 0 3.5 4M17 6h3v1a4 4 0 0 1-3.5 4',
   /* 'calendar' was referenced by the Attendance nav item but never
      defined here, so Icon fell through to ICON_PATHS.grid and Attendance
      wore the Dashboard's icon -- two different destinations, one glyph. */

@@ -7,6 +7,7 @@ import { api } from '../../api.js';
 import { useTheme } from '../../themeContext.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import { Sheet, Toast } from '../../components/UI.jsx';
+import TournamentIdentity from '../../components/TournamentIdentity.jsx';
 
 const SETTINGS_SECTIONS = [
   {
@@ -215,6 +216,13 @@ export default function Settings() {
 
       <Group title="Data & connections" hint="What Barbell reads, stores and remembers.">
         <PrivacyCard />
+        <div className="card p-5">
+          <div className="flex items-center gap-2.5 mb-3">
+            <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="trophy" size={18} /></span>
+            <span className="font-grotesk font-bold text-sm" style={{ color: 'var(--ink)' }}>Tournaments</span>
+          </div>
+          <TournamentIdentity />
+        </div>
         <div className="card p-5">
           <div className="flex items-center gap-2.5 mb-1">
             <span className="shrink-0" style={{ color: 'var(--accent)' }}><Icon name="trending" size={18} /></span>

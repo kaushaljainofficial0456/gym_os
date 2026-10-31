@@ -28,7 +28,7 @@
  * final state when it is set. There is no bare CSS transition in this file
  * that would survive that preference.
  */
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useUnits } from '../../unitsContext.jsx';
@@ -44,6 +44,9 @@ import {
   Reveal, Stagger, Tilt, Pressable, AnimatedNumber, motion,
 } from '../../design/index.js';
 import './Home.css';
+
+// Loaded after the page, never with it: a corner badge must not hold up Home.
+const TournamentPulse = lazy(() => import('../../components/TournamentPulse.jsx').catch(() => ({ default: () => null })));
 
 // Same rounding convention used everywhere else this app shows a macro
 // total (MyDietCard.jsx, Nutrition.jsx, CustomizeMealSheet.jsx all define
@@ -395,6 +398,7 @@ export default function Home() {
               {greet}, {c.name.split(' ')[0]}
             </div>
           </Reveal>
+          <Suspense fallback={null}><TournamentPulse badge /></Suspense>
           {workoutBlock}
         </div>
       </section>
