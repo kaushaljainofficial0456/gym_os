@@ -155,10 +155,10 @@ export default function Hub() {
         </div>
       )}
 
-      <div className="tr-tabs" role="tablist">
+      <div className="tr-tabs" data-stack="true" role="tablist">
         {tabs.map((x) => (
           <button type="button" key={x.id} role="tab" className="tr-tab" aria-selected={current === x.id} onClick={() => setTab(x.id)}>
-            <x.icon size={15} />{x.label}{x.rows.length > 0 && <span className="tr-tab-count">{x.rows.length}</span>}
+            <x.icon size={16} /><span>{x.label}{x.rows.length > 0 && <span className="tr-tab-count"> {x.rows.length}</span>}</span>
           </button>
         ))}
       </div>

@@ -93,7 +93,7 @@ function EventRow({ e, index, t, base, nav, mine, onStart, onEdit, busy }) {
     <div className="tr-event-row" style={eventStyle(index)}>
       <span className="tr-event-icon"><Icon size={21} /></span>
       <button type="button" className="tr-grow" style={{ textAlign: 'left' }} onClick={open}>
-        <b className="tr-ellipsis">{e.name}{mine && <Check size={15} strokeWidth={3} aria-label="You are in" />}</b>
+        <b className="tr-name"><span className="tr-ellipsis">{e.name}</span>{mine && <Check size={15} strokeWidth={3} aria-label="You are in" />}</b>
         <span className="tr-faint tr-num tr-ellipsis" style={{ display: 'block' }}>{METRIC_WORD[e.metric]} · {e.entrants}{e.capacity ? `/${e.capacity}` : ''} in</span>
       </button>
       {e.status === 'live' && <PhaseChip phase="live" />}
@@ -211,7 +211,7 @@ export default function Detail() {
   };
 
   const tabs = [
-    { id: 'events', label: 'Competitions', icon: Swords },
+    { id: 'events', label: 'Events', icon: Swords },
     { id: 'people', label: 'People', icon: Users, count: (t.requests.length || t.people.length) },
     ...(isHost ? [
       { id: 'share', label: 'QR', icon: QrCode },
@@ -246,13 +246,13 @@ export default function Detail() {
         {(t.starts_at || t.venue || t.prize) && (
           <div className="tr-meta">
             {t.starts_at && <span><CalendarDays size={13} />{fmtWhen(t.starts_at)}</span>}
-            {t.venue && <span><MapPin size={13} />{t.venue}</span>}
-            {t.prize && <span><Gift size={13} />{t.prize}</span>}
+            {t.venue && <span><MapPin size={13} /><span>{t.venue}</span></span>}
+            {t.prize && <span><Gift size={13} /><span>{t.prize}</span></span>}
           </div>
         )}
         <div className="tr-rail">
           <RailItem value={`${t.entrants}${t.capacity ? `/${t.capacity}` : ''}`} label="Athletes" />
-          <RailItem value={t.events.length} label="Competitions" />
+          <RailItem value={t.events.length} label="Events" />
           {t.phase === 'open' && t.registration_closes_at && <Countdown to={t.registration_closes_at} label="Closes in" />}
           {t.phase !== 'open' && t.status === 'upcoming' && t.starts_at && <Countdown to={t.starts_at} label="Starts in" />}
         </div>
@@ -269,10 +269,10 @@ export default function Detail() {
         </div>
       )}
 
-      <div className="tr-tabs" role="tablist">
+      <div className="tr-tabs" data-stack="true" role="tablist">
         {tabs.map((x) => (
           <button type="button" key={x.id} role="tab" className="tr-tab" aria-selected={current === x.id} onClick={() => pickTab(x.id)}>
-            <x.icon size={15} />{x.label}{x.count > 0 && <span className="tr-tab-count tr-num">{x.count}</span>}
+            <x.icon size={16} /><span>{x.label}{x.count > 0 && <span className="tr-tab-count"> {x.count}</span>}</span>
           </button>
         ))}
       </div>
@@ -354,7 +354,7 @@ export default function Detail() {
             {t.hosts.map((h) => (
               <div key={h.user_id} className="tr-event-row">
                 <TAvatar name={h.name} />
-                <div className="tr-grow"><b className="tr-ellipsis">{h.name}</b><span className="tr-faint">{h.username ? `@${h.username}` : ''}</span></div>
+                <div className="tr-grow"><b className="tr-ellipsis">{h.name}</b><span className="tr-faint tr-ellipsis" style={{ display: 'block' }}>{h.username ? `@${h.username}` : ''}</span></div>
                 <span className={`tr-chip ${h.role === 'prime' ? 'tr-chip-host' : ''}`}>{h.role === 'prime' ? <><Crown size={11} />Main host</> : h.status === 'pending' ? 'Invited' : 'Co-host'}</span>
                 {h.role !== 'prime' && you.is_prime && <button type="button" className="tr-icon-btn" aria-label={`Remove ${h.name}`} disabled={busy} onClick={() => removeHost(h)}><Trash2 size={15} /></button>}
               </div>

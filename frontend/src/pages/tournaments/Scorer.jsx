@@ -438,7 +438,7 @@ export default function Scorer() {
           </span>
         )}
         eyebrow={<><PhaseChip phase={isLive ? 'live' : event.status === 'completed' ? 'completed' : 'soon'} onHero /><span className="tr-tag">{METRIC_WORD[event.metric]}</span><span className="tr-tag">Top {event.win_positions} win</span></>}
-        title={event.name} />
+        title={event.name} compact />
 
       {isHost && isLive && (
         <div className="tr-tabs" role="tablist">
@@ -529,13 +529,13 @@ export default function Scorer() {
         <section className="tr-panel tr-section">
           <div className="tr-muted">{board.rows.length} in. {isHost ? 'Start when they are ready.' : 'Not started yet.'}</div>
           {board.rows.map((r) => <div key={r.id} className="tr-row" style={{ color: 'var(--ink)', fontSize: 14 }}><UserRound size={14} />{r.name}{r.is_me ? ' (you)' : ''}</div>)}
-          {isHost && !finished && <button type="button" className="tr-cta" disabled={busy} onClick={start}><Play size={16} />Start {event.name}</button>}
+          {isHost && !finished && <button type="button" className="tr-cta" disabled={busy} onClick={start}><Play size={16} />Start competition</button>}
         </section>
       )}
 
       {!scoring && event.status !== 'upcoming' && <Board board={board} />}
 
-      {canAdd && <button type="button" className="btn" onClick={() => setAdding(true)}><UserPlus size={16} />Add people to {event.name}</button>}
+      {canAdd && <button type="button" className="btn" onClick={() => setAdding(true)}><UserPlus size={16} />Add people</button>}
 
       {event.status === 'completed' && (
         <div className="tr-pair">
@@ -551,7 +551,7 @@ export default function Scorer() {
         </div>
       ) : null}
       {isHost && isLive && (
-        <button type="button" className="tr-cta" disabled={busy} onClick={finish}><Flag size={16} />Finish {event.name}</button>
+        <button type="button" className="tr-cta" disabled={busy} onClick={finish}><Flag size={16} />Finish competition</button>
       )}
 
       <EntrySheet entry={entry} event={event} theme={theme} onClose={() => setEntry(null)}

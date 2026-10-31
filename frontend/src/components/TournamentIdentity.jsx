@@ -40,13 +40,16 @@ export default function TournamentIdentity({ onSaved }) {
           <button type="button" className="btn" disabled={busy || !clean || clean === me.username} onClick={() => save({ username: clean })}>Save</button>
         </div>
       </label>
-      <label className="flex items-center justify-between gap-3 cursor-pointer">
-        <span>
-          <span className="block text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Show me in search</span>
-          <span className="block text-[11px]" style={{ color: 'var(--mute)' }}>Lets hosts at other gyms find and invite you.</span>
+      <button type="button" role="switch" aria-checked={!!me.findable} disabled={busy} onClick={() => save({ findable: !me.findable })}
+        className="flex w-full items-center justify-between gap-3 text-left py-1">
+        <span className="min-w-0">
+          <span className="block text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Show me in search</span>
+          <span className="block text-[12px]" style={{ color: 'var(--mute)' }}>Lets hosts at other gyms find and invite you.</span>
         </span>
-        <input type="checkbox" className="w-5 h-5 shrink-0" checked={!!me.findable} disabled={busy} onChange={(e) => save({ findable: e.target.checked })} />
-      </label>
+        <span aria-hidden="true" className="relative shrink-0 rounded-full transition-colors" style={{ width: 46, height: 28, background: me.findable ? 'var(--ink)' : 'rgb(var(--tint-rgb) / .14)' }}>
+          <span className="absolute rounded-full transition-transform" style={{ top: 3, left: 3, width: 22, height: 22, background: me.findable ? 'var(--bg)' : 'var(--mute)', transform: me.findable ? 'translateX(18px)' : 'none' }} />
+        </span>
+      </button>
       {note && <p role="status" className="text-[12px]" style={{ color: 'var(--mute)' }}>{note}</p>}
     </div>
   );

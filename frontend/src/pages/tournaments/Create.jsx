@@ -2,7 +2,7 @@
  * HOST A TOURNAMENT. Five short steps, and nothing is created until the last
  * one. `?from=<id>` starts a rematch from an old tournament's competitions.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight, Building2, CalendarClock, Check, Crown, Flag, Gift, Globe, Lock, MapPin, Medal, Palette,
@@ -12,6 +12,7 @@ import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch } from '../../utils.js';
 import { ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import { WhenList } from './WhenPicker.jsx';
 import {
   eventIcon, eventStyle, fmtDay, fromLocalInput, Hero, METRIC_ICON, METRIC_WORD, PeopleSearch, Stepper, TAvatar, themeClass, toLocalInput, useTournamentBase,
 } from './shared.jsx';
@@ -25,14 +26,6 @@ const STEPS = [
 ];
 const THEMES = ['ember', 'neon', 'ocean', 'volt', 'royal'];
 const CAPS = [[0, 'No limit'], [60, '1 min'], [120, '2 min'], [300, '5 min']];
-
-const nextSaturday = (weeks) => {
-  const d = new Date();
-  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7) + weeks * 7);
-  d.setHours(7, 0, 0, 0);
-  return d;
-};
-const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(18, 0, 0, 0); return d; };
 
 const eventKey = (e) => e.kind || e.name;
 
@@ -93,6 +86,7 @@ export default function Create() {
   const [events, setEvents] = useState([]);
   const [cohosts, setCohosts] = useState([]);
   const [custom, setCustom] = useState({ open: false, name: '', metric: 'reps', is_team: false });
+  const [picking, setPicking] = useState(false);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -104,15 +98,20 @@ export default function Create() {
     }).catch(() => {});
   }, [from]);
 
-  const startsAt = form.starts_at;
-  const setStart = (local) => {
-    const ms = Date.parse(local);
+  // The deadlines people forget follow the start until they are set by hand.
+  const handSet = useRef(new Set());
+  const changeWhen = (key, local) => {
+    if (key !== 'starts_at') {
+      handSet.current.add(key);
+      set({ [key]: local });
+      return;
+    }
     const patch = { starts_at: local };
-    // The deadlines people forget get sensible defaults, only while empty.
+    const ms = Date.parse(local);
     if (!Number.isNaN(ms)) {
-      if (!form.registration_closes_at) patch.registration_closes_at = toLocalInput(new Date(ms - 3600000).toISOString());
+      if (!handSet.current.has('registration_closes_at')) patch.registration_closes_at = toLocalInput(new Date(ms - 3600000).toISOString());
       const dayBefore = ms - 86400000;
-      if (!form.withdraw_closes_at && dayBefore > Date.now()) patch.withdraw_closes_at = toLocalInput(new Date(dayBefore).toISOString());
+      if (!handSet.current.has('withdraw_closes_at')) patch.withdraw_closes_at = dayBefore > Date.now() ? toLocalInput(new Date(dayBefore).toISOString()) : '';
     }
     set(patch);
   };
@@ -181,7 +180,7 @@ export default function Create() {
     <div className={`tr-root ${themeClass(form.theme)}`}>
       <Hero back={{ label: 'Back', onClick: () => (step ? setStep(step - 1) : nav(base)) }}
         eyebrow={<span className="tr-tag">Step {step + 1} of {STEPS.length}</span>}
-        title={form.name.trim() || 'Host a tournament'} tagline={form.tagline.trim()} />
+        title={form.name.trim() || 'Host a tournament'} tagline={step === 0 ? form.tagline.trim() : null} compact={step > 0} />
 
       <div className="tr-progress">
         {STEPS.map((s, i) => (
@@ -265,27 +264,11 @@ export default function Create() {
       )}
 
       {step === 2 && (
-        <section className="tr-panel tr-section">
-          <div className="tr-field"><span className="tr-label"><Rocket size={14} />Starts</span>
-            <input className="input" type="datetime-local" value={startsAt} onChange={(e) => setStart(e.target.value)} aria-label="Tournament start" />
-            <div className="tr-mini">
-              <button type="button" onClick={() => setStart(toLocalInput(tomorrow().toISOString()))}>Tomorrow</button>
-              <button type="button" onClick={() => setStart(toLocalInput(nextSaturday(0).toISOString()))}>Saturday</button>
-              <button type="button" onClick={() => setStart(toLocalInput(nextSaturday(1).toISOString()))}>Next Saturday</button>
-            </div>
-          </div>
-          <div className="tr-pair">
-            <label className="tr-field"><span className="tr-label"><Unlock size={14} />Entries open</span>
-              <input className="input" type="datetime-local" value={form.registration_opens_at} onChange={(e) => set({ registration_opens_at: e.target.value })} />
-            </label>
-            <label className="tr-field"><span className="tr-label"><Lock size={14} />Entries close</span>
-              <input className="input" type="datetime-local" value={form.registration_closes_at} onChange={(e) => set({ registration_closes_at: e.target.value })} />
-            </label>
-          </div>
-          <label className="tr-field"><span className="tr-label"><Flag size={14} />Last chance to leave</span>
-            <input className="input" type="datetime-local" value={form.withdraw_closes_at} onChange={(e) => set({ withdraw_closes_at: e.target.value })} />
-          </label>
-          <div className="tr-faint">{dateProblem ? <span style={{ color: 'rgb(var(--bad-rgb))' }}>{dateProblem}</span> : 'All optional. Leave them empty and entries stay open until you start the first competition.'}</div>
+        <section className="tr-section">
+          <WhenList values={form} firstOpen={form.starts_at ? null : 'starts_at'} onChange={changeWhen} onOpenChange={setPicking} />
+          {dateProblem
+            ? <div role="alert" style={{ color: 'rgb(255 90 80)', fontSize: 13, fontWeight: 600 }}>{dateProblem}</div>
+            : <div className="tr-faint">All optional. Leave them and entries stay open until you start the first competition.</div>}
         </section>
       )}
 
@@ -336,7 +319,7 @@ export default function Create() {
             <PeopleSearch picked={cohosts.map((c) => c.id)} onPick={(p) => setCohosts((l) => [...l, p])} />
           </div>
           <div className="tr-kpis">
-            <div className="tr-kpi"><Swords size={17} /><strong>{events.length}</strong><span>Competitions</span></div>
+            <div className="tr-kpi"><Swords size={17} /><strong>{events.length}</strong><span>Events</span></div>
             <div className="tr-kpi"><Medal size={17} /><strong>{form.overall_positions}</strong><span>Winners</span></div>
             <div className="tr-kpi"><Rocket size={17} /><strong>{form.starts_at ? fmtDay(fromLocalInput(form.starts_at)) : 'Open'}</strong><span>Start</span></div>
           </div>
@@ -344,14 +327,14 @@ export default function Create() {
         </section>
       )}
 
-      <div className="tr-action">
+      {!(step === 2 && picking) && <div className="tr-action">
         <span className="tr-grow tr-faint">{blocked}</span>
         {step < STEPS.length - 1 ? (
           <button type="button" className="tr-cta" disabled={!!blocked} onClick={() => setStep(step + 1)}>Next<ArrowRight size={16} /></button>
         ) : (
           <button type="button" className="tr-cta" disabled={saving} onClick={launch}><Rocket size={16} />{saving ? 'Creating…' : 'Create tournament'}</button>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
