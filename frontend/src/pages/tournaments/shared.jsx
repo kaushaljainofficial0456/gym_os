@@ -80,9 +80,10 @@ const PHASE = {
 };
 
 /** The top of every tournament screen. `lead` sits in the bar, left of the actions. */
-export function Hero({ back, actions, lead, eyebrow, title, tagline, children }) {
+export function Hero({ back, actions, lead, eyebrow, title, tagline, compact, children }) {
+  const long = typeof title === 'string' && title.length > 26;
   return (
-    <section className="tr-hero">
+    <section className="tr-hero" data-compact={compact || undefined}>
       {(back || actions || lead) && (
         <div className="tr-hero-top">
           {back ? <button type="button" className="tr-hero-back" aria-label={back.label} onClick={back.onClick}><ArrowLeft size={18} /></button> : (lead || <span />)}
@@ -90,7 +91,7 @@ export function Hero({ back, actions, lead, eyebrow, title, tagline, children })
         </div>
       )}
       {eyebrow && <div className="tr-eyebrow">{eyebrow}</div>}
-      <h1 className="tr-title">{title}</h1>
+      <h1 className="tr-title" data-long={long || undefined}>{title}</h1>
       {tagline && <p className="tr-tagline">{tagline}</p>}
       {children}
     </section>

@@ -191,12 +191,12 @@ export default function TournamentPublic() {
         {(page.starts_at || page.venue) && (
           <div className="tr-meta">
             {page.starts_at && <span><CalendarDays size={13} />{fmtWhen(page.starts_at)}</span>}
-            {page.venue && <span><MapPin size={13} />{page.venue}</span>}
+            {page.venue && <span><MapPin size={13} /><span>{page.venue}</span></span>}
           </div>
         )}
         <div className="tr-rail">
           <RailItem value={page.entrants} label="Athletes" />
-          <RailItem value={page.events.length} label="Competitions" />
+          <RailItem value={page.events.length} label="Events" />
         </div>
       </Hero>
 

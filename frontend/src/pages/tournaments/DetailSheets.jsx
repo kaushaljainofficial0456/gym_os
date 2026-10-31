@@ -8,6 +8,7 @@ import {
 } from './icons.jsx';
 import { api } from '../../api.js';
 import { Sheet, Spinner } from '../../components/UI.jsx';
+import { WhenList } from './WhenPicker.jsx';
 import {
   eventIcon, eventStyle, fmtWhen, fromLocalInput, METRIC_WORD, PeopleSearch, Stepper, TAvatar, themeClass, toLocalInput,
 } from './shared.jsx';
@@ -261,7 +262,7 @@ export function EventSheet({ event, onClose, t, onDone, onRemove, onAddPeople })
       <label className="tr-field"><span className="tr-label"><Users size={14} />Spots</span>
         <input className="input" type="number" min="0" inputMode="numeric" value={spots} onChange={(e) => setSpots(e.target.value)} placeholder="Unlimited" />
       </label>
-      {event && event.status !== 'completed' && <button type="button" className="btn" onClick={() => onAddPeople(event)}><UserPlus size={16} />Add people to {event.name}</button>}
+      {event && event.status !== 'completed' && <button type="button" className="btn" onClick={() => onAddPeople(event)}><UserPlus size={16} />Add people to this competition</button>}
       {event?.status === 'upcoming' && <button type="button" className="btn-danger-quiet btn-base" onClick={onRemove}><Trash2 size={15} />Remove competition</button>}
       <Problem text={error} />
     </TSheet>
@@ -351,11 +352,6 @@ export function EditSheet({ open, onClose, t, onDone }) {
       <input className="input" maxLength={max} value={f[key]} onChange={(e) => setF({ ...f, [key]: e.target.value })} />
     </label>
   );
-  const date = (key, label) => (
-    <label className="tr-field"><span className="tr-label">{label}</span>
-      <input className="input" type="datetime-local" value={f[key]} onChange={(e) => setF({ ...f, [key]: e.target.value })} />
-    </label>
-  );
 
   return (
     <TSheet theme={t.theme} open={open} onClose={onClose} title="Edit tournament"
@@ -377,9 +373,7 @@ export function EditSheet({ open, onClose, t, onDone }) {
           <label className="tr-field"><span className="tr-label">Spots</span>
             <input className="input" type="number" min="0" value={f.capacity} onChange={(e) => setF({ ...f, capacity: e.target.value })} placeholder="Unlimited" />
           </label>
-          {date('starts_at', 'Starts')}
-          <div className="tr-pair">{date('registration_opens_at', 'Entries open')}{date('registration_closes_at', 'Entries close')}</div>
-          {date('withdraw_closes_at', 'Last chance to leave')}
+          <WhenList values={f} onChange={(key, value) => setF((x) => ({ ...x, [key]: value }))} />
         </>
       )}
       <Problem text={error} />
