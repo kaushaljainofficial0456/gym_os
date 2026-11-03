@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
-import { providerName, mockSimulateCheckout } from '../services/payments/paymentProvider.js';
+import { providerName, publicKeyId, mockSimulateCheckout } from '../services/payments/paymentProvider.js';
 
 export default function paymentsDevRoutes() {
   const r = Router();
@@ -45,7 +45,11 @@ export default function paymentsDevRoutes() {
   });
 
   r.get('/provider', limit, async (_req, res) => {
-    res.json({ provider: providerName() });
+    // keyId: Razorpay's PUBLIC key id, which Checkout needs in the browser.
+    // Served from the server's own configuration so the frontend build does
+    // not have to carry it; null unless Razorpay is the active provider.
+    // The secret is never part of any response.
+    res.json({ provider: providerName(), keyId: publicKeyId() });
   });
 
   return r;

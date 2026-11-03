@@ -56,16 +56,22 @@ function loadRazorpayScript() {
  * `order` is a payment_orders row (has provider_order_id, amount,
  * currency). `onComplete(providerPaymentId, signature)` fires once a
  * checkout attempt (real or simulated) has produced a result to verify.
- * `razorpayKeyId` is only needed for the live branch (public key, safe
- * to ship to the browser -- never the secret).
+ * `razorpayKeyId` is a fallback for the live branch (public key, safe to
+ * ship to the browser -- never the secret); the server's own key id from
+ * GET /api/payments/provider takes precedence when present.
  */
 export default function PaymentCheckout({ order, orgName, onComplete, onCancel, razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID }) {
   const [provider, setProvider] = useState(null);
+  const [serverKeyId, setServerKeyId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    api('/payments/provider').then((r) => setProvider(r.provider)).catch(() => setProvider('mock'));
+    // The server also says which PUBLIC key id to use, so a build without
+    // VITE_RAZORPAY_KEY_ID still opens the widget with the right key.
+    api('/payments/provider')
+      .then((r) => { setProvider(r.provider); setServerKeyId(r.keyId || null); })
+      .catch(() => setProvider('mock'));
   }, []);
 
   const runMock = async (outcome) => {
@@ -78,11 +84,18 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
   };
 
   const runRazorpay = async () => {
+    const key = serverKeyId || razorpayKeyId;
+    if (!key) {
+      // Opening the widget without a key fails inside Razorpay's own iframe
+      // with a message nobody can act on; say what is wrong instead.
+      setErr('Payments are not set up correctly on this deployment. Please contact the gym.');
+      return;
+    }
     setBusy(true); setErr('');
     try {
       const Razorpay = await loadRazorpayScript();
       const rp = new Razorpay({
-        key: razorpayKeyId,
+        key,
         amount: Math.round(order.amount * 100),
         currency: order.currency,
         name: 'Barbell',
@@ -91,7 +104,9 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
         handler: (response) => {
           onComplete(response.razorpay_payment_id, response.razorpay_signature);
         },
-        modal: { ondismiss: () => setBusy(false) },
+        // Closing the widget is the member's choice, not a failure: say so,
+        // so they know nothing was charged and they can try again.
+        modal: { ondismiss: () => { setBusy(false); setErr('Payment cancelled — you have not been charged.'); } },
         /* Was '#14C4BC' — a teal from a palette two repaints ago, which
            meant the ONE screen a paying customer sees rendered the gateway
            in a colour the product no longer uses anywhere. Read from the
