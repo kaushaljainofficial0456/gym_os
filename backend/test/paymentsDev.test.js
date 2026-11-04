@@ -39,10 +39,11 @@ async function memDb() {
 
 async function startApp(db) {
   const authRoutes = (await import('../src/routes/auth.js')).default;
-  const paymentsDevRoutes = (await import('../src/routes/paymentsDev.js')).default;
+  const { default: paymentsDevRoutes, paymentsInfoRoutes } = await import('../src/routes/paymentsDev.js');
   const app = express();
   app.use(express.json());
   app.use('/api/auth', authRoutes(db));
+  app.use('/api/payments', paymentsInfoRoutes());
   app.use('/api/payments', paymentsDevRoutes());
   const server = app.listen(0);
   await new Promise((r) => server.on('listening', r));

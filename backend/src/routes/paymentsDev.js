@@ -44,13 +44,26 @@ export default function paymentsDevRoutes() {
     }
   });
 
-  r.get('/provider', limit, async (_req, res) => {
-    // keyId: Razorpay's PUBLIC key id, which Checkout needs in the browser.
-    // Served from the server's own configuration so the frontend build does
-    // not have to carry it; null unless Razorpay is the active provider.
-    // The secret is never part of any response.
+  return r;
+}
+
+/**
+ * Which checkout the app should show: the real Razorpay widget (with the
+ * PUBLIC key id it needs) or the practice panel. Mounted in EVERY
+ * environment, production included. It used to live in the dev-only
+ * router above, so on the live site this answered 404, PaymentCheckout
+ * fell back to the practice panel, and nobody could actually pay. Only
+ * /mock/complete is what must never exist in production.
+ * The secret is never part of any response.
+ */
+export function paymentsInfoRoutes() {
+  const r = Router();
+  const limit = rateLimit({ windowMs: 60_000, max: 60, keyFn: (req) => req.user?.sub || 'anon' });
+  // Auth on this one route, not router-wide: a router-wide requireAuth
+  // would answer 401 for EVERY /api/payments path, so the unmounted
+  // /mock/complete would look present-but-protected instead of absent.
+  r.get('/provider', requireAuth, limit, async (_req, res) => {
     res.json({ provider: providerName(), keyId: publicKeyId() });
   });
-
   return r;
 }
