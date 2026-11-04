@@ -36,10 +36,10 @@ Test evidence IDs (for example `C.workout.complete`) refer to lines in `docs/sal
 | Area | ● Full | ◇ Config | ◐ Partial | ✕ Not shipped |
 |---|---|---|---|---|
 | Client (C1–C77) | 67 | 6 | 4 | — |
-| Gym Owner (O1–O32) | 28 | 2 | 2 | — |
+| Gym Owner (O1–O32) | 27 | 2 | 3 | — |
 | Trainer (T1–T20) | 20 | — | — | — |
 | Shared / all roles (S1–S14) | 12 | 2 | — | — |
-| **Total (143 IDs)** | **127** | **10** | **6** | 9 groups in §7.1 |
+| **Total (143 IDs)** | **126** | **10** | **7** | 9 groups in §7.1 |
 
 Mixed rows are counted by their base capability, with the setup-dependent part noted in the row. C72: base intelligence ●, wearable fields ◇. O22: invoice PDF ●, email ◇.
 
@@ -196,7 +196,7 @@ Owners have every trainer capability gym-wide (O24), so the owner's real feature
 | O26 | Owner-recorded payments are excluded from trainer view ("Payment history is visible to the gym owner only") | ● | crawl3 `trainer_cp-membership` | `components/trainer/MembershipTab.jsx` |
 | O27 | Tournament hosting at gym level (see S1–S8) | ● | `O.tournament.*` | `routes/tournaments.js` |
 | O28 | Live crowd thresholds and member visibility enforced on the server | ● | crawl3 `acc-settings` ("Enforced on the server") | `routes/access.js` settings |
-| O29 | Branch selector when adding access devices | ● | UI reads `/admin/branches` | `components/access/DevicesPanel.jsx:164` |
+| O29 | Branch selector when adding access devices | ◐ | UI reads `/admin/branches`, but no screen can create a branch (see O31), so in practice the list is empty. *Downgraded from ● during catalogue preparation.* | `components/access/DevicesPanel.jsx:164` |
 | O30 | Payment-account record for settlements | ◐ | Stores business/legal name only; Razorpay Route settlement not wired (`enterprise.js` PUT `/payment-account` comment). **Don't claim automatic payouts of online member payments to the gym.** | `routes/enterprise.js` |
 | O31 | Multi-branch management | ◐ | Branch API exists (`admin.js:874`), but no screen creates or edits branches. | `routes/admin.js:874` |
 | O32 | Staff tick a client's planned meals as eaten (or un-tick) from the client's Nutrition tab | ● | `T.client.plan-meal-toggle` 200 | `routes/nutrition.js:164`, `pages/trainer/ClientProfile.jsx:576` |
@@ -298,6 +298,7 @@ Owners have every trainer capability gym-wide (O24), so the owner's real feature
 | D11 | Cosmetic | Old brand strings visible: "SK Coach AI" on the trainer AI tab, "SK food database" in Help. | `ClientProfile.jsx`, `Help.jsx` |
 | D12 | Cosmetic | Coach Brief protein figure (260.6 g) differs from Home ring (250.6 g) on the same day. | `services/intelligence/*` vs `nutritionCalc.js` |
 | D13 | Note | "2 eggs" parses to 100 g (≈ 1.9 eggs) where piece weight is 52 g; roti counts are correct. | `services/food/*` |
+| D15 | Medium | `POST /me/nutrition/log-batch` (the type-a-meal / plate logging path) **stores the calories and macros the client sends** without recalculating them, so the README's "client-sent calorie/macro totals are ignored" doesn't hold for this path. Values normally come from the server's own `/describe` result, but a modified client could log arbitrary numbers. | `routes/me.js:1187-1212`, `README.md` ("Server-authoritative nutrition") |
 | D14 | Seed only | `seed.js` creates the demo gym without an `org_billing_state` row, so Enterprise activation can't flip the gym to ACTIVE and QR joins fail on the demo gym. Gyms created by real sign-up are fine. | `backend/scripts/seed.js` |
 
 ## 10. Integrations
@@ -372,7 +373,16 @@ Live behaviour tests run for this audit: **298 logged API actions** (256 PASS li
 
 **Reconciliation result:** every crawled screen maps to inventoried features. Every ● feature was seen on a screen and/or exercised through the API the screen calls. Discrepancies found while reconciling: D1, D2, D4, D6, D8, D9, D11 and the illustrative onboarding figures (row 16). No screen exposes a feature missing from this inventory.
 
-## 13. Guidance for sales copy
+## 13. Sales catalogue
+
+`BARBELL_Complete_Feature_Catalogue.pdf` (25 pages, A4) is generated from `BARBELL_Feature_Catalogue_Source.html` using `catalogue-src/render-pdf.js`. Screenshots come from `catalogue-src/capture-screens.js` against a throwaway seeded database.
+
+- Every catalogue entry carries `data-covers` with the IDs above. The coverage check (`catalogue-src/check-coverage.py`) confirms that **all 136 ● / ◇ IDs appear** and that **no ◐ ID appears**.
+- Catalogue counts: Client 73 (67 ● + 6 ◇), Gym Owner 29 (27 ● + 2 ◇, plus every trainer tool gym-wide), Trainer 20 (●), Shared 14 (12 ● + 2 ◇).
+- Screens deliberately not used: the trainer AI tab (shows the old "SK Coach AI" label, D11) and the Enterprise overview (shows the unwired payment-account alert, O30).
+- Copy corrected against code while writing the catalogue: the nutrition "server-authoritative" claim was dropped (D15), and O29 was downgraded.
+
+## 14. Guidance for sales copy
 
 - Only ● items go in the primary list. ◇ items carry a "requires setup" marker and name what's needed (Razorpay, AI key, WHOOP/Oura developer app, door hardware, email provider).
 - Don't claim: rest timer, Ask Barbell / chat coach, meal-photo estimates, AI workout generation, closed-app push notifications, member QR door check-in, Apple Health / Health Connect / Samsung / Garmin / Fitbit, named door vendors other than eSSL (beta), automatic payouts to the gym, multi-branch management, support ticketing.

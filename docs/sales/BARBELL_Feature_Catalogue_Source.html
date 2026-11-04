@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BARBELL — Complete Feature Catalogue</title>
+<!--
+  EDITABLE SOURCE for BARBELL_Complete_Feature_Catalogue.pdf
+  Render:  node docs/sales/catalogue-src/render-pdf.js
+  Facts:   every feature here maps to an ID in BARBELL_Feature_Audit.md (data-covers).
+           Only ● (fully implemented) and ◇ (configuration-dependent) items appear.
+  Images:  real screenshots from assets/screens (see capture-screens.js). Never edit them.
+-->
+<style>
+@font-face { font-family: 'Sentient'; src: url('catalogue-src/assets/fonts/sentient-400.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'Sentient'; src: url('catalogue-src/assets/fonts/sentient-500.woff2') format('woff2'); font-weight: 500; }
+@font-face { font-family: 'DM Sans'; src: url('catalogue-src/assets/fonts/dmsans-var-latin.woff2') format('woff2'); font-weight: 100 1000; }
+@font-face { font-family: 'DM Sans'; src: url('catalogue-src/assets/fonts/dmsans-var-latin-ext.woff2') format('woff2'); font-weight: 100 1000; unicode-range: U+0100-024F, U+20B9; }
+
+:root {
+  /* App tokens (frontend/src/theme.css) */
+  --night: #0A0909; --night-2: #141212; --night-line: rgba(255,223,221,.10);
+  --blush: #FFDFDD; --blush-mute: rgba(255,223,221,.66);
+  --platinum: #B4C2CE;
+  --paper: #FAF5F3; --paper-2: #F3ECE8; --line: #EBDFDA;
+  --ink: #1E1714; --mute: rgba(30,23,20,.70); --faint: rgba(30,23,20,.52);
+  --burgundy: #8E2A3F;
+  /* Role colours (theme.css --m-nutrition rose, --m-body sage, --accent platinum) */
+  --rose: #DE9AAE;   --rose-ink: #9A4560;  --rose-soft: rgba(222,154,174,.16);
+  --plat: #B4C2CE;   --plat-ink: #4C6175;  --plat-soft: rgba(180,194,206,.24);
+  --sage: #7FB894;   --sage-ink: #3B7350;  --sage-soft: rgba(127,184,148,.18);
+  --setup: #C7955C;  --setup-ink: #7A5530; --setup-soft: rgba(199,149,92,.14);
+}
+
+@page { size: A4; margin: 17mm 15mm 17mm 15mm; background: var(--paper);
+  @bottom-left { content: "BARBELL  ·  Complete Feature Catalogue"; font: 500 6.6pt 'DM Sans'; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  @bottom-right { content: counter(page, decimal-leading-zero); font: 500 7pt 'DM Sans'; letter-spacing: .1em; color: var(--burgundy); }
+}
+@page cover  { margin: 0; background: var(--night); @bottom-left { content: none; } @bottom-right { content: none; } }
+@page opener { margin: 0; background: var(--night); @bottom-left { content: none; } @bottom-right { content: none; } }
+@page cov { @top-left { content: "Part One  ·  Client overview"; font: 600 6.6pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; color: var(--rose-ink); } }
+@page oov { @top-left { content: "Part One  ·  Gym Owner overview"; font: 600 6.6pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; color: var(--plat-ink); } }
+@page tov { @top-left { content: "Part One  ·  Trainer overview"; font: 600 6.6pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; color: var(--sage-ink); } }
+@page cdet { @top-left { content: "Part Two  ·  The Client Experience"; font: 600 6.6pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; color: var(--rose-ink); } }
+@page odet { @top-left { content: "Part Two  ·  The Gym Owner Experience"; font: 600 6.6pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; color: var(--plat-ink); } }
+@page tdet { @top-left { content: "Part Two  ·  The Trainer Experience"; font: 600 6.6pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; color: var(--sage-ink); } }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: 'DM Sans', system-ui, sans-serif; font-size: 9.2pt; line-height: 1.5; color: var(--ink); background: var(--paper);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; font-feature-settings: "ss01", "tnum" 0; }
+h1, h2, h3, h4 { margin: 0; font-weight: 500; }
+p { margin: 0; }
+img { display: block; }
+.serif { font-family: 'Sentient', Georgia, serif; }
+.ov { font: 600 6.6pt 'DM Sans'; letter-spacing: .18em; text-transform: uppercase; }
+
+/* ───────── Cover ───────── */
+.cover { page: cover; height: 297mm; width: 210mm; position: relative; overflow: hidden; color: var(--blush);
+  background: radial-gradient(120% 70% at 85% 10%, rgba(142,42,63,.38), transparent 60%), radial-gradient(90% 60% at 0% 100%, rgba(180,194,206,.12), transparent 60%), var(--night); }
+.cover .top { position: absolute; top: 18mm; left: 18mm; right: 18mm; display: flex; align-items: center; justify-content: space-between; }
+.cover .top .brand { display: flex; align-items: center; gap: 4mm; }
+.cover .top .brand img.badge { width: 11mm; }
+.cover .top .brand img.wm { height: 5.2mm; }
+.cover .top .ed { font: 600 6.6pt 'DM Sans'; letter-spacing: .18em; text-transform: uppercase; color: var(--blush-mute); }
+.cover .title { position: absolute; top: 40mm; left: 18mm; right: 18mm; }
+.cover .title .ov { color: var(--platinum); }
+.cover .title h1 { font-family: 'Sentient'; font-weight: 400; font-size: 36pt; line-height: 1.02; letter-spacing: -.01em; margin-top: 5mm; }
+.cover .title h1 em { font-style: normal; color: var(--rose); }
+.cover .title p { margin-top: 5mm; max-width: 140mm; font-size: 10.5pt; line-height: 1.5; color: var(--blush-mute); }
+.cover .shots { position: absolute; left: 18mm; right: 18mm; top: 136mm; height: 108mm; }
+.cover .shots .ph { position: absolute; width: 46mm; border-radius: 6.5mm; overflow: hidden; border: 0.35mm solid rgba(255,223,221,.16); box-shadow: 0 10mm 22mm rgba(0,0,0,.6); }
+.cover .shots .ph img { width: 100%; }
+.cover .shots .a { left: 10mm; top: 8mm; transform: rotate(-4deg); }
+.cover .shots .b { left: 62mm; top: 0; z-index: 2; width: 50mm; }
+.cover .shots .c { left: 118mm; top: 8mm; transform: rotate(4deg); }
+.cover .roles { position: absolute; left: 18mm; right: 18mm; bottom: 20mm; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+.cover .roles div { border-top: 0.6mm solid; padding-top: 3mm; }
+.cover .roles .r1 { border-color: var(--rose); } .cover .roles .r2 { border-color: var(--platinum); } .cover .roles .r3 { border-color: var(--sage); }
+.cover .roles b { display: block; font-family: 'Sentient'; font-weight: 500; font-size: 12pt; color: var(--blush); }
+.cover .roles span { font-size: 7.8pt; color: var(--blush-mute); line-height: 1.4; display: block; margin-top: 1mm; }
+
+/* ───────── Part divider / section opener ───────── */
+.opener { page: opener; height: 297mm; width: 210mm; position: relative; overflow: hidden; color: var(--blush); background: var(--night); break-before: page; }
+.opener .glow { position: absolute; inset: 0; }
+.opener.client .glow { background: radial-gradient(90% 55% at 100% 0%, rgba(222,154,174,.28), transparent 62%); }
+.opener.owner  .glow { background: radial-gradient(90% 55% at 100% 0%, rgba(180,194,206,.26), transparent 62%); }
+.opener.trainer .glow { background: radial-gradient(90% 55% at 100% 0%, rgba(127,184,148,.26), transparent 62%); }
+.opener .inner { position: absolute; inset: 20mm 18mm; display: flex; flex-direction: column; }
+.opener .part { display: flex; align-items: center; gap: 3mm; color: var(--blush-mute); }
+.opener .part img { width: 7mm; }
+.opener h2 { font-family: 'Sentient'; font-weight: 400; font-size: 40pt; line-height: 1.02; margin-top: 16mm; }
+.opener.client h2 em { color: var(--rose); font-style: normal; }
+.opener.owner h2 em { color: var(--platinum); font-style: normal; }
+.opener.trainer h2 em { color: var(--sage); font-style: normal; }
+.opener .lead { margin-top: 7mm; max-width: 140mm; font-size: 11pt; line-height: 1.55; color: var(--blush-mute); }
+.opener .stats { margin-top: 12mm; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; }
+.opener .stats div { border-left: 0.4mm solid var(--night-line); padding-left: 3.5mm; }
+.opener .stats b { display: block; font-family: 'Sentient'; font-weight: 400; font-size: 22pt; line-height: 1.05; color: var(--blush); }
+.opener .stats span { display: block; margin-top: 1.5mm; font-size: 7.4pt; color: var(--blush-mute); line-height: 1.35; }
+.opener .hero { margin-top: auto; }
+.opener .hero.desk img { width: 100%; border-radius: 3.5mm; border: 0.3mm solid rgba(255,223,221,.14); box-shadow: 0 8mm 20mm rgba(0,0,0,.55); }
+.opener .hero.phones { display: flex; gap: 6mm; justify-content: flex-start; }
+.opener .hero.phones .ph { width: 52mm; border-radius: 6mm; overflow: hidden; border: 0.3mm solid rgba(255,223,221,.14); box-shadow: 0 8mm 20mm rgba(0,0,0,.55); }
+.opener .hero.phones .ph img { width: 100%; }
+
+/* ───────── Part One: overviews ───────── */
+.overview { break-before: page; }
+.overview.client { page: cov; } .overview.owner { page: oov; } .overview.trainer { page: tov; }
+.ovhead { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8mm; padding-bottom: 5mm; border-bottom: 0.3mm solid var(--line); margin-bottom: 5mm; }
+.ovhead .kicker { display: flex; align-items: center; gap: 2.5mm; }
+.ovhead .dot { width: 2.6mm; height: 2.6mm; border-radius: 50%; }
+.client .dot { background: var(--rose); } .owner .dot { background: var(--plat); } .trainer .dot { background: var(--sage); }
+.client .ov.c { color: var(--rose-ink); } .owner .ov.c { color: var(--plat-ink); } .trainer .ov.c { color: var(--sage-ink); }
+.ovhead h2 { font-family: 'Sentient'; font-weight: 400; font-size: 27pt; line-height: 1.05; margin-top: 3mm; }
+.ovhead p { margin-top: 3mm; max-width: 120mm; color: var(--mute); font-size: 9.6pt; }
+.ovhead .count { text-align: right; }
+.ovhead .count b { display: block; font-family: 'Sentient'; font-weight: 400; font-size: 30pt; line-height: 1; }
+.ovhead .count span { font-size: 7.2pt; color: var(--faint); letter-spacing: .06em; }
+.legend { display: flex; gap: 6mm; font-size: 7.4pt; color: var(--mute); margin: -2mm 0 6mm; }
+.legend i { font-style: normal; display: inline-grid; place-items: center; width: 3.6mm; height: 3.6mm; border-radius: 50%; margin-right: 1.4mm; font-size: 6pt; vertical-align: -0.6mm; }
+.legend .l1 i { background: var(--ink); color: var(--paper); }
+.legend .l2 i { background: var(--setup-soft); color: var(--setup-ink); border: 0.25mm solid var(--setup); }
+.cols { column-count: 2; column-gap: 9mm; }
+.cat { break-inside: avoid; margin-bottom: 4.6mm; }
+.cat h3 { font: 700 7pt 'DM Sans'; letter-spacing: .16em; text-transform: uppercase; padding-bottom: 1.8mm; margin-bottom: 2.2mm; border-bottom: 0.3mm solid var(--line); }
+.client .cat h3 { color: var(--rose-ink); } .owner .cat h3 { color: var(--plat-ink); } .trainer .cat h3 { color: var(--sage-ink); }
+.cat ul { list-style: none; margin: 0; padding: 0; }
+.cat li { position: relative; padding-left: 4mm; margin: 0 0 1.15mm; font-size: 8.3pt; line-height: 1.38; color: var(--mute); break-inside: avoid; }
+.cat li::before { content: ""; position: absolute; left: 0; top: 1.8mm; width: 1.5mm; height: 1.5mm; border-radius: 50%; }
+.client .cat li::before { background: var(--rose); } .owner .cat li::before { background: var(--plat-ink); } .trainer .cat li::before { background: var(--sage); }
+.cat li b { color: var(--ink); font-weight: 600; }
+.overview.owner .cat li { font-size: 8.1pt; line-height: 1.3; margin-bottom: 0.9mm; }
+.overview.owner .cat { margin-bottom: 3.6mm; }
+.overview.owner .ovhead { padding-bottom: 4mm; margin-bottom: 4mm; }
+
+.setupbox { break-inside: avoid; margin-top: 2mm; border: 0.3mm solid rgba(199,149,92,.55); background: var(--setup-soft); border-radius: 3mm; padding: 4.5mm 5mm 3.5mm; }
+.setupbox .hd { display: flex; align-items: center; gap: 2.5mm; margin-bottom: 1.5mm; }
+.setupbox .hd i { font-style: normal; display: inline-grid; place-items: center; width: 4.6mm; height: 4.6mm; border-radius: 50%; border: 0.3mm solid var(--setup); color: var(--setup-ink); font-size: 7pt; background: var(--paper); }
+.setupbox .hd b { font-family: 'Sentient'; font-weight: 500; font-size: 11.5pt; }
+.setupbox > p { color: var(--mute); font-size: 8.2pt; margin-bottom: 3mm; }
+.setupbox table { width: 100%; border-collapse: collapse; }
+.setupbox.compact { padding: 4mm 5mm; }
+.setupbox .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; margin-top: 2.5mm; }
+.setupbox .cards div { border-top: 0.25mm solid rgba(199,149,92,.45); padding-top: 2mm; font-size: 7.9pt; line-height: 1.4; }
+.setupbox .cards b { display: block; font-weight: 600; color: var(--ink); }
+.setupbox .cards span { display: block; color: var(--mute); margin-top: .8mm; }
+.setupbox .cards em { display: block; font-style: normal; color: var(--setup-ink); margin-top: 1.2mm; }
+.setupbox td { vertical-align: top; padding: 1.6mm 0; border-top: 0.25mm solid rgba(199,149,92,.35); font-size: 8.2pt; line-height: 1.42; }
+.setupbox td:first-child { width: 47%; padding-right: 5mm; color: var(--ink); }
+.setupbox td:first-child b { font-weight: 600; }
+.setupbox td:last-child { color: var(--setup-ink); }
+
+/* ───────── Part Two: detailed sections ───────── */
+.detail.client { page: cdet; } .detail.owner { page: odet; } .detail.trainer { page: tdet; }
+.group { margin-bottom: 9mm; }
+.group.newpage { break-before: page; }
+.ghead { break-inside: avoid; break-after: avoid; margin-bottom: 5mm; }
+.ghead .ov { display: flex; align-items: center; gap: 2mm; }
+.ghead .ov::before { content: ""; width: 6mm; height: 0.5mm; }
+.client .ghead .ov { color: var(--rose-ink); } .client .ghead .ov::before { background: var(--rose); }
+.owner .ghead .ov { color: var(--plat-ink); }  .owner .ghead .ov::before { background: var(--plat-ink); }
+.trainer .ghead .ov { color: var(--sage-ink); } .trainer .ghead .ov::before { background: var(--sage); }
+.ghead h3 { font-family: 'Sentient'; font-weight: 400; font-size: 20pt; line-height: 1.12; margin-top: 2.5mm; }
+.ghead p { margin-top: 2.5mm; color: var(--mute); max-width: 150mm; font-size: 9.4pt; }
+
+.split { display: grid; grid-template-columns: 56mm 1fr; gap: 8mm; align-items: start; break-inside: avoid; }
+.split.rev { grid-template-columns: 1fr 56mm; }
+.split.rev figure { order: 2; }
+.feats { display: grid; grid-template-columns: 1fr; gap: 3.8mm; }
+.feats.two { grid-template-columns: 1fr 1fr; column-gap: 7mm; row-gap: 4.2mm; }
+.feat { break-inside: avoid; }
+.feat h4 { font-family: 'DM Sans'; font-weight: 650; font-size: 9.6pt; line-height: 1.3; color: var(--ink); display: flex; align-items: baseline; gap: 2mm; }
+.feat h4 .tag { font: 700 5.8pt 'DM Sans'; letter-spacing: .12em; text-transform: uppercase; color: var(--setup-ink); background: var(--setup-soft); border: 0.25mm solid rgba(199,149,92,.6); border-radius: 1mm; padding: 0.3mm 1.2mm; white-space: nowrap; }
+.feat p { margin-top: 1.1mm; font-size: 8.5pt; line-height: 1.5; color: var(--mute); }
+.feat p em { font-style: normal; color: var(--ink); font-weight: 600; }
+.feat .req { margin-top: 1.4mm; font-size: 7.7pt; color: var(--setup-ink); }
+
+figure { margin: 0; break-inside: avoid; }
+figure.phone .frame { border-radius: 5mm; overflow: hidden; background: var(--night); border: 0.3mm solid #2B2524; box-shadow: 0 4mm 10mm rgba(30,23,20,.16); }
+figure.phone img { width: 100%; }
+figure.desk .frame { border-radius: 2.6mm; overflow: hidden; background: var(--night); border: 0.3mm solid #2B2524; box-shadow: 0 4mm 12mm rgba(30,23,20,.14); }
+figure.desk img { width: 100%; }
+figure.desk.clip .frame { height: var(--h, 92mm); }
+figure.desk.clip img { object-fit: cover; object-position: top left; height: 100%; }
+figure.phone.clip .frame { height: var(--h, 110mm); }
+figure.phone.clip img { object-fit: cover; object-position: top; height: 100%; }
+figcaption { margin-top: 2.2mm; font-size: 7pt; color: var(--faint); line-height: 1.4; }
+figcaption b { color: var(--mute); font-weight: 600; }
+.deskwrap { margin-bottom: 5.5mm; }
+.trio { display: grid; grid-template-columns: 48mm 48mm 1fr; gap: 6mm; align-items: start; }
+.phones2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+
+.callout { break-inside: avoid; border-left: 0.7mm solid; padding: 2.5mm 0 2.5mm 4.5mm; margin-top: 5mm; font-size: 8.6pt; color: var(--mute); }
+.client .callout { border-color: var(--rose); } .owner .callout { border-color: var(--plat-ink); } .trainer .callout { border-color: var(--sage); }
+.callout b { color: var(--ink); }
+.detail .setupbox { margin-top: 6mm; }
+.endnote { break-inside: avoid; margin-top: 7mm; padding-top: 5mm; border-top: 0.3mm solid var(--line); font-size: 7.6pt; color: var(--faint); line-height: 1.5; }
+.endnote b { color: var(--mute); }
+code { font-family: 'DM Sans'; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════════════════ COVER ═════════════════════════ -->
+<section class="cover">
+  <div class="top">
+    <div class="brand"><img class="badge" src="catalogue-src/assets/badge-blush.svg" alt=""><img class="wm" src="catalogue-src/assets/wordmark-blush.svg" alt="BARBELL"></div>
+    <div class="ed">Feature Catalogue · November 2026</div>
+  </div>
+  <div class="title">
+    <div class="ov">For gym owners</div>
+    <h1>One connected system for your <em>members</em>, your trainers and your business.</h1>
+    <p>Barbell gives every member a personal training and nutrition app, gives every trainer a full picture of their roster, and gives you the numbers, controls and tools to run the gym. All of it on one shared, live record.</p>
+  </div>
+  <div class="shots">
+    <div class="ph a"><img src="catalogue-src/assets/screens/client-workout.jpg" alt="Today's training screen"></div>
+    <div class="ph b"><img src="catalogue-src/assets/screens/client-home.jpg" alt="Member home screen"></div>
+    <div class="ph c"><img src="catalogue-src/assets/screens/client-nutrition.jpg" alt="Today's fuel screen"></div>
+  </div>
+  <div class="roles">
+    <div class="r1"><b>Client</b><span>Training, nutrition, progress and community in one mobile-first app.</span></div>
+    <div class="r2"><b>Gym Owner</b><span>Members, revenue, staff, the gym floor and growth from one dashboard.</span></div>
+    <div class="r3"><b>Trainer</b><span>Every client's data, programming tools and early warnings in one place.</span></div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ PART ONE · CLIENT OVERVIEW ═════════════════════════ -->
+<section class="overview client">
+  <div class="ovhead">
+    <div>
+      <div class="kicker"><span class="dot"></span><span class="ov c">For every member</span></div>
+      <h2 class="serif">The Client app</h2>
+      <p>What every member gets on their phone: a training and nutrition app that follows their coach's plan and leaves room to make it their own.</p>
+    </div>
+    <div class="count"><b class="serif">73</b><span>client features</span></div>
+  </div>
+  <div class="legend"><span class="l1"><i>●</i>Available now: included and working</span><span class="l2"><i>◇</i>Available with setup: needs a provider account or key</span></div>
+
+  <div class="cols">
+    <div class="cat"><h3>Joining &amp; first run</h3><ul>
+      <li data-covers="C1"><b>Join with the gym's sign-up code</b>: new members land in the right gym automatically</li>
+      <li data-covers="C3"><b>Onboarding wizard</b>: six quick questions about body, goal and experience build personal calorie and macro targets</li>
+      <li data-covers="C4"><b>Guided app tour</b>, replayable at any time</li>
+    </ul></div>
+
+    <div class="cat"><h3>Home &amp; daily guidance</h3><ul>
+      <li data-covers="C5"><b>Today at a glance</b>: session, calories and macros, burn, goal progress, gym crowd, community</li>
+      <li data-covers="C6"><b>Customisable Home</b>: show, hide and reorder every card</li>
+      <li data-covers="C7"><b>Coach Brief</b>: today's priorities from the member's own logged data</li>
+      <li data-covers="C8"><b>Smart reminders</b>: workout today, tomorrow's session, unfinished session, rest day, meals, water and a daily recap</li>
+      <li data-covers="C9"><b>Device notifications</b> while Barbell is open in the background</li>
+      <li data-covers="C10"><b>Reminder controls</b>: per-type switches, water interval, recap time, quiet hours</li>
+    </ul></div>
+
+    <div class="cat"><h3>Training</h3><ul>
+      <li data-covers="C11 C12"><b>Today's Training</b>: the assigned program serves the right session each day</li>
+      <li data-covers="C13"><b>Progressive-overload targets</b> on every lift, from last session's numbers</li>
+      <li data-covers="C14"><b>Live workout session</b>: timer, set-by-set reps and weight, add sets and exercises, auto-save and resume</li>
+      <li data-covers="C15"><b>Effort rating</b> and a calorie estimate shown as a range</li>
+      <li data-covers="C16"><b>Automatic personal records</b>: heaviest weight, estimated 1RM, best set volume</li>
+      <li data-covers="C17"><b>Session recap</b> after every workout</li>
+      <li data-covers="C18"><b>Build today</b>: create your own session from the exercise library</li>
+      <li data-covers="C19"><b>My workouts</b> planner with a weekly schedule</li>
+      <li data-covers="C20"><b>Log a past workout</b> with date, times and effort</li>
+      <li data-covers="C21"><b>Cardio and sports</b>: 40+ activities, live or logged after</li>
+      <li data-covers="C22"><b>Training history</b> and a full day-by-day record</li>
+      <li data-covers="C23"><b>287-exercise library</b> with muscles, equipment and animated visuals</li>
+      <li data-covers="C24"><b>Share a workout</b> as a link that others can import</li>
+      <li data-covers="C25"><b>My PRs</b> and per-lift strength trends</li>
+    </ul></div>
+
+    <div class="cat"><h3>Nutrition</h3><ul>
+      <li data-covers="C26"><b>Today's Fuel</b>: calories left, macros, planned meals and logs</li>
+      <li data-covers="C27"><b>Type a meal in plain words</b>, with Indian portions understood: katori, roti, piece</li>
+      <li data-covers="C28"><b>Speak a meal</b> in supported browsers</li>
+      <li data-covers="C29"><b>21,000+ food database</b> (Indian, international and packaged) with portion and cooking-oil choices</li>
+      <li data-covers="C30"><b>Barcode scanning</b> for packaged foods</li>
+      <li data-covers="C33"><b>Usuals, recent meals and one-tap repeat</b></li>
+      <li data-covers="C34"><b>Custom foods and saved meals</b></li>
+      <li data-covers="C35"><b>Share meals</b> as a link</li>
+      <li data-covers="C36"><b>Personal targets</b>, recommended from body, activity and goal, or set manually</li>
+      <li data-covers="C37"><b>Calorie rebalancing</b> after an over-target day</li>
+      <li data-covers="C38 C39"><b>Water and supplements</b> tracking</li>
+      <li data-covers="C40"><b>Net energy</b>: intake against burn</li>
+      <li data-covers="C41"><b>Nutrition Tracker</b>: any date, any range, with averages</li>
+      <li data-covers="C42"><b>Flexible day start</b>, so late meals count to the right day</li>
+    </ul></div>
+
+    <div class="cat"><h3>Progress &amp; body</h3><ul>
+      <li data-covers="C43 C44"><b>Progress dashboard</b> with body, training, nutrition and energy views</li>
+      <li data-covers="C45"><b>Goal ETA</b> projected from the current trend</li>
+      <li data-covers="C46 C47"><b>Weight and six body measurements</b>, with history editing</li>
+      <li data-covers="C48"><b>Custom metrics</b>: anything else a member wants to track</li>
+      <li data-covers="C49"><b>Where the work went</b>: weekly sets per muscle group</li>
+      <li data-covers="C50"><b>120 milestones</b> across five categories</li>
+      <li data-covers="C51"><b>Progress photos</b>: before/after comparison of photos the coach takes</li>
+      <li data-covers="C52"><b>Today's burn breakdown</b>, every figure labelled measured or estimated</li>
+      <li data-covers="C72"><b>Daily health intelligence</b>: training load and energy, with no wearable needed</li>
+    </ul></div>
+
+    <div class="cat"><h3>Community &amp; competition</h3><ul>
+      <li data-covers="C65 C69"><b>Gym community</b> (opt-in): weekly activity, streaks, consistency</li>
+      <li data-covers="C66"><b>Leaderboards</b>: today, this week, this month</li>
+      <li data-covers="C67"><b>Activity feed</b>: share workouts, react, comment, copy</li>
+      <li data-covers="C68"><b>Members directory</b> and following</li>
+      <li data-covers="C70"><b>Private friend communities</b> across gyms, with invites and challenges</li>
+      <li data-covers="S1 S2 S3 S4"><b>Tournaments</b>: enter or host, live scoring, podiums</li>
+      <li data-covers="S5 S8"><b>Trophy cabinet</b> and open tournaments from other gyms</li>
+    </ul></div>
+
+    <div class="cat"><h3>Profile, privacy &amp; data</h3><ul>
+      <li data-covers="C53 C54"><b>Profile journey</b> and goal setup</li>
+      <li data-covers="C55 C56"><b>Equipment and coach preferences</b>, so plans fit real life</li>
+      <li data-covers="C57"><b>Message your coach</b> in-app</li>
+      <li data-covers="C58 C59 S12"><b>Account, password, photo, theme and units</b> (metric or imperial)</li>
+      <li data-covers="C60"><b>Privacy controls</b> for records and feed; health data is never shared</li>
+      <li data-covers="C61 S13"><b>Cookie preferences</b> and clear legal terms</li>
+      <li data-covers="C62 C63"><b>Download my data</b> or delete my account</li>
+    </ul></div>
+  </div>
+
+  <div class="setupbox" data-covers="C2 C31 C32 C64 C71 C73 S10 S11">
+    <div class="hd"><i>◇</i><b class="serif">Client features available with setup</b></div>
+    <p>Built and working. Each goes live once the gym, or Barbell's deployment, connects the service shown.</p>
+    <table>
+      <tr><td><b>QR join with online payment</b>: scan the gym's code, pay, start</td><td>Razorpay payment account (live keys)</td></tr>
+      <tr><td><b>Membership page</b>: plan status, online renewal, renewal payments</td><td>Razorpay for online renewal; status and dates work without it</td></tr>
+      <tr><td><b>Nutrition-label photo scan</b></td><td>An AI vision provider key; without one, the photo is kept and values are typed in</td></tr>
+      <tr><td><b>AI estimate</b> for dishes the database can't match</td><td>An AI provider key (Groq, Gemini, OpenRouter or Ollama)</td></tr>
+      <tr><td><b>Wearables</b>: WHOOP and Oura (workouts, recovery, sleep), plus the recovery panel</td><td>WHOOP / Oura developer app credentials</td></tr>
+      <tr><td><b>Password reset by email</b></td><td>An email provider (Resend)</td></tr>
+      <tr><td><b>Google sign-in</b> for independent members</td><td>A Google OAuth client ID</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════════════════════ PART ONE · OWNER OVERVIEW ═════════════════════════ -->
+<section class="overview owner">
+  <div class="ovhead">
+    <div>
+      <div class="kicker"><span class="dot"></span><span class="ov c">For the gym owner</span></div>
+      <h2 class="serif">The Gym Owner dashboard</h2>
+      <p>Everything a trainer can do, across the whole gym, plus memberships, revenue, staff, the gym floor and your own Barbell subscription.</p>
+    </div>
+    <div class="count"><b class="serif">29</b><span>owner features, plus every<br>trainer tool, gym-wide</span></div>
+  </div>
+  <div class="legend"><span class="l1"><i>●</i>Available now: included and working</span><span class="l2"><i>◇</i>Available with setup: needs a provider account, key or hardware</span></div>
+
+  <div class="cols">
+    <div class="cat"><h3>Command centre</h3><ul>
+      <li data-covers="O1"><b>Your gym today</b>: active members, check-ins, money collected and outstanding, with trends for check-ins, revenue, memberships and adherence</li>
+      <li data-covers="O1"><b>Needs your attention</b>: overdue payments, expiring plans, at-risk clients, missing trainers, plus one-click actions</li>
+    </ul></div>
+
+    <div class="cat"><h3>Members &amp; coaching</h3><ul>
+      <li data-covers="O2"><b>All clients</b>, filtered by trainer, membership and status, sorted by risk or progress</li>
+      <li data-covers="O3"><b>Add a client</b> and assign a trainer</li>
+      <li data-covers="O24"><b>Every trainer tool, gym-wide</b>: client profiles, builders, alerts, reports, messages</li>
+      <li data-covers="O32"><b>Tick a client's planned meals</b> as eaten from their profile</li>
+    </ul></div>
+
+    <div class="cat"><h3>Memberships &amp; revenue</h3><ul>
+      <li data-covers="O5"><b>Business overview</b>: members, monthly revenue, renewals, overdue, attendance</li>
+      <li data-covers="O6 O7"><b>Packages and subscriptions</b> in a couple of clicks</li>
+      <li data-covers="O8"><b>Record payments</b> (cash, UPI and more) with duplicate protection</li>
+      <li data-covers="O9"><b>Members table</b>: overdue, due and paid; renewal countdowns; suspend, resume, cancel</li>
+      <li data-covers="O10"><b>CSV export</b> of members and payments</li>
+      <li data-covers="O26"><b>Payments stay private</b> to the owner</li>
+    </ul></div>
+
+    <div class="cat"><h3>Analytics</h3><ul>
+      <li data-covers="O13"><b>Joined vs left, churn, revenue and visits</b> over 6, 12 or 24 months</li>
+    </ul></div>
+
+    <div class="cat"><h3>Team &amp; attendance</h3><ul>
+      <li data-covers="O4"><b>Trainers</b>: workload, capacity, flagged clients, attendance</li>
+      <li data-covers="O14"><b>Attendance roster</b>: hours as worked or fixed shifts, grace minutes, late flags</li>
+      <li data-covers="O15"><b>Rotating QR codes</b> for arrival and departure, refreshed every 90 seconds</li>
+      <li data-covers="O16"><b>Corrections</b> approved by you, with a full audit trail</li>
+    </ul></div>
+
+    <div class="cat"><h3>The gym floor</h3><ul>
+      <li data-covers="O11"><b>Mark member attendance</b>: it drives check-ins and the live crowd</li>
+      <li data-covers="O17"><b>Gym Crowd Live</b>: occupancy, arrivals by hour, typical week</li>
+      <li data-covers="O28"><b>Crowd controls</b>: capacity, hours, thresholds and who sees what, enforced on the server</li>
+    </ul></div>
+
+    <div class="cat"><h3>Gym settings</h3><ul>
+      <li data-covers="O12"><b>Sign-up code, branding, crowd display</b>, community and leaderboard switches</li>
+      <li data-covers="O19"><b>Client freedom</b>: Prescribed, Hybrid or Custom, plus substitute, add and edit switches</li>
+    </ul></div>
+
+    <div class="cat"><h3>Growth &amp; your Barbell account</h3><ul>
+      <li data-covers="O25"><b>Set up your gym</b> and owner account in minutes</li>
+      <li data-covers="O20"><b>Enterprise onboarding wizard</b></li>
+      <li data-covers="O23"><b>QR onboarding</b>: one-time codes for new clients (tied to a plan) and trainers</li>
+      <li data-covers="O22"><b>Numbered invoices</b> as downloadable PDFs</li>
+      <li data-covers="O27 S1 S3 S4 S6 S7"><b>Host tournaments</b>: 16 events, live scoring, podiums, gym TV display</li>
+    </ul></div>
+
+    <div class="cat"><h3>Platform</h3><ul>
+      <li data-covers="S9 S12"><b>One sign-in</b> for every role; light, dark or system appearance</li>
+      <li data-covers="S13 S14"><b>Legal pages and terms acceptance</b> built in; a <b>guided live demo</b> on request</li>
+    </ul></div>
+  </div>
+
+  <div class="setupbox compact" data-covers="O18 O21 O22 S10">
+    <div class="hd"><i>◇</i><b class="serif">Owner features available with setup</b></div>
+    <div class="cards">
+      <div><b>Access control</b><span>Doors and turnstiles feed live occupancy, with member mapping, event log, sync, health alerts and audit.</span><em>Needs: webhook, REST, CSV or eSSL/ZKTeco (beta) connection. A demo sandbox runs without hardware.</em></div>
+      <div><b>Online payment for your Barbell plan</b><span>Packages, upgrades and add-on capacity, paid by card or UPI.</span><em>Needs: Razorpay live keys.</em></div>
+      <div><b>Emailed invoices and password resets</b><span>Invoices to your accountant; reset links to users.</span><em>Needs: an email provider (Resend).</em></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ PART ONE · TRAINER OVERVIEW ═════════════════════════ -->
+<section class="overview trainer">
+  <div class="ovhead">
+    <div>
+      <div class="kicker"><span class="dot"></span><span class="ov c">For every trainer</span></div>
+      <h2 class="serif">The Trainer workspace</h2>
+      <p>A focused workspace for each coach: their own roster, every client's real data, the tools to program them, and early warnings when someone starts to slip.</p>
+    </div>
+    <div class="count"><b class="serif">20</b><span>trainer features</span></div>
+  </div>
+  <div class="legend"><span class="l1"><i>●</i>Every trainer feature works out of the box, with no setup</span></div>
+
+  <div class="cols">
+    <div class="cat"><h3>Your day</h3><ul>
+      <li data-covers="T1"><b>Trainer dashboard</b>: check-in card, clients at risk, adherence trend, today's roster</li>
+      <li data-covers="T20"><b>Live gym crowd</b>, and which of your clients are in</li>
+      <li data-covers="T2"><b>My clients</b>: your roster only, with status, adherence and last activity</li>
+    </ul></div>
+
+    <div class="cat"><h3>Client 360° profile</h3><ul>
+      <li data-covers="T3"><b>Overview</b>: adherence score, weight trend, measurements, why they need attention</li>
+      <li data-covers="T4"><b>Training</b>: program week, weekly muscle balance against target ranges, movement patterns</li>
+      <li data-covers="T5"><b>Workouts</b>: full history; assign a session</li>
+      <li data-covers="T6 O32"><b>Nutrition</b>: today's plan, logged food, targets; assign a plan; tick planned meals</li>
+      <li data-covers="T7"><b>Photos</b>: front, side and back, with a before/after slider</li>
+      <li data-covers="T8"><b>Membership</b>: status and 90-day attendance</li>
+      <li data-covers="T9"><b>Client analysis</b>: data-derived insights to accept, modify or dismiss</li>
+      <li data-covers="T10"><b>Messages</b> thread</li>
+    </ul></div>
+
+    <div class="cat"><h3>Programming</h3><ul>
+      <li data-covers="T11"><b>Workout builder</b>: templates, reorder, rest times, preview, assign on any date</li>
+      <li data-covers="T12"><b>Custom exercises</b> added to the gym's library</li>
+      <li data-covers="T13"><b>Weekly programs</b>: PPL, Upper/Lower, Full Body or custom splits</li>
+      <li data-covers="T14"><b>Nutrition builder</b>: calorie-targeted plans with realistic meals</li>
+    </ul></div>
+
+    <div class="cat"><h3>Stay ahead</h3><ul>
+      <li data-covers="T15"><b>Risk alerts</b>: plateaus, low protein, missed workouts, missed check-ins and more</li>
+      <li data-covers="T16"><b>Weekly reports</b> generated from real data, sent in one tap</li>
+      <li data-covers="T17"><b>Messages</b> with quick templates and unread counts</li>
+    </ul></div>
+
+    <div class="cat"><h3>Your hours</h3><ul>
+      <li data-covers="T18"><b>My attendance</b>: scan in and out, see your hours, request corrections</li>
+      <li data-covers="T19"><b>Join a gym</b> by scanning its trainer QR</li>
+    </ul></div>
+
+    <div class="cat"><h3>Events</h3><ul>
+      <li data-covers="S1 S3 S6"><b>Host and score tournaments</b>, with co-hosts</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ PART TWO · CLIENT ═════════════════════════ -->
+<section class="opener client">
+  <div class="glow"></div>
+  <div class="inner">
+    <div class="part"><img src="catalogue-src/assets/badge-blush.svg" alt=""><span class="ov">Part Two · Explore the Barbell experience</span></div>
+    <h2>The <em>Client</em><br>experience</h2>
+    <p class="lead">Members don't get a static plan. They get a coach in their pocket that shows the session for today, knows what they lifted last time, understands the food they actually eat, and shows progress in numbers they trust.</p>
+    <div class="stats">
+      <div><b>287</b><span>exercises in the library</span></div>
+      <div><b>21,000+</b><span>foods, including 1,014 Indian dishes</span></div>
+      <div><b>120</b><span>milestones to earn</span></div>
+      <div><b>40+</b><span>cardio activities and sports</span></div>
+    </div>
+    <div class="hero phones">
+      <div class="ph"><img src="catalogue-src/assets/screens/client-session.jpg" alt="Live workout session"></div>
+      <div class="ph"><img src="catalogue-src/assets/screens/client-log-meal.jpg" alt="Meal typed in plain words"></div>
+      <div class="ph"><img src="catalogue-src/assets/screens/client-progress.jpg" alt="Progress"></div>
+    </div>
+  </div>
+</section>
+
+<section class="detail client">
+  <!-- Joining & Home -->
+  <div class="group">
+    <div class="ghead"><div class="ov">Getting started · Home</div>
+      <h3>A personal app from the first minute</h3>
+      <p>Members join the gym's Barbell in seconds. From then on, Home tells them what matters today, and nothing they don't need.</p></div>
+    <div class="split">
+      <figure class="phone"><div class="frame"><img src="catalogue-src/assets/screens/client-home.jpg" alt=""></div><figcaption><b>Home.</b> Today's session, fuel and burn, goal progress and the live gym crowd.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C1"><h4>Join with the gym's code</h4><p>New members sign up with the gym's sign-up code and are placed in the right gym automatically. No manual matching by staff.</p></div>
+        <div class="feat" data-covers="C3"><h4>Onboarding that builds real targets</h4><p>Six quick questions about the member's body, goal and experience set personal calorie and macro targets instead of a generic average, and progress is measured from their own starting point. Everything can be changed later.</p></div>
+        <div class="feat" data-covers="C4"><h4>Guided tour</h4><p>A short walkthrough of the main screens on first use, replayable any time from Help.</p></div>
+        <div class="feat" data-covers="C5"><h4>Today at a glance</h4><p>Today's session with its muscle focus and length, calories left with protein, carbs and fat, today's burn, progress toward the goal weight, how busy the gym is right now, and what the gym community has been doing.</p></div>
+        <div class="feat" data-covers="C6"><h4>A Home that's theirs</h4><p>Members choose which cards appear and in what order. Cards appear only when they have something to show.</p></div>
+        <div class="feat" data-covers="C7"><h4>Coach Brief</h4><p>A daily list of priorities worked out from the member's own logs: over target on calories, short on water, protein reached, today's session done. Each comes with a priority level and a link to act on it. Built on rules, not guesswork, and it needs no AI key.</p></div>
+      </div>
+    </div>
+    <div class="feats two" style="margin-top:5mm">
+      <div class="feat" data-covers="C8"><h4>Reminders that fit the day</h4><p>The notification bell carries reminders for today's workout, tomorrow's session, an unfinished workout, rest days, meal logging, water at the member's chosen interval, and a daily recap.</p></div>
+      <div class="feat" data-covers="C9 C10"><h4>In control of every nudge</h4><p>Each reminder type can be switched on or off, with a water interval, a recap time and quiet hours. If the member allows it, reminders also appear as device notifications while Barbell is open in a background tab.</p></div>
+    </div>
+  </div>
+
+  <!-- Training -->
+  <div class="group newpage">
+    <div class="ghead"><div class="ov">Training</div>
+      <h3>Every session planned, logged and progressed</h3>
+      <p>The trainer's program decides what's on today. Barbell remembers every set, so each session builds on the last.</p></div>
+    <div class="split">
+      <figure class="phone"><div class="frame"><img src="catalogue-src/assets/screens/client-workout.jpg" alt=""></div><figcaption><b>Today's Training.</b> The day's session from the assigned program, with lifts ready to progress.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C11 C12"><h4>Today's Training</h4><p>The member's weekly program serves the right session each day automatically: name, muscle focus, exercises with sets, reps and weight, estimated duration and a this-week strip showing what's done.</p></div>
+        <div class="feat" data-covers="C13"><h4>Progressive overload, built in</h4><p>Each lift shows what was done last time and what to try today, for example <em>"Last time 82.5 kg × 8 · today try 85 kg × 8"</em>. The session header says how many lifts are ready to progress.</p></div>
+        <div class="feat" data-covers="C14"><h4>Live workout session</h4><p>A running timer and a set-by-set log of reps and weight, with one tap to reuse last time's numbers. Members can add or remove sets and add exercises. Progress saves as they go, so a session can be resumed.</p></div>
+        <div class="feat" data-covers="C15"><h4>Effort and calories, honestly</h4><p>After a session the member rates the effort. Barbell stores the calories burned as an estimate with a range (for example 221 kcal, 156–286), never as a false precise figure.</p></div>
+        <div class="feat" data-covers="C16 C17"><h4>Personal records, automatically</h4><p>Completing a workout detects new records for heaviest weight, estimated one-rep max and best set volume, and shows them in the session recap.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="feats two">
+          <div class="feat" data-covers="C18"><h4>Build today</h4><p>Where the gym allows it, members build their own session from the exercise library, filtered by muscle group and equipment. It replaces today's session.</p></div>
+          <div class="feat" data-covers="C19"><h4>My workouts planner</h4><p>Saved sessions and a personal weekly schedule, with Do today, Edit, Copy and Delete on each.</p></div>
+          <div class="feat" data-covers="C20"><h4>Log a past workout</h4><p>Forgot to start the app? Members record the session afterwards with date, start and end time, exercises and effort. Barbell warns if it overlaps another session.</p></div>
+          <div class="feat" data-covers="C21"><h4>Cardio and sports</h4><p>40+ activities across gym machines (treadmill, rower, air bike, ski erg), outdoor training and sports such as cricket, badminton, football, kabaddi, yoga and boxing. Run live or log afterwards.</p></div>
+          <div class="feat" data-covers="C22"><h4>Training history</h4><p>Every completed and missed session, plus a day view that shows exactly what was trained and eaten on any date.</p></div>
+          <div class="feat" data-covers="C23"><h4>287-exercise library</h4><p>Every exercise tagged with primary and secondary muscles, equipment and difficulty, with an animated exercise visual.</p></div>
+          <div class="feat" data-covers="C24"><h4>Share a workout</h4><p>Send any session as a link. Anyone can preview it; a member who signs in imports it to today or to their planner.</p></div>
+          <div class="feat" data-covers="C25"><h4>My PRs and strength trends</h4><p>Recent records and a "where your strength is moving" list showing each lift's change over the weeks, for example lateral raise +93.8% in 8 weeks.</p></div>
+    </div>
+    <div class="phones2" style="grid-template-columns:repeat(3,1fr);gap:5mm;margin-top:6mm">
+      <figure class="phone clip" style="--h:76mm"><div class="frame"><img src="catalogue-src/assets/screens/client-session.jpg" alt=""></div><figcaption><b>Live session.</b> Last time's numbers and today's target.</figcaption></figure>
+      <figure class="phone clip" style="--h:76mm"><div class="frame"><img src="catalogue-src/assets/screens/client-planner.jpg" alt=""></div><figcaption><b>My workouts.</b> Saved sessions and the member's week.</figcaption></figure>
+      <figure class="phone clip" style="--h:76mm"><div class="frame"><img src="catalogue-src/assets/screens/client-cardio.jpg" alt=""></div><figcaption><b>Cardio.</b> Machines, outdoor training and sports.</figcaption></figure>
+    </div>
+  </div>
+
+  <!-- Nutrition -->
+  <div class="group">
+    <div class="ghead"><div class="ov">Nutrition</div>
+      <h3>Food logging that understands Indian meals</h3>
+      <p>Most food apps struggle with "2 roti, dal and chai". Barbell's food engine knows katoris, rotis and home cooking, and calculates every value from published food-composition data.</p></div>
+    <div class="split">
+      <figure class="phone"><div class="frame"><img src="catalogue-src/assets/screens/client-log-meal.jpg" alt=""></div><figcaption><b>Type a meal.</b> "2 roti, dal and chai" becomes three foods, 470 kcal, ready to log.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C26"><h4>Today's Fuel</h4><p>One dial for calories left (or over), with protein, carbs and fat, the day's planned meals and everything logged.</p></div>
+        <div class="feat" data-covers="C27"><h4>Type a meal in plain words</h4><p>Members write what they ate the way they'd say it. Barbell splits it into foods, picks a sensible portion (a roti, a katori of dal, a cup of chai) and lets them adjust quantities before logging.</p></div>
+        <div class="feat" data-covers="C28"><h4>Or say it</h4><p>A microphone button turns speech into the same meal entry, tuned for Indian English food words. It uses the browser's built-in speech recognition (Chrome, Edge, Safari) and no third-party service.</p></div>
+        <div class="feat" data-covers="C29"><h4>21,000+ foods, real portions</h4><p>Search across the Indian Food Composition Tables, 1,014 Indian dishes, USDA and Canadian data and Open Food Facts packaged products. Pick portions in bowls, katoris, pieces or grams, and set the cooking oil from low to high.</p></div>
+        <div class="feat" data-covers="C30"><h4>Barcode scanning</h4><p>Scan a packaged product with the camera to get its brand, serving and full nutrition. Lookups check Barbell's own cache and bundled data before the live Open Food Facts database.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="split rev">
+      <figure class="phone"><div class="frame"><img src="catalogue-src/assets/screens/client-nutrition.jpg" alt=""></div><figcaption><b>Today's Fuel.</b> Calories left, macros and the day's plan.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C33"><h4>Usuals and repeat</h4><p>Barbell learns what a member usually eats at each meal and keeps recent meals one tap away. Any past meal can be repeated today.</p></div>
+        <div class="feat" data-covers="C34"><h4>Custom foods and saved meals</h4><p>Add family recipes with their own macros and units, save regular meals, and log either in one step.</p></div>
+        <div class="feat" data-covers="C35"><h4>Share meals</h4><p>Send saved meals and foods as a link; the recipient saves them to their own diet.</p></div>
+        <div class="feat" data-covers="C36"><h4>Targets that fit the person</h4><p>Daily calories and macros recommended from metabolic rate, activity and goal, or set by hand.</p></div>
+        <div class="feat" data-covers="C37"><h4>Calorie rebalancing</h4><p>After an over-target day, Barbell offers to spread the surplus across the coming days: Easy, Moderate, Aggressive, Intense or Custom. For example, 1,270 kcal over becomes −320 kcal a day for four days, with protein protected.</p></div>
+        <div class="feat" data-covers="C38 C39"><h4>Water and supplements</h4><p>Quick +250 ml / +500 ml water logging against a daily target, and a supplement list with dose and time.</p></div>
+        <div class="feat" data-covers="C40"><h4>Net energy</h4><p>Intake against total burn for the day, with a running energy-balance history.</p></div>
+        <div class="feat" data-covers="C41 C42"><h4>Nutrition Tracker</h4><p>Browse any date, compare target and actual, and view 7-day, 30-day, 3-month, 6-month or custom ranges with averages. The day can start at 3–6 am so a late dinner counts to the night it was eaten.</p></div>
+      </div>
+    </div>
+    <div class="split" style="margin-top:6mm;align-items:center">
+      <figure class="phone clip" style="--h:92mm"><div class="frame"><img src="catalogue-src/assets/screens/client-tracker.jpg" alt=""></div><figcaption><b>Nutrition Tracker.</b> Target against actual for any day.</figcaption></figure>
+      <div class="callout" style="margin-top:0"><b>Numbers members can rely on.</b> Portions and nutrition values come from Barbell's food engine, which matches each food against published food-composition data (the Indian Food Composition Tables, the Indian dish database, USDA and Open Food Facts) and weighs portions by each food's own serving size. Where a portion is converted or approximate, it is labelled as an estimate rather than shown as exact.</div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="group newpage">
+    <div class="ghead"><div class="ov">Progress &amp; body</div>
+      <h3>Progress members can see and trust</h3>
+      <p>Clear trends, honest estimates and milestones that reward consistency, not just results.</p></div>
+    <div class="split">
+      <figure class="phone"><div class="frame"><img src="catalogue-src/assets/screens/client-progress.jpg" alt=""></div><figcaption><b>Progress.</b> Weight trend, sessions, adherence and energy balance.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C43"><h4>Progress dashboard</h4><p>A plain-language headline ("Trending down 0.4 kg/week"), weight change, sessions, adherence and records over 7 days to 1 year.</p></div>
+        <div class="feat" data-covers="C44"><h4>Explore your data</h4><p>Body, Training, Nutrition and Energy views, each comparable with the previous period. Touch any chart to read a day.</p></div>
+        <div class="feat" data-covers="C45"><h4>Goal ETA</h4><p>"About 13 weeks from your target", projected from the current trend and labelled as an estimate, not a promise.</p></div>
+        <div class="feat" data-covers="C46 C47"><h4>Weight and measurements</h4><p>Weight feeds straight into the trend and goal. Waist, chest, arms, thighs, hips and neck can be back-dated, corrected or deleted, and readings far outside the normal range are flagged before saving.</p></div>
+        <div class="feat" data-covers="C48"><h4>Custom metrics</h4><p>Resting heart rate, steps, a lift to watch: members track anything else with its own unit and target.</p></div>
+        <div class="feat" data-covers="C49"><h4>Where the work went</h4><p>Total volume and sets per muscle group, so members see what they're actually training.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="trio">
+      <figure class="phone clip" style="--h:84mm"><div class="frame"><img src="catalogue-src/assets/screens/client-milestones.jpg" alt=""></div><figcaption><b>Milestones.</b> 120 to earn; the closest ones highlighted.</figcaption></figure>
+      <figure class="phone clip" style="--h:84mm"><div class="frame"><img src="catalogue-src/assets/screens/client-strength.jpg" alt=""></div><figcaption><b>Strength trends.</b> Each lift's change over the weeks.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C50"><h4>120 milestones</h4><p>Five categories (Training, Strength, Consistency, Nutrition and Body), each with progressive levels and a "closest to earning" shortlist.</p></div>
+        <div class="feat" data-covers="C51"><h4>Progress photos</h4><p>Front, side and back photos taken by the coach appear on Progress as a before/after comparison, with the days between them.</p></div>
+        <div class="feat" data-covers="C52"><h4>Today's burn, explained</h4><p>Resting energy, workouts and cardio, each labelled with its source and whether it was measured or estimated.</p></div>
+        <div class="feat" data-covers="C72"><h4>Daily health intelligence</h4><p>Logged workouts and the member's profile combine into daily energy and training-load figures. It works with no wearable and never double-counts energy across sources.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Community -->
+  <div class="group newpage">
+    <div class="ghead"><div class="ov">Community &amp; competition</div>
+      <h3>A gym community that keeps people coming back</h3>
+      <p>Optional and private by default. Members share only what they choose, and weight, food, sleep and health data are never shared.</p></div>
+    <div class="phones2" style="grid-template-columns:repeat(3,1fr);gap:5mm;margin-bottom:6mm">
+      <figure class="phone clip" style="--h:92mm"><div class="frame"><img src="catalogue-src/assets/screens/client-community.jpg" alt=""></div><figcaption><b>Leaderboards.</b> This week's workouts.</figcaption></figure>
+      <figure class="phone clip" style="--h:92mm"><div class="frame"><img src="catalogue-src/assets/screens/client-feed.jpg" alt=""></div><figcaption><b>Activity.</b> Shared workouts with reactions.</figcaption></figure>
+      <figure class="phone clip" style="--h:92mm"><div class="frame"><img src="catalogue-src/assets/screens/client-friend.jpg" alt=""></div><figcaption><b>Friend community.</b> Across gyms.</figcaption></figure>
+    </div>
+    <div class="feats two">
+      <div class="feat" data-covers="C65 C69"><h4>Gym community</h4><p>Members opt in and see who was active today, workouts and records this week, their streak, weekly consistency and a community activity calendar.</p></div>
+      <div class="feat" data-covers="C66"><h4>Leaderboards</h4><p>Today, this week or this month, ranked by workouts or streaks. The owner can turn leaderboards off.</p></div>
+      <div class="feat" data-covers="C67"><h4>Activity feed</h4><p>Share a finished workout, react with fire, strong, clap or like, comment, and copy anyone's shared workout into your own planner. Show everyone, or only people you follow.</p></div>
+      <div class="feat" data-covers="C68"><h4>Members and following</h4><p>A members directory with follow, which shapes the feed and who can see a member's records.</p></div>
+      <div class="feat" data-covers="C70"><h4>Private friend communities</h4><p>Train with friends at other gyms, or no gym at all. Create an invite-only community with its own colour and mark, invite by code or link, and compete on leaderboards and challenges for workouts, volume or records.</p></div>
+      <div class="feat" data-covers="C60"><h4>Privacy controls</h4><p>Members choose who sees their personal records (everyone at the gym, only followers, or nobody) and what their feed shows.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="split">
+      <figure class="phone"><div class="frame"><img src="catalogue-src/assets/screens/client-tournament.jpg" alt=""></div><figcaption><b>Tournament results.</b> Placing, points and the field beaten.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="S2"><h4>Tournaments for every member</h4><p>Enter a gym's tournament from the app, by code or by scanning its QR. Anyone with the link can follow the public tournament page.</p></div>
+        <div class="feat" data-covers="S1 S3"><h4>Host one yourself</h4><p>Any member can host: name it, pick events, set the venue and prize, invite people. Hosts record scores live and rankings update instantly.</p></div>
+        <div class="feat" data-covers="S4"><h4>Podiums and points</h4><p>Results show each event's ranking, an overall podium (10, 7, 5, 4, 3, 2, 1 points by place), gold, silver and bronze, and gym-versus-gym standings.</p></div>
+        <div class="feat" data-covers="S5"><h4>Trophy cabinet</h4><p>Every member has a username and a cabinet of tournaments played, medals and titles. They can choose to appear in search so hosts at other gyms can invite them.</p></div>
+        <div class="feat" data-covers="S8"><h4>Discover</h4><p>Live, upcoming and finished tournaments from the member's gym, plus open ones from other gyms.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile & data -->
+  <div class="group">
+    <div class="ghead"><div class="ov">Profile, privacy &amp; data</div>
+      <h3>Personal, private and under the member's control</h3></div>
+    <div class="split rev">
+      <figure class="phone clip" style="--h:96mm"><div class="frame"><img src="catalogue-src/assets/screens/client-settings.jpg" alt=""></div><figcaption><b>Settings.</b> Privacy choices and tournament identity.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="C53 C54"><h4>Profile and goals</h4><p>A journey card (start, now, target, percentage of the way) and goal setup: goal type, target weight and date, experience and body details.</p></div>
+        <div class="feat" data-covers="C55"><h4>My equipment</h4><p>Nine equipment types, from barbell and cables to bands and bodyweight, so plans use what's actually available.</p></div>
+        <div class="feat" data-covers="C56"><h4>Coach preferences</h4><p>When they train, how long a session can be, what kit they have, foods they actually eat, exercises to avoid, and anything else worth knowing, such as injuries or travel.</p></div>
+        <div class="feat" data-covers="C57"><h4>Message your coach</h4><p>A direct thread with the trainer from the Profile page; replies arrive in the notification bell.</p></div>
+        <div class="feat" data-covers="C58 C59 S12"><h4>Account and display</h4><p>Name, phone and profile photo; a password change that requires the current password; system, light or dark appearance; metric or imperial units, which change only the display, never the data.</p></div>
+        <div class="feat" data-covers="C61 S13"><h4>Cookies and terms</h4><p>Essential cookies only by default, with preferences, analytics and marketing off until the member turns them on. Terms are accepted at first sign-in.</p></div>
+        <div class="feat" data-covers="C62 C63"><h4>Download or delete</h4><p>One tap downloads everything (profile, workouts, food, measurements, payments, devices) as a single file. Members can permanently delete their account by typing their email to confirm.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="setupbox compact" data-covers="C2 C31 C32 C64 C71 C73 S10 S11">
+    <div class="hd"><i>◇</i><b class="serif">Client features available with setup</b></div>
+    <div class="cards">
+      <div><b>Join by QR, with online payment</b><span>Scan the owner's one-time code, see the gym and plan, pay, start immediately.</span><em>Needs: Razorpay live keys. Until then, members join by sign-up code and the owner records payment.</em></div>
+      <div><b>Membership page</b><span>Plan, real status (active, expiring, lapsed), dates and renewal payments.</span><em>Status and dates work as is; online renewal needs Razorpay.</em></div>
+      <div><b>WHOOP and Oura</b><span>Workouts, energy, heart rate, sleep and recovery, plus a recovery panel comparing training and rest days.</span><em>Needs: WHOOP / Oura developer credentials. WHOOP is verified against a live account.</em></div>
+      <div><b>Nutrition-label scan</b><span>Photograph a label and the values are read for review.</span><em>Needs: an AI vision key. Without one, values are typed in.</em></div>
+      <div><b>AI estimate for unmatched dishes</b><span>Clearly labelled as an estimate; Barbell never invents values.</span><em>Needs: Groq, Gemini, OpenRouter or Ollama.</em></div>
+      <div><b>Password reset email · Google sign-in</b><span>Reset links by email; one-tap sign-in for independent members.</span><em>Needs: Resend email; a Google OAuth client ID.</em></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ PART TWO · OWNER ═════════════════════════ -->
+<section class="opener owner">
+  <div class="glow"></div>
+  <div class="inner">
+    <div class="part"><img src="catalogue-src/assets/badge-platinum.svg" alt=""><span class="ov">Part Two · Explore the Barbell experience</span></div>
+    <h2>The <em>Gym Owner</em><br>experience</h2>
+    <p class="lead">One dashboard that answers the questions owners ask every morning: who needs attention, what's owed, who's renewing, which trainers are in, how busy the floor is. And every coaching tool, across the whole gym.</p>
+    <div class="stats">
+      <div><b>1</b><span>dashboard for members, money, staff and floor</span></div>
+      <div><b>90 s</b><span>attendance codes that can't be reused from a screenshot</span></div>
+      <div><b>5</b><span>ways to connect door and turnstile systems</span></div>
+      <div><b>16</b><span>tournament events, plus your own</span></div>
+    </div>
+    <div class="hero desk"><img src="catalogue-src/assets/screens/owner-dashboard.jpg" alt="Owner dashboard"></div>
+  </div>
+</section>
+
+<section class="detail owner">
+  <div class="group">
+    <div class="ghead"><div class="ov">Command centre</div>
+      <h3>Know what needs you before you ask</h3>
+      <p>The owner dashboard turns live gym data into a short list of things to act on today.</p></div>
+    <div class="feats two">
+      <div class="feat" data-covers="O1"><h4>Your gym today</h4><p>Active members and new joins, today's check-ins and how many trainers are in, money collected this month, and the amount outstanding with how many memberships are overdue.</p></div>
+      <div class="feat" data-covers="O1"><h4>Needs your attention</h4><p>Overdue payments, memberships expiring within 30 days, clients whose adherence has dropped below the gym's thresholds, and trainers who haven't checked in. Each opens the right screen.</p></div>
+      <div class="feat" data-covers="O1"><h4>Start something</h4><p>One-click shortcuts to add a client or trainer, build a workout, open attendance or manage memberships.</p></div>
+      <div class="feat" data-covers="O1"><h4>Trends and member health</h4><p>30-day check-ins, revenue by month, membership mix (active, lapsed, overdue), a 14-day adherence trend, where adherence comes from (workouts or nutrition), and how many members are on track, need attention or are at risk.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Members &amp; coaching</div>
+      <h3>Every client, every trainer, one list</h3></div>
+    <div class="deskwrap"><figure class="desk clip" style="--h:84mm"><div class="frame"><img src="catalogue-src/assets/screens/owner-clients.jpg" alt=""></div><figcaption><b>All clients.</b> Goal, weight against target, 7-day change, adherence, last workout and check-in, trainer, membership and status.</figcaption></figure></div>
+    <div class="feats two">
+      <div class="feat" data-covers="O2"><h4>All clients</h4><p>Filter by trainer (or no trainer), membership state (payment outstanding, expiring in 30 days, none) and status (on track, needs attention, at risk, inactive). Sort by status, name, adherence or weight change.</p></div>
+      <div class="feat" data-covers="O3"><h4>Add a client</h4><p>Create the member's account with goal, body details and target, and assign their trainer in the same step.</p></div>
+      <div class="feat" data-covers="O24"><h4>Every trainer tool, gym-wide</h4><p>Owners can open any client's 360° profile, build and assign workouts, programs and nutrition plans, work the alert queue, send weekly reports and message any member. See the Trainer experience for details.</p></div>
+      <div class="feat" data-covers="O32"><h4>Tick planned meals</h4><p>From a client's Nutrition tab, staff can mark the day's planned meals as eaten, or un-mark them, on the member's behalf.</p></div>
+    </div>
+  </div>
+
+  <div class="group newpage">
+    <div class="ghead"><div class="ov">Memberships &amp; revenue</div>
+      <h3>The business side, without a spreadsheet</h3>
+      <p>Plans, payments and renewals in the same system your members train in, so status is always current.</p></div>
+    <div class="deskwrap"><figure class="desk clip" style="--h:96mm"><div class="frame"><img src="catalogue-src/assets/screens/owner-business.jpg" alt=""></div><figcaption><b>Business.</b> Members, revenue, renewals, packages and gym settings.</figcaption></figure></div>
+    <div class="feats two">
+      <div class="feat" data-covers="O5"><h4>Business overview</h4><p>Active members, monthly revenue, renewals due in the next 30 days, overdue payments, today's attendance and a six-month revenue chart from recorded payments.</p></div>
+      <div class="feat" data-covers="O6 O7"><h4>Packages and subscriptions</h4><p>Create membership packages with a price and period (monthly, quarterly, transformation or anything else), then put a member on one. The first payment is recorded with it.</p></div>
+      <div class="feat" data-covers="O8"><h4>Record payments</h4><p>Cash, UPI or any method. An identical payment recorded moments earlier is caught, so nothing is entered twice by accident.</p></div>
+      <div class="feat" data-covers="O9"><h4>Members table</h4><p>Filter overdue, due or paid; sort by name, renewal date or payment status; see days until renewal or how long overdue; and suspend, resume or cancel a membership in place.</p></div>
+      <div class="feat" data-covers="O10"><h4>CSV export</h4><p>Members (plan, dates, payment and membership state, trainer) and payments (date, member, amount, method, status, reference) export for your accountant.</p></div>
+      <div class="feat" data-covers="O26"><h4>Payments stay private</h4><p>Trainers see a client's membership status and attendance, but payment history is visible to the owner only.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Analytics</div>
+      <h3>What moved, and when</h3></div>
+    <div class="split" style="grid-template-columns: 1.25fr 1fr">
+      <figure class="desk clip" style="--h:62mm"><div class="frame"><img src="catalogue-src/assets/screens/owner-analytics.jpg" alt=""></div><figcaption><b>Analytics.</b> Joins, departures, revenue and visits.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="O13"><h4>Growth and churn</h4><p>Members joined and left over 6, 12 or 24 months, net change, churn rate, revenue by month and gym visits, with totals.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Team &amp; attendance</div>
+      <h3>Trainer hours you can trust</h3>
+      <p>Hours come from two real scans at the gym, not a button pressed from home.</p></div>
+    <div class="split" style="grid-template-columns: 1fr 1fr">
+      <figure class="desk"><div class="frame"><img src="catalogue-src/assets/screens/owner-codes.jpg" alt=""></div><figcaption><b>Attendance codes.</b> Arriving and Leaving QR codes for the gym display.</figcaption></figure>
+      <figure class="desk"><div class="frame"><img src="catalogue-src/assets/screens/owner-trainers.jpg" alt=""></div><figcaption><b>Trainers.</b> Workload, capacity and attendance at a glance.</figcaption></figure>
+    </div>
+    <div class="feats two" style="margin-top:6mm">
+      <div class="feat" data-covers="O4"><h4>Trainers</h4><p>Each trainer's speciality, workload as a share of capacity, active clients against their limit, whether any clients are flagged, and whether they've been in this week. Sort by busiest, most clients or name.</p></div>
+      <div class="feat" data-covers="O14"><h4>Attendance roster</h4><p>Who is in, late, not in or needs attention today. Record hours as worked, or set fixed shifts per trainer with grace minutes for lateness. Require a scan, or allow self check-in for small teams.</p></div>
+      <div class="feat" data-covers="O15"><h4>Rotating QR codes</h4><p>Show Arriving and Leaving codes on the gym display. They refresh every 90 seconds, so a saved screenshot won't work tomorrow. A text code is available as a fallback.</p></div>
+      <div class="feat" data-covers="O16"><h4>Corrections with an audit trail</h4><p>Trainers request corrections for a missed scan; you approve or reject them. Every record keeps a full before-and-after history.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">The gym floor</div>
+      <h3>How busy is the gym, right now?</h3></div>
+    <div class="deskwrap"><figure class="desk clip" style="--h:80mm"><div class="frame"><img src="catalogue-src/assets/screens/owner-crowd.jpg" alt=""></div><figcaption><b>Gym Crowd Live.</b> Occupancy, entries and exits, arrivals by hour. Demo-connection entries are always counted separately from real ones.</figcaption></figure></div>
+    <div class="feats two">
+      <div class="feat" data-covers="O11"><h4>Member attendance</h4><p>Mark members present at the desk. It feeds today's check-ins, member attendance history and the live crowd count, with no hardware needed.</p></div>
+      <div class="feat" data-covers="O17"><h4>Gym Crowd Live</h4><p>Occupancy against capacity, entries and exits today, busiest hour, average visit, arrivals by hour compared with yesterday, a typical week once seven days of data exist, and who is inside.</p></div>
+      <div class="feat" data-covers="O28"><h4>Crowd controls</h4><p>Set capacity, opening hours and the quiet, moderate and busy thresholds. Choose whether members and trainers see the crowd card and the exact head-count. These choices are enforced on the server.</p></div>
+      <div class="feat" data-covers="O12 O19"><h4>Gym settings</h4><p>The client sign-up code, branding, the live-crowd display, community and leaderboard switches, and how much members may change: Prescribed, Hybrid or Custom, plus whether they may substitute exercises, add exercises or edit sets, reps and weights.</p></div>
+    </div>
+  </div>
+
+  <div class="group newpage">
+    <div class="ghead"><div class="ov">Growth &amp; your Barbell account</div>
+      <h3>Onboard people in seconds; manage your plan in one place</h3></div>
+    <div class="split" style="grid-template-columns: 1fr 1fr">
+      <figure class="desk clip" style="--h:60mm"><div class="frame"><img src="catalogue-src/assets/screens/owner-qr.jpg" alt=""></div><figcaption><b>QR onboarding.</b> One-time codes for clients and trainers.</figcaption></figure>
+      <figure class="desk clip" style="--h:60mm"><div class="frame"><img src="catalogue-src/assets/screens/owner-billing.jpg" alt=""></div><figcaption><b>Billing.</b> Package, upgrades, add-on capacity and invoices.</figcaption></figure>
+    </div>
+    <div class="feats two" style="margin-top:6mm">
+      <div class="feat" data-covers="O25"><h4>Set up your gym</h4><p>Create the gym and owner account with contact details, city and address. The gym is ready for trainers and members straight away.</p></div>
+      <div class="feat" data-covers="O20"><h4>Enterprise onboarding</h4><p>A five-step wizard captures gym type, size, team, branches and billing habits so the plan matches the business.</p></div>
+      <div class="feat" data-covers="O23"><h4>QR onboarding</h4><p>Generate a one-time code tied to a membership plan for a new client, or a code for a new trainer. Codes check available capacity, can be revoked, and are listed with their status.</p></div>
+      <div class="feat" data-covers="O22"><h4>Invoices</h4><p>Every payment for your Barbell subscription is receipted automatically with a numbered invoice, downloadable as a PDF.</p></div>
+      <div class="feat" data-covers="O27 S1 S3 S6"><h4>Host tournaments</h4><p>A five-step wizard: name, tagline, colours, venue and prize, then events from 16 built-in competitions (reps, holds, heaviest lift with attempts, distance, sprint and row times, team tug-of-war and relay) or your own. Keep it in-gym or open it to every gym. Add co-hosts, rotate codes and see a full audit log.</p></div>
+      <div class="feat" data-covers="S4 S7"><h4>Live scoring and the big screen</h4><p>Hosts record results as they happen and rankings update immediately. A big-screen mode puts live standings and a scan-to-follow code on the gym TV. Results finish with podiums, points and gym-versus-gym standings.</p></div>
+    </div>
+    <figure class="desk clip" style="--h:72mm;margin-top:6mm"><div class="frame"><img src="catalogue-src/assets/screens/public-bigscreen.jpg" alt=""></div><figcaption><b>Big-screen mode.</b> Live event standings and the overall table, with a scan-to-follow code.</figcaption></figure>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Platform</div>
+      <h3>Built for real gyms</h3></div>
+    <div class="feats two">
+      <div class="feat" data-covers="S9"><h4>One sign-in, three roles</h4><p>Owners, trainers and members use the same sign-in with clear paths: set up a new gym, join a gym ecosystem, or train independently.</p></div>
+      <div class="feat" data-covers="S12"><h4>Light, dark or system</h4><p>Every screen is designed in both themes and follows each user's choice.</p></div>
+      <div class="feat" data-covers="S13"><h4>Legal pages and consent</h4><p>About, Contact, Terms, Privacy, Refund and Shipping pages ship with the product, and users accept terms at first sign-in.</p></div>
+      <div class="feat" data-covers="S14"><h4>See it live</h4><p>Request a guided demo and the Barbell team prepares a ready-to-walk-through live gym with real data, available for 30 minutes.</p></div>
+    </div>
+  </div>
+
+  <div class="setupbox" data-covers="O18 O21 O22 S10">
+    <div class="hd"><i>◇</i><b class="serif">Owner features available with setup</b></div>
+    <p>Built and working. Each connects to a system outside Barbell.</p>
+    <table>
+      <tr><td><b>Access control</b>: connect a door, turnstile or attendance system and Barbell tracks who is inside. Map members to cards or PINs, browse every entry with its outcome (counted, duplicate, unrecognised, rejected), run syncs and imports, and get health alerts such as "a member with a lapsed membership may still open the door". Every action is in the audit log. Biometric data never leaves the device.</td><td>A supported connection: <b>Webhook</b> (HMAC-signed, any system that can post events), <b>REST polling</b>, <b>CSV import</b>, or an <b>eSSL / ZKTeco terminal</b> over ADMS (beta). A <b>demo sandbox</b> runs with no hardware, and its events never mix with real ones.</td></tr>
+      <tr><td><b>Pay for your Barbell plan online</b>: 75, 100 or 200-client annual packages, custom capacity quotes, add-on capacity and renewals. Capacity used and available is always shown.</td><td>Razorpay live keys. Quotes, orders and activation are complete; card checkout goes live with the keys.</td></tr>
+      <tr><td><b>Email invoices</b> to your accountant, and password-reset emails.</td><td>An email provider (Resend). PDF download works without one.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════════════════════ PART TWO · TRAINER ═════════════════════════ -->
+<section class="opener trainer">
+  <div class="glow"></div>
+  <div class="inner">
+    <div class="part"><img src="catalogue-src/assets/badge-blush.svg" alt=""><span class="ov">Part Two · Explore the Barbell experience</span></div>
+    <h2>The <em>Trainer</em><br>experience</h2>
+    <p class="lead">Trainers see what their clients actually did, not what they said they did. Every workout, meal, weigh-in and check-in lands in one profile, with alerts when someone starts to slip and the tools to respond.</p>
+    <div class="stats">
+      <div><b>8</b><span>views in every client profile</span></div>
+      <div><b>8</b><span>program splits, from PPL to custom</span></div>
+      <div><b>1 tap</b><span>to send a data-backed weekly report</span></div>
+      <div><b>0</b><span>setup: every trainer feature works out of the box</span></div>
+    </div>
+    <div class="hero desk"><img src="catalogue-src/assets/screens/trainer-dashboard.jpg" alt="Trainer dashboard"></div>
+  </div>
+</section>
+
+<section class="detail trainer">
+  <div class="group">
+    <div class="ghead"><div class="ov">Your day</div>
+      <h3>Start the shift knowing who needs you</h3></div>
+    <div class="feats two">
+      <div class="feat" data-covers="T1"><h4>Trainer dashboard</h4><p>Today's check-in card with <em>Scan to check in</em>; how many clients need attention and why; active, on-track, slipping and at-risk counts; a 14-day adherence trend; today's roster with sessions done and completion; and the average weight change this week.</p></div>
+      <div class="feat" data-covers="T20"><h4>The gym, right now</h4><p>The live crowd level, and whether any of the trainer's own clients are in today.</p></div>
+      <div class="feat" data-covers="T2"><h4>My clients</h4><p>The trainer's own roster, with goal, weight against target, 7-day change, adherence, last workout and check-in, membership and status. Filter and sort like the owner's view. New clients a trainer adds are assigned to them.</p></div>
+      <div class="feat" data-covers="T19"><h4>Join a gym by QR</h4><p>A trainer signs up, scans the gym's one-time trainer code, and is on the team.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Client 360° profile</div>
+      <h3>Everything about a client, in eight views</h3></div>
+    <div class="deskwrap"><figure class="desk clip" style="--h:86mm"><div class="frame"><img src="catalogue-src/assets/screens/trainer-training.jpg" alt=""></div><figcaption><b>Training view.</b> The client's program week and weekly muscle balance against target ranges.</figcaption></figure></div>
+  </div>
+
+  <div class="group">
+    <div class="feats two">
+      <div class="feat" data-covers="T3"><h4>Overview</h4><p>Adherence score and 7-day score, weight trend over time, recent measurements, and a plain-language "why this client needs attention" panel.</p></div>
+      <div class="feat" data-covers="T4"><h4>Training</h4><p>The active program week, then weekly muscle balance: sets per muscle against a target range, marked high, balanced or undertrained, plus movement patterns.</p></div>
+      <div class="feat" data-covers="T5"><h4>Workouts</h4><p>Every assigned and completed session with its status, and Assign workout for a chosen date.</p></div>
+      <div class="feat" data-covers="T6"><h4>Nutrition</h4><p>Today's planned meals and what was actually logged, plan targets, a 30-day history, and Assign plan.</p></div>
+      <div class="feat" data-covers="T7"><h4>Photos</h4><p>Upload front, side and back photos. A before/after slider compares them, and the client sees them on their Progress page.</p></div>
+      <div class="feat" data-covers="T8"><h4>Membership</h4><p>Plan and real status (for example lapsed and how long ago), plus attendance over the last 90 days and the last visit.</p></div>
+      <div class="feat" data-covers="T9"><h4>Client analysis</h4><p>One click analyses the client's recorded data and proposes an insight with a recommended action, such as the next progression target. The trainer accepts, modifies or dismisses it. Every insight comes only from measured, calculated or estimated data.</p></div>
+      <div class="feat" data-covers="T10"><h4>Messages</h4><p>The conversation with the client, right inside their profile.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Programming</div>
+      <h3>Build once, assign in seconds</h3></div>
+    <div class="split" style="grid-template-columns: 1fr 1fr">
+      <figure class="desk"><div class="frame"><img src="catalogue-src/assets/screens/trainer-builder.jpg" alt=""></div><figcaption><b>Workout builder.</b> Templates, exercises, sets × reps · weight · rest.</figcaption></figure>
+      <figure class="desk"><div class="frame"><img src="catalogue-src/assets/screens/trainer-nutrition.jpg" alt=""></div><figcaption><b>Nutrition builder.</b> Calorie-targeted plans, meal by meal.</figcaption></figure>
+    </div>
+    <div class="feats two" style="margin-top:6mm">
+      <div class="feat" data-covers="T11"><h4>Workout builder</h4><p>Templates filtered by type and sorted by recent, A–Z or longest. Add exercises with sets, reps, weight and rest; reorder them; preview with a 3D muscle body; duplicate a template; assign it to a client on any date.</p></div>
+      <div class="feat" data-covers="T12"><h4>Custom exercises</h4><p>Add exercises the library doesn't have; they become part of the gym's own library.</p></div>
+      <div class="feat" data-covers="T13"><h4>Weekly programs</h4><p>Push/Pull/Legs (3 to 6 days), Upper/Lower, Full Body (2 or 3 days) or custom. Map each day to a template and the client's Workout page serves the right session every day, automatically.</p></div>
+      <div class="feat" data-covers="T14"><h4>Nutrition builder</h4><p>Plans with calorie and macro targets and meals for each slot, from breakfast to before bed, each with time, calories and macros, using realistic Indian meals. Assign to any client.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Stay ahead</div>
+      <h3>Catch the drop-off before it happens</h3></div>
+    <div class="deskwrap"><figure class="desk clip" style="--h:62mm"><div class="frame"><img src="catalogue-src/assets/screens/trainer-report.jpg" alt=""></div><figcaption><b>Weekly report.</b> Weight, workouts, adherence breakdown, coach summary and next-week action, ready to send.</figcaption></figure></div>
+    <div class="feats two">
+      <div class="feat" data-covers="T15"><h4>Risk alerts</h4><p>Signals detected from real client data: weight plateau, protein below 70% of target, no workout for several days, low workout adherence, missed weekly check-in, low nutrition adherence and inactivity. Each has a severity and an explanation with the numbers behind it, and can be marked read, followed up or dismissed. Alerts are shared across the gym's coaching team, and each one names whose client it is.</p></div>
+      <div class="feat" data-covers="T16"><h4>Weekly reports</h4><p>A week in review generated from tracked data: weight change, workouts completed, water, an adherence breakdown, a coach summary, a next-week action and a 7-day log. <em>Send to client</em> delivers it to their notification bell and message thread.</p></div>
+      <div class="feat" data-covers="T17"><h4>Messages</h4><p>A direct line to each client, with quick templates for workout updates, nutrition updates and check-in reminders, and unread counts per client.</p></div>
+      <div class="feat" data-covers="O32"><h4>Tick planned meals</h4><p>Mark a client's planned meals as eaten from their Nutrition view, for example after a check-in conversation.</p></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="ghead"><div class="ov">Your hours &amp; events</div>
+      <h3>Your own record, kept straight</h3></div>
+    <div class="split" style="grid-template-columns: 1.2fr 1fr">
+      <figure class="desk clip" style="--h:46mm"><div class="frame"><img src="catalogue-src/assets/screens/trainer-attendance.jpg" alt=""></div><figcaption><b>My attendance.</b> Today's status, totals and every recorded day.</figcaption></figure>
+      <div class="feats">
+        <div class="feat" data-covers="T18"><h4>My attendance</h4><p>Scan the gym's Arriving and Leaving codes; see this week's, 30-day or 90-day days present, total hours, average day and late count. Missed a scan? Request a correction and the owner approves it.</p></div>
+        <div class="feat" data-covers="S1 S3 S6"><h4>Tournaments</h4><p>Trainers host and score tournaments just like owners, and can be added as co-hosts to run events live.</p></div>
+      </div>
+    </div>
+    <div class="endnote">
+      <b>About this catalogue.</b> Every trainer feature works out of the box, with no provider accounts, keys or hardware. Every feature described here was verified in the running product (Barbell <code>main</code> @ 643e19f, November 2026) and maps to an entry in <i>BARBELL_Feature_Audit.md</i>. Screens are unedited screenshots of the app running on demonstration data for a sample gym, "IRONFORGE FITNESS"; names and figures are illustrative. Features marked "Available with setup" are built and tested and need the named service to go live. Features still in development are not listed.
+    </div>
+  </div>
+</section>
+</body>
+</html>
