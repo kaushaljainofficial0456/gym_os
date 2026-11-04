@@ -127,7 +127,9 @@ export default function NutritionBuilder() {
                 <button className="w-full text-left px-3.5 py-3 flex items-center gap-3" onClick={() => openPlan(p)}>
                   <div className="flex-1 min-w-0">
                     <div className="font-grotesk text-sm font-semibold truncate">{p.name}</div>
-                    <div className="text-[11px] text-mute">{p.calories} kcal · {p.meals?.length || 0} meals</div>
+                    {/* Plan names often carry their calories already ("Muscle Gain ·
+                        3,000 kcal"); saying it twice, once unformatted, read as a bug. */}
+                    <div className="text-[11px] text-mute">{/kcal/i.test(p.name || '') ? '' : `${Number(p.calories || 0).toLocaleString('en-IN')} kcal · `}{p.meals?.length || 0} meals</div>
                   </div>
                   <span className="text-mute"><ChevronRightIcon /></span>
                 </button>
@@ -195,7 +197,7 @@ export default function NutritionBuilder() {
             </div>
           ) : (
             <div className="text-center py-12 text-mute text-sm">
-              Select a plan on the left, or press <span className="text-gold">+ New plan</span> to build one.
+              Pick a plan, or press <span className="text-gold">+ New plan</span> to build one.
             </div>
           )}
         </Card>

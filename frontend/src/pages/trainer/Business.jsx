@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, downloadFile } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch, fmtK, fmt1, localDateKey } from '../../utils.js';
+import { useFetch, fmtK, fmt1, fmtMoneyShort, localDateKey } from '../../utils.js';
 import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import MembersTable from '../../components/trainer/MembersTable.jsx';
 import { TrendChart } from '../../components/charts.jsx';
@@ -99,7 +99,10 @@ export default function Business() {
   if (ov.error) return <ErrorState error={ov.error} onRetry={ov.reload} />;
 
   const d = ov.data;
-  const trendRows = (d.revenueTrend || []).map((t) => ({ label: t.month.slice(5), value: t.total }));
+  const trendRows = (d.revenueTrend || []).map((t) => ({
+    label: new Date(`${t.month}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'short' }),
+    value: t.total,
+  }));
 
   const addPackage = async () => {
     try {
@@ -172,13 +175,13 @@ export default function Business() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="Active members" value={d.activeMembers} sub={`${d.totalMembers} total`} />
-        <Kpi label="Monthly revenue" value={d.monthlyRevenue} dec={0} sub="this month" />
+        <Kpi label="Monthly revenue" value={d.monthlyRevenue} prefix="₹" dec={0} sub="this month" />
         <Kpi label="Renewals due" value={d.renewalsThisMonth} sub="next 30 days" dot="bg-bad" />
         <Kpi label="Overdue" value={d.overdue} sub="payments" dot="bg-bad" />
         <Kpi label="Attendance today" value={d.attendanceToday} sub="marked present" />
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* revenue trend */}
         <Card className="lg:col-span-2">
           <Kicker>Revenue · 6 months</Kicker>
@@ -189,7 +192,7 @@ export default function Business() {
                follow the theme; and revenue-over-time is this page's primary
                metric, not a status — spending the semantic "good" colour on
                it means an actual warning elsewhere reads no differently. */
-            <TrendChart data={trendRows} color="var(--accent)" />
+            <TrendChart data={trendRows} color="var(--accent)" domain={[0, 'auto']} formatY={fmtMoneyShort} />
           ) : (
             <div className="empty-state">
               <div className="empty-state-title">No revenue recorded yet</div>
@@ -205,7 +208,7 @@ export default function Business() {
             <Kicker>Packages</Kicker>
             <button className="btn btn-sm" onClick={() => setPkgOpen(true)}>+ Add package</button>
           </div>
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(d.packages || []).map((p) => (
               <div key={p.id} className="rounded-2xl border border-line bg-tint/[.03] p-4">
                 <div className="t-micro mb-1">{p.period_days}-day plan</div>
@@ -223,7 +226,7 @@ export default function Business() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Kicker>Gym settings</Kicker>
           {crowd.data?.enabled && (
-            <span className="chip border-cyanx/30 text-cyanx bg-cyanx/5">
+            <span className="chip border-cyanx/30 text-cyanx bg-cyanx/5 max-w-full whitespace-normal text-left">
               Live crowd: {crowd.data.current}/{crowd.data.capacity} · {crowd.data.status?.replace('_', ' ')}
             </span>
           )}
@@ -250,7 +253,7 @@ export default function Business() {
         )}
 
         {setForm && (
-          <div className="grid md:grid-cols-2 gap-4 mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
             <div className="space-y-2.5">
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">BRANDING</div>
               <input className="input" placeholder="Gym name" value={setForm.brand_name} onChange={(e) => setSetForm((f) => ({ ...f, brand_name: e.target.value }))} />
@@ -266,10 +269,19 @@ export default function Business() {
             <div className="space-y-2.5">
               <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">DEFAULT CLIENT PERMISSIONS</div>
               <select className="input" aria-label="Default workout mode for new clients" value={setForm.workout_mode_default} onChange={(e) => setSetForm((f) => ({ ...f, workout_mode_default: e.target.value }))}>
-                <option value="hybrid">Hybrid — trainer prescribes, client can personalize</option>
-                <option value="prescribed">Prescribed — trainer controls workouts</option>
-                <option value="custom">Custom — clients build their own workouts</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="prescribed">Prescribed</option>
+                <option value="custom">Custom</option>
               </select>
+              {/* The full sentence lives here, not in the option: a phone shows
+                  a closed select's text on one line and cut it mid-word. */}
+              <div className="text-[11.5px] text-mute -mt-1">
+                {{
+                  hybrid: 'The trainer prescribes; the client can personalise.',
+                  prescribed: 'The trainer controls every workout.',
+                  custom: 'Clients build their own workouts.',
+                }[setForm.workout_mode_default] || ''}
+              </div>
               {[
                 ['allow_substitute', 'Clients may substitute exercises'],
                 ['allow_add_exercise', 'Clients may add exercises'],
@@ -361,13 +373,13 @@ export default function Business() {
                     : status === 'failed' ? 'var(--bad)' : 'var(--warn)';
                   return (
                     <tr key={p.id || `${p.paid_at}-${p.amount}`} className="border-b border-line/50 last:border-0">
-                      <td className="py-2 pr-3 text-xs tabular-nums" style={{ color: 'var(--mute)' }}>
-                        {p.paid_at?.slice(0, 10) || '—'}
+                      <td className="py-2 pr-3 text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--mute)' }}>
+                        {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
                       </td>
                       <td className="py-2 pr-3 text-xs" style={{ color: 'var(--ink)' }}>
                         {p.client_name || <span style={{ color: 'var(--faint)' }}>Unknown member</span>}
                       </td>
-                      <td className="py-2 pr-3 font-grotesk font-bold tabular-nums">₹{fmtK(p.amount)}</td>
+                      <td className="py-2 pr-3 font-grotesk font-bold tabular-nums whitespace-nowrap">₹{fmtK(p.amount)}</td>
                       <td className="py-2 pr-3 text-xs" style={{ color: 'var(--mute)' }}>
                         {p.method || '—'}
                       </td>

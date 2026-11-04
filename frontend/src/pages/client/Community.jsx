@@ -326,7 +326,7 @@ export default function Community() {
 
   if (membershipFetch.loading) return <PageSkeleton />;
   if (membershipFetch.error) {
-    return <ErrorState message={membershipFetch.error} onRetry={membershipFetch.reload} />;
+    return <ErrorState error={membershipFetch.error} onRetry={membershipFetch.reload} />;
   }
 
   const gymName = overview?.gym?.name || membershipFetch.data?.gym?.name || 'Your Gym';
@@ -445,7 +445,7 @@ export default function Community() {
 
       {overviewFetch.loading && !overview && <PageSkeleton />}
       {overviewFetch.error && (
-        <ErrorState message={overviewFetch.error} onRetry={overviewFetch.reload} />
+        <ErrorState error={overviewFetch.error} onRetry={overviewFetch.reload} />
       )}
 
       {/* On a wide screen the page becomes two columns rather than one

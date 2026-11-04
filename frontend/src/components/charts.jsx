@@ -42,7 +42,11 @@ function getTooltipStyle() {
 
 export function WeightChart({ data }) {
   if (!data || !data.length) return null;
-  const rows = data.map((d, i) => ({ i, label: d.date.slice(5), weight: d.weight, date: d.date }));
+  // "9 Aug", not "08-09": the two-digit form reads as either order.
+  const rows = data.map((d, i) => ({
+    i, weight: d.weight, date: d.date,
+    label: new Date(`${d.date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+  }));
   return (
     <ResponsiveContainer width="100%" height={210}>
       <AreaChart data={rows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -53,8 +57,13 @@ export function WeightChart({ data }) {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 6" stroke="rgba(128,128,128,.08)" vertical={false} />
-        <XAxis dataKey="label" tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} />
-        <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+        {/* Whole kilograms on the axis (the tooltip has the exact figure):
+            'dataMin - 1' gave ticks like 73.15 and 71.65, and the lowest one
+            sat on the first date label in the corner. The padding moves the
+            first date clear of it. */}
+        <XAxis dataKey="label" tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={28} padding={{ left: 14, right: 6 }} />
+        <YAxis domain={[(min) => Math.floor(min - 1), (max) => Math.ceil(max + 1)]} allowDecimals={false}
+          tick={{ fill: 'rgba(128,128,128,.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
         {/* Recharts calls labelFormatter(label, payload) with `label` set to
             the hovered point's OWN dataKey value -- here that's the "label"
             field ("09-11"), a string, not an array index. `data[l]` indexed
@@ -85,7 +94,7 @@ export function WeightChart({ data }) {
  */
 const gradientId = (color) => `tg-${String(color).replace(/[^a-zA-Z0-9]/g, '')}`;
 
-export function TrendChart({ data, color = 'var(--accent)', domain }) {
+export function TrendChart({ data, color = 'var(--accent)', domain, formatY }) {
   if (!data || !data.length) return null;
   const gid = gradientId(color);
   return (
@@ -99,8 +108,10 @@ export function TrendChart({ data, color = 'var(--accent)', domain }) {
         </defs>
         <CartesianGrid strokeDasharray="3 6" stroke="rgb(var(--tint-rgb) / .10)" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: 'var(--faint)', fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={24} />
-        <YAxis domain={domain || [0, 100]} tick={{ fill: 'var(--faint)', fontSize: 9 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={getTooltipStyle()} cursor={{ stroke: 'rgb(var(--tint-rgb) / .2)' }} />
+        <YAxis domain={domain || [0, 100]} tick={{ fill: 'var(--faint)', fontSize: 9 }} axisLine={false} tickLine={false}
+          tickFormatter={formatY} width={formatY ? 52 : 60} />
+        <Tooltip contentStyle={getTooltipStyle()} cursor={{ stroke: 'rgb(var(--tint-rgb) / .2)' }}
+          formatter={formatY ? (v) => [formatY(v), ''] : undefined} />
         <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#${gid})`} dot={false} />
       </AreaChart>
     </ResponsiveContainer>

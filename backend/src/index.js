@@ -106,6 +106,15 @@ export async function buildApp() {
   // process-wide singleton. See auth.js's requireAuth for why that
   // distinction matters to the demo-session gate.
   app.set('db', db);
+  // On Vercel every request reaches this function through the platform's
+  // own proxy, so the socket address is the proxy's and was the same for
+  // every visitor: each per-address limit (login, sign-up, reset, link
+  // previews, tournament QR joins) and the login lockout was one bucket
+  // shared by everyone using the app. Vercel's edge replaces
+  // X-Forwarded-For with the caller's own address, so trusting it there
+  // gives req.ip the real visitor. Anywhere else the header could be
+  // written by the caller, so it stays untrusted.
+  if (process.env.VERCEL) app.set('trust proxy', true);
 
   // ---- Minimal cookie parser (no dependency needed) ----
   app.use((_req, _res, next) => {

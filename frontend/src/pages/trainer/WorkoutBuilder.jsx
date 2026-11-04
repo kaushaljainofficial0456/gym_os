@@ -610,7 +610,7 @@ export default function WorkoutBuilder() {
             </div>
           ) : (
             <div className="text-center py-12 text-mute text-sm">
-              Select a template on the left to view it, or press <span className="text-gold">+ New template</span> to build one.
+              Pick a template to view it, or press <span className="text-gold">+ New template</span> to build one.
             </div>
           )}
         </Card>
@@ -625,7 +625,7 @@ export default function WorkoutBuilder() {
           </div>
           <button className="btn-primary" disabled={!progClient} onClick={() => openProgramModal(currentProg)}>{currentProg ? 'Replace program' : 'Create program'}</button>
         </div>
-        <div className="grid sm:grid-cols-[240px_1fr] gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-4 mt-4">
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
             {/* The <label> above is a SIBLING with no htmlFor, so it labels
@@ -696,7 +696,7 @@ export default function WorkoutBuilder() {
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {progForm.days.map((d, i) => (
                 <div key={d.dow} className={`rounded-xl border p-2.5 transition-colors ${d.enabled ? 'border-gold/30 bg-gold/[.04]' : 'border-line bg-tint/[.01] opacity-70'}`}>
                   <div className="flex items-center gap-2">
@@ -799,7 +799,7 @@ export default function WorkoutBuilder() {
       </Modal>
 
       <Modal open={pickOpen} onClose={() => { setPickOpen(false); setPickGroup(null); }} title="Pick an exercise by muscle" wide>
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <MuscleBody3D selectedGroup={pickGroup} onSelect={onPickMuscle} height={380} />
           <div className="min-w-0">
             <Kicker>{lib.loading ? 'Loading exercise library…' : pickGroup ? `${pickLabel} · ${pickMatches.length} exercises` : 'Select a muscle'}</Kicker>

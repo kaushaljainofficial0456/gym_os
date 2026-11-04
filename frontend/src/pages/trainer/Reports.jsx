@@ -67,7 +67,7 @@ export default function Reports() {
       {error && <ErrorState error={error} onRetry={() => load(clientId)} />}
 
       {report && (
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
               <h2 className="font-grotesk font-bold text-xl uppercase tracking-wide">{report.clientName}</h2>
@@ -105,7 +105,7 @@ export default function Reports() {
             {weightSeries.length >= 2 && (
               <div className="mb-5">
                 <Kicker>Weight · this week</Kicker>
-                <TrendChart data={weightSeries} color="var(--m-body)" />
+                <TrendChart data={weightSeries} color="var(--m-body)" domain={['auto', 'auto']} formatY={(v) => `${+Number(v).toFixed(1)} kg`} />
               </div>
             )}
 

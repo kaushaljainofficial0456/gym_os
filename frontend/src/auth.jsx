@@ -37,15 +37,36 @@ export function AuthProvider({ children }) {
   const [demo, setDemo] = useState(null);
 
   useEffect(() => {
-    api('/auth/me')
-      .then(({ user: u, demo: d }) => { setStoredUser(u); setUser(u); setDemo(d || null); })
-      // clearStoredUser, not clearSession: whatever made /auth/me fail has
-      // already been handled at the network layer -- a 401 went through
-      // api()'s own 401 branch, which already POSTed the logout, and a
-      // transport failure means a second POST would fail too. All that is
-      // left to do here is drop this browser's optimistic cached user.
-      .catch(() => { clearStoredUser(); setUser(null); setDemo(null); })
-      .finally(() => setReady(true));
+    let alive = true;
+    // Only the server saying "no session" (a 401, already handled inside
+    // api()) means signed out. Anything else -- a cold start, a 5xx, a
+    // dropped connection, a 429 -- used to land in the same catch, so a
+    // signed-in person opening the app at the wrong moment was shown the
+    // login screen with their session still valid. Those are retried, and
+    // if the server is still not answering, the cached user carries on:
+    // each screen then shows its own error and "Try again", which is true,
+    // instead of a login screen, which is not.
+    const signedOut = (e) => e?.status === 401 || e?.message === 'Session expired' || e?.message === 'Demo session ended';
+    const check = async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await api('/auth/me');
+        } catch (e) {
+          if (signedOut(e) || attempt >= 2) throw e;
+          await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+        }
+      }
+    };
+    check()
+      .then(({ user: u, demo: d }) => { if (!alive) return; setStoredUser(u); setUser(u); setDemo(d || null); })
+      // clearStoredUser, not clearSession: a 401 went through api()'s own
+      // 401 branch, which already POSTed the logout.
+      .catch((e) => {
+        if (!alive) return;
+        if (signedOut(e) || !getStoredUser()) { clearStoredUser(); setUser(null); setDemo(null); }
+      })
+      .finally(() => { if (alive) setReady(true); });
+    return () => { alive = false; };
   }, []);
 
   const login = async (email, password) => {

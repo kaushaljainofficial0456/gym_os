@@ -110,7 +110,7 @@ export function Kicker({ children, tone }) {
  * direction is carried by an arrow glyph as well as colour, so it survives
  * greyscale (Part 33).
  */
-export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, dot, trend }) {
+export function Kpi({ label, value, prefix = '', suffix = '', dec = 0, tone, sub, dot, trend }) {
   const v = useCountUp(value, 1000, dec);
   const up = typeof trend === 'number' && trend > 0;
   const down = typeof trend === 'number' && trend < 0;
@@ -123,7 +123,7 @@ export function Kpi({ label, value, suffix = '', dec = 0, tone, sub, dot, trend 
       <div className="flex items-baseline gap-2">
         <div className={cls('font-grotesk tabular-nums leading-none', tone)}
           style={{ fontSize: '1.625rem', fontWeight: 800, letterSpacing: '-.03em', color: tone ? undefined : 'var(--ink)' }}>
-          {v.toLocaleString('en-US', { maximumFractionDigits: dec })}{suffix}
+          {prefix}{v.toLocaleString('en-IN', { maximumFractionDigits: dec })}{suffix}
         </div>
         {(up || down) && (
           <span className="font-grotesk tabular-nums shrink-0" style={{ fontSize: '.75rem', fontWeight: 650, color: up ? 'rgb(var(--good-rgb))' : 'rgb(var(--bad-rgb))' }}>
@@ -885,7 +885,7 @@ export function PageSkeleton({ variant = 'list', label = 'Loading' }) {
       {variant === 'detail' && (
         <>
           <div className="skeleton" style={{ height: 150, borderRadius: 'var(--r-lg)' }} />
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="skeleton" style={{ height: 190, borderRadius: 'var(--r-lg)' }} />
             <div className="skeleton" style={{ height: 190, borderRadius: 'var(--r-lg)' }} />
           </div>
@@ -905,7 +905,7 @@ export function PageSkeleton({ variant = 'list', label = 'Loading' }) {
       )}
 
       {variant === 'split' && (
-        <div className="grid lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton-row" />)}
           </div>
