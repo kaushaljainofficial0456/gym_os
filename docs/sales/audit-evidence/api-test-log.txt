@@ -1,0 +1,300 @@
+# BARBELL audit — scripted API test log (throwaway SQLite DB, main@643e19f, 2026-11-04)
+# FAIL lines are explained in BARBELL_Feature_Audit.md §8/§9/§11 (request-shape retries, business rules, or recorded defects).
+PASS C.workout.start :: {"ok":true,"workout_id":"wko_uH0cG65oNs","started_at":"2026-11-04T11:32:57.961Z"}
+PASS C.workout.progress-save :: 200 {"ok":true}
+PASS C.workout.complete :: {"ok":true,"prs":[{"name":"deadlift","records":[{"type":"heaviest_weight","label":"Heaviest weight","value":105,"previous":85,"weight":105,"reps":5,"date":"2026-11-04"},{"type":"est_1rm","label":"Estimated 1RM","value":122.5,"previous":99.17,"weight":105,"reps":5,"date":"2026-11-04"},{"type":"best_volume","label":"Best set volume","value":525,"previous":425,"weight":null,"reps":null,"date":"2026-11-04"}]},{"name":"push_up","records":[{"type":"heaviest_weight","label":"Heaviest weight","value":25,"previous":null,"weight":25,"reps":15,"date":"2026-11-04"},{"type":"best
+FAIL C.workout.effort(RPE) :: 422 {"error":"Validation failed","issues":["effort: Expected 'light' | 'moderate' | 'hard', received number"]}
+FAIL C.overload.suggest :: {"error":"Insufficient permissions"}
+PASS C.progress.prs :: ["weights","adherence","measurements","photos","supplements"]
+PASS C.progress.exercise-detail :: {"history":[{"date":"2026-10-08","weight":85,"reps":5,"sets":3,"est1rm":99.2,"volume":1275,"isPr":false},{"date":"2026-10-09","weight":85,"reps":5,"sets":3,"est1rm":99.2,"volume":1275,"isPr":false},{"date":"2026-10-12","weight":85,"reps":5,"sets":3,"est1rm":99.2,"volume":1275,"isPr":false},{"date":"
+PASS C.workout.effort :: {"ok":true,"effort":"hard","calorie":{"schema_version":"0.2","estimated_active_kcal":221,"lower_kcal":156,"upper_kcal":286,"model_version":"skos-cal-baseline-v2","provider":"baseline","method":"Compen
+PASS C.exercise-library :: count=287 sample={"id":"exl_0rYGwj7VlA","org_id":null,"name":"Cable Hip Abduction","primary_muscle":"ABDUCTORS","secondary_muscles":"GLUTES","equipment":"CABLE","movement":"isolation","ex_type":"cable","difficulty":"BEGINNER","instructions":null,"cues":null,"mistakes
+PASS C.log-past.create :: 200 {"id":"wko_8bbSn7le03","scheduled_date":"2026-11-01","source":"manual_retroactive","exercises":[{"id":"wxe_4eZn4MqZkr","exercise_id":"exl_vrSR2huRyB","name":"Bench Press","sets":3,"reps":"8","weight":"60","rest_sec":90}]}
+FAIL C.log-past.complete :: 422 {"error":"exercise_id does not belong to this workout","exercise_id":"exl_vrSR2huRyB"}
+PASS C.build-today :: 200 {"id":"wko_lcuUyKZ690","scheduled_date":"2026-11-04","source":"client_custom","exercises":[{"id":"wxe_K34RB435az","exercise_id":"exl_vrSR2huRyB","name":"Bench Press","sets":4,"reps":"10","weight":"50"
+PASS C.cardio.log :: 201 {"ok":true,"id":"crd_mr4O4ZgQrt","date":"2026-11-04"}
+PASS C.cardio.log-past :: 201 {"ok":true,"id":"crd_d0viGmxKDQ","date":"2026-11-02"}
+PASS C.planner.create :: 200 {"id":"cw_DU27VXgFdy"}
+PASS C.planner.duplicate :: 200 {"id":"cw_nslPX4zJc7"}
+PASS C.planner.schedule :: 200 {"ok":true}
+PASS C.workout-share.create :: 201 {"id":"shr_QE6p4TU6F9","expires_at":"2026-12-04T11:33:34.894Z"}
+PASS C.workout-share.public-preview(no auth) :: 200 {"id":"shr_QE6p4TU6F9","shared_by_name":null,"created_at":"2026-11-04T11:33:34.894Z","workout":{"name":"My Chest Day","notes":null,"exercises":[{"name":"Bench Press","sets":4,"reps":"10","weight":"50"
+PASS C.workout-share.import-by-other :: 201 {"ok":true,"id":"cw_IfhuYwMhIm","destination":"planner"}
+PASS C.log-past.complete :: 200 {"ok":true,"prs":[],"workoutId":"wko_8bbSn7le03","duration_min":30,"calorie":{"schema_version":"0.2","estimated_active_kcal":76,"lower_kcal":50,"upper_kcal":101,"model_version":"skos-cal-baseline-v2",
+PASS C.day-history.shows-retro :: {"date":"2026-11-01","workouts":[{"id":"wko_8bbSn7le03","org_id":"org_squbXVFYjC","template_id":null,"client_id":"cli_itx9YV0HfZ","trainer_id":null,"name":"Forgot to log","day_label":"Forgot to log","
+PASS C.energy-balance :: {"days":[{"date":"2026-10-29","intakeKcal":2420,"burn":{"restingKcal":1258,"workoutKcal":0,"cardioKcal":0,"totalKcal":1258},"netKcal":1163,"partialDay":false},{"date":"2026-10-30","intakeKcal":2420,"burn":{"restingKcal":1258,"workoutKcal":0,"cardioKcal":0,"totalKcal":1258},"netKcal":1163,"partialDay
+PASS C.burn-breakdown :: {"breakdown":{"date":"2026-11-04","computed_at":"2026-11-04T11:33:43.336Z","totals":{"total":1124.979716840278,"resting":893.9797168402778,"active":231,"workouts":231,"movement":null},"steps":null,"activeSource":"skos_composed","providers":[],"dataQuality":"complete","entries":[{"type":"workout","la
+PASS C.daily-intelligence :: {"intelligence":{"id":"hds_M5Trpax9u2","user_id":"usr_4JofVwfrCC","org_id":"org_squbXVFYjC","date":"2026-11-04","active_energy":231,"resting_energy":893.9797750578703,"total_energy":1124.9797750578703,"steps":null,"distance_m":null,"workout_minutes":0.00016666666666666666,"training_load":23,"sleep_duration_seconds":null,"sleep_score":null,"recovery_score":null,"readiness_score":null,"readiness_lab
+PASS C.nutri.describe :: ["Egg (boiled) 100g 155","Poha 97.8g 177","Black coffee 150g 2"]
+PASS C.nutri.log-batch :: 201 {"ids":["mlg_hJaTRnXxdG","mlg_k7byHEHljZ","mlg_wkXZpbrQ09"],"date":"2026-11-04","slot":"breakfast"}
+PASS C.nutri.usuals :: {"slot":"breakfast","usuals":[{"name":"Egg (boiled)","quantity":100,"unit":"g","calories":155,"protein":12.6,"carbs":1.1,"fat":10.6,"last_date":"2026-11-04","source":"manual","times":1,"in_slot":1},{"
+PASS C.nutri.recent-meals :: {"today":"2026-11-04","meals":[]}
+FAIL C.nutri.repeat-meal :: 404 {"error":"Nothing was logged for that meal"}
+PASS C.nutri.resolve-portion :: 200 {"schema_version":"food-v1","source_id":"indb:ASC222","name":"Paneer in butter sauce","grams":156.8,"grams_basis":"staple_unit","quantity_label":"1 katori","confidence":"high","cooking_state":"cooked","totals":{"energy_kcal":228.31,"protein_g":10.96,"fat_g":13.81,"carb_g":15.21,"fiber_g":2.35,"sugar
+PASS C.nutri.custom-food :: 200 {"id":"food_7ZGkARFNQK"}
+PASS C.nutri.saved-meal :: 200 {"id":"cmt_52rCBBuhUl"}
+PASS C.nutri.log-saved-meal :: 200 {"id":"mlg_wyqkZFNdlI"}
+PASS C.nutri.share-link :: 201 {"id":"shr_ri1u9lWGBb","expires_at":"2026-12-04T11:34:06.668Z"}
+PASS C.nutri.share-public(no auth) :: 200 {"id":"shr_ri1u9lWGBb","shared_by_name":null,"created_at":"2026-11-04T11:34:06.668Z","items":[{"type":"meal","name":"Rajma Chawal","quantity":1,"unit"
+PASS C.water.log :: 200 {"ok":true}
+PASS C.supplement.add :: 201 {"ok":true}
+PASS C.targets.get(recommended) :: {"targets":{"calories":1949,"protein":81,"carbs":269,"fat":61},"incomplete":false,"meta":{"bmr":1258,"activityMultiplier":1.55,"experience":"INTERMEDIATE","goal":"RECOMP"},"client":{"name":"Neha Gupta","sex":"F","height_cm":158,"current_weight":55.1,"age":24,"goal":"RECOMP"}}
+PASS C.calorie-balance.get :: {"baseTarget":{"calories":2550,"protein":200,"carbs":235,"fat":90},"activePlan":null,"promptEligible":null,"justSettled":false,"justExpired":false,"baseTargetTooLow":false,"strategies":[{"key":"EASY","label":"Easy","minDays":5,"maxDays":7},{"key":"MODERATE","label":"Moderate","minDays":4,"maxDays":6},{"key":"AGGRESSIVE","label":"Aggressive","minDay
+FAIL C.calorie-balance.preview :: 422 {"error":"No eligible calorie surplus to adjust right now."}
+PASS C.barcode.lookup :: {"n":"maggi","src":"OPEN_FOOD_FACTS"}
+PASS C.food-ai.status :: {"ok":true,"available":true}
+PASS C.weight.log :: 201 {"ok":true}
+PASS C.measurement.log :: 201 {"ok":true}
+PASS C.custom-metric.create :: 200 {"id":"mtr_KHqNLSsVQg"}
+PASS C.custom-metric.entry :: 200 {"id":"men_GonkhYK5nV"}
+FAIL C.progress-photo.upload :: 403 {"error":"Insufficient permissions"}
+PASS C.home-layout.save :: 200 {"ok":true}
+PASS C.notif.prefs.get :: {"preferences":{"user_id":"usr_4JofVwfrCC","org_id":"org_squbXVFYjC","enabled":1,"workout_reminders":1,"water_reminders":1,"water_interval_h":2,"nutrition_reminders":1,"daily_summary":1,"daily_summary_time":"23:30","tomorrow_workout":1,"rest_day_reminders":0,"incomplete_workout":1,"quiet_hours_start
+PASS C.notif.list :: count=0 types=
+PASS C.coach-prefs.get :: {"memory":[]}
+PASS C.coach-brief :: {"ok":true,"generated_at":"2026-11-04T11:34:36.968Z","provider":"deterministic","ai_framed":false,"priority":{"type":"NUTRITION","title":"Calorie target exceeded","message":"You've logged 724 kcal over today's 2550 kcal target.","reason":"Total logged intake is above the plan target.","priority":"HIGH","confidence":"MEDIUM","data_sources":["meal_logs"],"action":"OPEN_NUTRITION","detail":null},"ins
+PASS C.coach-weekly :: {"ok":true,"generated_at":"2026-11-04T11:34:36.974Z","week_label":"last 7 days","went_well":["You logged 26 workouts this week.","Protein averaged 225g on logged days — at or near your 200g target.","Sleep averaged 8.1h — close to your 8h target.","Weight trend is 7.3kg down over 14 days."],"needs_a
+FAIL C.message.to-coach :: 422 {"error":"Validation failed","issues":["client_id: Required"]}
+PASS C.data-export :: keys=format,exportedAt,account,member,data
+PASS C.announcements :: {"announcements":[]}
+PASS C.live-crowd :: {"enabled":true,"current":17,"capacity":150,"pct":11,"status":"LOW","peak":25,"peakHour":"10","average":17.9,"busiestHour":"10","byHour":[{"hour":"05","count":7},{"hour":"06","count":10},{"hour":"07",
+PASS C.crowd-history :: {"enabled":true,"unit":"people","sufficient":false,"source":"manual","nowHour":17,"daysOfHistory":0,"daysRequired":7,"typicalByHour":null,"busiestHours":null,"quietestHours":null,"bestTime":null,"toda
+PASS C.membership.view :: {"membership":{"id":"sub_gjcPiRkbB4","org_id":"org_squbXVFYjC","client_id":"cli_itx9YV0HfZ","package_id":"pkg_DNBXHndVGy","plan_name":"Monthly","amount":1999,"currency":"INR","start_date":"2026-06-24","end_date":"2026-07-24","renewal_date":"2026-07-2
+PASS C.message.to-coach :: 201 {"id":"msg_hOdV6Ce0KA"}
+PASS T.messages.unread :: {"total":1,"byClient":{"cli_itx9YV0HfZ":1}}
+PASS C.community.join :: {"ok":true,"enabled":true}
+PASS C.community.share-workout :: 201 {"ok":true,"id":"cs_kTzzoIC3Ym","workoutName":"Full Body B"}
+PASS T.messages.unread :: {"total":1,"byClient":{"cli_itx9YV0HfZ":1}}
+PASS C.community.join :: {"ok":true,"enabled":true}
+PASS C.community.feed(other member sees) :: {"id":"cs_kTzzoIC3Ym","clientId":"cli_itx9YV0HfZ","authorName":"Neha Gupta","authorAvatar":null,"workoutId":"wko_uH0cG65oNs","workoutName":"Full Body B","payload":[{"name":"deadlift","sets":3,"reps":"5","weight":"80 kg","rest_sec":150},{"name":"push_
+FAIL C.community.react :: 422 {"error":"Reaction must be one of: like, fire, clap, strong"}
+PASS C.community.comment :: 201 {"ok":true,"id":"cmc_Cj3zD4HKVy"}
+PASS C.community.copy-workout :: 201 {"ok":true,"id":"cw_j417JIVOSh","name":"Full Body B","exerciseCount":5}
+PASS C.community.follow :: 200 {"ok":true,"following":true}
+PASS C.community.leaderboards :: keys=gym,settings,period,leaderboards
+FAIL C.community.challenge-create :: 403 {"error":"Only gym staff can create challenges"}
+PASS C.community.pr-privacy :: 200 {"prVisibility":"followers","feedScope":"all"}
+PASS C.friend-community.create :: 201 {"id":"com_2vSWvo96RD"}
+PASS C.friend-community.invite-code :: 201 {"id":"cinv_IANFGjFGUg","code":"KBRV-D9BE","expiresAt":"2026-11-11T11:35:30.607Z","maxUses":25}
+PASS C.friend-community.public-invite-preview :: 200 {"state":"valid","code":"KBRV-D9BE","community":{"name":"Sunday Run Club","theme":"sage","mark":null,"memberCount":1}}
+PASS C.friend-community.join-by-code :: 201 {"communityId":"com_2vSWvo96RD","already":false}
+FAIL C.friend-community.challenge :: 422 {"error":"A challenge cannot start in the past","reason":"bad_dates"}
+PASS C.friend-community.leaderboard :: {"period":{"type":"week","start":"2026-11-02","end":"2026-11-08"},"leaderboards":{"completedWorkouts":[{"rank":1,"clientId":"cli_itx9YV0HfZ","value":3,"name":"Neha Gupta"},{"rank":2,"clientId":"cli_Gk
+PASS C.friend-community.metric-defs :: {"definitions":{"completedWorkouts":"Completed workouts in the selected period.","activeDays":"Days with at least one completed workout. Two sessions in a day still count once.","volume":"Total kilogr
+PASS C.community.react :: 200 {"ok":true,"reacted":true}
+PASS T.gym-challenge.create(staff) :: 201 {"ok":true,"id":"chal_EHewgY7GJZ"}
+PASS C.gym-challenge.visible-progress :: {"challenges":[{"id":"chal_EHewgY7GJZ","name":"10 workouts in Nov","description":null,"metric":"workouts","scope":"member","goal":10,"startDate":"2026-11-04","endDate":"2026-11-30","value":0,"percent":0,"complete":false,"yourValue":0,"yourPercent":0,"membersCompleted":0,"membersParticipating":1}]}
+PASS C.friend-community.challenge :: 201 {"id":"cgch_o7NEwdcL24"}
+FAIL C.friend-community.transfer(endpoint exists) :: 404 {"error":"Member not found","reason":"member_not_found"}
+PASS O.tournament.create :: 201 {"id":"trn_D9Qcxheb70"}
+PASS O.tournament.detail :: code=Y6D5A3Q keys=id,name,tagline,venue,theme,status,phase,visibility,reach,audience,starts_at,registration_closes_at
+PASS Public.tournament.page(no auth) :: 200 {"id":"trn_D9Qcxheb70","name":"IronForge Games","tagline":"Every rep counts","venue":"Main floor","theme":"ember","status":"upcoming","phase":"open","visibility":"public","reach":"
+FAIL C.tournament.join :: 422 {"error":"Validation failed","issues":["event_ids: Required"]}
+FAIL C.tournament.join(2) :: 422 {"error":"Validation failed","issues":["event_ids: Required"]}
+PASS O.tournament.event-start :: 200 {"id":"trn_D9Qcxheb70","name":"IronForge Games","tagline":"Every rep counts","venue":"Main floor","theme":"ember","statu
+PASS O.tournament.board :: keys=event,rows,is_host rows=0
+PASS O.tournament.event-finish :: 200 {"id":"trn_D9Qcxheb70","name":"IronForge Games","tagline":"Every rep counts","venue":"Main floor","t
+FAIL O.tournament.finish :: 409 {"error":"Finish Deadlift first","reason":"events_open"}
+PASS C.tournament.results :: {"tournament":{"id":"trn_D9Qcxheb70","name":"IronForge Games","tagline":"Every rep counts","theme":"ember","status":"live","venue":"Main floor","overall_positions":3,"completed_at":null,"prize":"Free month"},"totals":{"athletes":0,"competitions":2,"finished":1,"gyms":0,"scores":0},"overall":[],"gym_war":[],"events":[{"id":"tev_7ZNCeH6DRv","name":"Push-ups","kind":"push_ups","metric":"reps","attemp
+PASS C.tournament.trophies :: {"played":0,"gold":0,"silver":0,"bronze":0,"titles":0,"history":[]}
+PASS C.tournament.join :: 200 {"status":"active"}
+PASS C.tournament.join :: 200 {"status":"active"}
+PASS O.tournament.board :: {"id":"tep_S98rqnM1t7","name":"Neha Gupta","gym_label":"IRONFORGE FITNESS","rank":null,"best":null,"display":"—","winner":false,"attempts":[],"self_recorded":false,"is_team":false,"is_me":false}
+PASS O.tournament.score-entry :: 200 [["Neha Gupta",1,40],["Rahul Sharma",null,null]]
+PASS O.tournament.score-entry :: 200 [["Rahul Sharma",1,52],["Neha Gupta",2,40]]
+PASS O.tournament.finish :: 200 {"id":"trn_BanUAAk53F","name":"Push-up Showdown","tagline":null,"venue":null,"th
+PASS C.tournament.results+podium :: [{"id":"tep_rKRVm1Wn0R","name":"Rahul Sharma","gym_label":"IRONFORGE FITNESS","user_id":"usr_hxJqp1W9og","points":10,"gold":1,"silver":0,"bronze":0,"finals":1,"rank":1,"is_me":true,"winner":true},{"id":"tep_S98rqnM1t7","name":"Neha Gupta","gym_label":"IRONFORGE FITNESS","user_id":"usr_4JofVwfrCC","p
+PASS C.tournament.trophy-cabinet :: {"played":1,"gold":1,"silver":0,"bronze":0,"titles":1,"history":[{"id":"trn_BanUAAk53F","name":"Push-up Showdown","rank":1,"of":2,"completed_at":"2026-11-04T11:36:18.576Z"}]}
+PASS O.tournament.rotate-codes :: 200
+PASS O.tournament.audit-log :: {"entries":[{"action":"codes_rotated","detail":null,"created_at":"2026-11-04T11:36:18.592Z","actor":"Maya Kapoor"},{"action":"finished","detail":null,"created_at":"2026-11-04T11:36:18.577Z","actor":"M
+PASS C.notif.generate :: ["water_reminder:💧 Hydration reminder","workout_reminder:💪 Workout reminder","daily_summary:📊 Yesterday on Barbell"]
+PASS C.notif.list-after :: count=6
+PASS C.notif.prefs.update :: 200 {"preferences":{"user_id":"usr_4JofVwfrCC","org_id":"org_squbXVFYjC","enabled":1,"workout_reminders":1,"water_reminders":1,"water_interval_h":3,"nutri
+PASS C.avatar.upload :: 200
+PASS C.change-password :: 200 {"ok":true}
+PASS C.change-password(revert) :: 200 {"ok":true}
+PASS C.profile.units+day-start :: 200
+PASS C.delete-account :: 200 {"ok":true}
+PASS C.delete-account.login-blocked :: 401
+PASS T.delete-account.refused :: 403 {"error":"Your account belongs to your gym. Ask your gym owner to remove it, or contact support."}
+PASS Auth.client-signup.gym-code :: 201 {"role":"CLIENT"}
+PASS Auth.client-signup.no-code(pending gym) :: 201 {"token":"<jwt-redacted>.<jwt-redacted>
+PASS Auth.trainer-signup :: 201 {"token":"<jwt-redacted>.<jwt-redacted>
+PASS Auth.gym-owner-setup-org :: 201 {"role":"GYM_OWNER"}
+PASS Auth.forgot-password :: 200 {"ok":true,"message":"If an account exists for that email, a password reset link has been sent."}
+PASS Auth.google(needs GOOGLE_CLIENT_ID) :: 422 {"error":"Validation failed","issues":["credential: String must contain at least 20 character(s)"]}
+PASS O.trainers.list :: {"n":3,"first":"Arjun Mehta"}
+PASS O.client.create+assign-trainer :: 201 {"client":{"id":"cli_Ctq8BDvN3a","name":"Kabir Shah","email":"kabir@test.in","avatar":null,"age":29,"sex":"M","goal":"MUSCLE_GAIN","trainerId":"usr_bvNVum3Q0q","startWeight":null,"currentWeight":null,
+PASS O.package.create :: 201 {"id":"pkg_QfTHCeH84T"}
+PASS O.subscription.create :: 201 {"id":"sub_W5oMolBEf0"}
+FAIL O.payment.record :: 409 {"error":"An identical payment for this member was recorded moments ago. If this is a second, separate payment, try again in a minute.","existingPaymentId":"pay_Z6jX0Xiugs"}
+PASS O.membership.suspend :: 200 {"ok":true,"subscription":{"id":"sub_W5oMolBEf0","org_id":"org_squbXVFYjC","client_id":"cli_Ctq8BDvN3a","package_id":"pkg_QfTHCeH84T","plan_name":"Ann
+PASS O.membership.resume :: 200 {"ok":true,"subscription":{"id":"sub_W5oMolBEf0","org_id":"org_squbXVFYjC","client_id":"cli_Ctq8BDvN3a","package_id":"pkg_QfTHCeH84T","plan_name":"Ann
+PASS O.member-attendance.mark :: 201
+PASS O.export.payments-csv :: Date,Member,Email,Amount,Currency,Method,Status,Reference | 2026-11-04,Kabir Shah,kabir@test.in,17999,INR,cash,paid,
+PASS O.export.members-csv :: Name,Email,Phone,Goal,Coaching status,Trainer,Joined,Plan,Plan start,Plan end,Payment,Membership
+PASS O.settings.get :: keys=org_id,brand_name,tagline,crowd_capacity,crowd_enabled,workout_mode_default,allow_substitute,allow_add_exercise,allow_edit_targets,community_enabled,community_leaderboard_enabled,attendance_mode,attendance_grace_min,attendance_require_qr,crowd_threshold_quiet,crowd_threshold_moderate,crowd_threshold_busy,crowd_show_exact_count,crowd_client_visible,crowd_trainer_visible,crowd_open_time,crowd_close_time,access_auto_close_hours,access_grace_days,access_sync_enabled,updated_at,contact_email,contact_phone,address,city,country,logo_url,website,instagram_url,description
+PASS O.analytics :: keys=months,series,totals,churnPct,activeMembers,totalMembers,hasRevenue,hasAttendance
+PASS O.dashboard.overview :: keys=kpis,clients
+PASS O.dashboard.pulse :: {"today":{"date":"2026-11-04","checkIns":19,"trainersTotal":3,"trainersIn":0},"money":{"collectedThisMonth":155974,"paymentsThisMonth":26,"outstandingAmount":9998,"outstandingCount":2,"overdueCount":2,"currency":"INR"},"members":{"expiringSoon":4,"by
+PASS O.crowd :: {"enabled":true,"current":17,"capacity":150,"pct":11,"status":"LOW","peak":25,"peakHour":"10","average":17.9,"busiestHour":"10","byHour":[{"hour":"05","count":7},{"hour":"06","count":10},{"hour":"07",
+FAIL O.workout.assign-template :: 422 {"error":"Validation failed","issues":["name: Required"]}
+FAIL O.program.assign :: 422 {"error":"Validation failed","issues":["name: Required"]}
+PASS O.nutrition.assign-plan :: 201 {"planId":"nut_Pf2bCMXnjN"}
+PASS O.template.duplicate :: 201
+PASS O.workout.assign-template(future date) :: 201 {"id":"wko_LDGSTkbav1"}
+FAIL O.program.assign-weekly-split :: 422 {"error":"Invalid training program","issues":["split must be one of: PPL_3, PPL_4, PPL_5, PPL_6, UPPER_LOWER, FULL_BODY_2, FULL_BODY_3, CUSTOM"]}
+PASS O.program.assign-weekly-split :: 201 {"id":"tpr_4OM1gGhnlC"}
+FAIL C.program.visible-to-client :: []
+FAIL C.assigned-plan.visible :: {"error":"Authentication required"}
+PASS O.settings.client-permissions :: 200
+FAIL C.permissions.enforced-after-change :: {"error":"Authentication required"}
+PASS C.permissions.server-blocks-custom-workout :: 401 {"error":"Authentication required"}
+PASS C.program.visible-to-client :: ["SUN:Rest","MON:Push","TUE:Rest","WED:Pull","THU:Rest","FRI:Legs","SAT:Rest"]
+PASS C.assigned-plan.visible :: {"targets":null,"incomplete":true,"missing":["current_weight"],"client":{"name":"Kabir Shah","sex":"M","height_cm":178,"current_weight":0,"age":29,"goal":"MUSCL
+PASS C.permissions.reflect-gym-setting :: {"workout_mode":"prescribed","allow_substitute":false,"allow_add_exercise":false,"allow_edit_targets":false,"can_create_workout":false}
+FAIL C.permissions.server-blocks-custom-workout :: 200 {"id":"wko_s6go6sHDMU","scheduled_date":"2026-11-04","source":"client_custom","exercises":[{"id":"wxe_4clKHOIo3J","exercise_id":"exl_vrSR2huRyB","name
+PASS C.permissions.restored :: {"workout_mode":"hybrid","allow_substitute":true,"allow_add_exercise":true,"allow_edit_targets":true,"can_create_workout
+PASS O.attendance.rotating-qr :: expiresIn=90
+PASS T.attendance.check-in(scan) :: 200 {"ok":true,"attendance":{"id":"tat_15cX7Ups4j","org_id":"org_squbXVFYjC","trainer_id":"usr_s2muMLBxNP","date":"2026-11-04","scheduled_start":null,"scheduled_end":null,"check_in":"2026-11-04T11:38:50.6
+PASS T.attendance.forged-qr-rejected :: 422 {"error":"That code isn't valid any more. Ask for a fresh one."}
+PASS T.attendance.check-out(scan) :: 200 {"ok":true,"attendance":{"id":"tat_15cX7Ups4j","org_id":"org_squbXVFYjC","trainer_id":"usr_s2muMLBxNP","date":"2026-11-04","scheduled_start":null,"scheduled_end":null,"check_in":"2026-11-04T11:38:50.6
+PASS C.attendance.client-refused :: 403
+PASS T.attendance.correction-request :: 201 {"ok":true,"attendance":{"id":"tat_vuyaZ8Uj70","correctionStatus":"PENDING"}}
+PASS O.attendance.corrections-queue :: {"id":"tat_vuyaZ8Uj70","trainerId":"usr_s2muMLBxNP","trainerName":"Kavya Iyer","date":"2026-11-03","currentCheckIn":null,"currentCheckOut":null,"requestedCheckIn":"2026-11-03T01:30:00.000Z","requested
+PASS O.attendance.correction-approve :: 200 {"ok":true,"status":"PRESENT","correctionStatus":"APPROVED"}
+PASS O.attendance.record-audit :: {"audit":[{"id":"taa_CooLjsJ8l1","action":"CORRECTION_REQUESTED","actorName":"Kavya Iyer","before":{"id":"tat_vuyaZ8Uj70","org_id":"org_squbXVFYjC","trainer_id":"usr_s2muMLBxNP","date":"2026-11-03","s
+PASS O.attendance.set-shift :: 200
+PASS O.attendance.policy :: 200 {"mode":"scheduled","graceMinutes":10,"requireQr":true}
+PASS O.attendance.roster :: [["Arjun Mehta","NO_RECORD"],["Kavya Iyer","PRESENT"],["Rohan Kapoor","NO_RECORD"]]
+PASS T.attendance.my-history :: {"start":"2026-10-06","end":"2026-11-04","days":[{"id":"tat_15cX7Ups4j","date":"2026-11-04","status":"PRESENT","scheduled":null,"checkIn":"2026-11-04T11:38:50.695Z","checkOut":"2026-11-04T11:38:50.704
+PASS T.attendance.roster-refused :: 403
+PASS O.access.catalogue :: ["demo","generic_webhook","generic_rest","csv_import","essl","zkteco(n/a)","matrix(n/a)","hikvision(n/a)","suprema(n/a)"]
+FAIL O.access.connect-demo :: 500 {"error":"Internal server error","message":"[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"displayName\"\n    ],\n  
+PASS O.access.member-mapping :: 201 {"ok":true}
+FAIL O.access.demo-entry :: 404 {"error":"Connection not found."}
+PASS O.access.live-inside :: {"crowd":{"status":"quiet","label":"Quiet","occupancyCount":0,"occupancyPercentage":0,"capacity":150,"severity":"low","color":"var(--good)","description":"The gym is quiet right now. 0 of 150 people.","recommendation":"A good time to train — you should have space to work.","thresholds":{"quiet":30,"
+PASS O.access.event-log :: []
+FAIL O.access.unmatched-event :: 404 {"error":"Connection not found."}
+PASS O.access.health :: {"providers":[],"devices":[],"alerts":[{"id":"175ddfee-1e10-4c25-81cb-b0b2e8ee171f","kind":"access_sync","severity":"warning","title":"1 member has a lapsed membership but may still open the door","de
+PASS O.access.alerts :: {"alerts":[{"id":"175ddfee-1e10-4c25-81cb-b0b2e8ee171f","kind":"access_sync","severity":"warning","title":"1 member has a lapsed membership but may still open the door","detail":"Your access system ca
+PASS O.access.analytics :: keys=source,timezone,today,yesterday,comparison,peakToday,avgVisitMin,visitsMeasured,weekly,week
+PASS O.access.audit :: ["access.permission.evaluated","access.member.mapped"]
+FAIL O.access.connect-webhook :: 500 {"error":"Internal server error","message":"[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"displayName\"\n    ],\n    \"message\": \"Required\"\n  }\n]"}
+PASS O.access.unimplemented-vendor-refused :: 500 {"error":"Internal server error","message":"[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path
+PASS T.access.refused :: 403
+PASS T.crowd.view :: {"enabled":true,"current":17,"capacity":150,"pct":11,"status":"LOW","peak":25,"peakHour":"10","average":17.9,"busiestHour":"10","byHour":[{"hour":"05","count":7},{"hour":"06","count":10},{"hour":"07",
+PASS C.crowd.reflects-access :: {"enabled":true,"current":17,"capacity":150,"pct":11,"status":"LOW","peak":25,"peakHour":"10","average":17.9,"busiestHour":"10","byHour":[{"hour":"05","count":7
+PASS O.access.catalogue :: ["demo","generic_webhook","generic_rest","csv_import","essl","zkteco(n/a)","matrix(n/a)","hikvision(n/a)","suprema(n/a)"]
+PASS O.access.connect-demo :: 201 {"provider":{"id":"20bd12bb-bb61-476f-9231-cd272d859455","providerKey":"demo","name":"Front door demo","branchId":null,"status":"CONFIGURED","authType":"none","config":{},"capabilities":{"supportsOAut
+PASS O.access.member-mapping :: 201 {"ok":true}
+PASS O.access.demo-entry :: 200 {"status":"accepted","eventId":"a5e9f87c-7f80-468c-9886-4e92c6266929","outcome":"entered","duplicate":false,"occupancyDelta":1,"processingStatus":"PROCESSED","demo":true}
+PASS O.access.live-inside :: {"crowd":{"status":"quiet","label":"Quiet","occupancyCount":0,"occupancyPercentage":0,"capacity":150,"severity":"low","color":"var(--good)","description":"The gym is quiet right now. 0 of 150 people.","recommendation":"A good time to train — you should have space to work.","thresholds":{"quiet":30,"
+PASS O.access.event-log :: [[null,"demo",null]]
+PASS O.access.unmatched-event :: 200 {"status":"accepted","eventId":"9937b770-414a-4d5d-928b-ed70c94c7ceb","outcome":"unmatched","duplicate":false,"occupancyDelta":0,"processingStatus":"U
+PASS O.access.health :: {"providers":[{"id":"20bd12bb-bb61-476f-9231-cd272d859455","name":"Front door demo","providerKey":"demo","status":"CONFIGURED","lastEventAt":"2026-11-04T11:39:16.036Z","lastPolledAt":null,"lastTestedA
+PASS O.access.alerts :: {"alerts":[{"id":"175ddfee-1e10-4c25-81cb-b0b2e8ee171f","kind":"access_sync","severity":"warning","title":"1 member has a lapsed membership but may still open the door","detail":"Your access system ca
+PASS O.access.analytics :: keys=source,timezone,today,yesterday,comparison,peakToday,avgVisitMin,visitsMeasured,weekly,week
+PASS O.access.audit :: ["access.member.mapped","access.provider.connected","access.permission.evaluated","access.member.mapped"]
+PASS O.access.connect-webhook :: 201 {"provider":{"id":"42631ff3-0a24-478e-a576-e79d8ab06b86","providerKey":"generic_webhook","name":"Turnstile hook","branchId":null,"status":"CONFIGURED","authType":"hmac","config":{},"capabilities":{"supportsOAuth":false,"supportsApiKey":false,"support
+PASS O.access.unimplemented-vendor-refused :: 400 {"error":"Barbell does not ship a Hikvision adapter yet. Connect it as a Webhook or REST provider instead.","code":"adapter_not_implemented"}
+PASS T.access.refused :: 403
+PASS T.crowd.view :: {"enabled":true,"current":17,"capacity":150,"pct":11,"status":"LOW","peak":25,"peakHour":"10","average":17.9,"busiestHour":"10","byHour":[{"hour":"05","count":7},{"hour":"06","count":10},{"hour":"07",
+PASS C.crowd.reflects-access :: {"enabled":true,"current":17,"capacity":150,"pct":11,"status":"LOW","peak":25,"peakHour":"10","average":17.9,"busiestHour":"10","byHour":[{"hour":"05","count":7
+FAIL O.enterprise.onboarding :: 422 {"error":"Validation failed","issues":["gymType: Invalid enum value. Expected 'commercial' | 'studio' | 'crossfit' | 'personal_training' | 'sports_academy' | 'other', received 'COMMERCIAL'","clientCou
+PASS O.enterprise.packages :: {"packages":[{"id":"skpkg_A1UoTaVPjm","name":"75 Clients","client_capacity":75,"price":12000,"currency":"INR","duration_days":365,"version":1,"status":"active","effective_from":"2026-11-04T11:21:17.898Z","effective_until":null,"created_at":"2026-11-04T11:21:17.898Z"},{"id":"skpkg_grdAv6DHWp","name":
+PASS O.enterprise.price-calc :: {"ok":true,"capacity":120,"price":18100,"currency":"INR","basePackage":{"id":"skpkg_grdAv6DHWp","name":"100 Clients","client_capacity":100,"price":15000,"currency":"INR","duration_days":365,"version":
+PASS O.enterprise.quote :: 200 {"quote":{"id":"bq_7EhzJK2pFI","org_id":"org_squbXVFYjC","kind":"ORG_PACKAGE","package_id":"skpkg_A1UoTaVPjm","addon_id":null,"capacity":75,"base_price":12000,"credit":0,"total":12000,"currency":"INR","breakdown_json":"{\"base\":12000,\"additional\":
+PASS O.enterprise.order :: 200 {"order":{"id":"pord_WwUcGEhL7d","subject_type":"ORG_PACKAGE","subject_id":"osub_hS9vVx5edq","org_id":"org_squbXVFYjC","client_id":null,"amount":12000,"currency":"INR","provider":"mock","provider_order_id":"mock_order_8fde9e4a2dc12059","status":"CREA
+PASS Pay.provider :: {"provider":"mock","keyId":null}
+FAIL Pay.mock-checkout :: 422 {"error":"Validation failed","issues":["providerOrderId: Required"]}
+PASS O.enterprise.status :: {"billingStatus":"SETUP","onboardingCompleted":false,"subscription":null,"purchasedCapacity":0,"activeClients":27,"availableCapacity":0,"activeTrainers":3}
+PASS O.enterprise.invoices :: {"invoices":[]}
+PASS O.enterprise.onboarding :: 200 {"ok":true}
+PASS Pay.mock-checkout :: 200 {"paymentId":"mock_pay_c469e1eac3b05178","signature":"46874518279cc5bff39905d7b31c5696db639d551af0053439a38fb40884696a"}
+FAIL O.enterprise.payment-verify :: 422 {"error":"Validation failed","issues":["providerPaymentId: Required"]}
+FAIL O.enterprise.status-after :: {"billingStatus":"SETUP","onboardingCompleted":true,"subscription":null,"purchasedCapacity":0,"activeClients":27,"availableCapacity":0,"activeTrainers":3}
+FAIL O.enterprise.invoice-issued :: undefined
+FAIL O.qr.client-generate :: 409 {"error":"Your Barbell package is not active yet"}
+PASS O.qr.trainer-generate :: 200 {"payload":"enr_m5HRggYFKP._FQ3ryElh37UzeDFQFJ-vSCMXGpQUnzQqxcj8FJ0j7g","id":"enr_m5HRggYFKP","expiresAt":"2026-11-04T11:50:03.645Z"}
+FAIL C.qr.preview :: 422 {"error":"Validation failed","issues":["payload: Required"]}
+FAIL C.qr.join(payment step) :: 422 {"error":"Validation failed","issues":["payload: Required"]}
+FAIL T.qr.join-gym :: 409 {"error":"gym_not_active"}
+PASS T.qr.one-time-reuse-refused :: 422 {"error":"already_consumed"}
+PASS O.enterprise.payment-verify :: 200 {"ok":true,"order":{"id":"pord_gPW7M62GtH","subject_type":"ORG_PACKAGE","subject_id":"osub_1mpdW0CoRB","org_id":"org_squbXVFYjC","client_id":null,"amount":12000,"currency":"INR","provider":"mock","pro
+PASS O.enterprise.status-after :: {"billingStatus":"ACTIVE","onboardingCompleted":true,"subscription":{"id":"osub_1mpdW0CoRB","org_id":"org_squbXVFYjC","package_id":"skpkg_A1UoTaVPjm","client_capacity":75,"price":12000,"currency":"INR","status":"ACTIVE","start_date":"2026-11-04T11:40
+PASS O.enterprise.invoice-issued :: {"id":"inv_RHMH7VZP6w","invoice_number":"SKOS-2026-7RSQOC","order_id":"pord_gPW7M62GtH","org_id":"org_squbXVFYjC","subject_type":"ORG_PACKAGE","amount":12000,"currency":"INR","tax_amount":0,"status":"
+PASS O.enterprise.invoice-pdf :: 200 starts=%PDF-1.3
+PASS O.enterprise.invoice-email(mock) :: 200 {"ok":true,"to":"accounts@ironforge.in","provider":"mock"}
+PASS O.enterprise.addon-quote(endpoint) :: 422 {"error":"addon_not_found","message":"That add-on is no longer available."}
+PASS O.qr.client-generate :: 200 {"payload":"enr_aa5F2yk5AB.skIXYAdDYF75cjDajQGLatmazAA1DdrENWuHy_B14u0","id":"enr_aa5F2yk5AB","expiresAt":"2026-11-04T11:50:20.562Z","remainingCapacity":48}
+FAIL C.qr.preview :: 409 {"error":"gym_not_active"}
+FAIL C.qr.join :: 409 {"error":"gym_not_active"}
+PASS C.qr.membership-active :: null
+FAIL T.qr.join-gym :: 409 {"error":"gym_not_active"}
+PASS O.qr.history :: {"tokens":[{"id":"enr_JFPiGPvqSn","org_id":"org_squbXVFYjC","created_by":"usr_2PrPBe6zA1","purpose":"TRAINER","membership_plan_id":null,"status":"CONSUMED","expires_at":"2026-11-04T11:50:20.947Z","con
+PASS O2.package-activate :: 200
+PASS O2.qr.client-generate :: 200 cap=75
+PASS C.qr.preview :: 200 {"purpose":"CLIENT","gym":{"id":"org_sY4DTHKQ4t","name":"Pulse Studio"},"membershipPlan":{"id":"pkg_AeQgvY3InQ","name":"Monthly","amount":1500,"currency":"INR","period_days":30},"expiresAt":"2026-11-04T11:50:47.996Z"}
+PASS C.qr.join :: 200 {"order":{"id":"pord_GWzJ5rO9Su","subject_type":"CLIENT_MEMBERSHIP","subject_id":"enr_b21V3xSCbz","org_id":"org_sY4DTHKQ4t","client_id":null,"amount":1500,"currency":"INR","provider":"mock","provider_order_id":"mock_order_066f1ef201e06628","status":"CREATED","idempotency_key":"client-mem-enr_b21V3xS
+PASS C.qr.membership-payment :: 200 {"ok":true,"membershipActive":true,"token":"<jwt-redacted>.<jwt-redacted>
+PASS C.qr.membership-active :: {"plan":"Monthly","status":"active","end":"2026-12-04T11:40:48.418Z"}
+PASS C.membership.payment-history :: {"payments":[]}
+PASS C.membership.renew-order :: 200 {"order":{"id":"pord_gMXzEHpOk3","subject_type":"CLIENT_MEMBERSHIP","subject_id":"sub_GMOoNSSSPH","org_id":"org_sY4DTHKQ4t","client_id":"cli_arfOuwBWgO","amount":1500,"currency":"INR","provider":"mock
+PASS T.qr.join-gym :: 200 {"ok":true,"gym":{"id":"org_sY4DTHKQ4t","name":"Pulse Studio"},"token":"<jwt-redacted>.<jwt-redacted>
+PASS O2.qr.revoke :: 200
+PASS T.clients.scoped-to-own :: n=10 of 27
+PASS T.other-trainer-client.overview-blocked :: 403
+PASS T.other-trainer-client.dashboard-blocked :: 404
+PASS T.other-trainer-client.report-blocked :: 403
+PASS T.other-trainer-client.message-blocked :: 403
+PASS T.alerts.scope :: total=21 foreign=9 sample={"client":"Priya Nair"}
+PASS T.alerts.can-act-on-foreign :: 200 {"ok":true,"status":"dismiss"}
+PASS T.own-client.dashboard :: keys=client,summary,weight,workouts,nutrition,hydration,alerts,recentActivity,photos,measurements
+PASS T.insights.analyze :: 201 {"insight":{"id":"ins_dbKezj6Cml","clientId":"cli_itx9YV0HfZ","type":"overload","summary":"Neha's last weighted session shows 55kg × 15 — First session logged — repeat the same load to establish a baseline before progressing.","recommendation":"Next target: 55kg × 15 (0kg progression).","data":{"mea
+PASS T.report.send-to-client :: 201 {"ok":true,"reportId":"rpt_PKS9P4PgIk"}
+FAIL T.progress-photo.upload :: 422 {"error":"Validation failed","issues":["data_url: Required"]}
+PASS T.nutrition.log-for-client(endpoint) :: 422 {"error":"Validation failed","issues":["name: Required","calories: Required","protein: Required","carbs: Required","fat:
+PASS T.owner-only /admin/overview :: 403
+PASS T.owner-only /admin/payments :: 403
+PASS T.owner-only /admin/analytics :: 403
+PASS T.owner-only /admin/export/members.csv :: 403
+PASS T.owner-only /enterprise/status :: 403
+PASS T.owner-only /attendance/roster :: 403
+PASS T.owner-only /admin/settings :: 403
+PASS C.blocked /clients :: 403
+PASS C.blocked /admin/overview :: 403
+PASS C.blocked /alerts :: 403
+PASS C.blocked /dashboard/overview :: 403
+PASS C.blocked /clients/cli_itx9YV0HfZ/overview :: 403
+PASS C.blocked /workouts/templates :: 403
+PASS C.cannot-write-other-client-water :: 403
+PASS X.cross-gym-owner-blocked :: 403
+FAIL T.progress-photo.upload :: 400 {"error":"Image is too small to be a valid photo"}
+PASS T.template.create :: 201 {"id":"wkt_1JBexJxgbw"}
+PASS T.nutrition-plan.create :: 201 {"id":"nut_21OUoaRAYh"}
+PASS T.exercise.custom-create :: 201 {"id":"ex_wt0qujb31w"}
+PASS T.overload.suggestion :: {"suggestion":null}
+PASS T.client.weekly-volume :: {"volume":{"days":7,"muscles":[{"id":"triceps","name":"TRICEPS","region":"arms","view":"back","sets":36,"min":8,"max":14,"status":"HIGH_VOLUME"},{"id":"shoulders","name":"SHOULDERS","region":"shoulder
+PASS T.dashboard :: keys=kpis,clients,attention
+PASS T.client.nutrition-history :: {"from":"2026-10-06","to":"2026-11-04","target":{"calories":2550,"protein":200,"carbs":235,"fat":90},"days":[{"date":"2026-10-29","logged":true,"logs"
+PASS T.client.meal-ai-estimate :: 200 {"text":"2 roti dal","items":[{"name":"Roti / Chapati","source_name":"Chapati/Roti","staple_key":"roti","unit_key":"roti","unit":"2 x roti","qty":2,"c
+PASS T.progress-photo.upload :: 201 {"ok":true,"imageUrl":"/uploads/photos/cli_itx9YV0HfZ/pho_8Ef42xQdSA.jpg"}
+FAIL C.progress-photos.view-own :: 403 n=0
+FAIL C.progress-photo.self-upload :: 403 {"error":"Insufficient permissions"}
+PASS I.health.devices :: ["whoop:disconnected","oura:disconnected","apple_health:disconnected","health_connect:disconnected","samsung_health:disconnected","garmin:disconnected","fitbit:disconnected","polar:disconnected","coros:disconnected","ultrahuman:disconnected"]
+PASS I.health.connect.whoop :: 503 {"error":"whoop is not configured (missing: WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET)","code":"NOT_CONFIGURED"}
+PASS I.health.connect.oura :: 503 {"error":"oura is not configured (missing: OURA_CLIENT_ID, OURA_CLIENT_SECRET)","code":"NOT_CONFIGURED"}
+PASS I.health.connect.apple_health :: 409 {"error":"apple_health requires the Barbell iOS app -- it cannot be connected from a web browser","code":"REQUIRES_NATIVE_APP","platform":"iOS"}
+PASS I.health.sync :: 200 {"results":[]}
+PASS I.food-ai.estimate(no key) :: 502 {"ok":false,"schema_version":"food-v1","tier":4,"estimate_status":"unresolved","reason":"Could not produce an AI estimate (error).","error":"Could not produce an AI estimate (error).","food_name":"Chi
+PASS I.label-scan(no key) :: 200 {"ok":true,"imagePath":"/uploads/tmp/cli_itx9YV0HfZ/XMWP8ea8z1.jpeg","note":"OCR unavailable (fetch failed). Enter the values manually.","provenance":"LABEL_SCANNED","ocr":{"attempted":true,"extracted
+PASS I.coach-chat(no UI, no Ollama) :: 400 {"error":"text is required"}
+PASS I.generate-workout(AskSK only) :: 200 {"ok":true,"template":true,"label":"TEMPLATE — starting structure, not a medical/performance prescription","goal":"HYPERTROPHY","days":3,"equipment":["full_gym"],"exclusions":[],"splitStyle":"HYPERTRO
+PASS C.nutri.log-batch(past date) :: 201
+PASS C.calorie-balance.eligible :: {"sourceDate":"2026-11-03","surplusCalories":1270,"declined":false}
+PASS C.calorie-balance.preview :: 200 {"preview":{"feasible":true,"strategy":"MODERATE","plannedDays":4,"dailyAdjustmentCalories":320,"adjustedCalorieTarget":2230,"macros":{"protein":200,"carbs":155,"fat":90},"extended":false},"baseTarget":{"calories":2550,"protein":200,"carbs":235,"fat":90},"totalSurplusCalories":1270}
+PASS C.calorie-balance.apply :: 201 {"ok":true,"plan":{"id":"nba_0bZRA4HQ1u","sourceDate":"2026-11-03","status":"ACTIVE","strategy":"MODERATE","originalSurplusCalories":1270,"remainingSurplusCalories":1270,"plannedDays":4,"remainingDays":4,"dailyAdjustmentCalories":320,"customDays":nul
+PASS C.calorie-balance.active-plan :: {"id":"nba_0bZRA4HQ1u","sourceDate":"2026-11-03","status":"ACTIVE","strategy":"MODERATE","originalSurplusCalories":1270,"remainingSurplusCalories":1270,"plannedDays":4,"remainingDays":4,"dailyAdjustmentCalories":320,"customDays":null,"customProteinTa
+PASS C.nutri.repeat-meal :: 201 {"ids":["mlg_bkFoTLLULT"],"date":"2026-11-04","slot":"dinner"}
+PASS T.client.plan-meal-toggle :: 200 {"ok":true}
