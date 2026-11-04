@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
+    "dev:razorpay": "node --watch scripts/dev-razorpay.mjs",
     "start": "node src/index.js",
     "init": "node scripts/init-db.js",
     "seed": "node scripts/seed.js",

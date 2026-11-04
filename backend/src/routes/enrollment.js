@@ -66,7 +66,10 @@ async function activateRenewal(db, order, tx) {
   const nowIso = now();
   const client = await tx.q1('SELECT user_id FROM clients WHERE id = ?', [order.client_id]);
 
-  await tx.run(`UPDATE subscriptions SET end_date = ?, status = 'active', payment_status = 'paid', lifecycle_status = 'ACTIVE' WHERE id = ?`, [newEndDate, subscription.id]);
+  // renewal_date moves with end_date, as it is set at creation: left on
+  // the old date, a member who renewed in the app stayed "renewal due" on
+  // the owner's dashboard and fell out of next month's renewals count.
+  await tx.run(`UPDATE subscriptions SET end_date = ?, renewal_date = ?, status = 'active', payment_status = 'paid', lifecycle_status = 'ACTIVE' WHERE id = ?`, [newEndDate, newEndDate.slice(0, 10), subscription.id]);
   await tx.run(
     `INSERT INTO membership_status_history (id, subscription_id, org_id, previous_status, new_status, reason, changed_by, created_at)
      VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,

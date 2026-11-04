@@ -352,6 +352,17 @@ app.use('/uploads', requireAuth, async (req, res) => {
     if (err?.code === 'payments_not_configured') {
       return res.status(503).json({ error: 'payments_not_configured', message: 'Payments are not configured on this deployment.' });
     }
+    // Razorpay order creation failed (paymentProvider.js PaymentGatewayError)
+    // or the amount is below Razorpay's Rs 1 minimum (PaymentAmountError).
+    // Stable codes and a readable sentence; the gateway's own response text
+    // stays in the server log only.
+    if (err?.code === 'payment_gateway_auth_failed' || err?.code === 'payment_gateway_error') {
+      console.error(`[error] req=${req.id || '-'}`, err.message);
+      return res.status(err.status).json({ error: err.code, message: 'The payment gateway could not create this payment. Please try again shortly.' });
+    }
+    if (err?.code === 'amount_below_minimum') {
+      return res.status(400).json({ error: 'amount_below_minimum', message: 'Payments must be at least ₹1.' });
+    }
     // A demo tenant reached for the real payment gateway (see
     // services/demo/session.js's assertNotDemoOrg). A deliberate refusal,
     // not a fault: answered as a 403 with a sentence the prospect can

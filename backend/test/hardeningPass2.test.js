@@ -252,6 +252,7 @@ test('client renewal: extends from the EXISTING end_date when renewing before ex
   const after = await db.q1('SELECT * FROM subscriptions WHERE id = ?', [before.id]);
   const expectedNewEnd = new Date(Date.parse(oldEnd) + 30 * 86_400_000).toISOString().slice(0, 10);
   assert.equal(after.end_date.slice(0, 10), expectedNewEnd, 'new expiry = OLD expiry + period, not now + period');
+  assert.equal(after.renewal_date, expectedNewEnd, 'the next renewal moves with the expiry, so renewals-due counts see it');
 });
 
 test('client renewal: an ALREADY EXPIRED membership renews from now, not from the stale old expiry, and reactivates (EXPIRED -> ACTIVE)', async (t) => {
