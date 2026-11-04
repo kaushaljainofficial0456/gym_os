@@ -88,7 +88,7 @@ const FULL_RAZORPAY_ENV = {
   RAZORPAY_WEBHOOK_SECRET: 'fake-webhook-secret-for-test-only',
 };
 
-test('production: POST /api/payments/mock/complete is unmounted -> 404 (route does not exist)', () => {
+test('production: the mock bridge is unmounted (404), but the checkout still learns its provider', () => {
   const r = runServerProbe('production', FULL_RAZORPAY_ENV, [
     { path: '/api/payments/mock/complete', method: 'POST', headers: { 'content-type': 'application/json' } },
     { path: '/api/payments/provider', method: 'GET' },
@@ -98,7 +98,10 @@ test('production: POST /api/payments/mock/complete is unmounted -> 404 (route do
   const complete = results.find((x) => x.path === '/api/payments/mock/complete');
   const provider = results.find((x) => x.path === '/api/payments/provider');
   assert.equal(complete.status, 404, 'the mock-checkout bridge must not exist as a route at all in production, not merely reject with 409');
-  assert.equal(provider.status, 404, 'the whole /api/payments router is unmounted in production, not just the /mock/complete route');
+  // This used to assert 404 for /provider too, which is exactly what broke
+  // live checkout: PaymentCheckout could not learn the provider and fell
+  // back to the practice panel. 401 = the route exists and needs a session.
+  assert.equal(provider.status, 401, 'GET /provider must exist in production so the real checkout opens');
 });
 
 test('development: POST /api/payments/mock/complete IS mounted (mock testing stays available outside production)', () => {

@@ -32,7 +32,7 @@ import shareRoutes from './routes/share.js';
 import clientErrorRoutes from './routes/clientError.js';
 import enterpriseRoutes from './routes/enterprise.js';
 import enrollmentRoutes from './routes/enrollment.js';
-import paymentsDevRoutes from './routes/paymentsDev.js';
+import paymentsDevRoutes, { paymentsInfoRoutes } from './routes/paymentsDev.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import trainerRoutes from './routes/trainer.js';
 import notificationRoutes from './routes/notifications.js';
@@ -293,6 +293,9 @@ app.use('/api/health', healthRoutes(db)); // SK OS Health Intelligence Engine: w
 // means a future change to either of those two other guards can never by
 // itself re-expose a payment-forging endpoint in production -- see
 // paymentsDev.js's own header for why this route is otherwise safe.
+// Which checkout to show (real or practice) is needed everywhere; the
+// practice "simulate a payment" bridge only outside production.
+app.use('/api/payments', paymentsInfoRoutes());
 if (config.nodeEnv !== 'production') {
   app.use('/api/payments', paymentsDevRoutes());
 }

@@ -20,7 +20,8 @@ async function startApi() {
   const planRoutes = (await import('../src/routes/plan.js')).default;
   const { planGate } = await import('../src/routes/plan.js');
   const { resetRateLimits } = await import('../src/rateLimit.js');
-  const { mockSimulateCheckout } = await import('../src/services/payments/paymentProvider.js');
+  const { mockSimulateCheckout, mockBuildWebhookEvent } = await import('../src/services/payments/paymentProvider.js');
+  const { recordWebhookEvent } = await import('../src/services/payments/paymentActivation.js');
   resetRateLimits();
   const { DatabaseSync } = await import('node:sqlite');
   const raw = new DatabaseSync(':memory:');
@@ -60,7 +61,11 @@ async function startApi() {
     return { status: res.status, json, buf, headers: res.headers };
   };
   const close = () => new Promise((r) => { server.closeAllConnections(); server.close(r); });
-  return { raw, addUser, call, close, mockSimulateCheckout };
+  const webhook = (providerOrderId, eventType) => {
+    const ev = mockBuildWebhookEvent(providerOrderId, { eventType });
+    return recordWebhookEvent(db, { rawBody: ev.body, signature: ev.signature });
+  };
+  return { raw, addUser, call, close, mockSimulateCheckout, webhook };
 }
 
 test('a new independent client is on a 14-day trial with full access', async (t) => {
@@ -168,4 +173,56 @@ test('someone who leaves a gym gets their own 14 days from leaving', async (t) =
   const s = await api.call('GET', '/api/plan/status', 'u_left', 'org_ind');
   assert.equal(s.json.access, 'trial');
   assert.ok(s.json.trialDaysLeft >= 12 && s.json.trialDaysLeft <= 14, String(s.json.trialDaysLeft));
+});
+
+test("pay, then close the app before it confirms: Razorpay's webhook alone grants the plan", async (t) => {
+  const api = await startApi(); t.after(() => api.close());
+  api.addUser('u_closed', 'org_ind', ago(40));
+  api.raw.exec(`UPDATE users SET plan_trial_from = '${ago(40)}' WHERE id = 'u_closed'`);
+  const o = (await api.call('POST', '/api/plan/order', 'u_closed', 'org_ind', { plan: 'monthly' })).json.order;
+  const r = await api.webhook(o.provider_order_id, 'payment.captured');
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.activated, true);
+  const s = await api.call('GET', '/api/plan/status', 'u_closed', 'org_ind');
+  assert.equal(s.json.access, 'active');
+  assert.equal(s.json.receipts.length, 1, 'and the receipt is there');
+  assert.equal((await api.call('GET', '/api/me/home', 'u_closed', 'org_ind')).status, 200, 'the lock lifts');
+
+  // The app's own confirmation arriving late changes nothing.
+  const { paymentId, signature } = api.mockSimulateCheckout(o.provider_order_id);
+  const late = await api.call('POST', '/api/plan/verify', 'u_closed', 'org_ind', { orderId: o.id, providerPaymentId: paymentId, signature });
+  assert.equal(late.status, 200);
+  assert.equal(late.json.order.period_end, s.json.paidUntil, 'not a second month');
+});
+
+test('the webhook and the app both confirming one payment add its time once', async (t) => {
+  const api = await startApi(); t.after(() => api.close());
+  api.addUser('u_both', 'org_ind', new Date().toISOString());
+  const o = (await api.call('POST', '/api/plan/order', 'u_both', 'org_ind', { plan: 'yearly' })).json.order;
+  const { paymentId, signature } = api.mockSimulateCheckout(o.provider_order_id);
+  const first = await api.call('POST', '/api/plan/verify', 'u_both', 'org_ind', { orderId: o.id, providerPaymentId: paymentId, signature });
+  const r = await api.webhook(o.provider_order_id, 'payment.captured');
+  assert.equal(r.duplicate, true);
+  const again = await api.webhook(o.provider_order_id, 'order.paid');
+  assert.equal(again.ok, true);
+  const s = await api.call('GET', '/api/plan/status', 'u_both', 'org_ind');
+  assert.equal(s.json.paidUntil, first.json.order.period_end);
+  assert.equal(s.json.receipts.length, 1);
+});
+
+test('a failed attempt, or a payment for the wrong amount, grants nothing', async (t) => {
+  const api = await startApi(); t.after(() => api.close());
+  api.addUser('u_fail', 'org_ind', ago(40));
+  api.raw.exec(`UPDATE users SET plan_trial_from = '${ago(40)}' WHERE id = 'u_fail'`);
+  const o = (await api.call('POST', '/api/plan/order', 'u_fail', 'org_ind', { plan: 'monthly' })).json.order;
+  const failed = await api.webhook(o.provider_order_id, 'payment.failed');
+  assert.equal(failed.ok, true);
+  assert.equal((await api.call('GET', '/api/plan/status', 'u_fail', 'org_ind')).json.access, 'locked');
+
+  // The order asked for 590 but Razorpay reports the 59 that was paid.
+  api.raw.exec(`UPDATE barbell_plan_orders SET amount = 590 WHERE id = '${o.id}'`);
+  const wrong = await api.webhook(o.provider_order_id, 'payment.captured');
+  assert.equal(wrong.ok, false);
+  assert.equal(wrong.reason, 'amount_or_currency_mismatch');
+  assert.equal((await api.call('GET', '/api/plan/status', 'u_fail', 'org_ind')).json.access, 'locked');
 });

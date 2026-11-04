@@ -71,7 +71,11 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
     // VITE_RAZORPAY_KEY_ID still opens the widget with the right key.
     api('/payments/provider')
       .then((r) => { setProvider(r.provider); setServerKeyId(r.keyId || null); })
-      .catch(() => setProvider('mock'));
+      // Could not ask. In development that means the practice panel; on a
+      // live build it must NOT, or a paying customer sees "Simulate
+      // success" buttons that can only fail. Use the build's public key
+      // if there is one; otherwise say payments could not load.
+      .catch(() => setProvider(import.meta.env.DEV ? 'mock' : (razorpayKeyId ? 'razorpay' : 'unavailable')));
   }, []);
 
   const runMock = async (outcome) => {
@@ -138,7 +142,11 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
         </span>
       </div>
 
-      {provider === 'mock' ? (
+      {provider === 'unavailable' || provider === 'none' ? (
+        <div className="field-error" role="alert" style={{ marginTop: 0 }}>
+          Payments could not load just now. Close this and try again in a minute.
+        </div>
+      ) : provider === 'mock' ? (
         <div style={{ borderRadius: 'var(--r-md)', border: '1px solid rgb(var(--warn-rgb) / .35)', background: 'rgb(var(--warn-rgb) / .08)', padding: 14 }}>
           <div className="badge badge-warn mb-2">Test mode</div>
           <p className="t-sub" style={{ fontSize: '.75rem' }}>

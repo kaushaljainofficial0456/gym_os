@@ -32,6 +32,7 @@
 
 import { id, now } from '../../ids.js';
 import { track } from '../events.js';
+import { confirmPlanFromWebhook } from '../plans/barbellPlan.js';
 import {
   verifyCheckoutSignature, verifyWebhookSignature, parseWebhookPayload, mapProviderEventToStatus,
 } from './paymentProvider.js';
@@ -110,7 +111,12 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
   const order = parsed.providerOrderId
     ? await db.q1('SELECT * FROM payment_orders WHERE provider_order_id = ?', [parsed.providerOrderId])
     : null;
-  const provider = order?.provider || 'unknown';
+  // Not a gym or Enterprise order: it may be an independent client buying
+  // the Barbell plan, which keeps its own table (barbell_plan_orders).
+  const planOrder = !order && parsed.providerOrderId
+    ? await db.q1('SELECT * FROM barbell_plan_orders WHERE provider_order_id = ?', [parsed.providerOrderId])
+    : null;
+  const provider = order?.provider || planOrder?.provider || 'unknown';
   const eventKey = parsed.providerOrderId ? `${parsed.eventType}:${parsed.providerOrderId}:${parsed.providerPaymentId || ''}` : null;
 
   // Log the raw event FIRST, unconditionally -- this is the
@@ -155,6 +161,13 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
     }
   }
 
+  if (!order && planOrder) {
+    const planResult = await confirmPlanFromWebhook(db, planOrder, {
+      status, providerPaymentId: parsed.providerPaymentId, amount: parsed.amount, currency: parsed.currency,
+    });
+    await db.run('UPDATE payment_events SET processed_at = ? WHERE id = ?', [now(), eventId]);
+    return planResult;
+  }
   if (!order) return { ok: false, reason: 'order_not_found', eventType: parsed.eventType };
 
   const result = await _finalizeOrder(db, order, {

@@ -129,21 +129,52 @@ export async function confirmPlanPayment(db, userId, { orderId, providerPaymentI
     e.status = 422;
     throw e;
   }
+  return activatePlanOrder(db, order, { providerPaymentId });
+}
+
+/**
+ * The one step that turns a paid plan order into time: from the end of the
+ * time already paid for, or from now if that has run out. Shared by the
+ * app's own confirmation above and the Razorpay webhook below; whichever
+ * arrives first wins, and the other changes nothing.
+ */
+async function activatePlanOrder(db, order, { providerPaymentId }) {
   const plan = plans()[order.plan];
-  const current = await db.q1(`SELECT MAX(period_end) AS until FROM barbell_plan_orders WHERE user_id = ? AND status = 'SUCCESS'`, [userId]);
+  const current = await db.q1(`SELECT MAX(period_end) AS until FROM barbell_plan_orders WHERE user_id = ? AND status = 'SUCCESS'`, [order.user_id]);
   const from = Math.max(Date.now(), Date.parse(current?.until || '') || 0);
   const start = new Date(from).toISOString();
   const end = new Date(from + plan.days * DAY).toISOString();
   const number = `BBL-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const res = await db.run(
+  // WHERE status = 'CREATED': if the other path got here first, this
+  // changes no rows and its result is the one that stands.
+  await db.run(
     `UPDATE barbell_plan_orders SET status = 'SUCCESS', provider_payment_id = ?, period_start = ?, period_end = ?, invoice_number = ?, updated_at = ?
       WHERE id = ? AND status = 'CREATED'`,
     [providerPaymentId, start, end, number, now(), order.id]);
-  forgetAccess(userId);
-  // No rows changed: a second confirmation raced this one and won. Its
-  // result is the one that stands.
-  void res;
+  forgetAccess(order.user_id);
   return db.q1('SELECT * FROM barbell_plan_orders WHERE id = ?', [order.id]);
+}
+
+/**
+ * THE BACKUP: Razorpay's signed webhook for a plan order. Someone who pays
+ * and closes the app before it confirms still gets their time, because
+ * Razorpay tells the server directly. The signature is already checked by
+ * the caller (recordWebhookEvent). Only a successful payment does
+ * anything; a failed attempt on an order can still be followed by a
+ * successful one, so it changes nothing here.
+ */
+export async function confirmPlanFromWebhook(db, order, { status, providerPaymentId, amount, currency }) {
+  if (status !== 'SUCCESS') return { ok: true, plan: true, ignored: status };
+  if (order.status === 'SUCCESS') return { ok: true, plan: true, duplicate: true };
+  if (order.status !== 'CREATED') return { ok: false, plan: true, reason: 'plan_order_not_payable', orderStatus: order.status };
+  if ((amount != null && Math.abs(amount - Number(order.amount)) > 0.01) || (currency && currency !== order.currency)) {
+    // Never grant time for a payment that does not match what was asked.
+    // The raw event is kept in payment_events for whoever looks into it.
+    console.error(`[plan] webhook amount/currency mismatch on ${order.id}: got ${amount} ${currency}, expected ${order.amount} ${order.currency}`);
+    return { ok: false, plan: true, reason: 'amount_or_currency_mismatch' };
+  }
+  const done = await activatePlanOrder(db, order, { providerPaymentId });
+  return { ok: true, plan: true, activated: done?.status === 'SUCCESS' };
 }
 
 export async function paidPlanOrders(db, userId) {
