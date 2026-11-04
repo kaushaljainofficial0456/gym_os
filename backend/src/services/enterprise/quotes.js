@@ -18,43 +18,96 @@
 import { id, now } from '../../ids.js';
 import { calculatePackagePrice } from './pricing.js';
 import { getOrgBillingSnapshot } from './subscriptionLifecycle.js';
+import { priceWithCoupons, successMessage, quoteCouponLines, round2 } from '../coupons/couponEngine.js';
 
 const QUOTE_TTL_MS = 10 * 60 * 1000; // 10 minutes, per spec
 
-async function insertQuote(db, { orgId, kind, packageId, addonId, capacity, basePrice, credit, total, currency, breakdown, createdBy }) {
+async function insertQuote(db, { orgId, kind, packageId, addonId, capacity, basePrice, credit, total, currency, breakdown, createdBy, discount = 0, coupons = null }) {
   const quoteId = id('bq');
   const nowIso = now();
   const expiresAt = new Date(Date.now() + QUOTE_TTL_MS).toISOString();
   await db.run(
-    `INSERT INTO billing_quotes (id, org_id, kind, package_id, addon_id, capacity, base_price, credit, total, currency, breakdown_json, status, created_by, expires_at, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?, 'ACTIVE', ?, ?, ?)`,
+    `INSERT INTO billing_quotes (id, org_id, kind, package_id, addon_id, capacity, base_price, credit, total, currency, breakdown_json, discount_amount, coupons_json, status, created_by, expires_at, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'ACTIVE', ?, ?, ?)`,
     [quoteId, orgId, kind, packageId ?? null, addonId ?? null, capacity ?? null, basePrice, credit, total, currency,
-     JSON.stringify(breakdown ?? null), createdBy ?? null, expiresAt, nowIso]);
+     JSON.stringify(breakdown ?? null), discount, coupons?.length ? JSON.stringify(coupons) : null, createdBy ?? null, expiresAt, nowIso]);
   return db.q1('SELECT * FROM billing_quotes WHERE id = ?', [quoteId]);
 }
 
+/**
+ * Takes coupon discounts off an already-priced quote DRAFT, before it is
+ * inserted -- so the discount is locked into the quote exactly like the
+ * price itself is, and /payment/order can only ever charge the quote's
+ * stored total. The pre-coupon total (after any upgrade credit) is the
+ * amount coupons discount and the amount a minimum-purchase rule is
+ * measured against. With no codes this is a no-op, so every existing
+ * caller and quote is byte-for-byte unchanged.
+ */
+async function withCoupons(db, draft, couponCodes) {
+  if (!Array.isArray(couponCodes) || !couponCodes.length) return { ok: true, draft };
+  const priced = await priceWithCoupons(db, {
+    orgId: draft.orgId, kind: draft.kind, packageId: draft.packageId, amount: draft.total, currency: draft.currency, codes: couponCodes,
+  });
+  if (!priced.ok) return { ok: false, reason: 'coupon_invalid', coupon: priced };
+  return {
+    ok: true,
+    draft: {
+      ...draft,
+      total: priced.total,
+      discount: priced.discount,
+      coupons: priced.lines,
+      breakdown: { ...(draft.breakdown || {}), subtotalBeforeCoupons: priced.subtotal, couponDiscount: priced.discount, coupons: priced.lines },
+    },
+  };
+}
+
+/** The customer-facing pricing summary for a stored quote -- what the
+ *  checkout renders. Derived from the quote row only, never re-priced. */
+export function quotePricing(quote) {
+  if (!quote) return null;
+  const coupons = quoteCouponLines(quote).map(({ couponId, ...pub }) => pub); // eslint-disable-line no-unused-vars
+  const discount = round2(Number(quote.discount_amount || 0));
+  const credit = round2(Number(quote.credit || 0));
+  return {
+    originalAmount: round2(Number(quote.base_price || 0)),
+    credit,
+    subtotal: round2(Number(quote.total) + discount),
+    discount,
+    total: round2(Number(quote.total)),
+    currency: quote.currency,
+    coupons,
+    savings: discount,
+    message: coupons.length ? successMessage(coupons, discount) : null,
+    expiresAt: quote.expires_at,
+  };
+}
+
 /** Initial package purchase OR a same-capacity renewal quote. */
-export async function createOrgPackageQuote(db, { orgId, capacity, createdBy }) {
+export async function createOrgPackageQuote(db, { orgId, capacity, createdBy, couponCodes }) {
   const priced = await calculatePackagePrice(db, capacity);
   if (!priced.ok) return { ok: false, reason: priced.reason };
-  const quote = await insertQuote(db, {
+  const c = await withCoupons(db, {
     orgId, kind: 'ORG_PACKAGE', packageId: priced.basePackage.id, capacity,
     basePrice: priced.price, credit: 0, total: priced.price, currency: priced.currency, breakdown: priced.breakdown, createdBy,
-  });
+  }, couponCodes);
+  if (!c.ok) return c;
+  const quote = await insertQuote(db, c.draft);
   return { ok: true, quote };
 }
 
 /** Additional capacity add-on, billed for the remainder of the current period (not prorated -- see enterprise.js's prior note). */
-export async function createCapacityAddonQuote(db, { orgId, addonId, createdBy }) {
+export async function createCapacityAddonQuote(db, { orgId, addonId, createdBy, couponCodes }) {
   const addon = await db.q1(`SELECT * FROM sk_capacity_addons WHERE id = ? AND status = 'active' AND effective_until IS NULL`, [addonId]);
   if (!addon) return { ok: false, reason: 'addon_not_found' };
   const snapshot = await getOrgBillingSnapshot(db, orgId);
   if (!snapshot.subscription || snapshot.subscription.status !== 'ACTIVE') return { ok: false, reason: 'no_active_subscription' };
-  const quote = await insertQuote(db, {
+  const c = await withCoupons(db, {
     orgId, kind: 'ORG_CAPACITY_ADDON', addonId: addon.id, capacity: addon.increment,
     basePrice: addon.price, credit: 0, total: addon.price, currency: addon.currency,
     breakdown: { increment: addon.increment, note: 'Billed for the remaining period of the current package -- not prorated.' }, createdBy,
-  });
+  }, couponCodes);
+  if (!c.ok) return c;
+  const quote = await insertQuote(db, c.draft);
   return { ok: true, quote };
 }
 
@@ -67,7 +120,7 @@ export async function createCapacityAddonQuote(db, { orgId, addonId, createdBy }
  * (this deployment never cash-refunds the difference on a downgrade,
  * it only ever reduces what's charged now).
  */
-export async function createOrgUpgradeQuote(db, { orgId, capacity, createdBy }) {
+export async function createOrgUpgradeQuote(db, { orgId, capacity, createdBy, couponCodes }) {
   const snapshot = await getOrgBillingSnapshot(db, orgId);
   const current = snapshot.subscription;
   if (!current || current.status !== 'ACTIVE') return { ok: false, reason: 'no_active_subscription' };
@@ -87,7 +140,7 @@ export async function createOrgUpgradeQuote(db, { orgId, capacity, createdBy }) 
   const unusedCredit = Math.round(current.price * (remainingMs / totalDurationMs) * 100) / 100;
   const total = Math.max(0, Math.round((priced.price - unusedCredit) * 100) / 100);
 
-  const quote = await insertQuote(db, {
+  const c = await withCoupons(db, {
     orgId, kind: 'ORG_UPGRADE', packageId: priced.basePackage.id, capacity,
     basePrice: priced.price, credit: unusedCredit, total, currency: priced.currency,
     breakdown: {
@@ -95,7 +148,9 @@ export async function createOrgUpgradeQuote(db, { orgId, capacity, createdBy }) 
       remainingDays: Math.ceil(remainingMs / 86_400_000), totalDurationDays: Math.ceil(totalDurationMs / 86_400_000), unusedCredit,
     },
     createdBy,
-  });
+  }, couponCodes);
+  if (!c.ok) return c;
+  const quote = await insertQuote(db, c.draft);
   return { ok: true, quote, direction: capacity > currentCapacity ? 'upgrade' : 'downgrade' };
 }
 

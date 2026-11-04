@@ -18,7 +18,9 @@ function useCountUp(value, duration = 700) {
     const tick = (t) => {
       const p = Math.min(1, (t - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3);
-      setDisplay(Math.round(from + (value - from) * eased));
+      // Lands on the EXACT value: rounding the last frame too turned a
+      // paise amount (Rs 3,499.75) into Rs 3,500 once the count finished.
+      setDisplay(p < 1 ? Math.round(from + (value - from) * eased) : value);
       if (p < 1) frameRef.current = requestAnimationFrame(tick);
     };
     frameRef.current = requestAnimationFrame(tick);

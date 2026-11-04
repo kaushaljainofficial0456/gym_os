@@ -34,6 +34,10 @@ const PATHS = {
   trend: 'M3 17l6-6 4 4 7-7M15 8h6v6',
   dumbbell: 'M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11',
   bolt: 'M13 2 4 14h6l-1 8 9-12h-6l1-8Z',
+  coupon: 'M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4ZM9.5 15l5-6M9.5 9.5h.01M14.5 14.5h.01',
+  plus: 'M12 5v14M5 12h14',
+  copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+  edit: 'M4 20h4L19 9l-4-4L4 16ZM14 6l4 4',
 };
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8 }) {

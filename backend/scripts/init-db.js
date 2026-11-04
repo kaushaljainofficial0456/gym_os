@@ -346,6 +346,16 @@ const MIGRATIONS = [
   ['access_member_mappings', 'override_at', `override_at TEXT`],
   ['access_sync_jobs', 'cursor_json', `cursor_json TEXT`],
   ['access_sync_jobs', 'result_json', `result_json TEXT`],
+  // --- Coupons (founder-issued discount codes; see services/coupons/) ---
+  // The coupons/coupon_redemptions TABLES are new, so schema.sql's own
+  // CREATE TABLE IF NOT EXISTS (re-applied by this script before these
+  // migrations run) creates them on an existing database. billing_quotes
+  // already exists everywhere, so its two new columns must be guarded
+  // additions here -- the CREATE TABLE in schema.sql is a no-op there.
+  // Defaults keep every existing quote reading exactly as before: no
+  // discount, no coupons.
+  ['billing_quotes', 'discount_amount', `discount_amount REAL NOT NULL DEFAULT 0`],
+  ['billing_quotes', 'coupons_json', `coupons_json TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

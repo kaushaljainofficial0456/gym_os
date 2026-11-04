@@ -37,6 +37,27 @@ export function money(n) {
   return '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 }
 
+/** Rupees to the paisa, for discount maths where Rs 3,499.75 must not
+ *  read as Rs 3,500 (money() above deliberately rounds to whole rupees). */
+export function moneyExact(n) {
+  if (n == null) return 'N/A';
+  return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(Number(n)) ? 0 : 2, maximumFractionDigits: 2 });
+}
+
+/** "5 Nov 2026, 12:00 am IST" -- a stored UTC instant shown in the
+ *  timezone it was configured in (a coupon's own `timezone`). */
+export function formatInTz(iso, tz = 'Asia/Kolkata', { time = true } = {}) {
+  if (!iso) return '—';
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: tz, day: 'numeric', month: 'short', year: 'numeric',
+      ...(time ? { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' } : {}),
+    }).format(new Date(iso));
+  } catch {
+    return formatDateTime(iso);
+  }
+}
+
 /** YYYY-MM-DD, or an em dash for a null timestamp -- never a blank cell
  *  with no explanation. */
 export function formatDate(iso) {
