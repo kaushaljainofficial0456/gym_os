@@ -78,6 +78,7 @@ const CommunityHub = lazy(() => import('./pages/client/CommunityHub.jsx'));
 const Community = lazy(() => import('./pages/client/Community.jsx'));
 const FriendCommunity = lazy(() => import('./pages/client/FriendCommunity.jsx'));
 const Membership = lazy(() => import('./pages/client/Membership.jsx'));
+const Plan = lazy(() => import('./pages/client/Plan.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
 const GymAttendance = lazy(() => import('./pages/trainer/GymAttendance.jsx'));
@@ -362,6 +363,7 @@ export default function App() {
         <Route path="progress" element={page(Progress)} />
         <Route path="profile" element={page(Profile)} />
         <Route path="membership" element={page(Membership)} />
+        <Route path="plan" element={page(Plan)} />
         <Route path="settings" element={page(Settings)} />
         <Route path="community" element={page(CommunityHub)} />
         <Route path="community/gym" element={page(Community)} />

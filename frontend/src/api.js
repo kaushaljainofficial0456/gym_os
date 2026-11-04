@@ -253,6 +253,11 @@ export async function api(path, opts = {}) {
     throw new Error('Session expired');
   }
   const data = await res.json().catch(() => ({}));
+  // An independent client whose free trial has ended (routes/plan.js): the
+  // layout listens for this and shows the plans in place of the screen.
+  if (res.status === 402 && data?.error === 'plan_required' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('barbell:plan-required'));
+  }
   if (!res.ok) {
     // Fold validate.js's per-field detail into the message itself (not
     // just err.issues below) -- a real bug, found live: every one of this

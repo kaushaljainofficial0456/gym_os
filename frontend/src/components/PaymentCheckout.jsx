@@ -145,11 +145,14 @@ export default function PaymentCheckout({ order, orgName, onComplete, onCancel, 
             No real payment gateway is configured, so this simulates a checkout — no money moves, but the same
             server-side signature verification runs.
           </p>
-          <div className="flex gap-2 mt-3">
-            <button className="btn-primary flex-1" data-loading={busy ? 'true' : undefined} disabled={busy} onClick={() => runMock('success')}>
+          {/* Wraps rather than squeezing: .btn-primary is overflow:hidden (its
+              sheen), which lets it shrink below its own label in a flex row,
+              so on a phone "Simulate success" was cut to "ulate succ". */}
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button className="btn-primary grow basis-36" data-loading={busy ? 'true' : undefined} disabled={busy} onClick={() => runMock('success')}>
               Simulate success
             </button>
-            <button className="btn flex-1" disabled={busy} onClick={() => runMock('failure')}>Simulate failure</button>
+            <button className="btn grow basis-36" disabled={busy} onClick={() => runMock('failure')}>Simulate failure</button>
           </div>
         </div>
       ) : (

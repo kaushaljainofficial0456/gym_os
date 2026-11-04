@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -16,6 +16,14 @@ import { Avatar } from '../../components/UI.jsx';
 import NotificationBell from '../../components/NotificationBell.jsx';
 import NotificationPermissionPrompt from '../../components/NotificationPermissionPrompt.jsx';
 import { useUnits } from '../../unitsContext.jsx';
+
+// The Barbell plan screen, also shown in place of any page once an
+// independent client's free trial is over (see below). Lazy, so gym members
+// never download it.
+const Plan = lazy(() => import('./Plan.jsx'));
+// What stays reachable when the plan is locked: paying, account settings
+// (export, delete, sign out) and help.
+const PLAN_OPEN_ROUTES = ['/app/client/plan', '/app/client/settings', '/app/client/help'];
 
 // Map route paths to feature IDs for first-time popups
 const FEATURE_MAP = {
@@ -115,6 +123,36 @@ export default function ClientLayout() {
   const weeklyFetch = useFetch(() => api('/intel/coach/weekly'));
   const homeFetch = useFetch(() => api('/tracking/me/home'));
 
+  // THE BARBELL PLAN (independent clients only; a gym covers its members).
+  // The server holds every other request with 402 plan_required once the
+  // trial is over; api.js announces that, so a trial that ends while the
+  // app is open locks without a reload.
+  const planFetch = useFetch(() => (isIndependent ? api('/plan/status') : Promise.resolve({ applies: false })), [isIndependent]);
+  const [planHeld, setPlanHeld] = useState(false);
+  // Paying from the lock screen swaps it straight for the page underneath,
+  // which would otherwise be the only sign the payment worked.
+  const [planPaidUntil, setPlanPaidUntil] = useState(null);
+  useEffect(() => {
+    const held = () => setPlanHeld(true);
+    const paid = (e) => {
+      setPlanHeld(false);
+      setPlanPaidUntil(e.detail?.paidUntil || null);
+      planFetch.reload({ silent: true });
+      homeFetch.reload({ silent: true });
+    };
+    window.addEventListener('barbell:plan-required', held);
+    window.addEventListener('barbell:plan-paid', paid);
+    return () => {
+      window.removeEventListener('barbell:plan-required', held);
+      window.removeEventListener('barbell:plan-paid', paid);
+    };
+  }, [planFetch.reload, homeFetch.reload]);
+  const plan = planFetch.data;
+  const planLocked = !!isIndependent && (planHeld || (plan?.applies && plan.access === 'locked'));
+  const showLock = planLocked && !PLAN_OPEN_ROUTES.some((r) => loc.pathname.startsWith(r));
+  const trialEnding = !planLocked && plan?.applies && plan.access === 'trial' && plan.trialDaysLeft <= 3
+    && !loc.pathname.startsWith('/app/client/plan');
+
   const hasBrief = briefFetch.data?.ok;
   const briefPriority = briefFetch.data?.priority;
 
@@ -154,7 +192,12 @@ export default function ClientLayout() {
 
   useEffect(() => {
     setDropdownOpen(false);
+    setPlanPaidUntil(null);
   }, [loc.pathname]);
+
+  const menu = useMemo(() => (isIndependent
+    ? PROFILE_MENU.map((g, i) => (i === 1 ? [...g, { to: '/app/client/plan', label: 'Barbell plan', icon: 'card' }] : g))
+    : PROFILE_MENU), [isIndependent]);
 
   const handleMenuClick = useCallback((item) => {
     setDropdownOpen(false);
@@ -222,7 +265,7 @@ export default function ClientLayout() {
                   </div>
                 </div>
 
-                {PROFILE_MENU.map((group, gi) => (
+                {menu.map((group, gi) => (
                   <div key={gi} className="py-1" style={gi > 0 ? { borderTop: '1px solid var(--line)' } : undefined}>
                     {group.map((item) => (
                       <button
@@ -333,8 +376,28 @@ export default function ClientLayout() {
             ordinary member. */}
         <DemoBanner />
         <AnnouncementBanner />
+        {planPaidUntil && (
+          <div className="row mb-3 flex items-center justify-between gap-3" role="status" style={{ background: 'rgb(var(--good-rgb) / .10)', borderColor: 'rgb(var(--good-rgb) / .3)' }}>
+            <span className="t-sub" style={{ color: 'var(--ink)' }}>
+              Paid, thank you. Barbell is yours until {new Date(planPaidUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. Your receipt is under Barbell plan.
+            </span>
+            <button type="button" className="btn btn-sm shrink-0" onClick={() => setPlanPaidUntil(null)}>OK</button>
+          </div>
+        )}
+        {trialEnding && (
+          <button type="button" onClick={() => nav('/app/client/plan')} className="row w-full text-left mb-3" style={{ border: '1px solid var(--line)' }}>
+            <span className="t-sub" style={{ color: 'var(--ink)' }}>
+              {plan.trialDaysLeft === 0 ? 'Your free trial ends today.' : `${plan.trialDaysLeft} ${plan.trialDaysLeft === 1 ? 'day' : 'days'} left in your free trial.`}
+              {' '}<span className="underline">See plans</span>
+            </span>
+          </button>
+        )}
         <div key={loc.pathname} className="anim-route">
-          <Outlet context={homeCtx} />
+          {showLock ? (
+            <Suspense fallback={null}><Plan locked /></Suspense>
+          ) : (
+            <Outlet context={homeCtx} />
+          )}
         </div>
       </div>
 

@@ -40,6 +40,8 @@ export default function JoinGym() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(false);
+  // Joined a gym that takes payments at the desk for now: in, with this due.
+  const [dueAtDesk, setDueAtDesk] = useState(null);
   const isClient = user?.role === 'CLIENT';
 
   const onScanned = async (value) => {
@@ -66,9 +68,10 @@ export default function JoinGym() {
         // already enrolled them. Without this branch the screen sat on the
         // join prompt showing neither a payment sheet nor a success state,
         // so a member who WAS enrolled looked like a failed scan.
-        if (res.free) {
+        if (res.free || res.payAtDesk) {
           if (res.token) await refreshSession(res.token);
           setDone(true);
+          if (res.payAtDesk) { setDueAtDesk(res.amountDue); return; }
           setTimeout(() => nav('/app/client', { replace: true }), 1400);
           return;
         }
@@ -101,7 +104,13 @@ export default function JoinGym() {
 
   return (
     <AuthShell variant="compact" headline={HEADLINE} showcase={isClient ? 'member' : 'coach'}>
-      {done ? (
+      {done && dueAtDesk ? (
+        <div className="auth-view">
+          <Done title="You're in."
+            sub={`Welcome to ${preview?.gym?.name || 'your gym'}. Pay ₹${Number(dueAtDesk).toLocaleString('en-IN')} at the front desk; they'll give you a receipt, and it will appear in your Membership page.`} />
+          <button type="button" className="btn-primary w-full mt-4" onClick={() => nav('/app/client', { replace: true })}>Go to my dashboard</button>
+        </div>
+      ) : done ? (
         <Done title="You're in." sub={`Welcome to ${preview?.gym?.name || 'your gym'}. Taking you to your dashboard…`} />
       ) : order ? (
         <div className="auth-view">

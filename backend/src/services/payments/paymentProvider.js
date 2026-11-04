@@ -137,6 +137,38 @@ export function paymentsDisabled() {
   return providerName() === 'none';
 }
 
+/** A call to Razorpay's account APIs (Route linked accounts and their
+ *  product configuration), with the same handling as order creation:
+ *  Razorpay rejecting OUR keys is a 502, never a 401 (which signs the
+ *  person out); its own validation message ("Invalid PAN") comes back as a
+ *  422 the owner can act on; anything else is a 500 with the detail logged.
+ *  Only ever called in Razorpay mode. */
+export async function razorpayApi(method, path, body) {
+  const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+  let res;
+  try {
+    res = await fetch(`https://api.razorpay.com${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw new PaymentGatewayError('payment_gateway_error', 500, `network: ${String(e?.message || e).slice(0, 200)}`);
+  }
+  if (res.status === 401) throw new PaymentGatewayError('payment_gateway_auth_failed', 502, 'razorpay rejected the API key id/secret');
+  const text = await res.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch { /* not JSON */ }
+  if (res.status === 400 && data?.error?.description) {
+    const err = new PaymentGatewayError('payment_gateway_rejected', 422, data.error.description);
+    err.publicMessage = data.error.description;
+    err.field = data.error.field || null;
+    throw err;
+  }
+  if (!res.ok) throw new PaymentGatewayError('payment_gateway_error', 500, `razorpay ${method} ${path} ${res.status}: ${text.slice(0, 300)}`);
+  return data;
+}
+
 /** The PUBLIC key id the browser's Checkout widget needs -- only while
  *  Razorpay is the active provider. Never the secret. */
 export function publicKeyId() {
@@ -248,7 +280,7 @@ export function mockBuildWebhookEvent(providerOrderId, { eventType = 'payment.ca
     unattended script can drive.                                      */
 /* ------------------------------------------------------------------ */
 
-async function razorpayCreateOrder({ amount, currency, receipt, notes }) {
+async function razorpayCreateOrder({ amount, currency, receipt, notes, transfers }) {
   const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
   let res;
   try {
@@ -256,7 +288,10 @@ async function razorpayCreateOrder({ amount, currency, receipt, notes }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
       // Razorpay wants amount in the smallest currency unit (paise for INR).
-      body: JSON.stringify({ amount: Math.round(amount * 100), currency, receipt, notes: notes || {} }),
+      // `transfers` (Route): the gym's share, moved to its linked account
+      // when the payment is captured. Already in paise. Route needs
+      // partial_payment off, which is Razorpay's default.
+      body: JSON.stringify({ amount: Math.round(amount * 100), currency, receipt, notes: notes || {}, ...(transfers?.length ? { transfers } : {}) }),
     });
   } catch (e) {
     throw new PaymentGatewayError('payment_gateway_error', 500, `network: ${String(e?.message || e).slice(0, 200)}`);
@@ -356,13 +391,13 @@ export async function refundProviderPayment({ providerPaymentId, amount, notes }
  *  currency SERVER-SIDE (see paymentOrders.js) -- this function trusts
  *  whatever it's given, so it must never be called with client-supplied
  *  amounts. */
-export async function createProviderOrder({ amount, currency, receipt, notes }) {
+export async function createProviderOrder({ amount, currency, receipt, notes, transfers }) {
   const provider = providerName();
   if (provider === 'none') throw new PaymentsNotConfiguredError();
   // Checked for both providers, so a below-minimum amount fails the same
   // way in development as it would at Razorpay.
   if (!(Number(amount) >= MIN_ORDER_AMOUNT)) throw new PaymentAmountError(amount);
-  if (provider === 'razorpay') return { provider, ...(await razorpayCreateOrder({ amount, currency, receipt, notes })) };
+  if (provider === 'razorpay') return { provider, ...(await razorpayCreateOrder({ amount, currency, receipt, notes, transfers })) };
   return { provider, ...(await mockCreateOrder({ amount, currency, receipt })) };
 }
 

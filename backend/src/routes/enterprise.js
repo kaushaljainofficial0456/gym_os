@@ -26,6 +26,7 @@ import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, recordWebhookEvent } from '../services/payments/paymentActivation.js';
 import { issueInvoice } from '../services/payments/invoices.js';
 import { renderInvoicePdf, resolveInvoiceRecipient } from '../services/payments/invoicePdf.js';
+import { getPayoutAccount, payoutView, refreshPayoutStatus, submitPayoutDetails } from '../services/payments/payouts.js';
 import { sendEmail } from '../services/notifications/emailProvider.js';
 
 export default function enterpriseRoutes(db) {
@@ -285,7 +286,11 @@ export default function enterpriseRoutes(db) {
 
   // ---- invoices ----
   r.get('/invoices', async (req, res) => {
-    const rows = await db.q('SELECT * FROM invoices WHERE org_id = ? ORDER BY issued_at DESC LIMIT 100', [req.orgId]);
+    // What Barbell has billed this gym. Its members' receipts carry the
+    // same org_id and were listed here as if they were Barbell's bills.
+    const rows = await db.q(
+      `SELECT * FROM invoices WHERE org_id = ? AND subject_type IN ('ORG_PACKAGE', 'ORG_CAPACITY_ADDON')
+        ORDER BY issued_at DESC LIMIT 100`, [req.orgId]);
     res.json({ invoices: rows });
   });
 
@@ -350,32 +355,41 @@ export default function enterpriseRoutes(db) {
     res.json({ ok: true, to, provider: result.provider });
   });
 
-  // ---- payout/KYC account status (Razorpay Route linked account, once configured) ----
+  // ---- getting paid: the gym's Razorpay Route account ----
+  // Members pay the gym, not Barbell: their money is moved to this account
+  // and settled to the gym's bank (services/payments/payouts.js). Until it
+  // is ACTIVE, members pay at the desk.
   r.get('/payment-account', async (req, res) => {
-    const row = await db.q1('SELECT * FROM payment_accounts WHERE org_id = ?', [req.orgId]);
-    res.json({ account: row || { org_id: req.orgId, provider: 'razorpay', status: 'NOT_CONNECTED' } });
+    res.json({ account: payoutView(await getPayoutAccount(db, req.orgId)) });
   });
 
-  r.put('/payment-account', validate(z.object({
-    businessName: z.string().max(120).optional(), legalName: z.string().max(120).optional(),
+  const payoutLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/payment-account', payoutLimit, validate(z.object({
+    legalBusinessName: z.string().trim().min(4).max(200),
+    displayName: z.string().trim().max(120).optional(),
+    businessType: z.enum(['individual', 'proprietorship', 'partnership', 'private_limited', 'public_limited', 'llp', 'trust', 'society', 'ngo', 'not_yet_registered', 'other']),
+    contactName: z.string().trim().min(2).max(120),
+    email: z.string().trim().email(),
+    phone: z.string().trim().regex(/^[6-9]\d{9}$/, 'A 10-digit Indian mobile number'),
+    pan: z.string().trim().toUpperCase().regex(/^[A-Z]{5}\d{4}[A-Z]$/, 'A PAN looks like ABCDE1234F'),
+    gst: z.string().trim().toUpperCase().regex(/^\d{2}[A-Z0-9]{13}$/, 'A GSTIN has 15 characters').optional().or(z.literal('')),
+    street1: z.string().trim().min(3).max(100),
+    street2: z.string().trim().max(100).optional(),
+    city: z.string().trim().min(2).max(100),
+    state: z.string().trim().min(2).max(32),
+    postalCode: z.string().trim().regex(/^\d{6}$/, 'A 6-digit PIN code'),
+    accountNumber: z.string().trim().regex(/^\d{9,18}$/, 'Bank account numbers have 9 to 18 digits'),
+    ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'An IFSC looks like HDFC0001234'),
+    beneficiaryName: z.string().trim().min(2).max(120),
+    acceptTerms: z.literal(true, { errorMap: () => ({ message: "Accept Razorpay's terms to continue" }) }),
   })), async (req, res) => {
-    // Deliberately does NOT collect bank account/IFSC/UPI details here --
-    // those stay entirely inside the payment provider's own hosted KYC
-    // flow per its compliance requirements (spec: "prefer provider-
-    // hosted KYC/account onboarding"). This just records the business/
-    // legal name SK OS already has and marks KYC as the next step; the
-    // actual provider_account_id/status transition to ACTIVE happens
-    // once real Razorpay Route credentials exist to call their account
-    // API with -- see the Enterprise report's "remaining manual
-    // configuration" section.
-    await db.run(
-      `INSERT INTO payment_accounts (org_id, provider, status, business_name, legal_name, updated_at)
-       VALUES (?, 'razorpay', 'KYC_PENDING', ?, ?, ?)
-       ON CONFLICT(org_id) DO UPDATE SET business_name=excluded.business_name, legal_name=excluded.legal_name,
-         status = CASE WHEN payment_accounts.status = 'NOT_CONNECTED' THEN 'KYC_PENDING' ELSE payment_accounts.status END,
-         updated_at=excluded.updated_at`,
-      [req.orgId, req.body.businessName ?? null, req.body.legalName ?? null, now()]);
-    res.json({ ok: true });
+    const account = await submitPayoutDetails(db, req.orgId, req.body);
+    await track(db, { type: 'payout_account_submitted', orgId: req.orgId, userId: req.user.sub, data: { status: account.status } }).catch(() => {});
+    res.json({ account: payoutView(account) });
+  });
+
+  r.post('/payment-account/refresh', payoutLimit, async (req, res) => {
+    res.json({ account: payoutView(await refreshPayoutStatus(db, req.orgId)) });
   });
 
   return r;
