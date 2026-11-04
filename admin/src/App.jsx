@@ -32,6 +32,9 @@ const Risk = lazy(() => import('./pages/Risk.jsx'));
 const FeatureFlags = lazy(() => import('./pages/FeatureFlags.jsx'));
 const Announcements = lazy(() => import('./pages/Announcements.jsx'));
 const SystemHealth = lazy(() => import('./pages/SystemHealth.jsx'));
+const Coupons = lazy(() => import('./pages/Coupons.jsx'));
+const CouponForm = lazy(() => import('./pages/CouponForm.jsx'));
+const CouponDetail = lazy(() => import('./pages/CouponDetail.jsx'));
 
 const PageFallback = <div style={{ padding: 24 }}><SkeletonBlock height={280} /></div>;
 // One-liner per route, same shape as the main frontend's own `page()`
@@ -50,6 +53,10 @@ export default function App() {
             <Route path="gyms/:id" element={page(GymDetail)} />
             <Route path="demos" element={page(Demos)} />
             <Route path="payments" element={page(Payments)} />
+            <Route path="coupons" element={page(Coupons)} />
+            <Route path="coupons/new" element={page(CouponForm)} />
+            <Route path="coupons/:id" element={page(CouponDetail)} />
+            <Route path="coupons/:id/edit" element={page(CouponForm)} />
             <Route path="refunds" element={page(Refunds)} />
             <Route path="reconciliation" element={page(Reconciliation)} />
             <Route path="support" element={page(Support)} />

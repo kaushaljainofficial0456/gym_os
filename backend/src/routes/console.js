@@ -46,6 +46,7 @@ import {
 } from '../services/demo/session.js';
 import { seedDemoTenant, findDemoOrg, listDemoOrgIds, DEMO_ORG_SLUG, DEMO_GYM_NAME } from '../services/demo/seed.js';
 import { sendDemoLinkEmail } from '../services/demo/notify.js';
+import consoleCouponRoutes from './consoleCoupons.js';
 
 const safeParse = (json) => { try { return JSON.parse(json || 'null'); } catch { return null; } };
 
@@ -74,6 +75,11 @@ export default function consoleRoutes(db) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id('aal'), req.user.sub, action, entityType, entityId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, req.ip || null, now()]);
   }
+
+  // ---- Coupon Management -- its own file (consoleCoupons.js) for size,
+  // but mounted HERE so it sits behind this router's SUPER_ADMIN gate and
+  // rate limit above and records through this same writeAuditLog. ----
+  r.use('/coupons', consoleCouponRoutes(db, { writeAuditLog }));
 
   // ---- dashboard: real aggregate KPIs, never fabricated -- an empty
   // platform shows zeros, not example numbers (spec: "NEVER hardcode... if

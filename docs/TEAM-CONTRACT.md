@@ -158,6 +158,24 @@ IMPACT — Sambhav: the resolved value arrives as input.user.body_weight_kg. Man
   and ML. Do not create a second exercise database; request metadata changes via the
   OLD/NEW/WHY/IMPACT format instead.
 
+### 5.1 Coupons on gym billing quotes — NEW (additive)
+
+```
+OLD — POST /api/enterprise/billing/quote returned { quote, direction }; the
+      frontend went straight from quote to /payment/order.
+NEW — the body accepts optional couponCodes: string[] (max 3). The response
+      adds `pricing` { originalAmount, credit, subtotal, discount, total,
+      coupons[], message } and quote rows gain discount_amount/coupons_json.
+      A refused coupon returns 422 { error: 'coupon_invalid', reason, code, message }.
+      /payment/order can return 409 { error: 'coupon_unavailable', ... } if a
+      coupon stopped being valid since the quote was priced.
+      GET /enterprise/invoices rows gain original_amount, discount_amount, coupons[].
+WHY — founder-issued discounts (docs/COUPONS.md). The discount is priced
+      into the SAME locked quote, so the frontend still never computes a price.
+IMPACT — Manavi: existing calls are unchanged (all fields are additive and
+      optional). The checkout UI lives in components/billing/CouponCheckout.jsx.
+```
+
 ## 6. Change log
 
 | Date | Change | Owner |
@@ -174,3 +192,4 @@ IMPACT — Sambhav: the resolved value arrives as input.user.body_weight_kg. Man
 | 2026-08-16 | Phase 3B Step 1: `estimateWorkoutCalories()` made async; `ml` provider calls bounded by a hard timeout (`ML_TIMEOUT_MS`, `AbortController`/`Promise.race`) — a slow/hanging provider can never stall workout completion, falls back to `baseline` (new `ml_timeout` observability category). No change to validation, persisted contract, or API shape | Kaushal |
 | 2026-08-16 | Phase 3B Step 2: training-data export gained an optional `--org <org_id>` scope (parameterized filter, unknown-org fails fast, bare `--org` fails fast); default cross-org behavior unchanged. Contract: `docs/training-data-contract.md` §1.2 | Kaushal |
 | 2026-08-16 | Phase 3B Step 3: `ml` provider implemented — Sambhav's `skos-cal-v1` artifact ported (ESM, `mlModels/skosCalV1.js` + `skosCalV1.model.json`, coefficients unchanged) and wired via `calorieModel.js`; exercise-ID canonicalization (6 confirmed global `animation_key` mappings only, custom exercises never trusted) and gross→net-of-resting conversion added at the integration boundary. `ml` remains opt-in and dev/staging-only; `baseline` stays the production default. Contract: `docs/calorie-model-contract.md` §7/§8 | Kaushal |
+| 2026-11-05 | Coupons: optional `couponCodes` on `/enterprise/billing/quote`, `pricing` in its response, `billing_quotes.discount_amount`/`coupons_json`, new `coupons`/`coupon_redemptions` tables, `/api/console/coupons/*` (SUPER_ADMIN) (§5.1, docs/COUPONS.md) | Kaushal |

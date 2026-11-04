@@ -1926,6 +1926,8 @@ CREATE TABLE IF NOT EXISTS billing_quotes (
   total          REAL NOT NULL,             -- what /payment/order will actually charge -- floored at 0, never negative
   currency       TEXT NOT NULL DEFAULT 'INR',
   breakdown_json TEXT,               -- full calculation detail for the receipt/UI (never re-derived from "today's" pricing later)
+  discount_amount REAL NOT NULL DEFAULT 0,  -- coupon discount already taken off total (see coupons below)
+  coupons_json   TEXT,               -- coupons applied to this quote: [{couponId, code, discountType, discountValue, discountAmount}]
   status         TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','CONSUMED','EXPIRED','CANCELLED')),
   created_by     TEXT REFERENCES users(id),
   expires_at     TEXT NOT NULL,      -- 10-minute validity by default -- see quotes.js
@@ -1933,6 +1935,119 @@ CREATE TABLE IF NOT EXISTS billing_quotes (
   consumed_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_billing_quotes_org ON billing_quotes(org_id, status);
+
+-- ============================================================
+-- COUPONS -- founder-issued discount codes for a gym's OWN Barbell
+-- subscription (billing_quotes -> payment_orders). See
+-- backend/src/services/coupons/couponEngine.js for the lifecycle.
+--
+-- PLATFORM-LEVEL, NOT TENANT DATA: a coupon belongs to Barbell, not to
+-- any gym, so this table has no org_id and no RLS policy (same as
+-- sk_packages/sk_pricing_rules). Only SUPER_ADMIN routes write it
+-- (routes/consoleCoupons.js); gym owners only ever reach it read-only,
+-- through the quote pricing path, and never see founder_notes,
+-- internal_name or the usage counters.
+--
+-- STATUS IS DERIVED, NOT STORED. Active / Scheduled / Expired /
+-- Exhausted are functions of the clock and the counters, so storing
+-- them would need a cron this codebase does not have and would drift
+-- the moment one was missed. Only the founder's own on/off switch
+-- (is_enabled) is stored. See couponStatusSql() in couponEngine.js.
+--
+-- COUNTERS ARE THE CONCURRENCY GUARD. redemption_count (verified
+-- payments) and reserved_count (orders in flight) are bumped by
+-- conditional UPDATEs whose WHERE clause enforces max_redemptions, the
+-- same guard-in-the-WHERE pattern as reserveCapacitySlot. They live on
+-- this RLS-free row deliberately: a COUNT(*) over coupon_redemptions
+-- inside an org-scoped db.tx() would only see that one gym's rows.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS coupons (
+  id                           TEXT PRIMARY KEY,
+  code                         TEXT NOT NULL UNIQUE,           -- always stored UPPERCASE, so UNIQUE is case-insensitive
+  internal_name                TEXT NOT NULL,                  -- founder-only label
+  description                  TEXT,                           -- customer-facing line shown at checkout
+  discount_type                TEXT NOT NULL CHECK (discount_type IN ('PERCENTAGE','FIXED')),
+  discount_value               REAL NOT NULL CHECK (discount_value > 0),
+  max_discount_amount          REAL CHECK (max_discount_amount IS NULL OR max_discount_amount > 0),
+  minimum_purchase_amount      REAL CHECK (minimum_purchase_amount IS NULL OR minimum_purchase_amount >= 0),
+  currency                     TEXT NOT NULL DEFAULT 'INR',
+  customer_type                TEXT NOT NULL CHECK (customer_type IN ('ENTERPRISE','INDEPENDENT','BOTH')),
+  applicable_kinds_json        TEXT,                           -- JSON array of billing_quotes.kind; NULL = every purchase type
+  applicable_tiers_json        TEXT,                           -- JSON array of sk_packages.name; NULL = every capacity tier
+  applicable_durations_json    TEXT,                           -- JSON array of sk_packages.duration_days; NULL = every duration
+  starts_at                    TEXT NOT NULL,                  -- UTC ISO-8601
+  expires_at                   TEXT NOT NULL,                  -- UTC ISO-8601, exclusive
+  timezone                     TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+  max_redemptions              INTEGER CHECK (max_redemptions IS NULL OR max_redemptions > 0),
+  max_redemptions_per_customer INTEGER CHECK (max_redemptions_per_customer IS NULL OR max_redemptions_per_customer > 0),
+  redemption_count             INTEGER NOT NULL DEFAULT 0 CHECK (redemption_count >= 0),
+  reserved_count               INTEGER NOT NULL DEFAULT 0 CHECK (reserved_count >= 0),
+  first_time_only              INTEGER NOT NULL DEFAULT 0,
+  allow_stacking               INTEGER NOT NULL DEFAULT 0,
+  is_enabled                   INTEGER NOT NULL DEFAULT 1,
+  founder_notes                TEXT,
+  created_by                   TEXT NOT NULL REFERENCES users(id),
+  updated_by                   TEXT REFERENCES users(id),
+  disabled_at                  TEXT,
+  disabled_by                  TEXT REFERENCES users(id),
+  created_at                   TEXT NOT NULL,
+  updated_at                   TEXT NOT NULL,
+  CHECK (code = UPPER(code)),
+  CHECK (discount_type <> 'PERCENTAGE' OR discount_value < 100),
+  CHECK (expires_at > starts_at)
+);
+CREATE INDEX IF NOT EXISTS idx_coupons_created ON coupons(created_at);
+CREATE INDEX IF NOT EXISTS idx_coupons_window ON coupons(starts_at, expires_at);
+
+-- One row per (coupon, quote) -- the coupon's whole life on ONE purchase.
+--   RESERVED  /payment/order created a gateway order for a coupon quote;
+--             holds one unit of the coupon's limits until the payment
+--             resolves or reservation_expires_at passes.
+--   REDEEMED  the payment was VERIFIED (signature or signed webhook) --
+--             set only inside _finalizeOrder's SUCCESS transaction.
+--             The ONLY status analytics ever count.
+--   RELEASED  the payment failed / was cancelled / disputed.
+--   EXPIRED   the hold timed out with no verified payment (abandoned).
+-- Clicking Apply writes NOTHING here: it only prices a quote.
+--
+-- original/discount/final are SNAPSHOTS taken from the locked quote, so
+-- editing a coupon later can never rewrite what a past purchase paid.
+--
+-- customer_slot (1..max_redemptions_per_customer) + UNIQUE(coupon_id,
+-- org_id, customer_slot) is the race-safe per-customer limit: two
+-- concurrent checkouts by one gym cannot both take the last slot. It is
+-- NULLed when a hold ends, freeing the slot (NULLs never collide).
+CREATE TABLE IF NOT EXISTS coupon_redemptions (
+  id                     TEXT PRIMARY KEY,
+  coupon_id              TEXT NOT NULL REFERENCES coupons(id),        -- NO ACTION: a coupon with history cannot be deleted
+  org_id                 TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  quote_id               TEXT NOT NULL REFERENCES billing_quotes(id),
+  payment_order_id       TEXT REFERENCES payment_orders(id),
+  subject_type           TEXT CHECK (subject_type IS NULL OR subject_type IN ('ORG_PACKAGE','ORG_CAPACITY_ADDON')),
+  subject_id             TEXT,                                 -- org_subscriptions.id | org_capacity_purchases.id
+  original_amount        REAL NOT NULL CHECK (original_amount >= 0),
+  discount_amount        REAL NOT NULL CHECK (discount_amount > 0),
+  final_amount           REAL NOT NULL CHECK (final_amount >= 0),
+  currency               TEXT NOT NULL DEFAULT 'INR',
+  status                 TEXT NOT NULL DEFAULT 'RESERVED' CHECK (status IN ('RESERVED','REDEEMED','RELEASED','EXPIRED')),
+  customer_slot          INTEGER,
+  late_confirmation      INTEGER NOT NULL DEFAULT 0,           -- 1 = payment verified after the hold had already ended
+  reserved_at            TEXT NOT NULL,
+  reservation_expires_at TEXT NOT NULL,
+  redeemed_at            TEXT,
+  released_at            TEXT,
+  release_reason         TEXT,
+  created_at             TEXT NOT NULL,
+  updated_at             TEXT NOT NULL,
+  UNIQUE (coupon_id, quote_id),
+  UNIQUE (coupon_id, org_id, customer_slot),
+  CHECK (discount_amount <= original_amount)
+);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_coupon ON coupon_redemptions(coupon_id, status);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_org ON coupon_redemptions(org_id, coupon_id);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_order ON coupon_redemptions(payment_order_id);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_subject ON coupon_redemptions(subject_type, subject_id);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_hold ON coupon_redemptions(status, reservation_expires_at);
 
 -- Immutable audit trail of every client-membership lifecycle
 -- transition (see membershipLifecycle.js's transition graph). Additive

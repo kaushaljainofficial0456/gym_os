@@ -1,0 +1,50 @@
+/* Coupon field + subscription summary (CouponCheckout.jsx). Built only
+   from the app's theme tokens so it reads correctly both on the Billing
+   page and inside the onboarding overlay, in light and dark. */
+.cpn { margin-top: 14px; }
+.cpn-toggle {
+  background: none; border: 0; padding: 4px 0; color: var(--accent); font-weight: 600; font-size: 13px;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.cpn-toggle:disabled { opacity: .5; cursor: not-allowed; }
+.cpn-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); margin-bottom: 6px; }
+.cpn-row { display: flex; gap: 8px; }
+.cpn-input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .06em; font-family: ui-monospace, 'DM Mono', SFMono-Regular, Menlo, monospace; }
+.cpn-input[aria-invalid='true'] { border-color: rgb(var(--bad-rgb)); }
+.cpn-apply { flex-shrink: 0; min-width: 88px; }
+.cpn-error { margin-top: 6px; font-size: 12.5px; font-weight: 600; color: rgb(var(--bad-rgb)); }
+.cpn-applied { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.cpn-success + .cpn-form, .cpn-applied + .cpn-form { margin-top: 12px; }
+.cpn-chip {
+  position: relative; border: 1.5px dashed rgba(var(--good-rgb), .55); background: rgba(var(--good-rgb), .07);
+  border-radius: var(--r-md, 12px); padding: 10px 76px 10px 12px;
+}
+.cpn-chip-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.cpn-code { font-family: ui-monospace, 'DM Mono', SFMono-Regular, Menlo, monospace; font-weight: 600; letter-spacing: .06em; color: var(--ink); }
+.cpn-off { font-size: 12.5px; color: var(--mute); }
+.cpn-save { font-weight: 700; color: rgb(var(--good-rgb)); font-variant-numeric: tabular-nums; }
+.cpn-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 11.5px; color: var(--mute); }
+.cpn-remove {
+  position: absolute; top: 8px; right: 8px; background: none; border: 1px solid var(--line); color: var(--mute);
+  border-radius: var(--r-pill, 999px); padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.cpn-remove:hover:not(:disabled) { color: var(--ink); border-color: var(--mute); }
+.cpn-remove:disabled { opacity: .5; cursor: not-allowed; }
+.cpn-success { margin: 0; font-size: 13px; font-weight: 600; color: rgb(var(--good-rgb)); }
+
+.cpn-summary { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin: 16px 0 12px; }
+.cpn-summary-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+.cpn-line { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13.5px; color: var(--mute); }
+.cpn-line .cpn-strong { color: var(--ink); font-weight: 600; text-align: right; }
+.cpn-num { color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cpn-muted { color: var(--faint); font-size: 12px; }
+.cpn-line.is-discount, .cpn-line.is-discount .cpn-num { color: rgb(var(--good-rgb)); }
+.cpn-line.is-total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; color: var(--ink); font-weight: 700; font-size: 15px; }
+.cpn-line.is-total .cpn-num { font-size: 22px; font-weight: 700; }
+.cpn-saved { margin-top: 4px; text-align: right; font-size: 12.5px; font-weight: 700; color: rgb(var(--good-rgb)); }
+@media (max-width: 420px) {
+  .cpn-row { flex-direction: column; }
+  .cpn-apply { width: 100%; }
+  .cpn-chip { padding-right: 12px; padding-bottom: 40px; }
+  .cpn-remove { top: auto; bottom: 8px; right: 8px; }
+}

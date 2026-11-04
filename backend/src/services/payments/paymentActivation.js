@@ -69,6 +69,33 @@ export function registerReleaseHandler(subjectType, handler) {
   _releaseHandlers.set(subjectType, handler);
 }
 
+/** Subject-type-AGNOSTIC observers of an order's outcome, for things
+ *  that ride along with a purchase rather than being the thing bought --
+ *  today, coupon holds (services/coupons/couponEngine.js). Unlike the
+ *  per-subject-type Maps above (one handler each, owned by the domain
+ *  module), any number of these can exist, so adding one never displaces
+ *  an activation/release handler.
+ *
+ *  Same transactional contract as those handlers: onSuccess runs inside
+ *  the SAME transaction that marks the order SUCCESS, exactly once per
+ *  order; onRelease runs inside the transaction that moves the order to
+ *  FAILED/CANCELLED/DISPUTED/EXPIRED, once per transition. A hook that
+ *  throws rolls the whole finalize back (and a webhook is retried), so
+ *  hooks must only make writes that cannot fail on a constraint. */
+const _outcomeHooks = [];
+export function registerOrderOutcomeHook(hook) {
+  if (hook?.name && _outcomeHooks.some((h) => h.name === hook.name)) return;
+  _outcomeHooks.push(hook);
+}
+
+async function runSuccessHooks(db, order, tx) {
+  for (const h of _outcomeHooks) if (h.onSuccess) await h.onSuccess(db, order, tx);
+}
+
+async function runReleaseHooks(db, order, tx, status) {
+  for (const h of _outcomeHooks) if (h.onRelease) await h.onRelease(db, order, tx, status);
+}
+
 /**
  * Checkout-return path. `signature` must verify against
  * `providerOrderId|providerPaymentId` (see paymentProvider.js). Returns
@@ -220,6 +247,7 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
       if (upd.changes > 0) {
         const release = _releaseHandlers.get(order.subject_type);
         if (release) await release(db, order, tx);
+        await runReleaseHooks(db, order, tx, 'DISPUTED');
       }
       await track(db, { type: 'payment_amount_mismatch', orgId: order.org_id, data: { orderId: order.id, expected: { amount: order.amount, currency: order.currency }, got: { amount, currency }, source } }).catch(() => {});
       return { ok: false, reason: 'amount_or_currency_mismatch' };
@@ -245,6 +273,7 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
       // double-counted against availability.
       const release = _releaseHandlers.get(order.subject_type);
       if (release) await release(db, order, tx);
+      await runSuccessHooks(db, order, tx);
       await track(db, { type: 'payment_success', orgId: order.org_id, data: { orderId: order.id, subjectType: order.subject_type, amount: order.amount, currency: order.currency, source } }).catch(() => {});
       return { ok: true, order, alreadyFinalized: false };
     }
@@ -260,6 +289,9 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
     if (upd.changes > 0 && ['FAILED', 'CANCELLED', 'DISPUTED'].includes(status)) {
       const release = _releaseHandlers.get(order.subject_type);
       if (release) await release(db, order, tx);
+    }
+    if (upd.changes > 0 && ['FAILED', 'CANCELLED', 'DISPUTED', 'EXPIRED'].includes(status)) {
+      await runReleaseHooks(db, order, tx, status);
     }
     await track(db, { type: `payment_${status.toLowerCase()}`, orgId: order.org_id, data: { orderId: order.id, subjectType: order.subject_type, source } }).catch(() => {});
     return { ok: true, order, alreadyFinalized: false };

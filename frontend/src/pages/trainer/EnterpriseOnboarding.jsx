@@ -23,6 +23,7 @@ import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { ErrorState, Spinner } from '../../components/UI.jsx';
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
+import { CouponField, PriceSummary } from '../../components/billing/CouponCheckout.jsx';
 import AuthShell from '../../components/auth/AuthShell.jsx';
 import '../../components/auth/auth-flow.css';
 import { AuthTitle, Cta, ErrorNote, Steps } from '../../components/auth/authKit.jsx';
@@ -100,6 +101,11 @@ export default function EnterpriseOnboarding() {
   const [pricingBusy, setPricingBusy] = useState(false);
   const [quote, setQuote] = useState(null);
   const [order, setOrder] = useState(null);
+  // A coupon-priced LOCKED quote ({ quote, pricing }) from the server, or
+  // null. Its quote.id is what gets paid -- the discount is never
+  // computed here (see components/billing/CouponCheckout.jsx).
+  const [couponQuote, setCouponQuote] = useState(null);
+  const [couponNote, setCouponNote] = useState('');
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const go = (s) => { setErr(''); setDir(typeof s === 'number' && typeof step === 'number' && s < step ? 'back' : 'fwd'); setStep(s); };
@@ -142,15 +148,38 @@ export default function EnterpriseOnboarding() {
     finally { setSaving(false); }
   };
 
+  // A coupon was priced for ONE capacity. Changing the plan must not
+  // carry its discount over silently -- drop it and say so.
+  useEffect(() => {
+    if (couponQuote && couponQuote.quote.capacity !== Number(capacity)) {
+      setCouponQuote(null);
+      setCouponNote('Your plan changed, so the coupon was removed — apply it again for this plan.');
+    }
+  }, [capacity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const proceedToCheckout = async () => {
     setErr(''); setSaving(true);
     try {
-      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify({ kind: 'ORG_PACKAGE', capacity: Number(capacity) }) });
-      setQuote(q.quote);
-      const o = await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
+      // With a coupon applied, pay the coupon quote the server already
+      // locked; otherwise lock a plain one now, exactly as before.
+      let q = couponQuote?.quote;
+      if (!q || Date.parse(q.expires_at) <= Date.now()) {
+        const codes = couponQuote?.pricing?.coupons?.map((c) => c.code);
+        const fresh = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify({ kind: 'ORG_PACKAGE', capacity: Number(capacity), ...(codes?.length ? { couponCodes: codes } : {}) }) });
+        q = fresh.quote;
+        if (codes?.length) setCouponQuote({ quote: fresh.quote, pricing: fresh.pricing });
+      }
+      setQuote(q);
+      const o = await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.id }) });
       setOrder(o.order);
       go('checkout');
-    } catch (ex) { setErr(ex.message); }
+    } catch (ex) {
+      // The coupon stopped being valid between Apply and Pay (disabled,
+      // expired, used up): take it off so the owner sees the real price
+      // and can continue without it, rather than retrying into a wall.
+      if (ex.data?.error === 'coupon_unavailable' || ex.data?.error === 'coupon_invalid') setCouponQuote(null);
+      setErr(ex.message);
+    }
     finally { setSaving(false); }
   };
 
@@ -191,6 +220,11 @@ export default function EnterpriseOnboarding() {
     body = (
       <>
         <AuthTitle eyebrow="Payment" title="Confirm your plan" sub={`${quote?.capacity} clients, held at this price for 10 minutes.`} onBack={back} />
+        {Number(quote?.discount_amount) > 0 && (
+          <p className="text-[13px] mb-3" style={{ color: 'rgb(var(--good-rgb))', fontWeight: 600 }}>
+            {inr(quote.base_price)} − coupon {inr(quote.discount_amount)} = {inr(quote.total)}. You save {inr(quote.discount_amount)}.
+          </p>
+        )}
         <PaymentCheckout order={order} onComplete={onPaid} onCancel={() => go(PLAN)} />
         {err && <div className="mt-4"><ErrorNote>{err}</ErrorNote></div>}
       </>
@@ -275,23 +309,36 @@ export default function EnterpriseOnboarding() {
                   <input type="number" min={1} inputMode="numeric" className="input auth-input" value={capacity}
                     onChange={(e) => setCapacity(e.target.value)} />
                 </label>
-                <div className="auth-total" aria-live="polite">
-                  {pricingBusy ? <Spinner label="Calculating…" /> : priced?.error ? (
-                    <span className="text-[13px]" style={{ color: 'rgb(var(--bad-rgb))' }}>{priced.error}</span>
-                  ) : priced ? (
-                    <>
-                      <span>
-                        <span className="auth-label block">Total</span>
-                        {priced.breakdown?.additionalClients > 0 && (
-                          <span className="text-[12px]" style={{ color: 'var(--mute)' }}>
-                            {inr(priced.breakdown.base)} + {priced.breakdown.additionalClients} × {inr(priced.breakdown.rate)}
-                          </span>
-                        )}
-                      </span>
-                      <strong>{inr(priced.price)}</strong>
-                    </>
-                  ) : null}
-                </div>
+                {couponQuote ? (
+                  <PriceSummary planLabel={`${couponQuote.quote.capacity} clients`} original={couponQuote.pricing.originalAmount} pricing={couponQuote.pricing} />
+                ) : (
+                  <div className="auth-total" aria-live="polite">
+                    {pricingBusy ? <Spinner label="Calculating…" /> : priced?.error ? (
+                      <span className="text-[13px]" style={{ color: 'rgb(var(--bad-rgb))' }}>{priced.error}</span>
+                    ) : priced ? (
+                      <>
+                        <span>
+                          <span className="auth-label block">Total</span>
+                          {priced.breakdown?.additionalClients > 0 && (
+                            <span className="text-[12px]" style={{ color: 'var(--mute)' }}>
+                              {inr(priced.breakdown.base)} + {priced.breakdown.additionalClients} × {inr(priced.breakdown.rate)}
+                            </span>
+                          )}
+                        </span>
+                        <strong>{inr(priced.price)}</strong>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+                {priced?.ok && !pricingBusy && (
+                  <CouponField
+                    request={{ kind: 'ORG_PACKAGE', capacity: Number(capacity) }}
+                    applied={couponQuote}
+                    onApplied={(r) => { setCouponQuote(r); setCouponNote(''); }}
+                    disabled={saving}
+                  />
+                )}
+                {couponNote && <p className="text-[12.5px] mt-2" style={{ color: 'var(--mute)' }}>{couponNote}</p>}
                 <ErrorNote>{err}</ErrorNote>
                 <Cta busy={saving} disabled={!priced?.ok} onClick={proceedToCheckout}>Continue to payment</Cta>
               </>
