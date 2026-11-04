@@ -195,7 +195,7 @@ export default function MembersTable({ members = [], renderActions }) {
                   <td className="py-2.5 pr-3 text-xs" style={{ color: 'var(--mute)' }}>
                     {GOAL_LABEL[m.goal] || String(m.goal || '').replace(/_/g, ' ') || '—'}
                   </td>
-                  <td className="py-2.5 pr-3 text-xs tabular-nums">{m.current_weight ? `${kg1(m.current_weight)} kg` : '—'}</td>
+                  <td className="py-2.5 pr-3 text-xs tabular-nums whitespace-nowrap">{m.current_weight ? `${kg1(m.current_weight)} kg` : '—'}</td>
                   <td className="py-2.5 pr-3 text-xs">{m.plan_name || '—'}</td>
                   <td className="py-2.5 pr-3 text-xs tabular-nums whitespace-nowrap">
                     <span style={{ color: renew.muted ? 'var(--faint)' : 'var(--ink)' }}>{renew.text}</span>

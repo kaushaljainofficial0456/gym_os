@@ -46,7 +46,7 @@ function PaymentResultDemo() {
   const [payment, setPayment] = useState('success');
   const [receipt, setReceipt] = useState('ready');
   return (
-    <div className="grid lg:grid-cols-[240px_1fr] gap-5 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-5 items-start">
       <div className="space-y-4">
         <div>
           <div className="t-micro mb-2">Payment state</div>
@@ -236,7 +236,7 @@ export default function DesignSystem() {
           title="Motion"
           note={`One house easing curve — cubic-bezier(${easing.standard.join(', ')}) — shared by the CSS keyframes and framer-motion so both engines feel identical. Every primitive renders its final state directly under prefers-reduced-motion.`}
         >
-          <div className="grid sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <div className="kicker">Pressable</div>
               <Pressable className="btn-primary w-full">Tap me</Pressable>
@@ -300,7 +300,7 @@ export default function DesignSystem() {
           note="The existing primitives from components/UI.jsx. These were already good — the design system tokenised their colours rather than replacing them."
         >
           <Reveal>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Kpi label="Volume" value={12480} suffix=" kg" />
               <Kpi label="Protein" value={148} suffix=" g" />
               <Kpi label="Sessions" value={18} />
@@ -308,7 +308,7 @@ export default function DesignSystem() {
             </div>
           </Reveal>
 
-          <div className="grid sm:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
             <Card className="flex items-center justify-center">
               <Ring value={1840} max={2400} label="1840" sub="of 2400 kcal" />
             </Card>
@@ -343,7 +343,7 @@ export default function DesignSystem() {
             </Card>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <Card><Empty title="No meals logged" hint="Scan a barcode or search to add one." /></Card>
             <Card className="grid place-items-center"><Spinner /></Card>
           </div>
@@ -351,7 +351,7 @@ export default function DesignSystem() {
 
         {/* ── Inputs ── */}
         <Section title="Inputs">
-          <div className="grid sm:grid-cols-2 gap-4 max-w-xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
             <input className="input" placeholder="Search a food…" />
             <select className="input">
               <option>Moderate oil</option>
@@ -365,7 +365,7 @@ export default function DesignSystem() {
           title="3D — and when NOT to use it"
           note="three.js is 508 kB (129 kB gzipped). It is lazily code-split, gated on visibility, and tiered to the device — but it is never free."
         >
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card>
               <div className="kicker">Use 3D for</div>
               <ul className="text-xs space-y-1.5 leading-relaxed" style={{ color: 'var(--mute)' }}>

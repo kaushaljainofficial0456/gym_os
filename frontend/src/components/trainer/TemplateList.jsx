@@ -105,22 +105,24 @@ export default function TemplateList({
         style={{ minHeight: 42 }}
       />
 
-      <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-        {types.length > 1 && (
-          <>
-            <Chip on={!type} onClick={() => setType('')}>All</Chip>
-            {types.map(([value, n]) => (
-              <Chip key={value} on={type === value} onClick={() => setType(type === value ? '' : value)}>
-                {prettyName(value)} <span style={{ opacity: 0.6 }}>{n}</span>
-              </Chip>
-            ))}
-          </>
-        )}
-        <div className="ml-auto flex items-center gap-1.5">
-          {SORTS.map(([value, label]) => (
-            <Chip key={value} on={sort === value} onClick={() => setSort(value)} small>{label}</Chip>
+      {/* Types and sort on rows of their own. Sharing one wrapping row, the
+          sort group was pushed right and on a phone landed beside whichever
+          type chips were left over, with a ragged gap between. */}
+      {types.length > 1 && (
+        <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+          <Chip on={!type} onClick={() => setType('')}>All</Chip>
+          {types.map(([value, n]) => (
+            <Chip key={value} on={type === value} onClick={() => setType(type === value ? '' : value)}>
+              {prettyName(value)} <span style={{ opacity: 0.75 }}>{n}</span>
+            </Chip>
           ))}
         </div>
+      )}
+      <div className="flex items-center gap-1.5 mt-2">
+        <span className="text-[11px] mr-0.5" style={{ color: 'var(--faint)' }}>Sort</span>
+        {SORTS.map(([value, label]) => (
+          <Chip key={value} on={sort === value} onClick={() => setSort(value)} small>{label}</Chip>
+        ))}
       </div>
 
       {/* Saying how many matched is what makes a filter trustworthy -- a

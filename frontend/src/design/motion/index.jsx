@@ -319,7 +319,7 @@ export function AnimatedNumber({ value, decimals = 0, className }) {
   const mv = useSpring(value, spring.precise);
 
   const format = useCallback(
-    (v) => Number(v).toLocaleString('en-US', {
+    (v) => Number(v).toLocaleString('en-IN', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }),

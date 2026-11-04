@@ -1610,3 +1610,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
    stacking order means the topmost is always the one under the finger. */
 .tap-target + .tap-target::after { inset: -12px -6px; }
 
+
+/* A kicker sharing a row with a button ("Packages  + Add package"): its own
+   bottom margin made the row taller than the label, so the label sat 6px
+   above the button's centre and the button met whatever came next edge to
+   edge. In a row, the row carries the spacing instead. :where() keeps the
+   row rule weightless, so a row's own mb-* utility still wins.
+   (Matched as [class~="flex"]: naming .flex here reads to Tailwind as a
+   loop, because .kicker is itself built with @apply flex.)
+   A column (flex-col) is left alone: there the label's own gap is the
+   space between it and what follows. */
+[class~="flex"]:not([class~="flex-col"]) > .kicker { margin-bottom: 0; }
+:where([class~="flex"]:not([class~="flex-col"]):has(> .kicker)) { margin-bottom: .75rem; }

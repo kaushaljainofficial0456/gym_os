@@ -56,7 +56,7 @@ export default function Dashboard() {
       <div className="space-y-6">
         <div className="skeleton h-20 w-2/3" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map(i => <div key={i} className="card p-4"><Skeleton lines={2} /></div>)}</div>
-        <div className="grid lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3 card p-5"><Skeleton lines={5} /></div>
           <div className="lg:col-span-2 card p-5"><Skeleton lines={4} /></div>
         </div>
@@ -178,20 +178,23 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="trainer-dashboard-kpis">
         <Kpi label="Active clients" value={k.activeClients} sub={k.newClients != null ? `${k.newClients} new · ${k.inactive} inactive` : `${k.totalClients} total · ${k.inactive} inactive`} />
         <Kpi label="On track" value={k.onTrack} sub="adherence above 70%" />
-        <Kpi label="Needs attention" value={k.needsAttention} dot="bg-bad" />
+        {/* The headline counts these two together, so each says what it is:
+            "1 client needs you today" over a bare "Needs attention 0" read
+            as the page contradicting itself. */}
+        <Kpi label="Needs attention" value={k.needsAttention} sub="starting to slip" dot="bg-bad" />
         {/* attentionCount is absent from the owner payload entirely, so
             this rendered a bare " open alerts" with no number in front
             of it. Only claim a count when there is one. */}
         <Kpi
           label="At risk"
           value={k.atRisk}
-          sub={k.attentionCount ? `${k.attentionCount} open alerts` : undefined}
+          sub={k.attentionCount ? `likely to drop off · ${k.attentionCount} open alerts` : 'likely to drop off'}
           dot="bg-bad"
         />
       </div>
       )}
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* attention queue — staggered cards */}
         <Card className="lg:col-span-3 !p-0 overflow-hidden self-start">
           <div className="px-5 pt-5 pb-1">
@@ -228,7 +231,12 @@ export default function Dashboard() {
                         screen for every client with no logged days yet. A
                         missing number is now stated as missing. */}
                     <div className="text-[10px] text-faint mt-0.5 font-grotesk tabular-nums">
-                      {c.goal.replace(/_/g, ' ')} · {kg1(c.currentWeight)} → {kg1(c.targetWeight)} kg
+                      {/* Only the weights that exist: "22 → — kg" read as a broken
+                          figure for anyone without a target set. */}
+                      {c.goal.replace(/_/g, ' ')}
+                      {c.currentWeight != null && c.targetWeight != null ? ` · ${kg1(c.currentWeight)} → ${kg1(c.targetWeight)} kg`
+                        : c.currentWeight != null ? ` · ${kg1(c.currentWeight)} kg`
+                          : c.targetWeight != null ? ` · target ${kg1(c.targetWeight)} kg` : ''}
                       {c.adherence == null ? ' · no adherence data yet' : ` · ${fmt1(c.adherence)}% adherence`}
                     </div>
                   </div>

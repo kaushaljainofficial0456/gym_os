@@ -18,7 +18,10 @@ import { buildApp } from '../backend/src/index.js';
 let appPromise;
 
 export default async function handler(req, res) {
-  if (!appPromise) appPromise = buildApp();
+  // A start-up that failed (a database blip on a cold start) must not be
+  // remembered: kept, every later request on this warm instance would
+  // fail the same way until the host happened to recycle it.
+  if (!appPromise) appPromise = buildApp().catch((e) => { appPromise = null; throw e; });
   const app = await appPromise;
   return app(req, res);
 }

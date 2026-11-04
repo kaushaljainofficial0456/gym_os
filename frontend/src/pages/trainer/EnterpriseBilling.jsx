@@ -219,7 +219,7 @@ export default function EnterpriseBilling() {
         {/* Packages that failed to load are not "nothing to upgrade to": the
             options simply did not render, with no reason given. */}
         {packages.error && <ErrorState error={packages.error} onRetry={packages.reload} />}
-        <div className="grid sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {(packages.data?.packages || []).filter((p) => p.client_capacity !== currentCapacity).map((p) => (
             <button key={p.id} className="btn" disabled={busy} onClick={() => startUpgrade(p.client_capacity)}>
               {p.client_capacity > currentCapacity ? 'Upgrade' : 'Downgrade'} to {p.client_capacity} — ₹{p.price.toLocaleString('en-IN')}

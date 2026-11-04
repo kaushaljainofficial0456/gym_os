@@ -364,8 +364,11 @@ async function codeBelongsTo(db, code, tournamentId) {
  */
 export function tournamentPublicRoutes(db) {
   const r = Router();
-  const previewLimit = rateLimit({ windowMs: 60_000, max: 120, keyFn: (req) => req.ip || 'ip' });
-  const joinLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.ip || 'ip' });
+  // Per address, and at a gym event the whole room shares one: forty
+  // phones on the gym Wi-Fi each refreshing the board every 6 seconds, plus
+  // the TV, and most of them entering in the same few minutes.
+  const previewLimit = rateLimit({ windowMs: 60_000, max: 1200, keyFn: (req) => req.ip || 'ip' });
+  const joinLimit = rateLimit({ windowMs: 60_000, max: 60, keyFn: (req) => req.ip || 'ip' });
 
   const load = async (req) => {
     const code = String(req.params.code || '').toUpperCase().slice(0, 12);

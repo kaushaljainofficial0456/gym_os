@@ -4,6 +4,13 @@ import { api } from '../../api.js';
 import { useFetch, GOAL_LABEL, STATUS_META, cls, kg1 } from '../../utils.js';
 import { Card, Kicker, ErrorState, Modal, StatusChip, PageSkeleton } from '../../components/UI.jsx';
 
+// "24 Oct" from an ISO date; anything that is not one is shown as it is.
+const shortDay = (v) => {
+  if (!v) return '—';
+  if (!/^\d{4}-\d\d-\d\d/.test(String(v))) return v;
+  return new Date(`${String(v).slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
+
 const STATUS_FILTERS = ['ALL', 'ON_TRACK', 'NEEDS_ATTENTION', 'AT_RISK', 'INACTIVE'];
 
 
@@ -157,7 +164,7 @@ export default function Clients() {
           <input className="input flex-1 min-w-[200px] sm:!w-56 sm:flex-none"
                  placeholder="Search name or email…" aria-label="Search clients"
                  value={q} onChange={(e) => setQ(e.target.value)} />
-          <select className="input !w-40" value={sort} aria-label="Sort clients" onChange={(e) => setSort(e.target.value)}>
+          <select className="input flex-1 min-w-[140px] sm:!w-40 sm:flex-none" value={sort} aria-label="Sort clients" onChange={(e) => setSort(e.target.value)}>
             <option value="status">Sort: Status</option>
             <option value="name">Sort: Name</option>
             <option value="adherence">Sort: Adherence</option>
@@ -169,7 +176,7 @@ export default function Clients() {
               trainer list is built from the roster itself, so it never
               offers a coach with nobody assigned. */}
           {trainerOptions.length > 0 && (
-            <select className="input !w-44" value={trainerId} aria-label="Filter by trainer"
+            <select className="input flex-1 min-w-[140px] sm:!w-44 sm:flex-none" value={trainerId} aria-label="Filter by trainer"
                     onChange={(e) => setTrainerId(e.target.value)}>
               <option value="ALL">Any trainer</option>
               {trainerOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -177,7 +184,7 @@ export default function Clients() {
             </select>
           )}
 
-          <select className="input !w-44" value={money} aria-label="Filter by membership"
+          <select className="input flex-1 min-w-[140px] sm:!w-44 sm:flex-none" value={money} aria-label="Filter by membership"
                   onChange={(e) => setMoney(e.target.value)}>
             <option value="ALL">Any membership</option>
             <option value="OWING">Payment outstanding</option>
@@ -246,7 +253,7 @@ export default function Clients() {
                 <th className="px-3 py-3.5">Δ 7d</th>
                 <th className="px-3 py-3.5">Adherence</th>
                 <th className="px-3 py-3.5">Last workout</th>
-                <th className="px-3 py-3.5">Last check-in</th>
+                <th className="px-3 py-3.5 whitespace-nowrap">Last check-in</th>
                 <th className="px-3 py-3.5">Trainer</th>
                 <th className="px-3 py-3.5">Membership</th>
                 <th className="px-3 py-3.5">Status</th>
@@ -290,9 +297,10 @@ export default function Clients() {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-xs text-mute font-grotesk">{c.lastWorkout || '—'}</td>
-                  <td className="px-3 py-3 text-xs text-mute font-grotesk">{c.lastCheckin ? c.lastCheckin.slice(0, 10) : '—'}</td>
-                  <td className="px-3 py-3 text-xs font-grotesk" style={{ color: c.trainerName ? 'var(--mute)' : 'var(--faint)' }}>
+                  {/* "24 Oct" on one line: the ISO dates broke at their hyphens. */}
+                  <td className="px-3 py-3 text-xs text-mute font-grotesk whitespace-nowrap">{shortDay(c.lastWorkout)}</td>
+                  <td className="px-3 py-3 text-xs text-mute font-grotesk whitespace-nowrap">{shortDay(c.lastCheckin)}</td>
+                  <td className="px-3 py-3 text-xs font-grotesk max-w-[160px] truncate" title={c.trainerName || undefined} style={{ color: c.trainerName ? 'var(--mute)' : 'var(--faint)' }}>
                     {c.trainerName || 'Unassigned'}
                   </td>
                   <td className="px-3 py-3"><MembershipPill membership={c.membership} /></td>
