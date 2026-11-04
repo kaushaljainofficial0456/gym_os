@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const backend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,7 +21,8 @@ const FAKE_SECRET = 'fake_secret_for_tests_only';
 function inRazorpay(fetchStub, body, extraEnv = {}) {
   const script = `
     globalThis.fetch = ${fetchStub};
-    const p = await import(${JSON.stringify(path.join(backend, 'src/services/payments/paymentProvider.js'))});
+    // A file:// URL, not a bare path: on Windows import('D:\...') is refused.
+    const p = await import(${JSON.stringify(pathToFileURL(path.join(backend, 'src/services/payments/paymentProvider.js')).href)});
     const out = await (${body})(p);
     process.stdout.write(JSON.stringify(out));
   `;
@@ -107,4 +108,74 @@ test('checkout signature: HMAC-SHA256(order_id|payment_id, key secret); a mismat
     empty: p.verifyCheckoutSignature({ providerOrderId: 'order_A', providerPaymentId: 'pay_B', signature: '' }),
   })`);
   assert.deepEqual(out, { good: true, swapped: false, tampered: false, empty: false });
+});
+
+// ---- An unpaid order Razorpay cannot take payment against is re-issued ----
+// Idempotency keys are stable per intent, so an order created under the mock
+// provider (or another Razorpay account) used to come back on every attempt,
+// and Checkout failed on an order id Razorpay had never issued.
+
+const ORDERS_URL = pathToFileURL(path.join(backend, 'src/services/payments/paymentOrders.js')).href;
+
+/** One payment_orders row in memory, enough for createPaymentOrder. */
+const fakeDb = (row) => `(() => {
+  const rows = [${JSON.stringify(row)}];
+  return {
+    rows,
+    async q1(sql, params) {
+      if (/FROM organizations/.test(sql)) return null;
+      if (/idempotency_key = \?/.test(sql)) return rows.find((r) => r.idempotency_key === params[0]) || null;
+      if (/WHERE id = \?/.test(sql)) return rows.find((r) => r.id === params[0]) || null;
+      throw new Error('unexpected q1 ' + sql);
+    },
+    async run(sql, params) {
+      if (!/^\s*UPDATE payment_orders SET provider/.test(sql)) throw new Error('unexpected run ' + sql);
+      const [provider, providerOrderId, createdAt, updatedAt, id, oldId] = params;
+      const r = rows.find((x) => x.id === id && x.provider_order_id === oldId && x.status === 'CREATED');
+      if (r) Object.assign(r, { provider, provider_order_id: providerOrderId, created_at: createdAt, updated_at: updatedAt });
+      return { changes: r ? 1 : 0 };
+    },
+  };
+})()`;
+
+const pending = (over) => ({ id: 'pord_1', status: 'CREATED', provider: 'mock', provider_order_id: 'mock_order_old', amount: 1999, currency: 'INR', idempotency_key: 'renew-sub_1-2026-02-23', created_at: '2026-08-28T11:53:37.809Z', ...over });
+const reuse = (row) => `async () => {
+  const { createPaymentOrder } = await import(${JSON.stringify(ORDERS_URL)});
+  const calls = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { calls.push(((init && init.method) || 'GET') + ' ' + url); return real(url, init); };
+  const db = ${fakeDb(row)};
+  const order = await createPaymentOrder(db, { subjectType: 'client_membership', subjectId: 'sub_1', orgId: 'org_1', amount: 1999, idempotencyKey: 'renew-sub_1-2026-02-23' });
+  return { order, calls };
+}`;
+const gateway = `async (url, init) => {
+  if (init && init.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'order_NEW' }) };
+  if (url.includes('/orders/order_KNOWN/')) return { ok: true, status: 200, json: async () => ({ items: [] }) };
+  return { ok: false, status: 400, text: async () => '{"error":{"description":"The id provided does not exist"}}' };
+}`;
+
+test('an unpaid order from the mock provider gets a real Razorpay order, on the same record', () => {
+  const { order, calls } = inRazorpay(gateway, reuse(pending()));
+  assert.equal(order.id, 'pord_1');
+  assert.equal(order.provider, 'razorpay');
+  assert.equal(order.provider_order_id, 'order_NEW');
+  assert.deepEqual(calls, ['POST https://api.razorpay.com/v1/orders']);
+  assert.ok(order.created_at > '2026-08-28T11:53:37.809Z', 'dated as the new attempt, not the stale one');
+});
+
+test('an unpaid order from another Razorpay account is re-issued too', () => {
+  const { order } = inRazorpay(gateway, reuse(pending({ provider: 'razorpay', provider_order_id: 'order_FROMOTHERKEYS' })));
+  assert.equal(order.provider_order_id, 'order_NEW');
+});
+
+test('an unpaid order Razorpay knows is returned as it was: a retried tap never makes a second order', () => {
+  const { order, calls } = inRazorpay(gateway, reuse(pending({ provider: 'razorpay', provider_order_id: 'order_KNOWN' })));
+  assert.equal(order.provider_order_id, 'order_KNOWN');
+  assert.ok(!calls.some((c) => c.startsWith('POST')), 'no new order created');
+});
+
+test('an order that has been paid is never replaced', () => {
+  const { order, calls } = inRazorpay(gateway, reuse(pending({ status: 'SUCCESS' })));
+  assert.equal(order.provider_order_id, 'mock_order_old');
+  assert.deepEqual(calls, []);
 });
