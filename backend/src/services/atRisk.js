@@ -180,7 +180,7 @@ export async function evaluateOrg(db, orgId, trainerId = null) {
   const clientIds = clients.map((c) => c.id);
   const allOpen = clientIds.length
     ? await db.q(
-        `SELECT id, type, client_id FROM alerts WHERE client_id IN (${clientIds.map(() => '?').join(',')}) AND status = 'open'`,
+        `SELECT id, type, client_id, severity, title, detail, data_json FROM alerts WHERE client_id IN (${clientIds.map(() => '?').join(',')}) AND status = 'open'`,
         clientIds)
     : [];
   const openByClient = new Map();
@@ -192,16 +192,22 @@ export async function evaluateOrg(db, orgId, trainerId = null) {
     const r = evaluated.get(c.id);
     results.push({ client: c, ...r });
     const open = openByClient.get(c.id) || [];
-    const openByType = new Map(open.map(a => [a.type, a.id]));
+    const openByType = new Map(open.map(a => [a.type, a]));
     const firedTypes = new Set();
     for (const rule of r.rules) {
       firedTypes.add(rule.type);
-      const existingId = openByType.get(rule.type);
-      if (existingId) {
-        // refresh content so stale severity/title/detail don't linger
-        await db.run(
-          `UPDATE alerts SET severity = ?, title = ?, detail = ?, data_json = ? WHERE id = ?`,
-          [rule.severity, rule.title, rule.detail, JSON.stringify(rule), existingId]);
+      const existing = openByType.get(rule.type);
+      if (existing) {
+        // Refresh content so stale severity/title/detail don't linger, but
+        // only when it changed: this runs on every visit to the alerts
+        // list, and rewriting every open alert each time was most of that
+        // request's database work, growing with the gym.
+        const dataJson = JSON.stringify(rule);
+        if (existing.severity !== rule.severity || existing.title !== rule.title || existing.detail !== rule.detail || existing.data_json !== dataJson) {
+          await db.run(
+            `UPDATE alerts SET severity = ?, title = ?, detail = ?, data_json = ? WHERE id = ?`,
+            [rule.severity, rule.title, rule.detail, dataJson, existing.id]);
+        }
       } else {
         await db.run(
           `INSERT INTO alerts (id, org_id, client_id, trainer_id, type, severity, title, detail, data_json, status, created_at)
@@ -211,7 +217,7 @@ export async function evaluateOrg(db, orgId, trainerId = null) {
       }
     }
     // resolve alerts whose condition no longer fires
-    for (const [type, id] of openByType) {
+    for (const [type, { id }] of openByType) {
       if (!firedTypes.has(type)) {
         await db.run(`UPDATE alerts SET status = 'resolved', resolved_at = ? WHERE id = ?`, [nowIso, id]);
       }

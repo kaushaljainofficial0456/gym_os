@@ -115,21 +115,24 @@ export default function Trainers() {
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* One row at every width: the search takes what is left and the
+              sort keeps its own width. Capped at 240px and wrapping, the two
+              landed on separate lines of different widths on a phone. */}
+          <div className="flex items-center gap-2">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search trainers"
               aria-label="Search trainers"
-              className="input text-[13px]"
-              style={{ minHeight: 40, maxWidth: 240 }}
+              className="input text-[13px] flex-1 min-w-0 sm:max-w-[320px]"
+              style={{ minHeight: 40 }}
             />
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
               aria-label="Sort trainers"
-              className="input text-[12px] ml-auto"
-              style={{ minHeight: 40, maxWidth: 180 }}
+              className="input text-[12px] ml-auto shrink-0"
+              style={{ minHeight: 40, width: 'auto' }}
             >
               <option value="load">Sort: Busiest</option>
               <option value="clients">Sort: Most clients</option>
@@ -137,7 +140,9 @@ export default function Trainers() {
             </select>
           </div>
 
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {/* grid-cols-1, not a bare grid: with no column rule the one column
+              grew to fit the longest name and pushed every card off screen. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {shown.map((t) => <TrainerCard key={t.id} t={t} />)}
           </div>
 
@@ -168,7 +173,7 @@ function TrainerCard({ t }) {
         <Avatar name={t.name} src={t.avatar} size="w-11 h-11" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-grotesk font-semibold text-[14px] truncate" style={{ color: 'var(--ink)' }}>
+            <span className="font-grotesk font-semibold text-[14px] truncate min-w-0 max-w-full" title={t.name} style={{ color: 'var(--ink)' }}>
               {t.name}
             </span>
             {/* An inactive trainer still holds clients, which is exactly

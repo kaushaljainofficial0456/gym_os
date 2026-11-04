@@ -54,7 +54,7 @@ export default function EnterpriseDashboard() {
     <div className="space-y-6" data-tour="trainer-enterprise">
       <PageHeader title="Enterprise" sub="Your Barbell subscription, capacity, and QR onboarding." />
 
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Kpi label="Purchased capacity" value={d.purchasedCapacity} />
         <Kpi label="Active clients" value={d.activeClients} />
         <Kpi label="Available slots" value={d.availableCapacity} tone={d.availableCapacity === 0 ? 'text-bad' : undefined} />
@@ -64,7 +64,7 @@ export default function EnterpriseDashboard() {
         <Bar label="Capacity used" right={`${d.activeClients} / ${d.purchasedCapacity}`} value={d.activeClients} max={d.purchasedCapacity || 1} />
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-5">
           <div className="kicker">Subscription</div>
           <div className="font-grotesk font-bold">{d.subscription?.client_capacity ? `${d.subscription.client_capacity} clients / package` : '—'}</div>

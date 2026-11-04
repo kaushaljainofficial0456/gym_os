@@ -195,3 +195,27 @@ test('POST /api/alerts/:id/action rejects an invalid action value (schema-valida
   const row = await db.q1('SELECT status FROM alerts WHERE id = ?', [alertId]);
   assert.equal(row.status, 'open');
 });
+
+test('re-evaluating on every list visit writes only the alerts whose content changed', async () => {
+  const { evaluateOrg } = await import('../src/services/atRisk.js');
+  const db = await memDb();
+  const a = await seedOrgWithClient(db, 'a');
+  // A workout three weeks ago: no workout since, and nothing else since either.
+  const longAgo = new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10);
+  await db.run('INSERT INTO workout_logs (id, client_id, date) VALUES (?, ?, ?)', [idp('wl'), a.clientId, longAgo]);
+  await evaluateOrg(db, a.orgId, a.trainerId);
+  const open = await db.q("SELECT id FROM alerts WHERE org_id = ? AND status = 'open'", [a.orgId]);
+  assert.ok(open.length > 0, 'a client gone quiet raises alerts');
+
+  const writes = [];
+  const run = db.run.bind(db);
+  db.run = (sql, params) => { if (/^\s*(UPDATE|INSERT)/i.test(sql)) writes.push(sql.trim().slice(0, 40)); return run(sql, params); };
+  await evaluateOrg(db, a.orgId, a.trainerId);
+  assert.deepEqual(writes, [], 'nothing changed, so nothing is written');
+
+  await run('UPDATE alerts SET title = ? WHERE id = ?', ['stale title', open[0].id]);
+  await evaluateOrg(db, a.orgId, a.trainerId);
+  assert.equal(writes.length, 1, 'the one changed alert is refreshed');
+  const fresh = await db.q1('SELECT title FROM alerts WHERE id = ?', [open[0].id]);
+  assert.notEqual(fresh.title, 'stale title');
+});

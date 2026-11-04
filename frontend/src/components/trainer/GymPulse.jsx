@@ -81,7 +81,16 @@ function monthAxis(points, endDay, months = 6) {
 }
 
 /* ── a bar series with no library, so it costs nothing to load ── */
-function MiniBars({ points, label, format, color = 'var(--m-training)', empty }) {
+/* ₹1.4L, ₹35K, ₹2.1Cr: room for an amount over a bar a few pixels wide. */
+const moneyShort = (n) => {
+  const v = Math.round(Number(n) || 0);
+  if (v >= 1e7) return `₹${+(v / 1e7).toFixed(1)}Cr`;
+  if (v >= 1e5) return `₹${+(v / 1e5).toFixed(1)}L`;
+  if (v >= 1e3) return `₹${+(v / 1e3).toFixed(1)}K`;
+  return `₹${v}`;
+};
+
+function MiniBars({ points, label, format, short, color = 'var(--m-training)', empty }) {
   const vals = points.map((p) => p.value);
   const peak = Math.max(...vals, 1);
   const total = vals.reduce((s, v) => s + v, 0);
@@ -89,6 +98,32 @@ function MiniBars({ points, label, format, color = 'var(--m-training)', empty })
   if (!points.length || total === 0) {
     return (
       <div className="py-6 text-center text-[11px]" style={{ color: 'var(--faint)' }}>{empty}</div>
+    );
+  }
+
+  /* A handful of bars (months) each get their own label and amount. Drawn
+     like the thirty daily ones, six months became three fat blocks pressed
+     to one side with a label at each end, and no figure anywhere. */
+  if (points.length <= 12) {
+    const nameOf = (p) => (p.date ? shortDate(p.date) : shortMonth(p.month));
+    return (
+      <div className="flex items-end gap-1.5" style={{ height: 112 }}
+           role="img" aria-label={`${label}. ${points.map((p) => `${nameOf(p)} ${format ? format(p.value) : p.value}`).join(', ')}.`}>
+        {points.map((p) => (
+          <div key={p.date || p.month} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full"
+               title={`${nameOf(p)}: ${format ? format(p.value) : p.value}`}>
+            <span className="text-[9.5px] font-semibold tabular-nums leading-none mb-1 whitespace-nowrap" style={{ color: 'var(--mute)' }}>
+              {p.value > 0 ? (short ? short(p.value) : p.value) : ''}
+            </span>
+            <div className="w-full max-w-[28px] flex items-end" style={{ height: 72 }}>
+              <div className="w-full rounded-t-[4px]"
+                   style={{ height: `${p.value > 0 ? Math.max(6, (p.value / peak) * 100) : 0}%`, background: color }} />
+            </div>
+            <span className="w-full max-w-[28px] mt-1.5" style={{ height: 1, background: 'var(--line)' }} aria-hidden="true" />
+            <span className="text-[9.5px] mt-1 tabular-nums leading-none" style={{ color: 'var(--faint)' }}>{nameOf(p)}</span>
+          </div>
+        ))}
+      </div>
     );
   }
 
@@ -333,7 +368,7 @@ export default function GymPulse({ pulse, kpis, loading, error, onRetry }) {
           <div className="mt-2">
             <MiniBars
               points={monthAxis(series.revenue, today.date)} label="Revenue by month"
-              color="var(--m-body)" format={(v) => money(v, m.currency)}
+              color="var(--m-body)" format={(v) => money(v, m.currency)} short={moneyShort}
               empty="No payments recorded yet. Revenue appears once payments are logged."
             />
           </div>

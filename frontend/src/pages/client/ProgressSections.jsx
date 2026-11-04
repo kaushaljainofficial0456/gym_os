@@ -689,7 +689,7 @@ function CustomMetrics() {
                   </div>
                   <div className="text-[10.5px] mt-0.5 tabular-nums" style={{ color: 'var(--mute)' }}>
                     {m.latest
-                      ? <>Latest <strong style={{ color: 'var(--ink)' }}>{m.latest.value}{m.unit ? ` ${m.unit}` : ''}</strong> · {String(m.latest.date).slice(0, 10)}</>
+                      ? <>Latest <strong style={{ color: 'var(--ink)' }}>{m.latest.value}{m.unit ? ` ${m.unit}` : ''}</strong> · <span className="whitespace-nowrap">{new Date(`${String(m.latest.date).slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span></>
                       : 'Nothing recorded yet'}
                     {m.target != null && <> · target {m.target}{m.unit ? ` ${m.unit}` : ''}</>}
                   </div>

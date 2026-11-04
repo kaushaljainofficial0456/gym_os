@@ -168,7 +168,7 @@ export default function GymAttendance() {
   }, [data, query, filter]);
 
   if (!data) return <PageSkeleton />;
-  if (err && !data.roster.length) return <ErrorState message={err} onRetry={() => load(date)} />;
+  if (err && !data.roster.length) return <ErrorState error={{ message: err }} onRetry={() => load(date)} />;
 
   const s = data.summary;
   const isToday = date === todayKey();
@@ -507,7 +507,7 @@ function QrDialog({ qr, onClose, onRefresh }) {
           {' '}— a saved screenshot will not work tomorrow.
         </p>
 
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CodePanel label="Arriving" sub="Scan to check in" token={inToken} tone="var(--m-body)" expired={expired} />
           {outToken
             ? <CodePanel label="Leaving" sub="Scan to check out" token={outToken} tone="var(--m-energy)" expired={expired} />

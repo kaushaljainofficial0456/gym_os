@@ -384,7 +384,7 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
   };
 
   return (
-    <div className="grid lg:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       {confirmDialog}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full font-grotesk text-xs shadow-card border"
@@ -448,7 +448,7 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
       <Card className="lg:col-span-3">
         <Kicker tone="cyan">Why this client needs attention</Kicker>
         {rules.length ? (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
             {rules.map((r) => (
               <div key={r.type} className={cls('rounded-xl border p-3',
                 r.severity === 'high' ? 'border-bad/40 bg-bad/8' : r.severity === 'medium' ? 'border-warn/40 bg-warn/8' : 'border-line bg-tint/[.02]')}>
@@ -584,7 +584,7 @@ function NutritionTab({ clientId, profile }) {
   };
 
   return (
-    <div className="grid lg:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <Card className="lg:col-span-2">
         <div className="flex items-center justify-between mb-4">
           <Kicker tone="gold">Today's fuel plan</Kicker>
@@ -676,7 +676,7 @@ function PhotosTab({ clientId, photos, onChanged }) {
   const group = (v) => photos.filter((p) => p.view === v);
 
   return (
-    <div className="grid md:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       {['front', 'side', 'back'].map((v) => {
         const shots = group(v);
         const before = shots[0];

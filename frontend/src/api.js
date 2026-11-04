@@ -126,10 +126,64 @@ export async function downloadFile(path, filename) {
  * Which of the two a given call is cannot be told from the path -- only
  * the caller knows.
  */
+/**
+ * A request the server never answers must not keep a page on its loading
+ * placeholders for as long as the host lets a function run (minutes). Reads
+ * give up after READ_TIMEOUT_MS, writes after WRITE_TIMEOUT_MS (uploads and
+ * the food photo estimate legitimately take a while), and either then fails
+ * like any other error, so the page shows its own "Try again".
+ *
+ * A read that met a cold start, a deploy swapping over or a dropped
+ * connection (no response, or 502/503/504 from the host) is sent once more
+ * before giving up. Writes never are: the first may have landed.
+ */
+const READ_TIMEOUT_MS = 20_000;
+const WRITE_TIMEOUT_MS = 60_000;
+const HOST_HICCUP = new Set([502, 503, 504]);
+
+export const isNetworkError = (e) => e?.network === true;
+
+async function send(url, init, timeoutMs) {
+  const method = String(init.method || 'GET').toUpperCase();
+  const read = method === 'GET' || method === 'HEAD';
+  const limit = timeoutMs ?? (read ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS);
+  for (let attempt = 0; ; attempt += 1) {
+    const ctrl = new AbortController();
+    const callerSignal = init.signal;
+    const follow = () => ctrl.abort(callerSignal.reason);
+    callerSignal?.addEventListener('abort', follow, { once: true });
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, limit);
+    try {
+      const res = await fetch(url, { ...init, signal: ctrl.signal });
+      if (read && attempt === 0 && HOST_HICCUP.has(res.status)) {
+        await new Promise((r) => setTimeout(r, 700));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (callerSignal?.aborted) throw e;
+      if (read && attempt === 0) {
+        await new Promise((r) => setTimeout(r, 700));
+        continue;
+      }
+      const err = new Error(timedOut
+        ? 'Barbell is taking too long to answer. Check your connection and try again.'
+        : 'Could not reach Barbell. Check your connection and try again.');
+      err.network = true;
+      err.status = 0;
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      callerSignal?.removeEventListener('abort', follow);
+    }
+  }
+}
+
 export async function api(path, opts = {}) {
-  const { probe, ...fetchOpts } = opts;
+  const { probe, timeoutMs, ...fetchOpts } = opts;
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  const res = await fetch('/api' + path, { ...fetchOpts, headers, credentials: 'include' });
+  const res = await send('/api' + path, { ...fetchOpts, headers, credentials: 'include' }, timeoutMs);
   if (res.status === 401) {
     // A DEMO that has ended is not an expired login, and must not be
     // treated as one. The backend answers `demo_session_ended` (see

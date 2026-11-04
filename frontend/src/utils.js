@@ -22,7 +22,16 @@ export function weightJump(kg, lastKg, limit = 0.15) {
  *  are raw floats (a pound entry converts to 45.31387776300001). */
 export const kg1 = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : String(Math.round(Number(v) * 10) / 10));
 
-export const fmtK = (n) => Number(n || 0).toLocaleString('en-US');
+// Indian grouping (12,49,875): the amounts are rupees and the readers are in India.
+export const fmtK = (n) => Number(n || 0).toLocaleString('en-IN');
+// ₹1.4L, ₹35K, ₹2.1Cr: for a chart axis, where ₹12,49,875 has no room.
+export const fmtMoneyShort = (n) => {
+  const v = Math.round(Number(n) || 0);
+  if (v >= 1e7) return `₹${+(v / 1e7).toFixed(1)}Cr`;
+  if (v >= 1e5) return `₹${+(v / 1e5).toFixed(1)}L`;
+  if (v >= 1e3) return `₹${+(v / 1e3).toFixed(1)}K`;
+  return `₹${v}`;
+};
 export const fmt1 = (n) => (Math.round(Number(n || 0) * 10) / 10).toFixed(1);
 export const fmtDate = (iso) => {
   if (!iso) return '—';

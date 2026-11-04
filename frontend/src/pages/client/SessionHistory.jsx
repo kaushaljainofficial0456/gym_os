@@ -122,7 +122,7 @@ export default function SessionHistory() {
   const completedCount = (rows || []).filter((w) => w.status === 'completed').length;
 
   if (rows === null) return <PageSkeleton />;
-  if (err && !rows.length) return <ErrorState message={err} onRetry={() => window.location.reload()} />;
+  if (err && !rows.length) return <ErrorState error={{ message: err }} onRetry={() => window.location.reload()} />;
 
   return (
     <div className="pb-24">
