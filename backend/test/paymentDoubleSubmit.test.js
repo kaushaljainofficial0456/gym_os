@@ -132,8 +132,11 @@ test('an identical payment outside the window is allowed', async (t) => {
   t.after(() => close());
 
   await pay('c1', 1999);
-  await db.run("UPDATE payments SET paid_at = ? WHERE amount = 1999",
-    [new Date(Date.now() - 10 * 60_000).toISOString()]);
+  // Recorded ten minutes ago: the guard reads when a payment was RECORDED
+  // (its receipt order), since the date paid can be typed in after the fact.
+  const earlier = new Date(Date.now() - 10 * 60_000).toISOString();
+  await db.run("UPDATE payments SET paid_at = ? WHERE amount = 1999", [earlier]);
+  await db.run("UPDATE payment_orders SET created_at = ? WHERE provider = 'manual'", [earlier]);
 
   assert.equal((await pay('c1', 1999)).status, 201, 'ten minutes later is a real second payment');
   assert.equal(await countRows(db), 2);

@@ -36,7 +36,9 @@ async function resolveLineItem(db, order) {
     `SELECT p.name AS plan_name FROM enrollment_tokens t LEFT JOIN packages p ON p.id = t.membership_plan_id WHERE t.id = ?`, [order.subject_id]);
   if (viaToken) return { description: viaToken.plan_name ? `Membership -- ${viaToken.plan_name}` : 'Gym membership', detail: null };
   const viaRenewal = await db.q1('SELECT plan_name FROM subscriptions WHERE id = ?', [order.subject_id]);
-  return { description: viaRenewal?.plan_name ? `Membership renewal -- ${viaRenewal.plan_name}` : 'Gym membership', detail: null };
+  // Taken at the desk: a payment towards the membership, not necessarily a renewal.
+  const what = order.provider === 'manual' ? 'Membership payment' : 'Membership renewal';
+  return { description: viaRenewal?.plan_name ? `${what} -- ${viaRenewal.plan_name}` : 'Gym membership', detail: null };
 }
 
 async function resolveCustomer(db, order) {
@@ -140,11 +142,20 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   ]);
   if (!invoice) return null;
   const order = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [invoice.order_id]);
-  const [lineItem, customer, refunds] = await Promise.all([
+  const [lineItem, customer, refunds, payment, account] = await Promise.all([
     resolveLineItem(db, order),
     resolveCustomer(db, order),
     order ? db.q(`SELECT * FROM refunds WHERE payment_order_id = ? AND status = 'SUCCESS' ORDER BY created_at`, [order.id]) : [],
+    order ? db.q1('SELECT method, paid_at FROM payments WHERE external_ref = ? ORDER BY paid_at LIMIT 1', [order.id]) : null,
+    db.q1('SELECT business_name, legal_name FROM payment_accounts WHERE org_id = ?', [orgId]).catch(() => null),
   ]);
+  /* A membership is sold by the GYM to its member, so its receipt is the
+     gym's: from the gym, to the member. It used to read "From Barbell,
+     billed to <gym>, attn <member>" -- an invoice from us to the gym, for
+     money the member paid the gym. What Barbell sells a gym (a package,
+     capacity) stays an invoice from Barbell to the gym. */
+  const membership = order?.subject_type === 'CLIENT_MEMBERSHIP';
+  const gymName = account?.legal_name || account?.business_name || org?.name || 'Gym';
 
   // Cache key covers every mutable field the render below actually reads
   // (invoice.status, order.status, refund count) -- anything else on an
@@ -185,9 +196,9 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   paintBackground(doc);
 
   // ---- header: "Invoice" + brand/number ----
-  doc.fillColor(INK).font('Helvetica-Bold').fontSize(34).text('Invoice', margin, margin);
+  doc.fillColor(INK).font('Helvetica-Bold').fontSize(34).text(membership ? 'Receipt' : 'Invoice', margin, margin);
   doc.font('Helvetica').fontSize(9).fillColor(MUTED)
-    .text('Barbell', margin, margin, { width: rightEdge - margin, align: 'right' });
+    .text(membership ? gymName : 'Barbell', margin, margin, { width: rightEdge - margin, align: 'right' });
   doc.text(`No. ${invoice.invoice_number}`, margin, margin + 13, { width: rightEdge - margin, align: 'right' });
 
   let y = margin + 56;
@@ -212,22 +223,34 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
 
   label('From', y); y += labelGap;
   doc.font('Helvetica-Bold').fontSize(11).fillColor(INK);
-  y = drawLine('Barbell', y, { gap: 4 });
-  doc.font('Helvetica').fontSize(9).fillColor(MUTED);
-  for (const line of SK_OS_ADDRESS) y = drawLine(line, y, { gap: 0 });
-  y += blockGap;
-
-  label('Billed to', y); y += labelGap;
-  doc.font('Helvetica-Bold').fontSize(11).fillColor(INK);
-  y = drawLine(org?.name || 'Gym', y, { gap: 4 });
-  if (customer?.name) {
+  if (membership) {
+    y = drawLine(gymName, y, { gap: 4 });
+  } else {
+    y = drawLine('Barbell', y, { gap: 4 });
     doc.font('Helvetica').fontSize(9).fillColor(MUTED);
-    y = drawLine(`Attn: ${customer.name}`, y, { gap: 0 });
-    if (customer.email) y = drawLine(customer.email, y, { gap: 0 });
+    for (const line of SK_OS_ADDRESS) y = drawLine(line, y, { gap: 0 });
   }
   y += blockGap;
 
-  label('Issue date', y); y += labelGap;
+  label(membership ? 'Paid by' : 'Billed to', y); y += labelGap;
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(INK);
+  if (membership) {
+    y = drawLine(customer?.name || 'Member', y, { gap: 4 });
+    if (customer?.email) {
+      doc.font('Helvetica').fontSize(9).fillColor(MUTED);
+      y = drawLine(customer.email, y, { gap: 0 });
+    }
+  } else {
+    y = drawLine(org?.name || 'Gym', y, { gap: 4 });
+    if (customer?.name) {
+      doc.font('Helvetica').fontSize(9).fillColor(MUTED);
+      y = drawLine(`Attn: ${customer.name}`, y, { gap: 0 });
+      if (customer.email) y = drawLine(customer.email, y, { gap: 0 });
+    }
+  }
+  y += blockGap;
+
+  label(membership ? 'Paid on' : 'Issue date', y); y += labelGap;
   doc.font('Helvetica').fontSize(10).fillColor(INK).text(String(invoice.issued_at).slice(0, 10), margin, y, { width: leftColW }); y += 15;
   y += blockGap - 15;
 
@@ -300,8 +323,16 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
       doc.fillColor(INK).text(v, margin + 100, by, { width: 260 });
       by += 14;
     };
-    refRow('Reference', order.provider_order_id || order.id);
-    refRow('Status', order.status);
+    // How it was paid. A desk payment carries the method the owner chose
+    // and whatever reference they typed (a UPI transaction id, a cheque
+    // number); one made online carries the gateway's order reference.
+    const manual = order.provider === 'manual';
+    const METHOD = { cash: 'Cash', upi: 'UPI', card: 'Card', bank_transfer: 'Bank transfer', cheque: 'Cheque' };
+    const method = manual ? (METHOD[String(payment?.method || '').toLowerCase()] || payment?.method || 'Paid at the gym') : 'Online';
+    refRow('Method', method);
+    if (!manual || order.provider_order_id) refRow('Reference', order.provider_order_id || order.id);
+    refRow('Receipt for', order.id);
+    if (manual) refRow('Recorded by', gymName);
     by += 6;
   }
 
@@ -325,4 +356,74 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   if (pdfCache.size >= PDF_CACHE_MAX) pdfCache.delete(pdfCache.keys().next().value); // simple FIFO eviction
   pdfCache.set(invoiceId, { key: cacheKey, buf });
   return buf;
+}
+
+
+/**
+ * A receipt for something Barbell sold a person directly (the Barbell plan
+ * for independent clients): the same look as a gym's receipt, from Barbell,
+ * to them. Takes the facts already resolved, since there is no gym order.
+ */
+export async function renderPlanReceiptPdf({ number, customer, paidOn, description, detail, amount, reference }) {
+  const margin = 50;
+  const doc = new PDFDocument({ size: 'A4', margin });
+  doc.on('pageAdded', () => paintBackground(doc));
+  const chunks = [];
+  doc.on('data', (c) => chunks.push(c));
+  const done = new Promise((resolve, reject) => { doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
+  const rightEdge = doc.page.width - margin;
+  paintBackground(doc);
+
+  doc.fillColor(INK).font('Helvetica-Bold').fontSize(34).text('Receipt', margin, margin);
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('Barbell', margin, margin, { width: rightEdge - margin, align: 'right' });
+  doc.text(`No. ${number}`, margin, margin + 13, { width: rightEdge - margin, align: 'right' });
+  let y = margin + 56;
+  doc.moveTo(margin, y).lineTo(rightEdge, y).strokeColor(LINE).lineWidth(1).stroke();
+  y += 22;
+  const label = (t, ly) => doc.font('Helvetica').fontSize(8).fillColor(FAINT).text(t.toUpperCase(), margin, ly, { characterSpacing: 0.6 });
+  const line = (t, ly, opts = {}) => { doc.text(t, margin, ly, { width: 220 }); return ly + doc.heightOfString(t, { width: 220 }) + (opts.gap ?? 2); };
+
+  label('From', y); y += 12;
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(INK); y = line('Barbell', y, { gap: 4 });
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED);
+  for (const l of SK_OS_ADDRESS) y = line(l, y, { gap: 0 });
+  y += 20;
+  label('Paid by', y); y += 12;
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(INK); y = line(customer?.name || 'Member', y, { gap: 4 });
+  if (customer?.email) { doc.font('Helvetica').fontSize(9).fillColor(MUTED); y = line(customer.email, y, { gap: 0 }); }
+  y += 20;
+  label('Paid on', y); y += 12;
+  doc.font('Helvetica').fontSize(10).fillColor(INK).text(String(paidOn).slice(0, 10), margin, y); y += 30;
+
+  const tableX = margin + 250;
+  let ty = margin + 78;
+  doc.font('Helvetica').fontSize(8).fillColor(FAINT).text('DESCRIPTION', tableX, ty);
+  doc.text('AMOUNT', tableX, ty, { width: rightEdge - tableX, align: 'right' });
+  ty += 12;
+  doc.moveTo(tableX, ty).lineTo(rightEdge, ty).strokeColor(LINE).lineWidth(1).stroke();
+  ty += 16;
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(description, tableX, ty, { width: rightEdge - tableX - 90 });
+  doc.font('Helvetica').text(money(amount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+  ty += 16;
+  if (detail) { doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(detail, tableX, ty, { width: rightEdge - tableX - 90 }); ty += 16; }
+
+  let by = Math.max(y, ty) + 20;
+  doc.moveTo(margin, by).lineTo(rightEdge, by).strokeColor(LINE).lineWidth(1).stroke();
+  by += 20;
+  doc.font('Helvetica').fontSize(8).fillColor(FAINT).text('TOTAL PAID', margin, by, { characterSpacing: 0.6 });
+  doc.font('Helvetica-Bold').fontSize(26).fillColor(INK).text(money(amount), margin, by - 4, { width: rightEdge - margin, align: 'right' });
+  by += 46;
+  if (reference) {
+    doc.font('Helvetica').fontSize(8).fillColor(FAINT).text('PAYMENT REFERENCE', margin, by, { characterSpacing: 0.6 });
+    by += 16;
+    doc.font('Helvetica').fontSize(9).fillColor(MUTED).text('Method', margin, by, { width: 90 });
+    doc.fillColor(INK).text('Online', margin + 100, by); by += 14;
+    doc.fillColor(MUTED).text('Reference', margin, by, { width: 90 });
+    doc.fillColor(INK).text(reference, margin + 100, by);
+  }
+  const footerY = doc.page.height - margin - 10;
+  doc.font('Helvetica').fontSize(8).fillColor(FAINT).text('Thank you for training with Barbell.', margin, footerY, { width: 300 });
+  doc.text('Page 1 of 1', margin, footerY, { width: rightEdge - margin, align: 'right' });
+  doc.end();
+  return done;
 }

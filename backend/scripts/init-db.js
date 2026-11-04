@@ -43,6 +43,13 @@ const MIGRATIONS = [
   // Tournaments: how a co-host is found across gyms, and the way to opt out.
   ['users', 'username', `username TEXT`],
   ['users', 'findable', `findable INTEGER NOT NULL DEFAULT 1`],
+  // Gym payouts (Razorpay Route): the gym's product configuration id, and
+  // what Razorpay still needs before it will pay the gym out.
+  ['payment_accounts', 'provider_product_id', `provider_product_id TEXT`],
+  ['payment_accounts', 'requirements_json', `requirements_json TEXT`],
+  // The Barbell plan: when an independent client's free trial began, if
+  // that is later than signing up (the first check after the plan shipped).
+  ['users', 'plan_trial_from', `plan_trial_from TEXT`],
   // --- Trainer attendance: gym-configurable rules ---
   ['gym_settings', 'attendance_mode', `attendance_mode TEXT NOT NULL DEFAULT 'simple'`],
   ['gym_settings', 'attendance_grace_min', `attendance_grace_min INTEGER NOT NULL DEFAULT 10`],

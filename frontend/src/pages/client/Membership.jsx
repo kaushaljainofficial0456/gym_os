@@ -16,7 +16,7 @@
 //     a document number is worse than one that is briefly incomplete.
 // ============================================================
 import { useState } from 'react';
-import { api } from '../../api.js';
+import { api, downloadFile } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, PageHeader, ErrorState, Empty, Modal } from '../../components/UI.jsx';
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
@@ -75,15 +75,26 @@ const PAYMENT_STATUS = {
  * ever paid. It is the first question a membership screen is opened to
  * answer.
  *
- * PAYMENT STATE AND RECEIPT STATE ARE DIFFERENT FACTS. An order reaching
- * SUCCESS does not mean an invoice was issued for it, so a receipt line
- * appears only where a real issued invoice came back with the row. There
- * is no download button, because nothing in this product generates a
- * receipt document -- and a button that produces nothing is worse than
- * the invoice number, which is the thing a gym can actually look up.
+ * EVERY PAYMENT THE GYM RECEIVED, with its receipt. A payment taken at
+ * the desk used to be missing from this list altogether (it read online
+ * orders only), and nothing could be downloaded. Each paid row now has a
+ * PDF receipt from the gym, issued on first download if need be; an
+ * online attempt that never completed still has none, and says so.
  */
 function PaymentHistory({ reloadKey }) {
   const payments = useFetch(() => api('/enrollment/client/payments'), [reloadKey]);
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState('');
+  const download = async (p) => {
+    setBusy(p.paymentId); setErr('');
+    try {
+      await downloadFile(`/receipts/payments/${p.paymentId}/pdf`, `${p.invoice?.number || 'receipt'}.pdf`);
+    } catch (e) {
+      setErr(e.message || 'Could not download the receipt. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (payments.loading) {
     return <Card className="p-4"><div className="t-sub">Loading payments…</div></Card>;
@@ -127,15 +138,20 @@ function PaymentHistory({ reloadKey }) {
                 <span>
                   {new Date(p.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
-                {/* Only where an invoice genuinely exists. */}
                 {p.invoice
                   ? <span className="tabular-nums">Receipt {p.invoice.number}</span>
-                  : <span>No receipt issued</span>}
+                  : <span>{p.paymentId ? 'Receipt ready to download' : 'No receipt issued'}</span>}
               </div>
+              {p.paymentId && (
+                <button type="button" className="btn btn-sm mt-2 w-full" disabled={busy === p.paymentId} onClick={() => download(p)}>
+                  {busy === p.paymentId ? 'Preparing…' : 'Download receipt (PDF)'}
+                </button>
+              )}
             </div>
           );
         })}
       </div>
+      {err && <div className="field-error mt-2" role="alert">{err}</div>}
       <p className="text-[10px] mt-2.5" style={{ color: 'var(--faint)' }}>
         Ask your gym if a charge here looks wrong.
       </p>
@@ -163,6 +179,18 @@ export default function Membership() {
     finally { setBusy(false); }
   };
 
+  // The receipt for the payment just made: its payment row, found by order.
+  const downloadPaidReceipt = async (orderId) => {
+    try {
+      const list = await api('/enrollment/client/payments');
+      const row = (list.payments || []).find((p) => p.id === orderId && p.paymentId);
+      if (!row) throw new Error('Your receipt is still being prepared. It will be in Payments below in a moment.');
+      await downloadFile(`/receipts/payments/${row.paymentId}/pdf`, `${row.invoice?.number || 'receipt'}.pdf`);
+    } catch (e) {
+      setErr(e.message || 'Could not download the receipt.');
+    }
+  };
+
   const onPaid = async (paymentId, signature) => {
     setBusy(true); setErr('');
     const paidOrder = order;
@@ -185,6 +213,7 @@ export default function Membership() {
         amountLabel: money(paidOrder.amount, paidOrder.currency),
         purchase: m?.plan_name,
         transactionId: paymentId,
+        orderId: paidOrder.id,
         receiptData: {
           gymName,
           date: new Date().toLocaleDateString(),
@@ -210,6 +239,7 @@ export default function Membership() {
         amountLabel: money(paidOrder.amount, paidOrder.currency),
         purchase: m?.plan_name,
         transactionId: paymentId,
+        orderId: paidOrder.id,
         verifyError: e.message,
       });
     } finally { setBusy(false); }
@@ -290,7 +320,15 @@ export default function Membership() {
 
       {err && <div className="field-error" role="alert" style={{ marginTop: 0 }}>{err}</div>}
 
-      {canRenew && (
+      {canRenew && membership.data?.onlinePayments === false && (
+        <Card className="p-4">
+          <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Renew at the front desk</div>
+          <p className="t-sub mt-1">
+            {membership.data.gym?.name || 'Your gym'} takes payments at the desk for now. They will give you a receipt, and it will appear below.
+          </p>
+        </Card>
+      )}
+      {canRenew && membership.data?.onlinePayments !== false && (
         <button className="btn-primary" data-loading={busy ? 'true' : undefined} disabled={busy} onClick={startRenew}>
           Renew membership
         </button>
@@ -314,6 +352,7 @@ export default function Membership() {
               purchase={result.purchase}
               transactionId={result.transactionId}
               receiptData={result.receiptData}
+              onDownloadReceipt={result.payment === 'success' ? () => downloadPaidReceipt(result.orderId) : undefined}
               onDone={() => setResult(null)}
             />
             {result.verifyError && (

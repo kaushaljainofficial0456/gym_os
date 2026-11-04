@@ -23,7 +23,7 @@ import { assertNotDemoOrg } from '../demo/session.js';
  * is the actual enforcement; this function just makes the retry path
  * return the original order instead of erroring.
  */
-export async function createPaymentOrder(db, { subjectType, subjectId, orgId, clientId = null, amount, currency = 'INR', idempotencyKey }) {
+export async function createPaymentOrder(db, { subjectType, subjectId, orgId, clientId = null, amount, currency = 'INR', idempotencyKey, transfers }) {
   if (!(amount > 0)) throw new Error('createPaymentOrder: amount must be a positive number');
   // A demo tenant must never reach a real payment gateway -- see
   // assertNotDemoOrg for why this is guarded at the service and not on the
@@ -33,11 +33,11 @@ export async function createPaymentOrder(db, { subjectType, subjectId, orgId, cl
   if (idempotencyKey) {
     const existing = await db.q1('SELECT * FROM payment_orders WHERE idempotency_key = ?', [idempotencyKey]);
     if (existing && !(await needsNewGatewayOrder(existing))) return existing;
-    if (existing) return reissueGatewayOrder(db, existing, { subjectType, subjectId, orgId });
+    if (existing) return reissueGatewayOrder(db, existing, { subjectType, subjectId, orgId, transfers });
   }
   const orderId = id('pord');
   const nowIso = now();
-  const provider = await createProviderOrder({ amount, currency, receipt: orderId, notes: { subjectType, subjectId, orgId } });
+  const provider = await createProviderOrder({ amount, currency, receipt: orderId, notes: { subjectType, subjectId, orgId }, transfers });
   await db.run(
     `INSERT INTO payment_orders (id, subject_type, subject_id, org_id, client_id, amount, currency, provider, provider_order_id, status, idempotency_key, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?, 'CREATED', ?, ?, ?)`,
@@ -75,9 +75,9 @@ async function needsNewGatewayOrder(existing) {
 /** The same payment_orders row, with a gateway order the current provider
  *  can take payment against. Compare-and-set on the old gateway id, so two
  *  taps racing here keep one replacement, and the loser gets the winner's. */
-async function reissueGatewayOrder(db, existing, { subjectType, subjectId, orgId }) {
+async function reissueGatewayOrder(db, existing, { subjectType, subjectId, orgId, transfers }) {
   const provider = await createProviderOrder({
-    amount: existing.amount, currency: existing.currency, receipt: existing.id, notes: { subjectType, subjectId, orgId },
+    amount: existing.amount, currency: existing.currency, receipt: existing.id, notes: { subjectType, subjectId, orgId }, transfers,
   });
   // A new attempt, so a new created_at: the member's payment list is dated
   // by it, and a renewal paid today was shown under the day the stale

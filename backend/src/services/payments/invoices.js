@@ -9,7 +9,7 @@ import { id, now } from '../../ids.js';
  *  order_id: a duplicate call (e.g. both checkout-verify AND a webhook
  *  independently trying to issue one for the same order) returns the
  *  EXISTING invoice rather than creating a second one. */
-export async function issueInvoice(db, order) {
+export async function issueInvoice(db, order, { issuedAt } = {}) {
   const existing = await db.q1('SELECT * FROM invoices WHERE order_id = ?', [order.id]);
   if (existing) return existing;
   const invoiceId = id('inv');
@@ -20,9 +20,11 @@ export async function issueInvoice(db, order) {
   // constraint that actually enforces that.
   const invoiceNumber = `SKOS-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
   const nowIso = now();
+  // A payment taken at the desk is receipted for the day it was paid,
+  // which the owner may enter after the fact; everything else, today.
   await db.run(
     `INSERT INTO invoices (id, invoice_number, order_id, org_id, subject_type, amount, currency, tax_amount, status, issued_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'ISSUED', ?, ?)`,
-    [invoiceId, invoiceNumber, order.id, order.org_id, order.subject_type, order.amount, order.currency, nowIso, nowIso]);
+    [invoiceId, invoiceNumber, order.id, order.org_id, order.subject_type, order.amount, order.currency, issuedAt || nowIso, nowIso]);
   return db.q1('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
 }

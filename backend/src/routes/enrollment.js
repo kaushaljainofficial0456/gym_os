@@ -36,6 +36,7 @@ import { notify, notifyOwners } from '../services/enterprise/notifications.js';
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, registerActivationHandler, registerReleaseHandler } from '../services/payments/paymentActivation.js';
 import { issueInvoice } from '../services/payments/invoices.js';
+import { memberCheckout, onlinePaymentsOpen } from '../services/payments/payouts.js';
 
 // Releases the capacity slot claimed at /client/join time (see
 // reserveCapacitySlot there) once this order is known to have
@@ -196,12 +197,17 @@ async function finishClientMembership(db, tx, { orgId, userId, clientId, plan, o
   const subId = id('sub');
   await tx.run(
     `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, status, payment_status, lifecycle_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'paid', 'ACTIVE')`,
-    [subId, orgId, clientId, plan?.id || null, plan?.name || 'Membership', order.amount, order.currency, startDate, endDate]);
-  await tx.run(
-    `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at, external_ref)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)`,
-    [id('pay'), orgId, clientId, subId, order.amount, order.currency, order.provider, nowIso, order.id]);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, 'ACTIVE')`,
+    [subId, orgId, clientId, plan?.id || null, plan?.name || 'Membership', order.amount, order.currency, startDate, endDate,
+      order.due ? 'pending' : 'paid']);
+  // Joined to pay at the desk: no money yet, so no payment row. The gym
+  // sees it as outstanding until the owner records the payment.
+  if (!order.due) {
+    await tx.run(
+      `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at, external_ref)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)`,
+      [id('pay'), orgId, clientId, subId, order.amount, order.currency, order.provider, nowIso, order.id]);
+  }
 
   await notify(db, { orgId, userId, type: 'membership_activated', title: `Welcome! Your ${plan?.name || 'membership'} is active`, data: { subscriptionId: subId } });
   await notifyOwners(db, orgId, {
@@ -387,7 +393,12 @@ export default function enrollmentRoutes(db) {
     // This is what makes a comped/beta/free-tier membership possible:
     // scan the QR, and you are a member.
     const amount = Number(plan?.amount) || 0;
-    if (amount <= 0) {
+    // The money goes to the gym (services/payments/payouts.js). A gym not
+    // yet set up to be paid online still takes the member in, with the
+    // membership due: they pay at the desk, and the owner records it.
+    const checkout = amount > 0 ? await memberCheckout(db, consumed.token.org_id, amount) : { ok: true, transfers: [] };
+    const payAtDesk = amount > 0 && !checkout.ok;
+    if (amount <= 0 || payAtDesk) {
       try {
         await db.tx(async (tx) => {
           await activateClientMembership(db, {
@@ -398,10 +409,11 @@ export default function enrollmentRoutes(db) {
             subject_id: consumed.token.id,
             client_id: null,
             org_id: consumed.token.org_id,
-            amount: 0,
+            amount: payAtDesk ? amount : 0,
             currency: plan?.currency || 'INR',
             provider: 'none',
             id: null,
+            due: payAtDesk,
           }, tx);
           // The paid path releases this via registerReleaseHandler once
           // the order resolves; with no order there is nothing to resolve,
@@ -424,7 +436,9 @@ export default function enrollmentRoutes(db) {
       });
       setAuthCookie(res, token);
       return res.json({
-        free: true,
+        free: !payAtDesk,
+        payAtDesk,
+        amountDue: payAtDesk ? amount : 0,
         gym: { id: org.id, name: org.name },
         membershipPlan: plan,
         token,
@@ -435,7 +449,7 @@ export default function enrollmentRoutes(db) {
     try {
       order = await createPaymentOrder(db, {
         subjectType: 'CLIENT_MEMBERSHIP', subjectId: consumed.token.id, orgId: consumed.token.org_id,
-        amount, currency: plan?.currency || 'INR', idempotencyKey: `client-mem-${consumed.token.id}`,
+        amount, currency: plan?.currency || 'INR', idempotencyKey: `client-mem-${consumed.token.id}`, transfers: checkout.transfers,
       });
     } catch (e) {
       // The slot was already claimed above -- if order creation itself
@@ -503,7 +517,9 @@ export default function enrollmentRoutes(db) {
     const membership = subscription
       ? { ...subscription, lifecycle_status: effectiveMembershipStatus(subscription, { tz: req.tz }) }
       : null;
-    res.json({ membership, gym: org });
+    // Whether renewing here can be paid online, or happens at the desk.
+    const onlinePayments = client.org_id ? await onlinePaymentsOpen(db, client.org_id) : false;
+    res.json({ membership, gym: org, onlinePayments });
   });
 
   /* ================= CLIENT: my payment history =================
@@ -527,30 +543,63 @@ export default function enrollmentRoutes(db) {
     const client = await db.q1('SELECT id FROM clients WHERE user_id = ?', [req.user.sub]);
     if (!client) return res.json({ payments: [] });
 
-    const rows = await db.q(
-      `SELECT o.id, o.amount, o.currency, o.status, o.provider, o.created_at, o.updated_at,
-              i.invoice_number, i.issued_at AS invoice_issued_at, i.status AS invoice_status
-         FROM payment_orders o
-         LEFT JOIN invoices i ON i.order_id = o.id AND i.status = 'ISSUED'
-        WHERE o.client_id = ? AND o.subject_type = 'CLIENT_MEMBERSHIP'
-        ORDER BY o.created_at DESC
-        LIMIT 50`,
-      [client.id]);
+    /* Every payment the gym received, however it was paid: a payment taken
+       at the desk is a `payments` row with no online order behind it, and
+       this list used to read online orders only, so a member who paid
+       cash never saw it here at all. Each paid row can be receipted.
+       Online orders with no payment row are listed after them. */
+    const [paid, open] = await Promise.all([
+      db.q(
+        `SELECT p.id AS payment_id, p.amount, p.currency, p.status AS payment_status, p.method, p.paid_at,
+                o.id AS order_id, o.status AS order_status, o.provider, o.created_at, o.updated_at,
+                i.invoice_number, i.issued_at AS invoice_issued_at
+           FROM payments p
+           LEFT JOIN payment_orders o ON o.id = p.external_ref
+           LEFT JOIN invoices i ON i.order_id = o.id AND i.status = 'ISSUED'
+          WHERE p.client_id = ?
+          ORDER BY p.paid_at DESC
+          LIMIT 50`, [client.id]),
+      // Orders with no payment row: attempts that never completed, and any
+      // older paid order recorded without one, which still shows as paid.
+      db.q(
+        `SELECT o.id, o.amount, o.currency, o.status, o.provider, o.created_at, o.updated_at,
+                i.invoice_number, i.issued_at AS invoice_issued_at
+           FROM payment_orders o
+           LEFT JOIN invoices i ON i.order_id = o.id AND i.status = 'ISSUED'
+          WHERE o.client_id = ? AND o.subject_type = 'CLIENT_MEMBERSHIP'
+            AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.external_ref = o.id)
+          ORDER BY o.created_at DESC
+          LIMIT 20`, [client.id]),
+    ]);
 
     res.json({
-      payments: rows.map((r0) => ({
-        id: r0.id,
-        amount: Number(r0.amount),
-        currency: r0.currency,
-        status: r0.status,
-        provider: r0.provider,
-        createdAt: r0.created_at,
-        updatedAt: r0.updated_at,
-        // Present only when an issued invoice actually exists for it.
-        invoice: r0.invoice_number
-          ? { number: r0.invoice_number, issuedAt: r0.invoice_issued_at }
-          : null,
-      })),
+      payments: [
+        ...paid.map((r0) => ({
+          id: r0.order_id || r0.payment_id,
+          paymentId: r0.payment_id, // what GET /api/receipts/payments/:id/pdf takes
+          amount: Number(r0.amount),
+          currency: r0.currency,
+          // A refunded online payment says so; otherwise it was paid.
+          status: r0.order_status && r0.order_status !== 'SUCCESS' ? r0.order_status : (r0.payment_status === 'refunded' ? 'REFUNDED' : 'SUCCESS'),
+          provider: r0.provider || 'manual',
+          method: r0.method || null,
+          createdAt: r0.paid_at || r0.created_at,
+          updatedAt: r0.updated_at || r0.paid_at,
+          invoice: r0.invoice_number ? { number: r0.invoice_number, issuedAt: r0.invoice_issued_at } : null,
+        })),
+        ...open.map((r0) => ({
+          id: r0.id,
+          paymentId: null,
+          amount: Number(r0.amount),
+          currency: r0.currency,
+          status: r0.status,
+          provider: r0.provider,
+          method: null,
+          createdAt: r0.created_at,
+          updatedAt: r0.updated_at,
+          invoice: r0.invoice_number ? { number: r0.invoice_number, issuedAt: r0.invoice_issued_at } : null,
+        })),
+      ],
     });
   });
 
@@ -571,9 +620,19 @@ export default function enrollmentRoutes(db) {
     // package rates -- a genuine plan CHANGE on renewal isn't built yet
     // (out of scope for this pass; would need its own quote step,
     // mirroring the org-level billing_quotes pattern).
+    // The money goes to the gym (services/payments/payouts.js). A gym not
+    // yet set up to be paid online renews at the desk instead.
+    const checkout = await memberCheckout(db, client.org_id, subscription.amount);
+    if (!checkout.ok) {
+      const gym = await db.q1('SELECT name FROM organizations WHERE id = ?', [client.org_id]);
+      return res.status(409).json({
+        error: 'pay_at_desk',
+        message: `${gym?.name || 'Your gym'} takes payments at the front desk for now. Renew there and they will give you a receipt.`,
+      });
+    }
     const order = await createPaymentOrder(db, {
       subjectType: 'CLIENT_MEMBERSHIP', subjectId: subscription.id, orgId: client.org_id, clientId: client.id,
-      amount: subscription.amount, currency: subscription.currency,
+      amount: subscription.amount, currency: subscription.currency, transfers: checkout.transfers,
       // Keyed to the subscription's CURRENT end_date -- a double-click
       // before this renewal's payment resolves reuses the SAME order
       // (createPaymentOrder's own idempotency_key dedup); once it

@@ -1846,6 +1846,30 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_org ON invoices(org_id, issued_at);
 
+-- Barbell's own plan for INDEPENDENT clients (no gym): a 14-day trial of
+-- everything, then ₹59 a month or ₹590 a year. Paid to Barbell, never to
+-- a gym, so it lives apart from payment_orders (which always belong to a
+-- gym). One row per purchase attempt; access runs to the latest paid
+-- period_end. See services/plans/barbellPlan.js.
+CREATE TABLE IF NOT EXISTS barbell_plan_orders (
+  id                  TEXT PRIMARY KEY,
+  user_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan                TEXT NOT NULL CHECK (plan IN ('monthly','yearly')),
+  amount              REAL NOT NULL,
+  currency            TEXT NOT NULL DEFAULT 'INR',
+  provider            TEXT NOT NULL,
+  provider_order_id   TEXT,
+  provider_payment_id TEXT,
+  status              TEXT NOT NULL DEFAULT 'CREATED' CHECK (status IN ('CREATED','SUCCESS','FAILED','CANCELLED','REFUNDED')),
+  period_start        TEXT,
+  period_end          TEXT,
+  invoice_number      TEXT UNIQUE,
+  idempotency_key     TEXT UNIQUE,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_barbell_plan_orders_user ON barbell_plan_orders(user_id, status, period_end);
+
 -- Gym owner's payout/settlement account state (e.g. Razorpay Route
 -- linked account). Deliberately stores ONLY the provider's own account
 -- reference + a status enum -- never raw bank/UPI credentials, which
@@ -1863,6 +1887,8 @@ CREATE TABLE IF NOT EXISTS payment_accounts (
   status                TEXT NOT NULL DEFAULT 'NOT_CONNECTED' CHECK (status IN ('NOT_CONNECTED','KYC_PENDING','ACTIVE','LIMITED')),
   business_name         TEXT,
   legal_name            TEXT,
+  provider_product_id TEXT,   -- Razorpay Route product configuration (acc_prd_...)
+  requirements_json TEXT,     -- what Razorpay still needs, as it returned it
   updated_at            TEXT NOT NULL
 );
 

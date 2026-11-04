@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, downloadFile } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch, fmtK, fmt1, fmtMoneyShort, localDateKey } from '../../utils.js';
+import { useFetch, fmtK, fmtMoneyShort, localDateKey } from '../../utils.js';
 import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import MembersTable from '../../components/trainer/MembersTable.jsx';
 import { TrendChart } from '../../components/charts.jsx';
@@ -20,6 +21,10 @@ const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', mon
 // explicit state graph on the server (an invalid jump like cancel ->
 // resume is rejected there, not just hidden here). Dangerous actions
 // (suspend/cancel) ask for confirmation, per spec.
+// How a payment was made, in words: an online payment's method is the
+// gateway's name ("razorpay"), which means nothing to the person reading it.
+const METHOD_LABEL = { razorpay: 'Online', mock: 'Online', cash: 'Cash', upi: 'UPI', card: 'Card', bank_transfer: 'Bank transfer', cheque: 'Cheque' };
+
 function MembershipActions({ member, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
@@ -67,6 +72,7 @@ function ExportButton({ path, filename, label }) {
 }
 
 export default function Business() {
+  const nav = useNavigate();
   const { user } = useAuth();
   const ov = useFetch(() => api('/admin/overview'));
   const members = useFetch(() => api('/admin/members'));
@@ -84,7 +90,24 @@ export default function Business() {
   const [pkgForm, setPkgForm] = useState({ name: '', amount: '', period_days: 30, features: '' });
   const [subForm, setSubForm] = useState({ client_id: '', package_id: '', start_date: '' });
   const [payOpen, setPayOpen] = useState(false);
-  const [payForm, setPayForm] = useState({ client_id: '', amount: '', method: 'cash' });
+  const blankPayment = () => ({ client_id: '', amount: '', method: 'cash', paid_on: localDateKey(), reference: '' });
+  const [payForm, setPayForm] = useState(blankPayment);
+  // Members pay the gym directly once its payout account is live; until
+  // then this page is where their desk payments are recorded.
+  const payout = useFetch(() => api('/enterprise/payment-account').catch(() => null));
+  // The payment just recorded, so its receipt can be downloaded straight away.
+  const [justPaid, setJustPaid] = useState(null);
+  const [receiptBusy, setReceiptBusy] = useState(null);
+  const downloadReceipt = async (paymentId, number) => {
+    setReceiptBusy(paymentId);
+    try {
+      await downloadFile(`/receipts/payments/${paymentId}/pdf`, `${number || 'receipt'}.pdf`);
+    } catch (e) {
+      setToast(e.message || 'Could not download the receipt');
+    } finally {
+      setReceiptBusy(null);
+    }
+  };
   const [attDate, setAttDate] = useState(localDateKey());
   const [attList, setAttList] = useState(null);
   const [loadingAtt, setLoadingAtt] = useState(false);
@@ -122,17 +145,27 @@ export default function Business() {
 
   const addSub = async () => {
     try {
-      await api('/admin/subscriptions', { method: 'POST', body: JSON.stringify({ ...subForm, start_date: subForm.start_date || undefined }) });
+      const r = await api('/admin/subscriptions', { method: 'POST', body: JSON.stringify({ ...subForm, start_date: subForm.start_date || undefined }) });
       setSubOpen(false); setSubForm({ client_id: '', package_id: '', start_date: '' });
-      setToast('Subscription created'); ov.reload({ silent: true }); members.reload({ silent: true });
+      ov.reload({ silent: true }); members.reload({ silent: true });
+      // Selling a membership at the desk records its payment, which has a receipt.
+      if (r?.paymentId) setJustPaid({ paymentId: r.paymentId, number: null });
+      else setToast('Subscription created');
     } catch (e) { setToast(e.message); }
   };
 
   const addPayment = async () => {
     try {
-      await api('/admin/payments', { method: 'POST', body: JSON.stringify({ client_id: payForm.client_id, amount: Number(payForm.amount), method: payForm.method }) });
-      setPayOpen(false); setPayForm({ client_id: '', amount: '', method: 'cash' });
-      setToast('Payment recorded'); ov.reload({ silent: true });
+      const r = await api('/admin/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          client_id: payForm.client_id, amount: Number(payForm.amount), method: payForm.method,
+          paid_on: payForm.paid_on || undefined, reference: payForm.reference.trim() || undefined,
+        }),
+      });
+      setPayOpen(false); setPayForm(blankPayment());
+      setJustPaid({ paymentId: r.paymentId, number: r.receipt?.number || null });
+      ov.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
@@ -172,6 +205,18 @@ export default function Business() {
         </div>
         <button className="btn-primary" onClick={() => setSubOpen(true)}>+ New subscription</button>
       </div>
+
+      {payout.data?.account && payout.data.account.status !== 'ACTIVE' && (
+        <Card className="p-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Members can&rsquo;t pay you online yet</div>
+              <p className="text-xs mt-0.5 text-mute">Set up payouts and their payments go straight to your bank. Until then, record desk payments below; each gets a receipt.</p>
+            </div>
+            <button type="button" className="btn btn-sm shrink-0" onClick={() => nav('/app/trainer/enterprise')}>Set up payouts</button>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="Active members" value={d.activeMembers} sub={`${d.totalMembers} total`} />
@@ -358,6 +403,7 @@ export default function Business() {
                   <th className="py-2 pr-3 font-semibold">Amount</th>
                   <th className="py-2 pr-3 font-semibold">Method</th>
                   <th className="py-2 pr-3 font-semibold">Status</th>
+                  <th className="py-2 pr-3 font-semibold"><span className="sr-only">Receipt</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -380,14 +426,22 @@ export default function Business() {
                         {p.client_name || <span style={{ color: 'var(--faint)' }}>Unknown member</span>}
                       </td>
                       <td className="py-2 pr-3 font-grotesk font-bold tabular-nums whitespace-nowrap">₹{fmtK(p.amount)}</td>
-                      <td className="py-2 pr-3 text-xs" style={{ color: 'var(--mute)' }}>
-                        {p.method || '—'}
+                      <td className="py-2 pr-3 text-xs whitespace-nowrap" style={{ color: 'var(--mute)' }}>
+                        {METHOD_LABEL[String(p.method || '').toLowerCase()] || p.method || '—'}
                       </td>
                       <td className="py-2 pr-3">
                         <span className="inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold"
                           style={{ color: tone, border: `1px solid ${tone}` }}>
                           {status.toUpperCase()}
                         </span>
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {p.id && status !== 'failed' && (
+                          <button type="button" className="btn btn-sm whitespace-nowrap" disabled={receiptBusy === p.id}
+                            aria-label={`Download receipt for ${p.client_name || 'this payment'}`} onClick={() => downloadReceipt(p.id)}>
+                            {receiptBusy === p.id ? '…' : 'Receipt'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -463,9 +517,33 @@ export default function Business() {
               <option value="upi">UPI</option>
               <option value="card">Card</option>
               <option value="bank_transfer">Bank transfer</option>
+              <option value="cheque">Cheque</option>
             </select>
           </div>
-          <button className="btn-primary w-full" onClick={addPayment}>Record payment</button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[11px] text-mute">Paid on</span>
+              <input className="input mt-1" type="date" aria-label="Date paid" max={localDateKey()} value={payForm.paid_on} onChange={(e) => setPayForm((f) => ({ ...f, paid_on: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-mute">Reference (optional)</span>
+              <input className="input mt-1" aria-label="Payment reference" maxLength={60} placeholder="UPI ref, cheque no." value={payForm.reference} onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))} />
+            </label>
+          </div>
+          <p className="text-[11px] text-mute">A receipt is issued for this payment. You and the member can both download it.</p>
+          <button className="btn-primary w-full" disabled={!payForm.client_id || !(Number(payForm.amount) > 0)} onClick={addPayment}>Record payment</button>
+        </div>
+      </Modal>
+
+      <Modal open={!!justPaid} onClose={() => setJustPaid(null)} title="Payment recorded">
+        <div className="space-y-3">
+          <p className="text-sm text-mute">
+            {justPaid?.number ? `Receipt ${justPaid.number} is ready. The member can also download it from their Membership page.` : 'The member can download the receipt from their Membership page.'}
+          </p>
+          <button className="btn-primary w-full" disabled={receiptBusy === justPaid?.paymentId} onClick={() => downloadReceipt(justPaid.paymentId, justPaid.number)}>
+            {receiptBusy === justPaid?.paymentId ? 'Preparing…' : 'Download receipt (PDF)'}
+          </button>
+          <button className="btn w-full" onClick={() => setJustPaid(null)}>Done</button>
         </div>
       </Modal>
 

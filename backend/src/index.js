@@ -42,6 +42,8 @@ import communityRoutes from './routes/community.js';
 import communitiesRoutes from './routes/communities.js';
 import communityInviteRoutes from './routes/communityInvite.js';
 import tournamentRoutes, { tournamentPublicRoutes } from './routes/tournaments.js';
+import receiptRoutes from './routes/receipts.js';
+import planRoutes, { planGate } from './routes/plan.js';
 import attendanceRoutes from './routes/attendance.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
@@ -244,6 +246,11 @@ app.get(['/ready', '/api/ready'], async (_req, res) => {
 // NOTE: org timezone is resolved per-request inside requireAuth (after the token is
 // verified) so req.tz always reflects the authenticated org — never a pre-auth default.
 
+// Independent clients past their free trial with no Barbell plan: held at
+// the plans screen (402) everywhere but the paths they need to pay, manage
+// or leave their account. Ahead of every route so none is missed.
+app.use(planGate(db));
+app.use('/api/plan', planRoutes(db)); // the Barbell plan: status, buy, receipts
 app.use('/api/auth', authRoutes(db));
 app.use('/api/dashboard', dashboardRoutes(db));
 app.use('/api/clients', clientRoutes(db));
@@ -267,6 +274,7 @@ app.use('/iclock', admsRoutes(db)); // PUBLIC: eSSL / ZKTeco terminals push punc
 app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/communities', communitiesRoutes(db)); // friend communities: private, invite-only, cross-gym -- see routes/communities.js
+app.use('/api/receipts', receiptRoutes(db)); // the PDF receipt for a payment: the member who paid, or that gym's owner
 app.use('/api/tournaments-public', tournamentPublicRoutes(db)); // PUBLIC: what a tournament QR opens, with guest sign-up
 app.use('/api/tournaments', tournamentRoutes(db)); // gym wars: hosting, QR enrolment, co-hosts, live scoring, results
 app.use('/api/community-invite', communityInviteRoutes(db)); // PUBLIC: what an invite link leads to (no auth) -- joining requires auth, see POST /api/communities/join
@@ -358,7 +366,12 @@ app.use('/uploads', requireAuth, async (req, res) => {
     // stays in the server log only.
     if (err?.code === 'payment_gateway_auth_failed' || err?.code === 'payment_gateway_error') {
       console.error(`[error] req=${req.id || '-'}`, err.message);
-      return res.status(err.status).json({ error: err.code, message: 'The payment gateway could not create this payment. Please try again shortly.' });
+      return res.status(err.status).json({ error: err.code, message: 'The payment gateway could not complete this just now. Please try again shortly.' });
+    }
+    // Razorpay refused what a gym owner submitted for their payout account
+    // ("Invalid PAN"): its own sentence is the actionable part.
+    if (err?.code === 'payment_gateway_rejected') {
+      return res.status(422).json({ error: err.code, message: err.publicMessage || 'Razorpay could not accept these details.', field: err.field || undefined });
     }
     if (err?.code === 'amount_below_minimum') {
       return res.status(400).json({ error: 'amount_below_minimum', message: 'Payments must be at least ₹1.' });

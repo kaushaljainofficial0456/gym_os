@@ -4,6 +4,7 @@ import { endGymMembership } from '../services/enterprise/gymExit.js';
 import { z } from 'zod';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
+import { receiptManualPayment } from '../services/payments/receipts.js';
 import { id, now } from '../ids.js';
 import { dayKey, shiftDayKey, addDays, daysAgoIso } from '../utils/time.js';
 import { track } from '../services/events.js';
@@ -215,9 +216,10 @@ export default function adminRoutes(db) {
     if (!client) return;
     const pkg = await db.q1('SELECT * FROM packages WHERE id = ? AND org_id = ?', [req.body.package_id, req.orgId]);
     if (!pkg) return res.status(404).json({ error: 'Package not found' });
-    const start = req.body.start_date || dayKey();
+    const start = req.body.start_date || dayKey(new Date(), req.tz);
     const end = addDays(new Date(start + 'T00:00:00Z'), pkg.period_days).toISOString().slice(0, 10);
     const subId = id('sub');
+    const payId = id('pay');
     // Was two sequential db.run() calls: a failure on the second insert left
     // an 'active, paid' subscription committed with no matching payment
     // row -- a real bookkeeping gap for a money-related flow. Same db.tx()
@@ -253,21 +255,34 @@ export default function adminRoutes(db) {
       await tx.run(
         `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
          VALUES (?, ?, ?, ?, ?, ?, 'cash', 'paid', ?)`,
-        [id('pay'), req.orgId, req.body.client_id, subId, pkg.amount, pkg.currency, now()]);
+        [payId, req.orgId, req.body.client_id, subId, pkg.amount, pkg.currency, now()]);
     });
+    // Best-effort, after the money is booked: a receipt failing to issue
+    // must never undo the membership. The receipt route issues it on
+    // first download if this did not.
+    const payment = await db.q1('SELECT * FROM payments WHERE id = ?', [payId]);
+    await receiptManualPayment(db, payment).catch(() => {});
     await track(db, { orgId: req.orgId, userId: req.user.sub, type: 'subscription_renewed', data: { subscriptionId: subId, amount: pkg.amount } });
-    res.status(201).json({ id: subId });
+    res.status(201).json({ id: subId, paymentId: payId });
   });
 
   r.post('/payments', validate(z.object({
     client_id: z.string().min(1),
     amount: z.number().positive(),
     method: z.string().max(30).default('cash'),
-    subscription_id: z.string().optional()
+    subscription_id: z.string().optional(),
+    // The day it was paid, which the owner may be entering after the
+    // fact; today when left out. Never in the future.
+    paid_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    // A UPI transaction id, a cheque number: printed on the receipt.
+    reference: z.string().trim().max(60).optional(),
   })), async (req, res) => {
     const client = await requireOrgClient(req, res, req.body.client_id);
     if (!client) return;
     const b = req.body;
+    const today = dayKey(new Date(), req.tz); // the gym's today, not UTC's
+    if (b.paid_on && b.paid_on > today) return res.status(422).json({ error: 'A payment cannot be dated in the future.' });
+    const paidAt = b.paid_on && b.paid_on !== today ? `${b.paid_on}T12:00:00.000Z` : now();
 
     /* A DOUBLE-CLICK MUST NOT BOOK THE MONEY TWICE.
      *
@@ -288,11 +303,16 @@ export default function adminRoutes(db) {
      * saved when it deliberately did not; they need to know the first
      * one landed. */
     const since = new Date(Date.now() - 60_000).toISOString();
+    // When it was RECORDED, not the date typed in: an owner entering last
+    // week's payment twice in a row is the same double tap. (Older rows
+    // have no receipt order yet, so the paid_at window still covers them.)
     const dupe = await db.q1(
-      `SELECT id, paid_at FROM payments
-        WHERE org_id = ? AND client_id = ? AND amount = ? AND status = 'paid' AND paid_at >= ?
-        ORDER BY paid_at DESC`,
-      [req.orgId, b.client_id, b.amount, since]);
+      `SELECT p.id, p.paid_at FROM payments p
+         LEFT JOIN payment_orders o ON o.id = p.external_ref AND o.provider = 'manual'
+        WHERE p.org_id = ? AND p.client_id = ? AND p.amount = ? AND p.status = 'paid'
+          AND (o.created_at >= ? OR p.paid_at >= ?)
+        ORDER BY p.paid_at DESC`,
+      [req.orgId, b.client_id, b.amount, since, since]);
     if (dupe) {
       return res.status(409).json({
         error: 'An identical payment for this member was recorded moments ago. '
@@ -301,11 +321,25 @@ export default function adminRoutes(db) {
       });
     }
 
+    // A member who joined to pay at the desk has a membership marked due;
+    // this is that payment, so it is booked against it, and paying it in
+    // full clears it from what the gym is owed.
+    const due = b.subscription_id
+      ? await db.q1('SELECT * FROM subscriptions WHERE id = ? AND org_id = ? AND client_id = ?', [b.subscription_id, req.orgId, b.client_id])
+      : await db.q1(
+        `SELECT * FROM subscriptions WHERE org_id = ? AND client_id = ? AND payment_status IN ('pending', 'overdue')
+          ORDER BY end_date DESC LIMIT 1`, [req.orgId, b.client_id]);
+    const payId = id('pay');
     await db.run(
       `INSERT INTO payments (id, org_id, client_id, subscription_id, amount, currency, method, status, paid_at)
        VALUES (?, ?, ?, ?, ?, 'INR', ?, 'paid', ?)`,
-      [id('pay'), req.orgId, b.client_id, b.subscription_id || null, b.amount, b.method, now()]);
-    res.status(201).json({ ok: true });
+      [payId, req.orgId, b.client_id, due?.id || null, b.amount, b.method, paidAt]);
+    if (due && ['pending', 'overdue'].includes(due.payment_status) && b.amount >= Number(due.amount || 0)) {
+      await db.run(`UPDATE subscriptions SET payment_status = 'paid' WHERE id = ?`, [due.id]);
+    }
+    const payment = await db.q1('SELECT * FROM payments WHERE id = ?', [payId]);
+    const receipt = await receiptManualPayment(db, payment, { reference: b.reference || null }).catch(() => null);
+    res.status(201).json({ ok: true, paymentId: payId, receipt: receipt ? { number: receipt.invoice_number } : null });
   });
 
   r.get('/attendance', async (req, res) => {

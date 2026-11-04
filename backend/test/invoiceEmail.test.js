@@ -159,8 +159,11 @@ test('POST /invoices/:id/email: CLIENT_MEMBERSHIP invoice defaults to the actual
     orderId: join.json.order.id, providerPaymentId: clientCheckout.paymentId, signature: clientCheckout.signature,
   }, clientToken);
 
+  // Enterprise billing lists what Barbell billed the gym, so a member's
+  // receipt is not in it; it is still the gym's to email.
   const invoices = await api.call('GET', '/api/enterprise/invoices', undefined, ownerToken);
-  const clientInvoice = invoices.json.invoices.find((i) => i.subject_type === 'CLIENT_MEMBERSHIP');
+  assert.ok(!invoices.json.invoices.some((i) => i.subject_type === 'CLIENT_MEMBERSHIP'), 'member receipts are not Barbell bills');
+  const clientInvoice = await db.q1(`SELECT * FROM invoices WHERE org_id = ? AND subject_type = 'CLIENT_MEMBERSHIP'`, [orgId]);
   assert.ok(clientInvoice);
 
   const emailRes = await api.call('POST', `/api/enterprise/invoices/${clientInvoice.id}/email`, {}, ownerToken);

@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, PageHeader, Kpi, Bar, ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import PayoutSetup from '../../components/trainer/PayoutSetup.jsx';
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -18,7 +19,6 @@ function daysUntil(iso) {
 export default function EnterpriseDashboard() {
   const nav = useNavigate();
   const status = useFetch(() => api('/enterprise/status'));
-  const account = useFetch(() => api('/enterprise/payment-account'));
 
   if (status.loading) return <PageSkeleton variant="detail" label="Loading your gym's billing status" />;
   if (status.error) return <ErrorState error={status.error} onRetry={status.reload} />;
@@ -48,7 +48,6 @@ export default function EnterpriseDashboard() {
   if (d.purchasedCapacity > 0 && d.availableCapacity <= Math.max(1, Math.round(d.purchasedCapacity * 0.1))) {
     alerts.push(`Only ${d.availableCapacity} client slot${d.availableCapacity === 1 ? '' : 's'} left — consider buying more capacity.`);
   }
-  if (account.data && account.data.account?.status !== 'ACTIVE') alerts.push('Your payment account needs attention before you can receive settlements.');
 
   return (
     <div className="space-y-6" data-tour="trainer-enterprise">
@@ -73,11 +72,7 @@ export default function EnterpriseDashboard() {
           </div>
           <div className="text-xs mt-1" style={{ color: 'var(--faint)' }}>{d.activeTrainers} active trainer{d.activeTrainers === 1 ? '' : 's'}</div>
         </Card>
-        <Card className="p-5">
-          <div className="kicker">Payment account</div>
-          <div className="font-grotesk font-bold">{(account.data?.account?.status || 'NOT_CONNECTED').replace('_', ' ')}</div>
-          <div className="text-sm mt-1" style={{ color: 'var(--mute)' }}>Provider: {account.data?.account?.provider || 'razorpay'}</div>
-        </Card>
+        <PayoutSetup />
       </div>
 
       {alerts.length > 0 && (
