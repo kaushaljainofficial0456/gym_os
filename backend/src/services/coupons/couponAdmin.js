@@ -12,10 +12,20 @@
 // ============================================================
 import { id, now } from '../../ids.js';
 import {
-  COUPON_KINDS, CUSTOMER_TYPES, KIND_LABELS, normalizeCouponCode, couponStatus, couponStatusSql, parseJsonArray,
-  sweepExpiredReservations, round2, describeApplicability,
+  COUPON_KINDS, CUSTOMER_TYPES, KIND_LABELS, PERSONAL_KINDS, normalizeCouponCode, couponStatus, couponStatusSql, parseJsonArray,
+  sweepExpiredReservations, round2, describeApplicability, HELD_FOR_REVIEW,
 } from './couponEngine.js';
 import { couponWindowFromLocal, utcToZoned, isValidTimeZone, zonedToUtcMs, DEFAULT_COUPON_TZ } from './couponTime.js';
+import { plans as barbellPlans } from '../plans/barbellPlan.js';
+
+/** The Barbell plan's lengths (30 / 365 days), which a coupon may also
+ *  be limited to alongside the gym packages' durations. */
+const planDurations = () => Object.values(barbellPlans()).map((p) => Number(p.days));
+
+/** One customer, as the analytics count them: the person for a Barbell
+ *  plan purchase (every Independent client shares one org), the gym for
+ *  everything else. */
+const CUSTOMER_KEY_SQL = `CASE WHEN cr.user_id IS NOT NULL THEN 'u:' || cr.user_id ELSE 'o:' || cr.org_id END`;
 
 /** Fields that define what a coupon IS worth and to whom. Once any
  *  gym has held or redeemed the coupon these are frozen: changing them
@@ -48,14 +58,19 @@ export async function getCouponOptions(db) {
   const pkgs = await db.q(
     `SELECT name, client_capacity, duration_days, price, currency FROM sk_packages WHERE status = 'active' AND effective_until IS NULL ORDER BY client_capacity ASC`);
   const allNames = await db.q('SELECT DISTINCT name FROM sk_packages');
-  const durations = [...new Set(pkgs.map((p) => Number(p.duration_days)))].sort((a, b) => a - b);
+  const durations = [...new Set([...pkgs.map((p) => Number(p.duration_days)), ...planDurations()])].sort((a, b) => a - b);
   return {
-    kinds: COUPON_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] })),
+    // `personal` marks the Barbell plan: bought by Independent clients
+    // only, so the form keeps it out of an Enterprise-only coupon.
+    kinds: COUPON_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k], personal: PERSONAL_KINDS.includes(k) })),
     // price is for the form's PREVIEW only ("on 100 Clients a gym would
     // pay..."); what a gym is actually charged is always re-priced
     // server-side at checkout.
     tiers: pkgs.map((p) => ({ value: p.name, label: p.name, capacity: Number(p.client_capacity), price: Number(p.price), durationDays: Number(p.duration_days) })),
     knownTierNames: allNames.map((r) => r.name),
+    // The Barbell plan's own prices, for the same preview. It has no
+    // capacity tier, so a tier-limited coupon never applies to it.
+    plans: Object.values(barbellPlans()).map((p) => ({ value: p.id, label: `Barbell plan · ${p.name}`, price: Number(p.amount), durationDays: Number(p.days) })),
     durations: durations.map((d) => ({ value: d, label: d % 365 === 0 ? `${(d / 365) * 12} months (${d} days)` : `${d} days` })),
     customerTypes: [
       { value: 'ENTERPRISE', label: 'Enterprise gyms' },
@@ -97,6 +112,9 @@ async function normalizeInput(db, input) {
 
   const kinds = Array.isArray(input.applicableKinds) && input.applicableKinds.length ? [...new Set(input.applicableKinds)] : null;
   if (kinds && kinds.some((k) => !COUPON_KINDS.includes(k))) throw new CouponError(422, 'invalid_kind', 'Unknown purchase type.');
+  if (kinds && input.customerType === 'ENTERPRISE' && kinds.some((k) => PERSONAL_KINDS.includes(k))) {
+    throw new CouponError(422, 'invalid_kind', 'Only Independent clients buy the Barbell plan, so an Enterprise-only coupon cannot include it.');
+  }
   if (kinds && kinds.length === COUPON_KINDS.length) kinds.length = 0; // "every type" is stored as no restriction
   const tiers = Array.isArray(input.applicableTiers) && input.applicableTiers.length ? [...new Set(input.applicableTiers.map((t) => String(t)))] : null;
   if (tiers) {
@@ -107,7 +125,7 @@ async function normalizeInput(db, input) {
   const durations = Array.isArray(input.applicableDurations) && input.applicableDurations.length
     ? [...new Set(input.applicableDurations.map(Number))] : null;
   if (durations) {
-    const known = new Set((await db.q('SELECT DISTINCT duration_days FROM sk_packages')).map((r) => Number(r.duration_days)));
+    const known = new Set([...(await db.q('SELECT DISTINCT duration_days FROM sk_packages')).map((r) => Number(r.duration_days)), ...planDurations()]);
     const unknown = durations.filter((d) => !known.has(d));
     if (unknown.length) throw new CouponError(422, 'invalid_duration', `Unknown billing duration: ${unknown.join(', ')} days.`);
   }
@@ -344,13 +362,21 @@ export async function listCoupons(db, { search, status, customerType, createdFro
 export async function getCouponDashboard(db) {
   await sweepExpiredReservations(db, {});
   const nowIso = now();
-  const [byStatus, redeemed, revenue, refunded] = await Promise.all([
+  const [byStatus, redeemed, revenue, planRevenue, refunded] = await Promise.all([
     db.q(`SELECT status, COUNT(*) AS n FROM (SELECT ${couponStatusSql('c')} AS status FROM coupons c) x GROUP BY status`, [nowIso, nowIso]),
-    db.q1(`SELECT COUNT(*) AS n, COALESCE(SUM(discount_amount), 0) AS discount FROM coupon_redemptions WHERE status = 'REDEEMED'`),
+    db.q1(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(cr.discount_amount), 0) AS discount,
+              COALESCE(SUM(CASE WHEN o.type = 'independent' THEN 1 ELSE 0 END), 0) AS independent
+         FROM coupon_redemptions cr JOIN organizations o ON o.id = cr.org_id WHERE cr.status = 'REDEEMED'`),
     // Revenue is counted once per ORDER (a stacked purchase has one row
-    // per coupon), from the payment order's own verified amount.
+    // per coupon), from the order's own verified amount: gym purchases in
+    // payment_orders, Barbell plans in barbell_plan_orders.
     db.q1(`SELECT COUNT(*) AS n, COALESCE(SUM(po.amount), 0) AS total FROM payment_orders po
             WHERE EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.payment_order_id = po.id AND cr.status = 'REDEEMED')`),
+    db.q1(`SELECT COUNT(*) AS n, COALESCE(SUM(bpo.amount), 0) AS total,
+                  COALESCE(SUM(CASE WHEN bpo.status = 'REFUNDED' THEN bpo.amount ELSE 0 END), 0) AS refunded
+             FROM barbell_plan_orders bpo
+            WHERE EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.plan_order_id = bpo.id AND cr.status = 'REDEEMED')`),
     db.q1(`SELECT COALESCE(SUM(rf.amount), 0) AS total FROM refunds rf
             WHERE rf.status = 'SUCCESS'
               AND EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.payment_order_id = rf.payment_order_id AND cr.status = 'REDEEMED')`),
@@ -358,8 +384,10 @@ export async function getCouponDashboard(db) {
   const counts = { ACTIVE: 0, SCHEDULED: 0, EXPIRED: 0, DISABLED: 0, EXHAUSTED: 0 };
   let total = 0;
   for (const r of byStatus) { counts[r.status] = Number(r.n || 0); total += Number(r.n || 0); }
-  const gross = round2(Number(revenue?.total || 0));
-  const refundedTotal = round2(Number(refunded?.total || 0));
+  const gross = round2(Number(revenue?.total || 0) + Number(planRevenue?.total || 0));
+  const refundedTotal = round2(Number(refunded?.total || 0) + Number(planRevenue?.refunded || 0));
+  const redemptions = Number(redeemed?.n || 0);
+  const independent = Number(redeemed?.independent || 0);
   return {
     totalCoupons: total,
     active: counts.ACTIVE,
@@ -367,8 +395,10 @@ export async function getCouponDashboard(db) {
     expired: counts.EXPIRED,
     disabled: counts.DISABLED,
     exhausted: counts.EXHAUSTED,
-    successfulRedemptions: Number(redeemed?.n || 0),
-    discountedOrders: Number(revenue?.n || 0),
+    successfulRedemptions: redemptions,
+    enterpriseRedemptions: redemptions - independent,
+    independentRedemptions: independent,
+    discountedOrders: Number(revenue?.n || 0) + Number(planRevenue?.n || 0),
     totalDiscountGiven: round2(Number(redeemed?.discount || 0)),
     grossRevenue: gross,
     refundedRevenue: refundedTotal,
@@ -385,7 +415,7 @@ export async function getCouponAnalytics(db, couponId) {
   if (!coupon) return null;
   const [agg, holds, refunded] = await Promise.all([
     db.q1(
-      `SELECT COUNT(*) AS redemptions, COUNT(DISTINCT cr.org_id) AS customers,
+      `SELECT COUNT(*) AS redemptions, COUNT(DISTINCT ${CUSTOMER_KEY_SQL}) AS customers,
               COALESCE(SUM(cr.discount_amount), 0) AS discount, COALESCE(SUM(cr.original_amount), 0) AS original,
               COALESCE(SUM(cr.final_amount), 0) AS collected,
               COALESCE(SUM(CASE WHEN o.type = 'independent' THEN 1 ELSE 0 END), 0) AS independent,
@@ -393,14 +423,19 @@ export async function getCouponAnalytics(db, couponId) {
               COALESCE(SUM(cr.late_confirmation), 0) AS late
          FROM coupon_redemptions cr JOIN organizations o ON o.id = cr.org_id
         WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED'`, [couponId]),
-    db.q(`SELECT status, COUNT(*) AS n FROM coupon_redemptions WHERE coupon_id = ? AND status <> 'REDEEMED' GROUP BY status`, [couponId]),
+    db.q(`SELECT CASE WHEN release_reason = ? THEN 'HELD' ELSE status END AS status, COUNT(*) AS n
+            FROM coupon_redemptions WHERE coupon_id = ? AND status <> 'REDEEMED'
+           GROUP BY CASE WHEN release_reason = ? THEN 'HELD' ELSE status END`, [HELD_FOR_REVIEW, couponId, HELD_FOR_REVIEW]),
     db.q1(
-      `SELECT COALESCE(SUM(rf.amount), 0) AS total FROM refunds rf
-        WHERE rf.status = 'SUCCESS'
-          AND EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED' AND cr.payment_order_id = rf.payment_order_id)`,
-      [couponId]),
+      `SELECT (SELECT COALESCE(SUM(rf.amount), 0) FROM refunds rf
+                WHERE rf.status = 'SUCCESS'
+                  AND EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED' AND cr.payment_order_id = rf.payment_order_id))
+            + (SELECT COALESCE(SUM(bpo.amount), 0) FROM barbell_plan_orders bpo
+                WHERE bpo.status = 'REFUNDED'
+                  AND EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED' AND cr.plan_order_id = bpo.id)) AS total`,
+      [couponId, couponId]),
   ]);
-  const holdCounts = { RESERVED: 0, RELEASED: 0, EXPIRED: 0 };
+  const holdCounts = { RESERVED: 0, RELEASED: 0, EXPIRED: 0, HELD: 0 };
   for (const h of holds) holdCounts[h.status] = Number(h.n || 0);
   const collected = round2(Number(agg?.collected || 0));
   return {
@@ -410,6 +445,9 @@ export async function getCouponAnalytics(db, couponId) {
       remainingRedemptions: coupon.remaining_redemptions,
       inFlight: holdCounts.RESERVED,
       abandonedOrFailed: holdCounts.RELEASED + holdCounts.EXPIRED,
+      // Paid after the hold ended with no use left: not activated, waiting
+      // for a founder (Reconciliation). Never counted as a redemption.
+      heldForReview: holdCounts.HELD,
       lateConfirmations: Number(agg?.late || 0),
       totalDiscount: round2(Number(agg?.discount || 0)),
       totalOriginalValue: round2(Number(agg?.original || 0)),
@@ -431,15 +469,22 @@ export async function listCouponRedemptions(db, couponId, { status = 'REDEEMED',
   const [rows, totalRow] = await Promise.all([
     db.q(
       `SELECT cr.id, cr.status, cr.org_id, o.name AS org_name, o.type AS org_type,
+              cr.user_id, cu.name AS customer_name, cr.plan_order_id,
               cr.subject_type, cr.subject_id, cr.payment_order_id, cr.original_amount, cr.discount_amount, cr.final_amount,
               cr.currency, cr.late_confirmation, cr.reserved_at, cr.redeemed_at, cr.released_at, cr.release_reason, cr.created_at,
-              po.status AS order_status, po.provider, po.provider_order_id,
-              (SELECT pt.provider_payment_id FROM payment_transactions pt
-                 WHERE pt.order_id = cr.payment_order_id AND pt.status = 'SUCCESS' ORDER BY pt.created_at DESC LIMIT 1) AS provider_payment_id,
-              (SELECT inv.invoice_number FROM invoices inv WHERE inv.order_id = cr.payment_order_id LIMIT 1) AS invoice_number
+              COALESCE(po.status, bpo.status) AS order_status,
+              COALESCE(po.provider, bpo.provider) AS provider,
+              COALESCE(po.provider_order_id, bpo.provider_order_id) AS provider_order_id,
+              COALESCE((SELECT pt.provider_payment_id FROM payment_transactions pt
+                 WHERE pt.order_id = cr.payment_order_id AND pt.status = 'SUCCESS' ORDER BY pt.created_at DESC LIMIT 1),
+                 bpo.provider_payment_id) AS provider_payment_id,
+              COALESCE((SELECT inv.invoice_number FROM invoices inv WHERE inv.order_id = cr.payment_order_id LIMIT 1),
+                 bpo.invoice_number) AS invoice_number
          FROM coupon_redemptions cr
          JOIN organizations o ON o.id = cr.org_id
+         LEFT JOIN users cu ON cu.id = cr.user_id
          LEFT JOIN payment_orders po ON po.id = cr.payment_order_id
+         LEFT JOIN barbell_plan_orders bpo ON bpo.id = cr.plan_order_id
         WHERE ${where}
         ORDER BY COALESCE(cr.redeemed_at, cr.created_at) DESC, cr.id ASC
         LIMIT ? OFFSET ?`, [...params, lim, off]),
@@ -449,6 +494,8 @@ export async function listCouponRedemptions(db, couponId, { status = 'REDEEMED',
     redemptions: rows.map((r) => ({
       ...r,
       customer_type: r.org_type === 'independent' ? 'INDEPENDENT' : 'ENTERPRISE',
+      // A plan was bought by a person, not the shared 'independent' org.
+      customer_name: r.subject_type === 'BARBELL_PLAN' ? (r.customer_name || 'Deleted account') : r.org_name,
       original_amount: Number(r.original_amount), discount_amount: Number(r.discount_amount), final_amount: Number(r.final_amount),
       late_confirmation: !!Number(r.late_confirmation),
     })),

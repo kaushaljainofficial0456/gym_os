@@ -127,7 +127,8 @@ export default function Coupons() {
           <StatCard label="Scheduled" value={s.scheduled} />
           <StatCard label="Expired" value={s.expired} description={s.exhausted ? `+ ${s.exhausted} fully used` : undefined} />
           <StatCard label="Disabled" value={s.disabled} />
-          <StatCard icon="check" label="Successful redemptions" value={s.successfulRedemptions} description="Verified payments only" />
+          <StatCard icon="check" label="Successful redemptions" value={s.successfulRedemptions}
+            description={`Verified payments only · ${s.enterpriseRedemptions ?? 0} Enterprise, ${s.independentRedemptions ?? 0} Independent`} />
           <StatCard label="Total discounts given" value={s.totalDiscountGiven} format={moneyExact} />
           <StatCard icon="trend" label="Revenue via coupons" value={s.netRevenue} format={moneyExact}
             description={s.refundedRevenue ? `${moneyExact(s.grossRevenue)} collected − ${moneyExact(s.refundedRevenue)} refunded` : `${s.discountedOrders} discounted subscription${s.discountedOrders === 1 ? '' : 's'}`} />

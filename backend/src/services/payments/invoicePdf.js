@@ -386,8 +386,14 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
  * A receipt for something Barbell sold a person directly (the Barbell plan
  * for independent clients): the same look as a gym's receipt, from Barbell,
  * to them. Takes the facts already resolved, since there is no gym order.
+ *
+ * With a coupon, the line is priced at `originalAmount` (before the
+ * discount) and each coupon is its own row under it, so the page
+ * reconciles the way a gym's invoice does: price - coupon(s) = paid.
+ * `coupons` are the order's own snapshot ({ code, discountType,
+ * discountValue, discountAmount }), never the coupon's current definition.
  */
-export async function renderPlanReceiptPdf({ number, customer, paidOn, description, detail, amount, reference }) {
+export async function renderPlanReceiptPdf({ number, customer, paidOn, description, detail, amount, reference, originalAmount = null, coupons = [] }) {
   const margin = 50;
   const doc = new PDFDocument({ size: 'A4', margin });
   doc.on('pageAdded', () => paintBackground(doc));
@@ -425,10 +431,29 @@ export async function renderPlanReceiptPdf({ number, customer, paidOn, descripti
   ty += 12;
   doc.moveTo(tableX, ty).lineTo(rightEdge, ty).strokeColor(LINE).lineWidth(1).stroke();
   ty += 16;
+  const discounted = coupons.length > 0 && originalAmount != null;
+  const lineAmount = discounted ? Number(originalAmount) : Number(amount);
   doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(description, tableX, ty, { width: rightEdge - tableX - 90 });
-  doc.font('Helvetica').text(money(amount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+  doc.font('Helvetica').text(money(lineAmount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
   ty += 16;
   if (detail) { doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(detail, tableX, ty, { width: rightEdge - tableX - 90 }); ty += 16; }
+  if (discounted) {
+    ty += 6;
+    const labelW = rightEdge - tableX - 90;
+    for (const c of coupons) {
+      // One line per coupon; a long code drops its "(25% off)" suffix
+      // rather than wrap into the row below.
+      const off = c.discountType === 'PERCENTAGE' ? ` (${Number(c.discountValue)}% off)` : '';
+      doc.font('Helvetica').fontSize(9.5);
+      const full = `Coupon ${c.code}${off}`;
+      doc.fillColor(MUTED).text(doc.widthOfString(full) <= labelW ? full : `Coupon ${c.code}`, tableX, ty, { width: labelW });
+      doc.fillColor(INK).text('- ' + money(c.discountAmount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+      ty += 16;
+    }
+    doc.font('Helvetica').fontSize(9.5).fillColor(MUTED).text('Amount after discount', tableX, ty, { width: labelW });
+    doc.fillColor(INK).text(money(amount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+    ty += 16;
+  }
 
   let by = Math.max(y, ty) + 20;
   doc.moveTo(margin, by).lineTo(rightEdge, by).strokeColor(LINE).lineWidth(1).stroke();

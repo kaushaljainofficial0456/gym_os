@@ -18,7 +18,7 @@ import { CouponStatusBadge, CUSTOMER_LABEL, discountLabel } from './Coupons.jsx'
 const PAGE = 25;
 const HOLD_TONE = { REDEEMED: 'good', RESERVED: 'warn', RELEASED: 'mute', EXPIRED: 'mute' };
 const HOLD_LABEL = { REDEEMED: 'Redeemed', RESERVED: 'Checkout in progress', RELEASED: 'Payment failed', EXPIRED: 'Abandoned' };
-const KIND_LABEL = { ORG_PACKAGE: 'Package', ORG_CAPACITY_ADDON: 'Capacity add-on' };
+const KIND_LABEL = { ORG_PACKAGE: 'Package', ORG_CAPACITY_ADDON: 'Capacity add-on', BARBELL_PLAN: 'Barbell plan' };
 
 function Redemptions({ coupon }) {
   const toast = useToast();
@@ -56,7 +56,7 @@ function Redemptions({ coupon }) {
       {error && <div className="error-text">{error.message}</div>}
       {data && !data.redemptions.length && (
         <EmptyState icon="coupon" title={status === 'REDEEMED' ? 'No redemptions yet' : 'Nothing here'}
-          description={status === 'REDEEMED' ? 'A redemption appears here once a gym has paid with this coupon and the payment is verified.' : 'No checkouts in this state.'} />
+          description={status === 'REDEEMED' ? 'A redemption appears here once a gym or an Independent client has paid with this coupon and the payment is verified.' : 'No checkouts in this state.'} />
       )}
       {data && data.redemptions.length > 0 && (
         <>
@@ -64,7 +64,7 @@ function Redemptions({ coupon }) {
             <table>
               <thead>
                 <tr>
-                  <th>Date</th><th>Gym</th><th>Customer</th><th>Purchase</th><th className="num">Original</th>
+                  <th>Date</th><th>Gym or client</th><th>Customer</th><th>Purchase</th><th className="num">Original</th>
                   <th className="num">Discount</th><th className="num">Paid</th><th>Payment reference</th><th>Status</th>
                 </tr>
               </thead>
@@ -72,7 +72,8 @@ function Redemptions({ coupon }) {
                 {data.redemptions.map((r) => (
                   <tr key={r.id}>
                     <td className="faint">{formatInTz(r.redeemed_at || r.created_at, coupon.timezone)}</td>
-                    <td><Link to={`/gyms/${r.org_id}`}>{r.org_name}</Link></td>
+                    {/* A Barbell plan is bought by a person, not by the shared Independent org -- no gym page to link to. */}
+                    <td>{r.subject_type === 'BARBELL_PLAN' ? r.customer_name : <Link to={`/gyms/${r.org_id}`}>{r.org_name}</Link>}</td>
                     <td className="faint">{CUSTOMER_LABEL[r.customer_type]}</td>
                     <td className="faint">
                       {KIND_LABEL[r.subject_type] || '—'}
@@ -86,7 +87,9 @@ function Redemptions({ coupon }) {
                       {r.invoice_number && <div>{r.invoice_number}</div>}
                     </td>
                     <td>
-                      <span className={`badge ${HOLD_TONE[r.status] || 'mute'}`}>{HOLD_LABEL[r.status] || r.status}</span>
+                      {r.release_reason === 'held_for_review'
+                        ? <span className="badge warn">Paid — held for review</span>
+                        : <span className={`badge ${HOLD_TONE[r.status] || 'mute'}`}>{HOLD_LABEL[r.status] || r.status}</span>}
                       {r.late_confirmation && <div className="faint" style={{ marginTop: 3 }}>Paid after the hold ended</div>}
                       {['REFUNDED', 'PARTIALLY_REFUNDED'].includes(r.order_status) && <div className="faint" style={{ marginTop: 3 }}>{r.order_status.replace('_', ' ').toLowerCase()}</div>}
                     </td>
@@ -172,6 +175,10 @@ export default function CouponDetail() {
         <StatCard label="Enterprise redemptions" value={a.enterpriseRedemptions} />
         <StatCard label="Independent redemptions" value={a.independentRedemptions}
           description={a.abandonedOrFailed ? `${a.abandonedOrFailed} failed or abandoned checkout${a.abandonedOrFailed === 1 ? '' : 's'} (not counted)` : undefined} />
+        {a.heldForReview > 0 && (
+          <StatCard label="Paid, held for review" value={a.heldForReview}
+            description="Paid after the coupon ran out, so not activated. Refund or honour them from Reconciliation." />
+        )}
       </div>
 
       <div className="card">

@@ -349,6 +349,9 @@ export default function enterpriseRoutes(db) {
     const order = await db.q1('SELECT * FROM payment_orders WHERE id = ? AND org_id = ?', [req.body.orderId, req.orgId]);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     const result = await recordCheckoutVerification(db, { orderId: order.id, providerPaymentId: req.body.providerPaymentId, signature: req.body.signature });
+    // Paid, but its coupon could no longer be honoured: not activated,
+    // held for a founder to refund or honour (see couponEngine.js).
+    if (!result.ok && result.heldForReview) return res.status(409).json({ error: result.reason, message: result.message });
     if (!result.ok) return res.status(422).json({ error: result.reason });
     if (!result.alreadyFinalized) {
       await issueInvoice(db, order).catch(() => {}); // best-effort -- a receipt failing to generate must never undo a real payment
