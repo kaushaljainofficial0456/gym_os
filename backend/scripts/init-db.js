@@ -6,6 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../src/config.js';
 import { id, now } from '../src/ids.js';
+import {
+  upgradeCouponRedemptionsSqlite, upgradeCouponRedemptionsPg, COUPON_REDEMPTION_INDEXES,
+} from './lib/couponRedemptionsUpgrade.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -356,6 +359,16 @@ const MIGRATIONS = [
   // discount, no coupons.
   ['billing_quotes', 'discount_amount', `discount_amount REAL NOT NULL DEFAULT 0`],
   ['billing_quotes', 'coupons_json', `coupons_json TEXT`],
+  // --- Coupons on the Barbell plan (Independent clients) ---
+  // The plan order is its own price lock (it has no billing quote), so
+  // it carries the same three facts a coupon quote does. Every existing
+  // order reads exactly as before: no discount, no coupons, and a NULL
+  // original_amount means `amount` was the whole price. coupon_redemptions'
+  // own changes (a nullable quote_id, the plan hold key, the per-person
+  // slot) are not plain column additions; see lib/couponRedemptionsUpgrade.js.
+  ['barbell_plan_orders', 'original_amount', `original_amount REAL`],
+  ['barbell_plan_orders', 'discount_amount', `discount_amount REAL NOT NULL DEFAULT 0`],
+  ['barbell_plan_orders', 'coupons_json', `coupons_json TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
@@ -705,6 +718,9 @@ async function applySqliteMigrations(db) {
     if (!hasCol(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
   };
   for (const [table, col, ddl] of MIGRATIONS) addCol(table, col, ddl);
+  // --- coupon_redemptions takes Barbell plan purchases (see the module) ---
+  if (upgradeCouponRedemptionsSqlite(db, fs.readFileSync(schemaPath, 'utf8'))) console.log('coupon_redemptions upgraded for Barbell plan coupons');
+  for (const stmt of COUPON_REDEMPTION_INDEXES) db.exec(stmt);
   // --- exercise library expansion: curated relations table (also in schema.sql;
   // repeated here for older DBs / parity with the PG path) ---
   db.exec(`
@@ -804,6 +820,9 @@ async function applyPgMigrations(pool) {
     // IF NOT EXISTS slot is: ADD COLUMN [IF NOT EXISTS] name type.
     await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${ddl}`);
   }
+  // --- coupon_redemptions takes Barbell plan purchases (see the module) ---
+  await upgradeCouponRedemptionsPg((sql) => pool.query(sql));
+  for (const stmt of COUPON_REDEMPTION_INDEXES) await pool.query(stmt);
   // --- exercise library expansion: curated relations table (also in schema.sql) ---
   await pool.query(`
     CREATE TABLE IF NOT EXISTS exercise_relations (

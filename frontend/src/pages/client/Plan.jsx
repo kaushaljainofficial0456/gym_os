@@ -4,6 +4,11 @@
  * year keeps it going. Also what a locked account sees in place of any
  * other screen (ClientLayout), so there is always a way back in.
  *
+ * Choosing a plan opens a short checkout: the price, an optional coupon
+ * code (founder-issued, see docs/COUPONS.md), then the payment. This page
+ * never works out a price: the coupon is priced by /plan/quote, and
+ * /plan/order prices it again on the server and charges exactly that.
+ *
  * Gym members never get here: their gym covers Barbell, and the server
  * says so (`applies: false`).
  */
@@ -13,14 +18,19 @@ import { api, downloadFile } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, PageHeader, Modal, PageSkeleton, ErrorState } from '../../components/UI.jsx';
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
+import { CouponField, PriceSummary, inr } from '../../components/billing/CouponCheckout.jsx';
 
-const money = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const money = inr;
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
 export default function Plan({ locked = false }) {
   const status = useFetch(() => api('/plan/status'));
-  const [order, setOrder] = useState(null);
-  const [busy, setBusy] = useState(null);
+  // { plan, applied, order } | null while no checkout is open.
+  //   plan     the plan being bought (from /plan/status)
+  //   applied  { pricing } once a coupon is applied, else null
+  //   order    the gateway order, once payment has started
+  const [checkout, setCheckout] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState('');
 
@@ -36,21 +46,41 @@ export default function Plan({ locked = false }) {
     );
   }
 
-  const start = async (planId) => {
-    setBusy(planId); setErr(''); setDone('');
+  const choose = (plan) => { setErr(''); setDone(''); setCheckout({ plan, applied: null, order: null }); };
+
+  // Leaving before paying gives the coupon back straight away, so trying
+  // again is not refused as "already used" while the hold runs out.
+  const close = () => {
+    const open = checkout?.order;
+    if (open) api(`/plan/order/${open.id}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
+    setCheckout(null);
+  };
+
+  const pay = async () => {
+    const { plan, applied } = checkout;
+    const couponCodes = applied?.pricing?.coupons?.map((c) => c.code) || [];
+    setBusy(true); setErr('');
     try {
-      const r = await api('/plan/order', { method: 'POST', body: JSON.stringify({ plan: planId }) });
-      setOrder(r.order);
+      const r = await api('/plan/order', {
+        method: 'POST', body: JSON.stringify(couponCodes.length ? { plan: plan.id, couponCodes } : { plan: plan.id }),
+      });
+      setCheckout((c) => ({ ...c, order: r.order }));
     } catch (e) {
-      setErr(e.message || 'Could not start the payment. Please try again.');
+      // The coupon was valid at Apply but not any more (switched off,
+      // expired, used up): say why, and fall back to the full price
+      // rather than charge something the client did not agree to.
+      if (e.data?.error === 'coupon_unavailable' || e.data?.error === 'coupon_invalid') {
+        setCheckout((c) => ({ ...c, applied: null }));
+      }
+      setErr(e.data?.message || e.message || 'Could not start the payment. Please try again.');
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
   const onPaid = async (providerPaymentId, signature) => {
-    const paid = order;
-    setOrder(null);
+    const paid = checkout.order;
+    setCheckout(null);
     try {
       const r = await api('/plan/verify', { method: 'POST', body: JSON.stringify({ orderId: paid.id, providerPaymentId, signature }) });
       setDone(`Paid. Barbell is yours until ${day(r.status.paidUntil)}.`);
@@ -79,6 +109,9 @@ export default function Plan({ locked = false }) {
       ? `Everything is free until ${day(s.trialEndsAt)}. After that, a plan keeps it going.`
       : 'Paying early adds to the time you already have; you never lose days.';
 
+  const plan = checkout?.plan;
+  const total = checkout?.applied?.pricing?.total ?? plan?.amount;
+
   return (
     <div className="space-y-4">
       <PageHeader title={locked ? 'Keep training with Barbell' : 'Barbell plan'} sub={headline} />
@@ -94,15 +127,15 @@ export default function Plan({ locked = false }) {
               {money(p.amount)}<span className="text-sm font-semibold text-mute"> / {p.id === 'yearly' ? 'year' : 'month'}</span>
             </div>
             <p className="text-sm mt-1" style={{ color: p.id === 'yearly' ? 'var(--good)' : 'var(--mute)' }}>{p.line}</p>
-            <button type="button" className={`${p.id === 'yearly' ? 'btn-primary' : 'btn'} w-full mt-4`} disabled={!!busy} onClick={() => start(p.id)}>
-              {busy === p.id ? 'Starting…' : `Pay ${money(p.amount)}`}
+            <button type="button" className={`${p.id === 'yearly' ? 'btn-primary' : 'btn'} w-full mt-4`} disabled={!!checkout} onClick={() => choose(p)}>
+              {`Choose ${p.name.toLowerCase()}`}
             </button>
           </Card>
         ))}
       </div>
 
       {done && <div className="row" role="status" style={{ background: 'rgb(var(--good-rgb) / .10)' }}><span className="t-sub" style={{ color: 'var(--ink)' }}>{done}</span></div>}
-      {err && <div className="field-error" role="alert">{err}</div>}
+      {err && !checkout && <div className="field-error" role="alert">{err}</div>}
 
       {s.receipts.length > 0 && (
         <Card className="p-4">
@@ -112,6 +145,11 @@ export default function Plan({ locked = false }) {
               <div key={r.id} className="rounded-xl px-3 py-2.5 flex items-center justify-between gap-3" style={{ border: '1px solid var(--line)' }}>
                 <div className="min-w-0">
                   <div className="text-[13px] font-bold tabular-nums" style={{ color: 'var(--ink)' }}>{money(r.amount)} · {r.plan === 'yearly' ? 'Yearly' : 'Monthly'}</div>
+                  {r.coupons?.length > 0 && (
+                    <div className="text-[11px] tabular-nums" style={{ color: 'var(--mute)' }}>
+                      {money(r.originalAmount)}{r.coupons.map((c) => ` − ${c.code} ${money(c.discountAmount)}`).join('')}
+                    </div>
+                  )}
                   <div className="text-[10.5px]" style={{ color: 'var(--faint)' }}>{day(r.periodStart)} to {day(r.periodEnd)} · {r.number}</div>
                 </div>
                 <button type="button" className="btn btn-sm shrink-0" onClick={() => download(r)}>Receipt</button>
@@ -127,8 +165,21 @@ export default function Plan({ locked = false }) {
         </p>
       )}
 
-      <Modal open={!!order} onClose={() => setOrder(null)} title="Barbell plan" sub={order ? `${order.plan === 'yearly' ? 'Yearly' : 'Monthly'} · ${money(order.amount)}` : ''}>
-        {order && <PaymentCheckout order={order} orgName="Barbell" onComplete={onPaid} onCancel={() => setOrder(null)} />}
+      <Modal open={!!checkout} onClose={close} title={checkout?.order ? 'Confirm payment' : 'Barbell plan'}
+        sub={plan ? `${plan.name} · ${money(checkout?.order ? checkout.order.amount : total)}` : ''}>
+        {checkout?.order ? (
+          <PaymentCheckout order={checkout.order} orgName="Barbell" onComplete={onPaid} onCancel={close} />
+        ) : plan ? (
+          <div>
+            <PriceSummary planLabel={`${plan.name} · ${plan.line}`} original={plan.amount} pricing={checkout.applied?.pricing} />
+            <CouponField endpoint="/plan/quote" request={{ plan: plan.id }} applied={checkout.applied} disabled={busy}
+              onApplied={(applied) => { setErr(''); setCheckout((c) => ({ ...c, applied })); }} />
+            {err && <div className="field-error mt-3" role="alert">{err}</div>}
+            <button type="button" className="btn-primary w-full mt-5" disabled={busy} data-loading={busy ? 'true' : undefined} onClick={pay}>
+              {busy ? 'Preparing payment…' : `Pay ${money(total)}`}
+            </button>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

@@ -4,7 +4,8 @@
 //   /coupons/new?from=:id   duplicate (same settings, new code)
 //   /coupons/:id/edit       edit
 // Written for a founder, not an engineer: plain-language choices, a
-// live preview of what a gym would actually pay, and every rule the
+// live preview of what a gym (or an Independent client on the Barbell
+// plan) would actually pay, and every rule the
 // server enforces explained next to the control it applies to. The
 // server re-validates everything -- these checks are only for speed.
 // ============================================================
@@ -232,13 +233,35 @@ export default function CouponForm() {
     if (coupon) setForm(fromCoupon(coupon, { duplicate: !editing }));
   }, [coupon, editing]);
   useEffect(() => {
-    if (!previewTier && options.data?.tiers?.length) setPreviewTier(options.data.tiers[Math.min(1, options.data.tiers.length - 1)].value);
+    if (previewTier) return;
+    if (options.data?.tiers?.length) setPreviewTier(options.data.tiers[Math.min(1, options.data.tiers.length - 1)].value);
+    else if (options.data?.plans?.length) setPreviewTier(`plan:${options.data.plans[0].value}`);
   }, [options.data, previewTier]);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
-  const tier = options.data?.tiers?.find((t) => t.value === previewTier);
+  // The example purchase is a gym's capacity tier or the Barbell plan
+  // (values prefixed "plan:" so they can never clash with a tier name).
+  const examples = useMemo(() => [
+    ...(options.data?.tiers || []).map((t) => ({ ...t, kind: 'tier' })),
+    ...(options.data?.plans || []).map((p) => ({ ...p, value: `plan:${p.value}`, kind: 'plan' })),
+  ], [options.data]);
+  const tier = examples.find((t) => t.value === previewTier);
   const preview = useMemo(() => previewDiscount(form, tier?.price), [form, tier]);
   const minNotMet = tier && form.minimumPurchaseAmount !== '' && Number(form.minimumPurchaseAmount) > tier.price;
+  const personalKinds = (options.data?.kinds || []).filter((k) => k.personal).map((k) => k.value);
+  // Why the plan example would be refused -- the same rules the server applies.
+  const planNotEligible = tier?.kind === 'plan' && (
+    form.customerType === 'ENTERPRISE' ? 'Enterprise-only coupons never apply to the Barbell plan.'
+      : form.kindsMode === 'SELECTED' && !form.applicableKinds.some((k) => personalKinds.includes(k)) ? 'The Barbell plan is not one of the purchase types you picked.'
+        : form.tiersMode === 'SELECTED' ? 'Limited to capacity tiers, which the Barbell plan does not have.'
+          : form.durationsMode === 'SELECTED' && !form.applicableDurations.map(Number).includes(tier.durationDays) ? 'Not one of the billing durations you picked.'
+            : null);
+  const chooseCustomerType = (v) => set({
+    customerType: v,
+    // Only Independent clients buy the plan; the server refuses an
+    // Enterprise-only coupon that names it.
+    applicableKinds: v === 'ENTERPRISE' ? form.applicableKinds.filter((k) => !personalKinds.includes(k)) : form.applicableKinds,
+  });
 
   const submit = async (ev) => {
     ev.preventDefault();
@@ -274,14 +297,14 @@ export default function CouponForm() {
   const o = options.data;
   const title = editing ? `Edit ${coupon?.code || 'coupon'}` : fromId ? `Duplicate ${coupon?.code || 'coupon'}` : 'Create coupon';
   const pct = form.discountType === 'PERCENTAGE';
-  const indieSelected = form.customerType === 'INDEPENDENT' || form.customerType === 'BOTH';
+  const kindOptions = form.customerType === 'ENTERPRISE' ? o.kinds.filter((k) => !k.personal) : o.kinds;
 
   return (
     <div>
       <div className="page-header">
         <p style={{ marginBottom: 8 }}><Link to="/coupons">← Coupon Management</Link></p>
         <h1>{title}</h1>
-        <p>{editing ? 'Changes apply to future checkouts only — purchases already made keep exactly what they paid.' : 'Gyms enter the code at checkout; the discount is calculated and charged by the server.'}</p>
+        <p>{editing ? 'Changes apply to future checkouts only — purchases already made keep exactly what they paid.' : 'Gyms and Independent clients enter the code at checkout; the discount is calculated and charged by the server.'}</p>
       </div>
 
       {locked.length > 0 && (
@@ -297,7 +320,7 @@ export default function CouponForm() {
             <div className="card">
               <h2>Code &amp; discount</h2>
               <div className="form-grid-2">
-                <Field id="cpn-code" label="Coupon code" error={errors.code} hint={isLocked('code') ? 'Locked — already used.' : 'What gyms type at checkout. Not case-sensitive.'}>
+                <Field id="cpn-code" label="Coupon code" error={errors.code} hint={isLocked('code') ? 'Locked — already used.' : 'What customers type at checkout. Not case-sensitive.'}>
                   <div className="inline-row">
                     <input {...aria('cpn-code', errors.code, true)} className="input code-input" value={form.code} maxLength={32} disabled={isLocked('code')}
                       autoComplete="off" spellCheck={false} placeholder="BARBELL25" onChange={(e) => set({ code: e.target.value.toUpperCase().replace(/\s/g, '') })} />
@@ -349,30 +372,25 @@ export default function CouponForm() {
 
             <div className="card">
               <h2>Who can use it</h2>
-              <p className="form-section-hint">Decided by the gym's account, never by anything typed at checkout. An Enterprise-only coupon never works for Independent clients.</p>
+              <p className="form-section-hint">Decided by the customer's own account, never by anything typed at checkout. An Enterprise-only coupon never works for Independent clients.</p>
               <div className="choice-grid" role="radiogroup" aria-label="Customer type" aria-invalid={errors.customerType ? 'true' : undefined}>
                 {o.customerTypes.map((ct) => (
                   <label key={ct.value} className="choice-card">
                     <input type="radio" name="customerType" value={ct.value} checked={form.customerType === ct.value}
-                      disabled={isLocked('customer_type')} onChange={() => set({ customerType: ct.value })} />
+                      disabled={isLocked('customer_type')} onChange={() => chooseCustomerType(ct.value)} />
                     <span className="t">{ct.label}</span>
                     <span className="d">{{
                       ENTERPRISE: 'Gyms buying a Barbell package for their business.',
-                      INDEPENDENT: 'People using Barbell on their own, without a gym.',
+                      INDEPENDENT: 'People using Barbell on their own, without a gym, buying the Barbell plan.',
                       BOTH: 'Anyone with a Barbell checkout.',
                     }[ct.value]}</span>
                   </label>
                 ))}
               </div>
               {errors.customerType && <div className="field-error" role="alert">{errors.customerType}</div>}
-              {indieSelected && (
-                <div className="notice">
-                  Heads up: coupons don't apply to the Independent clients' Barbell plan checkout yet, so Independent clients can't redeem them today. {form.customerType === 'BOTH' ? 'Enterprise gyms can use this one now.' : 'This coupon will only become usable once that checkout accepts coupons.'}
-                </div>
-              )}
               <div style={{ marginTop: 10 }}>
                 <Toggle id="cpn-first" checked={form.firstTimeOnly} onChange={(v) => set({ firstTimeOnly: v })}
-                  title="First-time customers only" description="Only gyms that have never paid for Barbell before — checked against their real payment history." />
+                  title="First-time customers only" description="Only customers who have never paid for Barbell before — gyms by their package payments, Independent clients by their plan payments." />
               </div>
             </div>
 
@@ -381,18 +399,24 @@ export default function CouponForm() {
               <div className="field">
                 <label>Purchase types</label>
                 <Seg name="Purchase types" value={form.kindsMode} onChange={(v) => set({ kindsMode: v })} options={[['ALL', 'All purchases'], ['SELECTED', 'Selected']]} />
-                {form.kindsMode === 'SELECTED' && <Pills legend="Purchase types" options={o.kinds} selected={form.applicableKinds} error={errors.applicableKinds} onChange={(v) => set({ applicableKinds: v })} />}
+                {form.kindsMode === 'SELECTED' && <Pills legend="Purchase types" options={kindOptions} selected={form.applicableKinds} error={errors.applicableKinds} onChange={(v) => set({ applicableKinds: v })} />}
+                <div className="field-hint">
+                  {form.customerType === 'ENTERPRISE'
+                    ? 'The Barbell plan is left out: only Independent clients buy it.'
+                    : 'The Barbell plan is what Independent clients buy (monthly or yearly).'}
+                </div>
               </div>
               <div className="field">
                 <label>Capacity tiers</label>
                 <Seg name="Capacity tiers" value={form.tiersMode} onChange={(v) => set({ tiersMode: v })} options={[['ALL', 'All tiers'], ['SELECTED', 'Selected']]} />
                 {form.tiersMode === 'SELECTED' && <Pills legend="Capacity tiers" options={o.tiers} selected={form.applicableTiers} error={errors.applicableTiers} onChange={(v) => set({ applicableTiers: v })} />}
-                <div className="field-hint">A custom capacity belongs to the tier it is priced from (e.g. 80 clients is the 75 Clients tier). Add-ons follow the gym's current tier.</div>
+                <div className="field-hint">A custom capacity belongs to the tier it is priced from (e.g. 80 clients is the 75 Clients tier). Add-ons follow the gym's current tier. Tiers are gym packages only: a coupon limited to tiers never applies to the Barbell plan.</div>
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
                 <label>Billing durations</label>
                 <Seg name="Billing durations" value={form.durationsMode} onChange={(v) => set({ durationsMode: v })} options={[['ALL', 'All durations'], ['SELECTED', 'Selected']]} />
                 {form.durationsMode === 'SELECTED' && <Pills legend="Billing durations" options={o.durations} selected={form.applicableDurations} error={errors.applicableDurations} onChange={(v) => set({ applicableDurations: v })} />}
+                <div className="field-hint">The Barbell plan is 30 days (monthly) or 12 months (yearly).</div>
               </div>
             </div>
 
@@ -484,22 +508,33 @@ export default function CouponForm() {
                   {{ ENTERPRISE: 'Enterprise gyms', INDEPENDENT: 'Independent clients', BOTH: 'Enterprise & Independent' }[form.customerType] || 'Choose who it is for'}
                 </div>
               </div>
-              {o.tiers.length > 0 && (
+              {examples.length > 0 && (
                 <>
                   <div className="field" style={{ marginTop: 14, marginBottom: 0 }}>
                     <label htmlFor="cpn-prev-tier">Example purchase</label>
                     <select id="cpn-prev-tier" className="input" value={previewTier} onChange={(e) => setPreviewTier(e.target.value)}>
-                      {o.tiers.map((t) => <option key={t.value} value={t.value}>{t.label} — {moneyExact(t.price)}</option>)}
+                      {o.tiers.length > 0 && (
+                        <optgroup label="Gym packages">
+                          {o.tiers.map((t) => <option key={t.value} value={t.value}>{t.label} — {moneyExact(t.price)}</option>)}
+                        </optgroup>
+                      )}
+                      {(o.plans || []).length > 0 && (
+                        <optgroup label="Independent clients">
+                          {o.plans.map((p) => <option key={p.value} value={`plan:${p.value}`}>{p.label} — {moneyExact(p.price)}</option>)}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
-                  {preview && !minNotMet ? (
+                  {planNotEligible ? (
+                    <p className="faint" style={{ marginTop: 12 }}>{planNotEligible}</p>
+                  ) : preview && !minNotMet ? (
                     <div className="preview-lines" aria-live="polite">
                       <div className="ln"><span>Original price</span><span className="v">{moneyExact(preview.original)}</span></div>
                       <div className="ln save"><span>Coupon discount</span><span className="v">−{moneyExact(preview.discount)}</span></div>
-                      <div className="ln total"><span>Gym pays</span><span className="v">{moneyExact(preview.total)}</span></div>
+                      <div className="ln total"><span>{tier?.kind === 'plan' ? 'Client pays' : 'Gym pays'}</span><span className="v">{moneyExact(preview.total)}</span></div>
                     </div>
                   ) : (
-                    <p className="faint" style={{ marginTop: 12 }}>{minNotMet ? 'Below the minimum purchase — this coupon would not apply here.' : 'Enter a discount to see what a gym would pay.'}</p>
+                    <p className="faint" style={{ marginTop: 12 }}>{minNotMet ? 'Below the minimum purchase — this coupon would not apply here.' : 'Enter a discount to see what the customer would pay.'}</p>
                   )}
                 </>
               )}

@@ -32,7 +32,6 @@
 
 import { id, now } from '../../ids.js';
 import { track } from '../events.js';
-import { confirmPlanFromWebhook } from '../plans/barbellPlan.js';
 import {
   verifyCheckoutSignature, verifyWebhookSignature, parseWebhookPayload, mapProviderEventToStatus,
 } from './paymentProvider.js';
@@ -189,6 +188,13 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
   }
 
   if (!order && planOrder) {
+    // Loaded here, not imported at the top: barbellPlan.js imports the
+    // coupon engine, which imports THIS file to register its outcome
+    // hook. A static import would make that a cycle in which, whenever
+    // this file is the first of the three to load, the hook registers
+    // before _outcomeHooks exists. By the time a webhook arrives the
+    // module is loaded and cached, so this costs nothing.
+    const { confirmPlanFromWebhook } = await import('../plans/barbellPlan.js');
     const planResult = await confirmPlanFromWebhook(db, planOrder, {
       status, providerPaymentId: parsed.providerPaymentId, amount: parsed.amount, currency: parsed.currency,
     });

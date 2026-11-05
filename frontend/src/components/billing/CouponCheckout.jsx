@@ -1,13 +1,15 @@
 // ============================================================
-// COUPONS AT CHECKOUT -- shared by the first package purchase
-// (EnterpriseOnboarding) and every later purchase (EnterpriseBilling).
+// COUPONS AT CHECKOUT -- shared by a gym's first package purchase
+// (EnterpriseOnboarding), every later gym purchase (EnterpriseBilling),
+// and an Independent client's Barbell plan (pages/client/Plan.jsx).
 //
-// This component never computes a price. "Apply" asks the server for a
-// fresh LOCKED quote with the code(s) attached (POST /enterprise/
-// billing/quote { couponCodes }); the server validates the coupon,
-// works out the discount and returns the quote that /payment/order will
-// charge. What is shown here is exactly what the gateway will be asked
-// for. Removing a coupon simply drops back to the coupon-free quote.
+// This component never computes a price. "Apply" asks the server to
+// price the purchase with the code(s) attached -- for a gym, a fresh
+// LOCKED quote (POST /enterprise/billing/quote { couponCodes }); for the
+// plan, POST /plan/quote { plan, couponCodes }. The server validates the
+// coupon and works out the discount; what is shown here is what the
+// gateway will be asked for (the plan's /plan/order prices it once more
+// on the server). Removing a coupon simply drops back to the full price.
 // ============================================================
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../../api.js';
@@ -30,12 +32,14 @@ function validUntil(c) {
 }
 
 /**
- * `request` is the purchase being priced: { kind, capacity?, addonId? }.
- * `applied` is the current coupon result ({ quote, pricing }) or null.
- * `onApplied(result|null)` hands the new locked quote up to the page,
- * which then pays with `applied.quote.id`.
+ * `request` is the purchase being priced: { kind, capacity?, addonId? }
+ * for a gym, { plan } for the Barbell plan. `endpoint` is where it is
+ * priced (the gym quote by default, '/plan/quote' for the plan).
+ * `applied` is the current coupon result ({ quote?, pricing }) or null.
+ * `onApplied(result|null)` hands it up to the page, which then pays with
+ * `applied.quote.id` (a gym) or the applied codes (the plan).
  */
-export function CouponField({ request, applied, onApplied, disabled = false }) {
+export function CouponField({ request, applied, onApplied, disabled = false, endpoint = '/enterprise/billing/quote' }) {
   const inputId = useId();
   const [open, setOpen] = useState(!!applied);
   const [code, setCode] = useState('');
@@ -46,7 +50,7 @@ export function CouponField({ request, applied, onApplied, disabled = false }) {
 
   useEffect(() => { if (open && !applied) inputRef.current?.focus(); }, [open, applied]);
 
-  const requote = (nextCodes) => api('/enterprise/billing/quote', {
+  const requote = (nextCodes) => api(endpoint, {
     method: 'POST', body: JSON.stringify({ ...request, couponCodes: nextCodes }),
   });
 
