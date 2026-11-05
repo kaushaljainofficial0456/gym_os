@@ -87,7 +87,9 @@ function Redemptions({ coupon }) {
                       {r.invoice_number && <div>{r.invoice_number}</div>}
                     </td>
                     <td>
-                      <span className={`badge ${HOLD_TONE[r.status] || 'mute'}`}>{HOLD_LABEL[r.status] || r.status}</span>
+                      {r.release_reason === 'held_for_review'
+                        ? <span className="badge warn">Paid — held for review</span>
+                        : <span className={`badge ${HOLD_TONE[r.status] || 'mute'}`}>{HOLD_LABEL[r.status] || r.status}</span>}
                       {r.late_confirmation && <div className="faint" style={{ marginTop: 3 }}>Paid after the hold ended</div>}
                       {['REFUNDED', 'PARTIALLY_REFUNDED'].includes(r.order_status) && <div className="faint" style={{ marginTop: 3 }}>{r.order_status.replace('_', ' ').toLowerCase()}</div>}
                     </td>
@@ -173,6 +175,10 @@ export default function CouponDetail() {
         <StatCard label="Enterprise redemptions" value={a.enterpriseRedemptions} />
         <StatCard label="Independent redemptions" value={a.independentRedemptions}
           description={a.abandonedOrFailed ? `${a.abandonedOrFailed} failed or abandoned checkout${a.abandonedOrFailed === 1 ? '' : 's'} (not counted)` : undefined} />
+        {a.heldForReview > 0 && (
+          <StatCard label="Paid, held for review" value={a.heldForReview}
+            description="Paid after the coupon ran out, so not activated. Refund or honour them from Reconciliation." />
+        )}
       </div>
 
       <div className="card">

@@ -13,7 +13,7 @@
 import { id, now } from '../../ids.js';
 import {
   COUPON_KINDS, CUSTOMER_TYPES, KIND_LABELS, PERSONAL_KINDS, normalizeCouponCode, couponStatus, couponStatusSql, parseJsonArray,
-  sweepExpiredReservations, round2, describeApplicability,
+  sweepExpiredReservations, round2, describeApplicability, HELD_FOR_REVIEW,
 } from './couponEngine.js';
 import { couponWindowFromLocal, utcToZoned, isValidTimeZone, zonedToUtcMs, DEFAULT_COUPON_TZ } from './couponTime.js';
 import { plans as barbellPlans } from '../plans/barbellPlan.js';
@@ -423,7 +423,9 @@ export async function getCouponAnalytics(db, couponId) {
               COALESCE(SUM(cr.late_confirmation), 0) AS late
          FROM coupon_redemptions cr JOIN organizations o ON o.id = cr.org_id
         WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED'`, [couponId]),
-    db.q(`SELECT status, COUNT(*) AS n FROM coupon_redemptions WHERE coupon_id = ? AND status <> 'REDEEMED' GROUP BY status`, [couponId]),
+    db.q(`SELECT CASE WHEN release_reason = ? THEN 'HELD' ELSE status END AS status, COUNT(*) AS n
+            FROM coupon_redemptions WHERE coupon_id = ? AND status <> 'REDEEMED'
+           GROUP BY CASE WHEN release_reason = ? THEN 'HELD' ELSE status END`, [HELD_FOR_REVIEW, couponId, HELD_FOR_REVIEW]),
     db.q1(
       `SELECT (SELECT COALESCE(SUM(rf.amount), 0) FROM refunds rf
                 WHERE rf.status = 'SUCCESS'
@@ -433,7 +435,7 @@ export async function getCouponAnalytics(db, couponId) {
                   AND EXISTS (SELECT 1 FROM coupon_redemptions cr WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED' AND cr.plan_order_id = bpo.id)) AS total`,
       [couponId, couponId]),
   ]);
-  const holdCounts = { RESERVED: 0, RELEASED: 0, EXPIRED: 0 };
+  const holdCounts = { RESERVED: 0, RELEASED: 0, EXPIRED: 0, HELD: 0 };
   for (const h of holds) holdCounts[h.status] = Number(h.n || 0);
   const collected = round2(Number(agg?.collected || 0));
   return {
@@ -443,6 +445,9 @@ export async function getCouponAnalytics(db, couponId) {
       remainingRedemptions: coupon.remaining_redemptions,
       inFlight: holdCounts.RESERVED,
       abandonedOrFailed: holdCounts.RELEASED + holdCounts.EXPIRED,
+      // Paid after the hold ended with no use left: not activated, waiting
+      // for a founder (Reconciliation). Never counted as a redemption.
+      heldForReview: holdCounts.HELD,
       lateConfirmations: Number(agg?.late || 0),
       totalDiscount: round2(Number(agg?.discount || 0)),
       totalOriginalValue: round2(Number(agg?.original || 0)),

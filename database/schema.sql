@@ -1859,6 +1859,7 @@ CREATE TABLE IF NOT EXISTS barbell_plan_orders (
   original_amount     REAL,                          -- the plan's price before coupons (NULL on orders from before coupons: amount is the whole story)
   discount_amount     REAL NOT NULL DEFAULT 0,       -- coupon discount already taken off amount (see coupon_redemptions below)
   coupons_json        TEXT,                          -- coupons priced into this order, the same shape as billing_quotes.coupons_json
+  review_reason       TEXT,                          -- set when a verified payment was NOT turned into time (its coupon had no uses left); the order then never activates on its own -- a founder refunds or honours it
   currency            TEXT NOT NULL DEFAULT 'INR',
   provider            TEXT NOT NULL,
   provider_order_id   TEXT,

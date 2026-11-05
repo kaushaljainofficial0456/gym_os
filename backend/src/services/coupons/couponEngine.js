@@ -49,11 +49,10 @@
 // SQLite and PostgreSQL alike, neither a check-then-act race.
 //
 // LATE PAYMENTS: a hold can end (expired/released) and the customer can
-// still complete payment at the discounted price afterwards. They paid
-// that price, so the redemption is recorded (late_confirmation = 1)
-// even if that takes the coupon one past its limit -- refusing to
-// record a real payment would corrupt reconciliation, which is worse
-// than a limit overshoot the founder can see.
+// still complete payment at the discounted price afterwards. The payment
+// re-claims the coupon within its limits (late_confirmation = 1); if it
+// no longer fits, nothing is redeemed and the purchase is HELD FOR REVIEW
+// instead of activated -- a limit is never exceeded. See REDEMPTION below.
 // ============================================================
 import { id, now } from '../../ids.js';
 import { track } from '../events.js';
@@ -657,65 +656,183 @@ async function holdsForOrder(tx, order) {
     [order.id, order.subject_type, order.subject_id]);
 }
 
-/**
- * The holds of ONE verified purchase -> REDEEMED. Every write is a
- * guarded UPDATE that cannot violate a constraint, so it can never be
- * the reason a real payment fails to be confirmed. `paymentOrderId` is
- * the payment_orders row for a gym purchase (null for the plan, whose
- * order lives in barbell_plan_orders and is already the hold key).
- */
-async function redeemHolds(tx, rows, { paymentOrderId = null } = {}) {
-  let redeemed = 0;
-  for (const row of rows) {
-    if (row.status === 'REDEEMED') continue;
-    const ts = now();
-    const onTime = await tx.run(
-      `UPDATE coupon_redemptions SET status = 'REDEEMED', payment_order_id = COALESCE(?, payment_order_id), redeemed_at = ?, updated_at = ?
-        WHERE id = ? AND status = 'RESERVED'`,
-      [paymentOrderId, ts, ts, row.id]);
-    if (onTime.changes === 1) {
-      await tx.run(
-        `UPDATE coupons SET redemption_count = redemption_count + 1,
-            reserved_count = CASE WHEN reserved_count > 0 THEN reserved_count - 1 ELSE 0 END
-          WHERE id = ?`,
-        [row.coupon_id]);
-      redeemed += 1;
-      continue;
-    }
-    // The hold had already ended (expired / released) -- the customer
-    // still paid the discounted price, so the redemption is real.
-    const late = await tx.run(
-      `UPDATE coupon_redemptions SET status = 'REDEEMED', payment_order_id = COALESCE(?, payment_order_id),
-          customer_slot = NULL, user_slot = NULL, late_confirmation = 1, redeemed_at = ?, updated_at = ?
-        WHERE id = ? AND status IN ('RELEASED','EXPIRED')`,
-      [paymentOrderId, ts, ts, row.id]);
-    if (late.changes === 1) {
-      await tx.run(`UPDATE coupons SET redemption_count = redemption_count + 1 WHERE id = ?`, [row.coupon_id]);
-      redeemed += 1;
+// ============================================================
+// REDEMPTION -- a VERIFIED payment, inside the transaction that confirms
+// the purchase, BEFORE the purchase is activated.
+//
+// LATE CONFIRMATIONS NEVER EXCEED A LIMIT. A payment can verify after its
+// hold has ended: the checkout was closed or the attempt failed (hold
+// RELEASED) or it sat past RESERVATION_TTL_MS (EXPIRED), and its unit
+// went back to the pool. Such a payment re-claims the coupon with exactly
+// the guards a new hold uses (the global counter in the UPDATE's WHERE
+// clause, a free per-customer slot under its UNIQUE constraint):
+//   * it fits      -> REDEEMED, late_confirmation = 1; the purchase activates.
+//   * it does not  -> NOTHING is redeemed and the purchase is NOT activated:
+//                     it is held for review (HELD_FOR_REVIEW on its holds,
+//                     a reconciliation issue for the founders). The caller
+//                     marks the order (payment_orders DISPUTED /
+//                     barbell_plan_orders.review_reason) so no later
+//                     callback can activate it. A founder refunds it, or
+//                     honours it by hand.
+// The hold-for-review decision is sticky: once made, every later callback
+// for that purchase gets the same answer without re-checking the limits.
+// ============================================================
+export const HELD_FOR_REVIEW = 'held_for_review';
+const REVIEW_NOTE = 'COUPON_LIMIT_AFTER_PAYMENT';
+export const HELD_FOR_REVIEW_MESSAGE =
+  "Your payment went through, but the coupon was used up before the payment was confirmed, so your purchase is on hold. We'll refund it or honour it shortly. Please don't pay again.";
+
+/** Runs `fn` inside a SAVEPOINT (SQLite and PostgreSQL both support them
+ *  within a transaction): a refusal or a lost race undoes only fn's own
+ *  writes, and on PostgreSQL a caught constraint violation does not
+ *  poison the surrounding transaction. */
+async function inSavepoint(tx, name, fn) {
+  await tx.run(`SAVEPOINT ${name}`);
+  try {
+    const out = await fn();
+    if (out && out.ok === false) await tx.run(`ROLLBACK TO SAVEPOINT ${name}`);
+    await tx.run(`RELEASE SAVEPOINT ${name}`);
+    return out;
+  } catch (e) {
+    try { await tx.run(`ROLLBACK TO SAVEPOINT ${name}`); await tx.run(`RELEASE SAVEPOINT ${name}`); } catch { /* transaction already aborted */ }
+    throw e;
+  }
+}
+
+/** A late payment re-claims its coupon within the limits (see above). */
+async function redeemLate(tx, row, { paymentOrderId, ts }) {
+  const coupon = await tx.q1('SELECT id, max_redemptions_per_customer FROM coupons WHERE id = ?', [row.coupon_id]);
+  if (!coupon) return { ok: false, reason: 'invalid_code' };
+  const global = await tx.run(
+    `UPDATE coupons SET redemption_count = redemption_count + 1
+      WHERE id = ? AND (max_redemptions IS NULL OR redemption_count + reserved_count < max_redemptions)`,
+    [row.coupon_id]);
+  if (global.changes !== 1) return { ok: false, reason: 'exhausted' };
+
+  const personal = row.plan_order_id != null || row.subject_type === 'BARBELL_PLAN';
+  const slotCol = personal ? 'user_slot' : 'customer_slot';
+  const ownerCol = personal ? 'user_id' : 'org_id';
+  const owner = personal ? row.user_id : row.org_id;
+  const max = coupon.max_redemptions_per_customer != null ? Number(coupon.max_redemptions_per_customer) : null;
+  const redeemWith = (slot) => tx.run(
+    `UPDATE coupon_redemptions SET status = 'REDEEMED', payment_order_id = COALESCE(?, payment_order_id),
+        customer_slot = ?, user_slot = ?, late_confirmation = 1, redeemed_at = ?, updated_at = ?
+      WHERE id = ? AND status IN ('RELEASED','EXPIRED')`,
+    [paymentOrderId, personal ? null : slot, personal ? slot : null, ts, ts, row.id]);
+
+  // No per-customer limit (or an account deleted since): nothing to count against.
+  if (max == null || owner == null) {
+    return (await redeemWith(null)).changes === 1 ? { ok: true } : { ok: false, reason: 'not_redeemable' };
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const taken = await tx.q(
+      `SELECT ${slotCol} AS slot FROM coupon_redemptions WHERE coupon_id = ? AND ${ownerCol} = ? AND ${slotCol} IS NOT NULL AND id <> ?`,
+      [row.coupon_id, owner, row.id]);
+    const used = new Set(taken.map((r) => Number(r.slot)));
+    let slot = null;
+    for (let s = 1; s <= max; s++) if (!used.has(s)) { slot = s; break; }
+    if (slot == null) return { ok: false, reason: 'already_used' };
+    try {
+      const upd = await inSavepoint(tx, 'coupon_late_slot', () => redeemWith(slot));
+      return upd.changes === 1 ? { ok: true } : { ok: false, reason: 'not_redeemable' };
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;
+      // a concurrent checkout took this slot first -- try the next one
     }
   }
-  return redeemed;
+  return { ok: false, reason: 'already_used' };
 }
 
 /**
- * VERIFIED gym payment -> REDEEMED. Runs inside _finalizeOrder's SUCCESS
- * transaction, which only ever runs once per order (its own
- * `status != 'SUCCESS'` guard), so a duplicate webhook or a webhook
- * racing the checkout return cannot reach this twice.
+ * The holds of ONE verified purchase -> REDEEMED, all or nothing.
+ * Returns { ok: true, redeemed } or { ok: false, reason } (held for
+ * review; nothing was redeemed). `paymentOrderId` is the payment_orders
+ * row of a gym purchase (null for the plan, whose order is the hold key).
+ */
+async function redeemHolds(tx, rows, { paymentOrderId = null } = {}) {
+  if (rows.some((r) => r.release_reason === HELD_FOR_REVIEW)) return { ok: false, reason: HELD_FOR_REVIEW, sticky: true };
+  const pending = rows.filter((r) => r.status !== 'REDEEMED');
+  if (!pending.length) return { ok: true, redeemed: 0 };
+  return inSavepoint(tx, 'coupon_redeem', async () => {
+    let redeemed = 0;
+    for (const row of pending) {
+      const ts = now();
+      const onTime = await tx.run(
+        `UPDATE coupon_redemptions SET status = 'REDEEMED', payment_order_id = COALESCE(?, payment_order_id), redeemed_at = ?, updated_at = ?
+          WHERE id = ? AND status = 'RESERVED'`,
+        [paymentOrderId, ts, ts, row.id]);
+      if (onTime.changes === 1) {
+        // Its unit was already counted in reserved_count: move it across.
+        await tx.run(
+          `UPDATE coupons SET redemption_count = redemption_count + 1,
+              reserved_count = CASE WHEN reserved_count > 0 THEN reserved_count - 1 ELSE 0 END
+            WHERE id = ?`,
+          [row.coupon_id]);
+        redeemed += 1;
+        continue;
+      }
+      const late = await redeemLate(tx, row, { paymentOrderId, ts });
+      if (!late.ok) return { ok: false, reason: late.reason, couponId: row.coupon_id };
+      redeemed += 1;
+    }
+    return { ok: true, redeemed };
+  });
+}
+
+/** A purchase whose coupon could not be honoured within its limits: its
+ *  remaining holds are given back, every hold is marked HELD_FOR_REVIEW
+ *  (which makes the decision sticky), and the founders get a
+ *  reconciliation issue (Admin OS -> Reconciliation). Same transaction. */
+async function holdForReview(tx, rows, { orgId, paymentOrderId = null, planOrderId = null, refusal }) {
+  for (const row of rows) if (row.status === 'RESERVED') await endHold(tx, row, 'RELEASED', HELD_FOR_REVIEW);
+  const ts = now();
+  for (const row of rows) {
+    await tx.run(`UPDATE coupon_redemptions SET release_reason = ?, updated_at = ? WHERE id = ? AND status IN ('RELEASED','EXPIRED')`,
+      [HELD_FOR_REVIEW, ts, row.id]);
+  }
+  const coupon = refusal.couponId ? await tx.q1('SELECT code FROM coupons WHERE id = ?', [refusal.couponId]) : null;
+  const what = paymentOrderId ? `payment order ${paymentOrderId}` : `Barbell plan order ${planOrderId}`;
+  await tx.run(
+    `INSERT INTO reconciliation_issues (id, payment_order_id, org_id, issue_type, expected_json, actual_json, status, note, created_at)
+     VALUES (?, ?, ?, 'STATUS_MISMATCH', ?, ?, 'OPEN', ?, ?)`,
+    [id('rcon'), paymentOrderId, orgId,
+     JSON.stringify({ status: 'NOT_ACTIVATED', reason: refusal.reason, coupon: coupon?.code || null, planOrderId }),
+     JSON.stringify({ status: 'PAID' }),
+     `${REVIEW_NOTE}: ${what} was paid after its hold on coupon ${coupon?.code || refusal.couponId} ended, and the coupon had no uses left (${refusal.reason}). It was NOT activated. Refund the payment, or honour it by hand.`,
+     ts]);
+}
+
+/**
+ * VERIFIED gym payment -> its coupons REDEEMED, or the purchase held for
+ * review. Runs inside _finalizeOrder's SUCCESS transaction BEFORE the
+ * activation handler (see registerOrderOutcomeHook's onConfirm), which
+ * only ever reaches here once per order -- so a duplicate webhook or a
+ * webhook racing the checkout return cannot redeem twice.
+ * Returns { ok: true, redeemed } or { ok: false, reason, message }.
  */
 export async function redeemOrderCoupons(tx, order) {
-  if (!['ORG_PACKAGE', 'ORG_CAPACITY_ADDON'].includes(order.subject_type)) return 0;
-  return redeemHolds(tx, await holdsForOrder(tx, order), { paymentOrderId: order.id });
+  if (!['ORG_PACKAGE', 'ORG_CAPACITY_ADDON'].includes(order.subject_type)) return { ok: true, redeemed: 0 };
+  const rows = await holdsForOrder(tx, order);
+  const result = await redeemHolds(tx, rows, { paymentOrderId: order.id });
+  if (result.ok) return result;
+  if (!result.sticky) await holdForReview(tx, rows, { orgId: order.org_id, paymentOrderId: order.id, refusal: result });
+  return { ok: false, reason: HELD_FOR_REVIEW, detail: result.reason, message: HELD_FOR_REVIEW_MESSAGE };
 }
 
 /**
- * VERIFIED Barbell plan payment -> REDEEMED. The caller runs this inside
- * the transaction that moves the plan order CREATED -> SUCCESS, and only
- * when that guarded UPDATE changed the row -- so the checkout return and
- * the webhook (or a duplicate webhook) can only ever redeem it once.
+ * VERIFIED Barbell plan payment -> its coupons REDEEMED, or the plan held
+ * for review. The caller runs this inside the transaction that moves the
+ * plan order CREATED -> SUCCESS, and only when that guarded UPDATE changed
+ * the row -- so the checkout return and the webhook (or a duplicate
+ * webhook) can only ever redeem it once. On { ok: false } the caller must
+ * not grant the plan.
  */
 export async function redeemPlanOrderCoupons(tx, planOrder) {
-  return redeemHolds(tx, await tx.q('SELECT * FROM coupon_redemptions WHERE plan_order_id = ?', [planOrder.id]));
+  const rows = await tx.q('SELECT * FROM coupon_redemptions WHERE plan_order_id = ?', [planOrder.id]);
+  const result = await redeemHolds(tx, rows);
+  if (result.ok) return result;
+  if (!result.sticky) await holdForReview(tx, rows, { orgId: rows[0]?.org_id, planOrderId: planOrder.id, refusal: result });
+  return { ok: false, reason: HELD_FOR_REVIEW, detail: result.reason, message: HELD_FOR_REVIEW_MESSAGE };
 }
 
 /** Failed / cancelled / disputed gym payment -> hold RELEASED. Never a redemption. */
@@ -734,9 +851,14 @@ export async function releaseOrderCoupons(tx, order, status) {
 // inside paymentActivation's transaction -- see registerOrderOutcomeHook.
 registerOrderOutcomeHook({
   name: 'coupons',
-  async onSuccess(db, order, tx) {
-    const n = await redeemOrderCoupons(tx, order);
-    if (n) await track(db, { type: 'coupon_redeemed', orgId: order.org_id, data: { orderId: order.id, count: n } }).catch(() => {});
+  // Before activation: a coupon that can no longer be honoured within its
+  // limits stops the purchase from activating (see REDEMPTION above).
+  async onConfirm(db, order, tx) {
+    const result = await redeemOrderCoupons(tx, order);
+    if (result.ok && result.redeemed) {
+      await track(db, { type: 'coupon_redeemed', orgId: order.org_id, data: { orderId: order.id, count: result.redeemed } }).catch(() => {});
+    }
+    return result;
   },
   async onRelease(db, order, tx, status) {
     await releaseOrderCoupons(tx, order, status);

@@ -28,13 +28,17 @@
 //                     and the webhook arrives first.
 //   failed/cancelled  the hold is given back (the order stays payable).
 //   abandoned         the hold expires after RESERVATION_TTL_MS.
+//   paid after the hold ended
+//                     the coupon is re-claimed within its limits; if it no
+//                     longer fits, no time is granted and the order is held
+//                     for review (review_reason) -- never a limit overshoot.
 // ============================================================
 import { id, now } from '../../ids.js';
 import { track } from '../events.js';
 import { createProviderOrder, verifyCheckoutSignature, providerName } from '../payments/paymentProvider.js';
 import {
   priceWithCoupons, reservePlanOrderCoupons, releasePlanOrderCoupons, redeemPlanOrderCoupons,
-  planOrderCouponLines, successMessage, round2,
+  planOrderCouponLines, successMessage, round2, HELD_FOR_REVIEW_MESSAGE,
 } from '../coupons/couponEngine.js';
 
 export const TRIAL_DAYS = 14;
@@ -255,7 +259,10 @@ export async function confirmPlanPayment(db, userId, { orderId, providerPaymentI
     e.status = 422;
     throw e;
   }
-  return activatePlanOrder(db, order, { providerPaymentId });
+  if (order.review_reason) throw heldError();
+  const done = await activatePlanOrder(db, order, { providerPaymentId });
+  if (done?.review_reason) throw heldError();
+  return done;
 }
 
 /**
@@ -271,25 +278,49 @@ export async function confirmPlanPayment(db, userId, { orderId, providerPaymentI
 async function activatePlanOrder(db, order, { providerPaymentId }) {
   const plan = plans()[order.plan];
   const number = `BBL-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  let redeemed = 0;
+  let coupons = { ok: true, redeemed: 0 };
   await db.tx(async (tx) => {
     const current = await tx.q1(`SELECT MAX(period_end) AS until FROM barbell_plan_orders WHERE user_id = ? AND status = 'SUCCESS'`, [order.user_id]);
     const from = Math.max(Date.now(), Date.parse(current?.until || '') || 0);
     const start = new Date(from).toISOString();
     const end = new Date(from + plan.days * DAY).toISOString();
     // WHERE status = 'CREATED': if the other path got here first, this
-    // changes no rows and its result is the one that stands.
+    // changes no rows and its result is the one that stands. And never an
+    // order held for review (review_reason): that one waits for a founder.
     const upd = await tx.run(
       `UPDATE barbell_plan_orders SET status = 'SUCCESS', provider_payment_id = ?, period_start = ?, period_end = ?, invoice_number = ?, updated_at = ?
-        WHERE id = ? AND status = 'CREATED'`,
+        WHERE id = ? AND status = 'CREATED' AND review_reason IS NULL`,
       [providerPaymentId, start, end, number, now(), order.id]);
-    if (upd.changes === 1) redeemed = await redeemPlanOrderCoupons(tx, order);
+    if (upd.changes !== 1) return;
+    coupons = await redeemPlanOrderCoupons(tx, order);
+    if (!coupons.ok) {
+      // Paid, but its coupon could no longer be honoured within its
+      // limits: no time is granted. Same transaction, so the SUCCESS above
+      // never becomes visible; the order keeps the payment reference and
+      // is locked for a founder to refund or honour.
+      await tx.run(
+        `UPDATE barbell_plan_orders SET status = 'CREATED', period_start = NULL, period_end = NULL, invoice_number = NULL,
+            review_reason = ?, updated_at = ?
+          WHERE id = ?`,
+        [coupons.detail || coupons.reason, now(), order.id]);
+    }
   });
   forgetAccess(order.user_id);
-  if (redeemed) {
-    await track(db, { type: 'coupon_redeemed', userId: order.user_id, data: { planOrderId: order.id, count: redeemed } }).catch(() => {});
+  if (coupons.ok && coupons.redeemed) {
+    await track(db, { type: 'coupon_redeemed', userId: order.user_id, data: { planOrderId: order.id, count: coupons.redeemed } }).catch(() => {});
+  }
+  if (!coupons.ok) {
+    await track(db, { type: 'payment_held_for_review', userId: order.user_id, data: { planOrderId: order.id, reason: coupons.detail || coupons.reason } }).catch(() => {});
   }
   return db.q1('SELECT * FROM barbell_plan_orders WHERE id = ?', [order.id]);
+}
+
+/** A paid order that was held for review rather than turned into time. */
+function heldError() {
+  const e = new Error(HELD_FOR_REVIEW_MESSAGE);
+  e.status = 409;
+  e.code = 'payment_held_for_review';
+  return e;
 }
 
 /**
@@ -312,6 +343,7 @@ export async function confirmPlanFromWebhook(db, order, { status, providerPaymen
     return { ok: true, plan: true, ignored: status, couponsReleased };
   }
   if (order.status === 'SUCCESS') return { ok: true, plan: true, duplicate: true };
+  if (order.review_reason) return { ok: false, plan: true, reason: 'payment_held_for_review', heldForReview: true };
   if (order.status !== 'CREATED') return { ok: false, plan: true, reason: 'plan_order_not_payable', orderStatus: order.status };
   if ((amount != null && Math.abs(amount - Number(order.amount)) > 0.01) || (currency && currency !== order.currency)) {
     // Never grant time for a payment that does not match what was asked.
@@ -321,6 +353,7 @@ export async function confirmPlanFromWebhook(db, order, { status, providerPaymen
     return { ok: false, plan: true, reason: 'amount_or_currency_mismatch' };
   }
   const done = await activatePlanOrder(db, order, { providerPaymentId });
+  if (done?.review_reason) return { ok: false, plan: true, reason: 'payment_held_for_review', heldForReview: true };
   return { ok: true, plan: true, activated: done?.status === 'SUCCESS' };
 }
 

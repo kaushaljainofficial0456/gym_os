@@ -87,6 +87,12 @@ export default function Plan({ locked = false }) {
       status.reload({ silent: true });
       window.dispatchEvent(new CustomEvent('barbell:plan-paid', { detail: { paidUntil: r.status.paidUntil } }));
     } catch (e) {
+      if (e.data?.error === 'payment_held_for_review') {
+        // Paid, but the coupon ran out before the payment confirmed: the
+        // server held it for a founder to refund or honour (its own words).
+        setErr(e.data.message);
+        return;
+      }
       // The gateway took the money; our confirmation is what failed. Paying
       // again would charge twice, so say what actually happened.
       setErr(`Your bank approved the payment, but we couldn't confirm it (${e.message}). Don't pay again; refresh in a minute, or contact support.`);

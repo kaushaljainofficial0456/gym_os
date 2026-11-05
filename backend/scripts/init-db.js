@@ -369,6 +369,10 @@ const MIGRATIONS = [
   ['barbell_plan_orders', 'original_amount', `original_amount REAL`],
   ['barbell_plan_orders', 'discount_amount', `discount_amount REAL NOT NULL DEFAULT 0`],
   ['barbell_plan_orders', 'coupons_json', `coupons_json TEXT`],
+  // A paid plan order whose coupon could no longer be honoured within its
+  // limits is held for a founder instead of activated; this is the lock
+  // that keeps any later callback from activating it (couponEngine.js).
+  ['barbell_plan_orders', 'review_reason', `review_reason TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

@@ -35,6 +35,7 @@ import {
 import { recordWebhookEvent } from '../src/services/payments/paymentActivation.js';
 import { utcToZoned } from '../src/services/coupons/couponTime.js';
 import { confirmPlanFromWebhook } from '../src/services/plans/barbellPlan.js';
+import { sweepExpiredReservations } from '../src/services/coupons/couponEngine.js';
 import { upgradeCouponRedemptionsSqlite, upgradeCouponRedemptionsPg } from '../scripts/lib/couponRedemptionsUpgrade.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -580,6 +581,229 @@ test('admin: the Barbell plan is a purchase type; an Enterprise-only coupon cann
   // Picking every purchase type is stored as "no restriction".
   const all = await w.mkCoupon({ code: 'ALLKINDS', customerType: 'BOTH', applicableKinds: ['ORG_PACKAGE', 'ORG_UPGRADE', 'ORG_CAPACITY_ADDON', 'BARBELL_PLAN'] });
   assert.equal(all.applicable_kinds, null);
+});
+
+// ===============================================================
+// LATE CONFIRMATIONS NEVER EXCEED A LIMIT (both checkouts)
+// ===============================================================
+
+/** Enterprise: quote -> order (holds the coupon). */
+async function gymOrder(w, gym, codes) {
+  const q = await w.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_PACKAGE', capacity: 100, couponCodes: codes }, gym.token);
+  assert.equal(q.status, 200, JSON.stringify(q.json));
+  const o = await w.call('POST', '/api/enterprise/payment/order', { quoteId: q.json.quote.id }, gym.token);
+  assert.equal(o.status, 200, JSON.stringify(o.json));
+  return o.json;
+}
+const gymVerify = (w, gym, order) => {
+  const { paymentId, signature } = mockSimulateCheckout(order.provider_order_id);
+  return w.call('POST', '/api/enterprise/payment/verify', { orderId: order.id, providerPaymentId: paymentId, signature }, gym.token);
+};
+const expireHolds = (db, couponId) => db.run(
+  `UPDATE coupon_redemptions SET reservation_expires_at = ? WHERE coupon_id = ? AND status = 'RESERVED'`, ['2000-01-01T00:00:00.000Z', couponId]);
+
+test('late (Enterprise): a payment after its hold ended, when the last use went to someone else, is held for review -- never past the limit', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const c = await w.mkCoupon({ code: 'LASTONE', customerType: 'ENTERPRISE', maxRedemptions: 1 });
+  const a = await w.owner('owner-a@test.in', 'Gym A');
+  const b = await w.owner('owner-b@test.in', 'Gym B');
+  const slow = await gymOrder(w, a, ['LASTONE']);
+  await expireHolds(w.db, c.id); // Gym A's bank sits on it past the TTL...
+  const fast = await gymOrder(w, b, ['LASTONE']); // ...and Gym B takes the last use and pays.
+  assert.equal((await gymVerify(w, b, fast.order)).status, 200);
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+
+  // Gym A's payment now verifies.
+  const late = await gymVerify(w, a, slow.order);
+  assert.equal(late.status, 409, JSON.stringify(late.json));
+  assert.equal(late.json.error, 'payment_held_for_review');
+  assert.match(late.json.message, /on hold/);
+  assert.deepEqual(await counters(w.db, c.id), [1, 0], 'the limit of 1 is never exceeded');
+  const order = await w.db.q1('SELECT status FROM payment_orders WHERE id = ?', [slow.order.id]);
+  assert.equal(order.status, 'DISPUTED', 'money received, not activated');
+  const sub = await w.db.q1('SELECT status FROM org_subscriptions WHERE id = ?', [slow.subscription.id]);
+  assert.notEqual(sub.status, 'ACTIVE', 'the package is not activated at a discount the coupon could no longer give');
+  const hold = (await holds(w.db, c.id)).find((h) => h.payment_order_id === slow.order.id);
+  assert.equal(hold.status, 'EXPIRED');
+  assert.equal(hold.release_reason, 'held_for_review');
+  const issues = await w.db.q(`SELECT * FROM reconciliation_issues WHERE payment_order_id = ?`, [slow.order.id]);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0].note, /^COUPON_LIMIT_AFTER_PAYMENT: .*LASTONE.*NOT activated/);
+  assert.equal(issues[0].org_id, a.orgId);
+
+  // Any later callback for that payment gets the same answer -- sticky.
+  for (const evt of ['payment.captured', 'order.paid']) {
+    const r = await webhook(w.db, slow.order.provider_order_id, evt);
+    assert.notEqual(r.ok, true, `${evt}: ${JSON.stringify(r)}`);
+  }
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+  assert.equal((await w.db.q1('SELECT status FROM payment_orders WHERE id = ?', [slow.order.id])).status, 'DISPUTED');
+  assert.notEqual((await w.db.q1('SELECT status FROM org_subscriptions WHERE id = ?', [slow.subscription.id])).status, 'ACTIVE');
+  assert.equal((await w.db.q(`SELECT id FROM reconciliation_issues WHERE payment_order_id = ?`, [slow.order.id])).length, 1, 'one issue, not one per callback');
+  const an = (await w.call('GET', `/api/console/coupons/${c.id}`, undefined, w.admin.token)).json.analytics;
+  assert.equal(an.successfulRedemptions, 1);
+  assert.equal(an.heldForReview, 1, 'the founders see it as held, not as an abandoned checkout');
+  assert.equal(an.abandonedOrFailed, 0);
+  const all = (await w.call('GET', `/api/console/coupons/${c.id}/redemptions?status=ALL`, undefined, w.admin.token)).json;
+  assert.equal(all.redemptions.find((r) => r.payment_order_id === slow.order.id).release_reason, 'held_for_review');
+});
+
+test('late (Enterprise): a late payment that still fits is redeemed within the limit, holding a real per-gym slot', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const c = await w.mkCoupon({ code: 'ROOMY', customerType: 'ENTERPRISE', maxRedemptions: 5, maxRedemptionsPerCustomer: 1 });
+  const a = await w.owner('owner-a@test.in', 'Gym A');
+  const o = await gymOrder(w, a, ['ROOMY']);
+  await expireHolds(w.db, c.id);
+  assert.equal(await sweepExpiredReservations(w.db, { couponId: c.id }), 1, 'the abandoned hold is swept and its unit returned');
+  assert.deepEqual(await counters(w.db, c.id), [0, 0]);
+  assert.equal((await gymVerify(w, a, o.order)).status, 200);
+  const [h] = await holds(w.db, c.id);
+  assert.equal(h.status, 'REDEEMED');
+  assert.equal(h.late_confirmation, 1);
+  assert.equal(h.customer_slot, 1, 'the late redemption takes the gym\'s slot, so its once-per-gym limit still holds');
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+  resetRateLimits();
+  const again = await w.call('POST', '/api/enterprise/billing/quote', { kind: 'ORG_PACKAGE', capacity: 100, couponCodes: ['ROOMY'] }, a.token);
+  assert.equal(again.json.reason, 'already_used');
+});
+
+test('late (Enterprise): a gym that already used its one use cannot get a second through a late payment', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const c = await w.mkCoupon({ code: 'ONCEPERGYM', customerType: 'ENTERPRISE', maxRedemptionsPerCustomer: 1 });
+  const a = await w.owner('owner-a@test.in', 'Gym A');
+  const first = await gymOrder(w, a, ['ONCEPERGYM']);
+  await expireHolds(w.db, c.id);
+  const second = await gymOrder(w, a, ['ONCEPERGYM']);
+  assert.equal((await gymVerify(w, a, second.order)).status, 200);
+  const late = await gymVerify(w, a, first.order);
+  assert.equal(late.status, 409);
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+  assert.equal((await holds(w.db, c.id)).filter((h) => h.status === 'REDEEMED').length, 1);
+});
+
+test('late (plan): paid after the checkout closed, with the last use gone, grants no time and is held for review', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const c = await w.mkCoupon({ code: 'LASTSOLO', maxRedemptions: 1 });
+  const a = await w.client('Asha');
+  const b = await w.client('Ravi');
+  const slow = (await w.call('POST', '/api/plan/order', { plan: 'yearly', couponCodes: ['LASTSOLO'] }, a.token)).json.order;
+  await w.call('POST', `/api/plan/order/${slow.id}/cancel`, {}, a.token); // closed the sheet...
+  await buyPlan(w, b, { plan: 'monthly', codes: ['LASTSOLO'] }); // ...Ravi takes the last use...
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+
+  // ...and Asha's UPI approval lands afterwards.
+  const { paymentId, signature } = mockSimulateCheckout(slow.provider_order_id);
+  const late = await w.call('POST', '/api/plan/verify', { orderId: slow.id, providerPaymentId: paymentId, signature }, a.token);
+  assert.equal(late.status, 409, JSON.stringify(late.json));
+  assert.equal(late.json.error, 'payment_held_for_review');
+  assert.deepEqual(await counters(w.db, c.id), [1, 0], 'never past the limit');
+  const row = await w.db.q1('SELECT status, review_reason, invoice_number, period_end FROM barbell_plan_orders WHERE id = ?', [slow.id]);
+  assert.deepEqual({ ...row }, { status: 'CREATED', review_reason: 'exhausted', invoice_number: null, period_end: null });
+  const s = await w.call('GET', '/api/plan/status', undefined, a.token);
+  assert.equal(s.json.access, 'trial', 'no paid time was granted');
+  assert.equal(s.json.receipts.length, 0);
+  const issue = await w.db.q1(`SELECT * FROM reconciliation_issues WHERE note LIKE ?`, [`%${slow.id}%`]);
+  assert.ok(issue, 'the founders are told');
+  assert.equal(issue.payment_order_id, null);
+  assert.equal(issue.org_id, 'org_ind');
+
+  // The webhook, and the app confirming again, change nothing.
+  const r = await webhook(w.db, slow.provider_order_id, 'payment.captured');
+  assert.equal(r.heldForReview, true, JSON.stringify(r));
+  assert.equal((await w.call('POST', '/api/plan/verify', { orderId: slow.id, providerPaymentId: paymentId, signature }, a.token)).status, 409);
+  assert.equal((await w.call('GET', '/api/plan/status', undefined, a.token)).json.receipts.length, 0);
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+  assert.equal((await w.db.q(`SELECT id FROM reconciliation_issues WHERE note LIKE ?`, [`%${slow.id}%`])).length, 1);
+});
+
+test('late (plan): one person cannot get a second use of a once-per-person coupon through a late payment', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const c = await w.mkCoupon({ code: 'ONCEEACH', maxRedemptionsPerCustomer: 1 });
+  const a = await w.client('Asha');
+  const first = (await w.call('POST', '/api/plan/order', { plan: 'monthly', couponCodes: ['ONCEEACH'] }, a.token)).json.order;
+  await w.call('POST', `/api/plan/order/${first.id}/cancel`, {}, a.token);
+  await buyPlan(w, a, { plan: 'yearly', codes: ['ONCEEACH'] });
+  const { paymentId, signature } = mockSimulateCheckout(first.provider_order_id);
+  const late = await w.call('POST', '/api/plan/verify', { orderId: first.id, providerPaymentId: paymentId, signature }, a.token);
+  assert.equal(late.status, 409);
+  assert.equal((await w.db.q1('SELECT review_reason FROM barbell_plan_orders WHERE id = ?', [first.id])).review_reason, 'already_used');
+  assert.deepEqual(await counters(w.db, c.id), [1, 0]);
+  assert.equal((await w.call('GET', '/api/plan/status', undefined, a.token)).json.receipts.length, 1, 'only the purchase that got the coupon');
+});
+
+test('security: a refunded order is never re-activated by a later callback for its payment', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const a = await w.owner('owner-a@test.in', 'Gym A');
+  const o = await gymOrder(w, a, undefined);
+  assert.equal((await gymVerify(w, a, o.order)).status, 200);
+  await w.db.run(`UPDATE payment_orders SET status = 'REFUNDED' WHERE id = ?`, [o.order.id]); // as the refund flow leaves it
+  const subsBefore = await w.db.q1(`SELECT COUNT(*) AS n FROM org_subscriptions WHERE org_id = ? AND status = 'ACTIVE'`, [a.orgId]);
+  const r = await webhook(w.db, o.order.provider_order_id, 'order.paid');
+  assert.equal(r.alreadyFinalized, true, JSON.stringify(r));
+  assert.equal((await w.db.q1('SELECT status FROM payment_orders WHERE id = ?', [o.order.id])).status, 'REFUNDED');
+  const subsAfter = await w.db.q1(`SELECT COUNT(*) AS n FROM org_subscriptions WHERE org_id = ? AND status = 'ACTIVE'`, [a.orgId]);
+  assert.equal(subsAfter.n, subsBefore.n);
+});
+
+// ===============================================================
+// SECURITY
+// ===============================================================
+
+test('security: every coupon admin endpoint is founder-only -- Independent clients and gyms included', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  const c = await w.mkCoupon();
+  const solo = await w.client('Solo');
+  const gym = await w.owner('owner-a@test.in', 'Gym A');
+  const body = { code: 'HACKED', internalName: 'x', discountType: 'PERCENTAGE', discountValue: 99, customerType: 'BOTH',
+    startsDate: istDate(-1), startsTime: '00:00', expiresDate: istDate(5), expiresTime: '23:59' };
+  const probes = [
+    ['GET', '/api/console/coupons/summary'], ['GET', '/api/console/coupons/options'], ['GET', '/api/console/coupons'],
+    ['GET', '/api/console/coupons/export'], ['POST', '/api/console/coupons', body], ['GET', `/api/console/coupons/${c.id}`],
+    ['POST', `/api/console/coupons/${c.id}`, { ...body, code: c.code }], ['POST', `/api/console/coupons/${c.id}/disable`, {}],
+    ['POST', `/api/console/coupons/${c.id}/enable`, {}], ['DELETE', `/api/console/coupons/${c.id}`],
+    ['GET', `/api/console/coupons/${c.id}/redemptions`], ['GET', `/api/console/coupons/${c.id}/redemptions/export`],
+  ];
+  for (const [method, p, b] of probes) {
+    assert.equal((await w.call(method, p, b)).status, 401, `anonymous ${method} ${p}`);
+    for (const [who, token] of [['independent client', solo.token], ['gym owner', gym.token]]) {
+      resetRateLimits();
+      assert.equal((await w.call(method, p, b, token)).status, 403, `${who} ${method} ${p}`);
+    }
+  }
+  const after = await couponRow(w.db, c.id);
+  assert.deepEqual([after.discount_value, after.is_enabled, after.customer_type], [25, 1, 'INDEPENDENT'], 'nothing changed');
+  assert.equal((await w.db.q1(`SELECT COUNT(*) AS n FROM coupons WHERE code = 'HACKED'`)).n, 0);
+});
+
+test('security: the plan checkout needs a signed-in Independent client, and one client cannot touch another\'s order', async (t) => {
+  const w = await world(); t.after(() => w.close());
+  await w.mkCoupon({ customerType: 'BOTH' });
+  const a = await w.client('A');
+  const b = await w.client('B');
+  for (const [method, p, body] of [['GET', '/api/plan/status'], ['POST', '/api/plan/quote', { plan: 'monthly' }],
+    ['POST', '/api/plan/order', { plan: 'monthly' }], ['POST', '/api/plan/order/x/cancel', {}],
+    ['POST', '/api/plan/verify', { orderId: 'x', providerPaymentId: 'p', signature: 's' }]]) {
+    assert.equal((await w.call(method, p, body)).status, 401, `anonymous ${method} ${p}`);
+  }
+  // A gym owner is not an Independent client: no plan, no plan coupons.
+  const gym = await w.owner('owner-a@test.in', 'Gym A');
+  assert.equal((await w.call('POST', '/api/plan/quote', { plan: 'monthly', couponCodes: ['SOLO25'] }, gym.token)).status, 409);
+  assert.equal((await w.call('POST', '/api/plan/order', { plan: 'monthly', couponCodes: ['SOLO25'] }, gym.token)).status, 409);
+  // B cannot confirm, cancel or download A's order.
+  const o = (await w.call('POST', '/api/plan/order', { plan: 'yearly', couponCodes: ['SOLO25'] }, a.token)).json.order;
+  const { paymentId, signature } = mockSimulateCheckout(o.provider_order_id);
+  assert.equal((await w.call('POST', '/api/plan/verify', { orderId: o.id, providerPaymentId: paymentId, signature }, b.token)).status, 404);
+  assert.equal((await w.call('POST', `/api/plan/order/${o.id}/cancel`, {}, b.token)).status, 404);
+  assert.equal((await w.db.q1(`SELECT status FROM coupon_redemptions WHERE plan_order_id = ?`, [o.id])).status, 'RESERVED', 'A\'s hold is untouched');
+  // A forged signature on A's own order grants nothing and redeems nothing.
+  const forged = await w.call('POST', '/api/plan/verify', { orderId: o.id, providerPaymentId: paymentId, signature: 'ab'.repeat(32) }, a.token);
+  assert.equal(forged.status, 422);
+  assert.equal((await w.db.q1(`SELECT status FROM coupon_redemptions WHERE plan_order_id = ?`, [o.id])).status, 'RESERVED');
+  // A webhook with a bad signature is refused before it can do anything.
+  const ev = mockBuildWebhookEvent(o.provider_order_id, { eventType: 'payment.captured' });
+  const bad = await recordWebhookEvent(w.db, { rawBody: ev.body, signature: 'ab'.repeat(32) });
+  assert.equal(bad.reason, 'invalid_webhook_signature');
+  assert.equal((await w.db.q1(`SELECT status FROM barbell_plan_orders WHERE id = ?`, [o.id])).status, 'CREATED');
 });
 
 // ===============================================================

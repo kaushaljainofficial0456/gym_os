@@ -92,7 +92,15 @@ export default function planRoutes(db) {
   r.post('/verify', limit, validate(z.object({
     orderId: z.string().min(1), providerPaymentId: z.string().min(1), signature: z.string().min(1),
   })), async (req, res) => {
-    const order = await confirmPlanPayment(db, req.user.sub, req.body);
+    let order;
+    try {
+      order = await confirmPlanPayment(db, req.user.sub, req.body);
+    } catch (e) {
+      // Paid, but its coupon could no longer be honoured: no time was
+      // granted, and a founder will refund or honour it (couponEngine.js).
+      if (e.code === 'payment_held_for_review') return res.status(409).json({ error: e.code, message: e.message });
+      throw e;
+    }
     res.json({ order, status: await planStatus(db, req.user.sub) });
   });
 

@@ -8,10 +8,11 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 const apiMock = vi.fn();
 vi.mock('../src/api.js', () => ({ api: (...args) => apiMock(...args), downloadFile: vi.fn() }));
 vi.mock('../src/components/PaymentCheckout.jsx', () => ({
-  default: ({ order, onCancel }) => (
+  default: ({ order, onCancel, onComplete }) => (
     <div data-testid="gateway">
       Paying {order.amount}
       <button type="button" onClick={onCancel}>Close checkout</button>
+      <button type="button" onClick={() => onComplete('pay_1', 'sig_1')}>Approve payment</button>
     </div>
   ),
 }));
@@ -124,6 +125,24 @@ describe('Barbell plan checkout with a coupon', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Close checkout' }));
     await waitFor(() => expect(route('/plan/order/bpo_9/cancel')).toHaveLength(1));
     expect(screen.queryByTestId('gateway')).toBeNull();
+  });
+
+  it('a payment held for review says so in the server\'s words, never "pay again"', async () => {
+    const HELD = "Your payment went through, but the coupon was used up before the payment was confirmed, so your purchase is on hold. We'll refund it or honour it shortly. Please don't pay again.";
+    apiMock.mockImplementation(async (path) => {
+      if (path === '/plan/status') return STATUS;
+      if (path === '/plan/quote') return { pricing: PRICING };
+      if (path === '/plan/order') return { order: { id: 'bpo_7', plan: 'yearly', amount: 442.5, currency: 'INR', provider_order_id: 'po_7' }, pricing: PRICING };
+      if (path === '/plan/verify') {
+        throw Object.assign(new Error(HELD), { data: { error: 'payment_held_for_review', message: HELD } });
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    await openYearlyWithCoupon();
+    fireEvent.click(screen.getByRole('button', { name: 'Pay ₹442.50' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve payment' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(HELD);
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('receipts show the price, each coupon and what was paid', async () => {
