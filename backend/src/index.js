@@ -434,7 +434,7 @@ async function warnIfLocalSchemaBehind() {
     if (missing.length) {
       console.warn(`[sk-os] WARNING: this local database is missing ${missing.length} table(s)/column(s) the code needs, so those features will fail:`);
       console.warn(`  ${missing.slice(0, 12).join(', ')}${missing.length > 12 ? ', …' : ''}`);
-      console.warn('  Run `npm run db:init` (adds what is missing; existing data is kept).');
+      console.warn('  Run `npm run db:init` from the repo root (adds what is missing; existing data is kept).');
     }
   } catch (e) {
     console.warn('[sk-os] could not compare the local database with the schema:', e.message);
