@@ -11,11 +11,30 @@ import { Card, PageHeader, Spinner, ErrorState, Modal, Toast, CheckIcon } from '
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
 import PaymentResult from '../../components/PaymentResult.jsx';
 import Select from '../../components/Select.jsx';
+import { CouponField, PriceSummary, inr } from '../../components/billing/CouponCheckout.jsx';
 
-function QuoteFlow({ open, onClose, quote, order, onPay, onDone, freeChange }) {
+/** Receipt lines for a purchase: the price before any coupon, then one
+ *  negative line per coupon, so the receipt adds up to what was paid. */
+function receiptItems(label, { subtotal, total, coupons }) {
+  if (!coupons?.length) return [{ label, amount: total }];
+  return [{ label, amount: subtotal }, ...coupons.map((c) => ({ label: `Coupon ${c.code}`, amount: -Number(c.discountAmount) }))];
+}
+
+/**
+ * Two stages in one modal:
+ *   1. SUMMARY -- the server's locked quote, the coupon field, and
+ *      "Proceed to payment". Nothing is reserved or charged here.
+ *   2. CHECKOUT -- the gateway order, created only on Proceed, for the
+ *      quote's own (possibly discounted) total.
+ */
+function QuoteFlow({ open, onClose, modal, onApplied, onProceed, proceeding, onPay, onDone }) {
+  const quote = modal?.quote;
+  const order = modal?.order;
+  const applied = modal?.applied || null;
+  const base = modal?.base;
   return (
-    <Modal open={open} onClose={onClose} title={freeChange ? 'Change confirmed' : 'Confirm payment'}>
-      {freeChange ? (
+    <Modal open={open} onClose={onClose} title={modal?.freeChange ? 'Change confirmed' : order ? 'Confirm payment' : 'Review your purchase'}>
+      {modal?.freeChange ? (
         <div className="text-center py-4">
           <div className="text-2xl mb-2"><CheckIcon /></div>
           <p className="text-sm" style={{ color: 'var(--mute)' }}>Fully covered by your unused credit — no charge, no gateway needed.</p>
@@ -23,12 +42,24 @@ function QuoteFlow({ open, onClose, quote, order, onPay, onDone, freeChange }) {
         </div>
       ) : order ? (
         <div className="space-y-3">
-          {quote?.credit > 0 && (
+          {(quote?.credit > 0 || quote?.discount_amount > 0) && (
             <div className="text-xs rounded-lg px-3 py-2" style={{ background: 'var(--bg2)', color: 'var(--mute)' }}>
-              ₹{quote.base_price?.toLocaleString('en-IN')} new price − ₹{quote.credit.toLocaleString('en-IN')} credit for your unused period
+              {inr(quote.base_price)} price
+              {quote.credit > 0 && ` − ${inr(quote.credit)} credit for your unused period`}
+              {quote.discount_amount > 0 && ` − ${inr(quote.discount_amount)} coupon`}
+              {` = ${inr(quote.total)}`}
             </div>
           )}
           <PaymentCheckout order={order} onComplete={onPay} onCancel={onClose} />
+        </div>
+      ) : base ? (
+        <div>
+          <PriceSummary planLabel={modal.label} original={base.base_price} credit={base.credit} pricing={applied?.pricing} />
+          <CouponField request={modal.request} applied={applied} onApplied={onApplied} disabled={proceeding} />
+          <button className="btn-primary w-full mt-5" disabled={proceeding} data-loading={proceeding ? 'true' : undefined} onClick={onProceed}>
+            {proceeding ? 'Preparing payment…' : `Proceed to payment · ${inr(applied?.pricing?.total ?? base.total)}`}
+          </button>
+          <p className="text-[11px] mt-2 text-center" style={{ color: 'var(--faint)' }}>Price held for 10 minutes.</p>
         </div>
       ) : <Spinner />}
     </Modal>
@@ -41,8 +72,13 @@ export default function EnterpriseBilling() {
   const packages = useFetch(() => api('/enterprise/packages'));
   const invoices = useFetch(() => api('/enterprise/invoices'));
   const [toast, setToast] = useState('');
-  const [modal, setModal] = useState(null); // { quote, order, freeChange } | null
+  // { base, request, label, applied, quote, order, freeChange } | null
+  //   base     the coupon-free locked quote this purchase started from
+  //   applied  { quote, pricing } once a coupon is applied, else null
+  //   quote    the quote actually being paid (set on Proceed)
+  const [modal, setModal] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [proceeding, setProceeding] = useState(false);
   const [customCapacity, setCustomCapacity] = useState('');
   const [addonId, setAddonId] = useState('');
   const [invoiceBusyId, setInvoiceBusyId] = useState(null);
@@ -83,8 +119,11 @@ export default function EnterpriseBilling() {
   // the server refuses at the same capacity, so this button never worked.
   const startUpgrade = async (targetCapacity, { renew = false } = {}) => {
     setBusy(true); setToast('');
+    // Kept as one object: a coupon re-quote (CouponField) and an expired
+    // price hold (proceed) must ask for exactly the same purchase.
+    const request = { kind: renew ? 'ORG_PACKAGE' : 'ORG_UPGRADE', capacity: Number(targetCapacity) };
     try {
-      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify({ kind: renew ? 'ORG_PACKAGE' : 'ORG_UPGRADE', capacity: Number(targetCapacity) }) });
+      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify(request) });
       if (q.quote.total <= 0) {
         await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
         setModal({ quote: q.quote, freeChange: true });
@@ -95,8 +134,10 @@ export default function EnterpriseBilling() {
         // Nutrition.jsx.
         status.reload({ silent: true });
       } else {
-        const o = await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
-        setModal({ quote: q.quote, order: o.order });
+        const label = renew || Number(targetCapacity) === currentCapacity
+          ? `Renew · ${targetCapacity} clients`
+          : `${Number(targetCapacity) > currentCapacity ? 'Upgrade' : 'Downgrade'} to ${targetCapacity} clients`;
+        setModal({ base: q.quote, request, label, applied: null });
       }
     } catch (e) {
       // api.js's own .message already prefers this response's `message`
@@ -110,12 +151,42 @@ export default function EnterpriseBilling() {
   const startAddon = async () => {
     if (!addonId) return;
     setBusy(true); setToast('');
+    const request = { kind: 'ORG_CAPACITY_ADDON', addonId };
     try {
-      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify({ kind: 'ORG_CAPACITY_ADDON', addonId }) });
-      const o = await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.quote.id }) });
-      setModal({ quote: q.quote, order: o.order });
+      const q = await api('/enterprise/billing/quote', { method: 'POST', body: JSON.stringify(request) });
+      setModal({ base: q.quote, request, label: `+${q.quote.capacity} client capacity`, applied: null });
     } catch (e) { setToast(e.message); }
     finally { setBusy(false); }
+  };
+
+  /** "Proceed to payment": the gateway order is created only now, from
+   *  the coupon quote if one is applied. A price hold that ran out while
+   *  the owner was deciding is re-locked (same coupons) rather than
+   *  failing. */
+  const proceed = async () => {
+    if (!modal) return;
+    setProceeding(true); setToast('');
+    try {
+      let q = modal.applied?.quote || modal.base;
+      let applied = modal.applied;
+      if (Date.parse(q.expires_at) <= Date.now()) {
+        const codes = applied?.pricing?.coupons?.map((c) => c.code);
+        const fresh = await api('/enterprise/billing/quote', {
+          method: 'POST', body: JSON.stringify({ ...modal.request, ...(codes?.length ? { couponCodes: codes } : {}) }),
+        });
+        q = fresh.quote;
+        if (codes?.length) applied = { quote: fresh.quote, pricing: fresh.pricing };
+      }
+      const o = await api('/enterprise/payment/order', { method: 'POST', body: JSON.stringify({ quoteId: q.id }) });
+      setModal((m) => (m ? { ...m, applied, quote: q, order: o.order } : m));
+    } catch (e) {
+      // The coupon stopped being valid between Apply and Pay: show the
+      // real price again so the owner can decide, never charge silently.
+      if (e.data?.error === 'coupon_unavailable' || e.data?.error === 'coupon_invalid') {
+        setModal((m) => (m ? { ...m, applied: null } : m));
+      }
+      setToast(e.message);
+    } finally { setProceeding(false); }
   };
 
   /**
@@ -131,6 +202,8 @@ export default function EnterpriseBilling() {
   const onPay = async (paymentId, signature) => {
     const paidOrder = modal.order;
     const paidQuote = modal.quote;
+    const paidLabel = modal.label || 'Barbell subscription';
+    const paidPricing = modal.applied?.pricing || null;
     const knownInvoiceIds = new Set((invoices.data?.invoices || []).map((i) => i.id));
     try {
       await api('/enterprise/payment/verify', { method: 'POST', body: JSON.stringify({ orderId: paidOrder.id, providerPaymentId: paymentId, signature }) });
@@ -138,8 +211,8 @@ export default function EnterpriseBilling() {
       setResult({
         payment: 'success',
         receipt: 'generating',
-        amountLabel: `₹${Number(paidOrder.amount).toLocaleString('en-IN')}`,
-        purchase: paidQuote?.description || 'Barbell subscription',
+        amountLabel: inr(paidOrder.amount),
+        purchase: paidPricing?.coupons?.length ? `${paidLabel} · you saved ${inr(paidPricing.discount)}` : paidLabel,
         transactionId: paymentId,
         receiptData: {
           /* `status.data?.org?.name` used to sit here and read as though it
@@ -153,7 +226,11 @@ export default function EnterpriseBilling() {
           gymName: user?.orgName,
           date: new Date().toLocaleDateString(),
           currency: paidOrder.currency,
-          items: [{ label: paidQuote?.description || 'Barbell subscription', amount: paidOrder.amount }],
+          items: receiptItems(paidLabel, {
+            subtotal: Number(paidQuote?.total) + Number(paidQuote?.discount_amount || 0),
+            total: paidOrder.amount,
+            coupons: paidPricing?.coupons,
+          }),
           total: paidOrder.amount,
           transactionId: paymentId,
         },
@@ -178,8 +255,8 @@ export default function EnterpriseBilling() {
       setModal(null);
       setResult({
         payment: 'verifying',
-        amountLabel: `₹${Number(paidOrder.amount).toLocaleString('en-IN')}`,
-        purchase: paidQuote?.description || 'Barbell subscription',
+        amountLabel: inr(paidOrder.amount),
+        purchase: paidLabel,
         transactionId: paymentId,
         verifyError: e.message,
       });
@@ -326,7 +403,8 @@ export default function EnterpriseBilling() {
         )}
       </div>
 
-      <QuoteFlow open={!!modal} onClose={() => setModal(null)} quote={modal?.quote} order={modal?.order} freeChange={modal?.freeChange}
+      <QuoteFlow open={!!modal} onClose={() => setModal(null)} modal={modal} proceeding={proceeding}
+        onApplied={(applied) => setModal((m) => (m ? { ...m, applied } : m))} onProceed={proceed}
         onPay={onPay} onDone={() => { setModal(null); status.reload({ silent: true }); }} />
 
       {/* Opening a stored receipt shows the SAME surface a fresh payment
@@ -347,7 +425,9 @@ export default function EnterpriseBilling() {
               number: viewing.invoice_number,
               date: new Date(viewing.issued_at).toLocaleDateString(),
               currency: viewing.currency || 'INR',
-              items: [{ label: viewing.subject_type.replace(/_/g, ' ').toLowerCase(), amount: viewing.amount }],
+              items: receiptItems(viewing.subject_type.replace(/_/g, ' ').toLowerCase(), {
+                subtotal: viewing.original_amount ?? viewing.amount, total: viewing.amount, coupons: viewing.coupons,
+              }),
               total: viewing.amount,
             }}
             onDownloadReceipt={() => downloadInvoice(viewing)}

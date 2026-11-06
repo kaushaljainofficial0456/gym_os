@@ -32,7 +32,6 @@
 
 import { id, now } from '../../ids.js';
 import { track } from '../events.js';
-import { confirmPlanFromWebhook } from '../plans/barbellPlan.js';
 import {
   verifyCheckoutSignature, verifyWebhookSignature, parseWebhookPayload, mapProviderEventToStatus,
 } from './paymentProvider.js';
@@ -67,6 +66,49 @@ export function registerActivationHandler(subjectType, handler) {
  *  subject types hold nothing that needs releasing. */
 export function registerReleaseHandler(subjectType, handler) {
   _releaseHandlers.set(subjectType, handler);
+}
+
+/** Subject-type-AGNOSTIC observers of an order's outcome, for things
+ *  that ride along with a purchase rather than being the thing bought --
+ *  today, coupon holds (services/coupons/couponEngine.js). Unlike the
+ *  per-subject-type Maps above (one handler each, owned by the domain
+ *  module), any number of these can exist, so adding one never displaces
+ *  an activation/release handler.
+ *
+ *  Same transactional contract as those handlers: onConfirm and onSuccess
+ *  run inside the SAME transaction that marks the order SUCCESS, exactly
+ *  once per order -- onConfirm BEFORE the activation handler, onSuccess
+ *  after it; onRelease runs inside the transaction that moves the order
+ *  to FAILED/CANCELLED/DISPUTED/EXPIRED, once per transition. A hook that
+ *  throws rolls the whole finalize back (and a webhook is retried), so
+ *  hooks must only make writes that cannot fail on a constraint.
+ *
+ *  onConfirm may REFUSE activation by returning { ok: false, reason,
+ *  message } -- today, a coupon that can no longer be honoured within
+ *  its limits (couponEngine.redeemOrderCoupons). The payment is real, so
+ *  the order is not failed: it becomes DISPUTED (money received, not
+ *  activated, a human decides), exactly like an amount mismatch. */
+const _outcomeHooks = [];
+export function registerOrderOutcomeHook(hook) {
+  if (hook?.name && _outcomeHooks.some((h) => h.name === hook.name)) return;
+  _outcomeHooks.push(hook);
+}
+
+async function runConfirmHooks(db, order, tx) {
+  for (const h of _outcomeHooks) {
+    if (!h.onConfirm) continue;
+    const r = await h.onConfirm(db, order, tx);
+    if (r && r.ok === false) return r;
+  }
+  return { ok: true };
+}
+
+async function runSuccessHooks(db, order, tx) {
+  for (const h of _outcomeHooks) if (h.onSuccess) await h.onSuccess(db, order, tx);
+}
+
+async function runReleaseHooks(db, order, tx, status) {
+  for (const h of _outcomeHooks) if (h.onRelease) await h.onRelease(db, order, tx, status);
 }
 
 /**
@@ -162,6 +204,13 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
   }
 
   if (!order && planOrder) {
+    // Loaded here, not imported at the top: barbellPlan.js imports the
+    // coupon engine, which imports THIS file to register its outcome
+    // hook. A static import would make that a cycle in which, whenever
+    // this file is the first of the three to load, the hook registers
+    // before _outcomeHooks exists. By the time a webhook arrives the
+    // module is loaded and cached, so this costs nothing.
+    const { confirmPlanFromWebhook } = await import('../plans/barbellPlan.js');
     const planResult = await confirmPlanFromWebhook(db, planOrder, {
       status, providerPaymentId: parsed.providerPaymentId, amount: parsed.amount, currency: parsed.currency,
     });
@@ -220,6 +269,7 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
       if (upd.changes > 0) {
         const release = _releaseHandlers.get(order.subject_type);
         if (release) await release(db, order, tx);
+        await runReleaseHooks(db, order, tx, 'DISPUTED');
       }
       await track(db, { type: 'payment_amount_mismatch', orgId: order.org_id, data: { orderId: order.id, expected: { amount: order.amount, currency: order.currency }, got: { amount, currency }, source } }).catch(() => {});
       return { ok: false, reason: 'amount_or_currency_mismatch' };
@@ -231,11 +281,25 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
     // literal duplicate) sees changes === 0 and is reported as an
     // already-finalized no-op, never a second activation.
     if (status === 'SUCCESS') {
+      // Never out of REFUNDED / PARTIALLY_REFUNDED either: a refunded
+      // order's payment can still produce a later, distinct callback
+      // (order.paid after payment.captured, or a reconciliation recovery),
+      // and that must not re-activate what was refunded.
       const upd = await tx.run(
-        `UPDATE payment_orders SET status = 'SUCCESS', updated_at = ? WHERE id = ? AND status != 'SUCCESS'`,
+        `UPDATE payment_orders SET status = 'SUCCESS', updated_at = ? WHERE id = ? AND status NOT IN ('SUCCESS','REFUNDED','PARTIALLY_REFUNDED')`,
         [now(), order.id]);
       if (upd.changes === 0) {
         return { ok: true, order, alreadyFinalized: true };
+      }
+      // Before anything is activated: a coupon that can no longer be
+      // honoured within its limits holds the order for review instead.
+      const confirm = await runConfirmHooks(db, order, tx);
+      if (!confirm.ok) {
+        await tx.run(`UPDATE payment_orders SET status = 'DISPUTED', updated_at = ? WHERE id = ?`, [now(), order.id]);
+        const release = _releaseHandlers.get(order.subject_type);
+        if (release) await release(db, order, tx);
+        await track(db, { type: 'payment_held_for_review', orgId: order.org_id, data: { orderId: order.id, subjectType: order.subject_type, reason: confirm.detail || confirm.reason, source } }).catch(() => {});
+        return { ok: false, reason: 'payment_held_for_review', heldForReview: true, message: confirm.message };
       }
       const handler = _activationHandlers.get(order.subject_type);
       if (handler) await handler(db, order, tx);
@@ -245,6 +309,7 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
       // double-counted against availability.
       const release = _releaseHandlers.get(order.subject_type);
       if (release) await release(db, order, tx);
+      await runSuccessHooks(db, order, tx);
       await track(db, { type: 'payment_success', orgId: order.org_id, data: { orderId: order.id, subjectType: order.subject_type, amount: order.amount, currency: order.currency, source } }).catch(() => {});
       return { ok: true, order, alreadyFinalized: false };
     }
@@ -260,6 +325,9 @@ async function _finalizeOrder(db, order, { providerPaymentId, amount, currency, 
     if (upd.changes > 0 && ['FAILED', 'CANCELLED', 'DISPUTED'].includes(status)) {
       const release = _releaseHandlers.get(order.subject_type);
       if (release) await release(db, order, tx);
+    }
+    if (upd.changes > 0 && ['FAILED', 'CANCELLED', 'DISPUTED', 'EXPIRED'].includes(status)) {
+      await runReleaseHooks(db, order, tx, status);
     }
     await track(db, { type: `payment_${status.toLowerCase()}`, orgId: order.org_id, data: { orderId: order.id, subjectType: order.subject_type, source } }).catch(() => {});
     return { ok: true, order, alreadyFinalized: false };

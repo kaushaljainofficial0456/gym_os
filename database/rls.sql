@@ -462,6 +462,12 @@ END $$;
 -- ---- direct org_id, NOT NULL, no global rows ----
 ALTER TABLE billing_quotes          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_quotes          FORCE ROW LEVEL SECURITY;
+-- coupon_redemptions: one gym's use of a coupon. The coupons table
+-- itself is platform-level (no org_id, no policy -- like sk_packages),
+-- which is deliberate: its counters are the cross-gym usage-limit guard
+-- and must stay visible inside an org-scoped payment transaction.
+ALTER TABLE coupon_redemptions      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE coupon_redemptions      FORCE ROW LEVEL SECURITY;
 ALTER TABLE branches                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE branches                FORCE ROW LEVEL SECURITY;
 ALTER TABLE enrollment_tokens       ENABLE ROW LEVEL SECURITY;
@@ -504,7 +510,7 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'billing_quotes','branches','enrollment_tokens','gym_memberships','gym_onboarding',
+    'billing_quotes','coupon_redemptions','branches','enrollment_tokens','gym_memberships','gym_onboarding',
     'invoices','membership_status_history','org_billing_state','org_capacity_purchases',
     'org_subscriptions','payment_accounts','payment_orders','reconciliation_issues',
     'refunds','risk_events','support_tickets'

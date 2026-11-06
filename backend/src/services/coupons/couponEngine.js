@@ -1,0 +1,866 @@
+// ============================================================
+// COUPON ENGINE — the ONE place a coupon is judged, priced, held and
+// redeemed. Everything that touches money goes through here; the admin
+// CRUD (couponAdmin.js) only ever writes the coupon's own definition.
+//
+// WHERE IT SITS IN THE EXISTING PAYMENT FLOW (nothing parallel):
+//
+//   POST /enterprise/billing/quote { couponCodes }
+//     -> quotes.js prices the purchase exactly as before, then
+//        priceWithCoupons() takes the discount off the locked total.
+//        The quote row stores the discount + which coupons. NOTHING is
+//        reserved or consumed here -- "Apply" only prices.
+//
+//   POST /enterprise/payment/order { quoteId }
+//     -> reserveQuoteCoupons() re-checks every coupon against the clock
+//        and its limits and HOLDS one use (coupon_redemptions RESERVED,
+//        coupons.reserved_count + 1) before the gateway order is created
+//        for the quote's already-discounted total.
+//
+//   payment verified (checkout signature OR signed webhook OR
+//   reconciliation recovery) -> paymentActivation's _finalizeOrder
+//     -> redeemOrderCoupons() inside the SAME transaction that marks the
+//        order SUCCESS: RESERVED -> REDEEMED, redemption_count + 1.
+//        _finalizeOrder's own "only the first SUCCESS activates" guard
+//        is what makes a duplicate callback a no-op here too.
+//
+//   payment failed / cancelled / disputed -> releaseOrderCoupons()
+//   hold older than RESERVATION_TTL_MS with no verified payment
+//     -> sweepExpiredReservations() (lazy, no cron -- same posture as
+//        getOrgBillingSnapshot's subscription expiry)
+//
+// THE BARBELL PLAN (an Independent client's own ₹59/₹590 plan, see
+// services/plans/barbellPlan.js) takes the SAME steps through the same
+// functions, keyed on its own order instead of a quote:
+//   POST /plan/quote  -> priceWithCoupons() (kind BARBELL_PLAN) prices only
+//   POST /plan/order  -> the plan order row is the price lock;
+//                        reservePlanOrderCoupons() holds before the
+//                        gateway order is created for its discounted amount
+//   payment verified  -> redeemPlanOrderCoupons() inside the transaction
+//                        that confirms the plan (signature or webhook)
+//   failed/cancelled  -> releasePlanOrderCoupons(); abandoned -> the sweep
+// The one difference is WHO the customer is: every Independent client
+// shares one org row, so a plan's per-customer limit is per PERSON
+// (user_id/user_slot), where a gym purchase's is per gym (org_id/customer_slot).
+//
+// CONCURRENCY: the global limit is a conditional UPDATE on the coupon
+// row (redemption_count + reserved_count < max_redemptions in the WHERE
+// clause) and the per-customer limit is a UNIQUE slot -- both atomic on
+// SQLite and PostgreSQL alike, neither a check-then-act race.
+//
+// LATE PAYMENTS: a hold can end (expired/released) and the customer can
+// still complete payment at the discounted price afterwards. The payment
+// re-claims the coupon within its limits (late_confirmation = 1); if it
+// no longer fits, nothing is redeemed and the purchase is HELD FOR REVIEW
+// instead of activated -- a limit is never exceeded. See REDEMPTION below.
+// ============================================================
+import { id, now } from '../../ids.js';
+import { track } from '../events.js';
+import { registerOrderOutcomeHook } from '../payments/paymentActivation.js';
+
+export const COUPON_KINDS = ['ORG_PACKAGE', 'ORG_UPGRADE', 'ORG_CAPACITY_ADDON', 'BARBELL_PLAN'];
+export const KIND_LABELS = {
+  ORG_PACKAGE: 'New package / renewal',
+  ORG_UPGRADE: 'Upgrade / downgrade',
+  ORG_CAPACITY_ADDON: 'Capacity add-on',
+  BARBELL_PLAN: 'Barbell plan (Independent clients)',
+};
+/** Purchases a PERSON makes for themselves -- today only the Barbell plan,
+ *  which only Independent clients buy. The customer a per-customer limit
+ *  counts is that person (users.id), not their org: every Independent
+ *  client is in the one shared 'independent' org. */
+export const PERSONAL_KINDS = ['BARBELL_PLAN'];
+const isPersonal = (kind) => PERSONAL_KINDS.includes(kind);
+export const CUSTOMER_TYPES = ['ENTERPRISE', 'INDEPENDENT', 'BOTH'];
+export const MAX_STACKED_COUPONS = 3;
+/** How long a coupon is held for an unpaid gateway order. Longer than
+ *  the 10-minute quote TTL (the order is created inside that window) and
+ *  long enough for a slow UPI/netbanking confirmation. */
+export const RESERVATION_TTL_MS = 30 * 60 * 1000;
+/** A coupon never takes a payable amount below this (INR). Razorpay's
+ *  own minimum order is Rs 1, and a zero total would route a purchase
+ *  down enterprise.js's no-payment "free change" activation path --
+ *  a coupon must never be a way to activate a package without paying. */
+export const MIN_CHARGE = 1;
+
+const CODE_RE = /^[A-Z0-9][A-Z0-9_-]{2,31}$/;
+const ACTIVE_HOLD_STATUSES = ['RESERVED', 'REDEEMED'];
+
+/** Trim + uppercase. Returns null for anything that cannot be a code --
+ *  the caller answers that exactly like an unknown code (no oracle). */
+export function normalizeCouponCode(raw) {
+  if (typeof raw !== 'string') return null;
+  const code = raw.trim().toUpperCase();
+  return CODE_RE.test(code) ? code : null;
+}
+
+// ---- money: integer paise internally, so 25% of 13,999 is exactly 3,499.75 ----
+const toPaise = (n) => Math.round(Number(n || 0) * 100);
+const fromPaise = (p) => Math.round(p) / 100;
+export const round2 = (n) => fromPaise(toPaise(n));
+
+export function formatInr(n) {
+  return '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(Number(n)) ? 0 : 2, maximumFractionDigits: 2 });
+}
+
+/** "5 Nov 2026, 12:00 am IST" in the coupon's own timezone. */
+export function formatInZone(iso, tz = 'Asia/Kolkata') {
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: tz, day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    }).format(new Date(iso));
+  } catch {
+    return String(iso);
+  }
+}
+
+export function parseJsonArray(value) {
+  if (value == null || value === '') return null;
+  try {
+    const v = JSON.parse(value);
+    return Array.isArray(v) && v.length ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+const isUniqueViolation = (e) => e?.code === '23505' || /unique/i.test(String(e?.message || ''));
+
+// ============================================================
+// STATUS -- derived from the clock + counters, never stored (see the
+// coupons table comment in schema.sql).
+// ============================================================
+export function couponStatus(c, nowIso = now()) {
+  if (!Number(c.is_enabled)) return 'DISABLED';
+  if (c.expires_at <= nowIso) return 'EXPIRED';
+  if (c.max_redemptions != null && Number(c.redemption_count) >= Number(c.max_redemptions)) return 'EXHAUSTED';
+  if (c.starts_at > nowIso) return 'SCHEDULED';
+  return 'ACTIVE';
+}
+
+/** The same derivation as couponStatus(), as SQL, so lists can filter,
+ *  sort and count by status in the database. Binds TWO parameters, both
+ *  the current UTC ISO time: `[nowIso, nowIso]`. ISO-8601 UTC strings
+ *  compare correctly as text, which every timestamp here is. */
+export function couponStatusSql(alias = 'c') {
+  return `CASE WHEN ${alias}.is_enabled = 0 THEN 'DISABLED'
+    WHEN ${alias}.expires_at <= ? THEN 'EXPIRED'
+    WHEN ${alias}.max_redemptions IS NOT NULL AND ${alias}.redemption_count >= ${alias}.max_redemptions THEN 'EXHAUSTED'
+    WHEN ${alias}.starts_at > ? THEN 'SCHEDULED'
+    ELSE 'ACTIVE' END`;
+}
+
+// ============================================================
+// CUSTOMER-FACING REASONS. Never include founder notes, internal names
+// or usage counts -- a gym owner sees only why their code did not work.
+// ============================================================
+const MESSAGES = {
+  invalid_code: () => 'Invalid coupon code.',
+  disabled: () => 'This coupon is no longer available.',
+  not_started: (c) => `This coupon is not active yet. It starts on ${formatInZone(c.starts_at, c.timezone)}.`,
+  expired: () => 'This coupon has expired.',
+  exhausted: () => 'This coupon has reached its maximum number of uses.',
+  already_used: () => 'You have already used this coupon.',
+  enterprise_only: () => 'This coupon is only available for Enterprise gyms.',
+  independent_only: () => 'This coupon is only available for Independent clients.',
+  kind_not_eligible: () => 'This coupon is not applicable to this type of purchase.',
+  plan_not_eligible: () => 'This coupon is not applicable to this subscription plan.',
+  duration_not_eligible: () => 'This coupon is not applicable to this billing duration.',
+  minimum_not_met: (c) => `Minimum purchase amount of ${formatInr(c.minimum_purchase_amount)} not met.`,
+  first_time_only: () => 'This coupon is only for first-time Barbell customers.',
+  stacking_not_allowed: () => "This coupon can't be combined with other coupons.",
+  currency_mismatch: () => 'This coupon is not applicable to this currency.',
+  nothing_to_discount: () => 'There is nothing left to discount on this purchase.',
+  too_many_coupons: () => `You can apply up to ${MAX_STACKED_COUPONS} coupons to one purchase.`,
+  quote_in_use: () => 'This checkout is already being paid for.',
+  unknown_customer: () => 'Coupons are not available for this account.',
+};
+
+function fail(reason, coupon = null, code = null) {
+  const msg = MESSAGES[reason] ? MESSAGES[reason](coupon || {}) : 'This coupon cannot be applied.';
+  return { ok: false, reason, code: code || coupon?.code || null, message: msg };
+}
+
+// ============================================================
+// CONTEXT RESOLUTION -- everything a coupon is judged against comes
+// from the database, never from the request.
+// ============================================================
+
+/** Enterprise vs Independent, from the AUTHENTICATED org's own row.
+ *  organizations.type is structural (see services/orgKind.js) -- there
+ *  is no request field a customer could set to change it. */
+export async function resolveCustomerType(db, orgId) {
+  if (!orgId) return null;
+  const org = await db.q1('SELECT type FROM organizations WHERE id = ?', [orgId]);
+  if (!org) return null;
+  return org.type === 'independent' ? 'INDEPENDENT' : 'ENTERPRISE';
+}
+
+/** The capacity tier (sk_packages.name) and billing duration a purchase
+ *  belongs to. A package/upgrade quote carries its own base package; an
+ *  add-on is bought against the gym's CURRENT package, so it inherits
+ *  that package's tier and duration. The Barbell plan has no capacity
+ *  tier (so a tier-restricted coupon never applies to it) and its
+ *  duration is the plan's own (30 or 365 days), passed in by the caller
+ *  from the server's plan table. */
+export async function resolvePurchaseTarget(db, { orgId, kind, packageId, durationDays = null }) {
+  if (kind === 'BARBELL_PLAN') return { tier: null, durationDays: durationDays != null ? Number(durationDays) : null };
+  let pkg = null;
+  if (kind === 'ORG_CAPACITY_ADDON') {
+    const sub = await db.q1(
+      `SELECT package_id FROM org_subscriptions WHERE org_id = ? AND status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1`, [orgId]);
+    if (sub) pkg = await db.q1('SELECT name, duration_days FROM sk_packages WHERE id = ?', [sub.package_id]);
+  } else if (packageId) {
+    pkg = await db.q1('SELECT name, duration_days FROM sk_packages WHERE id = ?', [packageId]);
+  }
+  return { tier: pkg?.name ?? null, durationDays: pkg?.duration_days != null ? Number(pkg.duration_days) : null };
+}
+
+/** True when this customer has never completed a paid Barbell purchase.
+ *  For a gym: both sources are verified facts -- a payment_order only
+ *  reaches SUCCESS/REFUNDED through signature-verified finalization, and
+ *  an org_subscriptions row only leaves PENDING_PAYMENT by activation.
+ *  For a person buying the Barbell plan (`userId`): a plan order only
+ *  reaches SUCCESS through a verified signature or signed webhook. */
+export async function isFirstTimeCustomer(db, orgId, { userId = null } = {}) {
+  if (userId) {
+    const bought = await db.q1(
+      `SELECT 1 AS x FROM barbell_plan_orders WHERE user_id = ? AND status IN ('SUCCESS','REFUNDED') LIMIT 1`, [userId]);
+    return !bought;
+  }
+  const paid = await db.q1(
+    `SELECT 1 AS x FROM payment_orders
+      WHERE org_id = ? AND subject_type IN ('ORG_PACKAGE','ORG_CAPACITY_ADDON')
+        AND status IN ('SUCCESS','REFUNDED','PARTIALLY_REFUNDED') LIMIT 1`, [orgId]);
+  if (paid) return false;
+  const activated = await db.q1(
+    `SELECT 1 AS x FROM org_subscriptions WHERE org_id = ? AND status IN ('ACTIVE','EXPIRED','SUPERSEDED') LIMIT 1`, [orgId]);
+  return !activated;
+}
+
+/** Live uses (redeemed + unexpired holds) by ONE customer: the person
+ *  for a personal purchase (`userId`), otherwise the gym. A gym's count
+ *  leaves out people's own purchases, so a person's plan never uses up
+ *  their org's allowance or the other way round. */
+async function customerUseCount(db, couponId, { orgId, userId = null }, nowIso) {
+  const live = `(status = 'REDEEMED' OR (status = 'RESERVED' AND reservation_expires_at > ?))`;
+  const row = userId
+    ? await db.q1(`SELECT COUNT(*) AS n FROM coupon_redemptions WHERE coupon_id = ? AND user_id = ? AND ${live}`, [couponId, userId, nowIso])
+    : await db.q1(`SELECT COUNT(*) AS n FROM coupon_redemptions WHERE coupon_id = ? AND org_id = ? AND user_id IS NULL AND ${live}`, [couponId, orgId, nowIso]);
+  return Number(row?.n || 0);
+}
+
+// ============================================================
+// ELIGIBILITY -- the documented order: exists -> enabled -> window ->
+// customer type -> purchase/plan -> minimum -> limits -> stacking.
+// ============================================================
+async function checkEligibility(db, coupon, ctx, { checkLimits = true } = {}) {
+  const { orgId, userId = null, kind, customerType, target, subtotal, currency, nowIso, stackedCount } = ctx;
+  if (!coupon) return fail('invalid_code');
+  if (!Number(coupon.is_enabled)) return fail('disabled', coupon);
+  if (coupon.starts_at > nowIso) return fail('not_started', coupon);
+  if (coupon.expires_at <= nowIso) return fail('expired', coupon);
+
+  if (!customerType) return fail('unknown_customer', coupon);
+  // A personal purchase must name its person, or there is no one to
+  // count a per-customer limit or a first purchase against.
+  if (isPersonal(kind) && !userId) return fail('unknown_customer', coupon);
+  if (coupon.customer_type === 'ENTERPRISE' && customerType !== 'ENTERPRISE') return fail('enterprise_only', coupon);
+  if (coupon.customer_type === 'INDEPENDENT' && customerType !== 'INDEPENDENT') return fail('independent_only', coupon);
+
+  const kinds = parseJsonArray(coupon.applicable_kinds_json);
+  if (kinds && !kinds.includes(kind)) return fail('kind_not_eligible', coupon);
+  const tiers = parseJsonArray(coupon.applicable_tiers_json);
+  if (tiers && !(target.tier && tiers.includes(target.tier))) return fail('plan_not_eligible', coupon);
+  const durations = parseJsonArray(coupon.applicable_durations_json);
+  if (durations && !(target.durationDays != null && durations.map(Number).includes(target.durationDays))) {
+    return fail('duration_not_eligible', coupon);
+  }
+  if (coupon.discount_type === 'FIXED' && (coupon.currency || 'INR') !== currency) return fail('currency_mismatch', coupon);
+
+  if (coupon.minimum_purchase_amount != null && toPaise(subtotal) < toPaise(coupon.minimum_purchase_amount)) {
+    return fail('minimum_not_met', coupon);
+  }
+
+  if (checkLimits) {
+    if (coupon.max_redemptions != null
+        && Number(coupon.redemption_count) + Number(coupon.reserved_count) >= Number(coupon.max_redemptions)) {
+      return fail('exhausted', coupon);
+    }
+    if (coupon.max_redemptions_per_customer != null
+        && (await customerUseCount(db, coupon.id, { orgId, userId: isPersonal(kind) ? userId : null }, nowIso))
+          >= Number(coupon.max_redemptions_per_customer)) {
+      return fail('already_used', coupon);
+    }
+  }
+  if (Number(coupon.first_time_only)
+      && !(await isFirstTimeCustomer(db, orgId, { userId: isPersonal(kind) ? userId : null }))) {
+    return fail('first_time_only', coupon);
+  }
+  if (stackedCount > 1 && !Number(coupon.allow_stacking)) return fail('stacking_not_allowed', coupon);
+  return { ok: true };
+}
+
+/** Discount in PAISE for one coupon against `remainingPaise`, already
+ *  capped (max_discount_amount) and floored (never below MIN_CHARGE). */
+export function discountPaise(coupon, remainingPaise) {
+  const floorP = toPaise(MIN_CHARGE);
+  if (remainingPaise <= floorP) return 0;
+  let d = coupon.discount_type === 'PERCENTAGE'
+    ? Math.round((remainingPaise * Number(coupon.discount_value)) / 100)
+    : toPaise(coupon.discount_value);
+  if (coupon.discount_type === 'PERCENTAGE' && coupon.max_discount_amount != null) {
+    d = Math.min(d, toPaise(coupon.max_discount_amount));
+  }
+  return Math.max(0, Math.min(d, remainingPaise - floorP));
+}
+
+/** What a gym owner is allowed to see about a coupon at checkout. */
+export function publicCouponLine(coupon, discountAmount) {
+  return {
+    couponId: coupon.id,
+    code: coupon.code,
+    description: coupon.description || null,
+    discountType: coupon.discount_type,
+    discountValue: Number(coupon.discount_value),
+    maxDiscountAmount: coupon.max_discount_amount != null ? Number(coupon.max_discount_amount) : null,
+    discountAmount: round2(discountAmount),
+    expiresAt: coupon.expires_at,
+    timezone: coupon.timezone,
+    appliesTo: describeApplicability(coupon),
+  };
+}
+
+export function describeApplicability(coupon) {
+  const kinds = parseJsonArray(coupon.applicable_kinds_json);
+  const tiers = parseJsonArray(coupon.applicable_tiers_json);
+  const durations = parseJsonArray(coupon.applicable_durations_json);
+  const parts = [];
+  parts.push(kinds ? kinds.map((k) => KIND_LABELS[k] || k).join(', ') : 'All purchases');
+  if (tiers) parts.push(tiers.join(', '));
+  if (durations) parts.push(durations.map((d) => (Number(d) % 365 === 0 ? `${Number(d) / 365 * 12} months` : `${d} days`)).join(', '));
+  return parts.join(' · ');
+}
+
+/**
+ * Prices a purchase with one or more coupon codes. Pure pricing plus
+ * reads -- writes nothing except lazily expiring holds that are already
+ * past their TTL. `amount` is the payable total BEFORE coupons (after
+ * any upgrade proration credit), exactly as quotes.js computed it.
+ *
+ * Stacked coupons apply in the order given, each to what is left, so
+ * stacking can never discount more than the purchase is worth.
+ *
+ * Returns { ok, subtotal, discount, total, lines } or
+ * { ok: false, reason, code, message }.
+ *
+ * A personal purchase (the Barbell plan) also passes `userId` -- the
+ * authenticated person, who is the customer its limits count -- and the
+ * plan's `durationDays`. The customer TYPE still comes from the org row.
+ */
+export async function priceWithCoupons(db, {
+  orgId, userId = null, kind, packageId = null, durationDays = null, amount, currency = 'INR', codes, nowIso = now(),
+}) {
+  const seen = new Set();
+  const normalized = [];
+  for (const raw of codes || []) {
+    const code = normalizeCouponCode(raw);
+    if (!code) return fail('invalid_code', null, typeof raw === 'string' ? raw.trim().toUpperCase().slice(0, 32) : null);
+    if (!seen.has(code)) { seen.add(code); normalized.push(code); }
+  }
+  if (!normalized.length) return fail('invalid_code');
+  if (normalized.length > MAX_STACKED_COUPONS) return fail('too_many_coupons');
+  if (!COUPON_KINDS.includes(kind)) return fail('kind_not_eligible');
+
+  const customerType = await resolveCustomerType(db, orgId);
+  const target = await resolvePurchaseTarget(db, { orgId, kind, packageId, durationDays });
+  const subtotalP = toPaise(amount);
+  let remainingP = subtotalP;
+  const lines = [];
+
+  for (const code of normalized) {
+    const found = await db.q1('SELECT id FROM coupons WHERE code = ?', [code]);
+    if (found) await sweepExpiredReservations(db, { couponId: found.id });
+    const coupon = found ? await db.q1('SELECT * FROM coupons WHERE id = ?', [found.id]) : null;
+    const check = await checkEligibility(db, coupon, {
+      orgId, userId, kind, customerType, target, subtotal: fromPaise(subtotalP), currency, nowIso, stackedCount: normalized.length,
+    });
+    if (!check.ok) return { ...check, code };
+    const d = discountPaise(coupon, remainingP);
+    if (d <= 0) return fail('nothing_to_discount', coupon);
+    remainingP -= d;
+    lines.push(publicCouponLine(coupon, fromPaise(d)));
+  }
+
+  return {
+    ok: true,
+    subtotal: fromPaise(subtotalP),
+    discount: fromPaise(subtotalP - remainingP),
+    total: fromPaise(remainingP),
+    lines,
+    customerType,
+  };
+}
+
+/** The customer-facing success line, built server-side so every
+ *  surface says the same thing with the same rounding. */
+export function successMessage(lines, discount) {
+  const codes = lines.map((l) => l.code).join(' + ');
+  return `Congratulations! ${codes} applied successfully. You saved ${formatInr(discount)}.`;
+}
+
+export function quoteCouponLines(quote) {
+  return parseJsonArray(quote?.coupons_json) || [];
+}
+
+/** Coupon lines priced into a Barbell plan order (same shape as a quote's). */
+export function planOrderCouponLines(planOrder) {
+  return parseJsonArray(planOrder?.coupons_json) || [];
+}
+
+// ============================================================
+// HOLDS -- created when the gateway order is (/enterprise/payment/order,
+// /plan/order), never at Apply.
+//
+// A hold belongs to ONE purchase, named by its hold key: `quote_id` for
+// a gym purchase (the locked billing quote) or `plan_order_id` for an
+// Independent client's Barbell plan (the plan order is its own price
+// lock). The functions below take a PURCHASE describing it:
+//   { keyCol: 'quote_id' | 'plan_order_id', keyId, orgId, userId, kind,
+//     target, subtotal, total, currency, subjectType?, subjectId? }
+// where userId is set only for a personal purchase (the customer is the
+// person -- see PERSONAL_KINDS) and is null for a gym's.
+// ============================================================
+const HOLD_KEYS = ['quote_id', 'plan_order_id'];
+function holdKeyCol(col) {
+  if (!HOLD_KEYS.includes(col)) throw new Error(`unknown coupon hold key: ${col}`);
+  return col;
+}
+
+// NOTE: the counter UPDATEs in this file deliberately leave
+// coupons.updated_at alone -- that column means "the founder last edited
+// this coupon's definition" (shown as "Last changed by ..." in the Admin
+// Console). Usage is tracked on coupon_redemptions' own timestamps.
+async function decrementReserved(db, couponId) {
+  await db.run(
+    `UPDATE coupons SET reserved_count = CASE WHEN reserved_count > 0 THEN reserved_count - 1 ELSE 0 END WHERE id = ?`,
+    [couponId]);
+}
+
+/** Ends ONE hold (RESERVED -> RELEASED|EXPIRED) and gives its unit back.
+ *  The status guard in the WHERE clause makes it safe to race against a
+ *  concurrent redemption or a second release: only one of them wins. */
+async function endHold(db, row, status, reason) {
+  const ts = now();
+  const upd = await db.run(
+    `UPDATE coupon_redemptions SET status = ?, customer_slot = NULL, user_slot = NULL, released_at = ?, release_reason = ?, updated_at = ?
+      WHERE id = ? AND status = 'RESERVED'`,
+    [status, ts, reason, ts, row.id]);
+  if (upd.changes === 1) await decrementReserved(db, row.coupon_id);
+  return upd.changes === 1;
+}
+
+/**
+ * Lazily expires holds past their TTL whose payment never verified.
+ * Holds on an order the gateway already reports as in progress
+ * (PENDING/PROCESSING) are left alone -- that payment is very likely
+ * about to succeed, and expiring it would only make it a late
+ * confirmation. A Barbell plan order has no in-progress state (it is
+ * CREATED until a payment verifies), so its holds expire on the TTL alone.
+ */
+export async function sweepExpiredReservations(db, { couponId = null, limit = 200 } = {}) {
+  const nowIso = now();
+  const rows = await db.q(
+    `SELECT cr.id, cr.coupon_id FROM coupon_redemptions cr
+       LEFT JOIN payment_orders po ON po.id = cr.payment_order_id
+       LEFT JOIN barbell_plan_orders bpo ON bpo.id = cr.plan_order_id
+      WHERE cr.status = 'RESERVED' AND cr.reservation_expires_at <= ?
+        AND (po.status IS NULL OR po.status NOT IN ('PENDING','PROCESSING','SUCCESS'))
+        AND (bpo.status IS NULL OR bpo.status <> 'SUCCESS')
+        ${couponId ? 'AND cr.coupon_id = ?' : ''}
+      LIMIT ?`,
+    couponId ? [nowIso, couponId, limit] : [nowIso, limit]);
+  let expired = 0;
+  for (const row of rows) {
+    if (await endHold(db, row, 'EXPIRED', 'reservation_expired')) expired += 1;
+  }
+  return expired;
+}
+
+/** Inserts the RESERVED row, claiming the lowest free per-customer slot
+ *  (the person's user_slot on a personal purchase, the gym's
+ *  customer_slot otherwise). A lost race on a slot just retries with the
+ *  next free one. */
+async function insertHold(db, { coupon, purchase, line }) {
+  const keyCol = holdKeyCol(purchase.keyCol);
+  const personal = !!purchase.userId;
+  const slotCol = personal ? 'user_slot' : 'customer_slot';
+  const ownerCol = personal ? 'user_id' : 'org_id';
+  const owner = personal ? purchase.userId : purchase.orgId;
+  const max = coupon.max_redemptions_per_customer != null ? Number(coupon.max_redemptions_per_customer) : null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let slot = null;
+    if (max != null) {
+      const taken = await db.q(
+        `SELECT ${slotCol} AS slot FROM coupon_redemptions WHERE coupon_id = ? AND ${ownerCol} = ? AND ${slotCol} IS NOT NULL`,
+        [coupon.id, owner]);
+      const used = new Set(taken.map((r) => Number(r.slot)));
+      for (let s = 1; s <= max; s++) if (!used.has(s)) { slot = s; break; }
+      if (slot == null) return { ok: false, reason: 'already_used' };
+    }
+    const rowId = id('cred');
+    const ts = now();
+    try {
+      await db.run(
+        `INSERT INTO coupon_redemptions (id, coupon_id, org_id, quote_id, plan_order_id, user_id, subject_type, subject_id,
+           original_amount, discount_amount, final_amount, currency,
+           status, customer_slot, user_slot, reserved_at, reservation_expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?, ?, ?, ?, ?, ?)`,
+        [rowId, coupon.id, purchase.orgId,
+         keyCol === 'quote_id' ? purchase.keyId : null, keyCol === 'plan_order_id' ? purchase.keyId : null,
+         purchase.userId || null, purchase.subjectType || null, purchase.subjectId || null,
+         purchase.subtotal, round2(line.discountAmount), round2(purchase.total), purchase.currency,
+         personal ? null : slot, personal ? slot : null,
+         ts, new Date(Date.now() + RESERVATION_TTL_MS).toISOString(), ts, ts]);
+      return { ok: true, id: rowId, couponId: coupon.id };
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;
+      const samePurchase = await db.q1(`SELECT id FROM coupon_redemptions WHERE coupon_id = ? AND ${keyCol} = ?`, [coupon.id, purchase.keyId]);
+      if (samePurchase) return { ok: false, reason: 'quote_in_use' };
+      // otherwise a concurrent checkout took this slot first -- try the next one
+    }
+  }
+  return { ok: false, reason: 'already_used' };
+}
+
+/** Releases every live hold for ONE purchase (by its hold key). */
+async function releaseByKey(db, keyCol, keyId, reason) {
+  const rows = await db.q(
+    `SELECT id, coupon_id FROM coupon_redemptions WHERE ${holdKeyCol(keyCol)} = ? AND status = 'RESERVED'`, [keyId]);
+  let released = 0;
+  for (const row of rows) if (await endHold(db, row, 'RELEASED', reason)) released += 1;
+  return released;
+}
+
+/** Releases holds created for `quoteId` that never got as far as a
+ *  gateway order (order creation threw, or the quote turned out to be
+ *  already consumed by a concurrent request). */
+export async function releaseQuoteReservations(db, quoteId, reason = 'order_not_created') {
+  await releaseByKey(db, 'quote_id', quoteId, reason);
+}
+
+/**
+ * Holds every coupon priced into one purchase, for the payment about to
+ * be created. Re-checks each coupon NOW (it may have been disabled,
+ * expired, or used up since it was priced) but never re-prices: the
+ * discount and total stay exactly as locked on the quote / plan order.
+ * All-or-nothing: a failure on any coupon releases the ones already held
+ * by this call.
+ */
+async function reserveCoupons(db, purchase, lines) {
+  if (!lines.length) return { ok: true, reservations: [] };
+  const nowIso = now();
+  const customerType = await resolveCustomerType(db, purchase.orgId);
+  const held = [];
+  const abort = async (result) => {
+    for (const h of held) await endHold(db, { id: h.id, coupon_id: h.couponId }, 'RELEASED', 'reservation_aborted');
+    return result;
+  };
+
+  for (const line of lines) {
+    await sweepExpiredReservations(db, { couponId: line.couponId });
+    const coupon = await db.q1('SELECT * FROM coupons WHERE id = ?', [line.couponId]);
+    const check = await checkEligibility(db, coupon, {
+      orgId: purchase.orgId, userId: purchase.userId, kind: purchase.kind, customerType, target: purchase.target,
+      subtotal: purchase.subtotal, currency: purchase.currency, nowIso, stackedCount: lines.length,
+    }, { checkLimits: false });
+    if (!check.ok) return abort({ ...check, code: line.code });
+
+    // The global limit, atomically: the WHERE clause re-reads both
+    // counters at write time, so two gyms racing for the last use
+    // cannot both get it.
+    const claim = await db.run(
+      `UPDATE coupons SET reserved_count = reserved_count + 1
+        WHERE id = ? AND is_enabled = 1 AND starts_at <= ? AND expires_at > ?
+          AND (max_redemptions IS NULL OR redemption_count + reserved_count < max_redemptions)`,
+      [coupon.id, nowIso, nowIso]);
+    if (claim.changes !== 1) return abort(fail('exhausted', coupon));
+
+    const hold = await insertHold(db, { coupon, purchase, line });
+    if (!hold.ok) {
+      await decrementReserved(db, coupon.id);
+      return abort(fail(hold.reason, coupon));
+    }
+    held.push(hold);
+  }
+  return { ok: true, reservations: held };
+}
+
+/** A gym purchase: holds every coupon on its locked `quote`. */
+export async function reserveQuoteCoupons(db, { quote, orgId }) {
+  const lines = quoteCouponLines(quote);
+  if (!lines.length) return { ok: true, reservations: [] };
+  return reserveCoupons(db, {
+    keyCol: 'quote_id', keyId: quote.id, orgId, userId: null, kind: quote.kind,
+    target: await resolvePurchaseTarget(db, { orgId, kind: quote.kind, packageId: quote.package_id }),
+    subtotal: round2(Number(quote.total) + Number(quote.discount_amount || 0)), total: quote.total, currency: quote.currency,
+  }, lines);
+}
+
+/**
+ * The Barbell plan: holds every coupon priced into `planOrder` (already
+ * inserted, so the hold can reference it) before its gateway order is
+ * created. The customer is the order's own user_id; `orgId` is the
+ * buyer's org (which says they are INDEPENDENT); `durationDays` is the
+ * plan's length from the server's plan table.
+ */
+export async function reservePlanOrderCoupons(db, { planOrder, orgId, durationDays }) {
+  const lines = planOrderCouponLines(planOrder);
+  if (!lines.length) return { ok: true, reservations: [] };
+  return reserveCoupons(db, {
+    keyCol: 'plan_order_id', keyId: planOrder.id, orgId, userId: planOrder.user_id, kind: 'BARBELL_PLAN',
+    target: await resolvePurchaseTarget(db, { kind: 'BARBELL_PLAN', durationDays }),
+    subtotal: round2(Number(planOrder.amount) + Number(planOrder.discount_amount || 0)), total: planOrder.amount, currency: planOrder.currency,
+    subjectType: 'BARBELL_PLAN', subjectId: planOrder.id,
+  }, lines);
+}
+
+/** Gives back the holds on a plan order whose payment will not happen
+ *  through them: the gateway order could not be created, the buyer
+ *  closed the checkout, or the gateway reported the payment failed /
+ *  cancelled / disputed. Only RESERVED rows change, so this is a no-op
+ *  on a redeemed order and safe to repeat. If the payment verifies after
+ *  all, redeemPlanOrderCoupons() still records it (late confirmation). */
+export async function releasePlanOrderCoupons(db, planOrderId, reason) {
+  return releaseByKey(db, 'plan_order_id', planOrderId, reason);
+}
+
+/** Links a quote's holds to the subject row (org_subscriptions /
+ *  org_capacity_purchases) the moment it exists -- BEFORE the gateway
+ *  order -- so a crash between "order created" and "order linked" can
+ *  still be resolved by subject at payment time. */
+export async function attachReservationSubject(db, { quoteId, subjectType, subjectId }) {
+  await db.run(
+    `UPDATE coupon_redemptions SET subject_type = ?, subject_id = ?, updated_at = ? WHERE quote_id = ?`,
+    [subjectType, subjectId, now(), quoteId]);
+}
+
+export async function attachReservationOrder(db, { quoteId, orderId }) {
+  await db.run(`UPDATE coupon_redemptions SET payment_order_id = ?, updated_at = ? WHERE quote_id = ?`, [orderId, now(), quoteId]);
+}
+
+async function holdsForOrder(tx, order) {
+  return tx.q(
+    `SELECT * FROM coupon_redemptions
+      WHERE payment_order_id = ? OR (payment_order_id IS NULL AND subject_type = ? AND subject_id = ?)`,
+    [order.id, order.subject_type, order.subject_id]);
+}
+
+// ============================================================
+// REDEMPTION -- a VERIFIED payment, inside the transaction that confirms
+// the purchase, BEFORE the purchase is activated.
+//
+// LATE CONFIRMATIONS NEVER EXCEED A LIMIT. A payment can verify after its
+// hold has ended: the checkout was closed or the attempt failed (hold
+// RELEASED) or it sat past RESERVATION_TTL_MS (EXPIRED), and its unit
+// went back to the pool. Such a payment re-claims the coupon with exactly
+// the guards a new hold uses (the global counter in the UPDATE's WHERE
+// clause, a free per-customer slot under its UNIQUE constraint):
+//   * it fits      -> REDEEMED, late_confirmation = 1; the purchase activates.
+//   * it does not  -> NOTHING is redeemed and the purchase is NOT activated:
+//                     it is held for review (HELD_FOR_REVIEW on its holds,
+//                     a reconciliation issue for the founders). The caller
+//                     marks the order (payment_orders DISPUTED /
+//                     barbell_plan_orders.review_reason) so no later
+//                     callback can activate it. A founder refunds it, or
+//                     honours it by hand.
+// The hold-for-review decision is sticky: once made, every later callback
+// for that purchase gets the same answer without re-checking the limits.
+// ============================================================
+export const HELD_FOR_REVIEW = 'held_for_review';
+const REVIEW_NOTE = 'COUPON_LIMIT_AFTER_PAYMENT';
+export const HELD_FOR_REVIEW_MESSAGE =
+  "Your payment went through, but the coupon was used up before the payment was confirmed, so your purchase is on hold. We'll refund it or honour it shortly. Please don't pay again.";
+
+/** Runs `fn` inside a SAVEPOINT (SQLite and PostgreSQL both support them
+ *  within a transaction): a refusal or a lost race undoes only fn's own
+ *  writes, and on PostgreSQL a caught constraint violation does not
+ *  poison the surrounding transaction. */
+async function inSavepoint(tx, name, fn) {
+  await tx.run(`SAVEPOINT ${name}`);
+  try {
+    const out = await fn();
+    if (out && out.ok === false) await tx.run(`ROLLBACK TO SAVEPOINT ${name}`);
+    await tx.run(`RELEASE SAVEPOINT ${name}`);
+    return out;
+  } catch (e) {
+    try { await tx.run(`ROLLBACK TO SAVEPOINT ${name}`); await tx.run(`RELEASE SAVEPOINT ${name}`); } catch { /* transaction already aborted */ }
+    throw e;
+  }
+}
+
+/** A late payment re-claims its coupon within the limits (see above). */
+async function redeemLate(tx, row, { paymentOrderId, ts }) {
+  const coupon = await tx.q1('SELECT id, max_redemptions_per_customer FROM coupons WHERE id = ?', [row.coupon_id]);
+  if (!coupon) return { ok: false, reason: 'invalid_code' };
+  const global = await tx.run(
+    `UPDATE coupons SET redemption_count = redemption_count + 1
+      WHERE id = ? AND (max_redemptions IS NULL OR redemption_count + reserved_count < max_redemptions)`,
+    [row.coupon_id]);
+  if (global.changes !== 1) return { ok: false, reason: 'exhausted' };
+
+  const personal = row.plan_order_id != null || row.subject_type === 'BARBELL_PLAN';
+  const slotCol = personal ? 'user_slot' : 'customer_slot';
+  const ownerCol = personal ? 'user_id' : 'org_id';
+  const owner = personal ? row.user_id : row.org_id;
+  const max = coupon.max_redemptions_per_customer != null ? Number(coupon.max_redemptions_per_customer) : null;
+  const redeemWith = (slot) => tx.run(
+    `UPDATE coupon_redemptions SET status = 'REDEEMED', payment_order_id = COALESCE(?, payment_order_id),
+        customer_slot = ?, user_slot = ?, late_confirmation = 1, redeemed_at = ?, updated_at = ?
+      WHERE id = ? AND status IN ('RELEASED','EXPIRED')`,
+    [paymentOrderId, personal ? null : slot, personal ? slot : null, ts, ts, row.id]);
+
+  // No per-customer limit (or an account deleted since): nothing to count against.
+  if (max == null || owner == null) {
+    return (await redeemWith(null)).changes === 1 ? { ok: true } : { ok: false, reason: 'not_redeemable' };
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const taken = await tx.q(
+      `SELECT ${slotCol} AS slot FROM coupon_redemptions WHERE coupon_id = ? AND ${ownerCol} = ? AND ${slotCol} IS NOT NULL AND id <> ?`,
+      [row.coupon_id, owner, row.id]);
+    const used = new Set(taken.map((r) => Number(r.slot)));
+    let slot = null;
+    for (let s = 1; s <= max; s++) if (!used.has(s)) { slot = s; break; }
+    if (slot == null) return { ok: false, reason: 'already_used' };
+    try {
+      const upd = await inSavepoint(tx, 'coupon_late_slot', () => redeemWith(slot));
+      return upd.changes === 1 ? { ok: true } : { ok: false, reason: 'not_redeemable' };
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;
+      // a concurrent checkout took this slot first -- try the next one
+    }
+  }
+  return { ok: false, reason: 'already_used' };
+}
+
+/**
+ * The holds of ONE verified purchase -> REDEEMED, all or nothing.
+ * Returns { ok: true, redeemed } or { ok: false, reason } (held for
+ * review; nothing was redeemed). `paymentOrderId` is the payment_orders
+ * row of a gym purchase (null for the plan, whose order is the hold key).
+ */
+async function redeemHolds(tx, rows, { paymentOrderId = null } = {}) {
+  if (rows.some((r) => r.release_reason === HELD_FOR_REVIEW)) return { ok: false, reason: HELD_FOR_REVIEW, sticky: true };
+  const pending = rows.filter((r) => r.status !== 'REDEEMED');
+  if (!pending.length) return { ok: true, redeemed: 0 };
+  return inSavepoint(tx, 'coupon_redeem', async () => {
+    let redeemed = 0;
+    for (const row of pending) {
+      const ts = now();
+      const onTime = await tx.run(
+        `UPDATE coupon_redemptions SET status = 'REDEEMED', payment_order_id = COALESCE(?, payment_order_id), redeemed_at = ?, updated_at = ?
+          WHERE id = ? AND status = 'RESERVED'`,
+        [paymentOrderId, ts, ts, row.id]);
+      if (onTime.changes === 1) {
+        // Its unit was already counted in reserved_count: move it across.
+        await tx.run(
+          `UPDATE coupons SET redemption_count = redemption_count + 1,
+              reserved_count = CASE WHEN reserved_count > 0 THEN reserved_count - 1 ELSE 0 END
+            WHERE id = ?`,
+          [row.coupon_id]);
+        redeemed += 1;
+        continue;
+      }
+      const late = await redeemLate(tx, row, { paymentOrderId, ts });
+      if (!late.ok) return { ok: false, reason: late.reason, couponId: row.coupon_id };
+      redeemed += 1;
+    }
+    return { ok: true, redeemed };
+  });
+}
+
+/** A purchase whose coupon could not be honoured within its limits: its
+ *  remaining holds are given back, every hold is marked HELD_FOR_REVIEW
+ *  (which makes the decision sticky), and the founders get a
+ *  reconciliation issue (Admin OS -> Reconciliation). Same transaction. */
+async function holdForReview(tx, rows, { orgId, paymentOrderId = null, planOrderId = null, refusal }) {
+  for (const row of rows) if (row.status === 'RESERVED') await endHold(tx, row, 'RELEASED', HELD_FOR_REVIEW);
+  const ts = now();
+  for (const row of rows) {
+    await tx.run(`UPDATE coupon_redemptions SET release_reason = ?, updated_at = ? WHERE id = ? AND status IN ('RELEASED','EXPIRED')`,
+      [HELD_FOR_REVIEW, ts, row.id]);
+  }
+  const coupon = refusal.couponId ? await tx.q1('SELECT code FROM coupons WHERE id = ?', [refusal.couponId]) : null;
+  const what = paymentOrderId ? `payment order ${paymentOrderId}` : `Barbell plan order ${planOrderId}`;
+  await tx.run(
+    `INSERT INTO reconciliation_issues (id, payment_order_id, org_id, issue_type, expected_json, actual_json, status, note, created_at)
+     VALUES (?, ?, ?, 'STATUS_MISMATCH', ?, ?, 'OPEN', ?, ?)`,
+    [id('rcon'), paymentOrderId, orgId,
+     JSON.stringify({ status: 'NOT_ACTIVATED', reason: refusal.reason, coupon: coupon?.code || null, planOrderId }),
+     JSON.stringify({ status: 'PAID' }),
+     `${REVIEW_NOTE}: ${what} was paid after its hold on coupon ${coupon?.code || refusal.couponId} ended, and the coupon had no uses left (${refusal.reason}). It was NOT activated. Refund the payment, or honour it by hand.`,
+     ts]);
+}
+
+/**
+ * VERIFIED gym payment -> its coupons REDEEMED, or the purchase held for
+ * review. Runs inside _finalizeOrder's SUCCESS transaction BEFORE the
+ * activation handler (see registerOrderOutcomeHook's onConfirm), which
+ * only ever reaches here once per order -- so a duplicate webhook or a
+ * webhook racing the checkout return cannot redeem twice.
+ * Returns { ok: true, redeemed } or { ok: false, reason, message }.
+ */
+export async function redeemOrderCoupons(tx, order) {
+  if (!['ORG_PACKAGE', 'ORG_CAPACITY_ADDON'].includes(order.subject_type)) return { ok: true, redeemed: 0 };
+  const rows = await holdsForOrder(tx, order);
+  const result = await redeemHolds(tx, rows, { paymentOrderId: order.id });
+  if (result.ok) return result;
+  if (!result.sticky) await holdForReview(tx, rows, { orgId: order.org_id, paymentOrderId: order.id, refusal: result });
+  return { ok: false, reason: HELD_FOR_REVIEW, detail: result.reason, message: HELD_FOR_REVIEW_MESSAGE };
+}
+
+/**
+ * VERIFIED Barbell plan payment -> its coupons REDEEMED, or the plan held
+ * for review. The caller runs this inside the transaction that moves the
+ * plan order CREATED -> SUCCESS, and only when that guarded UPDATE changed
+ * the row -- so the checkout return and the webhook (or a duplicate
+ * webhook) can only ever redeem it once. On { ok: false } the caller must
+ * not grant the plan.
+ */
+export async function redeemPlanOrderCoupons(tx, planOrder) {
+  const rows = await tx.q('SELECT * FROM coupon_redemptions WHERE plan_order_id = ?', [planOrder.id]);
+  const result = await redeemHolds(tx, rows);
+  if (result.ok) return result;
+  if (!result.sticky) await holdForReview(tx, rows, { orgId: rows[0]?.org_id, planOrderId: planOrder.id, refusal: result });
+  return { ok: false, reason: HELD_FOR_REVIEW, detail: result.reason, message: HELD_FOR_REVIEW_MESSAGE };
+}
+
+/** Failed / cancelled / disputed gym payment -> hold RELEASED. Never a redemption. */
+export async function releaseOrderCoupons(tx, order, status) {
+  if (!['ORG_PACKAGE', 'ORG_CAPACITY_ADDON'].includes(order.subject_type)) return 0;
+  const rows = await holdsForOrder(tx, order);
+  let released = 0;
+  for (const row of rows) {
+    if (row.status !== 'RESERVED') continue;
+    if (await endHold(tx, row, 'RELEASED', `payment_${String(status || 'failed').toLowerCase()}`)) released += 1;
+  }
+  return released;
+}
+
+// Registered once per process (ES modules evaluate once). The hooks run
+// inside paymentActivation's transaction -- see registerOrderOutcomeHook.
+registerOrderOutcomeHook({
+  name: 'coupons',
+  // Before activation: a coupon that can no longer be honoured within its
+  // limits stops the purchase from activating (see REDEMPTION above).
+  async onConfirm(db, order, tx) {
+    const result = await redeemOrderCoupons(tx, order);
+    if (result.ok && result.redeemed) {
+      await track(db, { type: 'coupon_redeemed', orgId: order.org_id, data: { orderId: order.id, count: result.redeemed } }).catch(() => {});
+    }
+    return result;
+  },
+  async onRelease(db, order, tx, status) {
+    await releaseOrderCoupons(tx, order, status);
+  },
+});

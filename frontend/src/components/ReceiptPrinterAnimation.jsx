@@ -29,7 +29,9 @@ const currencySymbol = (c) => (c === 'INR' || !c ? '₹' : `${c} `);
 
 function money(amount, currency) {
   if (amount == null || !Number.isFinite(Number(amount))) return null;
-  return `${currencySymbol(currency)}${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  // A discount line (a coupon) is negative: "−₹3,499.75", not "₹-3,499.75".
+  const n = Number(amount);
+  return `${n < 0 ? '−' : ''}${currencySymbol(currency)}${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
 /** Perforated top/bottom edge, drawn as a zig-zag so the paper reads as

@@ -142,12 +142,21 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   ]);
   if (!invoice) return null;
   const order = await db.q1('SELECT * FROM payment_orders WHERE id = ?', [invoice.order_id]);
-  const [lineItem, customer, refunds, payment, account] = await Promise.all([
+  const [lineItem, customer, refunds, payment, account, coupons] = await Promise.all([
     resolveLineItem(db, order),
     resolveCustomer(db, order),
     order ? db.q(`SELECT * FROM refunds WHERE payment_order_id = ? AND status = 'SUCCESS' ORDER BY created_at`, [order.id]) : [],
     order ? db.q1('SELECT method, paid_at FROM payments WHERE external_ref = ? ORDER BY paid_at LIMIT 1', [order.id]) : null,
     db.q1('SELECT business_name, legal_name FROM payment_accounts WHERE org_id = ?', [orgId]).catch(() => null),
+    // Coupon lines come from the REDEEMED redemption snapshots (taken
+    // from the locked quote at purchase time), never from the coupon's
+    // current definition -- so editing a coupon cannot alter an issued
+    // invoice. No rows (every invoice without a coupon) renders exactly
+    // as it always has.
+    order ? db.q(
+      `SELECT cr.original_amount, cr.discount_amount, c.code, c.discount_type, c.discount_value
+         FROM coupon_redemptions cr JOIN coupons c ON c.id = cr.coupon_id
+        WHERE cr.payment_order_id = ? AND cr.status = 'REDEEMED' ORDER BY cr.created_at`, [order.id]) : [],
   ]);
   /* A membership is sold by the GYM to its member, so its receipt is the
      gym's: from the gym, to the member. It used to read "From Barbell,
@@ -161,7 +170,7 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   // (invoice.status, order.status, refund count) -- anything else on an
   // issued invoice is immutable, so a hit is guaranteed byte-identical to
   // a fresh render.
-  const cacheKey = `${invoice.status}|${order?.status || ''}|${refunds.length}`;
+  const cacheKey = `${invoice.status}|${order?.status || ''}|${refunds.length}|${coupons.length}`;
   const cached = pdfCache.get(invoiceId);
   if (cached && cached.key === cacheKey) return cached.buf;
 
@@ -279,9 +288,13 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
   const descLineH = doc.heightOfString(lineItem.description, { width: descW });
   doc.fillColor(INK).text(lineItem.description, tableX, ty, { width: descW });
   doc.font('Helvetica').fontSize(10).fillColor(INK);
+  // With a coupon the line item is priced at what it cost BEFORE the
+  // discount, and the discount appears as its own totals row below --
+  // so the page reconciles: line amount - coupon(s) = total paid.
+  const lineAmount = coupons.length ? Number(coupons[0].original_amount) : Number(invoice.amount);
   doc.text('1', qtyX, ty, { width: qtyW, align: 'right' });
-  doc.text(money(invoice.amount), rateX, ty, { width: rateW, align: 'right' });
-  doc.text(money(invoice.amount), amtX, ty, { width: amtW, align: 'right' });
+  doc.text(money(lineAmount), rateX, ty, { width: rateW, align: 'right' });
+  doc.text(money(lineAmount), amtX, ty, { width: amtW, align: 'right' });
   ty += descLineH + 4;
   if (lineItem.detail) {
     doc.font('Helvetica').fontSize(8.5);
@@ -297,7 +310,17 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
     doc.fillColor(opts.bold ? INK : INK).text(val, rateX - 10, ty, { width: amtX + amtW - (rateX - 10), align: 'right' });
     ty += opts.bold ? 20 : 16;
   };
-  totalsRow('Subtotal', money(invoice.amount));
+  totalsRow('Subtotal', money(lineAmount));
+  for (const c of coupons) {
+    // totalsRow's label column is a fixed 150pt; a long code must not
+    // wrap into the next row (the same overlap class of bug documented
+    // above), so the "(25% off)" suffix is dropped when it will not fit.
+    const off = c.discount_type === 'PERCENTAGE' ? ` (${Number(c.discount_value)}% off)` : '';
+    doc.font('Helvetica').fontSize(9.5);
+    const full = `Coupon ${c.code}${off}`;
+    totalsRow(doc.widthOfString(full) <= 148 ? full : String(c.code), '- ' + money(c.discount_amount));
+  }
+  if (coupons.length) totalsRow('Amount after discount', money(invoice.amount));
   if (Number(invoice.tax_amount)) totalsRow('Tax', money(invoice.tax_amount));
 
   // ---- bottom rule + total ----
@@ -363,8 +386,14 @@ export async function renderInvoicePdf(db, { invoiceId, orgId }) {
  * A receipt for something Barbell sold a person directly (the Barbell plan
  * for independent clients): the same look as a gym's receipt, from Barbell,
  * to them. Takes the facts already resolved, since there is no gym order.
+ *
+ * With a coupon, the line is priced at `originalAmount` (before the
+ * discount) and each coupon is its own row under it, so the page
+ * reconciles the way a gym's invoice does: price - coupon(s) = paid.
+ * `coupons` are the order's own snapshot ({ code, discountType,
+ * discountValue, discountAmount }), never the coupon's current definition.
  */
-export async function renderPlanReceiptPdf({ number, customer, paidOn, description, detail, amount, reference }) {
+export async function renderPlanReceiptPdf({ number, customer, paidOn, description, detail, amount, reference, originalAmount = null, coupons = [] }) {
   const margin = 50;
   const doc = new PDFDocument({ size: 'A4', margin });
   doc.on('pageAdded', () => paintBackground(doc));
@@ -402,10 +431,29 @@ export async function renderPlanReceiptPdf({ number, customer, paidOn, descripti
   ty += 12;
   doc.moveTo(tableX, ty).lineTo(rightEdge, ty).strokeColor(LINE).lineWidth(1).stroke();
   ty += 16;
+  const discounted = coupons.length > 0 && originalAmount != null;
+  const lineAmount = discounted ? Number(originalAmount) : Number(amount);
   doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(description, tableX, ty, { width: rightEdge - tableX - 90 });
-  doc.font('Helvetica').text(money(amount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+  doc.font('Helvetica').text(money(lineAmount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
   ty += 16;
   if (detail) { doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(detail, tableX, ty, { width: rightEdge - tableX - 90 }); ty += 16; }
+  if (discounted) {
+    ty += 6;
+    const labelW = rightEdge - tableX - 90;
+    for (const c of coupons) {
+      // One line per coupon; a long code drops its "(25% off)" suffix
+      // rather than wrap into the row below.
+      const off = c.discountType === 'PERCENTAGE' ? ` (${Number(c.discountValue)}% off)` : '';
+      doc.font('Helvetica').fontSize(9.5);
+      const full = `Coupon ${c.code}${off}`;
+      doc.fillColor(MUTED).text(doc.widthOfString(full) <= labelW ? full : `Coupon ${c.code}`, tableX, ty, { width: labelW });
+      doc.fillColor(INK).text('- ' + money(c.discountAmount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+      ty += 16;
+    }
+    doc.font('Helvetica').fontSize(9.5).fillColor(MUTED).text('Amount after discount', tableX, ty, { width: labelW });
+    doc.fillColor(INK).text(money(amount), tableX, ty, { width: rightEdge - tableX, align: 'right' });
+    ty += 16;
+  }
 
   let by = Math.max(y, ty) + 20;
   doc.moveTo(margin, by).lineTo(rightEdge, by).strokeColor(LINE).lineWidth(1).stroke();

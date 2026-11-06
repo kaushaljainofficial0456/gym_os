@@ -13,6 +13,7 @@ const GROUPS = [
       // decide whether someone becomes a customer.
       { to: '/demos', label: 'Demos', icon: 'sparkle' },
       { to: '/payments', label: 'Payments', icon: 'payments' },
+      { to: '/coupons', label: 'Coupon Management', icon: 'coupon' },
       { to: '/refunds', label: 'Refunds', icon: 'refunds' },
       { to: '/reconciliation', label: 'Reconciliation', icon: 'reconciliation' },
     ],

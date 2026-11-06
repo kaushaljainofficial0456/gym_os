@@ -31,6 +31,12 @@ async function startApi() {
     async q(sql, p = []) { return raw.prepare(sql).all(...p); },
     async q1(sql, p = []) { return raw.prepare(sql).all(...p)[0] || null; },
     async run(sql, p = []) { const r = raw.prepare(sql).run(...p); return { changes: Number(r.changes) }; },
+    // Confirming a plan is one transaction (the order and its coupons).
+    async tx(fn) {
+      raw.exec('BEGIN');
+      try { const out = await fn(db); raw.exec('COMMIT'); return out; }
+      catch (e) { try { raw.exec('ROLLBACK'); } catch { /* already rolled back */ } throw e; }
+    },
   };
   raw.exec(`INSERT INTO organizations (id, name, slug, type, created_at) VALUES ('org_ind', 'Independent', 'independent', 'independent', '2026-01-01')`);
   raw.exec(`INSERT INTO organizations (id, name, slug, created_at) VALUES ('org_gym', 'Iron Gym', 'iron', '2026-01-01')`);

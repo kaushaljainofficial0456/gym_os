@@ -21,7 +21,10 @@ import { id, now } from '../ids.js';
 import { track } from '../services/events.js';
 import { getCurrentPackages, getCurrentPricingRules, getCurrentCapacityAddons, calculatePackagePrice } from '../services/enterprise/pricing.js';
 import { getOrgBillingSnapshot, getActiveTrainerCount, createPendingOrgSubscription, createPendingCapacityPurchase, activateOrgSubscription } from '../services/enterprise/subscriptionLifecycle.js';
-import { createOrgPackageQuote, createOrgUpgradeQuote, createCapacityAddonQuote, getValidQuote, consumeQuote } from '../services/enterprise/quotes.js';
+import { createOrgPackageQuote, createOrgUpgradeQuote, createCapacityAddonQuote, getValidQuote, consumeQuote, quotePricing } from '../services/enterprise/quotes.js';
+import {
+  reserveQuoteCoupons, releaseQuoteReservations, attachReservationSubject, attachReservationOrder, quoteCouponLines, MAX_STACKED_COUPONS,
+} from '../services/coupons/couponEngine.js';
 import { createPaymentOrder } from '../services/payments/paymentOrders.js';
 import { recordCheckoutVerification, recordWebhookEvent } from '../services/payments/paymentActivation.js';
 import { issueInvoice } from '../services/payments/invoices.js';
@@ -178,6 +181,20 @@ export default function enterpriseRoutes(db) {
   // ---- gym package payment (SK OS billing the gym) ----
   const paymentLimit = rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' });
 
+  // ---- coupon attempts: an EXTRA, tighter limit that only counts
+  // quote requests carrying coupon codes, so guessing codes is slow
+  // (per user AND per gym, so rotating owner accounts does not reset
+  // it) while ordinary quote traffic keeps the paymentLimit above. ----
+  // 8 per 10 minutes binds BEFORE paymentLimit's 10/minute, so it is the
+  // limit a code-guesser actually meets; a person fixing a typo never will.
+  const couponUserLimit = rateLimit({ windowMs: 10 * 60_000, max: 8, keyFn: (req) => `cu:${req.user?.sub || 'anon'}` });
+  const couponOrgLimit = rateLimit({ windowMs: 60 * 60_000, max: 30, keyFn: (req) => `co:${req.orgId || 'anon'}` });
+  const couponAttemptLimit = (req, res, next) => {
+    const codes = req.body?.couponCodes;
+    if (!Array.isArray(codes) || !codes.length) return next();
+    couponUserLimit(req, res, (err) => (err ? next(err) : couponOrgLimit(req, res, next)));
+  };
+
   // ---- billing quotes: the ONE place a gym-level price gets locked,
   // before ANY payment_order exists. See quotes.js's header comment.
   // What the owner reads when a quote is refused: the billing page shows
@@ -191,21 +208,36 @@ export default function enterpriseRoutes(db) {
     addon_not_found: 'That add-on is no longer available.',
   };
 
-  r.post('/billing/quote', paymentLimit, validate(z.object({
+  // couponCodes (optional) are priced into the SAME locked quote -- the
+  // discount is computed here, server-side, and the frontend only ever
+  // displays the result. Applying a coupon reserves/consumes nothing.
+  r.post('/billing/quote', paymentLimit, couponAttemptLimit, validate(z.object({
     kind: z.enum(['ORG_PACKAGE', 'ORG_UPGRADE', 'ORG_CAPACITY_ADDON']),
     capacity: z.number().int().min(1).max(100_000).optional(),
     addonId: z.string().min(1).optional(),
+    couponCodes: z.array(z.string().trim().min(1).max(40)).max(MAX_STACKED_COUPONS).optional(),
   })), async (req, res) => {
-    const { kind, capacity, addonId } = req.body;
+    const { kind, capacity, addonId, couponCodes } = req.body;
     let result;
     if (kind === 'ORG_CAPACITY_ADDON') {
       if (!addonId) return res.status(400).json({ error: 'addonId is required for an ORG_CAPACITY_ADDON quote' });
-      result = await createCapacityAddonQuote(db, { orgId: req.orgId, addonId, createdBy: req.user.sub });
+      result = await createCapacityAddonQuote(db, { orgId: req.orgId, addonId, createdBy: req.user.sub, couponCodes });
     } else {
       if (!capacity) return res.status(400).json({ error: 'capacity is required for this quote kind' });
       result = kind === 'ORG_UPGRADE'
-        ? await createOrgUpgradeQuote(db, { orgId: req.orgId, capacity, createdBy: req.user.sub })
-        : await createOrgPackageQuote(db, { orgId: req.orgId, capacity, createdBy: req.user.sub });
+        ? await createOrgUpgradeQuote(db, { orgId: req.orgId, capacity, createdBy: req.user.sub, couponCodes })
+        : await createOrgPackageQuote(db, { orgId: req.orgId, capacity, createdBy: req.user.sub, couponCodes });
+    }
+    if (!result.ok && result.reason === 'coupon_invalid') {
+      // Logged (code + reason only) so abuse patterns are reviewable;
+      // the response carries only the customer-facing reason.
+      await track(db, {
+        type: 'coupon_rejected', orgId: req.orgId, userId: req.user.sub,
+        data: { code: result.coupon.code, reason: result.coupon.reason, kind },
+      }).catch(() => {});
+      return res.status(422).json({
+        error: 'coupon_invalid', reason: result.coupon.reason, code: result.coupon.code, message: result.coupon.message,
+      });
     }
     if (!result.ok) {
       if (result.reason === 'downgrade_blocked') {
@@ -216,7 +248,7 @@ export default function enterpriseRoutes(db) {
       }
       return res.status(422).json({ error: result.reason, message: QUOTE_REFUSALS[result.reason] || 'That quote could not be prepared. Please try again.' });
     }
-    res.json({ quote: result.quote, direction: result.direction });
+    res.json({ quote: result.quote, direction: result.direction, pricing: quotePricing(result.quote) });
   });
 
   // A payment_order is ALWAYS created from a locked quote -- never from
@@ -225,31 +257,70 @@ export default function enterpriseRoutes(db) {
     const resolved = await getValidQuote(db, req.body.quoteId, req.orgId);
     if (!resolved.ok) return res.status(422).json({ error: resolved.reason });
     const quote = resolved.quote;
+    const hasCoupons = quoteCouponLines(quote).length > 0;
 
     if (quote.kind === 'ORG_CAPACITY_ADDON') {
       const snapshot = await getOrgBillingSnapshot(db, req.orgId);
       if (!snapshot.subscription || snapshot.subscription.status !== 'ACTIVE') {
         return res.status(409).json({ error: 'An active package is required before buying additional capacity' });
       }
-      if (!(await consumeQuote(db, quote.id))) return res.status(409).json({ error: 'quote_already_used' });
-      const purchase = await createPendingCapacityPurchase(db, {
-        orgId: req.orgId, subscriptionId: snapshot.subscription.id, addonId: quote.addon_id, increment: quote.capacity, price: quote.total, currency: quote.currency,
-      });
-      const order = await createPaymentOrder(db, {
-        subjectType: 'ORG_CAPACITY_ADDON', subjectId: purchase.id, orgId: req.orgId,
-        amount: quote.total, currency: quote.currency, idempotencyKey: `capacity-${purchase.id}`,
-      });
-      return res.json({ order, purchase, quote });
     }
 
-    // ORG_PACKAGE (initial purchase / renewal) and ORG_UPGRADE both
-    // just create (or supersede-via-activation) an org_subscriptions
-    // row -- the SAME ORG_PACKAGE activation handler covers both.
-    if (!(await consumeQuote(db, quote.id))) return res.status(409).json({ error: 'quote_already_used' });
+    // Coupons are HELD here, before anything else is written -- this is
+    // the first moment a coupon use is spoken for, and it is still only
+    // a hold: it becomes a redemption only when the payment verifies
+    // (couponEngine.redeemOrderCoupons). A coupon that stopped being
+    // valid since the quote was priced (disabled, expired, used up)
+    // fails the order instead of silently charging full price.
+    if (hasCoupons) {
+      const held = await reserveQuoteCoupons(db, { quote, orgId: req.orgId });
+      if (!held.ok) {
+        return res.status(409).json({ error: 'coupon_unavailable', reason: held.reason, code: held.code, message: held.message });
+      }
+    }
+    // Anything below that fails must hand the hold back, or an
+    // abandoned error would sit on a coupon use until its TTL.
+    try {
+      if (quote.kind === 'ORG_CAPACITY_ADDON') {
+        const snapshot = await getOrgBillingSnapshot(db, req.orgId);
+        if (!(await consumeQuote(db, quote.id))) {
+          if (hasCoupons) await releaseQuoteReservations(db, quote.id, 'quote_already_used');
+          return res.status(409).json({ error: 'quote_already_used' });
+        }
+        const purchase = await createPendingCapacityPurchase(db, {
+          orgId: req.orgId, subscriptionId: snapshot.subscription.id, addonId: quote.addon_id, increment: quote.capacity, price: quote.total, currency: quote.currency,
+        });
+        if (hasCoupons) await attachReservationSubject(db, { quoteId: quote.id, subjectType: 'ORG_CAPACITY_ADDON', subjectId: purchase.id });
+        const order = await createPaymentOrder(db, {
+          subjectType: 'ORG_CAPACITY_ADDON', subjectId: purchase.id, orgId: req.orgId,
+          amount: quote.total, currency: quote.currency, idempotencyKey: `capacity-${purchase.id}`,
+        });
+        if (hasCoupons) await attachReservationOrder(db, { quoteId: quote.id, orderId: order.id });
+        return res.json({ order, purchase, quote, pricing: quotePricing(quote) });
+      }
+      return await createPackageOrder(req, res, quote, hasCoupons);
+    } catch (e) {
+      if (hasCoupons) await releaseQuoteReservations(db, quote.id, 'order_creation_failed').catch(() => {});
+      throw e;
+    }
+  });
+
+  // ORG_PACKAGE (initial purchase / renewal) and ORG_UPGRADE both just
+  // create (or supersede-via-activation) an org_subscriptions row -- the
+  // SAME ORG_PACKAGE activation handler covers both.
+  async function createPackageOrder(req, res, quote, hasCoupons) {
+    if (!(await consumeQuote(db, quote.id))) {
+      if (hasCoupons) await releaseQuoteReservations(db, quote.id, 'quote_already_used');
+      return res.status(409).json({ error: 'quote_already_used' });
+    }
     const subscription = await createPendingOrgSubscription(db, {
       orgId: req.orgId, packageId: quote.package_id, clientCapacity: quote.capacity, price: quote.total, currency: quote.currency,
     });
+    if (hasCoupons) await attachReservationSubject(db, { quoteId: quote.id, subjectType: 'ORG_PACKAGE', subjectId: subscription.id });
 
+    // Unreachable with a coupon (a coupon never takes a total below
+    // MIN_CHARGE -- see couponEngine.js), so a coupon can never route a
+    // purchase down this no-payment activation path.
     if (quote.total <= 0) {
       // A downgrade fully covered by unused credit (or any other
       // zero-amount quote) has nothing to charge -- no payment gateway
@@ -266,10 +337,11 @@ export default function enterpriseRoutes(db) {
       subjectType: 'ORG_PACKAGE', subjectId: subscription.id, orgId: req.orgId,
       amount: quote.total, currency: quote.currency, idempotencyKey: `org-pkg-${subscription.id}`,
     });
+    if (hasCoupons) await attachReservationOrder(db, { quoteId: quote.id, orderId: order.id });
     await db.run(`UPDATE org_subscriptions SET payment_order_id = ? WHERE id = ?`, [order.id, subscription.id]);
     await db.run(`UPDATE org_billing_state SET status = 'PAYMENT_PENDING', updated_at = ? WHERE org_id = ?`, [now(), req.orgId]);
-    res.json({ order, subscription, quote });
-  });
+    return res.json({ order, subscription, quote, pricing: quotePricing(quote) });
+  }
 
   r.post('/payment/verify', paymentLimit, validate(z.object({
     orderId: z.string().min(1), providerPaymentId: z.string().min(1), signature: z.string().min(1),
@@ -277,6 +349,9 @@ export default function enterpriseRoutes(db) {
     const order = await db.q1('SELECT * FROM payment_orders WHERE id = ? AND org_id = ?', [req.body.orderId, req.orgId]);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     const result = await recordCheckoutVerification(db, { orderId: order.id, providerPaymentId: req.body.providerPaymentId, signature: req.body.signature });
+    // Paid, but its coupon could no longer be honoured: not activated,
+    // held for a founder to refund or honour (see couponEngine.js).
+    if (!result.ok && result.heldForReview) return res.status(409).json({ error: result.reason, message: result.message });
     if (!result.ok) return res.status(422).json({ error: result.reason });
     if (!result.alreadyFinalized) {
       await issueInvoice(db, order).catch(() => {}); // best-effort -- a receipt failing to generate must never undo a real payment
@@ -291,7 +366,36 @@ export default function enterpriseRoutes(db) {
     const rows = await db.q(
       `SELECT * FROM invoices WHERE org_id = ? AND subject_type IN ('ORG_PACKAGE', 'ORG_CAPACITY_ADDON')
         ORDER BY issued_at DESC LIMIT 100`, [req.orgId]);
-    res.json({ invoices: rows });
+    // Coupon detail for the receipt view -- read from the REDEEMED
+    // redemption snapshots, so a later edit to the coupon can never
+    // change what an old receipt says. An invoice without a coupon is
+    // returned exactly as before (discount_amount 0, no coupons).
+    const orderIds = rows.map((i) => i.order_id);
+    const redemptions = orderIds.length
+      ? await db.q(
+        `SELECT cr.payment_order_id, cr.original_amount, cr.discount_amount, c.code
+           FROM coupon_redemptions cr JOIN coupons c ON c.id = cr.coupon_id
+          WHERE cr.org_id = ? AND cr.status = 'REDEEMED' AND cr.payment_order_id IN (${orderIds.map(() => '?').join(',')})
+          ORDER BY cr.created_at`, [req.orgId, ...orderIds])
+      : [];
+    const byOrder = new Map();
+    for (const r0 of redemptions) {
+      const list = byOrder.get(r0.payment_order_id) || [];
+      list.push(r0);
+      byOrder.set(r0.payment_order_id, list);
+    }
+    res.json({
+      invoices: rows.map((inv) => {
+        const list = byOrder.get(inv.order_id) || [];
+        const discount = Math.round(list.reduce((s, x) => s + Number(x.discount_amount), 0) * 100) / 100;
+        return {
+          ...inv,
+          original_amount: list.length ? Number(list[0].original_amount) : Number(inv.amount),
+          discount_amount: discount,
+          coupons: list.map((x) => ({ code: x.code, discountAmount: Number(x.discount_amount) })),
+        };
+      }),
+    });
   });
 
   r.get('/invoices/:id/pdf', async (req, res) => {
