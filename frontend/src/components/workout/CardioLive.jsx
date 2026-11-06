@@ -84,11 +84,16 @@ export default function CardioLive({ name, elapsed, kcal, fields, currentParams 
           onSubmit={(p) => { setAdjusting(false); onAdjust(p); }} />
       )}
 
+      {/* Wraps (see .wk-cardio__actions). basis-40, not flex-1: with a
+          zero basis the row would break only once the label outgrew it, so
+          on a 360px phone the buttons would jump to two lines mid-session as
+          the timer reached 10 min. A 160px basis decides by screen width
+          alone: stacked on phones up to ~390px, side by side from ~412px. */}
       <div className="wk-cardio__actions">
         {fields.length > 0 && !adjusting && (
-          <button type="button" className="btn flex-1" onClick={() => setAdjusting(true)}>Adjust settings</button>
+          <button type="button" className="btn grow basis-40" onClick={() => setAdjusting(true)}>Adjust settings</button>
         )}
-        <button type="button" className="btn-primary flex-1" onClick={onEnd}>
+        <button type="button" className="btn-primary grow basis-40" onClick={onEnd}>
           End cardio · {Math.max(0, Math.round(elapsed / 60))} min
         </button>
       </div>
