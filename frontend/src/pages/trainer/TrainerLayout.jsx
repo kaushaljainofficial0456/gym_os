@@ -1,83 +1,47 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import LineNavList from '../../components/LineNavList.jsx';
 import ThemeSwitch from '../../components/trainer/ThemeSwitch.jsx';
 import AnnouncementBanner from '../../components/AnnouncementBanner.jsx';
 import DemoBanner from '../../components/DemoBanner.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
-import { Avatar, useDialog } from '../../components/UI.jsx';
+import GlassTabBar from '../../components/GlassTabBar.jsx';
+import Icon from '../../components/Icon.jsx';
+import { Avatar } from '../../components/UI.jsx';
 import Logo from '../../components/Logo.jsx';
-import '../../components/LineNavList.css';
+import { workspaceSections, workspaceTabs } from '../../components/trainer/workspaceNav.js';
+import '../../components/trainer/workspace.css';
 
-const NAV = [
-  { to: '/app/trainer', end: true, label: 'Dashboard', icon: 'grid' },
-  { to: '/app/trainer/clients', label: 'Clients', icon: 'people' },
-  { to: '/app/trainer/workouts', label: 'Workouts', icon: 'dumbbell' },
-  { to: '/app/trainer/nutrition', label: 'Nutrition', icon: 'plate' },
-  { to: '/app/trainer/alerts', label: 'Alerts', icon: 'alert' },
-  { to: '/app/trainer/reports', label: 'Reports', icon: 'chart' },
-  { to: '/app/trainer/messages', label: 'Messages', icon: 'mail' },
-  { to: '/app/trainer/tournaments', label: 'Tournaments', icon: 'trophy' },
-  /* A TRAINER'S OWN HOURS. This was absent from their nav entirely --
-     /app/trainer/attendance was owner-only, so the whole self-service
-     side (history, totals, correction requests) existed on the server
-     and was unreachable. The same path now resolves to the roster for
-     an owner and to your own record for a trainer. */
-  { to: '/app/trainer/attendance', label: 'My attendance', icon: 'calendar' },
-];
-
-/** Stroke icons, 20px grid — matches the client app's Icon.jsx convention
- *  (never emoji as UI icons: different art per platform, no colour
- *  management, inconsistent baseline). Kept local rather than importing
- *  client/Icon.jsx so this file has no cross-section dependency. */
-const ICON_PATHS = {
-  grid: 'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z',
-  people: 'M9 8a3.2 3.2 0 1 0 0-6.4A3.2 3.2 0 0 0 9 8ZM3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5M17 9a2.6 2.6 0 1 0 0-5.2M15.2 14.6c2.6.2 4.3 2.2 4.3 5.1',
-  dumbbell: 'M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11',
-  plate: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
-  alert: 'M12 3 2 20h20L12 3ZM12 9v5M12 17h.01',
-  chart: 'M4 20V13M11 20V6M18 20v-9',
-  mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
-  trophy: 'M8 21h8M12 16v5M7 4h10v6a5 5 0 0 1-10 0zM7 6H4v1a4 4 0 0 0 3.5 4M17 6h3v1a4 4 0 0 1-3.5 4',
-  /* 'calendar' was referenced by the Attendance nav item but never
-     defined here, so Icon fell through to ICON_PATHS.grid and Attendance
-     wore the Dashboard's icon -- two different destinations, one glyph. */
-  calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
-  whistle: 'M11 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM15 12l6-2M15 12V7a2 2 0 0 1 2-2h2',
-  /* Distinct from 'chart', which Reports already owns. Two nav rows
-     wearing the same glyph is the same defect as the missing calendar
-     icon above -- different destinations must not look identical. */
-  analytics: 'M3 3v18h18M7 15l4-5 3 3 5-7',
-  business: 'M4 21V9l8-5 8 5v12M9 21v-6h6v6',
-  enterprise: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M9 11h.01M9 8h.01M15 11h.01M15 8h.01',
-  menu: 'M4 7h16M4 12h16M4 17h16',
-  close: 'M6 6l12 12M18 6 6 18',
-  signOut: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
-};
-
-function Icon({ name, size = 19 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={ICON_PATHS[name] || ICON_PATHS.grid} />
-    </svg>
-  );
-}
-
+/**
+ * THE OWNER & TRAINER WORKSPACE SHELL.
+ *
+ * Navigation used to be a drawer behind a hamburger at every screen size:
+ * on a laptop the whole map of the product was one click away and out of
+ * sight, so an owner had to remember where things were instead of seeing
+ * them. Now it follows what gym and SaaS dashboards converge on:
+ *   - a computer gets a permanent sidebar, grouped by job;
+ *   - a phone gets a bottom tab bar for the four most-used places, and
+ *     More, a page of every section as big tiles.
+ * Both read the same list (workspaceNav.js).
+ */
 export default function TrainerLayout() {
   const { user, logout, isOwner, isTrainer } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
 
+  // The workspace face and type scale (theme.css, html.ws). On <html> so
+  // dialogs and sheets that portal to <body> pick it up too.
+  useEffect(() => {
+    document.documentElement.classList.add('ws');
+    return () => document.documentElement.classList.remove('ws');
+  }, []);
+
   // ── GUIDED APP TOUR ──
   // Triggered when JoinGym.jsx (trainer QR join) or EnterpriseOnboarding.jsx
-  // (owner payment) sets localStorage 'sk-os-start-tour-next' before redirecting
-  // here. The flag is consumed once and cleared immediately so the tour never
-  // re-triggers on a plain page refresh.
+  // (owner payment) sets localStorage 'sk-os-start-tour-next' before
+  // redirecting here; consumed once so a refresh never restarts it.
   const [tourActive, setTourActive] = useState(false);
   useEffect(() => {
     const flag = localStorage.getItem('sk-os-start-tour-next');
@@ -86,211 +50,101 @@ export default function TrainerLayout() {
       if (!isTourDone(user?.id)) setTourActive(true);
     }
   }, [user?.id]);
-
-  // Help page's "Replay app tour" button — same activation path.
   useEffect(() => {
     const startTour = () => setTourActive(true);
     window.addEventListener('sk-os:start-tour', startTour);
     return () => window.removeEventListener('sk-os:start-tour', startTour);
   }, []);
-  // Trainer attendance is an OWNER tool: it is about staff hours, and a
-  // trainer's own attendance lives on their home screen where they check
-  // in, not behind a management page listing their colleagues.
-  /* An owner was given ten flat nav items with coaching tools and
-     business tools interleaved -- Clients sat next to Alerts sat next to
-     Enterprise, all weighted identically, so finding anything meant
-     reading the whole list every time. A trainer's seven are a coherent
-     set and stay flat; an owner's split into the two jobs they actually
-     switch between. */
-  /* One unread fetch for the whole workspace, so the nav can say what is
-     waiting. Silent on failure: a badge is a convenience, and a workspace
-     that refuses to render its own navigation because a count did not
-     load is a worse trade than a missing number. */
-  const unread = useFetch(() => api('/messages/unread'));
-  const unreadTotal = unread.data?.total || 0;
 
-  // Re-count when a thread is read, and on every route change -- the
-  // second catches messages that arrived while you were on another page.
+  /* One unread count for the whole workspace. Silent on failure: a badge
+     is a convenience, never a reason the navigation fails to render. */
+  const unread = useFetch(() => api('/messages/unread'));
+  const badges = { messages: unread.data?.total || 0 };
   const reloadUnread = unread.reload;
   useEffect(() => {
     const onRead = () => reloadUnread({ silent: true });
     window.addEventListener('sk-os:messages-read', onRead);
     return () => window.removeEventListener('sk-os:messages-read', onRead);
   }, [reloadUnread]);
-
-  const withBadges = (list) => list.map((n) => (
-    n.to === '/app/trainer/messages' ? { ...n, badge: unreadTotal } : n));
-
-  const links = isOwner
-    ? [
-        { section: 'Coaching' },
-        // The owner's attendance link belongs with the gym-running tools
-        // below (it is the ROSTER for them, not their own hours), so it is
-        // dropped from the coaching list rather than appearing twice.
-        ...NAV.filter((n) => n.to !== '/app/trainer/attendance'),
-        { section: 'Running the gym' },
-        { to: '/app/trainer/trainers', label: 'Trainers', icon: 'whistle' },
-        { to: '/app/trainer/analytics', label: 'Analytics', icon: 'analytics' },
-        { to: '/app/trainer/attendance', label: 'Attendance', icon: 'calendar' },
-        { to: '/app/trainer/crowd', label: 'Gym Crowd', icon: 'people' },
-        { to: '/app/trainer/access', label: 'Access control', icon: 'shield' },
-        { to: '/app/trainer/business', label: 'Business', icon: 'business' },
-        { to: '/app/trainer/enterprise', label: 'Enterprise', icon: 'enterprise' },
-      ]
-    : NAV;
-  const navLinks = withBadges(links);
-
-  /* Closed by default, on every screen size — the sidebar used to sit
-     permanently open, eating a fixed 240px on every trainer screen
-     whether or not the trainer needed it that moment. One toggle-able
-     drawer now serves BOTH desktop and mobile, replacing what were two
-     separate nav implementations (a static rail, and an unrelated
-     horizontal scroll-tab bar) with one pattern that behaves the same
-     way everywhere. */
-  const [navOpen, setNavOpen] = useState(false);
-
-  // Route change closes the drawer — opening a page is the natural signal
-  // that the trainer is done choosing where to go.
-  useEffect(() => { setNavOpen(false); }, [loc.pathname]);
   useEffect(() => { reloadUnread({ silent: true }); }, [loc.pathname, reloadUnread]);
 
-  // Escape closes it too, for keyboard users; a drawer with no keyboard
-  // exit is a trap. useDialog also keeps Tab inside the open drawer and
-  // hands focus back to the menu button when it closes.
-  const drawerRef = useDialog(navOpen, () => setNavOpen(false));
+  const sections = workspaceSections(isOwner);
+  const roleLabel = user?.role === 'GYM_OWNER' ? 'Gym owner' : user?.role === 'TRAINER' ? 'Trainer' : 'Admin';
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
-
-      {/* ── persistent top bar: hamburger + wordmark, nothing else ── */}
-      <header className="app-header !z-30 flex items-center gap-3 px-4">
-        <button
-          onClick={() => setNavOpen(true)}
-          aria-label="Open menu"
-          aria-expanded={navOpen}
-          data-tour="trainer-hamburger"
-          className="w-9 h-9 grid place-items-center border transition-colors active:scale-95 shrink-0"
-          style={{ borderRadius: 'var(--r-sm)', borderColor: 'var(--line)', color: 'var(--ink)' }}>
-          <motion.span animate={{ rotate: navOpen ? 90 : 0 }} transition={{ duration: 0.25, ease: [0.22, 0.8, 0.3, 1] }} style={{ display: 'inline-flex' }}>
-            <Icon name={navOpen ? 'close' : 'menu'} size={18} />
-          </motion.span>
-        </button>
-        <button className="flex items-center gap-2 min-w-0" onClick={() => nav('/app/trainer')}>
-          <Logo alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover shrink-0" />
-          <span className="font-brand text-[13px] font-bold leading-none shrink-0">Barbell</span>
-          {/* `truncate` matters: a long gym name pushed the wordmark out of
-              the bar entirely at 375px. */}
-          <span className="text-[10px] tracking-[.16em] uppercase truncate" style={{ color: 'var(--faint)' }}>
-            {user?.orgName || 'Workspace'}
+    <div className="ws-shell min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
+      {/* ── computer: the permanent sidebar ── */}
+      <aside className="ws-side" aria-label="Workspace">
+        <button className="ws-brand" onClick={() => nav('/app/trainer')}>
+          <Logo alt="" aria-hidden="true" className="w-9 h-9 rounded-xl object-cover shrink-0" />
+          <span className="min-w-0 text-left">
+            <span className="ws-brand-name">Barbell</span>
+            <span className="ws-brand-gym">{user?.orgName || 'Workspace'}</span>
           </span>
         </button>
 
-        {/* APPEARANCE, WHERE BOTH ROLES CAN REACH IT. A client could change
-            theme in Settings; an owner or trainer had no control anywhere
-            in the workspace -- they got whatever their device implied on
-            the day they first signed in. A gym floor at 6am and an office
-            at 3pm are not the same lighting.
-            Icon-only below sm: at 375px the three labelled pills would
-            push the gym name out of the bar, which is the bug the
-            `truncate` above already exists to prevent. */}
-        <div className="ml-auto shrink-0">
-          <span className="hidden sm:inline-flex"><ThemeSwitch /></span>
-          <span className="sm:hidden inline-flex"><ThemeSwitch compact /></span>
+        <nav className="ws-nav" data-tour="trainer-hamburger" aria-label="Main">
+          {sections.map((sec, i) => (
+            <div key={sec.title || i} className="ws-nav-group">
+              {sec.title && <div className="ws-nav-title">{sec.title}</div>}
+              {sec.items.filter((it) => it.sidebar !== false).map((it) => (
+                <NavLink key={it.to} to={it.to} end={!!it.end} className={({ isActive }) => `ws-nav-item${isActive ? ' is-active' : ''}`}>
+                  <Icon name={it.icon} size={19} strokeWidth={1.8} />
+                  <span className="flex-1 truncate">{it.label}</span>
+                  {it.badgeKey && badges[it.badgeKey] > 0 && <span className="ws-badge">{badges[it.badgeKey]}</span>}
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="ws-side-foot">
+          <ThemeSwitch compact />
+          <div className="flex items-center gap-2.5 mt-2.5">
+            <Avatar name={user?.name} size={36} />
+            <div className="min-w-0 flex-1">
+              <div className="ws-user-name truncate">{user?.name}</div>
+              <div className="ws-user-role">{roleLabel}</div>
+            </div>
+            <button onClick={logout} className="ws-icon-btn" aria-label="Sign out" title="Sign out">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+            </button>
+          </div>
         </div>
+      </aside>
+
+      {/* ── phone & tablet: a slim top bar ── */}
+      <header className="ws-top app-header">
+        <button className="flex items-center gap-2.5 min-w-0" onClick={() => nav('/app/trainer')}>
+          <Logo alt="" aria-hidden="true" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+          <span className="min-w-0 text-left">
+            <span className="ws-brand-name">Barbell</span>
+            {/* truncate: a long gym name must not push the bar wider than a 360px phone */}
+            <span className="ws-brand-gym truncate">{user?.orgName || 'Workspace'}</span>
+          </span>
+        </button>
+        <div className="ml-auto shrink-0"><ThemeSwitch compact /></div>
       </header>
 
-      {/* ── backdrop + drawer, StaggeredMenu-style choreography: panel
-          slides in first, then the nav items cascade in with a stagger,
-          via framer-motion (already a dependency) rather than adding
-          GSAP for one component. AnimatePresence handles both directions
-          so the close feels as deliberate as the open. ── */}
-      <AnimatePresence>
-        {navOpen && (
-          <motion.div
-            key="backdrop"
-            onClick={() => setNavOpen(false)}
-            aria-hidden="true"
-            className="fixed inset-0 z-40"
-            style={{ background: 'rgb(0 0 0 / .38)' }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {navOpen && (
-          <motion.aside
-            key="drawer"
-            ref={drawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Trainer navigation"
-            className="fixed inset-y-0 left-0 z-50 w-[272px] max-w-[86vw] flex flex-col p-4 border-r overflow-y-auto"
-            style={{
-              background: 'var(--panel)', borderColor: 'var(--line)', boxShadow: 'var(--e-4)',
-              paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))',
-              paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-            }}
-            initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-            transition={{ duration: 0.38, ease: [0.22, 0.8, 0.3, 1] }}
-          >
-            <div className="flex items-center justify-between mb-6 px-1">
-              <button className="flex items-center gap-2.5" onClick={() => { nav('/app/trainer'); setNavOpen(false); }}>
-                <Logo className="w-9 h-9 rounded-xl object-cover" />
-                <div className="text-left">
-                  <div className="font-brand text-[13px] font-bold leading-none">Barbell</div>
-                  <div className="text-[9px] tracking-[.2em] mt-1 uppercase" style={{ color: 'var(--faint)' }}>
-                    {user?.orgName || 'Workspace'}
-                  </div>
-                </div>
-              </button>
-              <button onClick={() => setNavOpen(false)} aria-label="Close menu"
-                className="chrome-btn w-8 h-8 justify-center shrink-0">
-                <Icon name="close" size={16} />
-              </button>
-            </div>
-
-            <LineNavList
-              items={navLinks.map((l) => ({ ...l, icon: <Icon name={l.icon} size={18} /> }))}
-              onNavigate={() => setNavOpen(false)}
-            />
-
-            {/* mt-auto pins the identity block to the bottom of the drawer.
-                Without it, on a short viewport the nav list and this block
-                sat mid-panel with dead space below them. */}
-            <div className="border-t pt-3 mt-auto" style={{ borderColor: 'var(--line)' }}>
-              <div className="flex items-center gap-2.5 px-2 mb-1.5">
-                <Avatar name={user?.name} size={32} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold font-grotesk truncate" style={{ color: 'var(--ink)' }}>{user?.name}</div>
-                  <div className="text-[10px]" style={{ color: 'var(--faint)' }}>
-                    {user?.role === 'GYM_OWNER' ? 'Gym Owner' : user?.role === 'TRAINER' ? 'Trainer' : 'Admin'}
-                  </div>
-                </div>
-              </div>
-              <button onClick={logout} className="menu-row menu-row-danger" style={{ borderRadius: 'var(--r-sm)' }}>
-                <span className="menu-icon"><Icon name="signOut" size={16} /></span>
-                Sign out
-              </button>
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      <main className="p-4 md:p-8 max-w-7xl mx-auto">
-        {/* Renders nothing unless this session is a demo -- see
-            DemoBanner.jsx. Outside the pathname-keyed div below so the
-            countdown is not remounted (and visibly restarted) on every
-            navigation. */}
-        <DemoBanner />
-        <AnnouncementBanner />
-        <div key={loc.pathname} className="anim-route">
-          <Outlet />
+      <main className="ws-main">
+        <div className="ws-content">
+          {/* Outside the pathname-keyed div so neither remounts (and
+              refetches or restarts its countdown) on every navigation. */}
+          <DemoBanner />
+          <AnnouncementBanner />
+          <div key={loc.pathname} className="anim-route">
+            <Outlet />
+          </div>
         </div>
       </main>
 
-      {/* ── GUIDED APP TOUR ── */}
+      {/* ── phone & tablet: the bottom tab bar ── */}
+      <div className="ws-tabs">
+        <GlassTabBar items={workspaceTabs(isOwner)} ariaLabel="Workspace" tourId="trainer-hamburger" />
+      </div>
+
       <AppTour
         active={tourActive}
         userId={user?.id}

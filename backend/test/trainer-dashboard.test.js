@@ -485,3 +485,22 @@ test('Response structure has required top-level keys', async (t) => {
   assert.ok('todayWorkoutsTotal' in k);
   assert.ok('recentWorkoutCompletion' in k);
 });
+
+test('owner overview: renewals due counts only renewals still ahead, within 30 days', async (t) => {
+  const db = await memDb();
+  const s = await seedFull(db);
+  const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  // One long lapsed (the bug: it counted as "due within the next 30 days"),
+  // one due in ten days, one due in ninety.
+  for (const [sid, cid, renew] of [['sub_lapsed', s.client1C, day(-200)], ['sub_soon', s.client2C, day(10)], ['sub_far', s.client3C, day(90)]]) {
+    await db.run(
+      `INSERT INTO subscriptions (id, org_id, client_id, plan_name, amount, currency, start_date, end_date, renewal_date, status, payment_status)
+       VALUES (?, ?, ?, 'Monthly', 1999, 'INR', ?, ?, ?, 'active', 'paid')`,
+      [sid, s.org1, cid, day(-230), renew, renew]);
+  }
+  const { base, close } = await startDashboard(db);
+  t.after(close);
+  const r = await callGet(base, '/overview', makeToken(s.owner1, 'GYM_OWNER', s.org1));
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.kpis.renewalsDue, 1);
+});

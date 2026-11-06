@@ -413,12 +413,41 @@ app.use('/uploads', requireAuth, async (req, res) => {
 // Only start a traditional listener when this file is run directly (local
 // dev, or a persistent host like Railway/Render) -- not when it's imported
 // by the serverless entry point (api/index.js), which just wants buildApp().
+/* A LOCAL database that missed a migration fails one feature at a time and
+   says nothing about why: a dev database without the tournament tables made
+   Tournaments simply "not work" for an owner, while every other page was
+   fine. Production has the db:check deploy gate for exactly this; a local
+   server now says it out loud at start-up instead. Warn only, never refuse
+   to start, and SQLite only (Postgres is the gate's job). */
+async function warnIfLocalSchemaBehind() {
+  if (dbInstance?.driver !== 'sqlite') return;
+  try {
+    const { buildRequired } = await import('../scripts/db-check.js');
+    const required = buildRequired();
+    const tables = new Set((await dbInstance.q("SELECT name FROM sqlite_master WHERE type = 'table'")).map((r) => r.name));
+    const missing = [];
+    for (const [table, cols] of Object.entries(required)) {
+      if (!tables.has(table)) { missing.push(table); continue; }
+      const have = new Set((await dbInstance.q(`SELECT name FROM pragma_table_info('${table}')`)).map((r) => r.name));
+      for (const c of cols) if (!have.has(c)) missing.push(`${table}.${c}`);
+    }
+    if (missing.length) {
+      console.warn(`[sk-os] WARNING: this local database is missing ${missing.length} table(s)/column(s) the code needs, so those features will fail:`);
+      console.warn(`  ${missing.slice(0, 12).join(', ')}${missing.length > 12 ? ', …' : ''}`);
+      console.warn('  Run `npm run db:init` from the repo root (adds what is missing; existing data is kept).');
+    }
+  } catch (e) {
+    console.warn('[sk-os] could not compare the local database with the schema:', e.message);
+  }
+}
+
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) {
   buildApp()
     .then((app) => {
       server = app.listen(config.port, () => {
         console.log(`[sk-os] API listening on http://127.0.0.1:${config.port} (db: ${dbInstance.driver})`);
+        warnIfLocalSchemaBehind();
       });
     })
     .catch((e) => { console.error('Fatal startup error:', e); process.exit(1); });

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryAction } from '../../components/trainer/useQueryAction.js';
 import { api } from '../../api.js';
-import { useFetch, GOAL_LABEL, STATUS_META, cls, kg1 } from '../../utils.js';
-import { Card, Kicker, ErrorState, Modal, StatusChip, PageSkeleton } from '../../components/UI.jsx';
+import { useFetch, GOAL_LABEL, STATUS_META, kg1 } from '../../utils.js';
+import { Card, ErrorState, Modal, StatusChip, PageSkeleton, Avatar } from '../../components/UI.jsx';
+import Select from '../../components/Select.jsx';
 
 // "24 Oct" from an ISO date; anything that is not one is shown as it is.
 const shortDay = (v) => {
@@ -62,6 +64,7 @@ export default function Clients() {
   const [trainerId, setTrainerId] = useState('ALL');
   const [money, setMoney] = useState('ALL');
   const [createOpen, setCreateOpen] = useState(false);
+  useQueryAction('new', () => setCreateOpen(true));
 
   /* The trainers who actually have clients here, built from the roster
      rather than fetched -- a filter listing coaches with nobody assigned
@@ -153,8 +156,8 @@ export default function Clients() {
     <div className="space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl tracking-tight">Clients</h1>
-          <p className="text-mute text-sm">{filtered.length} of {data.clients.length} shown</p>
+          <h1 className="t-title">Clients</h1>
+          <p className="t-sub mt-1.5">{filtered.length === data.clients.length ? `${data.clients.length} clients` : `${filtered.length} of ${data.clients.length} shown`}</p>
         </div>
         <button className="btn-primary" onClick={() => setCreateOpen(true)} data-tour="trainer-clients-new">+ New client</button>
       </div>
@@ -164,38 +167,32 @@ export default function Clients() {
           <input className="input flex-1 min-w-[200px] sm:!w-56 sm:flex-none"
                  placeholder="Search name or email…" aria-label="Search clients"
                  value={q} onChange={(e) => setQ(e.target.value)} />
-          <select className="input flex-1 min-w-[140px] sm:!w-40 sm:flex-none" value={sort} aria-label="Sort clients" onChange={(e) => setSort(e.target.value)}>
-            <option value="status">Sort: Status</option>
-            <option value="name">Sort: Name</option>
-            <option value="adherence">Sort: Adherence</option>
-            <option value="change">Sort: Weight change</option>
-          </select>
+          <div className="flex-1 min-w-[150px] sm:w-44 sm:flex-none">
+            <Select aria-label="Sort clients" value={sort} onChange={setSort}
+              options={[['status', 'Sort: Status'], ['name', 'Sort: Name'], ['adherence', 'Sort: Adherence'], ['change', 'Sort: Weight change']].map(([value, label]) => ({ value, label }))} />
+          </div>
 
           {/* WHO COACHES THEM and WHERE THE MONEY STANDS -- the two things
               an owner filters a roster by, and neither existed. The
               trainer list is built from the roster itself, so it never
               offers a coach with nobody assigned. */}
           {trainerOptions.length > 0 && (
-            <select className="input flex-1 min-w-[140px] sm:!w-44 sm:flex-none" value={trainerId} aria-label="Filter by trainer"
-                    onChange={(e) => setTrainerId(e.target.value)}>
-              <option value="ALL">Any trainer</option>
-              {trainerOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              <option value="NONE">No trainer</option>
-            </select>
+            <div className="flex-1 min-w-[150px] sm:w-48 sm:flex-none">
+              <Select aria-label="Filter by trainer" value={trainerId} onChange={setTrainerId}
+                options={[{ value: 'ALL', label: 'Any trainer' }, ...trainerOptions.map(([id, name]) => ({ value: id, label: name })), { value: 'NONE', label: 'No trainer' }]} />
+            </div>
           )}
 
-          <select className="input flex-1 min-w-[140px] sm:!w-44 sm:flex-none" value={money} aria-label="Filter by membership"
-                  onChange={(e) => setMoney(e.target.value)}>
-            <option value="ALL">Any membership</option>
-            <option value="OWING">Payment outstanding</option>
-            <option value="EXPIRING">Expiring in 30 days</option>
-            <option value="NONE">No membership</option>
-          </select>
+          <div className="flex-1 min-w-[150px] sm:w-52 sm:flex-none">
+            <Select aria-label="Filter by membership" value={money} onChange={setMoney}
+              options={[['ALL', 'Any membership'], ['OWING', 'Payment outstanding'], ['EXPIRING', 'Expiring in 30 days'], ['NONE', 'No membership']].map(([value, label]) => ({ value, label }))} />
+          </div>
         </div>
 
         <div className="flex gap-1.5 flex-wrap">
           {STATUS_FILTERS.map((s) => (
-            <button key={s} className={cls('chip', status === s && '!border-gold/50 !text-gold !bg-gold/10')}
+            <button key={s} type="button" className="rounded-full px-3.5 text-[14px] font-semibold whitespace-nowrap"
+              style={{ minHeight: 36, background: status === s ? 'var(--ink)' : 'rgb(var(--tint-rgb) / .07)', color: status === s ? 'var(--bg)' : 'var(--mute)' }}
               aria-pressed={status === s}
               onClick={() => setStatus(s)}>{s === 'ALL' ? 'All' : STATUS_META[s].label}</button>
           ))}
@@ -242,75 +239,72 @@ export default function Clients() {
         )}
       </div>
 
-      <Card className="p-0 overflow-hidden hidden sm:block">
+      <Card className="!p-0 overflow-hidden hidden sm:block">
+        {/* Seven columns that fit a laptop. Eleven did not: Status was cut
+            off at the right edge and weights wrapped onto two lines. The
+            status now rides with the name, and "last workout" and "last
+            check-in" are one "last active". */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm min-w-[820px]">
+          <table className="w-full text-left min-w-[760px]">
             <thead>
-              <tr className="border-b border-line text-[10px] uppercase tracking-[.14em] text-mute font-grotesk">
-                <th className="px-5 py-3.5">Client</th>
+              <tr style={{ borderBottom: '1px solid var(--line)' }}>
+                <th className="pl-5 pr-3 py-3.5">Client</th>
                 <th className="px-3 py-3.5">Goal</th>
                 <th className="px-3 py-3.5">Weight</th>
-                <th className="px-3 py-3.5">Δ 7d</th>
                 <th className="px-3 py-3.5">Adherence</th>
-                <th className="px-3 py-3.5">Last workout</th>
-                <th className="px-3 py-3.5 whitespace-nowrap">Last check-in</th>
+                <th className="px-3 py-3.5 whitespace-nowrap">Last active</th>
                 <th className="px-3 py-3.5">Trainer</th>
-                <th className="px-3 py-3.5">Membership</th>
-                <th className="px-3 py-3.5">Status</th>
+                <th className="pl-3 pr-5 py-3.5">Membership</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
-                <tr key={c.id} className="border-b border-line/50 hover:bg-tint/[.03] transition-colors">
-                  <td className="px-5 py-3">
-                    <Link to={`/app/trainer/clients/${c.id}`} className="flex items-center gap-3 group">
-                      <div className="w-8 h-8 rounded-full grid place-items-center bg-gradient-to-br from-ember/30 to-gold/20 border border-line font-grotesk text-xs font-bold">
-                        {c.name[0]}
-                      </div>
-                      <div>
-                        <div className="font-grotesk font-semibold group-hover:text-gold transition-colors">{c.name}</div>
-                        <div className="text-[11px] text-faint">{c.age ? `${c.age} yrs` : '—'} · {c.email}</div>
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 text-xs text-mute font-grotesk">{GOAL_LABEL[c.goal] || c.goal}</td>
-                  <td className="px-3 py-3 font-grotesk font-semibold tabular-nums">{kg1(c.currentWeight)} <span className="text-[10px] text-faint">/ {kg1(c.targetWeight)} kg</span></td>
-                  <td className={cls('px-3 py-3 font-grotesk text-xs', (c.change7 ?? 0) < -0.1 ? 'text-cyanx' : (c.change7 ?? 0) > 0.1 ? 'text-bad' : 'text-mute')}>
-                    {c.change7 == null ? '—' : `${c.change7 > 0 ? '+' : ''}${kg1(c.change7)}`}
-                  </td>
-                  {/* An unmeasured client rendered "null%" above a bar
-                      drawn at 0% -- indistinguishable from someone who
-                      logged nothing all week. Absence is stated as
-                      absence. The bar also takes the body metric hue
-                      rather than the ember->gold gradient, which was two
-                      brand colours the palette no longer uses. */}
-                  <td className="px-3 py-3">
-                    {c.adherence == null ? (
-                      <span className="text-xs" style={{ color: 'var(--faint)' }}>No data</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-                          <div className="h-full rounded-full"
-                            style={{ width: `${Math.min(100, c.adherence)}%`, background: 'var(--m-body)' }} />
+              {filtered.map((c) => {
+                const last = [c.lastWorkout, c.lastCheckin].filter(Boolean).sort().pop();
+                return (
+                  <tr key={c.id} className="transition-colors hover:bg-[rgb(var(--tint-rgb)/.04)]" style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td className="pl-5 pr-3 py-3">
+                      <Link to={`/app/trainer/clients/${c.id}`} className="flex items-center gap-3 group min-w-0">
+                        <Avatar name={c.name} size={38} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[15px] font-semibold group-hover:underline" style={{ color: 'var(--ink)' }}>{c.name}</span>
+                            <StatusChip status={c.status} />
+                          </div>
+                          <div className="text-[13px] truncate max-w-[260px]" style={{ color: 'var(--faint)' }}>{c.email}</div>
                         </div>
-                        <span className="font-grotesk text-xs tabular-nums">{Math.round(c.adherence)}%</span>
-                      </div>
-                    )}
-                  </td>
-                  {/* "24 Oct" on one line: the ISO dates broke at their hyphens. */}
-                  <td className="px-3 py-3 text-xs text-mute font-grotesk whitespace-nowrap">{shortDay(c.lastWorkout)}</td>
-                  <td className="px-3 py-3 text-xs text-mute font-grotesk whitespace-nowrap">{shortDay(c.lastCheckin)}</td>
-                  <td className="px-3 py-3 text-xs font-grotesk max-w-[160px] truncate" title={c.trainerName || undefined} style={{ color: c.trainerName ? 'var(--mute)' : 'var(--faint)' }}>
-                    {c.trainerName || 'Unassigned'}
-                  </td>
-                  <td className="px-3 py-3"><MembershipPill membership={c.membership} /></td>
-                  <td className="px-3 py-3"><StatusChip status={c.status} /></td>
-                </tr>
-              ))}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 text-[14px] whitespace-nowrap" style={{ color: 'var(--mute)' }}>{GOAL_LABEL[c.goal] || c.goal}</td>
+                    <td className="px-3 py-3 text-[14px] tabular-nums whitespace-nowrap">
+                      <span className="font-semibold" style={{ color: 'var(--ink)' }}>{kg1(c.currentWeight)}</span>
+                      {c.targetWeight != null && <span style={{ color: 'var(--faint)' }}> → {kg1(c.targetWeight)}</span>}
+                      <span style={{ color: 'var(--faint)' }}> kg</span>
+                    </td>
+                    {/* Absence is stated as absence, not drawn as a 0% bar. */}
+                    <td className="px-3 py-3">
+                      {c.adherence == null ? (
+                        <span className="text-[13px]" style={{ color: 'var(--faint)' }}>No data</span>
+                      ) : (
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgb(var(--tint-rgb) / .1)' }}>
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, c.adherence)}%`, background: c.adherence >= 70 ? 'var(--good)' : c.adherence >= 40 ? 'var(--warn)' : 'var(--bad)' }} />
+                          </div>
+                          <span className="text-[13px] tabular-nums" style={{ color: 'var(--mute)' }}>{Math.round(c.adherence)}%</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-[14px] whitespace-nowrap" style={{ color: 'var(--mute)' }}>{shortDay(last)}</td>
+                    <td className="px-3 py-3 text-[14px] max-w-[160px] truncate" title={c.trainerName || undefined} style={{ color: c.trainerName ? 'var(--mute)' : 'var(--faint)' }}>
+                      {c.trainerName || 'Unassigned'}
+                    </td>
+                    <td className="pl-3 pr-5 py-3 whitespace-nowrap"><MembershipPill membership={c.membership} /></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!filtered.length && (
-            <div className="text-center py-12 text-mute text-sm">No clients match — try clearing filters.</div>
+            <div className="text-center py-12 text-[15px]" style={{ color: 'var(--mute)' }}>No clients match. Try clearing a filter.</div>
           )}
         </div>
       </Card>
@@ -351,23 +345,40 @@ function CreateClient({ open, onClose, onDone }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Add a new client">
-      <form onSubmit={submit} className="space-y-3">
-        <input className="input" placeholder="Full name" value={form.name} onChange={set('name')} required />
-        <input className="input" type="email" placeholder="Email (login)" value={form.email} onChange={set('email')} required />
-        <input className="input" type="password" placeholder="Password (min 6 chars)" value={form.password} onChange={set('password')} required minLength={6} />
-        <div className="grid grid-cols-3 gap-2">
-          <input className="input" type="number" placeholder="Age" value={form.age} onChange={set('age')} />
-          <input className="input" type="number" placeholder="Height cm" value={form.height_cm} onChange={set('height_cm')} />
-          <select className="input" value={form.goal} onChange={set('goal')}>
-            {Object.entries(GOAL_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+      <form onSubmit={submit} className="space-y-4">
+        {/* Labels above every field: placeholders vanish as soon as you
+            type, and a half-filled form became a column of unnamed boxes. */}
+        <label className="block"><span className="field-label block mb-1.5">Full name</span>
+          <input className="input" placeholder="Full name" value={form.name} onChange={set('name')} required autoComplete="off" />
+        </label>
+        <label className="block"><span className="field-label block mb-1.5">Email (their login)</span>
+          <input className="input" type="email" placeholder="Email (login)" value={form.email} onChange={set('email')} required autoComplete="off" />
+        </label>
+        <label className="block"><span className="field-label block mb-1.5">Temporary password</span>
+          <input className="input" type="password" placeholder="Password (min 6 chars)" value={form.password} onChange={set('password')} required minLength={6} autoComplete="new-password" />
+          <span className="block text-[13px] mt-1.5" style={{ color: 'var(--mute)' }}>At least 6 characters. They can change it in Settings.</span>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block"><span className="field-label block mb-1.5">Age</span>
+            <input className="input" type="number" inputMode="numeric" placeholder="Age" value={form.age} onChange={set('age')} />
+          </label>
+          <label className="block"><span className="field-label block mb-1.5">Height (cm)</span>
+            <input className="input" type="number" inputMode="numeric" placeholder="Height cm" value={form.height_cm} onChange={set('height_cm')} />
+          </label>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <input className="input" type="number" placeholder="Start weight (kg)" value={form.start_weight} onChange={set('start_weight')} />
-          <input className="input" type="number" placeholder="Target weight (kg)" value={form.target_weight} onChange={set('target_weight')} />
+        <div><span className="field-label block mb-1.5">Goal</span>
+          <Select aria-label="Goal" value={form.goal} onChange={(v) => set('goal')({ target: { value: v } })}
+            options={Object.entries(GOAL_LABEL).map(([value, label]) => ({ value, label }))} />
         </div>
-        <div className="text-[11px] text-faint">Client can change their password from Settings after first login.</div>
-        {err && <div className="text-xs text-bad bg-bad/10 border border-bad/30 rounded-xl px-3 py-2.5">{err}</div>}
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block"><span className="field-label block mb-1.5">Current weight (kg)</span>
+            <input className="input" type="number" inputMode="decimal" placeholder="Start weight (kg)" value={form.start_weight} onChange={set('start_weight')} />
+          </label>
+          <label className="block"><span className="field-label block mb-1.5">Goal weight (kg)</span>
+            <input className="input" type="number" inputMode="decimal" placeholder="Target weight (kg)" value={form.target_weight} onChange={set('target_weight')} />
+          </label>
+        </div>
+        {err && <div className="field-error" role="alert">{err}</div>}
         <button className="btn-primary w-full" disabled={busy}>{busy ? 'Creating…' : 'Create client'}</button>
       </form>
     </Modal>

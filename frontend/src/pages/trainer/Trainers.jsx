@@ -18,9 +18,11 @@
  * to overloading a real person.
  */
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, Ring, ErrorState, Empty, PageSkeleton, Avatar } from '../../components/UI.jsx';
+import { Card, Ring, ErrorState, Empty, PageSkeleton, Avatar } from '../../components/UI.jsx';
+import Select from '../../components/Select.jsx';
 
 /** Load bands. Deliberately conservative: "at capacity" starts before
  *  100%, because a trainer at 95% has effectively no room for the next
@@ -77,11 +79,15 @@ export default function Trainers() {
     <div className="space-y-5 pb-8">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl tracking-tight">Trainers</h1>
-          <p className="text-mute text-sm">
+          <h1 className="t-title">Trainers</h1>
+          <p className="t-sub mt-1.5">
             {trainers.length} {trainers.length === 1 ? 'trainer' : 'trainers'} · {totals.coaching} clients coached
           </p>
         </div>
+        {/* There was no way to add a trainer from here: Home's "Add a
+            trainer" opened this page and it had nothing to press. A trainer
+            joins by scanning the gym's trainer QR code. */}
+        <Link to="/app/trainer/enterprise/qr?for=trainer" className="btn-primary">+ Invite trainer</Link>
       </div>
 
       {/* The two facts worth acting on, stated before the list. Both are
@@ -111,7 +117,8 @@ export default function Trainers() {
       {trainers.length === 0 ? (
         <Empty
           title="No trainers yet"
-          hint="Trainers appear here once they join your gym with the trainer enrollment code."
+          hint="Invite one: they scan your trainer QR code to join."
+          action={<Link to="/app/trainer/enterprise/qr?for=trainer" className="btn-primary">+ Invite trainer</Link>}
         />
       ) : (
         <>
@@ -127,17 +134,10 @@ export default function Trainers() {
               className="input text-[13px] flex-1 min-w-0 sm:max-w-[320px]"
               style={{ minHeight: 40 }}
             />
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              aria-label="Sort trainers"
-              className="input text-[12px] ml-auto shrink-0"
-              style={{ minHeight: 40, width: 'auto' }}
-            >
-              <option value="load">Sort: Busiest</option>
-              <option value="clients">Sort: Most clients</option>
-              <option value="name">Sort: Name</option>
-            </select>
+            <div className="w-48 ml-auto shrink-0">
+              <Select aria-label="Sort trainers" value={sort} onChange={setSort}
+                options={[['load', 'Sort: Busiest'], ['clients', 'Sort: Most clients'], ['name', 'Sort: Name']].map(([value, label]) => ({ value, label }))} />
+            </div>
           </div>
 
           {/* grid-cols-1, not a bare grid: with no column rule the one column

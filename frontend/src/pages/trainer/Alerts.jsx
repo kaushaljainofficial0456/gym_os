@@ -16,6 +16,13 @@ const FILTERS = [
   ['all', 'All'], ['open', 'Open'], ['read', 'Read'], ['followed_up', 'Followed up'], ['dismissed', 'Dismissed']
 ];
 
+/* Alerts store their sentence when raised, so ones from before dates were
+   written for people still say "2026-08-23". Shown as "23 Aug 2026". */
+const humanDates = (text) => String(text).replace(/\b(20\d\d)-(\d\d)-(\d\d)\b/g, (m) => {
+  const d = new Date(`${m}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? m : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+});
+
 export default function Alerts() {
   const { user, isOwner } = useAuth();
   // Owners open anyone; a trainer opens their own clients.
@@ -38,14 +45,15 @@ export default function Alerts() {
   };
 
   const rows = alerts.data?.alerts || [];
-  const openCount = rows.filter((a) => a.status === 'open').length;
+  // From the server's gym-wide totals, not the rows of the current tab.
+  const openCount = alerts.data?.counts?.open ?? rows.filter((a) => a.status === 'open').length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl">Trainer alerts</h1>
-          <p className="text-mute text-sm">Risk signals detected from real client data — read, follow up, or dismiss.</p>
+          <h1 className="t-title">Alerts</h1>
+          <p className="t-sub mt-1.5">Clients whose data says they are slipping.</p>
         </div>
         <div className="chip border-bad/40 bg-bad/10 text-bad">{openCount} open</div>
       </div>
@@ -89,7 +97,7 @@ export default function Alerts() {
                     <span className="text-[10px] text-faint font-grotesk">{daysAgoLabel(a.created_at)}</span>
                   </div>
                   <div className="text-sm mt-1">{a.title}</div>
-                  {a.detail && <div className="text-xs text-mute mt-0.5">{a.detail}</div>}
+                  {a.detail && <div className="text-xs text-mute mt-0.5">{humanDates(a.detail)}</div>}
                 </div>
                 {a.status === 'open' ? (
                   <div className="flex gap-1.5">

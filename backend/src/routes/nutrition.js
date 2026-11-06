@@ -6,6 +6,7 @@ import { id, now } from '../ids.js';
 import { dayKey, addDays, daysBetween } from '../utils/time.js';
 import { clientLogDay } from '../services/logDay.js';
 import { estimateFood, estimateMeal } from '../services/food/index.js';
+import { estimateFoodAI, isFoodAIAvailable } from '../services/intelligence/foodAI.js';
 import { track, trackOnce } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
 import { recalculateForEditedDate } from '../services/nutrition/flexibleBalance.js';
@@ -252,6 +253,87 @@ export default function nutritionRoutes(db) {
     // a later gated cutover. Anything else is V1.
     const engine = ['v2', 'v3'].includes(req.query.engine) ? req.query.engine : undefined;
     res.json(engine ? estimateMeal(req.body.text, { engine }) : estimateFood(req.body.text));
+  });
+
+  /* ---- MEAL-PLAN ITEM ESTIMATES (trainer) ----
+     The meal-plan builder lists a meal's items with quantities ("2 roti",
+     "150 g dal") and this works out each one's calories and macros with
+     the food model (skos-food-v1, the same default V1 engine the client
+     estimate uses), so a trainer never types macros by hand. Per item, not
+     per meal, so the builder can show which line it could not recognise.
+     No client involved, so it is not under /clients/:id; trainers and
+     owners only, and its own rate limit (each request can carry 40 items). */
+  const planEstimateLimit = rateLimit({ windowMs: 60_000, max: 90, keyFn: (req) => req.user?.sub || 'anon' });
+  const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
+  r.post('/estimate-items', trainerOnly, planEstimateLimit, validate(z.object({
+    items: z.array(z.object({
+      name: z.string().trim().min(1).max(80),
+      quantity: z.string().trim().max(40).optional().default(''),
+    })).min(1).max(40),
+  })), (req, res) => {
+    const items = req.body.items.map(({ name, quantity }) => {
+      const text = `${quantity} ${name}`.trim();
+      const est = estimateMeal(text);
+      if (!est?.items?.length) {
+        return { name, quantity, ok: false, reason: 'Not recognised. Try a simpler name, like "paneer" or "brown rice".' };
+      }
+      const t = est.total || {};
+      return {
+        name, quantity, ok: true,
+        matched: est.items.map((i) => i.name).join(' + '),
+        grams: Math.round(est.items.reduce((g, i) => g + (Number(i.grams) || 0), 0)),
+        // No quantity given and the model picked a typical portion.
+        assumed: est.items.some((i) => i.grams_assumed),
+        confidence: est.confidence || null,
+        partial: (est.unresolved || []).length > 0,
+        calories: Math.round(Number(t.calories) || 0),
+        protein: round1(t.protein), carbs: round1(t.carbs), fat: round1(t.fat),
+      };
+    });
+    const ok = items.filter((i) => i.ok);
+    const total = {
+      calories: ok.reduce((s, i) => s + i.calories, 0),
+      protein: round1(ok.reduce((s, i) => s + i.protein, 0)),
+      carbs: round1(ok.reduce((s, i) => s + i.carbs, 0)),
+      fat: round1(ok.reduce((s, i) => s + i.fat, 0)),
+    };
+    res.json({ items, total, model_version: 'skos-food-v1' });
+  });
+
+  /* ---- MEAL-PLAN AI ESTIMATE (trainer) ----
+     The client app's "describe it" estimate, for the meal-plan builder: a
+     trainer types a meal the way they would say it ("2 aloo parathas with
+     curd") and the AI breaks it into components with grams and macros. The
+     builder then runs those components through the food model (above), so
+     measured data wins wherever it exists and the AI figure is only the
+     fallback -- the same tiering the client app uses. Trainers and owners
+     only; its own tight limit, since each call reaches an AI provider. */
+  const planAILimit = rateLimit({ windowMs: 60_000, max: 15, keyFn: (req) => req.user?.sub || 'anon' });
+  r.post('/ai-estimate', trainerOnly, planAILimit, validate(z.object({
+    text: z.string().trim().min(2).max(150),
+  })), async (req, res) => {
+    if (!isFoodAIAvailable()) {
+      return res.status(503).json({ ok: false, error: 'AI estimation is not set up on this server. Add the items one by one instead.' });
+    }
+    const result = await estimateFoodAI(db, { query: req.body.text, orgId: req.orgId, userId: req.user.sub });
+    if (!result?.ok) {
+      return res.status(502).json({ ok: false, error: 'The AI could not estimate that meal just now. Try describing it more simply, or add the items one by one.' });
+    }
+    const r1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
+    res.json({
+      ok: true,
+      food_name: result.food_name,
+      components: (result.components || []).map((c) => ({
+        name: c.name,
+        grams: Math.round(Number(c.estimated_weight_g) || 0),
+        calories: Math.round(Number(c.calories) || 0),
+        protein: r1(c.protein_g), carbs: r1(c.carbs_g), fat: r1(c.fat_g),
+      })).filter((c) => c.name),
+      totals: result.totals,
+      confidence: result.confidence || null,
+      assumptions: (result.assumptions || []).slice(0, 4),
+      disclaimer: result.disclaimer || null,
+    });
   });
 
   // ---- daily nutrition summary ----

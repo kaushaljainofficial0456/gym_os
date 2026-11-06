@@ -22,6 +22,7 @@
 import { useMemo, useState } from 'react';
 import { Empty } from '../UI.jsx';
 import { GOAL_LABEL, kg1 } from '../../utils.js';
+import Select from '../Select.jsx';
 
 const PAYMENT_FILTERS = [
   ['', 'All'],
@@ -137,17 +138,10 @@ export default function MembersTable({ members = [], renderActions }) {
             <Chip key={label} on={payment === value} onClick={() => setPayment(value)}>{label}</Chip>
           ))}
         </div>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          aria-label="Sort members"
-          className="input text-[12px] ml-auto"
-          style={{ minHeight: 40, maxWidth: 170 }}
-        >
-          <option value="name">Sort: Name</option>
-          <option value="renewal">Sort: Renewal date</option>
-          <option value="status">Sort: Payment status</option>
-        </select>
+        <div className="w-52 ml-auto">
+          <Select aria-label="Sort members" value={sort} onChange={setSort}
+            options={[['name', 'Sort: Name'], ['renewal', 'Sort: Renewal date'], ['status', 'Sort: Payment status']].map(([value, label]) => ({ value, label }))} />
+        </div>
       </div>
 
       {(overdue > 0 || dueSoon > 0) && (
@@ -206,7 +200,7 @@ export default function MembersTable({ members = [], renderActions }) {
                     )}
                   </td>
                   <td className="py-2.5 pr-3">
-                    <Tag tone={PAYMENT_TONE[m.payment_status]}>{(m.payment_status || '—').toUpperCase()}</Tag>
+                    <Tag tone={PAYMENT_TONE[m.payment_status]}>{m.payment_status || '—'}</Tag>
                   </td>
                   <td className="py-2.5 pr-3">
                     {m.lifecycle_status
@@ -238,28 +232,26 @@ export default function MembersTable({ members = [], renderActions }) {
   );
 }
 
+/* 'PAID' / 'EXPIRED' read as shouting in a list of names; badges are
+   sentence case like the rest of the workspace. */
+const sentence = (v) => (typeof v === 'string' && v.length > 1 ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase().replace(/_/g, ' ') : v);
+
 function Tag({ children, tone }) {
   const t = tone || { color: 'var(--mute)', bg: 'transparent' };
   return (
     <span
-      className="inline-block rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide"
-      style={{ color: t.color, background: t.bg, border: `1px solid ${t.color === 'var(--mute)' ? 'var(--line)' : t.color}` }}
-    >{children}</span>
+      className="inline-block rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold whitespace-nowrap"
+      style={{ color: t.color, background: t.bg === 'transparent' ? 'rgb(var(--tint-rgb) / .08)' : t.bg }}
+    >{sentence(children)}</span>
   );
 }
 
 function Chip({ children, on, onClick }) {
   return (
-    <button
-      type="button" onClick={onClick} aria-pressed={on}
-      /* A filter pill you tap with a thumb, not click with a mouse. */
-      className="rounded-lg px-3 text-[11px] font-semibold shrink-0"
-      style={{
-        minHeight: 36,
-        background: on ? 'var(--accent-soft)' : 'transparent',
-        border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
-        color: on ? 'var(--accent)' : 'var(--mute)',
-      }}
-    >{children}</button>
+    <button type="button" onClick={onClick} aria-pressed={on}
+      className="rounded-full px-3.5 text-[14px] font-semibold whitespace-nowrap"
+      style={{ minHeight: 36, background: on ? 'var(--ink)' : 'rgb(var(--tint-rgb) / .07)', color: on ? 'var(--bg)' : 'var(--mute)' }}>
+      {children}
+    </button>
   );
 }

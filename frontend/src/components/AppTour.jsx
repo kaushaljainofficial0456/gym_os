@@ -136,13 +136,23 @@ const CLIENT_STEPS = [
   },
 ];
 
+/* The first match that is actually on screen. The workspace navigation
+   is a sidebar on a computer and a tab bar on a phone, both carrying the
+   same data-tour; querySelector alone would pick the hidden one. */
+function findVisible(selector) {
+  for (const el of document.querySelectorAll(selector)) {
+    if (el.getClientRects().length) return el;
+  }
+  return null;
+}
+
 // ─── TRAINER STEPS ─────────────────────────────────────────────
 const TRAINER_STEPS = [
   {
     route: '/app/trainer',
     target: '[data-tour="trainer-hamburger"]',
     title: 'Navigation menu',
-    body: 'Tap the menu icon to access Dashboard, Clients, Workouts, Nutrition, Alerts, Reports and Messages.',
+    body: 'Everything is in the menu: down the left on a computer, along the bottom on a phone (More holds the rest).',
     placement: 'bottom',
   },
   {
@@ -219,7 +229,7 @@ const TRAINER_NAV_STEP = {
   route: '/app/trainer',
   target: '[data-tour="trainer-hamburger"]',
   title: 'Navigation menu',
-  body: 'Tap the menu icon to open the sidebar with Dashboard, Clients, Workouts, Nutrition, Alerts, Reports and Messages.',
+  body: 'Everything is in the menu: down the left on a computer, along the bottom on a phone (More holds the rest).',
   placement: 'bottom',
 };
 
@@ -324,7 +334,7 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
 
     const measure = () => {
       if (cancelled) return;
-      const el = s.target ? document.querySelector(s.target) : null;
+      const el = s.target ? findVisible(s.target) : null;
       if (el) {
         const r = el.getBoundingClientRect();
         setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
@@ -338,7 +348,7 @@ export default function AppTour({ active, userId, onDone, isClient = false, isIn
       let tries = 0;
       const poll = () => {
         if (cancelled) return;
-        const el = s.target ? document.querySelector(s.target) : null;
+        const el = s.target ? findVisible(s.target) : null;
         if (el) {
           el.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
           measure();

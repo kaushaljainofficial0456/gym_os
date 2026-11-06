@@ -75,6 +75,14 @@ const PATHS = {
   pause: 'M9 5v14M15 5v14',
   play: 'M8 5l11 7-11 7z',
   card: 'M3 7h18v11H3zM3 11h18M7 15h3',
+  // Workspace navigation (owner & trainer).
+  grid: 'M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z',
+  qr: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM16 16h2v2h-2z',
+  shield: 'M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z',
+  whistle: 'M11 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM15 12l6-2M15 12V7a2 2 0 0 1 2-2h2',
+  plus: 'M12 5v14M5 12h14',
+  receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 8h6M9 12h6M9 16h3',
+  inbox: 'M3 13.5 5.8 5h12.4L21 13.5V19H3v-5.5ZM3 13.5h5l1.2 2.5h5.6l1.2-2.5h5',
   body: 'M12 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9 21v-5l-2-5 5-2 5 2-2 5v5M7 11l-2 3M17 11l2 3',
 };
 

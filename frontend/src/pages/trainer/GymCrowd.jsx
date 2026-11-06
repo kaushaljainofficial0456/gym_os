@@ -277,7 +277,7 @@ export default function GymCrowd() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Gym Crowd Live" sub="Who is inside right now, and whether the number can be trusted"
+      <PageHeader title="Live crowd" sub="Who is in the gym right now."
                   right={<Freshness freshness={d?.freshness} />} />
 
       {/* ── now ── */}

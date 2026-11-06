@@ -192,7 +192,7 @@ export function StatusChip({ status }) {
     AT_RISK: ['At risk', 'badge-bad'],
     INACTIVE: ['Inactive', ''],
   }[status] || [String(status || '').replace(/_/g, ' ').toLowerCase(), ''];
-  return <span className={cls('badge', meta[1])} style={{ textTransform: 'capitalize' }}>{meta[0]}</span>;
+  return <span className={cls('badge', meta[1])}>{meta[0]}</span>;
 }
 
 /** A true segmented control (track + thumb), not free-floating pills —
@@ -603,7 +603,9 @@ export function useDragToDismiss(panelRef, onClose) {
 }
 
 /** Icon, title, one sentence, one action (Part 20) — never bare space. */
-export function Empty({ title = 'Nothing here yet', hint, icon = 'empty', action }) {
+/* Default glyph is an inbox. It was 'empty', which is drawn as a bin, so
+   every "nothing here yet" in the app wore a delete icon. */
+export function Empty({ title = 'Nothing here yet', hint, icon = 'inbox', action }) {
   return (
     <div className="empty-state">
       <div className="empty-state-icon"><Icon name={icon} size={24} /></div>

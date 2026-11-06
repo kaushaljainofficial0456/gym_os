@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole, orgScope } from '../auth.js';
 import { computeAdherence } from '../services/adherence.js';
 import { evaluateClient, evaluateClients } from '../services/atRisk.js';
-import { daysAgoIso, todayKey, lastNDays, round1 } from '../utils/time.js';
+import { daysAgoIso, todayKey, lastNDays, round1, dayKey, shiftDayKey } from '../utils/time.js';
 import { gymPulse } from '../services/gymPulse.js';
 
 export default function dashboardRoutes(db) {
@@ -89,7 +89,15 @@ export default function dashboardRoutes(db) {
       db.q(`SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE org_id = ? AND paid_at >= ?`,
         [orgId, monthStart])
     ]);
-    const renewalsDue = subs.filter(s => s.renewal_date && s.renewal_date <= daysAgoIso(-30)).length;
+    // Due = still ahead of us, within 30 of the GYM's days. With no lower
+    // bound every membership that lapsed months ago counted as "due within
+    // the next 30 days" (the dashboard said 23 while Business said 0).
+    // Same definition as admin.js /overview and gymPulse's expiringSoon.
+    const gymToday = dayKey(new Date(), req.tz);
+    const renewalsDue = subs.filter((s) => {
+      const d = String(s.renewal_date || '').slice(0, 10);
+      return d && d >= gymToday && d <= shiftDayKey(gymToday, 30);
+    }).length;
 
     res.json({
       kpis: {

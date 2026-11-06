@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, localDateKey } from '../../utils.js';
 import { Card, Kicker, ErrorState, Empty, PageSkeleton } from '../../components/UI.jsx';
+import Select from '../../components/Select.jsx';
 
 const TYPES = [
   ['message', 'Message'], ['workout_update', 'Workout update'],
@@ -117,8 +118,8 @@ export default function Messages() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl">Messages</h1>
-          <p className="text-mute text-sm">
+          <h1 className="t-title">Messages</h1>
+          <p className="t-sub mt-1.5">
             {unreadTotal > 0
               ? `${unreadTotal} unread ${unreadTotal === 1 ? 'message' : 'messages'} waiting on a reply.`
               : 'A direct line to each client. Messages land in their app and notification bell.'}
@@ -127,15 +128,11 @@ export default function Messages() {
         {/* Waiting clients FIRST, with the count in the label. The picker
             was alphabetical with no unread signal at all, so finding who
             had written to you meant opening threads one at a time. */}
-        <select className="input max-w-xs" aria-label="Choose a client thread"
-                value={clientId} onChange={(e) => setClientId(e.target.value)}>
-          <option value="">{unreadTotal > 0 ? `Choose client… (${unreadTotal} unread)` : 'Choose client…'}</option>
-          {sortedClients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {unreadBy[c.id] ? `● ${c.name} (${unreadBy[c.id]})` : c.name}
-            </option>
-          ))}
-        </select>
+        <div className="w-full max-w-xs">
+          <Select aria-label="Choose a client thread" value={clientId} onChange={setClientId}
+            placeholder={unreadTotal > 0 ? `Choose a client (${unreadTotal} unread)` : 'Choose a client'}
+            options={sortedClients.map((c) => ({ value: c.id, label: c.name, hint: unreadBy[c.id] ? `${unreadBy[c.id]} unread` : undefined }))} />
+        </div>
       </div>
 
       <Card>

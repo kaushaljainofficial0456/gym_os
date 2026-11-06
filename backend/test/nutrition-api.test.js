@@ -198,3 +198,80 @@ test('response does not leak internal source IDs or database details', async (t)
   assert.ok(!body.includes('sqlite'), 'no database driver name in response');
   assert.ok(!body.includes('Error:'), 'no Error stack in response');
 });
+
+// ---- meal-plan item estimates (trainer) ----
+test('POST /estimate-items: a trainer gets calories and macros per item from the food model', async (t) => {
+  const { base, close } = await startNutritionApi();
+  t.after(() => close());
+  const trainer = jwt.sign({ sub: 't1', role: 'TRAINER', org: 'o1', name: 'Coach' }, config.jwtSecret, { expiresIn: '1h' });
+  const res = await fetch(`${base}/api/nutrition/estimate-items`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${trainer}` },
+    body: JSON.stringify({ items: [{ name: 'roti', quantity: '2' }, { name: 'paneer', quantity: '100 g' }, { name: 'xyzzy unknownfood', quantity: '1 bowl' }] }),
+  });
+  const j = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(j));
+  assert.equal(j.model_version, 'skos-food-v1');
+  const [roti, paneer, junk] = j.items;
+  assert.equal(roti.ok, true);
+  assert.ok(roti.calories > 100 && roti.calories < 260, `2 roti: ${roti.calories} kcal`);
+  assert.equal(paneer.ok, true);
+  assert.ok(paneer.protein > 10, `100 g paneer protein ${paneer.protein}`);
+  assert.equal(junk.ok, false, 'an unknown food is reported, never invented');
+  assert.match(junk.reason, /Not recognised/);
+  assert.equal(j.total.calories, roti.calories + paneer.calories, 'the total counts only what was recognised');
+});
+
+test('POST /estimate-items is for trainers and owners, not clients', async (t) => {
+  const { call, close } = await startNutritionApi();
+  t.after(() => close());
+  const r = await call('POST', '/api/nutrition/estimate-items', { items: [{ name: 'roti', quantity: '2' }] });
+  assert.equal(r.status, 403);
+});
+
+// ---- meal-plan AI estimate (trainer) ----
+test('POST /ai-estimate: a trainer describes a meal and gets its components with grams and macros', async (t) => {
+  const { base, close } = await startNutritionApi();
+  t.after(() => close());
+  const realFetch = globalThis.fetch;
+  // EVERY outgoing call except this test's own server is answered here:
+  // keys in backend/.env make a cloud provider first in the chain, and a
+  // test must never reach a real AI API. The reply carries all three
+  // providers' shapes (local, OpenAI-style, Gemini) so whichever one the
+  // chain picks parses it.
+  t.mock.method(globalThis, 'fetch', async (url, opts) => {
+    if (String(url).startsWith(base)) return realFetch(url, opts);
+    const content = JSON.stringify({
+      food_name: 'Aloo paratha with curd', food_type: 'composite_dish', cuisine: 'Indian', is_branded_or_restaurant: false,
+      serving: { description: '1 plate', estimated_weight_g: 330 },
+      components: [
+        { name: 'aloo paratha', estimated_weight_g: 230, calories: 520, protein_g: 11, carbs_g: 70, fat_g: 22, assumption: 'two medium' },
+        { name: 'curd', estimated_weight_g: 100, calories: 60, protein_g: 3.5, carbs_g: 4.7, fat_g: 3.3, assumption: 'one small bowl' },
+      ],
+      totals: { calories: 580, protein_g: 14.5, carbs_g: 74.7, fat_g: 25.3 },
+      uncertainty: { calories_low: 480, calories_high: 700, protein_low: 10, protein_high: 19, carbs_low: 60, carbs_high: 90, fat_low: 18, fat_high: 32 },
+      assumptions: ['Two medium parathas'], needs_user_confirmation: [],
+    });
+    return new Response(JSON.stringify({
+      message: { content },
+      choices: [{ message: { content } }],
+      candidates: [{ content: { parts: [{ text: content }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+  const trainer = jwt.sign({ sub: 't1', role: 'TRAINER', org: 'o1', name: 'Coach' }, config.jwtSecret, { expiresIn: '1h' });
+  const res = await realFetch(`${base}/api/nutrition/ai-estimate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${trainer}` },
+    body: JSON.stringify({ text: '2 aloo parathas with curd' }),
+  });
+  const j = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(j));
+  assert.equal(j.ok, true);
+  assert.deepEqual(j.components.map((c) => [c.name, c.grams]), [['aloo paratha', 230], ['curd', 100]]);
+  assert.ok(j.components.every((c) => c.calories > 0), 'every component carries its calories');
+});
+
+test('POST /ai-estimate is for trainers and owners, not clients', async (t) => {
+  const { call, close } = await startNutritionApi();
+  t.after(() => close());
+  const r = await call('POST', '/api/nutrition/ai-estimate', { text: '2 aloo parathas' });
+  assert.equal(r.status, 403);
+});

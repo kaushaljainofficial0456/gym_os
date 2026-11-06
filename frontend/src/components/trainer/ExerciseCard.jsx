@@ -51,150 +51,102 @@ export default function ExerciseCard({
 }) {
   const [open, setOpen] = useState(false);
   const set = (k, v) => onChange({ ...ex, [k]: v });
+  const name = prettyName(ex.name) || 'Exercise';
 
+  /* The prescription is the point of the card, so sets, reps and load are
+     always on show and editable in place; they used to sit behind a tap,
+     and building a 6-exercise day meant opening six cards. Rest and the
+     coaching note are the extras, one toggle away. */
   return (
-    <div
-      className="rounded-2xl"
-      style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}
-    >
-      {/* Resting state: position, name, prescription. Three things. */}
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        <span
-          className="shrink-0 tabular-nums text-[11px] font-bold rounded-lg grid place-items-center"
-          style={{ width: 26, height: 26, background: 'var(--bg)', color: 'var(--mute)' }}
-          aria-hidden="true"
-        >
-          {String(index + 1).padStart(2, '0')}
+    <div className="rounded-2xl" style={{ background: 'var(--panel)', border: '1px solid var(--line)' }}>
+      <div className="flex items-center gap-3 px-4 pt-3.5">
+        <span className="shrink-0 tabular-nums text-[13px] font-bold rounded-full grid place-items-center"
+          style={{ width: 28, height: 28, background: 'rgb(var(--tint-rgb) / .08)', color: 'var(--mute)' }} aria-hidden="true">
+          {index + 1}
         </span>
-
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="min-w-0 flex-1 text-left"
-        >
-          <div className="text-[13px] font-bold truncate" style={{ color: 'var(--ink)' }}>
-            {prettyName(ex.name) || 'Choose an exercise'}
-          </div>
-          <div className="text-[11px] mt-0.5 tabular-nums truncate" style={{ color: 'var(--mute)' }}>
-            {prescriptionLine(ex) || 'Tap to set sets and reps'}
-          </div>
-        </button>
-
-        {/* Reorder is available to keyboard and touch, not only to a drag
-            gesture -- dragging is unusable one-handed and invisible to a
-            screen reader. */}
-        <div className="flex items-center gap-0.5 shrink-0">
-          <IconBtn label={`Move ${prettyName(ex.name)} up`} disabled={index === 0} onClick={() => onMove(-1)}>↑</IconBtn>
-          <IconBtn label={`Move ${prettyName(ex.name)} down`} disabled={index === total - 1} onClick={() => onMove(1)}>↓</IconBtn>
+        <div className="min-w-0 flex-1">
+          <div className="text-[16px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{prettyName(ex.name) || 'Choose an exercise'}</div>
+          {previous && <div className="text-[13px] tabular-nums truncate" style={{ color: 'var(--mute)' }}>Last time: {previous}</div>}
+        </div>
+        <div className="flex items-center shrink-0">
+          <IconBtn label={`Move ${name} up`} disabled={index === 0} onClick={() => onMove(-1)}><path d="m6 15 6-6 6 6" /></IconBtn>
+          <IconBtn label={`Move ${name} down`} disabled={index === total - 1} onClick={() => onMove(1)}><path d="m6 9 6 6 6-6" /></IconBtn>
+          <IconBtn label={`Remove ${name}`} onClick={onRemove} danger><path d="M6 6l12 12M18 6 6 18" /></IconBtn>
         </div>
       </div>
 
-      {/* Previous performance, when the client has actually done it. Pure
-          context -- it never auto-fills the prescription, because the
-          trainer decides the progression, not the app. */}
-      {previous && (
-        <div
-          className="mx-3 mb-2.5 rounded-lg px-2.5 py-1.5 text-[10.5px] tabular-nums"
-          style={{ background: 'var(--bg)', color: 'var(--mute)' }}
-        >
-          Last session: <span style={{ color: 'var(--ink)' }}>{previous}</span>
-        </div>
-      )}
+      <div className="grid grid-cols-3 gap-2.5 px-4 pt-3">
+        <Stepper label="Sets" value={Number(ex.sets) || 0} min={1} max={20} onChange={(v) => set('sets', v)} />
+        {/* Reps is text, not a number: "8", "8-10" and "AMRAP" are all
+            real prescriptions a coach writes. */}
+        <Field label="Reps" value={ex.reps} onChange={(v) => set('reps', v)} placeholder="8-10" />
+        <Field label="Load (kg)" value={ex.weight} onChange={(v) => set('weight', v)} placeholder="BW" />
+      </div>
 
-      {open && (
-        <div className="px-3 pb-3 pt-1 space-y-2.5" style={{ borderTop: '1px solid var(--line)' }}>
-          <div className="grid grid-cols-3 gap-2">
-            <Field label="Sets" value={ex.sets} onChange={(v) => set('sets', v)} min={1} max={20} />
-            {/* Reps is text, not a number: "8", "8-10" and "AMRAP" are all
-                real prescriptions a coach writes. */}
-            <Field label="Reps" value={ex.reps} onChange={(v) => set('reps', v)} text placeholder="8" />
-            <Field label="Load (kg)" value={ex.weight} onChange={(v) => set('weight', v)} text placeholder="BW" />
-          </div>
-
-          <div>
-            <div className="t-micro mb-1.5">Rest</div>
-            <div className="flex gap-1.5 flex-wrap">
+      <div className="px-4 pt-2 pb-3">
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className="text-[14px] font-semibold inline-flex items-center gap-1.5" style={{ color: 'var(--accent)', minHeight: 36 }}>
+          {open ? 'Hide rest & note' : `Rest ${formatRest(Number(ex.rest_sec) || 90)}${ex.notes ? ' · note' : ''} · edit`}
+        </button>
+        {open && (
+          <div className="space-y-3 pt-1.5">
+            <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Rest between sets">
               {REST_PRESETS.map((sec) => {
                 const on = Number(ex.rest_sec) === sec;
                 return (
-                  <button
-                    key={sec} type="button"
-                    onClick={() => set('rest_sec', sec)}
-                    aria-pressed={on}
-                    className="rounded-lg px-2.5 text-[11.5px] font-semibold tabular-nums"
-                    style={{
-                      minHeight: 36,
-                      background: on ? 'var(--accent-soft)' : 'transparent',
-                      border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
-                      color: on ? 'var(--accent)' : 'var(--mute)',
-                    }}
-                  >{formatRest(sec)}</button>
+                  <button key={sec} type="button" onClick={() => set('rest_sec', sec)} aria-pressed={on}
+                    className="rounded-full px-3.5 text-[13px] font-semibold tabular-nums"
+                    style={{ minHeight: 36, background: on ? 'var(--ink)' : 'rgb(var(--tint-rgb) / .07)', color: on ? 'var(--bg)' : 'var(--mute)' }}>
+                    {formatRest(sec)}
+                  </button>
                 );
               })}
             </div>
+            <input value={ex.notes || ''} onChange={(e) => set('notes', e.target.value)}
+              placeholder="Coaching note, e.g. slow on the way down"
+              aria-label={`Note for ${name}`} className="input w-full" />
+            <button type="button" onClick={onDuplicate} className="text-[14px] font-semibold" style={{ color: 'var(--accent)', minHeight: 36 }}>
+              Duplicate this exercise
+            </button>
           </div>
-
-          <div>
-            <div className="t-micro mb-1.5">Coaching note</div>
-            <input
-              value={ex.notes || ''}
-              onChange={(e) => set('notes', e.target.value)}
-              placeholder="e.g. controlled eccentric, stop 2 reps short"
-              aria-label={`Note for ${prettyName(ex.name)}`}
-              className="input w-full text-[12px]"
-              style={{ minHeight: 40 }}
-            />
-          </div>
-
-          <div className="flex gap-1.5 pt-0.5">
-            <button
-              type="button" onClick={onDuplicate}
-              className="rounded-lg px-3 text-[11.5px] font-semibold"
-              style={{ minHeight: 38, border: '1px solid var(--line)', color: 'var(--mute)' }}
-            >Duplicate</button>
-            <button
-              type="button" onClick={onRemove}
-              className="rounded-lg px-3 text-[11.5px] font-semibold ml-auto"
-              style={{ minHeight: 38, border: '1px solid var(--line)', color: 'var(--bad)' }}
-            >Remove</button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
-function Field({ label, value, onChange, min, max, text = false, placeholder }) {
+function Stepper({ label, value, min, max, onChange }) {
+  const clamp = (v) => Math.max(min, Math.min(max, v));
   return (
-    <label className="block">
-      <span className="t-micro block mb-1">{label}</span>
-      <input
-        type={text ? 'text' : 'number'}
-        inputMode={text ? undefined : 'numeric'}
-        min={min} max={max}
-        value={value ?? ''}
-        placeholder={placeholder}
-        onChange={(e) => onChange(text ? e.target.value : Math.max(min ?? 0, Math.min(max ?? 999, Number(e.target.value) || 0)))}
-        aria-label={label}
-        className="input w-full text-[13px] tabular-nums"
-        style={{ minHeight: 42 }}
-      />
+    <div>
+      <span className="block text-[13px] mb-1" style={{ color: 'var(--mute)' }}>{label}</span>
+      <div className="flex items-center rounded-xl overflow-hidden" style={{ background: 'rgb(var(--tint-rgb) / .065)', minHeight: 46 }}>
+        <button type="button" aria-label={`Fewer ${label.toLowerCase()}`} onClick={() => onChange(clamp(value - 1))} disabled={value <= min}
+          className="w-10 h-[46px] grid place-items-center text-[20px] font-semibold disabled:opacity-30" style={{ color: 'var(--ink)' }}>−</button>
+        <span className="flex-1 text-center text-[16px] font-semibold tabular-nums" style={{ color: 'var(--ink)' }} aria-live="polite">{value}</span>
+        <button type="button" aria-label={`More ${label.toLowerCase()}`} onClick={() => onChange(clamp(value + 1))} disabled={value >= max}
+          className="w-10 h-[46px] grid place-items-center text-[20px] font-semibold disabled:opacity-30" style={{ color: 'var(--ink)' }}>+</button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, placeholder }) {
+  return (
+    <label className="block min-w-0">
+      <span className="block text-[13px] mb-1" style={{ color: 'var(--mute)' }}>{label}</span>
+      <input type="text" value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}
+        aria-label={label} className="input w-full tabular-nums text-center" />
     </label>
   );
 }
 
-function IconBtn({ children, label, onClick, disabled }) {
+function IconBtn({ children, label, onClick, disabled, danger }) {
   return (
-    <button
-      type="button" onClick={onClick} disabled={disabled} aria-label={label}
-      className="rounded-lg grid place-items-center text-[13px]"
-      style={{
-        width: 34, height: 34,
-        color: disabled ? 'var(--faint)' : 'var(--mute)',
-        opacity: disabled ? 0.4 : 1,
-        cursor: disabled ? 'default' : 'pointer',
-      }}
-    >{children}</button>
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
+      className="rounded-lg grid place-items-center disabled:opacity-30"
+      style={{ width: 36, height: 36, color: danger ? 'var(--bad)' : 'var(--mute)', cursor: disabled ? 'default' : 'pointer' }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+    </button>
   );
 }

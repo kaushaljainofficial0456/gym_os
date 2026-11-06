@@ -8,7 +8,8 @@
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
-import { Card, PageHeader, Kpi, Bar, ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import { Card, Bar, ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import GymSettingsCard from '../../components/trainer/GymSettingsCard.jsx';
 import PayoutSetup from '../../components/trainer/PayoutSetup.jsx';
 
 function daysUntil(iso) {
@@ -51,49 +52,55 @@ export default function EnterpriseDashboard() {
 
   return (
     <div className="space-y-6" data-tour="trainer-enterprise">
-      <PageHeader title="Enterprise" sub="Your Barbell subscription, capacity, and QR onboarding." />
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Kpi label="Purchased capacity" value={d.purchasedCapacity} />
-        <Kpi label="Active clients" value={d.activeClients} />
-        <Kpi label="Available slots" value={d.availableCapacity} tone={d.availableCapacity === 0 ? 'text-bad' : undefined} />
-      </div>
-
-      <Card className="p-5">
-        <Bar label="Capacity used" right={`${d.activeClients} / ${d.purchasedCapacity}`} value={d.activeClients} max={d.purchasedCapacity || 1} />
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-5">
-          <div className="kicker">Subscription</div>
-          <div className="font-grotesk font-bold">{d.subscription?.client_capacity ? `${d.subscription.client_capacity} clients / package` : '—'}</div>
-          <div className="text-sm mt-1" style={{ color: 'var(--mute)' }}>
-            Active{d.subscription?.end_date ? ` — expires ${new Date(d.subscription.end_date).toLocaleDateString()}` : ''}
-          </div>
-          <div className="text-xs mt-1" style={{ color: 'var(--faint)' }}>{d.activeTrainers} active trainer{d.activeTrainers === 1 ? '' : 's'}</div>
-        </Card>
-        <PayoutSetup />
+      <div>
+        <h1 className="t-title">Setup & billing</h1>
+        <p className="t-sub mt-1.5">Your Barbell plan, getting paid, join codes and gym settings.</p>
       </div>
 
       {alerts.length > 0 && (
-        <Card className="p-5" style={{ borderColor: 'var(--gold, #E0B23A)' }}>
-          <div className="kicker">Alerts</div>
-          <ul className="space-y-1.5">
-            {alerts.map((a, i) => <li key={i} className="text-sm" style={{ color: 'var(--ink)' }}>⚠ {a}</li>)}
+        <Card className="p-4 sm:p-5" style={{ borderColor: 'rgb(var(--warn-rgb) / .5)', background: 'rgb(var(--warn-rgb) / .07)' }}>
+          <ul className="space-y-1">
+            {alerts.map((a, i) => <li key={i} className="text-[15px] font-semibold" style={{ color: 'var(--ink)' }}>{a}</li>)}
           </ul>
         </Card>
       )}
 
-      <Card className="p-5">
-        <div className="kicker">Quick actions</div>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/qr')}>+ Onboard client</button>
-          <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/qr')}>+ Onboard trainer</button>
-          <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>Buy capacity</button>
-          <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>Upgrade / renew package</button>
-          <button className="btn" onClick={() => nav('/app/trainer/business')}>Manage memberships</button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="p-5 sm:p-6">
+          <h2 className="ws-section-title">Your Barbell plan</h2>
+          <div className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>
+            {d.subscription?.client_capacity ? `${d.subscription.client_capacity} clients` : 'Active'}
+            {d.subscription?.end_date ? ` · renews ${new Date(d.subscription.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+            {` · ${d.activeTrainers} trainer${d.activeTrainers === 1 ? '' : 's'}`}
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-5">
+            {[['Capacity', d.purchasedCapacity], ['In use', d.activeClients], ['Free', d.availableCapacity]].map(([l, v]) => (
+              <div key={l}>
+                <div className="text-[13px] font-semibold" style={{ color: 'var(--mute)' }}>{l}</div>
+                <div className="text-[26px] font-extrabold tabular-nums" style={{ color: l === 'Free' && v === 0 ? 'var(--bad)' : 'var(--ink)' }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3"><Bar label="" right="" value={d.activeClients} max={d.purchasedCapacity || 1} /></div>
+          <div className="flex flex-wrap gap-2 mt-5">
+            <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/billing')}>Buy capacity</button>
+            <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>Renew or upgrade</button>
+          </div>
+        </Card>
+        <PayoutSetup />
+      </div>
+
+      <Card className="p-5 sm:p-6">
+        <h2 className="ws-section-title">Join QR codes</h2>
+        <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>New clients and trainers scan one to join your gym.</p>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/qr')}>Client QR code</button>
+          {/* Opened the Client tab, so "Onboard trainer" made a client code. */}
+          <button className="btn" onClick={() => nav('/app/trainer/enterprise/qr?for=trainer')}>Trainer QR code</button>
         </div>
       </Card>
+
+      <GymSettingsCard />
     </div>
   );
 }

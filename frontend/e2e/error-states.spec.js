@@ -41,6 +41,20 @@ test.describe('client', () => {
   });
 });
 
+/* The adherence trend is a coaching view: the owner's Home is the gym
+   (money, check-ins, follow-ups) and no longer shows or fetches it, so the
+   check moved to the trainer, whose Home still does. */
+test.describe('trainer, dashboard', () => {
+  test.use({ storageState: storageFor('trainer') });
+
+  test('an adherence trend that fails to load does not say nothing was logged', async ({ page }) => {
+    const matcher = (url) => url.pathname === '/api/dashboard/adherence-trend';
+    await page.route(matcher, (route) => route.fulfill(FAILURE));
+    await page.goto('/app/trainer');
+    await expectErrorThenRecovery(page, matcher, /No adherence logged/);
+  });
+});
+
 test.describe('owner, dashboard and roster', () => {
   test.use({ storageState: storageFor('owner') });
 
@@ -49,13 +63,6 @@ test.describe('owner, dashboard and roster', () => {
     await page.route(matcher, (route) => route.fulfill(FAILURE));
     await page.goto('/app/trainer');
     await expectErrorThenRecovery(page, matcher, 'Everyone is on track');
-  });
-
-  test('an adherence trend that fails to load does not say nothing was logged', async ({ page }) => {
-    const matcher = (url) => url.pathname === '/api/dashboard/adherence-trend';
-    await page.route(matcher, (route) => route.fulfill(FAILURE));
-    await page.goto('/app/trainer');
-    await expectErrorThenRecovery(page, matcher, /No adherence logged/);
   });
 
   test('a member roster that fails to load is not "No members yet"', async ({ page }) => {
@@ -84,7 +91,9 @@ test.describe('owner', () => {
     const matcher = (url) => url.pathname === '/api/messages' && url.searchParams.has('client_id');
     await page.route(matcher, (route) => route.fulfill(FAILURE));
     await page.goto('/app/trainer/messages');
-    await page.getByRole('combobox', { name: 'Choose a client thread' }).selectOption({ index: 1 });
+    // The workspace's own picker (components/Select.jsx), not a native <select>.
+    await page.getByRole('combobox', { name: 'Choose a client thread' }).click();
+    await page.getByRole('listbox').getByRole('option').first().click();
     await expectErrorThenRecovery(page, matcher, 'No messages yet');
   });
 

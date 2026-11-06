@@ -106,10 +106,10 @@ export default {
          places (the Home/Dashboard greeting line) — a single human
          sentence above an otherwise numeric page. */
       fontFamily: {
-        brand: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
-        grotesk: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
-        body: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        brand: ['var(--font-ui)', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['var(--font-ui)', 'system-ui', '-apple-system', 'sans-serif'],
+        grotesk: ['var(--font-ui)', 'system-ui', '-apple-system', 'sans-serif'],
+        body: ['var(--font-ui)', 'system-ui', '-apple-system', 'sans-serif'],
         serif: ['Sentient', 'Georgia', 'serif'],
       },
       borderRadius: {

@@ -55,7 +55,7 @@ export default function AccessControl() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Access control" sub="Doors, devices, and who they let in" />
+      <PageHeader title="Access control" sub="Doors, devices and who they let in." />
       <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Access control sections">
         {TABS.map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => choose(k)}

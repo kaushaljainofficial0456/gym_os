@@ -73,6 +73,9 @@
   font-weight: 400 1000; font-style: normal; font-display: swap;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
+/* The one switch every font utility reads (tailwind.config.js). */
+:root { --font-ui: 'DM Sans'; }
+
 /* Bricolage Grotesque's three @font-face declarations were removed with
    the same reasoning as Satoshi's above. It existed for exactly one
    element — the trainer Dashboard's 50px headline — and that element's
@@ -552,7 +555,7 @@ html, body, #root { min-height: 100%; }
 
 body {
   @apply antialiased;
-  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
   /* Tabular figures app-wide: this is a numbers product, and proportional
      digits make every counter and table column shift width as it ticks. */
   font-variant-numeric: tabular-nums;

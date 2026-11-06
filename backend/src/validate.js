@@ -13,6 +13,16 @@ export function validate(schema) {
   };
 }
 
+/* A BODY WEIGHT, wherever one is stored. Only the plain weight log had a
+   floor; measurement and profile updates took anything positive, so a
+   member logging "0.4" with the unit set to pounds stored 0.181436948 kg,
+   and the converted 99.9 lb stored 45.31387776300001 -- both shown to the
+   coach exactly like that. 20-500 kg catches typos and unit mix-ups without
+   ever refusing a real person; two decimals keeps a pounds round trip
+   exact (45.31 kg -> 99.9 lb) and stops float noise reaching the screen. */
+const round2 = (v) => Math.round(v * 100) / 100;
+const bodyWeight = () => z.number().min(20, 'A body weight under 20 kg looks like a typo').max(500).transform(round2);
+
 export const schemas = {
   email: z.string().email(),
   login: z.object({
@@ -27,8 +37,8 @@ export const schemas = {
     height_cm: z.number().min(100).max(250).optional(),
     sex: z.enum(['M', 'F', 'OTHER']).optional(),
     goal: z.enum(['FAT_LOSS', 'MUSCLE_GAIN', 'RECOMP', 'STRENGTH', 'GENERAL']).default('GENERAL'),
-    start_weight: z.number().positive().optional(),
-    target_weight: z.number().positive().optional(),
+    start_weight: bodyWeight().optional(),
+    target_weight: bodyWeight().optional(),
     goal_date: z.string().optional(),
     trainer_id: z.string().optional()
   }),
@@ -54,8 +64,12 @@ export const schemas = {
       reps: z.string().max(20).default('10'),
       weight: z.string().max(20).default('BW'),
       rest_sec: z.number().int().min(0).max(600).default(90),
-      tempo: z.string().max(20).optional(),
-      notes: z.string().max(200).optional()
+      // nullish, not just optional: a saved template's exercises come back
+      // from the database with tempo/notes NULL, and the member profile's
+      // "Assign workout" sends the template as stored -- every assign from
+      // there failed with "tempo: Expected string, received null".
+      tempo: z.string().max(20).nullish(),
+      notes: z.string().max(200).nullish()
     })).default([])
   }),
   nutritionPlan: z.object({
@@ -72,12 +86,14 @@ export const schemas = {
       protein: z.number().min(0).max(1000),
       carbs: z.number().min(0).max(1000),
       fat: z.number().min(0).max(1000),
-      foods: z.string().max(300).optional()
+      // The meal's items with quantities ("2 roti, 150 g dal, 100 g paneer"),
+      // which the builder estimates macros from; a full meal ran past 300.
+      foods: z.string().max(800).optional()
     })).default([])
   }),
   weightLog: z.object({
     date: z.string().optional(),
-    weight: z.number().min(20, 'A body weight under 20 kg looks like a typo').max(500),
+    weight: bodyWeight(),
     source: z.enum(['manual', 'scale', 'estimate']).default('manual')
   }),
   mealLog: z.object({
@@ -343,7 +359,7 @@ export const schemas = {
      recorded bicep is about 79 cm) so this only ever catches mistakes. */
   measurement: z.object({
     taken_at: z.string().optional(),
-    weight: z.number().positive().max(500).optional(),
+    weight: bodyWeight().optional(),
     waist: z.number().min(30).max(250).optional(),
     chest: z.number().min(30).max(250).optional(),
     arms: z.number().min(10).max(100).optional(),
@@ -358,7 +374,7 @@ export const schemas = {
      leaving the rest of the set intact. */
   measurementPatch: z.object({
     taken_at: z.string().optional(),
-    weight: z.number().positive().max(500).nullable().optional(),
+    weight: bodyWeight().nullable().optional(),
     waist: z.number().min(30).max(250).nullable().optional(),
     chest: z.number().min(30).max(250).nullable().optional(),
     arms: z.number().min(10).max(100).nullable().optional(),
@@ -504,8 +520,8 @@ export const schemas = {
     sodium: z.number().min(0).max(100000).optional() // mg
   }),
   measurementUpdate: z.object({
-    weight: z.number().positive().max(500).optional(),
-    target_weight: z.number().positive().max(500).optional(),
+    weight: bodyWeight().optional(),
+    target_weight: bodyWeight().optional(),
     goal_date: z.string().optional(),
     status: z.enum(['ON_TRACK', 'NEEDS_ATTENTION', 'AT_RISK', 'INACTIVE']).optional(),
     trainer_id: z.string().optional(),

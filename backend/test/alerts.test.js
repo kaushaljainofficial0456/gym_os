@@ -219,3 +219,26 @@ test('re-evaluating on every list visit writes only the alerts whose content cha
   const fresh = await db.q1('SELECT title FROM alerts WHERE id = ?', [open[0].id]);
   assert.notEqual(fresh.title, 'stale title');
 });
+
+test('dismissing an alert files it under Dismissed, and the open count ignores the tab', async (t) => {
+  resetRateLimits();
+  const db = await memDb();
+  const a = await seedOrgWithClient(db, 'a');
+  const alertId = await insertAlert(db, { orgId: a.orgId, clientId: a.clientId });
+  await insertAlert(db, { orgId: a.orgId, clientId: a.clientId, type: 'PLATEAU' });
+  const { call, close } = await startApi(db); t.after(() => close());
+  const token = makeToken(a.trainerId, 'TRAINER', a.orgId);
+
+  const r = await call('POST', `/${alertId}/action`, { token, body: { action: 'dismiss' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.status, 'dismissed');
+  const dismissed = await call('GET', '/?status=dismissed', { token });
+  assert.ok(dismissed.json.alerts.some((x) => x.id === alertId), 'the Dismissed tab shows it');
+  assert.equal(dismissed.json.counts.dismissed, 1);
+  // The count is the gym's, not the tab's: it matches the table, whatever
+  // tab is being viewed (the evaluator may have resolved the other alert).
+  const open = await db.q1("SELECT COUNT(*) AS n FROM alerts WHERE org_id = ? AND status = 'open'", [a.orgId]);
+  assert.equal(dismissed.json.counts.open, Number(open.n));
+  const openTab = await call('GET', '/?status=open', { token });
+  assert.equal(openTab.json.counts.open, dismissed.json.counts.open);
+});

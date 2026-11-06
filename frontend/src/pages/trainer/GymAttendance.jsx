@@ -44,7 +44,7 @@ const FILTERS = [
 
 const todayKey = () => new Date().toLocaleDateString('en-CA');
 
-export default function GymAttendance() {
+export default function GymAttendance({ embedded = false } = {}) {
   const [date, setDate] = useState(todayKey());
   const [data, setData] = useState(null);
   const [corrections, setCorrections] = useState([]);
@@ -177,9 +177,11 @@ export default function GymAttendance() {
     <div className="pb-20">
       <header className="mb-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="font-black leading-tight" style={{ fontSize: 23, color: 'var(--ink)' }}>
-            Trainer attendance
-          </h1>
+          {/* Inside the Attendance page's Trainers tab the page already has
+              its title, so this one steps down to a section heading. */}
+          {embedded
+            ? <h2 className="ws-section-title">Trainer attendance</h2>
+            : <h1 className="font-black leading-tight" style={{ fontSize: 23, color: 'var(--ink)' }}>Trainer attendance</h1>}
           <div className="text-[12px] mt-1" style={{ color: 'var(--mute)' }}>
             {/* Says which MODE the gym is in, because the same screen
                 means different things with and without shifts. */}

@@ -1,0 +1,305 @@
+/* Loaded with the workspace (TrainerLayout), not with every page: none
+   of this applies until TrainerLayout puts `ws` on <html>, so the client
+   app's first paint does not download it (frontend/scripts/check-bundle
+   holds the initial CSS to its budget). */
+
+/* INTER -- the owner & trainer workspace face where the device has no
+   SF Pro (variable 100-900, OFL; licence beside the files in /fonts).
+   On Apple devices `-apple-system` resolves to SF Pro, Apple's own system
+   font, which is what the workspace is modelled on; Inter is the open
+   typeface drawn closest to it, so Windows and Android read the same.
+   Scoped, not global: TrainerLayout puts `ws` on <html> while the
+   workspace is open. DM Sans stays last, so a missing glyph still renders
+   in the app's own face. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var-latin-ext.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+html.ws { --font-ui: -apple-system, BlinkMacSystemFont, 'Inter', 'DM Sans'; }
+
+/* ══════════════════════════════════════════════════════════════
+   WORKSPACE SHELL -- sidebar (computer), top bar + tab bar (phone).
+   Breakpoint 1024px: below it a 264px sidebar costs too much width.
+   Colours are the theme tokens, so light, dark and system all hold.
+   ══════════════════════════════════════════════════════════════ */
+
+.ws-side { display: none; }
+.ws-top {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+.ws-main { min-width: 0; }
+.ws-content {
+  max-width: 1200px; margin: 0 auto;
+  padding: 18px 16px calc(112px + env(safe-area-inset-bottom, 0px));
+}
+.ws-tabs { display: block; }
+
+@media (min-width: 1024px) {
+  .ws-side {
+    display: flex; flex-direction: column;
+    position: fixed; inset: 0 auto 0 0; z-index: 30;
+    width: 264px;
+    padding: 20px 14px 16px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow: hidden;   /* the nav scrolls, not the whole sidebar */
+  }
+  .ws-top, .ws-tabs { display: none; }
+  .ws-main { padding-left: 264px; }
+  .ws-content { padding: 32px 40px 56px; }
+}
+
+/* ── brand ── */
+.ws-brand { display: flex; align-items: center; gap: 12px; padding: 2px 8px 14px; }
+.ws-brand-name {
+  display: block; font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 16px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; color: var(--ink);
+}
+.ws-brand-gym {
+  display: block; margin-top: 3px;
+  font-size: 12.5px; font-weight: 500; letter-spacing: -.004em; color: var(--faint);
+  max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── nav ── */
+/* Brand stays at the top and the account at the bottom; only the list
+   between them scrolls, on a screen too short to show it all. */
+.ws-brand, .ws-side-foot { flex-shrink: 0; }
+.ws-nav {
+  display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0;
+  overflow-y: auto; margin: 0 -6px; padding: 0 6px; scrollbar-width: thin;
+}
+.ws-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.ws-nav-title {
+  padding: 0 12px 4px;
+  font-size: 13px; font-weight: 600; letter-spacing: -.004em; color: var(--faint);
+}
+.ws-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 35px; padding: 0 12px; flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 15px; font-weight: 500; letter-spacing: -.012em; color: var(--mute);
+  transition: background-color .15s ease, color .15s ease;
+}
+.ws-nav-item:hover { background: rgb(var(--tint-rgb) / .06); color: var(--ink); }
+.ws-nav-item.is-active {
+  background: rgb(var(--accent-rgb) / .14);
+  color: var(--ink); font-weight: 600;
+}
+.ws-nav-item.is-active svg { color: var(--accent); }
+.ws-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-badge {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  font-size: 11.5px; font-weight: 800; color: var(--cta-ink, #fff); background: var(--accent);
+}
+
+/* ── footer ── */
+.ws-side-foot { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+.ws-user-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.ws-user-role { font-size: 12px; color: var(--faint); }
+.ws-icon-btn {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  color: var(--mute); border: 1px solid var(--line);
+}
+.ws-icon-btn:hover { color: var(--bad); border-color: rgb(var(--bad-rgb) / .4); }
+
+/* ══════════════════════════════════════════════════════════════
+   SHARED WORKSPACE PIECES -- quick-action tiles, section headers
+   ══════════════════════════════════════════════════════════════ */
+.ws-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) { .ws-actions { gap: 12px; } }
+@media (min-width: 1280px) { .ws-actions { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+
+.ws-action {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 108px; padding: 14px 8px;
+  border-radius: 20px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: var(--card-shadow);
+  text-align: center;
+  transition: transform .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.ws-action:hover { border-color: rgb(var(--tint-rgb) / .2); transform: translateY(-1px); }
+.ws-action:active { transform: scale(.97); }
+.ws-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-action-icon {
+  width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
+  background: rgb(var(--tint-rgb) / .07); color: var(--ink);
+}
+.ws-action.is-accent .ws-action-icon { background: rgb(var(--accent-rgb) / .16); color: var(--accent); }
+.ws-action-label { font-size: 13px; font-weight: 600; line-height: 1.2; color: var(--ink); letter-spacing: -.01em; }
+.ws-action .ws-badge { position: absolute; top: 10px; right: 10px; }
+@media (max-width: 400px) {
+  .ws-action { min-height: 92px; gap: 8px; padding: 12px 4px; border-radius: 16px; }
+  .ws-action-icon { width: 40px; height: 40px; border-radius: 12px; }
+  .ws-action-label { font-size: 12px; }
+}
+
+.ws-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.ws-section-title { font-size: 1.1875rem; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.ws-section-link { font-size: 13.5px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.ws-section-link:hover { text-decoration: underline; }
+
+/* More page: every section as tiles */
+.ws-more-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) { .ws-more-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .ws-more-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ws-more-tile {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 64px; padding: 12px; border-radius: 16px;
+  background: var(--panel); border: 1px solid var(--line);
+  font-size: 14.5px; font-weight: 700; color: var(--ink);
+}
+.ws-more-tile:hover { border-color: rgb(var(--accent-rgb) / .45); }
+.ws-more-tile .ws-action-icon { width: 38px; height: 38px; border-radius: 11px; }
+
+/* ══════════════════════════════════════════════════════════════
+   HUE CHIPS -- the client app's language: a thin line icon in its
+   section's muted hue, on a soft tint of that hue (MetricTile in
+   pages/client/Progress.jsx). --t is the hue, --tb its tint, --s the size.
+   Solid saturated tiles with white glyphs read as toy-like next to it.
+   ══════════════════════════════════════════════════════════════ */
+.ws-tile {
+  --s: 28px;
+  width: var(--s); height: var(--s); flex-shrink: 0;
+  border-radius: 999px;
+  display: grid; place-items: center;
+  color: var(--t, var(--ink));
+  background: var(--tb, rgb(var(--tint-rgb) / .06));
+  border: 1px solid var(--line);
+}
+
+/* The sidebar stays monochrome, like every premium sidebar: the page you
+   are on is the one in full ink. */
+.ws-nav-item svg { color: var(--faint); }
+.ws-nav-item:hover svg, .ws-nav-item.is-active svg { color: var(--ink); }
+.ws-nav-item.is-active { background: rgb(var(--tint-rgb) / .08); color: var(--ink); }
+
+/* Home shortcuts and More tiles carry a bigger tile. */
+.ws-action-icon.ws-tile { --s: 46px; }
+.ws-more-tile .ws-action-icon.ws-tile { --s: 36px; }
+@media (max-width: 400px) { .ws-action-icon.ws-tile { --s: 42px; } }
+html.ws.light :is(.ws-action, .ws-more-tile) { border-color: transparent; }
+.ws-count {
+  min-width: 24px; height: 24px; padding: 0 8px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  font-size: 13px; font-weight: 700; color: var(--m-energy); background: var(--m-energy-bg); border: 1px solid var(--line);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   OWNER & TRAINER WORKSPACE -- an iOS-style system.
+
+   Scoped to html.ws (set by TrainerLayout, on <html> so portaled
+   dialogs get it too); the client app keeps its own look. Modelled on
+   Apple's Human Interface Guidelines, because owners asked for an app
+   that feels like the best one on their phone:
+     - SF Pro where the device has it, Inter (its closest open cousin)
+       everywhere else;
+     - Large Title pages, sentence-case section headers -- never the
+       tiny, letter-spaced CAPITALS this workspace was full of;
+     - one type scale: 34 / 22 / 17 / 15 / 13, nothing under 12;
+     - 44px touch targets, filled input fields, an iOS segmented control,
+       grouped cards with hairline separators.
+   Unlayered and prefixed with html.ws, so it outranks the component and
+   utility layers without !important.
+   ═══════════════════════════════════════════════════════════════ */
+html.ws body {
+  font-size: 16px; letter-spacing: -.011em; line-height: 1.45;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Sentence case, everywhere. Small capitals with wide tracking were the
+   single biggest reason the workspace read as "basic and complex": iOS
+   uses sentence case for headers, labels, buttons and badges alike. ── */
+html.ws :is(.uppercase, [class*="tracking-["], .tracking-wider, .tracking-widest, .tracking-wide) {
+  text-transform: none; letter-spacing: -.005em;
+}
+
+/* ── type scale ── */
+html.ws .t-title { font-size: clamp(1.875rem, 1.45rem + 1.2vw, 2.125rem); font-weight: 700; letter-spacing: -.028em; line-height: 1.12; }
+html.ws .t-section, html.ws .ws-section-title { font-size: 1.375rem; font-weight: 700; letter-spacing: -.022em; line-height: 1.2; }
+html.ws .t-card { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.016em; }
+html.ws .t-body { font-size: 1rem; }
+html.ws .t-sub { font-size: .9375rem; line-height: 1.5; color: var(--mute); }
+html.ws .t-micro { font-size: .8125rem; font-weight: 500; text-transform: none; letter-spacing: -.004em; color: var(--mute); }
+html.ws .t-metric, html.ws .stat-value { font-weight: 700; letter-spacing: -.03em; }
+
+/* Section header: what the old ".KICKER" became. A dot and spaced
+   capitals at 11px read as decoration; a clear sentence-case heading
+   reads as structure. */
+html.ws .kicker {
+  font-size: 1.0625rem; font-weight: 600; letter-spacing: -.016em; text-transform: none;
+  color: var(--ink); margin-bottom: .875rem;
+}
+html.ws .kicker::before { display: none; }
+
+html.ws .field-label, html.ws label > .field-label {
+  font-size: .8125rem; font-weight: 600; letter-spacing: -.004em; text-transform: none; color: var(--mute);
+}
+
+/* ── readable floor: nothing in the workspace under ~12px ── */
+html.ws :is(.text-\[8px\], .text-\[9px\], .text-\[9\.5px\], .text-\[10px\], .text-\[10\.5px\]) { font-size: 12px; }
+html.ws :is(.text-\[11px\], .text-\[11\.5px\]) { font-size: 13px; }
+html.ws .text-xs { font-size: 13px; }
+html.ws :is(.text-\[12px\], .text-\[12\.5px\]) { font-size: 13.5px; }
+html.ws :is(.text-\[13px\], .text-\[13\.5px\]) { font-size: 14.5px; }
+html.ws .text-sm { font-size: 15px; }
+
+/* ── surfaces: grouped cards ── */
+html.ws .card { border-radius: 20px; }
+html.ws .row { border-radius: 14px; }
+
+/* ── controls ── */
+html.ws :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger) {
+  font-size: .9375rem; font-weight: 600; letter-spacing: -.01em; min-height: 44px; padding: 10px 20px;
+}
+html.ws .btn-sm { font-size: .875rem !important; min-height: 36px !important; padding: 7px 14px !important; }
+html.ws .btn-lg { font-size: 1.0625rem !important; min-height: 52px !important; }
+
+/* Inputs as iOS fields: filled, borderless until focused, 16px text (any
+   less and iOS Safari zooms the page when a field is tapped). */
+html.ws .input {
+  font-size: 16px; min-height: 46px; border-radius: 12px;
+  background: rgb(var(--tint-rgb) / .065); border-color: transparent;
+}
+html.ws .input:hover { border-color: rgb(var(--tint-rgb) / .12); }
+html.ws .input:focus, html.ws .input:focus-visible {
+  border-color: rgb(var(--accent-rgb) / .7); background: var(--panel);
+  box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .16); outline: none;
+}
+html.ws .input::placeholder { color: var(--faint); }
+
+/* Segmented control, the iOS way: a soft track, the selected segment a
+   raised pill. */
+html.ws .segmented { padding: 3px; border-radius: 12px; border: 0; background: rgb(var(--tint-rgb) / .08); gap: 2px; }
+html.ws .segmented-item { font-size: .875rem; font-weight: 600; letter-spacing: -.01em; min-height: 34px; border-radius: 9px; }
+html.ws .segmented-item[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .14), 0 3px 8px rgb(0 0 0 / .08); }
+
+/* Chips and badges: sentence case, a size you can read. */
+html.ws :is(.chip, .badge) { font-size: .8125rem; font-weight: 600; letter-spacing: -.004em; text-transform: none; }
+
+/* Tables: quiet sentence-case column heads, roomy rows. */
+html.ws th { font-size: .8125rem; font-weight: 600; letter-spacing: -.004em; text-transform: none; color: var(--mute); }
+html.ws td { font-size: .9375rem; }
+
+html.ws .menu-row { font-size: 1rem; font-weight: 500; }
+
+/* Empty states */
+html.ws .empty-state { padding: 44px 24px; }
+html.ws .empty-state-icon { width: 56px; height: 56px; border-radius: 16px; }
+html.ws .empty-state-title { font-size: 1.125rem; font-weight: 600; letter-spacing: -.018em; }
+html.ws .empty-state-body { font-size: .9375rem; max-width: 34ch; line-height: 1.5; }
+
+/* Number-tile labels: sentence case and readable, like every other label here. */
+html.ws .stat-label { font-size: .8125rem; font-weight: 500; letter-spacing: -.004em; text-transform: none; color: var(--mute); }

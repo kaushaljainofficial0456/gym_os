@@ -139,9 +139,7 @@ export default function MyAttendance() {
   return (
     <div className="space-y-5 anim-fadeUp">
       <div>
-        <h1 className="font-grotesk text-[22px] font-black tracking-[-.02em]" style={{ color: 'var(--ink)' }}>
-          My attendance
-        </h1>
+        <h1 className="t-title">My attendance</h1>
         <p className="text-[11.5px] mt-0.5" style={{ color: 'var(--mute)' }}>
           Your own hours. Corrections go to your gym owner for approval.
         </p>
