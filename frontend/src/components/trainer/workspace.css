@@ -1,3 +1,30 @@
+/* Loaded with the workspace (TrainerLayout), not with every page: none
+   of this applies until TrainerLayout puts `ws` on <html>, so the client
+   app's first paint does not download it (frontend/scripts/check-bundle
+   holds the initial CSS to its budget). */
+
+/* INTER -- the owner & trainer workspace face where the device has no
+   SF Pro (variable 100-900, OFL; licence beside the files in /fonts).
+   On Apple devices `-apple-system` resolves to SF Pro, Apple's own system
+   font, which is what the workspace is modelled on; Inter is the open
+   typeface drawn closest to it, so Windows and Android read the same.
+   Scoped, not global: TrainerLayout puts `ws` on <html> while the
+   workspace is open. DM Sans stays last, so a missing glyph still renders
+   in the app's own face. */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var-latin-ext.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+html.ws { --font-ui: -apple-system, BlinkMacSystemFont, 'Inter', 'DM Sans'; }
+
 /* ══════════════════════════════════════════════════════════════
    WORKSPACE SHELL -- sidebar (computer), top bar + tab bar (phone).
    Breakpoint 1024px: below it a 264px sidebar costs too much width.
@@ -169,3 +196,110 @@ html.ws.light :is(.ws-action, .ws-more-tile) { border-color: transparent; }
   display: inline-grid; place-items: center;
   font-size: 13px; font-weight: 700; color: var(--m-energy); background: var(--m-energy-bg); border: 1px solid var(--line);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   OWNER & TRAINER WORKSPACE -- an iOS-style system.
+
+   Scoped to html.ws (set by TrainerLayout, on <html> so portaled
+   dialogs get it too); the client app keeps its own look. Modelled on
+   Apple's Human Interface Guidelines, because owners asked for an app
+   that feels like the best one on their phone:
+     - SF Pro where the device has it, Inter (its closest open cousin)
+       everywhere else;
+     - Large Title pages, sentence-case section headers -- never the
+       tiny, letter-spaced CAPITALS this workspace was full of;
+     - one type scale: 34 / 22 / 17 / 15 / 13, nothing under 12;
+     - 44px touch targets, filled input fields, an iOS segmented control,
+       grouped cards with hairline separators.
+   Unlayered and prefixed with html.ws, so it outranks the component and
+   utility layers without !important.
+   ═══════════════════════════════════════════════════════════════ */
+html.ws body {
+  font-size: 16px; letter-spacing: -.011em; line-height: 1.45;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Sentence case, everywhere. Small capitals with wide tracking were the
+   single biggest reason the workspace read as "basic and complex": iOS
+   uses sentence case for headers, labels, buttons and badges alike. ── */
+html.ws :is(.uppercase, [class*="tracking-["], .tracking-wider, .tracking-widest, .tracking-wide) {
+  text-transform: none; letter-spacing: -.005em;
+}
+
+/* ── type scale ── */
+html.ws .t-title { font-size: clamp(1.875rem, 1.45rem + 1.2vw, 2.125rem); font-weight: 700; letter-spacing: -.028em; line-height: 1.12; }
+html.ws .t-section, html.ws .ws-section-title { font-size: 1.375rem; font-weight: 700; letter-spacing: -.022em; line-height: 1.2; }
+html.ws .t-card { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.016em; }
+html.ws .t-body { font-size: 1rem; }
+html.ws .t-sub { font-size: .9375rem; line-height: 1.5; color: var(--mute); }
+html.ws .t-micro { font-size: .8125rem; font-weight: 500; text-transform: none; letter-spacing: -.004em; color: var(--mute); }
+html.ws .t-metric, html.ws .stat-value { font-weight: 700; letter-spacing: -.03em; }
+
+/* Section header: what the old ".KICKER" became. A dot and spaced
+   capitals at 11px read as decoration; a clear sentence-case heading
+   reads as structure. */
+html.ws .kicker {
+  font-size: 1.0625rem; font-weight: 600; letter-spacing: -.016em; text-transform: none;
+  color: var(--ink); margin-bottom: .875rem;
+}
+html.ws .kicker::before { display: none; }
+
+html.ws .field-label, html.ws label > .field-label {
+  font-size: .8125rem; font-weight: 600; letter-spacing: -.004em; text-transform: none; color: var(--mute);
+}
+
+/* ── readable floor: nothing in the workspace under ~12px ── */
+html.ws :is(.text-\[8px\], .text-\[9px\], .text-\[9\.5px\], .text-\[10px\], .text-\[10\.5px\]) { font-size: 12px; }
+html.ws :is(.text-\[11px\], .text-\[11\.5px\]) { font-size: 13px; }
+html.ws .text-xs { font-size: 13px; }
+html.ws :is(.text-\[12px\], .text-\[12\.5px\]) { font-size: 13.5px; }
+html.ws :is(.text-\[13px\], .text-\[13\.5px\]) { font-size: 14.5px; }
+html.ws .text-sm { font-size: 15px; }
+
+/* ── surfaces: grouped cards ── */
+html.ws .card { border-radius: 20px; }
+html.ws .row { border-radius: 14px; }
+
+/* ── controls ── */
+html.ws :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger) {
+  font-size: .9375rem; font-weight: 600; letter-spacing: -.01em; min-height: 44px; padding: 10px 20px;
+}
+html.ws .btn-sm { font-size: .875rem !important; min-height: 36px !important; padding: 7px 14px !important; }
+html.ws .btn-lg { font-size: 1.0625rem !important; min-height: 52px !important; }
+
+/* Inputs as iOS fields: filled, borderless until focused, 16px text (any
+   less and iOS Safari zooms the page when a field is tapped). */
+html.ws .input {
+  font-size: 16px; min-height: 46px; border-radius: 12px;
+  background: rgb(var(--tint-rgb) / .065); border-color: transparent;
+}
+html.ws .input:hover { border-color: rgb(var(--tint-rgb) / .12); }
+html.ws .input:focus, html.ws .input:focus-visible {
+  border-color: rgb(var(--accent-rgb) / .7); background: var(--panel);
+  box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .16); outline: none;
+}
+html.ws .input::placeholder { color: var(--faint); }
+
+/* Segmented control, the iOS way: a soft track, the selected segment a
+   raised pill. */
+html.ws .segmented { padding: 3px; border-radius: 12px; border: 0; background: rgb(var(--tint-rgb) / .08); gap: 2px; }
+html.ws .segmented-item { font-size: .875rem; font-weight: 600; letter-spacing: -.01em; min-height: 34px; border-radius: 9px; }
+html.ws .segmented-item[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .14), 0 3px 8px rgb(0 0 0 / .08); }
+
+/* Chips and badges: sentence case, a size you can read. */
+html.ws :is(.chip, .badge) { font-size: .8125rem; font-weight: 600; letter-spacing: -.004em; text-transform: none; }
+
+/* Tables: quiet sentence-case column heads, roomy rows. */
+html.ws th { font-size: .8125rem; font-weight: 600; letter-spacing: -.004em; text-transform: none; color: var(--mute); }
+html.ws td { font-size: .9375rem; }
+
+html.ws .menu-row { font-size: 1rem; font-weight: 500; }
+
+/* Empty states */
+html.ws .empty-state { padding: 44px 24px; }
+html.ws .empty-state-icon { width: 56px; height: 56px; border-radius: 16px; }
+html.ws .empty-state-title { font-size: 1.125rem; font-weight: 600; letter-spacing: -.018em; }
+html.ws .empty-state-body { font-size: .9375rem; max-width: 34ch; line-height: 1.5; }
+
+/* Number-tile labels: sentence case and readable, like every other label here. */
+html.ws .stat-label { font-size: .8125rem; font-weight: 500; letter-spacing: -.004em; text-transform: none; color: var(--mute); }
