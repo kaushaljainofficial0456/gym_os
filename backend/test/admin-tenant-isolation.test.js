@@ -270,3 +270,35 @@ test('GET /admin/errors requires GYM_OWNER/SUPER_ADMIN -- a CLIENT role is rejec
   const res = await fetch(`http://127.0.0.1:${port}/api/business/errors`, { headers: { Authorization: `Bearer ${clientToken}` } });
   assert.equal(res.status, 403, 'requireRole must reject a CLIENT before the route ever runs');
 });
+
+test('GET /business/members shows a member whose only subscription is overdue, not "no plan"', async (t) => {
+  const { db, call, close } = await startAdminApi();
+  t.after(() => close());
+  await db.run(
+    `INSERT INTO subscriptions (id, org_id, client_id, package_id, plan_name, amount, currency, start_date, end_date, status, payment_status, lifecycle_status)
+     VALUES ('sub_due','o1','c1','pkg1','Quarterly',4999,'INR','2026-01-05','2026-04-05','overdue','overdue','ACTIVE')`);
+  const members = await call('GET', '/api/business/members');
+  const row = members.json.members.find((m) => m.id === 'c1');
+  assert.equal(row.subscription_id, 'sub_due', 'the member who owes money is exactly who the owner needs to see');
+  assert.equal(row.plan_name, 'Quarterly');
+  assert.equal(row.payment_status, 'overdue');
+});
+
+test('member check-ins list every member for the day, and a past day is marked on that day', async (t) => {
+  const { db, call, close } = await startAdminApi();
+  t.after(() => close());
+  const list = await call('GET', '/api/business/attendance?date=2026-03-02');
+  assert.equal(list.status, 200);
+  const row = list.json.attendance.find((a) => a.client_id === 'c1');
+  assert.ok(row, 'a member with no mark yet is still listed, so they can be marked');
+  assert.equal(row.marked, false);
+  assert.ok(!list.json.attendance.some((a) => a.client_id === 'c2'), 'never another gym\'s member');
+
+  const mark = await call('POST', '/api/business/attendance', { client_id: 'c1', present: true, date: '2026-03-02' });
+  assert.equal(mark.status, 201);
+  const stored = await db.q('SELECT date, present FROM attendance WHERE client_id = ?', ['c1']);
+  assert.deepEqual(stored.map((r) => [r.date, Number(r.present)]), [['2026-03-02', 1]], 'marked on the day shown, not today');
+
+  const future = await call('POST', '/api/business/attendance', { client_id: 'c1', present: true, date: '2999-01-01' });
+  assert.equal(future.status, 422);
+});

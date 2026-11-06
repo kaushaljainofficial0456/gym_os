@@ -1,0 +1,171 @@
+/* ══════════════════════════════════════════════════════════════
+   WORKSPACE SHELL -- sidebar (computer), top bar + tab bar (phone).
+   Breakpoint 1024px: below it a 264px sidebar costs too much width.
+   Colours are the theme tokens, so light, dark and system all hold.
+   ══════════════════════════════════════════════════════════════ */
+
+.ws-side { display: none; }
+.ws-top {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+.ws-main { min-width: 0; }
+.ws-content {
+  max-width: 1200px; margin: 0 auto;
+  padding: 18px 16px calc(112px + env(safe-area-inset-bottom, 0px));
+}
+.ws-tabs { display: block; }
+
+@media (min-width: 1024px) {
+  .ws-side {
+    display: flex; flex-direction: column;
+    position: fixed; inset: 0 auto 0 0; z-index: 30;
+    width: 264px;
+    padding: 20px 14px 16px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow: hidden;   /* the nav scrolls, not the whole sidebar */
+  }
+  .ws-top, .ws-tabs { display: none; }
+  .ws-main { padding-left: 264px; }
+  .ws-content { padding: 32px 40px 56px; }
+}
+
+/* ── brand ── */
+.ws-brand { display: flex; align-items: center; gap: 12px; padding: 2px 8px 14px; }
+.ws-brand-name {
+  display: block; font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 16px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; color: var(--ink);
+}
+.ws-brand-gym {
+  display: block; margin-top: 3px;
+  font-size: 12.5px; font-weight: 500; letter-spacing: -.004em; color: var(--faint);
+  max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── nav ── */
+/* Brand stays at the top and the account at the bottom; only the list
+   between them scrolls, on a screen too short to show it all. */
+.ws-brand, .ws-side-foot { flex-shrink: 0; }
+.ws-nav {
+  display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0;
+  overflow-y: auto; margin: 0 -6px; padding: 0 6px; scrollbar-width: thin;
+}
+.ws-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.ws-nav-title {
+  padding: 0 12px 4px;
+  font-size: 13px; font-weight: 600; letter-spacing: -.004em; color: var(--faint);
+}
+.ws-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 35px; padding: 0 12px; flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 15px; font-weight: 500; letter-spacing: -.012em; color: var(--mute);
+  transition: background-color .15s ease, color .15s ease;
+}
+.ws-nav-item:hover { background: rgb(var(--tint-rgb) / .06); color: var(--ink); }
+.ws-nav-item.is-active {
+  background: rgb(var(--accent-rgb) / .14);
+  color: var(--ink); font-weight: 600;
+}
+.ws-nav-item.is-active svg { color: var(--accent); }
+.ws-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-badge {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  font-size: 11.5px; font-weight: 800; color: var(--cta-ink, #fff); background: var(--accent);
+}
+
+/* ── footer ── */
+.ws-side-foot { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+.ws-user-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.ws-user-role { font-size: 12px; color: var(--faint); }
+.ws-icon-btn {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  color: var(--mute); border: 1px solid var(--line);
+}
+.ws-icon-btn:hover { color: var(--bad); border-color: rgb(var(--bad-rgb) / .4); }
+
+/* ══════════════════════════════════════════════════════════════
+   SHARED WORKSPACE PIECES -- quick-action tiles, section headers
+   ══════════════════════════════════════════════════════════════ */
+.ws-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) { .ws-actions { gap: 12px; } }
+@media (min-width: 1280px) { .ws-actions { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+
+.ws-action {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 108px; padding: 14px 8px;
+  border-radius: 20px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: var(--card-shadow);
+  text-align: center;
+  transition: transform .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.ws-action:hover { border-color: rgb(var(--tint-rgb) / .2); transform: translateY(-1px); }
+.ws-action:active { transform: scale(.97); }
+.ws-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-action-icon {
+  width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
+  background: rgb(var(--tint-rgb) / .07); color: var(--ink);
+}
+.ws-action.is-accent .ws-action-icon { background: rgb(var(--accent-rgb) / .16); color: var(--accent); }
+.ws-action-label { font-size: 13px; font-weight: 600; line-height: 1.2; color: var(--ink); letter-spacing: -.01em; }
+.ws-action .ws-badge { position: absolute; top: 10px; right: 10px; }
+@media (max-width: 400px) {
+  .ws-action { min-height: 92px; gap: 8px; padding: 12px 4px; border-radius: 16px; }
+  .ws-action-icon { width: 40px; height: 40px; border-radius: 12px; }
+  .ws-action-label { font-size: 12px; }
+}
+
+.ws-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.ws-section-title { font-size: 1.1875rem; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.ws-section-link { font-size: 13.5px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.ws-section-link:hover { text-decoration: underline; }
+
+/* More page: every section as tiles */
+.ws-more-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) { .ws-more-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .ws-more-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ws-more-tile {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 64px; padding: 12px; border-radius: 16px;
+  background: var(--panel); border: 1px solid var(--line);
+  font-size: 14.5px; font-weight: 700; color: var(--ink);
+}
+.ws-more-tile:hover { border-color: rgb(var(--accent-rgb) / .45); }
+.ws-more-tile .ws-action-icon { width: 38px; height: 38px; border-radius: 11px; }
+
+/* ══════════════════════════════════════════════════════════════
+   HUE CHIPS -- the client app's language: a thin line icon in its
+   section's muted hue, on a soft tint of that hue (MetricTile in
+   pages/client/Progress.jsx). --t is the hue, --tb its tint, --s the size.
+   Solid saturated tiles with white glyphs read as toy-like next to it.
+   ══════════════════════════════════════════════════════════════ */
+.ws-tile {
+  --s: 28px;
+  width: var(--s); height: var(--s); flex-shrink: 0;
+  border-radius: 999px;
+  display: grid; place-items: center;
+  color: var(--t, var(--ink));
+  background: var(--tb, rgb(var(--tint-rgb) / .06));
+  border: 1px solid var(--line);
+}
+
+/* The sidebar stays monochrome, like every premium sidebar: the page you
+   are on is the one in full ink. */
+.ws-nav-item svg { color: var(--faint); }
+.ws-nav-item:hover svg, .ws-nav-item.is-active svg { color: var(--ink); }
+.ws-nav-item.is-active { background: rgb(var(--tint-rgb) / .08); color: var(--ink); }
+
+/* Home shortcuts and More tiles carry a bigger tile. */
+.ws-action-icon.ws-tile { --s: 46px; }
+.ws-more-tile .ws-action-icon.ws-tile { --s: 36px; }
+@media (max-width: 400px) { .ws-action-icon.ws-tile { --s: 42px; } }
+html.ws.light :is(.ws-action, .ws-more-tile) { border-color: transparent; }
+.ws-count {
+  min-width: 24px; height: 24px; padding: 0 8px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  font-size: 13px; font-weight: 700; color: var(--m-energy); background: var(--m-energy-bg); border: 1px solid var(--line);
+}

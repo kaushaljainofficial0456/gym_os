@@ -32,6 +32,8 @@ import ArrivalHost from './components/ArrivalHost.jsx';
 const loadTrainerLayout = () => import('./pages/trainer/TrainerLayout.jsx');
 const loadClientLayout = () => import('./pages/client/ClientLayout.jsx');
 const TrainerLayout = lazy(loadTrainerLayout);
+const TrainerMore = lazy(() => import('./pages/trainer/More.jsx'));
+const AttendanceHub = lazy(() => import('./pages/trainer/AttendanceHub.jsx'));
 const ClientLayout = lazy(loadClientLayout);
 const storedRole = getStoredUser()?.role;
 if (storedRole) (isTrainerRole(storedRole) ? loadTrainerLayout : loadClientLayout)();
@@ -81,7 +83,6 @@ const Membership = lazy(() => import('./pages/client/Membership.jsx'));
 const Plan = lazy(() => import('./pages/client/Plan.jsx'));
 const DailyHistory = lazy(() => import('./pages/client/DailyHistory.jsx'));
 const SessionHistory = lazy(() => import('./pages/client/SessionHistory.jsx'));
-const GymAttendance = lazy(() => import('./pages/trainer/GymAttendance.jsx'));
 const GymCrowd = lazy(() => import('./pages/trainer/GymCrowd.jsx'));
 const AccessControl = lazy(() => import('./pages/trainer/AccessControl.jsx'));
 const MyAttendance = lazy(() => import('./pages/trainer/MyAttendance.jsx'));
@@ -306,6 +307,7 @@ export default function App() {
         {/* The same screens for every role: anyone can host or compete. */}
         <Route path="tournaments/*" element={page(TournamentArea)} />
         <Route path="clients" element={page(Clients)} />
+        <Route path="more" element={page(TrainerMore)} />
         <Route path="clients/:id" element={page(ClientProfile)} />
         <Route path="workouts" element={page(WorkoutBuilder)} />
         <Route path="nutrition" element={page(NutritionBuilder)} />
@@ -325,7 +327,7 @@ export default function App() {
             the dashboard, after which the record vanished from their
             view. Both endpoints were already scoped server-side, so this
             is a UI that finally matches what the API always allowed. */}
-        <Route path="attendance" element={isOwner ? page(GymAttendance) : page(MyAttendance)} />
+        <Route path="attendance" element={isOwner ? page(AttendanceHub) : page(MyAttendance)} />
         {/* Owner-only. A trainer reaching these by URL gets the same
             403 the API returns -- the route guard is a convenience, the
             permission check on the server is the control. */}

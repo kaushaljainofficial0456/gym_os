@@ -4,6 +4,7 @@ import { useFetch, fmt1 } from '../../utils.js';
 import { Card, Kicker, Spinner, ErrorState, ArrowRightIcon, PageSkeleton } from '../../components/UI.jsx';
 import { AdherenceBreakdown, TrendChart } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
+import Select from '../../components/Select.jsx';
 
 export default function Reports() {
   const clients = useFetch(() => api('/clients?sort=name'));
@@ -53,14 +54,13 @@ export default function Reports() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl">Weekly reports</h1>
-          <p className="text-mute text-sm">A data-backed week in review, generated from real tracked data — send it to the client in one tap.</p>
+          <h1 className="t-title">Client reports</h1>
+          <p className="t-sub mt-1.5">A client's week in review, ready to send.</p>
         </div>
-        <select className="input max-w-xs" aria-label="Choose a client to report on"
-                value={clientId} onChange={(e) => load(e.target.value)}>
-          <option value="">Choose client…</option>
-          {(clients.data?.clients || []).map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-        </select>
+        <div className="w-full max-w-xs">
+          <Select aria-label="Choose a client to report on" value={clientId} onChange={(v) => load(v)} placeholder="Choose a client"
+            options={(clients.data?.clients || []).map((c) => ({ value: c.id, label: c.name, hint: String(c.goal || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (x) => x.toUpperCase()) }))} />
+        </div>
       </div>
 
       {loading && <Spinner label="Crunching the week…" />}

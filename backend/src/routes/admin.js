@@ -342,23 +342,40 @@ export default function adminRoutes(db) {
     res.status(201).json({ ok: true, paymentId: payId, receipt: receipt ? { number: receipt.invoice_number } : null });
   });
 
+  /* MEMBER CHECK-INS for one of the gym's days: EVERY member, with their
+     mark if they have one. It used to return only members who already had
+     a row that day, so on a new day the list was empty and there was nobody
+     to mark -- the card could display attendance but never take it. And
+     "today" was UTC's day, not the gym's. */
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
   r.get('/attendance', async (req, res) => {
-    const d = req.query.date || dayKey();
+    const today = dayKey(new Date(), req.tz);
+    const d = DAY.test(String(req.query.date || '')) ? req.query.date : today;
     const rows = await db.q(
-      `SELECT a.*, u.name AS client_name FROM attendance a
-         JOIN clients c ON c.id = a.client_id
+      `SELECT c.id AS client_id, u.name AS client_name, a.id, a.present, a.date
+         FROM clients c
          JOIN users u ON u.id = c.user_id
-        WHERE a.org_id = ? AND a.date = ?`, [req.orgId, d]);
-    res.json({ attendance: rows });
+         LEFT JOIN attendance a ON a.client_id = c.id AND a.org_id = c.org_id AND a.date = ?
+        WHERE c.org_id = ?
+        ORDER BY u.name`, [d, req.orgId]);
+    res.json({
+      date: d,
+      attendance: rows.map((r) => ({ ...r, present: r.present == null ? null : Number(r.present) === 1, marked: r.present != null })),
+    });
   });
 
   r.post('/attendance', validate(z.object({
     client_id: z.string().min(1),
-    present: z.boolean().default(true)
+    present: z.boolean().default(true),
+    // The day being marked. It was always today (and UTC's today), so
+    // correcting yesterday from the date picker silently changed TODAY.
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })), async (req, res) => {
     const client = await requireOrgClient(req, res, req.body.client_id);
     if (!client) return;
-    const d = dayKey();
+    const today = dayKey(new Date(), req.tz);
+    if (req.body.date && req.body.date > today) return res.status(422).json({ error: 'You cannot mark attendance for a future day.' });
+    const d = req.body.date || today;
     const existing = await db.q1('SELECT id FROM attendance WHERE org_id = ? AND client_id = ? AND date = ?',
       [req.orgId, req.body.client_id, d]);
     if (existing) {
@@ -583,7 +600,13 @@ export default function adminRoutes(db) {
       `SELECT c.id, u.name, c.status, c.goal, c.current_weight, s.id AS subscription_id, s.plan_name, s.start_date, s.end_date, s.payment_status, s.lifecycle_status
          FROM clients c
          JOIN users u ON u.id = c.user_id
-         LEFT JOIN subscriptions s ON s.client_id = c.id AND s.status = 'active'
+         LEFT JOIN subscriptions s ON s.id = (
+             -- The member's CURRENT subscription: active if they have one,
+             -- otherwise the latest (an overdue one is exactly the member
+             -- an owner needs to see, and joining on status = 'active'
+             -- dropped them from this list as "no plan").
+             SELECT s2.id FROM subscriptions s2 WHERE s2.client_id = c.id
+              ORDER BY CASE WHEN s2.status = 'active' THEN 0 ELSE 1 END, s2.start_date DESC, s2.id DESC LIMIT 1)
         WHERE c.org_id = ? ORDER BY u.name`, [req.orgId]);
     /* Same derivation the client's own membership card uses. Without it
        the owner's roster and the member's own screen disagree about the
@@ -625,7 +648,13 @@ export default function adminRoutes(db) {
          FROM clients c
          JOIN users u ON u.id = c.user_id
          LEFT JOIN users tu ON tu.id = c.trainer_id
-         LEFT JOIN subscriptions s ON s.client_id = c.id AND s.status = 'active'
+         LEFT JOIN subscriptions s ON s.id = (
+             -- The member's CURRENT subscription: active if they have one,
+             -- otherwise the latest (an overdue one is exactly the member
+             -- an owner needs to see, and joining on status = 'active'
+             -- dropped them from this list as "no plan").
+             SELECT s2.id FROM subscriptions s2 WHERE s2.client_id = c.id
+              ORDER BY CASE WHEN s2.status = 'active' THEN 0 ELSE 1 END, s2.start_date DESC, s2.id DESC LIMIT 1)
         WHERE c.org_id = ? ORDER BY u.name`, [req.orgId]);
     sendCsv(res, `members-${dayKey(new Date(), req.tz)}.csv`,
       ['Name', 'Email', 'Phone', 'Goal', 'Coaching status', 'Trainer', 'Joined', 'Plan', 'Plan start', 'Plan end', 'Payment', 'Membership'],

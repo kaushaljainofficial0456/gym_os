@@ -13,9 +13,10 @@ import { useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, Modal } from '../UI.jsx';
+import Select from '../Select.jsx';
 
 const STATUS = {
-  NOT_CONNECTED: { title: 'Not set up yet', tone: 'var(--mute)', body: 'Members pay at the front desk until you finish this. Record those payments on the Business page; each gets a receipt.' },
+  NOT_CONNECTED: { title: 'Not set up yet', tone: 'var(--mute)', body: 'Add your bank details so members can pay you online. Until then, record desk payments on Payments.' },
   KYC_PENDING: { title: 'Razorpay is checking your details', tone: 'var(--warn)', body: 'This usually takes one or two working days. Members pay at the desk until then.' },
   LIMITED: { title: 'Razorpay needs something from you', tone: 'var(--bad)', body: 'Fix what is listed below and send your details again. Members pay at the desk until then.' },
   ACTIVE: { title: 'Members can pay you online', tone: 'var(--good)', body: 'Payments settle to your bank account through Razorpay.' },
@@ -85,16 +86,16 @@ export default function PayoutSetup() {
   };
 
   return (
-    <Card className="p-5">
-      <div className="kicker">Getting paid</div>
+    <Card className="p-5 sm:p-6">
+      <h2 className="ws-section-title mb-1">Getting paid</h2>
       {account.loading ? (
         <div className="t-sub">Loading…</div>
       ) : account.error ? (
         <div className="field-error" role="alert">{account.error.message}</div>
       ) : (
         <>
-          <div className="font-grotesk font-bold" style={{ color: st.tone }}>{st.title}</div>
-          <p className="text-sm mt-1" style={{ color: 'var(--mute)' }}>{st.body}</p>
+          <div className="text-[16px] font-extrabold" style={{ color: st.tone }}>{st.title}</div>
+          <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>{st.body}</p>
           {a?.businessName && <p className="text-xs mt-2" style={{ color: 'var(--faint)' }}>Paid to {a.legalName || a.businessName}</p>}
           {a?.status === 'LIMITED' && a.requirements?.length > 0 && (
             <ul className="mt-2 space-y-1 text-sm" style={{ color: 'var(--ink)' }}>
@@ -129,9 +130,8 @@ export default function PayoutSetup() {
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Business type">
-                <select className="input" value={f.businessType} onChange={set('businessType')}>
-                  {BUSINESS_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                <Select aria-label="Business type" value={f.businessType} onChange={(v) => set('businessType')({ target: { value: v, type: 'select' } })}
+                  options={BUSINESS_TYPES.map(([value, label]) => ({ value, label }))} />
               </Field>
               <Field label="PAN">
                 <input className="input uppercase" value={f.pan} onChange={set('pan')} maxLength={10} placeholder="ABCDE1234F" autoComplete="off" />

@@ -25,7 +25,7 @@ const tooltipBase = {
   border: '1px solid var(--line)',
   borderRadius: 12,
   fontSize: 12,
-  fontFamily: "'DM Sans', system-ui, sans-serif",
+  fontFamily: 'var(--font-ui), system-ui, sans-serif',
   color: 'var(--ink)',
   padding: '8px 12px',
 };
@@ -42,8 +42,19 @@ function getTooltipStyle() {
 
 export function WeightChart({ data }) {
   if (!data || !data.length) return null;
+  /* One reading per day (the last), only plausible body weights, to one
+     decimal. A unit mix-up stored 0.18 kg next to 45.3 kg on the same day,
+     and the line dived to the floor and back with the axis at -1. */
+  const byDay = new Map();
+  for (const d of data) {
+    const w = Number(d.weight);
+    if (!d.date || !Number.isFinite(w) || w < 20 || w > 500) continue;
+    byDay.set(String(d.date).slice(0, 10), { ...d, weight: Math.round(w * 10) / 10 });
+  }
+  const clean = [...byDay.values()];
+  if (!clean.length) return null;
   // "9 Aug", not "08-09": the two-digit form reads as either order.
-  const rows = data.map((d, i) => ({
+  const rows = clean.map((d, i) => ({
     i, weight: d.weight, date: d.date,
     label: new Date(`${d.date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
   }));

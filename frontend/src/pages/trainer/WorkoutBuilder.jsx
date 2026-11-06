@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryAction } from '../../components/trainer/useQueryAction.js';
 import { api } from '../../api.js';
 import ExercisePicker, { prettyName } from '../../components/trainer/ExercisePicker.jsx';
 import ExerciseCard, { prescriptionLine } from '../../components/trainer/ExerciseCard.jsx';
 import TemplateList from '../../components/trainer/TemplateList.jsx';
+import Select from '../../components/Select.jsx';
 import AssignPreview from '../../components/trainer/AssignPreview.jsx';
 import { useFetch } from '../../utils.js';
-import { Card, Kicker, ErrorState, Modal, PageSkeleton, CheckIcon, useConfirm } from '../../components/UI.jsx';
+import { Card, Kicker, Empty, ErrorState, Modal, PageSkeleton, CheckIcon, useConfirm } from '../../components/UI.jsx';
 import MuscleBody3D from '../../components/anatomy/MuscleBody3D.jsx';
 
 const emptyEx = () => ({ exercise_id: null, name: '', sets: 3, reps: '10', weight: 'BW', rest_sec: 90, tempo: '', notes: '' });
@@ -134,9 +136,14 @@ const SPLIT_PRESETS = {
 // pick a sensible template default for a day name (best-effort by type)
 // resolved with the loaded templates list via makeTemplateResolver()
 
+const TYPE_CHOICES = ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full body', 'Core', 'Cardio'];
+const goalLabel = (g) => String(g || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+
 export default function WorkoutBuilder() {
   const tpl = useFetch(() => api('/workouts/templates'));
   const clients = useFetch(() => api('/clients?sort=name'));
+  // ?new=1 (Home's "New workout") opens a blank template once the page has loaded.
+  useQueryAction('new', () => startNew(), !tpl.loading && !clients.loading);
   // The full exercise library (287 rows, ~128KB) is ONLY used by the "pick
   // by muscle" 3D picker below (pickMatches) — everything else on this page
   // (the "link from library" combobox) uses the debounced, capped
@@ -510,19 +517,19 @@ export default function WorkoutBuilder() {
       {confirmDialog}
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl">Workout builder</h1>
-          <p className="text-mute text-sm">Build templates, duplicate them, and assign to clients in one flow.</p>
+          <h1 className="t-title">Workouts</h1>
+          <p className="t-sub mt-1.5">Templates and weekly programs for your clients.</p>
         </div>
         <button className="btn-primary" onClick={startNew}>+ New template</button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* template list */}
-        <Card className="lg:col-span-2 self-start" data-tour="trainer-workouts-templates">
-          <Kicker>Your templates</Kicker>
+        <Card className="lg:col-span-2 self-start sm:p-6 overflow-hidden" data-tour="trainer-workouts-templates">
+          <h2 className="ws-section-title mb-3">Templates</h2>
           <TemplateList
             templates={templates}
-            selectedId={selectedId}
+            selectedId={editing ? selectedId : null}
             onOpen={openTemplate}
             onDuplicate={duplicate}
             onAssign={(t) => { openTemplate(t); setAssignOpen(true); }}
@@ -531,24 +538,34 @@ export default function WorkoutBuilder() {
         </Card>
 
         {/* editor */}
-        <Card className="lg:col-span-3">
-          <Kicker>{editing?.id ? 'Edit template' : 'New template'}</Kicker>
+        <Card className="lg:col-span-3 sm:p-6">
+          {editing && <h2 className="ws-section-title mb-4">{editing.id ? 'Edit template' : 'New template'}</h2>}
           {editing ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Name</label>
-                  <input className="input" value={editing.name} onChange={(e) => patch('name', e.target.value)} placeholder="Push Day A" aria-label="Template name" />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Type</label>
-                  <input className="input" value={editing.type} onChange={(e) => patch('type', e.target.value)} placeholder="Push / Pull / Legs" aria-label="Template type" />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Notes</label>
-                  <input className="input" value={editing.notes} onChange={(e) => patch('notes', e.target.value)} placeholder="Optional coaching notes" aria-label="Template notes" />
+            <div className="space-y-5">
+              <label className="block">
+                <span className="field-label">Name</span>
+                <input className="input mt-1.5 !text-[18px] !font-semibold" value={editing.name} onChange={(e) => patch('name', e.target.value)} placeholder="Push day A" aria-label="Template name" />
+              </label>
+              {/* Type as one tap: free text gave "Push", "push", "PUSH DAY"
+                  and three filter chips for one kind of session. */}
+              <div>
+                <span className="field-label" id="tpl-type-label">Type</span>
+                <div className="flex flex-wrap gap-1.5 mt-1.5" role="group" aria-labelledby="tpl-type-label">
+                  {[...TYPE_CHOICES, ...(editing.type && !TYPE_CHOICES.some((c) => c.toLowerCase() === String(editing.type).toLowerCase()) ? [editing.type] : [])].map((t) => {
+                    const on = String(editing.type || '').toLowerCase() === t.toLowerCase();
+                    return (
+                      <button key={t} type="button" aria-pressed={on} onClick={() => patch('type', t)}
+                        className="rounded-full px-3.5 text-[14px] font-semibold" style={{ minHeight: 36, background: on ? 'var(--ink)' : 'rgb(var(--tint-rgb) / .07)', color: on ? 'var(--bg)' : 'var(--mute)' }}>
+                        {t}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+              <label className="block">
+                <span className="field-label">Notes for the client (optional)</span>
+                <input className="input mt-1.5" value={editing.notes} onChange={(e) => patch('notes', e.target.value)} placeholder="e.g. Warm up 10 minutes first" aria-label="Template notes" />
+              </label>
 
               <div className="space-y-2">
                 {editing.exercises.map((ex, i) => (
@@ -596,22 +613,21 @@ export default function WorkoutBuilder() {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2 pt-1">
-                <button className="btn-primary" onClick={saveTemplate} disabled={saving}>
-                  {saving ? 'Saving…' : editing.id ? 'Update template' : 'Save template'}
+              <div className="flex flex-wrap items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--line)' }}>
+                <button className="btn-primary mt-3" onClick={saveTemplate} disabled={saving}>
+                  {saving ? 'Saving…' : editing.id ? 'Save changes' : 'Save template'}
                 </button>
                 {/* Seeing the session the way the client receives it,
                     before sending it. The editor is a form; this is the
                     workout. */}
-                <button className="btn" onClick={() => setPreviewOpen(true)}>Preview</button>
-                <button className="btn" onClick={() => setAssignOpen(true)}>Assign to client…</button>
-                <button className="btn-ghost btn-sm !text-mute" onClick={() => setEditing(null)}>Cancel</button>
+                <button className="btn mt-3" onClick={() => setPreviewOpen(true)}>Preview</button>
+                <button className="btn mt-3" onClick={() => setAssignOpen(true)}>Assign to client</button>
+                <button className="btn-ghost mt-3 ml-auto" style={{ color: 'var(--mute)' }} onClick={() => setEditing(null)}>Cancel</button>
               </div>
             </div>
           ) : (
-            <div className="text-center py-12 text-mute text-sm">
-              Pick a template to view it, or press <span className="text-gold">+ New template</span> to build one.
-            </div>
+            <Empty icon="strength" title="Pick a template" hint="Choose one from the list to edit it, or start fresh."
+              action={<button className="btn-primary" onClick={startNew}>+ New template</button>} />
           )}
         </Card>
       </div>
@@ -620,29 +636,26 @@ export default function WorkoutBuilder() {
       <Card data-tour="trainer-workouts-programs">
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
-            <Kicker>Training programs</Kicker>
-            <p className="text-mute text-sm">Assign a weekly split to a client — their workout page then serves the right session for each day automatically.</p>
+            <h2 className="ws-section-title">Weekly programs</h2>
+            <p className="t-sub mt-1">Give a client a weekly split. Their app shows the right session each day.</p>
           </div>
           <button className="btn-primary" disabled={!progClient} onClick={() => openProgramModal(currentProg)}>{currentProg ? 'Replace program' : 'Create program'}</button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-4 mt-4">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
+            <label className="field-label block mb-1.5">Client</label>
             {/* The <label> above is a SIBLING with no htmlFor, so it labels
                 this visually and not programmatically -- a screen reader
                 announced an unnamed combo box. */}
             {/* A client list that failed to load is not a gym with no clients. */}
             {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
-              <select className="input" aria-label="Client for this program"
-                      value={progClient} onChange={(e) => loadProgram(e.target.value)}>
-                <option value="">Choose client…</option>
-                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-              </select>
+              <Select aria-label="Client for this program" value={progClient} onChange={(v) => loadProgram(v)}
+                placeholder="Choose a client" options={clientList.map((c) => ({ value: c.id, label: c.name, hint: goalLabel(c.goal) }))} />
             )}
           </div>
           <div className="rounded-xl border border-line bg-tint/[.02] p-4">
             {!progClient ? (
-              <div className="text-center text-mute text-sm py-6">Select a client to see their current program.</div>
+              <div className="text-center text-[15px] font-semibold py-6" style={{ color: 'var(--mute)' }}>Choose a client to see their program.</div>
             ) : currentProg === null ? (
               <div className="text-center text-mute text-sm py-6">Loading…</div>
             ) : currentProg ? (
@@ -662,7 +675,7 @@ export default function WorkoutBuilder() {
                 </div>
               </div>
             ) : (
-              <div className="text-center text-mute text-sm py-4">No program yet — create one to drive this client's daily sessions.</div>
+              <div className="text-center text-[15px] font-semibold py-4" style={{ color: 'var(--mute)' }}>No program yet. Create one for this client.</div>
             )}
           </div>
         </div>
@@ -673,11 +686,11 @@ export default function WorkoutBuilder() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Program name</label>
+                <label className="field-label block mb-1.5">Program name</label>
                 <input className="input" value={progForm.name} onChange={(e) => setProgForm((f) => ({ ...f, name: e.target.value }))} placeholder="Push / Pull / Legs" />
               </div>
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Split preset</label>
+                <label className="field-label block mb-1.5">Split preset</label>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(SPLIT_PRESETS).map(([s, preset]) => (
                     <button key={s} onClick={() => setProgForm((f) => ({
@@ -709,11 +722,11 @@ export default function WorkoutBuilder() {
                     <div className="flex gap-2 mt-2">
                       <input className="input !py-1.5 !px-2 text-[10px] flex-1" value={d.focus} placeholder="Muscles: CHEST, SHOULDERS"
                         onChange={(e) => setProgForm((f) => ({ ...f, days: f.days.map((x, j) => j === i ? { ...x, focus: e.target.value } : x) }))} />
-                      <select className="input !py-1.5 !px-2 text-[10px] w-36 shrink-0" value={d.template_id}
-                        onChange={(e) => setProgForm((f) => ({ ...f, days: f.days.map((x, j) => j === i ? { ...x, template_id: e.target.value } : x) }))}>
-                        <option value="">No template</option>
-                        {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
+                      <div className="w-44 shrink-0">
+                        <Select aria-label={`Template for ${d.name || 'this day'}`} value={d.template_id}
+                          onChange={(v) => setProgForm((f) => ({ ...f, days: f.days.map((x, j) => j === i ? { ...x, template_id: v } : x) }))}
+                          options={[{ value: '', label: 'No template' }, ...templates.map((t) => ({ value: t.id, label: t.name }))]} />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -778,17 +791,14 @@ export default function WorkoutBuilder() {
       <Modal open={assignOpen} onClose={() => setAssignOpen(false)} title={`Assign "${editing?.name || 'workout'}"`}>
         <div className="space-y-3">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Client</label>
+            <label className="field-label block mb-1.5">Client</label>
             {clients.error ? <ErrorState error={clients.error} onRetry={clients.reload} /> : (
-              <select className="input" aria-label="Client to assign this workout to"
-                      value={assignClient} onChange={(e) => setAssignClient(e.target.value)}>
-                <option value="">Choose client…</option>
-                {clientList.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.goal}</option>)}
-              </select>
+              <Select aria-label="Client to assign this workout to" value={assignClient} onChange={setAssignClient}
+                placeholder="Choose a client" options={clientList.map((c) => ({ value: c.id, label: c.name, hint: goalLabel(c.goal) }))} />
             )}
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Schedule date (optional)</label>
+            <label className="field-label block mb-1.5">Schedule date (optional)</label>
             <input type="date" className="input" value={assignDate} onChange={(e) => setAssignDate(e.target.value)} />
           </div>
           {/* Chosen client + this template's exercises = the one place
@@ -832,32 +842,29 @@ export default function WorkoutBuilder() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Exercise name*</label>
+              <label className="field-label block mb-1.5">Exercise name*</label>
               <input className="input" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Cable Crossover" />
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Primary muscle*</label>
+              <label className="field-label block mb-1.5">Primary muscle*</label>
               <input className="input" value={addForm.primary_muscle} onChange={(e) => setAddForm((f) => ({ ...f, primary_muscle: e.target.value }))} placeholder="Chest" />
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Equipment</label>
+              <label className="field-label block mb-1.5">Equipment</label>
               <input className="input" value={addForm.equipment} onChange={(e) => setAddForm((f) => ({ ...f, equipment: e.target.value }))} placeholder="Cable" />
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Difficulty</label>
-              <select className="input" value={addForm.difficulty} onChange={(e) => setAddForm((f) => ({ ...f, difficulty: e.target.value }))}>
-                <option>BEGINNER</option>
-                <option>INTERMEDIATE</option>
-                <option>ADVANCED</option>
-              </select>
+              <label className="field-label block mb-1.5">Difficulty</label>
+              <Select aria-label="Difficulty" value={addForm.difficulty} onChange={(v) => setAddForm((f) => ({ ...f, difficulty: v }))}
+                options={[{ value: 'BEGINNER', label: 'Beginner' }, { value: 'INTERMEDIATE', label: 'Intermediate' }, { value: 'ADVANCED', label: 'Advanced' }]} />
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Animation key</label>
+              <label className="field-label block mb-1.5">Animation key</label>
               <input className="input" value={addForm.animation_key} onChange={(e) => setAddForm((f) => ({ ...f, animation_key: e.target.value }))} placeholder="bench_press / squat / fallback" />
             </div>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-mute font-grotesk mb-1">Instructions / coaching cues</label>
+            <label className="field-label block mb-1.5">Instructions / coaching cues</label>
             <textarea className="input" rows={3} value={addForm.instructions} onChange={(e) => setAddForm((f) => ({ ...f, instructions: e.target.value }))} />
           </div>
           <div className="flex gap-2">

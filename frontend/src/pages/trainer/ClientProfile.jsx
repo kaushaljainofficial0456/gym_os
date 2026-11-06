@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
-import { useFetch, GOAL_LABEL, fmt1, fmtK, cls, localDateKey, weightJump } from '../../utils.js';
+import { useFetch, GOAL_LABEL, fmt1, fmtK, cls, localDateKey, weightJump, kg1, fmtDayYear } from '../../utils.js';
 import { Card, Kicker, Ring, Bar, Spinner, ErrorState, Modal, StatusChip, MacroPill, Seg, CheckIcon, XIcon, PageSkeleton, useConfirm } from '../../components/UI.jsx';
 import { WeightChart, AdherenceBreakdown } from '../../components/charts.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import Logo from '../../components/Logo.jsx';
 import MembershipTab from '../../components/trainer/MembershipTab.jsx';
+import Select from '../../components/Select.jsx';
 
 // Map trainer client-detail response to the shape the existing components expect.
 // Owner/admin uses the existing /clients/:id/overview endpoint (returns all org data).
@@ -98,7 +99,7 @@ export default function ClientProfile() {
                   for why: trainer scope repoints font-grotesk to DM Sans
                   for supporting text, so a name-as-headline stays on the
                   bolder face on purpose. */}
-              <h1 className="font-brand font-black text-3xl tracking-tight" style={{ color: 'var(--ink)' }}>{client.name}</h1>
+              <h1 className="t-title">{client.name}</h1>
               <StatusChip status={client.status} />
             </div>
             <div className="text-xs text-mute mt-1 font-grotesk">
@@ -111,8 +112,8 @@ export default function ClientProfile() {
                 client.age && `${client.age} yrs`,
                 GOAL_LABEL[client.goal],
                 client.bmi != null && `BMI ${client.bmi}`,
-                client.targetWeight != null && `Goal ${client.targetWeight} kg`,
-                client.goalDate && `by ${client.goalDate.slice(0, 10)}`,
+                client.targetWeight != null && `Goal ${kg1(client.targetWeight)} kg`,
+                client.goalDate && `by ${fmtDayYear(client.goalDate)}`,
               ].filter(Boolean).join(' · ')}
             </div>
             {delta !== null && (
@@ -133,8 +134,8 @@ export default function ClientProfile() {
           <div className="flex gap-7 text-center">
             {[['Start', startW], ['Current', curW], ['Target', tgtW]].map(([l, v], i) => (
               <div key={l} className="anim-fadeUp" style={{ animationDelay: `${100 + i * 80}ms` }}>
-                <div className="font-grotesk font-bold text-2xl tracking-tight">{v ?? '—'}</div>
-                <div className="text-[9px] uppercase tracking-widest text-mute font-grotesk">{l} kg</div>
+                <div className="font-grotesk font-extrabold text-[26px] leading-none tabular-nums" style={{ color: 'var(--ink)' }}>{v == null ? '—' : kg1(v)}</div>
+                <div className="text-[13px] mt-1.5" style={{ color: 'var(--mute)' }}>{l} kg</div>
               </div>
             ))}
           </div>
@@ -152,14 +153,14 @@ export default function ClientProfile() {
           <div className="mt-6 relative">
             <div className="meter" style={{ height: 8 }}>
               <span className="meter-fill"
-                style={{ width: `${progress ?? 0}%`, background: 'var(--accent-grad)' }} />
+                style={{ width: `${progress ?? 0}%`, background: 'var(--accent)' }} />
             </div>
             <div className="flex justify-between mt-2 text-[10px] text-faint font-grotesk tabular-nums">
-              <span>Start {startW} kg</span>
+              <span>Start {kg1(startW)} kg</span>
               <span className="font-semibold" style={{ color: progress == null ? 'var(--faint)' : 'var(--accent)' }}>
                 {progress == null ? 'no current weight logged' : `${Math.round(progress)}% of journey`}
               </span>
-              <span>Target {tgtW} kg</span>
+              <span>Target {kg1(tgtW)} kg</span>
             </div>
           </div>
         )}
@@ -437,9 +438,9 @@ function OverviewTab({ client, profile, adherence, rules, weights, measurements,
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
           {measurements.slice(0, 3).map((m) => (
             <div key={m.id} className="rounded-xl border border-line bg-tint/[.02] p-3">
-              <div className="text-[9px] uppercase tracking-widest text-mute font-grotesk">{m.taken_at.slice(0, 10)}</div>
-              <div className="font-grotesk font-bold mt-1">{m.weight ?? '—'} kg</div>
-              {m.waist && <div className="text-[10px] text-mute">Waist {m.waist} cm</div>}
+              <div className="text-[13px]" style={{ color: 'var(--mute)' }}>{fmtDayYear(m.taken_at)}</div>
+              <div className="text-[17px] font-bold mt-0.5 tabular-nums" style={{ color: 'var(--ink)' }}>{m.weight == null ? '—' : `${kg1(m.weight)} kg`}</div>
+              {m.waist && <div className="text-[13px]" style={{ color: 'var(--mute)' }}>Waist {kg1(m.waist)} cm</div>}
             </div>
           ))}
         </div>
@@ -488,7 +489,7 @@ function WorkoutsTab({ clientId, history, onChanged }) {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="font-grotesk font-semibold">{w.name}</div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-mute font-grotesk">{w.scheduled_date}</span>
+                <span className="text-[13px] text-mute">{fmtDayYear(w.scheduled_date)}</span>
                 <span className={cls('chip', w.status === 'completed' ? '!text-good !border-good/40' : w.status === 'missed' ? '!text-bad !border-bad/40' : '!text-gold !border-gold/40')}>
                   {w.status}
                 </span>
@@ -528,9 +529,12 @@ function AssignWorkout({ clientId, templates, onClose, onDone }) {
         method: 'POST',
         body: JSON.stringify({
           name: t.name, day_label: t.name, scheduled_date: date,
+          // The same shape the Workout builder sends: a stored template
+          // carries NULL tempo/notes, which are "not set", not values.
           exercises: t.exercises.map((e) => ({
-            exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps,
-            weight: e.weight, rest_sec: e.rest_sec, tempo: e.tempo, notes: e.notes
+            exercise_id: e.exercise_id || undefined, name: e.name,
+            sets: Number(e.sets) || 3, reps: String(e.reps ?? ''), weight: String(e.weight ?? ''),
+            rest_sec: Number(e.rest_sec) || 90, tempo: e.tempo || undefined, notes: e.notes || undefined,
           }))
         })
       });
@@ -549,9 +553,8 @@ function AssignWorkout({ clientId, templates, onClose, onDone }) {
             {err}
           </div>
         )}
-        <select className="input" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-          {templates.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.exercises.length} exercises</option>)}
-        </select>
+        <Select aria-label="Workout template" value={templateId} onChange={setTemplateId}
+          options={templates.map((x) => ({ value: x.id, label: x.name, hint: `${x.exercises.length} exercises` }))} />
         <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         {t && (
           <div className="rounded-xl border border-line bg-tint/[.02] p-3 text-xs text-mute font-grotesk space-y-1">

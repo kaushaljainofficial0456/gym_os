@@ -47,8 +47,8 @@ export default function Analytics() {
     <div className="space-y-5 pb-8">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-grotesk font-bold text-2xl tracking-tight">Analytics</h1>
-          <p className="text-mute text-sm">Joins, departures, revenue and footfall — what moved and when.</p>
+          <h1 className="t-title">Analytics</h1>
+          <p className="t-sub mt-1.5">Joins, departures, revenue and footfall.</p>
         </div>
         <div className="flex gap-1.5">
           {WINDOWS.map(([value, label]) => (

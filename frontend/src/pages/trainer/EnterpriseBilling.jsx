@@ -10,6 +10,7 @@ import { useFetch } from '../../utils.js';
 import { Card, PageHeader, Spinner, ErrorState, Modal, Toast, CheckIcon } from '../../components/UI.jsx';
 import PaymentCheckout from '../../components/PaymentCheckout.jsx';
 import PaymentResult from '../../components/PaymentResult.jsx';
+import Select from '../../components/Select.jsx';
 
 function QuoteFlow({ open, onClose, quote, order, onPay, onDone, freeChange }) {
   return (
@@ -203,7 +204,7 @@ export default function EnterpriseBilling() {
   return (
     <div className="space-y-6">
       <Toast message={toast} onDone={() => setToast('')} tone={toast.toLowerCase?.().includes('complete') ? 'success' : 'error'} />
-      <PageHeader title="Billing" sub="Package, capacity, and invoices for your own Barbell subscription." />
+      <PageHeader title="Billing" sub="Your Barbell plan, capacity and invoices." />
 
       <Card className="p-5">
         <div className="kicker">Current package</div>
@@ -241,10 +242,11 @@ export default function EnterpriseBilling() {
         <div className="flex gap-2">
           {/* Add-ons come from the same request as the packages above: when it
               failed, say so here too rather than offer an empty list. */}
-          <select className="input flex-1" value={addonId} onChange={(e) => setAddonId(e.target.value)} disabled={!!packages.error}>
-            <option value="">{packages.error ? 'Add-ons could not be loaded' : 'Select add-on…'}</option>
-            {(packages.data?.capacityAddons || []).map((a) => <option key={a.id} value={a.id}>+{a.increment} clients — ₹{a.price.toLocaleString('en-IN')}</option>)}
-          </select>
+          <div className="flex-1 min-w-0">
+            <Select aria-label="Capacity add-on" value={addonId} onChange={setAddonId} disabled={!!packages.error}
+              placeholder={packages.error ? 'Add-ons could not be loaded' : 'Choose an add-on'}
+              options={(packages.data?.capacityAddons || []).map((a) => ({ value: a.id, label: `+${a.increment} clients`, hint: `₹${a.price.toLocaleString('en-IN')}` }))} />
+          </div>
           <button className="btn-primary" disabled={busy || !addonId} onClick={startAddon}>Buy</button>
         </div>
         <div className="text-[11px]" style={{ color: 'var(--faint)' }}>Billed for the remaining period of your current package — not prorated.</div>

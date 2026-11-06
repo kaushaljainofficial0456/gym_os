@@ -6,10 +6,12 @@
 // ============================================================
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryAction } from '../../components/trainer/useQueryAction.js';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, PageHeader, Seg, Spinner, ErrorState, Empty, Toast } from '../../components/UI.jsx';
+import Select from '../../components/Select.jsx';
 
 function timeLeft(iso) {
   const ms = Date.parse(iso) - Date.now();
@@ -27,6 +29,8 @@ const shortDate = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'n
 
 export default function EnterpriseQR() {
   const [purpose, setPurpose] = useState('CLIENT');
+  // ?for=trainer (Home's "Invite trainer", the Trainers page) opens the trainer tab.
+  useQueryAction('for', (v) => { if (v === 'trainer') setPurpose('TRAINER'); });
   const plans = useFetch(() => api('/admin/packages'));
   const list = useFetch(() => api(`/enrollment/qr?purpose=${purpose}`), [purpose]);
   const status = useFetch(() => api('/enterprise/status'));
@@ -85,7 +89,7 @@ export default function EnterpriseQR() {
   return (
     <div className="space-y-6">
       <Toast message={toast} onDone={() => setToast('')} tone={toast?.toLowerCase().includes('revoked') || toast === 'Copied' ? 'success' : 'error'} />
-      <PageHeader title="QR onboarding" sub="Generate a one-time code for a new client or trainer to scan." />
+      <PageHeader title="Join QR codes" sub="A one-time code a new client or trainer scans to join." />
 
       <Seg value={purpose} onChange={(v) => { setPurpose(v); setIssued(null); }} options={[{ value: 'CLIENT', label: 'Client' }, { value: 'TRAINER', label: 'Trainer' }]} />
 
@@ -103,10 +107,8 @@ export default function EnterpriseQR() {
               </div>
             ) : (
               <>
-                <select className="input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
-                  <option value="">Select a plan…</option>
-                  {(plans.data?.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.amount}/{p.period_days}d</option>)}
-                </select>
+                <Select aria-label="Membership plan" value={planId} onChange={setPlanId} placeholder="Choose a plan"
+                  options={(plans.data?.packages || []).map((p) => ({ value: p.id, label: p.name, hint: `₹${Number(p.amount).toLocaleString('en-IN')} · ${p.period_days} days` }))} />
                 {capacityKnownZero && <div className="text-xs text-bad mt-2">No client capacity remaining — buy more from Billing before generating a client QR.</div>}
               </>
             )}

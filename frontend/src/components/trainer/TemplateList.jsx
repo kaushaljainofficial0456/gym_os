@@ -28,6 +28,7 @@
 import { useMemo, useState } from 'react';
 import { Empty } from '../UI.jsx';
 import { prettyName } from './ExercisePicker.jsx';
+import Select from '../Select.jsx';
 
 const SORTS = [
   ['recent', 'Recent'],
@@ -91,7 +92,7 @@ export default function TemplateList({
   const filtering = Boolean(query.trim() || type);
 
   if (!templates.length) {
-    return <Empty title="No templates yet" hint="Create your first workout template to assign it to clients." />;
+    return <Empty icon="strength" title="No templates yet" hint="Build one once, assign it to any client." />;
   }
 
   return (
@@ -101,41 +102,39 @@ export default function TemplateList({
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search templates or exercises"
         aria-label="Search templates or exercises"
-        className="input w-full text-[13px]"
-        style={{ minHeight: 42 }}
+        className="input w-full"
+        type="search"
       />
 
-      {/* Types and sort on rows of their own. Sharing one wrapping row, the
-          sort group was pushed right and on a phone landed beside whichever
-          type chips were left over, with a ragged gap between. */}
-      {types.length > 1 && (
-        <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-          <Chip on={!type} onClick={() => setType('')}>All</Chip>
-          {types.map(([value, n]) => (
-            <Chip key={value} on={type === value} onClick={() => setType(type === value ? '' : value)}>
-              {prettyName(value)} <span style={{ opacity: 0.75 }}>{n}</span>
-            </Chip>
-          ))}
+      {/* Type filters as pills, sort as one compact menu: two rows of
+          small chips read as clutter before a single template was seen. */}
+      <div className="flex items-center gap-2 mt-3">
+        {types.length > 1 ? (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0 pr-6" style={{ maskImage: 'linear-gradient(to right, #000 calc(100% - 28px), transparent)', WebkitMaskImage: 'linear-gradient(to right, #000 calc(100% - 28px), transparent)' }}>
+            <Chip on={!type} onClick={() => setType('')}>All</Chip>
+            {types.map(([value, n]) => (
+              <Chip key={value} on={type === value} onClick={() => setType(type === value ? '' : value)}>
+                {prettyName(value)} <span style={{ opacity: 0.6 }}>{n}</span>
+              </Chip>
+            ))}
+          </div>
+        ) : <div className="flex-1" />}
+        <div className="w-[128px] shrink-0">
+          <Select aria-label="Sort templates" value={sort} onChange={setSort} options={SORTS.map(([value, label]) => ({ value, label }))} />
         </div>
-      )}
-      <div className="flex items-center gap-1.5 mt-2">
-        <span className="text-[11px] mr-0.5" style={{ color: 'var(--faint)' }}>Sort</span>
-        {SORTS.map(([value, label]) => (
-          <Chip key={value} on={sort === value} onClick={() => setSort(value)} small>{label}</Chip>
-        ))}
       </div>
 
       {/* Saying how many matched is what makes a filter trustworthy -- a
           short list with no count reads as "that is all you have". */}
       {filtering && (
-        <div className="text-[11px] mt-2.5 px-0.5" style={{ color: 'var(--mute)' }}>
+        <div className="text-[13px] mt-3 px-0.5" style={{ color: 'var(--mute)' }}>
           {shown.length} of {templates.length} templates
         </div>
       )}
 
-      <div className="space-y-1.5 mt-2.5">
+      <div className="mt-3 -mx-5 sm:-mx-6" style={{ borderTop: '1px solid var(--line)' }}>
         {shown.map((t) => (
-          <TemplateCard
+          <TemplateRow
             key={t.id}
             t={t}
             selected={selectedId === t.id}
@@ -150,13 +149,13 @@ export default function TemplateList({
             nothing", and it comes with the way out. */}
         {!shown.length && (
           <div className="py-8 text-center">
-            <div className="text-[12.5px] font-semibold" style={{ color: 'var(--ink)' }}>
+            <div className="text-[15px] font-semibold" style={{ color: 'var(--ink)' }}>
               No templates match {query.trim() ? `"${query.trim()}"` : `"${prettyName(type)}"`}
             </div>
             <button
               type="button"
               onClick={() => { setQuery(''); setType(''); }}
-              className="text-[11.5px] mt-1.5 font-semibold"
+              className="text-[14px] mt-1.5 font-semibold"
               style={{ color: 'var(--accent)' }}
             >
               Clear filters
@@ -168,66 +167,51 @@ export default function TemplateList({
   );
 }
 
-function TemplateCard({ t, selected, onOpen, onDuplicate, onAssign, onDelete }) {
+/* One template as a list row: its name, what is in it, how long it is.
+   Duplicate / Assign / Delete belong to the template you are looking at,
+   so they appear on the selected row only -- every row carrying all three
+   (one of them a red box) made the list look like a wall of warnings. */
+function TemplateRow({ t, selected, onOpen, onDuplicate, onAssign, onDelete }) {
   const exercises = t.exercises || [];
-  // Three names, then a count. Enough to tell two leg days apart without
-  // turning the list into the templates themselves.
   const preview = exercises.slice(0, 3).map((x) => prettyName(x.name)).filter(Boolean);
   const more = exercises.length - preview.length;
-
   return (
-    <div
-      className="rounded-xl transition-colors"
-      style={{
-        border: `1px solid ${selected ? 'var(--accent)' : 'var(--line)'}`,
-        background: selected ? 'var(--accent-soft)' : 'var(--panel)',
-      }}
-    >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-current={selected ? 'true' : undefined}
-        className="w-full text-left px-3.5 pt-3 pb-2"
-      >
-        <div className="flex items-baseline gap-2">
-          <div className="font-grotesk text-[13.5px] font-semibold truncate flex-1" style={{ color: 'var(--ink)' }}>
-            {t.name}
-          </div>
-          <div className="text-[10.5px] tabular-nums shrink-0" style={{ color: 'var(--mute)' }}>
-            {exercises.length || t.exercise_count || 0} ex
-          </div>
-        </div>
-        {preview.length > 0 && (
-          <div className="text-[11px] mt-1 truncate" style={{ color: 'var(--mute)' }}>
-            {preview.join(' · ')}{more > 0 ? ` +${more} more` : ''}
-          </div>
-        )}
+    <div style={{ borderBottom: '1px solid var(--line)', background: selected ? 'rgb(var(--accent-rgb) / .1)' : undefined }}>
+      <button type="button" onClick={onOpen} aria-current={selected ? 'true' : undefined}
+        className="w-full text-left flex items-center gap-3 px-5 sm:px-6 py-3.5 transition-colors hover:bg-[var(--bg2)]">
+        <span className="flex-1 min-w-0">
+          <span className="block text-[15px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{t.name}</span>
+          {preview.length > 0 && (
+            <span className="block text-[13px] mt-0.5 truncate" style={{ color: 'var(--mute)' }}>
+              {preview.join(' · ')}{more > 0 ? ` +${more}` : ''}
+            </span>
+          )}
+        </span>
+        <span className="text-[13px] tabular-nums shrink-0" style={{ color: 'var(--faint)' }}>
+          {exercises.length || t.exercise_count || 0} exercises
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="m9 18 6-6-6-6" /></svg>
       </button>
-
-      <div className="px-3.5 pb-2.5 flex gap-1.5 flex-wrap">
-        <Action onClick={onDuplicate} label={`Duplicate ${t.name}`}>Duplicate</Action>
-        <Action onClick={onAssign} label={`Assign ${t.name}`}>Assign</Action>
-        <Action onClick={onDelete} label={`Delete ${t.name}`} danger>Delete</Action>
-      </div>
+      {selected && (
+        <div className="flex items-center gap-1 px-4 sm:px-5 pb-2.5 -mt-1">
+          <Action onClick={onAssign} label={`Assign ${t.name}`}>Assign</Action>
+          <Action onClick={onDuplicate} label={`Duplicate ${t.name}`}>Duplicate</Action>
+          <Action onClick={onDelete} label={`Delete ${t.name}`} danger>Delete</Action>
+        </div>
+      )}
     </div>
   );
 }
 
-function Chip({ children, on, onClick, small }) {
+function Chip({ children, on, onClick }) {
   return (
     <button
       type="button" onClick={onClick} aria-pressed={on}
-      /* 28-30px is a mouse target, not a thumb one. Every filter and sort
-         control on this screen sat below the app's own 44px floor, on a
-         page a coach uses standing in a gym holding a phone. 38 keeps the
-         chip row compact while being hittable; the actions below get the
-         full 44. */
-      className={`rounded-lg font-semibold shrink-0 ${small ? 'px-2.5 text-[10.5px]' : 'px-3 text-[11px]'}`}
+      className="rounded-full font-semibold shrink-0 px-3.5 text-[13px] whitespace-nowrap"
       style={{
-        minHeight: small ? 36 : 38,
-        background: on ? 'var(--accent-soft)' : 'transparent',
-        border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
-        color: on ? 'var(--accent)' : 'var(--mute)',
+        minHeight: 36,
+        background: on ? 'var(--ink)' : 'rgb(var(--tint-rgb) / .07)',
+        color: on ? 'var(--bg)' : 'var(--mute)',
       }}
     >{children}</button>
   );
@@ -237,20 +221,8 @@ function Action({ children, onClick, label, danger }) {
   return (
     <button
       type="button" onClick={onClick} aria-label={label}
-      /* DELETE WAS A 32px TARGET SITTING BESIDE DUPLICATE AND ASSIGN.
-         Three buttons within a few pixels of each other, one of them
-         destructive, all under the touch-target floor -- on a phone that
-         is a mis-tap waiting to happen, and the confirm dialog is a
-         mitigation for a problem the layout should not create. 44px, and
-         the destructive one carries its own tint so it is distinguishable
-         before the finger lands rather than after. */
-      className={`rounded-lg px-3 text-[11px] font-semibold ${danger ? 'ml-auto' : ''}`}
-      style={{
-        minHeight: 44,
-        border: `1px solid ${danger ? 'rgb(var(--bad-rgb) / .35)' : 'var(--line)'}`,
-        background: danger ? 'rgb(var(--bad-rgb) / .06)' : 'transparent',
-        color: danger ? 'var(--bad)' : 'var(--mute)',
-      }}
+      className={`rounded-lg px-3 text-[14px] font-semibold ${danger ? 'ml-auto' : ''}`}
+      style={{ minHeight: 40, color: danger ? 'var(--bad)' : 'var(--accent)' }}
     >{children}</button>
   );
 }

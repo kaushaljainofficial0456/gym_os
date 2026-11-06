@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import AttendanceCard from '../../components/trainer/AttendanceCard.jsx';
-import { TrainerPulse, OwnerPulse } from '../../components/trainer/RosterPulse.jsx';
+import { TrainerPulse } from '../../components/trainer/RosterPulse.jsx';
 import GymPulse from '../../components/trainer/GymPulse.jsx';
 import TrainerCrowdCard from '../../components/trainer/TrainerCrowdCard.jsx';
-import { Link } from 'react-router-dom';
+import Icon from '../../components/Icon.jsx';
+import { quickActions, tileStyle } from '../../components/trainer/workspaceNav.js';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { useFetch, fmt1, kg1 } from '../../utils.js';
-import { Card, Kicker, Kpi, ErrorState, StatusChip, Avatar, Skeleton, CheckIcon } from '../../components/UI.jsx';
-import { Reveal, AnimatedNumber } from '../../design/index.js';
+import { Card, Kpi, ErrorState, StatusChip, Avatar, Skeleton } from '../../components/UI.jsx';
 import { TrendChart } from '../../components/charts.jsx';
-import { Stagger } from '../../components/motion.jsx';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -19,261 +19,173 @@ const greeting = () => {
   return 'Good evening';
 };
 
-const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+const todayLabel = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+const goalLabel = (g) => String(g || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+
+/* The most-used things, one tap from Home, and each lands IN the action
+   (the form already open) rather than on a page you then have to search. */
+function QuickActions({ isOwner, unread }) {
+  return (
+    <section aria-label="Shortcuts" data-tour="trainer-dashboard-hero">
+      <div className="ws-actions">
+        {quickActions(isOwner).map((a) => (
+          <Link key={a.to} to={a.to} className={`ws-action${a.tone === 'accent' ? ' is-accent' : ''}`}>
+            <span className="ws-action-icon ws-tile" style={tileStyle(a.tint)}><Icon name={a.icon} size={21} strokeWidth={1.8} /></span>
+            <span className="ws-action-label">{a.label}</span>
+            {a.badgeKey === 'messages' && unread > 0 && <span className="ws-badge">{unread}</span>}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* Clients who need a word from their coach, with why. Rendered plainly:
+   it used to fade in only once scrolled into view, so it sat as an empty
+   card in any capture and for anyone who never scrolled that far. */
+function FollowUps({ clients, error, onRetry, limit = 6 }) {
+  if (error) return <ErrorState error={error} onRetry={onRetry} />;
+  if (!clients.length) {
+    return (
+      <Card className="px-5 py-5">
+        <div className="text-[15px] font-semibold" style={{ color: 'var(--ink)' }}>Everyone is on track.</div>
+      </Card>
+    );
+  }
+  return (
+    <Card className="!p-0 overflow-hidden">
+      {clients.slice(0, limit).map((c, i) => (
+        <Link key={c.clientId} to={`/app/trainer/clients/${c.clientId}`}
+          className="flex items-center gap-3.5 px-4 sm:px-5 py-3.5 transition-colors hover:bg-[var(--bg2)]"
+          style={i ? { borderTop: '1px solid var(--line)' } : undefined}>
+          <Avatar name={c.name} size={42} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>{c.name}</span>
+              <StatusChip status={c.status} />
+            </div>
+            <div className="text-[13px] mt-0.5 truncate" style={{ color: 'var(--mute)' }}>
+              {c.rules.slice(0, 2).map((r) => r.title).join(' · ') || goalLabel(c.goal)}
+            </div>
+            <div className="text-[12.5px] mt-0.5 tabular-nums truncate" style={{ color: 'var(--faint)' }}>
+              {goalLabel(c.goal)}
+              {c.currentWeight != null && c.targetWeight != null ? ` · ${kg1(c.currentWeight)} → ${kg1(c.targetWeight)} kg`
+                : c.currentWeight != null ? ` · ${kg1(c.currentWeight)} kg` : ''}
+              {c.adherence == null ? '' : ` · ${fmt1(c.adherence)}% adherence`}
+            </div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="m9 18 6-6-6-6" /></svg>
+        </Link>
+      ))}
+    </Card>
+  );
+}
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isOwner } = useAuth();
   const isTrainerOnly = user?.role === 'TRAINER';
 
-  // Trainers use the scoped endpoint; owners/admins use the org-wide overview
+  // Trainers use the scoped endpoint; owners/admins use the org-wide overview.
   const ov = useFetch(() => api(isTrainerOnly ? '/dashboard/trainer' : '/dashboard/overview'));
-  const att = useFetch(() => isTrainerOnly ? Promise.resolve(null) : api('/dashboard/attention'));
-  const trend = useFetch(() => api('/dashboard/adherence-trend'));
-  /* Gym-wide numbers: money, check-ins, roster, and the series behind
-     them. Owner-only both here and on the server -- a trainer has no
-     business reading the gym's takings, and gating it in the fetch as
-     well as the route means the request is never even made. */
+  const att = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/attention')));
+  // The adherence trend is a coaching view; an owner's Home is the gym.
+  const trend = useFetch(() => (isTrainerOnly ? api('/dashboard/adherence-trend') : Promise.resolve(null)));
+  /* Gym-wide numbers: money, check-ins, roster. Owner-only here and on the
+     server -- a trainer has no business reading the gym's takings. */
   const pulse = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/pulse')));
-  /* The floor right now, and which of this trainer's own clients are on
-     it. Trainer-only: an owner has the whole Gym Crowd screen. Failures
-     are swallowed to null -- a crowd hiccup must not take the dashboard
-     down with it; the card simply does not render. */
+  /* The floor right now, and which of this trainer's clients are on it.
+     Failures are swallowed to null: a crowd hiccup must not take the
+     dashboard down; the card simply does not render. */
   const crowd = useFetch(() => (isTrainerOnly ? api('/trainer/crowd').catch(() => null) : Promise.resolve(null)));
   const crowdClients = useFetch(() => (isTrainerOnly ? api('/trainer/crowd/clients').catch(() => null) : Promise.resolve(null)));
-  const trendRows = useMemo(() => (trend.data?.trend || []).map(t => ({ label: t.date.slice(5), value: t.avg ?? 0 })), [trend.data]);
+  const unread = useFetch(() => api('/messages/unread').catch(() => null));
+  const trendRows = useMemo(() => (trend.data?.trend || []).map((t) => ({ label: t.date.slice(5), value: t.avg ?? 0 })), [trend.data]);
 
-  // For trainers, attention data comes from the trainer endpoint response
-  const attentionClients = isTrainerOnly
-    ? (ov.data?.attention || [])
-    : (att.data?.clients || []);
+  const attentionClients = isTrainerOnly ? (ov.data?.attention || []) : (att.data?.clients || []);
+  const firstName = user?.name?.split(' ')[0] || 'Coach';
 
-  // pulse is part of the gate: GymPulse arrives far taller than its own
-  // one-row skeleton, so painting the page without it and letting it land
-  // afterwards shoved the attention queue ~480px down (layout shift 0.31,
-  // e2e/performance.spec.js). The page now appears once, and holds still.
-  if (ov.loading || (!isTrainerOnly && (att.loading || pulse.loading)) || (isTrainerOnly && (crowd.loading || crowdClients.loading)) || trend.loading) {
+  const header = (
+    <div className="flex items-end justify-between flex-wrap gap-3">
+      <div className="min-w-0">
+        <h1 className="t-title">{greeting()}, {firstName}</h1>
+        <p className="t-sub mt-1.5">{todayLabel()}{user?.orgName ? ` · ${user.orgName}` : ''}</p>
+      </div>
+    </div>
+  );
+
+  // One gate for the whole page: GymPulse arrives far taller than a
+  // skeleton row, and painting without it shoved everything below ~480px
+  // down when it landed (layout shift, e2e/performance.spec.js).
+  if (ov.loading || (!isTrainerOnly && (att.loading || pulse.loading)) || (isTrainerOnly && (crowd.loading || crowdClients.loading || trend.loading))) {
     return (
-      <div className="space-y-6">
-        <div className="skeleton h-20 w-2/3" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map(i => <div key={i} className="card p-4"><Skeleton lines={2} /></div>)}</div>
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-3 card p-5"><Skeleton lines={5} /></div>
-          <div className="lg:col-span-2 card p-5"><Skeleton lines={4} /></div>
-        </div>
+      <div className="space-y-8">
+        {header}
+        <div className="ws-actions">{quickActions(!isTrainerOnly).map((a) => <div key={a.to} className="skeleton" style={{ height: 104, borderRadius: 18 }} />)}</div>
+        <div className="card p-5"><Skeleton lines={4} /></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="card p-4"><Skeleton lines={2} /></div>)}</div>
       </div>
     );
   }
   if (ov.error) return <ErrorState error={ov.error} onRetry={ov.reload} />;
-
   const k = ov.data.kpis;
-  const firstName = user?.name?.split(' ')[0] || 'Coach';
 
-  return (
-    <div className="space-y-6">
-      {/* hero */}
-      {/* Hero, matched to the client Home treatment: a quiet serif greeting,
-          then the number that actually decides what this person does next.
-
-          That number is HOW MANY CLIENTS NEED ATTENTION, not average
-          adherence. Average adherence is a vanity metric on a trainer's
-          dashboard -- it moves slowly, it is not actionable, and a healthy
-          82% average can hide three clients about to churn. The count of
-          people needing action is the thing the screen exists to answer, so
-          it gets the largest type and adherence moves to a supporting line.
-
-          The gradient-clipped name is gone: gradient text on a peach ground
-          reads as washed-out rather than premium, and it put the visual
-          emphasis on the trainer's own name, which is not information. */}
-      {/* Attendance sits directly under the greeting because checking in
-          is the first thing a trainer does on arriving -- ahead of any
-          dashboard metric, which is something they read, not something
-          they act on. Owners see it too: an owner who coaches still has
-          their own hours to record. */}
-      {/* TRAINERS ONLY. Recording attendance is TRAINER-only on the
-          server, so for an owner this card could never do anything --
-          it rendered "Not checked in" and then a line explaining that
-          the button they can see is not for them, at the very top of
-          the screen they open every morning. An owner's interest in
-          attendance is the ROSTER, and that is a tile in GymPulse
-          below which links straight to it. */}
-      {isTrainerOnly && (
-        <Reveal>
-          <AttendanceCard />
-        </Reveal>
-      )}
-
-      <Reveal>
-        <div className="flex items-end justify-between flex-wrap gap-4" data-tour="trainer-dashboard-hero">
-          <div className="min-w-0">
-            <div className="font-serif text-[15px]" style={{ color: 'var(--mute)' }}>
-              {greeting()}, {firstName}
-            </div>
-            {/* One uniform headline, not a big-number + small-caption split.
-                42 -> 50px and the whole phrase (not just the digit) now
-                shares the same font-black weight and ink colour, matching
-                the reference exactly rather than the split-hierarchy
-                treatment this had before. */}
-            <div className="mt-2 flex items-baseline gap-2.5 flex-wrap">
-              {/* The typeface override here named 'Bricolage Grotesque',
-                  which this app has never loaded — so the single largest
-                  piece of type in the trainer product silently rendered in
-                  the browser's default sans, at 50px, next to DM Sans
-                  everywhere else. It now uses the app face at its heaviest
-                  weight, which is what the override was reaching for. */}
-              {/* A fixed 50px was set against a desktop window. On a 375px
-                  phone the same sentence ran to four lines and pushed every
-                  KPI below the fold — the screen's whole job is "what do I
-                  do next", and you had to scroll past the question to reach
-                  the answers. clamp() ties it to the viewport so it lands at
-                  ~30px on a phone and still reaches 50px on a laptop. */}
-              <span className="font-black leading-[1.05] tracking-[-.035em]"
-                    style={{ fontSize: 'clamp(1.875rem, 6.2vw, 3.125rem)', color: 'var(--ink)', textWrap: 'balance' }}>
-                <AnimatedNumber value={k.needsAttention + k.atRisk} />
-                {' '}
-                {(k.needsAttention + k.atRisk) === 1 ? 'client needs you today' : 'clients need you today'}
-              </span>
-            </div>
-            {/* fmt1(null) is "0.0", so an org with nothing logged yet
-                announced "0.0% average adherence" -- which reads as every
-                client having failed, not as the absence of data. Same
-                distinction the attention rows below already make. */}
-            <div className="text-[11px] mt-1.5 tabular-nums" style={{ color: 'var(--faint)' }}>
-              {todayLabel} · {k.avgAdherence == null
-                ? 'no adherence logged yet'
-                : `${fmt1(k.avgAdherence)}% average adherence`}
-            </div>
+  if (!isTrainerOnly) {
+    return (
+      <div className="space-y-8">
+        {header}
+        <QuickActions isOwner={isOwner} unread={unread.data?.total || 0} />
+        <GymPulse pulse={pulse.data} kpis={k} loading={pulse.loading} error={pulse.error} onRetry={pulse.reload} />
+        <section>
+          <div className="ws-section-head">
+            <h2 className="ws-section-title">Clients to follow up</h2>
+            <Link to="/app/trainer/clients" className="ws-section-link">All clients</Link>
           </div>
-        </div>
-      </Reveal>
+          <FollowUps clients={attentionClients} error={att.error} onRetry={att.reload} />
+        </section>
+      </div>
+    );
+  }
 
-      {/* hero summary — big numbers.
-          Numbers were coloured per-tile (sage/amber/terracotta) via
-          `tone`; the reference shows all four numbers in plain ink and
-          reserves colour for a single small dot on the two tiles that
-          actually need one. Dropped `tone` here. Also collapsed the two
-          dot hues to one: amber-vs-terracotta was a second colour
-          distinction the reference doesn't make -- both actionable tiles
-          use the same accent-family dot now. */}
-      {/* OWNERS GET THE GYM, TRAINERS GET THEIR CLIENTS.
-          Both used to get the same four client-health tiles, which for an
-          owner answered a question they had not asked: "how is my gym
-          doing?" is about people through the door, money in, and the
-          roster, and not one of those was on the screen. GymPulse carries
-          those, plus an action centre and the trends behind them, and it
-          already contains Active clients -- so showing this row to an
-          owner as well would be eight tiles, two of them duplicates. */}
-      {isTrainerOnly && (crowd.data || crowdClients.data) && (
-        <Reveal>
-          <TrainerCrowdCard crowd={crowd.data} clients={crowdClients.data} />
-        </Reveal>
-      )}
+  /* ── TRAINER ── their own clients, and their own check-in first: it is
+     the first thing a trainer does on arriving. */
+  const needYou = k.needsAttention + k.atRisk;
+  return (
+    <div className="space-y-8">
+      <AttendanceCard />
+      <div>
+        {header}
+        <p className="mt-3 text-[17px] font-bold" style={{ color: needYou ? 'var(--ink)' : 'var(--mute)' }} data-tour="trainer-dashboard-kpis">
+          {needYou === 0 ? 'Every client is on track today.' : `${needYou} ${needYou === 1 ? 'client needs' : 'clients need'} you today.`}
+        </p>
+      </div>
+      <QuickActions isOwner={false} unread={unread.data?.total || 0} />
 
-      {!isTrainerOnly && (
-        <Reveal>
-          <GymPulse pulse={pulse.data} kpis={k} loading={pulse.loading} error={pulse.error} onRetry={pulse.reload} />
-        </Reveal>
-      )}
+      {(crowd.data || crowdClients.data) && <TrainerCrowdCard crowd={crowd.data} clients={crowdClients.data} />}
 
-      {isTrainerOnly && (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="trainer-dashboard-kpis">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Active clients" value={k.activeClients} sub={k.newClients != null ? `${k.newClients} new · ${k.inactive} inactive` : `${k.totalClients} total · ${k.inactive} inactive`} />
         <Kpi label="On track" value={k.onTrack} sub="adherence above 70%" />
-        {/* The headline counts these two together, so each says what it is:
-            "1 client needs you today" over a bare "Needs attention 0" read
-            as the page contradicting itself. */}
         <Kpi label="Needs attention" value={k.needsAttention} sub="starting to slip" dot="bg-bad" />
-        {/* attentionCount is absent from the owner payload entirely, so
-            this rendered a bare " open alerts" with no number in front
-            of it. Only claim a count when there is one. */}
-        <Kpi
-          label="At risk"
-          value={k.atRisk}
-          sub={k.attentionCount ? `likely to drop off · ${k.attentionCount} open alerts` : 'likely to drop off'}
-          dot="bg-bad"
-        />
+        <Kpi label="At risk" value={k.atRisk} sub="likely to drop off" dot="bg-bad" />
       </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* attention queue — staggered cards */}
-        <Card className="lg:col-span-3 !p-0 overflow-hidden self-start">
-          <div className="px-5 pt-5 pb-1">
-            <Kicker>Attention required</Kicker>
+        <section className="lg:col-span-3">
+          <div className="ws-section-head">
+            <h2 className="ws-section-title">Clients to follow up</h2>
+            <Link to="/app/trainer/clients" className="ws-section-link">All clients</Link>
           </div>
-          <div className="px-3 pb-3 space-y-1.5">
-            <Stagger step={70}>
-              {attentionClients.slice(0, 6).map((c) => (
-                /* Was `bg-white/[.02] hover:bg-white/[.05] hover:border-white/15`
-                   — three white-alpha washes, all of which are invisible on
-                   the light theme's white panel, so these rows had no fill
-                   and no hover feedback at all in light mode. `.row` is the
-                   tint-driven equivalent that works on both grounds. */
-                <Link key={c.clientId} to={`/app/trainer/clients/${c.clientId}`}
-                  className="group row row-interactive gap-3">
-                  <Avatar name={c.name} size="w-10 h-10" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-grotesk text-sm font-semibold" style={{ color: 'var(--ink)' }}>{c.name}</span>
-                      <StatusChip status={c.status} />
-                    </div>
-                    {/* Was text-bad on every row regardless of severity --
-                        a NEEDS_ATTENTION client's reason line shouted as
-                        loud as an AT_RISK one, and doubled the coloured
-                        surface the StatusChip badge already carries right
-                        above it. The badge alone is the status signal now;
-                        the reason line stays calm so it's readable, not
-                        alarming. */}
-                    <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--mute)' }}>
-                      {c.rules.slice(0, 2).map((r) => r.title).join(' · ')}
-                    </div>
-                    {/* `{c.adherence}% adherence` printed a bare "% adherence"
-                        whenever adherence was null — visible on this very
-                        screen for every client with no logged days yet. A
-                        missing number is now stated as missing. */}
-                    <div className="text-[10px] text-faint mt-0.5 font-grotesk tabular-nums">
-                      {/* Only the weights that exist: "22 → — kg" read as a broken
-                          figure for anyone without a target set. */}
-                      {c.goal.replace(/_/g, ' ')}
-                      {c.currentWeight != null && c.targetWeight != null ? ` · ${kg1(c.currentWeight)} → ${kg1(c.targetWeight)} kg`
-                        : c.currentWeight != null ? ` · ${kg1(c.currentWeight)} kg`
-                          : c.targetWeight != null ? ` · target ${kg1(c.targetWeight)} kg` : ''}
-                      {c.adherence == null ? ' · no adherence data yet' : ` · ${fmt1(c.adherence)}% adherence`}
-                    </div>
-                  </div>
-                  <span className="badge badge-plain shrink-0 group-hover:text-[color:var(--accent)] transition-colors">View</span>
-                </Link>
-              ))}
-            </Stagger>
-            {/* A queue that failed to load is not "Everyone is on track" --
-                the one false statement here that tells an owner to stop
-                looking. */}
-            {!isTrainerOnly && att.error ? (
-              <ErrorState error={att.error} onRetry={att.reload} />
-            ) : !(attentionClients.length) && (
-              <div className="empty-state"><div className="empty-state-icon"><CheckIcon /></div><div className="empty-state-title">Everyone is on track</div><p className="empty-state-body">No client needs attention right now.</p></div>
-            )}
-          </div>
-        </Card>
-
-        {/* Right rail: the trend, then whichever pulse this role's own
-            endpoint can actually populate.
-
-            The three ON TRACK / NEEDS ATTN / AT RISK boxes that used to
-            sit under the trend are gone -- they restated the KPI row
-            directly above them, and the same four counts now appear once,
-            proportionally, inside the pulse's roster bar. */}
+          <FollowUps clients={attentionClients} />
+        </section>
         <div className="lg:col-span-2 space-y-6">
-          <Card className="self-start">
-            <Kicker>Adherence trend · 14 days</Kicker>
-            {/* A trend that failed to load is not "no adherence logged". */}
+          <Card>
+            <div className="t-card mb-3">Adherence · 14 days</div>
             {trend.error ? <ErrorState error={trend.error} onRetry={trend.reload} /> : trendRows.some((t) => t.value > 0)
               ? <TrendChart data={trendRows} color="var(--m-training)" />
-              : <div className="text-[11.5px] py-6 text-center" style={{ color: 'var(--mute)' }}>
-                  No adherence logged in the last 14 days yet.
-                </div>}
+              : <div className="text-[14px] py-6 text-center" style={{ color: 'var(--mute)' }}>No adherence logged yet.</div>}
           </Card>
-
-          {isTrainerOnly ? <TrainerPulse k={k} /> : <OwnerPulse k={k} />}
+          <TrainerPulse k={k} />
         </div>
       </div>
     </div>

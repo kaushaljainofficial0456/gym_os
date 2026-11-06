@@ -7,6 +7,14 @@
 import { computeAdherence, computeAdherenceBulk } from './adherence.js';
 import { daysAgoIso, todayKey, daysBetween, round1 } from '../utils/time.js';
 
+/* "21 Aug", not "2026-08-21": these sentences are read by a coach, on the
+   Alerts page and a client's profile. Open alerts pick the new wording up
+   on the next evaluation (their detail is refreshed when it changes). */
+const humanDay = (key) => {
+  const d = new Date(`${String(key).slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? String(key) : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+};
+
 const SEVERITY_SCORE = { low: 1, medium: 2, high: 3 };
 
 // Pure rule evaluation from already-fetched per-client data. Shared by the
@@ -23,7 +31,7 @@ export function evaluateFromData(client, data) {
       rules.push({
         type: 'NO_WORKOUT', severity: days >= 7 ? 'high' : 'medium',
         title: `No workout for ${days} days`,
-        detail: `Last logged workout was ${days} days ago (${lastWorkout}).`
+        detail: `Last logged workout was ${days} days ago (${humanDay(lastWorkout)}).`
       });
     }
   }
@@ -89,7 +97,7 @@ export function evaluateFromData(client, data) {
     rules.push({
       type: 'INACTIVE', severity: 'high',
       title: `Client inactive for ${daysBetween(lastActive, today)} days`,
-      detail: `Last recorded activity was ${lastActive}.`
+      detail: `Last recorded activity was ${humanDay(lastActive)}.`
     });
   }
 

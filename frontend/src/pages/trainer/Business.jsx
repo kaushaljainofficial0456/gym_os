@@ -1,21 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryAction } from '../../components/trainer/useQueryAction.js';
 import { api, downloadFile } from '../../api.js';
-import { useAuth } from '../../auth.jsx';
-import { useFetch, fmtK, fmtMoneyShort, localDateKey } from '../../utils.js';
-import { Card, Kicker, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
+import { useFetch, fmtK, localDateKey } from '../../utils.js';
+import { Card, Kpi, ErrorState, Modal, PageSkeleton, useConfirm } from '../../components/UI.jsx';
+import { MiniBars, monthAxis, money, moneyShort } from '../../components/trainer/GymPulse.jsx';
 import MembersTable from '../../components/trainer/MembersTable.jsx';
-import { TrendChart } from '../../components/charts.jsx';
-import { status } from '../../design/tokens.js';
+import Select from '../../components/Select.jsx';
 
-const greeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-};
-
-const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
 // Membership lifecycle actions -- backed by membershipLifecycle.js's
 // explicit state graph on the server (an invalid jump like cancel ->
@@ -73,23 +65,15 @@ function ExportButton({ path, filename, label }) {
 
 export default function Business() {
   const nav = useNavigate();
-  const { user } = useAuth();
   const ov = useFetch(() => api('/admin/overview'));
   const members = useFetch(() => api('/admin/members'));
-  const settings = useFetch(() => api('/admin/settings'));
-  const crowd = useFetch(() => api('/admin/crowd'));
   const [toast, setToast] = useState('');
-  const [setForm, setSetForm] = useState(null);
-  const [savingSet, setSavingSet] = useState(false);
-
-  useEffect(() => {
-    if (settings.data?.settings) setSetForm((f) => f || settings.data.settings);
-  }, [settings.data]);
   const [pkgOpen, setPkgOpen] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
   const [pkgForm, setPkgForm] = useState({ name: '', amount: '', period_days: 30, features: '' });
   const [subForm, setSubForm] = useState({ client_id: '', package_id: '', start_date: '' });
   const [payOpen, setPayOpen] = useState(false);
+  useQueryAction('record', () => setPayOpen(true));
   const blankPayment = () => ({ client_id: '', amount: '', method: 'cash', paid_on: localDateKey(), reference: '' });
   const [payForm, setPayForm] = useState(blankPayment);
   // Members pay the gym directly once its payout account is live; until
@@ -108,9 +92,6 @@ export default function Business() {
       setReceiptBusy(null);
     }
   };
-  const [attDate, setAttDate] = useState(localDateKey());
-  const [attList, setAttList] = useState(null);
-  const [loadingAtt, setLoadingAtt] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -122,10 +103,6 @@ export default function Business() {
   if (ov.error) return <ErrorState error={ov.error} onRetry={ov.reload} />;
 
   const d = ov.data;
-  const trendRows = (d.revenueTrend || []).map((t) => ({
-    label: new Date(`${t.month}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'short' }),
-    value: t.total,
-  }));
 
   const addPackage = async () => {
     try {
@@ -169,232 +146,87 @@ export default function Business() {
     } catch (e) { setToast(e.message); }
   };
 
-  const loadAttendance = async (date) => {
-    setLoadingAtt(true);
-    try {
-      const r = await api(`/admin/attendance?date=${date || attDate}`);
-      setAttList(r.attendance || []);
-    } catch { setAttList([]); }
-    setLoadingAtt(false);
-  };
-
-  const toggleAtt = async (clientId, present) => {
-    try {
-      await api('/admin/attendance', { method: 'POST', body: JSON.stringify({ client_id: clientId, present }) });
-      loadAttendance();
-    } catch (e) { setToast(e.message); }
-  };
-
   return (
     <div className="space-y-6" data-tour="trainer-business">
-      <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
-        <div>
-          <div className="text-[11px] text-mute uppercase tracking-[.18em] font-grotesk">{todayLabel}</div>
-          {/* font-brand, not font-grotesk: this is a hero, and
-              trainer scope repoints font-grotesk to DM Sans for small
-              supporting text -- a hero staying on the punchier headline
-              face is the whole point of having two. Gradient-clipped name
-              removed to match the fix already made on Dashboard.jsx's
-              hero: gradient text on a warm ground reads washed-out, not
-              premium, and it spent the page's loudest moment on the
-              owner's own name rather than on information. */}
-          <h1 className="font-brand font-black text-3xl tracking-tight mt-1" style={{ color: 'var(--ink)' }}>
-            {greeting()}, {user?.name?.split(' ')[0] || 'Owner'}
-          </h1>
-          <p className="text-mute text-sm mt-1">Members, plans, payments and renewals — the pulse of your gym.</p>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div className="min-w-0">
+          <h1 className="t-title">Payments</h1>
+          <p className="t-sub mt-1.5">Memberships, plans and payments.</p>
         </div>
-        <button className="btn-primary" onClick={() => setSubOpen(true)}>+ New subscription</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn" onClick={() => setSubOpen(true)}>+ New membership</button>
+          <button className="btn-primary" onClick={() => setPayOpen(true)}>+ Record payment</button>
+        </div>
       </div>
 
       {payout.data?.account && payout.data.account.status !== 'ACTIVE' && (
-        <Card className="p-4">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
+        <Card className="p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold" style={{ color: 'var(--ink)' }}>Members can&rsquo;t pay you online yet</div>
-              <p className="text-xs mt-0.5 text-mute">Set up payouts and their payments go straight to your bank. Until then, record desk payments below; each gets a receipt.</p>
+              <div className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>Online payments are off</div>
+              <p className="text-[13.5px] mt-0.5" style={{ color: 'var(--mute)' }}>Set up payouts so members can pay you online. Until then, record desk payments here.</p>
             </div>
             <button type="button" className="btn btn-sm shrink-0" onClick={() => nav('/app/trainer/enterprise')}>Set up payouts</button>
           </div>
         </Card>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi label="Collected this month" value={d.monthlyRevenue} prefix="₹" dec={0} sub="from recorded payments" />
         <Kpi label="Active members" value={d.activeMembers} sub={`${d.totalMembers} total`} />
-        <Kpi label="Monthly revenue" value={d.monthlyRevenue} prefix="₹" dec={0} sub="this month" />
-        <Kpi label="Renewals due" value={d.renewalsThisMonth} sub="next 30 days" dot="bg-bad" />
-        <Kpi label="Overdue" value={d.overdue} sub="payments" dot="bg-bad" />
-        <Kpi label="Attendance today" value={d.attendanceToday} sub="marked present" />
+        <Kpi label="Renewals due" value={d.renewalsThisMonth} sub="next 30 days" dot={d.renewalsThisMonth ? 'bg-bad' : undefined} />
+        <Kpi label="Overdue" value={d.overdue} sub="memberships" dot={d.overdue ? 'bg-bad' : undefined} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* revenue trend */}
-        <Card className="lg:col-span-2">
-          <Kicker>Revenue · 6 months</Kicker>
-          {trendRows.some((t) => t.value > 0) ? (
-            /* Was `color={status.good}`. Two reasons it moved to the accent:
-               `status.good` is the literal '#7AA880', which matches
-               --good-rgb in DARK mode only, so the chart's green did not
-               follow the theme; and revenue-over-time is this page's primary
-               metric, not a status — spending the semantic "good" colour on
-               it means an actual warning elsewhere reads no differently. */
-            <TrendChart data={trendRows} color="var(--accent)" domain={[0, 'auto']} formatY={fmtMoneyShort} />
-          ) : (
-            <div className="empty-state">
-              <div className="empty-state-title">No revenue recorded yet</div>
-              <p className="empty-state-body">Payments you record against a subscription appear here.</p>
-            </div>
-          )}
-          <div className="text-[11px] text-faint mt-2">From recorded payments · ₹{fmtK(d.monthlyRevenue)} this month</div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+        {/* Bars, one per month with its amount: the line chart this replaced
+            drew equal months as a flat line along the top gridline and
+            empty months along the axis, and read as an empty chart. */}
+        <Card className="lg:col-span-2 p-5">
+          <h2 className="ws-section-title mb-4">Revenue by month</h2>
+          <MiniBars
+            points={monthAxis((d.revenueTrend || []).map((t) => ({ month: t.month, value: t.total })), localDateKey())}
+            label="Revenue by month" color="var(--m-body)"
+            format={(v) => money(v)} short={moneyShort}
+            empty="No payments recorded yet."
+          />
         </Card>
 
-        {/* packages */}
-        <Card className="lg:col-span-3">
-          <div className="flex items-center justify-between">
-            <Kicker>Packages</Kicker>
-            <button className="btn btn-sm" onClick={() => setPkgOpen(true)}>+ Add package</button>
+        <Card className="lg:col-span-3 p-5">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h2 className="ws-section-title">Plans</h2>
+            <button className="btn btn-sm" onClick={() => setPkgOpen(true)}>+ Add plan</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {(d.packages || []).map((p) => (
-              <div key={p.id} className="rounded-2xl border border-line bg-tint/[.03] p-4">
-                <div className="t-micro mb-1">{p.period_days}-day plan</div>
-                <div className="font-grotesk font-bold text-lg">{p.name}</div>
-                <div className="font-grotesk text-xl font-bold text-gold mt-1">₹{fmtK(p.amount)}</div>
-                {p.features && <div className="text-[11px] text-mute mt-2 leading-relaxed">{p.features}</div>}
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* gym settings — branding, crowd, default client permissions */}
-      <Card>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Kicker>Gym settings</Kicker>
-          {crowd.data?.enabled && (
-            <span className="chip border-cyanx/30 text-cyanx bg-cyanx/5 max-w-full whitespace-normal text-left">
-              Live crowd: {crowd.data.current}/{crowd.data.capacity} · {crowd.data.status?.replace('_', ' ')}
-            </span>
-          )}
-        </div>
-
-        {/* Gym code -- what a client types into /signup's "Gym code" field
-            (POST /auth/register resolves it to this org). orgSlug comes
-            from /auth/login's response right after signing in; org_slug is
-            the same value from /auth/me on a page refresh -- the API isn't
-            consistently camelCased across endpoints, so both are read here
-            rather than silently showing nothing after a refresh. */}
-        {(user?.orgSlug || user?.org_slug) && (
-          <div className="mt-3 rounded-2xl border border-line bg-tint/[.03] p-4 flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mb-1">Client sign-up code</div>
-              <div className="font-grotesk font-bold text-lg tracking-tight" style={{ color: 'var(--ink)' }}>{user.orgSlug || user.org_slug}</div>
-              <div className="text-[11px] text-mute mt-1">Share this with clients — they enter it at sign-up to join your gym automatically.</div>
-            </div>
-            <button className="btn btn-sm" onClick={() => {
-              navigator.clipboard?.writeText(user.orgSlug || user.org_slug);
-              setToast('Gym code copied');
-            }}>Copy code</button>
-          </div>
-        )}
-
-        {setForm && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-            <div className="space-y-2.5">
-              <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">BRANDING</div>
-              <input className="input" placeholder="Gym name" value={setForm.brand_name} onChange={(e) => setSetForm((f) => ({ ...f, brand_name: e.target.value }))} />
-              <input className="input" placeholder="e.g. Train hard, recover smarter" value={setForm.tagline || ''} onChange={(e) => setSetForm((f) => ({ ...f, tagline: e.target.value }))} />
-              <div className="grid grid-cols-2 gap-2">
-                <input className="input" type="number" placeholder="Crowd capacity (e.g. 60)" value={setForm.crowd_capacity} onChange={(e) => setSetForm((f) => ({ ...f, crowd_capacity: e.target.value }))} />
-                <label className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
-                  <input type="checkbox" className="accent-cyanx w-[18px] h-[18px] shrink-0" checked={!!setForm.crowd_enabled} onChange={(e) => setSetForm((f) => ({ ...f, crowd_enabled: e.target.checked ? 1 : 0 }))} />
-                  Show live crowd
-                </label>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider">DEFAULT CLIENT PERMISSIONS</div>
-              <select className="input" aria-label="Default workout mode for new clients" value={setForm.workout_mode_default} onChange={(e) => setSetForm((f) => ({ ...f, workout_mode_default: e.target.value }))}>
-                <option value="hybrid">Hybrid</option>
-                <option value="prescribed">Prescribed</option>
-                <option value="custom">Custom</option>
-              </select>
-              {/* The full sentence lives here, not in the option: a phone shows
-                  a closed select's text on one line and cut it mid-word. */}
-              <div className="text-[11.5px] text-mute -mt-1">
-                {{
-                  hybrid: 'The trainer prescribes; the client can personalise.',
-                  prescribed: 'The trainer controls every workout.',
-                  custom: 'Clients build their own workouts.',
-                }[setForm.workout_mode_default] || ''}
-              </div>
-              {[
-                ['allow_substitute', 'Clients may substitute exercises'],
-                ['allow_add_exercise', 'Clients may add exercises'],
-                ['allow_edit_targets', 'Clients may edit sets / reps / weight']
-              ].map(([k, label]) => (
-                <label key={k} className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
-                  <input type="checkbox" className="accent-ember w-[18px] h-[18px] shrink-0" checked={!!setForm[k]} onChange={(e) => setSetForm((f) => ({ ...f, [k]: e.target.checked ? 1 : 0 }))} />
-                  {label}
-                </label>
+          {(d.packages || []).length ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {d.packages.map((p) => (
+                <div key={p.id} className="rounded-2xl p-4" style={{ border: '1px solid var(--line)', background: 'rgb(var(--tint-rgb) / .03)' }}>
+                  <div className="text-[16px] font-extrabold truncate" style={{ color: 'var(--ink)' }}>{p.name}</div>
+                  <div className="text-[22px] font-extrabold tabular-nums mt-1" style={{ color: 'var(--accent)' }}>₹{fmtK(p.amount)}</div>
+                  <div className="text-[13px] mt-0.5" style={{ color: 'var(--mute)' }}>{p.period_days} days</div>
+                  {p.features && <div className="text-[13px] mt-2 leading-relaxed" style={{ color: 'var(--mute)' }}>{p.features}</div>}
+                </div>
               ))}
-              <div className="text-[10px] text-faint font-grotesk uppercase tracking-wider mt-3">COMMUNITY</div>
-              <label className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
-                <input type="checkbox" className="accent-gold w-[18px] h-[18px] shrink-0" checked={!!setForm.community_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_enabled: e.target.checked ? 1 : 0 }))} />
-                Enable gym community
-              </label>
-              <label className="flex items-center gap-2.5 text-xs text-mute min-h-[40px] cursor-pointer">
-                <input type="checkbox" className="accent-gold w-[18px] h-[18px] shrink-0" checked={!!setForm.community_leaderboard_enabled} onChange={(e) => setSetForm((f) => ({ ...f, community_leaderboard_enabled: e.target.checked ? 1 : 0 }))} />
-                Enable leaderboards
-              </label>
-              <button className="btn-primary w-full" disabled={savingSet} onClick={async () => {
-                setSavingSet(true);
-                try {
-                  await api('/admin/settings', { method: 'PUT', body: JSON.stringify({ ...setForm, crowd_capacity: Number(setForm.crowd_capacity) || 150 }) });
-                  setToast('Gym settings saved'); settings.reload({ silent: true }); crowd.reload({ silent: true });
-                } catch (e) { setToast(e.message); }
-                setSavingSet(false);
-              }}>{savingSet ? 'Saving…' : 'Save gym settings'}</button>
             </div>
-          </div>
-        )}
-      </Card>
-
-      {/* attendance */}
-      <Card>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Kicker>Attendance</Kicker>
-          <div className="flex items-center gap-2">
-            <input type="date" aria-label="Attendance date" className="input !py-1.5 !text-[11px]" value={attDate} onChange={(e) => { setAttDate(e.target.value); loadAttendance(e.target.value); }} />
-            {!attList && <button className="btn btn-sm" onClick={() => loadAttendance()}>Load</button>}
-          </div>
-        </div>
-        {attList && (
-          <div className="space-y-1.5 mt-3">
-            {loadingAtt && <div className="text-xs text-mute py-4 text-center">Loading…</div>}
-            {!loadingAtt && !attList.length && <div className="text-xs text-mute py-4 text-center">No attendance records for this date.</div>}
-            {attList.map((a) => (
-              <div key={a.client_id} className="flex items-center justify-between rounded-xl border border-line bg-tint/[.03] px-3 py-2">
-                <span className="font-grotesk text-sm font-semibold">{a.client_name}</span>
-                <button className={`chip text-[10px] ${a.present ? 'border-good/40 text-good bg-good/10' : 'border-bad/40 text-bad bg-bad/10'}`} onClick={() => toggleAtt(a.client_id, !a.present)}>
-                  {a.present ? 'Present ✓' : 'Absent ✕'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+          ) : (
+            <div className="text-[15px] py-4" style={{ color: 'var(--mute)' }}>No plans yet. Add one to start selling memberships.</div>
+          )}
+        </Card>
+      </div>
 
       {/* payments */}
       <Card>
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <Kicker>Payments</Kicker>
+          <h2 className="ws-section-title">Payments</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <ExportButton path="/admin/export/payments.csv" filename="payments.csv" label="Export all payments as a spreadsheet" />
             <button className="btn btn-sm" onClick={() => setPayOpen(true)}>+ Record payment</button>
           </div>
         </div>
         {(d.recentPayments || []).length > 0 ? (
-          <div className="overflow-x-auto mt-2">
+          <div className="overflow-x-auto mt-2 relative">
+            {/* relative: the sr-only "Receipt" header is absolutely positioned and, without a
+                positioned ancestor here, escaped this scroller and widened the whole page at 320px. */}
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-mute font-grotesk border-b border-line">
@@ -430,9 +262,9 @@ export default function Business() {
                         {METHOD_LABEL[String(p.method || '').toLowerCase()] || p.method || '—'}
                       </td>
                       <td className="py-2 pr-3">
-                        <span className="inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold"
-                          style={{ color: tone, border: `1px solid ${tone}` }}>
-                          {status.toUpperCase()}
+                        <span className="inline-block rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold"
+                          style={{ color: tone, background: `color-mix(in srgb, ${tone} 14%, transparent)` }}>
+                          {status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()}
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-right">
@@ -455,7 +287,7 @@ export default function Business() {
       {/* members */}
       <Card>
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <Kicker>Members</Kicker>
+          <h2 className="ws-section-title">Members</h2>
           <ExportButton path="/admin/export/members.csv" filename="members.csv" label="Export the member list as a spreadsheet" />
         </div>
         {/* A roster that failed to load is not "No members yet". */}
@@ -473,61 +305,68 @@ export default function Business() {
         )}
       </Card>
 
-      <Modal open={pkgOpen} onClose={() => setPkgOpen(false)} title="New package">
-        <div className="space-y-3">
-          <input className="input" placeholder="Package name (e.g. Transformation)" value={pkgForm.name} onChange={(e) => setPkgForm((f) => ({ ...f, name: e.target.value }))} />
+      <Modal open={pkgOpen} onClose={() => setPkgOpen(false)} title="New plan">
+        <div className="space-y-4">
+          <label className="block"><span className="field-label block mb-1.5">Name</span>
+            <input className="input" placeholder="e.g. Transformation" value={pkgForm.name} onChange={(e) => setPkgForm((f) => ({ ...f, name: e.target.value }))} />
+          </label>
           <div className="grid grid-cols-2 gap-3">
-            <input className="input" type="number" placeholder="Amount ₹" value={pkgForm.amount} onChange={(e) => setPkgForm((f) => ({ ...f, amount: e.target.value }))} />
-            <input className="input" type="number" placeholder="Days (30)" value={pkgForm.period_days} onChange={(e) => setPkgForm((f) => ({ ...f, period_days: e.target.value }))} />
+            <label className="block"><span className="field-label block mb-1.5">Price (₹)</span>
+              <input className="input" type="number" inputMode="numeric" placeholder="1999" value={pkgForm.amount} onChange={(e) => setPkgForm((f) => ({ ...f, amount: e.target.value }))} />
+            </label>
+            <label className="block"><span className="field-label block mb-1.5">Length (days)</span>
+              <input className="input" type="number" inputMode="numeric" placeholder="30" value={pkgForm.period_days} onChange={(e) => setPkgForm((f) => ({ ...f, period_days: e.target.value }))} />
+            </label>
           </div>
-          <input className="input" placeholder="Features (comma separated)" value={pkgForm.features} onChange={(e) => setPkgForm((f) => ({ ...f, features: e.target.value }))} />
-          <button className="btn-primary w-full" onClick={addPackage}>Create package</button>
+          <label className="block"><span className="field-label block mb-1.5">What's included (optional)</span>
+            <input className="input" placeholder="Gym floor, 2 PT sessions, diet plan" value={pkgForm.features} onChange={(e) => setPkgForm((f) => ({ ...f, features: e.target.value }))} />
+          </label>
+          <button className="btn-primary w-full" onClick={addPackage}>Create plan</button>
         </div>
       </Modal>
 
-      <Modal open={subOpen} onClose={() => setSubOpen(false)} title="New subscription">
-        <div className="space-y-3">
-          <select className="input" aria-label="Member" value={subForm.client_id} onChange={(e) => setSubForm((f) => ({ ...f, client_id: e.target.value }))}>
-            <option value="">Choose member…</option>
-            {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-          <select className="input" aria-label="Package" value={subForm.package_id} onChange={(e) => setSubForm((f) => ({ ...f, package_id: e.target.value }))}>
-            <option value="">Choose package…</option>
-            {(d.packages || []).map((p) => <option key={p.id} value={p.id}>{p.name} · ₹{fmtK(p.amount)}</option>)}
-          </select>
+      <Modal open={subOpen} onClose={() => setSubOpen(false)} title="New membership">
+        <div className="space-y-4">
+          <div><span className="field-label block mb-1.5">Member</span>
+          <Select aria-label="Member" value={subForm.client_id} onChange={(v) => setSubForm((f) => ({ ...f, client_id: v }))}
+            placeholder="Choose a member" options={(members.data?.members || []).map((m) => ({ value: m.id, label: m.name }))} />
+          </div>
+          <div><span className="field-label block mb-1.5">Plan</span>
+          <Select aria-label="Package" value={subForm.package_id} onChange={(v) => setSubForm((f) => ({ ...f, package_id: v }))}
+            placeholder="Choose a plan" options={(d.packages || []).map((p) => ({ value: p.id, label: p.name, hint: `₹${fmtK(p.amount)} · ${p.period_days} days` }))} />
+          </div>
           {/* A bare date field gave no hint what the date was for. */}
           <div className="field">
             <label htmlFor="sub-start-date" className="field-label">Start date</label>
             <input id="sub-start-date" type="date" className="input mt-1.5" value={subForm.start_date} onChange={(e) => setSubForm((f) => ({ ...f, start_date: e.target.value }))} />
           </div>
-          <button className="btn-primary w-full" onClick={addSub}>Create subscription</button>
+          <button className="btn-primary w-full" onClick={addSub}>Create membership</button>
         </div>
       </Modal>
 
       <Modal open={payOpen} onClose={() => setPayOpen(false)} title="Record payment">
-        <div className="space-y-3">
-          <select className="input" aria-label="Member" value={payForm.client_id} onChange={(e) => setPayForm((f) => ({ ...f, client_id: e.target.value }))}>
-            <option value="">Choose member…</option>
-            {(members.data?.members || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
+        <div className="space-y-4">
+          <div><span className="field-label block mb-1.5">Member</span>
+            <Select aria-label="Member" value={payForm.client_id} onChange={(v) => setPayForm((f) => ({ ...f, client_id: v }))}
+              placeholder="Choose a member" options={(members.data?.members || []).map((m) => ({ value: m.id, label: m.name }))} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <input className="input" type="number" aria-label="Amount in rupees" placeholder="Amount ₹" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
-            <select className="input" aria-label="Payment method" value={payForm.method} onChange={(e) => setPayForm((f) => ({ ...f, method: e.target.value }))}>
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="cheque">Cheque</option>
-            </select>
+            <label className="block"><span className="field-label block mb-1.5">Amount (₹)</span>
+              <input className="input" type="number" inputMode="numeric" aria-label="Amount in rupees" placeholder="1999" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
+            </label>
+            <div><span className="field-label block mb-1.5">Method</span>
+              <Select aria-label="Payment method" value={payForm.method} onChange={(v) => setPayForm((f) => ({ ...f, method: v }))}
+                options={[['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['bank_transfer', 'Bank transfer'], ['cheque', 'Cheque']].map(([value, label]) => ({ value, label }))} />
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-[11px] text-mute">Paid on</span>
-              <input className="input mt-1" type="date" aria-label="Date paid" max={localDateKey()} value={payForm.paid_on} onChange={(e) => setPayForm((f) => ({ ...f, paid_on: e.target.value }))} />
+              <span className="field-label block mb-1.5">Paid on</span>
+              <input className="input" type="date" aria-label="Date paid" max={localDateKey()} value={payForm.paid_on} onChange={(e) => setPayForm((f) => ({ ...f, paid_on: e.target.value }))} />
             </label>
             <label className="block">
-              <span className="text-[11px] text-mute">Reference (optional)</span>
-              <input className="input mt-1" aria-label="Payment reference" maxLength={60} placeholder="UPI ref, cheque no." value={payForm.reference} onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))} />
+              <span className="field-label block mb-1.5">Reference (optional)</span>
+              <input className="input" aria-label="Payment reference" maxLength={60} placeholder="UPI ref, cheque no." value={payForm.reference} onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))} />
             </label>
           </div>
           <p className="text-[11px] text-mute">A receipt is issued for this payment. You and the member can both download it.</p>

@@ -84,7 +84,9 @@ test.describe('confirmation: allowing self check-in', () => {
     page.on('request', (r) => {
       if (r.method() === 'PUT' && new URL(r.url()).pathname === '/api/attendance/policy') policyWrites.push(r.url());
     });
-    await page.goto('/app/trainer/attendance');
+    // The trainer roster and its policy are the Attendance page's Trainers
+    // tab now; Members (check-ins) is the default tab.
+    await page.goto('/app/trainer/attendance?tab=trainers');
     // Exact, and only used while no dialog is open: the confirmation's own
     // action button carries the same words.
     const toggle = page.getByRole('button', { name: 'Allow self check-in', exact: true });
@@ -224,29 +226,20 @@ test.describe('nutrition targets', () => {
   });
 });
 
-test.describe('trainer navigation drawer', () => {
+/* The workspace drawer is gone: navigation is a permanent sidebar on a
+   computer and a tab bar plus a More page on a phone (TrainerLayout.jsx).
+   What has to hold now is that it is ordinary, keyboard-reachable links. */
+test.describe('trainer workspace navigation', () => {
   test.use({ storageState: storageFor('owner') });
 
-  test('holds keyboard focus while open and hands it back to the menu button', async ({ page }) => {
+  test('the sidebar is open without a click, and its links route by keyboard', async ({ page }) => {
     await page.goto('/app/trainer');
-    const menu = page.getByRole('button', { name: 'Open menu' });
-    await menu.click();
-
-    const drawer = page.getByRole('dialog', { name: 'Trainer navigation' });
-    await expect(drawer).toBeVisible();
-    await expect.poll(() => focusInside(drawer)).toBe(true);
-
-    for (let i = 0; i < 30; i += 1) {
-      await page.keyboard.press('Tab');
-      expect(await focusInside(drawer)).toBe(true);
-    }
-    for (let i = 0; i < 5; i += 1) {
-      await page.keyboard.press('Shift+Tab');
-      expect(await focusInside(drawer)).toBe(true);
-    }
-
-    await page.keyboard.press('Escape');
-    await expect(drawer).toBeHidden();
-    await expect(menu).toBeFocused();
+    const nav = page.getByRole('complementary', { name: 'Workspace' }).getByRole('navigation', { name: 'Main' });
+    await expect(nav).toBeVisible();
+    const payments = nav.getByRole('link', { name: 'Payments' });
+    await payments.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/app\/trainer\/business$/);
+    await expect(nav.getByRole('link', { name: 'Payments' })).toHaveAttribute('aria-current', 'page');
   });
 });

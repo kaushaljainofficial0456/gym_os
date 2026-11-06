@@ -46,7 +46,7 @@ const SHOTS = [
   ['client-membership', 'client', '/app/client/membership', MOBILE],
   ['owner-dashboard', 'owner', '/app/trainer', DESKTOP],
   ['owner-dashboard', 'owner', '/app/trainer', MOBILE],
-  ['owner-drawer', 'owner', '/app/trainer', MOBILE, (page) => page.getByRole('button', { name: 'Open menu' }).click()],
+  ['owner-more', 'owner', '/app/trainer/more', MOBILE],
   ['owner-clients', 'owner', '/app/trainer/clients', DESKTOP],
   ['owner-workouts', 'owner', '/app/trainer/workouts', DESKTOP],
   ['owner-attendance', 'owner', '/app/trainer/attendance', DESKTOP],

@@ -38,6 +38,12 @@ export const fmtDate = (iso) => {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 };
+/** "21 Dec 2026": a date a person reads, never the raw "2026-12-21". */
+export const fmtDayYear = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(String(iso).length === 10 ? `${iso}T12:00:00` : iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
 export const daysAgoLabel = (iso) => {
   if (!iso) return '—';
   const days = Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -77,10 +83,10 @@ export const exerciseLabel = (name) => {
 };
 
 export const STATUS_META = {
-  ON_TRACK: { label: 'ON TRACK', cls: 'text-good border-good/40 bg-good/10' },
-  NEEDS_ATTENTION: { label: 'NEEDS ATTENTION', cls: 'text-warn border-warn/40 bg-warn/10' },
-  AT_RISK: { label: 'AT RISK', cls: 'text-bad border-bad/40 bg-bad/10' },
-  INACTIVE: { label: 'INACTIVE', cls: 'text-mute border-line bg-white/5' }
+  ON_TRACK: { label: 'On track', cls: 'text-good border-good/40 bg-good/10' },
+  NEEDS_ATTENTION: { label: 'Needs attention', cls: 'text-warn border-warn/40 bg-warn/10' },
+  AT_RISK: { label: 'At risk', cls: 'text-bad border-bad/40 bg-bad/10' },
+  INACTIVE: { label: 'Inactive', cls: 'text-mute border-line bg-white/5' }
 };
 export const GOAL_LABEL = {
   FAT_LOSS: 'Fat Loss', MUSCLE_GAIN: 'Muscle Gain', RECOMP: 'Recomposition',

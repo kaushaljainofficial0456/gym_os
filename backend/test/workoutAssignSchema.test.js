@@ -81,3 +81,14 @@ test('POST /workouts/clients/:id/assign persists the requested scheduled_date an
   assert.equal(row.scheduled_date, '2026-09-15', 'must use the trainer-requested date, not silently default to today');
   assert.equal(row.day_label, 'Future Leg Day');
 });
+
+test('schemas.workoutTemplate accepts a stored template whose exercises have no tempo or notes (null)', () => {
+  // The member profile's "Assign workout" sends the template as the API
+  // returned it, and saved exercises carry NULL for both. This used to fail
+  // validation, so no template could be assigned from a member's profile.
+  const parsed = schemas.workoutTemplate.safeParse({
+    name: 'Push Day', scheduled_date: '2026-11-06',
+    exercises: [{ exercise_id: 'ex_1', name: 'Bench Press', sets: 3, reps: '8', weight: '60', rest_sec: 90, tempo: null, notes: null }],
+  });
+  assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
+});

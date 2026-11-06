@@ -81,9 +81,9 @@ test.describe('signed in', () => {
   // this context's session leaves the saved one other specs reuse intact.
   test('signing out ends the session, and the workspace is closed afterwards', async ({ page }) => {
     await page.goto('/app/trainer');
-    await page.getByRole('button', { name: 'Open menu' }).click();
+    // Desktop: the workspace sidebar is always open, sign-out at its foot.
     const logout = page.waitForResponse((r) => r.url().endsWith('/api/auth/logout'));
-    await page.getByRole('dialog', { name: 'Trainer navigation' }).getByRole('button', { name: /Sign out/ }).click();
+    await page.getByRole('complementary', { name: 'Workspace' }).getByRole('button', { name: 'Sign out' }).click();
     // The server must actually accept the logout: the client clears its own
     // state regardless, so a refused request looks like a working button
     // right up until the next page load signs the user straight back in.
