@@ -79,6 +79,26 @@ export function parseCookieHeader(header) {
   return cookies;
 }
 
+// The segments of a private upload's path (req.path under /uploads), or
+// null when any segment is not a plain name. The /uploads route checks
+// ownership against ONE segment (the client id) and then serves the
+// RESOLVED path -- so photos/<mine>/../<theirs>/x.jpg passed the check as
+// "mine" and resolved to "theirs" (Express hands `..` through unchanged).
+// Rejecting empty, `.` and `..` segments -- raw or percent-encoded -- and
+// any separator hidden inside a segment means the id that is checked is
+// always the directory that is served. Pure, so it is unit-testable.
+export function uploadPathSegments(reqPath) {
+  const rel = String(reqPath || '').replace(/^\//, '');
+  if (!rel) return null;
+  const seg = rel.split('/');
+  for (const s of seg) {
+    let d;
+    try { d = decodeURIComponent(s); } catch { return null; }
+    if (!d || d === '.' || d === '..' || /[\\/]/.test(d) || d.includes('\0')) return null;
+  }
+  return seg;
+}
+
 // Builds the Express app without starting a listener, so it can be reused
 // both by the traditional long-running server below (for local dev or a
 // persistent host like Railway/Render) and by a serverless entry point
@@ -316,7 +336,8 @@ app.use('/uploads', requireAuth, async (req, res) => {
   const rel = req.path.replace(/^\//, '');
   // the requesting user must be authorized for this image
   // paths: tmp/<client_id>/... (label scans) | photos/<client_id>/... (progress photos)
-  const seg = rel.split('/');
+  const seg = uploadPathSegments(req.path);
+  if (!seg) return res.status(404).json({ error: 'Not found' });
   const owner = seg[0] === 'tmp' || seg[0] === 'photos' ? seg[1] : seg[0];
   const client = await db.q1('SELECT id, org_id, user_id, trainer_id FROM clients WHERE id = ?', [owner]);
   if (!client) return res.status(404).json({ error: 'Not found' });
