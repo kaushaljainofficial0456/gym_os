@@ -70,8 +70,29 @@ export function plans() {
  */
 export async function isIndependentClient(db, user) {
   if (!user || user.role !== 'CLIENT' || !user.org) return false;
-  const org = await db.q1('SELECT type, slug FROM organizations WHERE id = ?', [user.org]);
-  return org?.type === 'independent' && org?.slug === 'independent';
+  return isIndependentOrgCached(db, user.org);
+}
+
+// planGate asks this on EVERY request a client makes, ahead of the route,
+// and it was the one uncached query on that path -- a full database round
+// trip added to every client request. An org's type and slug are fixed
+// when it is created (nothing in the app updates either), so the answer is
+// held per org for a few minutes. Keyed by database handle as well as org
+// id so two databases in one process (the test suite) never share answers.
+// A failed lookup is not cached and still throws, exactly as before: the
+// gate fails open on it and the plan routes report it.
+const ORG_KIND_TTL_MS = 5 * 60 * 1000;
+const orgKindCache = new WeakMap(); // db -> Map(orgId -> { independent, at })
+async function isIndependentOrgCached(db, orgId) {
+  let byOrg = orgKindCache.get(db);
+  if (!byOrg) { byOrg = new Map(); orgKindCache.set(db, byOrg); }
+  const hit = byOrg.get(orgId);
+  if (hit && Date.now() - hit.at < ORG_KIND_TTL_MS) return hit.independent;
+  const org = await db.q1('SELECT type, slug FROM organizations WHERE id = ?', [orgId]);
+  const independent = org?.type === 'independent' && org?.slug === 'independent';
+  if (byOrg.size > 5000) byOrg.clear();
+  byOrg.set(orgId, { independent, at: Date.now() });
+  return independent;
 }
 
 async function trialStart(db, userId) {

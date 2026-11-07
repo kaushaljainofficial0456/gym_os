@@ -3122,3 +3122,28 @@ CREATE TABLE IF NOT EXISTS tournament_audit (
   created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tournament_audit_t ON tournament_audit(tournament_id, created_at);
+
+-- ---- Lookup indexes for hot request paths (engineering audit, 2026-11) ----
+-- Each one matches a filter the request path already runs, found by
+-- comparing every "FROM <table> WHERE <column>" in backend/src with the
+-- indexes above (see docs/PERFORMANCE_OPTIMIZATION.md). All additive and
+-- IF NOT EXISTS: re-running db:init is a no-op once they exist, and no
+-- query changes shape or result because of them.
+--
+-- nutrition_plans: "the client's current plan" (client_id ... ORDER BY
+-- created_at DESC LIMIT 1) runs on the client home screen, the coach brief
+-- and every adherence score, and had no index on client_id at all.
+CREATE INDEX IF NOT EXISTS idx_nutrition_plans_client ON nutrition_plans(client_id, created_at);
+-- workout_logs: the largest table (one row per logged set). Looked up by
+-- workout_id in correlated subqueries -- a log count per listed workout,
+-- "has this workout been logged" checks -- which without an index scan the
+-- whole table once per workout row.
+CREATE INDEX IF NOT EXISTS idx_wlogs_workout ON workout_logs(workout_id);
+-- subscriptions by client (member detail, enrolment, refunds): latest by end_date.
+CREATE INDEX IF NOT EXISTS idx_subs_client ON subscriptions(client_id, end_date);
+-- attendance by client (member detail: visits this month / all time).
+CREATE INDEX IF NOT EXISTS idx_att_client ON attendance(client_id, date);
+-- payments by gateway reference (receipts, enrolment reconciliation).
+CREATE INDEX IF NOT EXISTS idx_payments_external_ref ON payments(external_ref);
+-- users by org and role (owner/staff fan-out for notifications, console).
+CREATE INDEX IF NOT EXISTS idx_users_org_role ON users(org_id, role);

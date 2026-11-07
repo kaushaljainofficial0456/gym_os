@@ -151,9 +151,15 @@ export async function generateWeeklySummary(db, clientId) {
 }
 
 // Short, data-backed message shown on the client home screen.
-export async function generateCoachMessage(db, clientId) {
-  const a = await computeAdherence(db, clientId);
-  const weights = await db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? ORDER BY date DESC LIMIT 2', [clientId]);
+// `opts.adherence`: a computeAdherence(db, clientId) result the caller has
+// already computed for the same client (the client home route does), so
+// the eight queries behind it are not run a second time in one request.
+// Without it the score is computed here, as before.
+export async function generateCoachMessage(db, clientId, opts = {}) {
+  const [a, weights] = await Promise.all([
+    opts.adherence ? Promise.resolve(opts.adherence) : computeAdherence(db, clientId),
+    db.q('SELECT date, weight FROM weight_logs WHERE client_id = ? ORDER BY date DESC LIMIT 2', [clientId]),
+  ]);
   const parts = [];
   if (weights.length === 2) {
     const delta = round1(weights[0].weight - weights[1].weight);

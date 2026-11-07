@@ -321,15 +321,29 @@ export default function trackingRoutes(db) {
     // the CURRENT plan) is what the response actually uses. Verified via
     // a full-body grep before removing, not assumed: a wasted query on
     // the app's single most-loaded endpoint, now gone.
-    const latestPlan = plan ? await db.q('SELECT * FROM meals WHERE plan_id = ? ORDER BY position', [plan.id]) : [];
+    //
+    // The current plan's meals, today's session and the coach line are
+    // independent of each other, so they are fetched together. Today's
+    // session still starts only after the reads above: it can materialize
+    // today's workout from the program (a write), and the adherence score
+    // above has always been read before that happens.
+    //
+    // The coach line reuses that same adherence score instead of computing
+    // it again (8 more queries). The only difference this can make is on
+    // the one request per day that materializes the workout: the coach's
+    // "Workout completion" figure now matches the adherence numbers sent in
+    // this same response, rather than briefly counting the new workout.
+    const tz = await getOrgTzCached(db, client.org_id);
+    const [latestPlan, session, coachMessage] = await Promise.all([
+      plan ? db.q('SELECT * FROM meals WHERE plan_id = ? ORDER BY position', [plan.id]) : [],
+      todaySession(db, client.id, tz),
+      generateCoachMessage(db, client.id, { adherence }),
+    ]);
     const logMap = new Map(logs.map(l => [l.meal_id, l]));
     const eaten = logs.filter(l => l.eaten).reduce((s, l) => ({
       calories: s.calories + l.calories, protein: s.protein + l.protein,
       carbs: s.carbs + l.carbs, fat: s.fat + l.fat
     }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-    const tz = await getOrgTzCached(db, client.org_id);
-    const session = await todaySession(db, client.id, tz);
 
     res.json({
       client: {
@@ -359,7 +373,7 @@ export default function trackingRoutes(db) {
       },
       water: { litres: water?.litres ?? 0, target: profile?.water_target_l ?? 3 },
       sleep: sleep || null,
-      coachMessage: await generateCoachMessage(db, client.id)
+      coachMessage
     });
   });
 
@@ -379,30 +393,50 @@ export default function trackingRoutes(db) {
     if (req.user.role !== 'CLIENT') return res.status(403).json({ error: 'Client portal only' });
     const client = await db.q1('SELECT * FROM clients WHERE user_id = ?', [req.user.sub]);
     if (!client) return res.status(404).json({ error: 'Client profile not found' });
-    const prog = await getActiveProgram(db, client.id);
-    const days = prog ? await getProgramDays(db, prog.id) : [];
+    // The coach's programme (program -> its days) and the client's own
+    // planner schedule are independent chains, so they are read together
+    // rather than one after the other; the batched lookups below likewise.
     // planner schedule (client-owned reusable workouts assigned to weekdays)
     // NOTE: planner stores day_of_week 0=Mon..6=Sun; training_days uses 1=Mon..6=Sat,0=Sun
-    const sched = await db.q('SELECT day_of_week, workout_id FROM client_workout_schedule WHERE client_id = ?', [client.id]);
+    const [[prog, days], sched] = await Promise.all([
+      getActiveProgram(db, client.id).then(async (p) => [p, p ? await getProgramDays(db, p.id) : []]),
+      db.q('SELECT day_of_week, workout_id FROM client_workout_schedule WHERE client_id = ?', [client.id]),
+    ]);
     const byDow = new Map();
     for (const s of sched) {
       const tDow = (Number(s.day_of_week) + 1) % 7; // planner 0=Mon -> training 1=Mon .. planner 6=Sun -> training 0=Sun
       byDow.set(tDow, s.workout_id);
     }
     const plannerIds = [...new Set(sched.map((s) => s.workout_id).filter(Boolean))];
-    const plannerNames = plannerIds.length
-      ? await db.q('SELECT id, name FROM client_workouts WHERE id IN (' + plannerIds.map(() => '?').join(',') + ')', plannerIds)
-      : [];
+    // Batch-fetch every scheduled day's template exercises in one query
+    // instead of one sequential `await` per day-of-week inside the loop
+    // below (up to 7 round trips) — same batch-then-group-in-JS pattern
+    // used for plannerExs/byPlannerWorkout.
+    const templateIds = [...new Set(days.map((d) => d.template_id).filter(Boolean))];
+    const [plannerNames, plannerExs, templateExs] = await Promise.all([
+      plannerIds.length
+        ? db.q('SELECT id, name FROM client_workouts WHERE id IN (' + plannerIds.map(() => '?').join(',') + ')', plannerIds)
+        : [],
+      plannerIds.length
+        ? db.q(
+            `SELECT cwe.workout_id, cwe.position, cwe.name, cwe.sets, cwe.reps, cwe.weight, cwe.rest_sec,
+                    el.primary_muscle, el.secondary_muscles, el.equipment, el.animation_key
+               FROM client_workout_exercises cwe
+               LEFT JOIN exercise_library el ON el.id = cwe.exercise_id
+              WHERE cwe.workout_id IN (${plannerIds.map(() => '?').join(',')})
+              ORDER BY cwe.workout_id, cwe.position`, plannerIds)
+        : [],
+      templateIds.length
+        ? db.q(
+            `SELECT we.template_id, we.position, we.name, we.sets, we.reps, we.weight, we.rest_sec,
+                    el.primary_muscle, el.secondary_muscles, el.equipment, el.animation_key
+               FROM workout_exercises we
+               LEFT JOIN exercise_library el ON el.id = we.exercise_id
+              WHERE we.template_id IN (${templateIds.map(() => '?').join(',')})
+              ORDER BY we.template_id, we.position`, templateIds)
+        : [],
+    ]);
     const nameById = new Map(plannerNames.map((p) => [p.id, p.name]));
-    const plannerExs = plannerIds.length
-      ? await db.q(
-          `SELECT cwe.workout_id, cwe.position, cwe.name, cwe.sets, cwe.reps, cwe.weight, cwe.rest_sec,
-                  el.primary_muscle, el.secondary_muscles, el.equipment, el.animation_key
-             FROM client_workout_exercises cwe
-             LEFT JOIN exercise_library el ON el.id = cwe.exercise_id
-            WHERE cwe.workout_id IN (${plannerIds.map(() => '?').join(',')})
-            ORDER BY cwe.workout_id, cwe.position`, plannerIds)
-      : [];
     const byPlannerWorkout = new Map();
     for (const ex of plannerExs) {
       if (!byPlannerWorkout.has(ex.workout_id)) byPlannerWorkout.set(ex.workout_id, []);
@@ -410,20 +444,6 @@ export default function trackingRoutes(db) {
     }
 
     const DOW_LABEL = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-    // Batch-fetch every scheduled day's template exercises in one query
-    // instead of one sequential `await` per day-of-week inside the loop
-    // below (up to 7 round trips) — same batch-then-group-in-JS pattern
-    // already used above for plannerExs/byPlannerWorkout.
-    const templateIds = [...new Set(days.map((d) => d.template_id).filter(Boolean))];
-    const templateExs = templateIds.length
-      ? await db.q(
-          `SELECT we.template_id, we.position, we.name, we.sets, we.reps, we.weight, we.rest_sec,
-                  el.primary_muscle, el.secondary_muscles, el.equipment, el.animation_key
-             FROM workout_exercises we
-             LEFT JOIN exercise_library el ON el.id = we.exercise_id
-            WHERE we.template_id IN (${templateIds.map(() => '?').join(',')})
-            ORDER BY we.template_id, we.position`, templateIds)
-      : [];
     const byTemplate = new Map();
     for (const ex of templateExs) {
       // template_id was only needed to group here — drop it so each

@@ -171,26 +171,34 @@ export async function todaySession(db, clientId, tz) {
   }
   const estKcal = calorie?.estimated_active_kcal ?? null;
 
+  // Progressive-overload targets and equipment alternatives are read-only
+  // lookups per exercise. They used to run one exercise at a time -- a
+  // six-exercise session waited on six sequential suggestion lookups and
+  // then six more for alternatives, on the client home screen and the
+  // workout screen. They now run together; results keep exercise order.
   // progressive-overload next targets for exercises with history
+  const [suggested, profile] = await Promise.all([
+    Promise.all(exercises.map((ex) => (ex.exercise_id
+      ? suggestNextTarget(db, clientId, ex.exercise_id, { prescribedReps: parseInt(ex.reps) || null })
+      : null))),
+    // equipment availability + alternatives (client profile aware)
+    db.q1('SELECT equipment FROM client_profiles WHERE client_id = ?', [clientId]),
+  ]);
   const suggestions = [];
-  for (const ex of exercises) {
-    if (!ex.exercise_id) continue;
-    const s = await suggestNextTarget(db, clientId, ex.exercise_id, { prescribedReps: parseInt(ex.reps) || null });
-    if (s) suggestions.push({ exercise_id: ex.id, library_id: ex.exercise_id, current: s.current, suggested: s.suggested, rationale: s.rationale, increment: s.increment });
-  }
+  exercises.forEach((ex, i) => {
+    const s = suggested[i];
+    if (ex.exercise_id && s) suggestions.push({ exercise_id: ex.id, library_id: ex.exercise_id, current: s.current, suggested: s.suggested, rationale: s.rationale, increment: s.increment });
+  });
 
-  // equipment availability + alternatives (client profile aware)
-  const profile = await db.q1('SELECT equipment FROM client_profiles WHERE client_id = ?', [clientId]);
   const available = parseAvailable(profile?.equipment);
-  const equipment = [];
-  for (const ex of exercises) {
+  const equipment = await Promise.all(exercises.map(async (ex) => {
     const need = requiredItems(ex.equipment);
     const missing = need.filter(i => !available.has(i));
     const alternatives = missing.length && ex.exercise_id
       ? await suggestAlternatives(db, { id: ex.exercise_id, primary_muscle: ex.primary_muscle, equipment: ex.equipment, difficulty: ex.difficulty, movement: ex.movement }, profile?.equipment)
       : [];
-    equipment.push({ exercise_id: ex.id, name: ex.name, required: need, missing, ok: missing.length === 0, alternatives });
-  }
+    return { exercise_id: ex.id, name: ex.name, required: need, missing, ok: missing.length === 0, alternatives };
+  }));
 
   return {
     workout: { ...w, exercises },

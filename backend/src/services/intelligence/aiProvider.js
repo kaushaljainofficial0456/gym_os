@@ -152,7 +152,10 @@ export async function ping() {
   const now = Date.now();
   if (now - pingCache.at < 8000) return pingCache;
   try {
-    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { method: 'GET' });
+    // Bounded: the coach brief awaits this on the client Home screen, and an
+    // OLLAMA_BASE_URL that is unreachable (rather than refusing) would
+    // otherwise hold the request for the full TCP connect timeout.
+    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { method: 'GET', signal: AbortSignal.timeout(2000) });
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
     const models = (data.models || []).map((m) => m.name || '');
