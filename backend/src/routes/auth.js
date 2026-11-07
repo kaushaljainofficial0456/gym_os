@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
-import { hashPassword, verifyPassword, needsRehash, signToken, setAuthCookie, clearAuthCookie, requireAuth } from '../auth.js';
+import { hashPassword, verifyPassword, needsRehash, signToken, setAuthCookie, clearAuthCookie, requireAuth, revokeUserSessions } from '../auth.js';
 import { rateLimit, getRateLimitStore } from '../rateLimit.js';
 import { validate } from '../validate.js';
 import { id, now } from '../ids.js';
@@ -683,15 +683,16 @@ export default function authRoutes(db) {
     }
     await db.run('UPDATE users SET password_hash = ? WHERE id = ?',
       [await hashPassword(req.body.new_password), user.id]);
-    // F-10: does NOT clear this session's own cookie (unlike
-    // /reset-password, which does) -- the caller just proved BOTH the
-    // old and new password from an already-authenticated session, so
-    // forcing an immediate re-login here would be a pure UX regression
-    // with no real security benefit for THIS device. Cross-device
-    // session revocation has the same residual-risk limitation noted on
-    // /reset-password above (stateless JWTs, no token-epoch mechanism
-    // yet) -- an attacker who already has a valid token for this
-    // account from another device keeps it until natural expiry.
+    // Ends every OTHER session this account has (another device, or a
+    // token someone copied) -- see auth.js's revokeUserSessions. THIS
+    // session continues: the caller just proved both passwords from it, so
+    // a forced re-login here would be a UX regression with no security
+    // benefit. Its replacement token is re-signed from the CURRENT claims,
+    // not the users row, so a session switched to another gym
+    // (/switch-gym) stays on that gym.
+    await revokeUserSessions(db, user.id);
+    const { sub, role, org, name, email } = req.user;
+    setAuthCookie(res, signToken({ id: sub, role, org_id: org, name, email }));
     res.json({ ok: true });
   });
 
@@ -770,6 +771,17 @@ export default function authRoutes(db) {
   // DB read or write -- nothing here needs a verified identity.
   const logoutLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.ip || 'anon' });
   r.post('/logout', logoutLimit, (req, res) => {
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  });
+
+  // Sign out of every device, this one included. The same revocation a
+  // password change makes, without changing the password -- for a lost
+  // phone or a shared computer someone forgot to sign out of. Unlike
+  // /logout this needs a verified identity: it acts on the account.
+  r.post('/logout-everywhere', logoutLimit, requireAuth, async (req, res) => {
+    if (req.user.demo) return res.status(403).json({ error: 'Not available in the demo.' });
+    await revokeUserSessions(db, req.user.sub);
     clearAuthCookie(res);
     res.json({ ok: true });
   });
@@ -854,18 +866,12 @@ export default function authRoutes(db) {
       return res.status(422).json({ error: messages[result.reason] || 'This reset link is invalid.', reason: result.reason });
     }
     await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(req.body.newPassword), result.userId]);
-    // Clears THIS browser's own session cookie, if the reset happened to
-    // be performed from an already-logged-in tab -- forces a fresh
-    // login with the new password on this device. Does NOT invalidate
-    // any OTHER device's still-live session/cookie: this app's JWTs are
-    // stateless with no server-side session store to revoke against, so
-    // true cross-device revocation on password change would need a
-    // per-user token-epoch check added to requireAuth's own hot path
-    // (which runs on nearly every request across the whole app) -- a
-    // real, load-tested performance-sensitive change in its own right,
-    // deliberately scoped OUT of this pass rather than bolted on
-    // untested. See the security verification report's F-10 section for
-    // this called out explicitly as a residual risk, not an oversight.
+    // A reset is the "someone may have my password" path, so every session
+    // the account has -- on any device -- ends here (auth.js's
+    // revokeUserSessions; previously the F-10 residual risk: other devices
+    // kept working for up to 7 days). This browser's own cookie is cleared
+    // too, so the next step is a fresh sign-in with the new password.
+    await revokeUserSessions(db, result.userId);
     clearAuthCookie(res);
     res.json({ ok: true });
   });

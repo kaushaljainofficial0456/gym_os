@@ -373,6 +373,14 @@ const MIGRATIONS = [
   // limits is held for a founder instead of activated; this is the lock
   // that keeps any later callback from activating it (couponEngine.js).
   ['barbell_plan_orders', 'review_reason', `review_reason TEXT`],
+  // --- Session revocation (engineering audit, 2026-11) ---
+  // Sessions are stateless JWTs, so a password change or reset used to end
+  // only the browser it happened in; a token on another device -- or one an
+  // attacker had copied -- stayed valid for its full 7 days. requireAuth now
+  // rejects any token issued (its `iat`) before this instant. NULL for
+  // everyone until they change or reset a password, so no existing session
+  // is affected by the column arriving. See auth.js's readUserGate.
+  ['users', 'sessions_valid_after', `sessions_valid_after TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

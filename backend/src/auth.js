@@ -143,18 +143,77 @@ const BCRYPT_COST = 12;
 // cached read per request (same shape as the billing gate above) closes
 // that. Only an explicit active = 0 blocks: a missing row or a failed
 // lookup passes, like every other gate in requireAuth.
-const userActiveCache = new Map(); // userId -> { off: boolean, at: ms }
+//
+// ---- revoked sessions ----
+// The same read also carries users.sessions_valid_after: a token issued
+// (its `iat`) before that instant is refused. A password change or reset
+// sets it, which ends every OTHER session the account has -- including a
+// token someone copied -- instead of leaving them valid for the rest of
+// their 7 days. Read in the one query the deactivation check already
+// makes, so it costs no extra round trip. Like deactivation, it reaches
+// other warm instances within USER_ACTIVE_TTL_MS (immediately on the
+// instance that made the change, which invalidates its own entry).
+//
+// A timestamp rather than a per-user counter in the token on purpose:
+// every token already carries `iat`, so none of the places that sign one
+// had to change, and none can forget to.
+const userActiveCache = new Map(); // userId -> { off: boolean, validAfterSec: number|null, at: ms }
 const USER_ACTIVE_TTL_MS = 30_000;
-export async function isUserDeactivatedCached(db, userId) {
+
+async function readUserGate(db, userId) {
+  try {
+    return await db.q1('SELECT active, sessions_valid_after FROM users WHERE id = ?', [userId]);
+  } catch {
+    // sessions_valid_after not migrated yet (code ahead of db:init, or a
+    // test database built from schema.sql alone): deactivation keeps
+    // working; revocation simply has nothing to enforce.
+    return db.q1('SELECT active FROM users WHERE id = ?', [userId]);
+  }
+}
+
+export async function getUserGateCached(db, userId) {
   const hit = userActiveCache.get(userId);
-  if (hit && Date.now() - hit.at < USER_ACTIVE_TTL_MS) return hit.off;
-  const row = await db.q1('SELECT active FROM users WHERE id = ?', [userId]);
+  if (hit && Date.now() - hit.at < USER_ACTIVE_TTL_MS) return hit;
+  const row = await readUserGate(db, userId);
   const off = !!row && (row.active === 0 || row.active === '0' || row.active === false);
+  const parsed = row?.sessions_valid_after ? Date.parse(row.sessions_valid_after) : NaN;
+  const entry = { off, validAfterSec: Number.isFinite(parsed) ? Math.floor(parsed / 1000) : null, at: Date.now() };
   if (userActiveCache.size > 5000) userActiveCache.clear();
-  userActiveCache.set(userId, { off, at: Date.now() });
-  return off;
+  userActiveCache.set(userId, entry);
+  return entry;
+}
+export async function isUserDeactivatedCached(db, userId) {
+  return (await getUserGateCached(db, userId)).off;
 }
 export function invalidateUserActive(userId) { userActiveCache.delete(userId); }
+
+/** True when a token issued at `iat` (JWT seconds) predates the user's
+ *  last revocation. No revocation recorded => never revoked. */
+export function isSessionRevoked(gate, iat) {
+  if (!gate || gate.validAfterSec == null) return false;
+  return !Number.isFinite(iat) || iat < gate.validAfterSec;
+}
+
+/** End every session this user has open, everywhere. Stored at whole-second
+ *  precision because `iat` is in whole seconds: a token signed right after
+ *  this (the caller's replacement session) has iat >= the stored second and
+ *  stays valid. Returns the stored instant. */
+export async function revokeUserSessions(db, userId) {
+  const at = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString();
+  try {
+    await db.run('UPDATE users SET sessions_valid_after = ? WHERE id = ?', [at, userId]);
+  } catch (e) {
+    // Only possible on a database that has not run db:init since the
+    // column was added (production's deploy gate, db:check, refuses to
+    // build in that state). The password change itself must still
+    // succeed; say loudly that other sessions were not ended.
+    console.error('[auth] could not revoke other sessions (run `npm run db:init`):', e?.message || e);
+    return null;
+  } finally {
+    invalidateUserActive(userId);
+  }
+  return at;
+}
 
 export const hashPassword = (plain) => bcrypt.hash(plain, BCRYPT_COST);
 export const verifyPassword = (plain, hash) => bcrypt.compare(plain, hash);
@@ -327,10 +386,32 @@ export async function requireAuth(req, res, next) {
     // app's handle makes the middleware read the same data the routes
     // mounted beside it do, in every environment.
     db = (typeof req.app?.get === 'function' ? req.app.get('db') : null) || await getDb();
-    req.tz = await getOrgTzCached(db, req.user.org || null);
   } catch {
-    req.tz = DEFAULT_TZ;
+    db = undefined;
   }
+  // The four per-request lookups below (org timezone, demo-org flag,
+  // account switched off, gym suspended) are independent reads, so they
+  // are started together and awaited once. They used to run one after
+  // another: on an instance whose caches were cold -- every new serverless
+  // instance, and every user whose 30-60s cache entry had lapsed -- a
+  // request waited on four sequential database round trips before its
+  // route even began. Each keeps its own failure posture exactly as
+  // before (timezone falls back to the default; demo flag, deactivation
+  // and suspension fail open), and the results are still CHECKED in the
+  // original order below -- demo gate, then deactivation, then suspension
+  // -- so which answer a request gets is unchanged. Only the waiting is.
+  const org = req.user.org || null;
+  const [tz, demoOrg, userGate, billingStatus] = await Promise.all([
+    db ? getOrgTzCached(db, org).catch(() => DEFAULT_TZ) : DEFAULT_TZ,
+    // Not needed when the token already carries a demo claim (the gate
+    // below runs regardless), exactly as the short-circuit `||` skipped it.
+    (!req.user.demo && org && db) ? isDemoOrgCached(db, org) : false,
+    (db && req.user.sub && !req.user.demo)
+      ? getUserGateCached(db, req.user.sub).catch(() => null) // fail open, like the gates around it
+      : null,
+    (org && db) ? getOrgBillingStatusCached(db, org).catch(() => null) : null,
+  ]);
+  req.tz = tz;
   // ---- DEMO SESSION GATE ----
   // The server-side half of the 30-minute timer, and the reason a
   // frontend countdown cannot be negotiated with: EVERY request carrying
@@ -346,7 +427,7 @@ export async function requireAuth(req, res, next) {
   // specific "your demo has ended" answer rather than a generic one, and
   // so the demo's own tenant state can never be confused with a paying
   // gym's billing state.
-  if (req.user.demo || (req.user.org && db && await isDemoOrgCached(db, req.user.org))) {
+  if (req.user.demo || demoOrg) {
     if (!db) return res.status(503).json({ error: 'demo_unavailable', message: 'Demo is temporarily unavailable.' });
     // An org-less token (SUPER_ADMIN) never reaches here, so this is
     // always a demo-tenant token -- and one WITHOUT a demo claim is by
@@ -386,13 +467,15 @@ export async function requireAuth(req, res, next) {
 
   // A switched-off account loses its open sessions on the next request,
   // not when its token happens to expire (see isUserDeactivatedCached).
-  if (db && req.user.sub && !req.user.demo) {
-    try {
-      if (await isUserDeactivatedCached(db, req.user.sub)) {
-        clearAuthCookie(res);
-        return res.status(401).json({ error: 'This account is no longer active.' });
-      }
-    } catch { /* fail open, like the gates around it */ }
+  if (userGate?.off) {
+    clearAuthCookie(res);
+    return res.status(401).json({ error: 'This account is no longer active.' });
+  }
+  // A session ended by a password change/reset or "sign out everywhere"
+  // (see getUserGateCached / revokeUserSessions).
+  if (isSessionRevoked(userGate, req.user.iat)) {
+    clearAuthCookie(res);
+    return res.status(401).json({ error: 'session_revoked', message: 'This session has ended. Please sign in again.' });
   }
 
   // A SUSPENDED gym (SUPER_ADMIN console) blocks every org-scoped request
@@ -403,13 +486,10 @@ export async function requireAuth(req, res, next) {
   // that role, same as orgScope's own handling below) and is exactly who
   // needs to still be able to act on a suspended org, so this can never
   // lock an operator out of the gym they just suspended.
-  if (req.user.org && db) {
-    try {
-      const billingStatus = await getOrgBillingStatusCached(db, req.user.org);
-      if (billingStatus === 'SUSPENDED') {
-        return res.status(403).json({ error: 'This gym\'s account has been suspended. Contact support.' });
-      }
-    } catch { /* lookup failure must never itself block a login -- fail open, same as the tz lookup above */ }
+  // (A lookup failure never blocks a login -- fail open, same as the tz
+  // lookup above; that is the .catch on its promise.)
+  if (billingStatus === 'SUSPENDED') {
+    return res.status(403).json({ error: 'This gym\'s account has been suspended. Contact support.' });
   }
   // Scope the authenticated org for the rest of this request (db.tx uses it to
   // engage PostgreSQL RLS). Must wrap next() so the ALS context covers downstream.
