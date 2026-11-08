@@ -76,7 +76,40 @@ export const clearSession = () => {
 // on top of the one api()'s own 401 branch already sent -- that pair was
 // visible in the server log as two POST /auth/logout per anonymous page
 // load, one of them pure waste.
-export const clearStoredUser = () => { localStorage.removeItem(USER_KEY); };
+export const clearStoredUser = () => { localStorage.removeItem(USER_KEY); clearResponseCache(); };
+
+// ---- Last-seen responses, for screens revisited in the same tab ----
+// useFetch(fn, deps, { key }) shows the last response it saw for `key`
+// straight away and refreshes it in the background, so going back to a
+// tab renders immediately instead of putting its loading placeholders up
+// again (every page remounts on navigation, and each one used to refetch
+// from nothing). Memory only -- never written to storage -- and scoped to
+// the signed-in user AND gym, so one person's data can never be shown to
+// another, or to the same person switched to another gym. Cleared whenever
+// the session changes (sign-in, gym switch, sign-out, an expired session).
+// Opt-in per call: screens where a moment of stale data could mislead
+// (payments, plans, live logging) simply do not pass a key.
+const responseCache = new Map(); // `${userId}|${orgId}::${key}` -> data
+const RESPONSE_CACHE_MAX = 60;
+const cacheScope = () => {
+  const u = getStoredUser();
+  return u?.id ? `${u.id}|${u.orgId || ''}` : null;
+};
+export function readCachedResponse(key) {
+  const scope = cacheScope();
+  if (!scope || !key) return undefined;
+  const k = `${scope}::${key}`;
+  return responseCache.has(k) ? responseCache.get(k) : undefined;
+}
+export function writeCachedResponse(key, data) {
+  const scope = cacheScope();
+  if (!scope || !key) return;
+  const k = `${scope}::${key}`;
+  responseCache.delete(k); // re-insert so the oldest entry is evicted first
+  responseCache.set(k, data);
+  if (responseCache.size > RESPONSE_CACHE_MAX) responseCache.delete(responseCache.keys().next().value);
+}
+export function clearResponseCache() { responseCache.clear(); }
 
 // Downloads a binary response (e.g. an invoice PDF) -- same pattern as
 // admin/'s own downloadCsv() helper. api()'s JSON-only parsing can't be

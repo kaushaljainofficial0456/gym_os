@@ -75,7 +75,7 @@ export default function Community() {
   const [prVisibility, setPrVisibility] = useState('everyone');
   const [followingCount, setFollowingCount] = useState(0);
 
-  const membershipFetch = useFetch(() => api('/community/membership'));
+  const membershipFetch = useFetch(() => api('/community/membership'), [], { key: 'community/membership' });
   const joined = !!membershipFetch.data?.membership?.enabled;
   const [confirm, confirmDialog] = useConfirm();
   const available = membershipFetch.data?.available !== false;
@@ -85,13 +85,13 @@ export default function Community() {
   // correctly refuse.
   const overviewFetch = useFetch(
     () => (joined ? api(`/community/overview?period=${period}`) : Promise.resolve(null)),
-    [joined, period]);
+    [joined, period], { key: `community/overview:${joined}:${period}` });
   const boardsFetch = useFetch(
     () => (joined ? api(`/community/leaderboards?period=${period}`) : Promise.resolve(null)),
-    [joined, period]);
+    [joined, period], { key: `community/leaderboards:${joined}:${period}` });
   const challengesFetch = useFetch(
     () => (joined ? api('/community/challenges') : Promise.resolve(null)),
-    [joined]);
+    [joined], { key: `community/challenges:${joined}` });
 
   const [shares, setShares] = useState([]);
   const [feedOffset, setFeedOffset] = useState(0);

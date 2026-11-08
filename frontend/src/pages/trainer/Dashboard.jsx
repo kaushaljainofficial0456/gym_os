@@ -87,10 +87,10 @@ export default function Dashboard() {
   const isTrainerOnly = user?.role === 'TRAINER';
 
   // Trainers use the scoped endpoint; owners/admins use the org-wide overview.
-  const ov = useFetch(() => api(isTrainerOnly ? '/dashboard/trainer' : '/dashboard/overview'));
-  const att = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/attention')));
+  const ov = useFetch(() => api(isTrainerOnly ? '/dashboard/trainer' : '/dashboard/overview'), [], { key: isTrainerOnly ? 'dashboard/trainer' : 'dashboard/overview' });
+  const att = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/attention')), [], { key: `dashboard/attention:${isTrainerOnly}` });
   // The adherence trend is a coaching view; an owner's Home is the gym.
-  const trend = useFetch(() => (isTrainerOnly ? api('/dashboard/adherence-trend') : Promise.resolve(null)));
+  const trend = useFetch(() => (isTrainerOnly ? api('/dashboard/adherence-trend') : Promise.resolve(null)), [], { key: `dashboard/adherence-trend:${isTrainerOnly}` });
   /* Gym-wide numbers: money, check-ins, roster. Owner-only here and on the
      server -- a trainer has no business reading the gym's takings. */
   const pulse = useFetch(() => (isTrainerOnly ? Promise.resolve(null) : api('/dashboard/pulse')));
@@ -99,7 +99,7 @@ export default function Dashboard() {
      dashboard down; the card simply does not render. */
   const crowd = useFetch(() => (isTrainerOnly ? api('/trainer/crowd').catch(() => null) : Promise.resolve(null)));
   const crowdClients = useFetch(() => (isTrainerOnly ? api('/trainer/crowd/clients').catch(() => null) : Promise.resolve(null)));
-  const unread = useFetch(() => api('/messages/unread').catch(() => null));
+  const unread = useFetch(() => api('/messages/unread').catch(() => null), [], { key: 'messages/unread' });
   const trendRows = useMemo(() => (trend.data?.trend || []).map((t) => ({ label: t.date.slice(5), value: t.avg ?? 0 })), [trend.data]);
 
   const attentionClients = isTrainerOnly ? (ov.data?.attention || []) : (att.data?.clients || []);

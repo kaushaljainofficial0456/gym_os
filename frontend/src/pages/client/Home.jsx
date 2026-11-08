@@ -105,7 +105,7 @@ function CommunityCard() {
   const nav = useNavigate();
   // One call for every kind of community this member belongs to -- their
   // gym's, their private ones, and any invitation waiting on them.
-  const fetch = useFetch(() => api('/communities'));
+  const fetch = useFetch(() => api('/communities'), [], { key: 'communities' });
   const data = fetch.data;
   if (fetch.loading || fetch.error || !data) return null;
 
@@ -204,13 +204,13 @@ export default function Home() {
   // intelligence result itself is cached server-side after first compute
   // (health_daily_summaries), so repeat loads the same day are a single
   // indexed read, not a live recomputation.
-  const health = useFetch(() => api('/health/daily-intelligence'), []);
+  const health = useFetch(() => api('/health/daily-intelligence'), [], { key: 'health/daily-intelligence' });
   /* The customiser's saved layout. Its own fetch, for the same reason as
      the health call above: it must never gate or slow the hot path. While
      it is in flight resolveDashboard() returns the default order, so the
      screen renders the standard dashboard immediately and only rearranges
      if this person actually changed something. */
-  const dashFetch = useFetch(() => api('/me/dashboard'), []);
+  const dashFetch = useFetch(() => api('/me/dashboard'), [], { key: 'me/dashboard' });
   const dashPrefs = parseDashboardPrefs(dashFetch.data?.prefs);
 
   const data = home.data;

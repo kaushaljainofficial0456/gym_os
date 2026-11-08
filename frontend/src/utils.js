@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { readCachedResponse, writeCachedResponse } from './api.js';
 
 /** `d` as YYYY-MM-DD on the device's own calendar. Never
  *  d.toISOString().slice(0, 10): that is the UTC date, which in India stays
@@ -110,26 +111,54 @@ export function useCountUp(target, dur = 900, dec = 0) {
   return val;
 }
 
-export function useFetch(fn, deps = []) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+/**
+ * `opts.key` (optional): a stable name for this request, including anything
+ * the request depends on (e.g. `progress-intel:${period}`). With a key, a
+ * screen revisited in the same tab renders the last response it saw at once
+ * and refreshes it in the background (stale-while-revalidate) instead of
+ * showing its loading state again. See api.js's response cache for scoping
+ * (per signed-in user and gym, memory only, cleared on any session change).
+ * Without a key -- every existing call -- behaviour is exactly as before.
+ * An explicit reload() is never answered from the cache.
+ */
+export function useFetch(fn, deps = [], opts = {}) {
+  const key = opts.key || null;
+  const [data, setData] = useState(() => (key ? readCachedResponse(key) ?? null : null));
+  const [loading, setLoading] = useState(() => !(key && readCachedResponse(key) !== undefined));
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
   // A silent reload (see reload() below) skips the loading-flag toggle for
   // ONE upcoming fetch -- read once per effect run, then reset, so it never
   // silently "leaks" into a later non-silent reload.
   const silentNext = useRef(false);
+  const lastTick = useRef(tick);
   useEffect(() => {
     let alive = true;
-    const silent = silentNext.current;
+    const isReload = lastTick.current !== tick;
+    lastTick.current = tick;
+    let silent = silentNext.current;
     silentNext.current = false;
+    // First load or a dependency change (not an explicit reload): show the
+    // cached response for this key, if any, and refresh without a spinner.
+    if (key && !isReload) {
+      const cached = readCachedResponse(key);
+      if (cached !== undefined) {
+        setData(cached);
+        setError(null);
+        setLoading(false);
+        silent = true;
+      }
+    }
     if (!silent) setLoading(true);
     fn()
-      .then((d) => { if (alive) { setData(d); setError(null); } })
+      .then((d) => {
+        if (key) writeCachedResponse(key, d);
+        if (alive) { setData(d); setError(null); }
+      })
       .catch((e) => { if (alive) setError(e); })
       .finally(() => { if (alive && !silent) setLoading(false); });
     return () => { alive = false; };
-  }, [...deps, tick]);
+  }, [...deps, tick, key]);
   // Stable identity (was a fresh arrow fn every render) so consumers that
   // pass the whole { data, loading, error, reload } object down — e.g. via
   // Outlet context — don't get a new object on every unrelated re-render.

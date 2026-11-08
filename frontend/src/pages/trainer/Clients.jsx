@@ -57,7 +57,7 @@ function MembershipPill({ membership }) {
 }
 
 export default function Clients() {
-  const { data, loading, error, reload } = useFetch(() => api('/clients'));
+  const { data, loading, error, reload } = useFetch(() => api('/clients'), [], { key: 'clients' });
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('ALL');
   const [sort, setSort] = useState('status');

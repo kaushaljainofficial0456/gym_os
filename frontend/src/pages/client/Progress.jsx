@@ -1593,10 +1593,10 @@ export default function Progress() {
   // metrics, so the sidebar's Measurements row deep-links straight to it.
   const measureRef = useRef(null);
 
-  const intelFetch = useFetch(() => api(`/tracking/me/progress/intel?days=${period}`), [period]);
+  const intelFetch = useFetch(() => api(`/tracking/me/progress/intel?days=${period}`), [period], { key: `progress/intel:${period}` });
   // Photos/measurements still come from the original progress endpoint --
   // reused rather than duplicated into the new one.
-  const legacy = useFetch(() => api('/tracking/me/progress'));
+  const legacy = useFetch(() => api('/tracking/me/progress'), [], { key: 'progress' });
 
   const intel = intelFetch.data;
   const clientId = home.data?.client?.id;
