@@ -119,6 +119,7 @@ export function sms() { return setupStatus().mode === 'test' ? mock.sms : exotel
 export function whatsapp() { return setupStatus().mode === 'test' ? mock.whatsapp : exotel.whatsapp; }
 
 /** Can this tier run here? Test mode simulates every tier. */
+/** Can this tier run here? Test mode simulates every tier. */
 export function tierAvailable(product, tier) {
   if (!tier) return false;
   if (setupStatus().mode === 'test') return true;
@@ -126,6 +127,13 @@ export function tierAvailable(product, tier) {
   if (product === 'agent') return !!CONVERSATION[tier.provider]?.configured();
   return true;
 }
+
+/**
+ * Can anything be SOLD here? Not in `off` mode (production without
+ * providers): a gym must never pay real money for calls, SMS or WhatsApp this
+ * server cannot send -- every pack then shows "coming soon".
+ */
+export const salesOpen = () => setupStatus().mode !== 'off';
 
 /** What is available, for the owner's screens and the admin console. */
 export function capabilities() {

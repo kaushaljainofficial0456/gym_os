@@ -16,6 +16,7 @@
 //   POST /gyms/:orgId/adjust      grant or remove units (support, goodwill), with a reason
 //   GET/PUT /platform             pause all outbound, or one channel
 //   GET  /setup                   provider configuration status and the webhook URLs to paste
+//   GET  /health                  queue, scheduler, failures, 24h volumes and money, ledger reconciliation, alerts
 // ============================================================
 import { Router } from 'express';
 import { z } from 'zod';
@@ -25,6 +26,7 @@ import { setupStatus, sign, publicBase } from '../services/followups/config.js';
 import { getPriceBook, savePriceBook, evaluatePack, unitCosts, getWallet, lineCapacity, creditUnits, usageSince, unitKeys, unearnedValue } from '../services/followups/wallet.js';
 import * as providers from '../services/followups/providers/index.js';
 import { normalizePhone } from '../services/followups/render.js';
+import { recentOwnerChanges } from '../services/followups/audit.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -44,6 +46,92 @@ export default function consoleFollowupRoutes(db, { writeAuditLog }) {
         your_agent_server_results: `${base}/api/followups/hooks/agent/http`,
         cron: `${base}/api/followups/cron/tick`,
       },
+    });
+  }));
+
+  /*
+   * OPERATIONS HEALTH -- what is happening right now, without opening the
+   * database: queue depth and age, calls that never reported back, failures
+   * by reason, the scheduler's heartbeat, the last 24 hours by channel, money
+   * in and out, and a reconciliation of every balance against its ledger.
+   * Each problem becomes an alert with the action to take. Counts and reasons
+   * only: no member names, numbers or message text.
+   */
+  r.get('/health', wrap(async (req, res) => {
+    const nowMs = Date.now();
+    const iso = (ms) => new Date(ms).toISOString();
+    const since24 = iso(nowMs - 86_400_000);
+    const n = (v) => Number(v || 0);
+    const [platformRow, queue, stuck, awaiting, byChannel, failures, ticks, money, timing, ledgerSums, balances] = await Promise.all([
+      db.q1(`SELECT paused, paused_channels FROM followup_platform WHERE id = 'current'`),
+      db.q1(`SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM followup_jobs WHERE status = 'queued'`),
+      db.q1(`SELECT COUNT(*) AS n FROM followup_jobs WHERE status IN ('dialing','answered') AND dialed_at < ?`, [iso(nowMs - 30 * 60_000)]),
+      db.q1(`SELECT COUNT(*) AS n, MIN(ended_at) AS oldest FROM followup_jobs WHERE status = 'completed' AND units_held > 0`),
+      db.q(`SELECT channel, status, COUNT(*) AS n FROM followup_jobs WHERE created_at >= ? AND is_test = 0 GROUP BY channel, status`, [since24]),
+      db.q(`SELECT error, COUNT(*) AS n FROM followup_jobs WHERE status IN ('failed','skipped') AND created_at >= ? AND error IS NOT NULL GROUP BY error ORDER BY COUNT(*) DESC LIMIT 10`, [since24]),
+      db.q1(`SELECT COUNT(*) AS n, MAX(last_tick_at) AS last FROM followup_settings WHERE enabled = 1`),
+      db.q(`SELECT reason, SUM(charge_inr) AS v, SUM(COALESCE(cost_estimate, 0)) AS c, COUNT(*) AS n FROM followup_ledger WHERE created_at >= ? AND reason IN ('usage','refund') GROUP BY reason`, [since24]),
+      db.q(`SELECT created_at, dialed_at FROM followup_jobs WHERE created_at >= ? AND dialed_at IS NOT NULL AND is_test = 0 ORDER BY created_at DESC LIMIT 2000`, [since24]),
+      db.q(`SELECT org_id, unit, SUM(delta) AS s FROM followup_ledger GROUP BY org_id, unit`),
+      db.q(`SELECT org_id, unit, balance FROM followup_balances`),
+    ]);
+
+    const channels = {};
+    for (const r of byChannel) { (channels[r.channel] ||= {})[r.status] = n(r.n); }
+    const total = (ch, states) => states.reduce((s, st) => s + n(channels[ch]?.[st]), 0);
+    const placedCalls = total('call', ['completed', 'no_answer', 'busy', 'failed']) + total('agent', ['completed', 'no_answer', 'busy', 'failed']);
+    const failedCalls = total('call', ['failed']) + total('agent', ['failed']);
+    const sentMsgs = total('sms', ['sent', 'delivered', 'failed']) + total('whatsapp', ['sent', 'delivered', 'read', 'failed']);
+    const failedMsgs = total('sms', ['failed']) + total('whatsapp', ['failed']);
+    const usage = money.find((m) => m.reason === 'usage') || {};
+    const refund = money.find((m) => m.reason === 'refund') || {};
+    const revenue = Math.round((n(usage.v) - n(refund.v)) * 100) / 100;
+    const cost = Math.round(n(usage.c) * 100) / 100;
+    const waits = timing.map((t) => Date.parse(t.dialed_at) - Date.parse(t.created_at)).filter((ms) => Number.isFinite(ms) && ms >= 0);
+    const avgWaitSec = waits.length ? Math.round(waits.reduce((a, b) => a + b, 0) / waits.length / 1000) : null;
+
+    // Every balance must equal the sum of its ledger rows.
+    const sums = new Map(ledgerSums.map((r) => [`${r.org_id}|${r.unit}`, n(r.s)]));
+    const discrepancies = [];
+    for (const b of balances) {
+      const k = `${b.org_id}|${b.unit}`;
+      const diff = Math.round((n(b.balance) - (sums.get(k) || 0)) * 1000) / 1000;
+      if (Math.abs(diff) > 0.001) discrepancies.push({ org_id: b.org_id, unit: b.unit, balance: n(b.balance), ledger: sums.get(k) || 0, diff });
+      sums.delete(k);
+    }
+    for (const [k, s] of sums) if (Math.abs(s) > 0.001) { const [orgId, unit] = k.split('|'); discrepancies.push({ org_id: orgId, unit, balance: 0, ledger: s, diff: -s }); }
+
+    const status = setupStatus();
+    const tickAgeMin = ticks?.last ? Math.round((nowMs - Date.parse(ticks.last)) / 60_000) : null;
+    const queueAgeMin = queue?.oldest ? Math.round((nowMs - Date.parse(queue.oldest)) / 60_000) : null;
+    const credentialErrors = failures.filter((f) => /\b(401|403)\b|not configured|unauthori[sz]ed|authentication|invalid (api )?key/i.test(String(f.error))).reduce((s, f) => s + n(f.n), 0);
+    const noResult = failures.filter((f) => /^No result from the provider/.test(String(f.error))).reduce((s, f) => s + n(f.n), 0);
+    const alerts = [];
+    const alert = (level, code, text, action) => alerts.push({ level, code, text, action });
+    if (n(platformRow?.paused)) alert('info', 'platform_paused', 'All automated contact is paused by the platform switch.', 'Turn it off in Setup when the incident is over.');
+    if (discrepancies.length) alert('critical', 'credit_discrepancy', `${discrepancies.length} balance${discrepancies.length === 1 ? ' does' : 's do'} not match the ledger.`, 'Do not adjust by hand. Compare the gym\'s ledger with its balances and the audit log; a mismatch means a write happened outside wallet.js.');
+    if (n(ticks?.n) > 0 && status.mode !== 'off' && (tickAgeMin === null || tickAgeMin > 15)) alert('critical', 'scheduler_stopped', tickAgeMin === null ? 'Gyms are switched on but the scheduler has never run.' : `The scheduler last ran ${tickAgeMin} minutes ago.`, 'Check the job that calls GET /api/followups/cron/tick every 5 minutes with the CRON_SECRET bearer token.');
+    if (credentialErrors > 0) alert('critical', 'provider_credentials', `${credentialErrors} contact${credentialErrors === 1 ? '' : 's'} failed on provider authentication or configuration in the last 24 hours.`, 'Check the provider keys in the environment (Setup lists what is missing) and the provider dashboards.');
+    if (n(stuck?.n) > 0) alert('warning', 'jobs_stuck', `${n(stuck.n)} call${n(stuck.n) === 1 ? ' has' : 's have'} not reported back for over 30 minutes.`, 'The sweep reconciles these from the provider every 5 minutes. If the number keeps growing, check the status callback URL in the Exotel flow.');
+    if (n(awaiting?.n) > 0 && awaiting.oldest && nowMs - Date.parse(awaiting.oldest) > 60 * 60_000) alert('warning', 'duration_missing', `${n(awaiting.n)} answered call${n(awaiting.n) === 1 ? ' is' : 's are'} still waiting for the provider to report a duration.`, 'They are charged the 1-minute minimum after an hour. If this is frequent, confirm Exotel sends ConversationDuration or that the Call Details API is reachable.');
+    if (noResult >= 5) alert('warning', 'callbacks_missing', `${noResult} contacts got no result from the provider in the last 24 hours.`, 'Provider webhooks may not be reaching the server: compare the URLs in Setup with the ones configured at the provider.');
+    if (n(queue?.n) > 500 || (queueAgeMin !== null && queueAgeMin > 45)) alert('warning', 'queue_backlog', `${n(queue.n)} contacts queued; the oldest has waited ${queueAgeMin} minutes.`, 'Dispatch places 25 per gym per tick. A long backlog means ticks are failing or a gym has far more due members than one window allows.');
+    if (placedCalls >= 20 && failedCalls / placedCalls > 0.2) alert('warning', 'call_failures', `${Math.round((failedCalls / placedCalls) * 100)}% of calls failed in the last 24 hours.`, 'See the failure reasons below; a sudden rise usually means a provider outage or a blocked caller line.');
+    if (sentMsgs >= 20 && failedMsgs / sentMsgs > 0.2) alert('warning', 'message_failures', `${Math.round((failedMsgs / sentMsgs) * 100)}% of messages failed in the last 24 hours.`, 'Failed messages are refunded automatically. Check template approval and DLT registration.');
+
+    res.json({
+      at: iso(nowMs), mode: status.mode,
+      platform: { paused: !!n(platformRow?.paused), channels: platformRow?.paused_channels ? JSON.parse(platformRow.paused_channels) : [] },
+      queue: { queued: n(queue?.n), oldest_minutes: queueAgeMin, stuck: n(stuck?.n), awaiting_duration: n(awaiting?.n), avg_wait_seconds: avgWaitSec },
+      scheduler: { gyms_on: n(ticks?.n), last_tick: ticks?.last || null, minutes_ago: tickAgeMin },
+      last_24h: {
+        channels, failures: failures.map((f) => ({ reason: f.error, count: n(f.n) })),
+        calls: { placed: placedCalls, completed: total('call', ['completed']) + total('agent', ['completed']), failed: failedCalls },
+        messages: { sent: sentMsgs, delivered: total('sms', ['delivered']) + total('whatsapp', ['delivered', 'read']), failed: failedMsgs },
+        revenue, cost, margin: Math.round((revenue - cost) * 100) / 100, cost_per_contact: (placedCalls + sentMsgs) ? Math.round((cost / (placedCalls + sentMsgs)) * 100) / 100 : null,
+      },
+      discrepancies: discrepancies.slice(0, 20),
+      alerts: alerts.sort((a, b) => ['critical', 'warning', 'info'].indexOf(a.level) - ['critical', 'warning', 'info'].indexOf(b.level)),
     });
   }));
 
@@ -107,6 +195,7 @@ export default function consoleFollowupRoutes(db, { writeAuditLog }) {
       settings: await db.q1('SELECT enabled, whatsapp_from, sms_header, dlt_entity_id, compliance_json FROM followup_settings WHERE org_id = ?', [org.id]),
       ledger: await db.q(`SELECT unit, delta, reason, charge_inr, cost_estimate, pricing_version, note, created_at FROM followup_ledger WHERE org_id = ? ORDER BY created_at DESC LIMIT 100`, [org.id]),
       orders: await db.q(`SELECT id, pack_id, quantity, amount, tax_amount, pricing_version, status, invoice_number, created_at FROM followup_orders WHERE org_id = ? ORDER BY created_at DESC LIMIT 50`, [org.id]),
+      owner_changes: await recentOwnerChanges(db, org.id, 50),
     });
   }));
 

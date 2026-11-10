@@ -35,8 +35,8 @@ import * as providers from './providers/index.js';
 import { dueStep, normalizeConfig } from './schedule.js';
 import { quickRepliesFor, spokenLines, isLanguage, LANGUAGE_CODES } from './languages.js';
 import { normalizePhone, firstName, buildVoiceMessage, buildText, formatVariables, missingDetails, smsSegments, fill, toMetaBody } from './render.js';
-import { evaluate, recordConsent, consentKey } from './consent.js';
-import { getWallet, holdUnits, settleJob, chargeMessage, refundJob, unitCosts, getPriceBook, spentSince, tierOf } from './wallet.js';
+import { evaluate, recordConsent, consentKey, REASONS } from './consent.js';
+import { getWallet, holdUnits, settleJob, chargeMessage, refundJob, attachProviderRef, unitCosts, getPriceBook, spentSince, tierOf } from './wallet.js';
 import { lineFor } from './numbers.js';
 import { ensureAudio } from './audio.js';
 import { pickVariant, agentPrompt, agentHash, openCallback } from './studio.js';
@@ -121,7 +121,15 @@ async function gymDetails(db, orgId, settings) {
 
 /* ---------------- members ---------------- */
 
-export async function loadMembers(db, orgId, tz) {
+/**
+ * Members with the facts their schedules run on. `clientIds` narrows it to a
+ * few members (dispatch re-checks only the ones it is about to contact).
+ */
+export async function loadMembers(db, orgId, tz, { clientIds = null } = {}) {
+  const ids = clientIds ? [...new Set(clientIds.filter(Boolean))] : null;
+  if (ids && !ids.length) return [];
+  const only = (col) => (ids ? ` AND ${col} IN (${ids.map(() => '?').join(',')})` : '');
+  const p = (...head) => (ids ? [...head, ...ids] : head);
   const members = await db.q(
     `SELECT c.id, c.created_at, c.trainer_id, u.name, u.phone, gm.branch_id, b.name AS branch_name, b.phone AS branch_phone, t.name AS trainer_name
        FROM clients c
@@ -129,12 +137,12 @@ export async function loadMembers(db, orgId, tz) {
        LEFT JOIN gym_memberships gm ON gm.user_id = u.id AND gm.org_id = c.org_id
        LEFT JOIN branches b ON b.id = gm.branch_id
        LEFT JOIN users t ON t.id = c.trainer_id
-      WHERE c.org_id = ? AND u.active = 1`, [orgId]);
-  const subs = await db.q(`SELECT id, client_id, plan_name, start_date, end_date, status, payment_status, amount FROM subscriptions WHERE org_id = ? AND status != 'cancelled'`, [orgId]);
-  const paid = await db.q(`SELECT subscription_id, SUM(amount) AS paid FROM payments WHERE org_id = ? AND status = 'paid' AND subscription_id IS NOT NULL GROUP BY subscription_id`, [orgId]);
-  const visits = await db.q(`SELECT client_id, MAX(date) AS last FROM attendance WHERE org_id = ? AND present = 1 GROUP BY client_id`, [orgId]);
-  const entries = await db.q(`SELECT client_id, MAX(ts) AS last FROM attendance_events WHERE org_id = ? AND direction = 'entry' GROUP BY client_id`, [orgId]);
-  const prefs = await db.q('SELECT * FROM followup_member_prefs WHERE org_id = ?', [orgId]);
+      WHERE c.org_id = ? AND u.active = 1${only('c.id')}`, p(orgId));
+  const subs = await db.q(`SELECT id, client_id, plan_name, start_date, end_date, status, payment_status, amount FROM subscriptions WHERE org_id = ? AND status != 'cancelled'${only('client_id')}`, p(orgId));
+  const paid = await db.q(`SELECT subscription_id, SUM(amount) AS paid FROM payments WHERE org_id = ? AND status = 'paid' AND subscription_id IS NOT NULL${only('client_id')} GROUP BY subscription_id`, p(orgId));
+  const visits = await db.q(`SELECT client_id, MAX(date) AS last FROM attendance WHERE org_id = ? AND present = 1${only('client_id')} GROUP BY client_id`, p(orgId));
+  const entries = await db.q(`SELECT client_id, MAX(ts) AS last FROM attendance_events WHERE org_id = ? AND direction = 'entry'${only('client_id')} GROUP BY client_id`, p(orgId));
+  const prefs = await db.q(`SELECT * FROM followup_member_prefs WHERE org_id = ?${only('client_id')}`, p(orgId));
 
   const paidBy = new Map(paid.map((p) => [p.subscription_id, Number(p.paid) || 0]));
   const lastVisit = new Map(visits.map((v) => [v.client_id, String(v.last).slice(0, 10)]));
@@ -446,6 +454,7 @@ async function placeJob(db, job, ctx) {
       const r = await wa.sendTemplate({ from, to: job.to_number, templateName: c.ref.provider_name, language: c.language, params, seed: job.id });
       const status = r.simulated ? r.simulated.status : 'sent';
       await patchJob(db, job.id, { status, provider: wa.id, provider_ref: r.ref, from_number: from, message_text: text, ...(r.simulated ? { ended_at: now() } : {}) });
+      await attachProviderRef(db, job.id, r.ref);
       if (status === 'failed') await refundJob(db, job, 'Not delivered');
     } catch (e) {
       await refundJob(db, job, 'Send failed');
@@ -468,6 +477,7 @@ async function placeJob(db, job, ctx) {
       });
       const status = r.simulated ? r.simulated.status : 'sent';
       await patchJob(db, job.id, { status, provider: sms.id, provider_ref: r.ref, from_number: settings.sms_header || null, message_text: text, segments: r.segments || seg, ...(r.simulated ? { ended_at: now() } : {}) });
+      await attachProviderRef(db, job.id, r.ref);
       if (status === 'failed') await refundJob(db, job, 'Not delivered');
     } catch (e) {
       await refundJob(db, job, 'Send failed');
@@ -548,19 +558,63 @@ async function dispatchContext(db, orgId, mode) {
   };
 }
 
-export async function dispatchOrg(db, orgId, { max = 25, budgetMs = 20_000 } = {}) {
+/**
+ * The member-level gates again, at the moment of sending. A job can sit in
+ * the queue for several ticks (dispatch places `max` per tick), and in that
+ * time the member may have been paused, pressed 1 on another call, or moved
+ * outside their own preferred time. Returns null (send), { skip } or { defer }.
+ */
+async function sendGate(db, job, { todayKey, localMinutes, callbacks, rules, members }) {
+  if (job.day_key !== todayKey) return { skip: 'Not placed on the day it was due' };
+  // Still due? A visit, a renewal or a payment since planning ends it NOW,
+  // not after the queue drains (docs/FOLLOWUPS.md, "Smart stops").
+  const rule = job.rule_id ? rules.get(job.rule_id) : null;
+  if (rule) {
+    const m = members.get(job.client_id);
+    if (!m) return { skip: 'The member is no longer active at this gym' };
+    const step = dueStep(rule.kind, rule.config, m.facts, todayKey);
+    if (!step || step.cycleKey !== job.cycle_key) return { skip: 'No longer due: the member visited, renewed or paid' };
+    if (m.phone !== job.to_number) return { skip: "The member's number changed since planning" };
+  }
+  const prefs = job.client_id ? await db.q1('SELECT * FROM followup_member_prefs WHERE client_id = ?', [job.client_id]) : null;
+  const v = evaluate({ prefs, phone: job.to_number, channel: job.channel, todayKey, localMinutes, inGymHours: true, callbackPending: callbacks.has(job.client_id) });
+  if (v.decision === 'ALLOW') return null;
+  if (v.decision === 'DEFER' && v.reason === 'outside_member_window') return { defer: true };   // later today, inside their window
+  return { skip: REASONS[v.reason] || 'The member can no longer be reached on this channel' };
+}
+
+export async function dispatchOrg(db, orgId, { max = 25, budgetMs = 20_000, at = new Date() } = {}) {
   const started = Date.now();
   const mode = setupStatus().mode;
   if (mode === 'off') return { placed: 0 };
   const platform = await platformSwitches(db);
   if (platform.paused) return { placed: 0 };
+  // Calling hours and the gym's own switch are checked again here, not only
+  // when planning: a queue longer than one tick, or one left over from a
+  // platform pause, must never be placed after the gym's hours (21:00 at
+  // the latest) or once the owner has switched automations off. Jobs left
+  // queued are placed when hours resume the same day, else swept.
+  const settings = await getSettings(db, orgId);
+  if (!settings.enabled) return { placed: 0, reason: 'disabled' };
+  const tz = await getOrgTzCached(db, orgId);
+  if (!inCallingHours(settings, tz, at)) return { placed: 0, reason: 'outside_hours' };
   const queued = await db.q(`SELECT * FROM followup_jobs WHERE org_id = ? AND status = 'queued' ORDER BY created_at LIMIT ?`, [orgId, max]);
   if (!queued.length) return { placed: 0 };
   const ctx = await dispatchContext(db, orgId, mode);
+  const gate = {
+    todayKey: dayKey(at, tz),
+    localMinutes: localClock(tz, at).minutes,
+    callbacks: new Set((await db.q(`SELECT client_id FROM followup_callbacks WHERE org_id = ? AND status IN ('new','assigned','in_progress')`, [orgId])).map((c) => c.client_id)),
+    rules: ctx.rules,
+    members: new Map((await loadMembers(db, orgId, tz, { clientIds: queued.map((j) => j.client_id) })).map((m) => [m.id, m])),
+  };
   let placed = 0;
   for (const job of queued) {
     if (Date.now() - started > budgetMs) break;
     if (platform.channels.has(job.channel)) { await skipJob(db, job.id, 'This channel is paused by the platform'); continue; }
+    const g = await sendGate(db, job, gate);
+    if (g?.defer) continue;
+    if (g?.skip) { await skipJob(db, job.id, g.skip); continue; }
     const claimed = await db.run(`UPDATE followup_jobs SET status = 'dialing', dialed_at = ?, updated_at = ? WHERE id = ? AND status = 'queued'`, [now(), now(), job.id]);
     if (claimed.changes !== 1) continue;
     await placeJob(db, { ...job, status: 'dialing' }, ctx);
@@ -569,17 +623,63 @@ export async function dispatchOrg(db, orgId, { max = 25, budgetMs = 20_000 } = {
   return { placed };
 }
 
-/** Close out jobs that never heard back (holds released), and stale queue. */
-export async function sweep(db, orgId) {
-  const stale = new Date(Date.now() - 30 * 60_000).toISOString();
-  const old = new Date(Date.now() - 6 * 3600_000).toISOString();
-  const lost = await db.q(`SELECT * FROM followup_jobs WHERE org_id = ? AND status IN ('dialing','answered') AND dialed_at < ?`, [orgId, stale]);
-  for (const j of lost) {
-    await settleJob(db, j, { used: 0 });   // no provider record = nothing charged; reconciliation can correct
+/**
+ * Close out calls and messages that never heard back, and stale queue.
+ *
+ * Provider callbacks can be late, lost or incomplete (Exotel's docs say so and
+ * recommend its Call Details API as the fallback). So before a call is written
+ * off, the provider's own record is asked:
+ *   - a voice call whose callback said "completed" but gave no duration keeps
+ *     its hold, and is settled here from the provider's record; if after an
+ *     hour the provider still has no duration, the 1-minute minimum pulse is
+ *     charged (it connected, so it cost at least that) and the job says so;
+ *   - a call that never reported after 30 minutes is settled from the
+ *     provider's record when it has one, else failed with nothing charged;
+ *   - anything still queued after 6 hours is skipped (never sent late).
+ */
+export async function sweep(db, orgId, { telephony = providers.telephony(), at = Date.now() } = {}) {
+  const iso = (ms) => new Date(ms).toISOString();
+  const stale = iso(at - 30 * 60_000);
+  let closed = 0;
+  const pending = await db.q(
+    `SELECT * FROM followup_jobs WHERE org_id = ? AND (
+        (status IN ('dialing','answered') AND dialed_at < ?)
+     OR (status = 'completed' AND units_held > 0 AND ended_at < ?))
+      ORDER BY COALESCE(dialed_at, created_at) LIMIT 100`, [orgId, stale, iso(at - 3 * 60_000)]);   // the oldest first; the rest next tick
+  for (const j of pending) {
+    if (j.channel === 'call') { if (await reconcileCall(db, j, telephony, at)) closed += 1; continue; }
+    await settleJob(db, j, { used: 0 });   // AI conversation / message with no result: nothing charged; reconciliation can correct
     await patchJob(db, j.id, { status: 'failed', error: 'No result from the provider (pending reconciliation)', ended_at: now() });
+    closed += 1;
   }
-  const b = await db.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Not placed in time', ended_at = ?, updated_at = ? WHERE org_id = ? AND status = 'queued' AND created_at < ?`, [now(), now(), orgId, old]);
-  return lost.length + b.changes;
+  const b = await db.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Not placed in time', ended_at = ?, updated_at = ? WHERE org_id = ? AND status = 'queued' AND created_at < ?`, [now(), now(), orgId, iso(at - 6 * 3600_000)]);
+  return closed + b.changes;
+}
+
+export const UNKNOWN_DURATION_NOTE = 'The provider never reported how long this call lasted; charged the 1-minute minimum';
+
+/** One voice call the callbacks left open. True when it is now closed. */
+async function reconcileCall(db, j, telephony, at) {
+  let record = null;
+  if (j.provider_ref && typeof telephony?.fetchCall === 'function') {
+    try { record = await telephony.fetchCall(j.provider_ref); } catch { record = null; }   // try again next tick
+  }
+  if (record?.status && FINAL.has(record.status) && (record.status !== 'completed' || record.duration !== null)) {
+    await applyCallStatus(db, j, { status: record.status, duration: record.duration });
+    return true;
+  }
+  const since = Date.parse(j.ended_at || j.dialed_at || j.created_at) || at;
+  if (j.status === 'completed' || record?.status === 'completed') {
+    if (at - since < 60 * 60_000) return false;                     // details arrive late; look again next tick
+    const book = await getPriceBook(db);
+    await settleJob(db, j, { used: 1, cost: unitCosts(book)[j.unit] || 0, provider: j.provider, providerRef: j.provider_ref, pricingVersion: book.version });
+    await patchJob(db, j.id, { status: 'completed', error: UNKNOWN_DURATION_NOTE, ended_at: j.ended_at || now() });
+    return true;
+  }
+  if (record?.status === 'answered' && at - since < 6 * 3600_000) return false;   // the provider says it is still on
+  await settleJob(db, j, { used: 0 });
+  await patchJob(db, j.id, { status: 'failed', error: 'No result from the provider (pending reconciliation)', ended_at: now() });
+  return true;
 }
 
 export async function tickOrg(db, orgId, opts = {}) {
@@ -599,15 +699,33 @@ export async function maybeTick(db, orgId) {
   return tickOrg(db, orgId, { max: 8, budgetMs: 8_000 });
 }
 
-export async function runAll(db, { budgetMs = 50_000 } = {}) {
+const envInt = (k, dflt, lo, hi) => { const n = Math.round(Number(process.env[k])); return Number.isFinite(n) && n > 0 ? Math.min(hi, Math.max(lo, n)) : dflt; };
+
+/**
+ * The scheduler tick for every gym that is switched on.
+ *
+ * FAIR: gyms are visited longest-waiting first (by last_tick_at), and each
+ * gets at most its share of the time, so one large gym can no longer use up
+ * the whole tick while later gyms never run. BOUNDED: the total budget must
+ * stay below the hosting function's time limit (on Vercel, maxDuration) --
+ * a tick cut off mid-call leaves jobs for the sweep to reconcile.
+ *   FOLLOWUP_TICK_BUDGET_MS   whole tick       (default 50000)
+ *   FOLLOWUP_TICK_GYM_MS      one gym's share  (default 15000)
+ *   FOLLOWUP_DISPATCH_PER_TICK contacts placed per gym per tick (default 25)
+ */
+export async function runAll(db, { budgetMs = envInt('FOLLOWUP_TICK_BUDGET_MS', 50_000, 5_000, 800_000) } = {}) {
   const started = Date.now();
-  const orgs = await db.q('SELECT org_id FROM followup_settings WHERE enabled = 1');
+  const gymMs = envInt('FOLLOWUP_TICK_GYM_MS', 15_000, 2_000, 300_000);
+  const max = envInt('FOLLOWUP_DISPATCH_PER_TICK', 25, 1, 500);
+  const orgs = await db.q(`SELECT org_id FROM followup_settings WHERE enabled = 1 ORDER BY COALESCE(last_tick_at, ''), org_id`);
   const results = {};
   for (const { org_id: orgId } of orgs) {
-    if (Date.now() - started > budgetMs) break;
-    try { results[orgId] = await tickOrg(db, orgId, { budgetMs: Math.max(5_000, budgetMs - (Date.now() - started)) }); } catch (e) { results[orgId] = { error: String(e.message).slice(0, 200) }; }
+    const left = budgetMs - (Date.now() - started);
+    if (left < 1_000) break;
+    try { results[orgId] = await tickOrg(db, orgId, { max, budgetMs: Math.min(gymMs, left) }); } catch (e) { results[orgId] = { error: String(e.message).slice(0, 200) }; }
   }
-  return { gyms: Object.keys(results).length, results };
+  const ran = Object.keys(results).length;
+  return { gyms: ran, waiting: orgs.length - ran, results };
 }
 
 /* ---------------- outcomes ---------------- */
@@ -624,17 +742,34 @@ async function stopChannel(db, job, channel, source, evidence) {
   await recordConsent(db, { orgId: job.org_id, clientId: job.client_id, channels: [channel], action: 'opted_out', source, evidence });
 }
 
-/** A voice-message call's status. Settles the hold on the final status. */
-export async function applyCallStatus(db, job, { status, duration = 0 }) {
+/**
+ * A voice-message call's status. Settles the hold on the final status.
+ *
+ * `duration` null means the provider did not say how long the call was. A
+ * "completed" call with no duration is NOT settled at zero (that would give
+ * every answered call away): it is marked completed, keeps its hold, and is
+ * settled later from the provider's record (sweep/reconcileCall). Out of
+ * order and duplicate statuses change nothing once the call is settled.
+ */
+export async function applyCallStatus(db, job, { status, duration = null }) {
   if (!status) return;
   const j = await fresh(db, job.id);
-  if (!j || (FINAL.has(j.status) && j.status !== 'dialing')) return;      // duplicate or late
+  if (!j) return;
+  const awaitingDuration = j.status === 'completed' && Number(j.units_held) > 0;
+  if (FINAL.has(j.status) && !awaitingDuration) return;                     // duplicate or late
+  if (awaitingDuration && status !== 'completed') return;                   // only its duration is still to come
   if (!FINAL.has(status)) { await patchJob(db, j.id, { status }); return; }
+  const known = duration !== null && duration !== undefined && duration !== '' && Number.isFinite(Number(duration));
+  if (status === 'completed' && !known) {
+    if (!awaitingDuration) await patchJob(db, j.id, { status: 'completed', ended_at: now() });
+    return;
+  }
+  const secs = known ? Math.max(0, Math.round(Number(duration))) : 0;
   const book = await getPriceBook(db);
-  const connected = (status === 'completed') && duration > 0;
-  const minutes = connected ? Math.max(1, Math.ceil(duration / 60)) : 0;
+  const connected = status === 'completed' && secs > 0;
+  const minutes = connected ? Math.max(1, Math.ceil(secs / 60)) : 0;
   await settleJob(db, j, { used: minutes, cost: minutes * (unitCosts(book)[j.unit] || 0), provider: j.provider, providerRef: j.provider_ref, pricingVersion: book.version });
-  await patchJob(db, j.id, { status, duration_secs: duration || null, ended_at: now() });
+  await patchJob(db, j.id, { status, duration_secs: known ? secs : null, ended_at: j.ended_at || now() });
 }
 
 /** The key a member pressed: 1 = a person, 2 = I'm on it, 9 = stop calls. */
@@ -659,6 +794,10 @@ export async function applyAgentResult(db, job, { status, duration = 0, outcome,
   const done = await db.q1(`SELECT id FROM followup_ledger WHERE job_id = ? AND reason IN ('usage','release') LIMIT 1`, [j.id]);
   if (done) return;                                         // a duplicate webhook
   const mapped = AGENT_OUTCOMES[String(outcome || '').toLowerCase()] ?? null;
+  // Whatever a provider (or a self-hosted agent server) calls it, a job holds
+  // one of these -- an unknown status must not fail every retry on a CHECK.
+  status = ['completed', 'no_answer', 'busy', 'failed'].includes(status) ? status : 'failed';
+  duration = Math.max(0, Math.round(Number(duration) || 0));
   const minutes = status === 'completed' && duration > 0 ? Math.ceil(duration / 60) : 0;
   const book = await getPriceBook(db);
   await settleJob(db, j, { used: minutes, cost: minutes * (unitCosts(book)[j.unit] || 0), provider: j.provider, providerRef: j.provider_ref, pricingVersion: book.version });
@@ -685,11 +824,21 @@ export async function applyMessageStatus(db, job, status) {
 const norm = (s) => String(s || '').trim().toLowerCase();
 const STOP_WORDS = new Set(['stop', 'unsubscribe', 'stop messages', 'रोकें', 'बंद', 'बंद करें']);
 
-/** A member's WhatsApp reply: a quick-reply button or STOP. */
-export async function applyWhatsAppReply(db, { from, text }) {
+/**
+ * A member's WhatsApp reply: a quick-reply button or STOP.
+ *
+ * `to` is the business number they replied to. A person can belong to two
+ * gyms; when each gym has its own sender, the reply belongs to the gym whose
+ * number it was sent to, never to whichever gym happened to message last.
+ * Without `to` (or on the platform's shared sender) the latest message to
+ * that member is the one they are answering.
+ */
+export async function applyWhatsAppReply(db, { from, to = null, text }) {
   const phone = normalizePhone(from);
   if (!phone) return { matched: false };
-  const j = await db.q1(`SELECT * FROM followup_jobs WHERE to_number = ? AND channel = 'whatsapp' AND is_test = 0 ORDER BY created_at DESC LIMIT 1`, [phone]);
+  const sender = to ? (normalizePhone(to) || String(to).replace(/[^\d+]/g, '')) : null;
+  const latest = (extra, params) => db.q1(`SELECT * FROM followup_jobs WHERE to_number = ? AND channel = 'whatsapp' AND is_test = 0${extra} ORDER BY created_at DESC LIMIT 1`, [phone, ...params]);
+  const j = (sender ? await latest(' AND from_number = ?', [sender]) : null) || await latest('', []);
   if (!j) return { matched: false };
   const t = norm(text);
   let outcome = STOP_WORDS.has(t) ? 'opted_out' : null;

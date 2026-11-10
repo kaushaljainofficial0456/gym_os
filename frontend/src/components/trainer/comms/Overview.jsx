@@ -23,6 +23,22 @@ export function ModeBanner({ setup }) {
   );
 }
 
+const CHANNEL_NAMES = { call: 'voice calls', agent: 'AI conversations', sms: 'SMS', whatsapp: 'WhatsApp' };
+
+/** Barbell paused sending for every gym (or one channel) from the admin console. */
+export function PlatformBanner({ platform }) {
+  if (!platform || (!platform.paused && !platform.channels?.length)) return null;
+  const what = platform.paused ? 'all automated calls and messages' : platform.channels.map((c) => CHANNEL_NAMES[c] || c).join(', ');
+  return (
+    <div className="rounded-2xl p-4 flex gap-3 items-start" style={{ background: 'var(--m-strength-bg)', border: '1px solid var(--line)' }} role="status">
+      <Icon name="clock" size={18} style={{ color: 'var(--m-strength)', marginTop: 2 }} />
+      <div className="text-[14px]" style={{ color: 'var(--ink)' }}>
+        <b>Paused by Barbell.</b> Sending {what} is on hold for every gym for now. Nothing is lost: your campaigns, settings and balance stay as they are and pick up again when it resumes.
+      </div>
+    </div>
+  );
+}
+
 export default function Overview({ go }) {
   const { data, loading, error, reload } = useApi('/followups/overview');
   const [toast, setToast] = useState('');
@@ -55,6 +71,7 @@ export default function Overview({ go }) {
   return (
     <div className="space-y-6">
       <ModeBanner setup={d.setup} />
+      <PlatformBanner platform={d.platform} />
 
       {setupLeft > 0 && (
         <Card className="p-5">

@@ -62,6 +62,7 @@ export const telephony = {
   async placeMessageCall({ seed }) { return { ref: mockRef('call', seed), simulated: simulateMessageCall(seed) }; },
   parseCallStatus: () => ({ ref: null, status: null, duration: 0, customField: null }),
   parseDigits: (raw) => (/^[0-9]$/.test(String(raw || '')) ? String(raw) : null),
+  async fetchCall() { return null; },   // simulated calls always report their outcome at once
 };
 
 export const sms = {

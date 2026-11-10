@@ -3423,6 +3423,12 @@ CREATE INDEX IF NOT EXISTS idx_followup_jobs_org ON followup_jobs(org_id, create
 CREATE INDEX IF NOT EXISTS idx_followup_jobs_member ON followup_jobs(client_id, day_key);
 CREATE INDEX IF NOT EXISTS idx_followup_jobs_status ON followup_jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_followup_jobs_ref ON followup_jobs(provider_ref);
+-- Load-tested (docs/AI_COMMUNICATION_PRODUCTION_READINESS.md): every tick reads
+-- one gym's last 120 days of jobs, and every inbound WhatsApp reply finds the
+-- member's latest message by number. Without these both are full-table scans
+-- that grow with EVERY gym on the platform.
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_org_day ON followup_jobs(org_id, day_key);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_to ON followup_jobs(to_number, channel, created_at);
 
 -- Human follow-ups: a member asked for a person.
 CREATE TABLE IF NOT EXISTS followup_callbacks (
@@ -3465,11 +3471,13 @@ CREATE TABLE IF NOT EXISTS followup_audio (
 -- "voice:standard", "agent:advanced", "sms", "whatsapp" (the units come from
 -- the price book's tiers, so a new tier needs no migration) -- with the
 -- pre-tax INR value paid for what is left: deferred, not-yet-earned revenue.
+-- The CHECKs are a backstop under the conditional UPDATEs in wallet.js: no
+-- code path, race or operator adjustment can leave a negative balance.
 CREATE TABLE IF NOT EXISTS followup_balances (
   org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   unit            TEXT NOT NULL,
-  balance         REAL NOT NULL DEFAULT 0,
-  value           REAL NOT NULL DEFAULT 0,
+  balance         REAL NOT NULL DEFAULT 0 CHECK (balance >= 0),
+  value           REAL NOT NULL DEFAULT 0 CHECK (value >= 0),
   updated_at      TEXT NOT NULL,
   PRIMARY KEY (org_id, unit)
 );
@@ -3496,6 +3504,15 @@ CREATE TABLE IF NOT EXISTS followup_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_followup_ledger_org ON followup_ledger(org_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_followup_ledger_job ON followup_ledger(job_id);
+-- DURABLE IDEMPOTENCY. A job has at most one hold, one release, one usage and
+-- one refund row. The checks in wallet.js run under a row lock (Postgres), and
+-- this index is the guarantee underneath them: a duplicate or concurrent
+-- provider callback can never charge, release or refund the same job twice.
+-- A plain CREATE UNIQUE INDEX (not part of CREATE TABLE) so it also lands on
+-- a database where the table already exists.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_followup_ledger_job_reason ON followup_ledger(job_id, reason) WHERE job_id IS NOT NULL;
+-- Per-campaign budget totals (engine.loadHistory) without scanning the ledger.
+CREATE INDEX IF NOT EXISTS idx_followup_ledger_rule ON followup_ledger(org_id, rule_id, reason);
 
 -- Purchases. Their own order table, like barbell_plan_orders.
 CREATE TABLE IF NOT EXISTS followup_orders (
@@ -3539,3 +3556,21 @@ CREATE TABLE IF NOT EXISTS followup_platform (
   updated_by      TEXT,
   updated_at      TEXT NOT NULL
 );
+
+-- Owner-side changes to AI Communication (settings, the compliance checklist,
+-- campaigns, caller-number labels): who changed what, when, before and after.
+-- Founder actions are in admin_audit_logs; consent changes are in
+-- followup_consent_log. Values pass through a redactor before they are stored.
+CREATE TABLE IF NOT EXISTS followup_audit (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  actor_id        TEXT REFERENCES users(id) ON DELETE SET NULL,
+  actor_role      TEXT,
+  action          TEXT NOT NULL,
+  entity_type     TEXT,
+  entity_id       TEXT,
+  before_json     TEXT,
+  after_json      TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_audit_org ON followup_audit(org_id, created_at);

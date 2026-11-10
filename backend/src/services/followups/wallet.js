@@ -230,8 +230,11 @@ export async function savePriceBook(db, raw, userId) {
   throw err('Could not save the price book, try again', 409);
 }
 
-/** Packs an owner can buy. Never exposes cost or margin. `available(product, tierId)` says if a tier is live. */
-export function catalogue(book, available = () => true) {
+/**
+ * Packs an owner can buy. Never exposes cost or margin. `available(product, tier)`
+ * says if a tier is live (asked for tiered packs only); `selling` false closes all sales.
+ */
+export function catalogue(book, available = () => true, { selling = true } = {}) {
   return book.packs.filter((p) => p.active !== false).map((p) => {
     const t = taxed(p.price, book);
     const tier = p.tier ? tierOf(book, p.plan, p.tier) : null;
@@ -240,7 +243,9 @@ export function catalogue(book, available = () => true) {
       net: t.net, tax: t.tax, total: t.total, tax_label: book.tax?.label || 'GST', tax_inclusive: book.tax?.inclusive !== false,
       units: p.units || null, lines: p.lines || null, days: p.days || null, max_quantity: p.max_quantity || 1,
       tier: p.tier || null, tier_name: tier?.name || null, tagline: tier?.tagline || null,
-      available: !tier || (tier.active !== false && available(p.plan, tier)),
+      // Sales closed (`off` mode) -> nothing is available; otherwise a tiered
+      // pack also needs its tier active and its engine live.
+      available: selling && (!tier || (tier.active !== false && available(p.plan, tier))),
     };
   });
 }
@@ -257,7 +262,9 @@ export async function getWallet(db, orgId, book = null) {
 
 /** Units on hold for calls still in progress. */
 export async function pendingHolds(db, orgId) {
-  const rows = await db.q(`SELECT unit, SUM(units_held) AS held FROM followup_jobs WHERE org_id = ? AND units_held > 0 AND status IN ('queued','dialing','answered') GROUP BY unit`, [orgId]);
+  // units_held is zeroed on settlement, so any job still holding units counts --
+  // including a completed call still waiting for the provider to report its length.
+  const rows = await db.q(`SELECT unit, SUM(units_held) AS held FROM followup_jobs WHERE org_id = ? AND units_held > 0 GROUP BY unit`, [orgId]);
   return Object.fromEntries(rows.map((r) => [r.unit, num(r.held)]));
 }
 
@@ -274,6 +281,26 @@ const ledgerRow = (t, row) => t.run(
     row.providerRef || null, r2(num(row.charge)), row.cost ?? null, row.pricingVersion ?? null, row.note || null, now()]);
 
 const inTx = (db, orgId, tx, fn) => (tx ? fn(tx) : db.tx(fn, { orgId }));
+
+/*
+ * ONE JOB, ONE OF EACH MOVEMENT. Provider callbacks arrive twice, late and
+ * concurrently (a retried webhook racing the sweep). Every function below
+ * that moves money for a job first takes a row lock on that job (Postgres;
+ * SQLite has a single writer already), so its "has this been done?" check
+ * and its write cannot interleave with another. Underneath that, the
+ * ux_followup_ledger_job_reason index makes a second hold / release / usage /
+ * refund row for the same job impossible; if one is ever attempted, the
+ * transaction rolls back whole and the caller sees "already done".
+ */
+async function lockJob(t, jobId) {
+  if (jobId && t.driver === 'postgres') await t.q1('SELECT id FROM followup_jobs WHERE id = ? FOR UPDATE', [jobId]);
+}
+export const isDuplicateLedgerRow = (e) => e?.code === '23505' || /UNIQUE constraint failed: followup_ledger|ux_followup_ledger_job_reason|duplicate key/i.test(String(e?.message || ''));
+
+/** Run a job's money movement; a duplicate-row collision means another delivery already did it. */
+async function once(work, onDuplicate) {
+  try { return await work(); } catch (e) { if (isDuplicateLedgerRow(e)) return onDuplicate(); throw e; }
+}
 
 async function add(t, orgId, unit, n, value) {
   await ensureRow(t, orgId, unit);
@@ -308,13 +335,15 @@ export async function creditUnits(db, orgId, units, { values = {}, reason, order
 
 /** Reserve capacity for a call about to be placed. False when short. */
 export async function holdUnits(db, orgId, unit, n, { jobId, ruleId = null, tx = null } = {}) {
-  return inTx(db, orgId, tx, async (t) => {
+  return once(() => inTx(db, orgId, tx, async (t) => {
+    await lockJob(t, jobId);
+    if (await t.q1(`SELECT id FROM followup_ledger WHERE job_id = ? AND reason = 'hold' LIMIT 1`, [jobId])) return true;   // already held
     const value = await take(t, orgId, unit, n);
     if (value === null) return false;
     await ledgerRow(t, { orgId, unit, delta: -n, reason: 'hold', jobId, ruleId, charge: value, note: 'Reserved while the call is in progress' });
     await t.run('UPDATE followup_jobs SET units_held = ?, unit = ?, updated_at = ? WHERE id = ?', [n, unit, now(), jobId]);
     return true;
-  });
+  }), () => true);
 }
 
 /**
@@ -322,7 +351,8 @@ export async function holdUnits(db, orgId, unit, n, { jobId, ruleId = null, tx =
  * what is left). Idempotent per job: a second settle changes nothing.
  */
 export async function settleJob(db, job, { used, cost = null, provider = null, providerRef = null, pricingVersion = null }) {
-  return db.tx(async (t) => {
+  return once(() => db.tx(async (t) => {
+    await lockJob(t, job.id);
     const fresh = await t.q1('SELECT units_held, units, unit FROM followup_jobs WHERE id = ?', [job.id]);
     if (!fresh) return 0;
     const already = await t.q1(`SELECT id FROM followup_ledger WHERE job_id = ? AND reason IN ('usage','release') LIMIT 1`, [job.id]);
@@ -336,43 +366,71 @@ export async function settleJob(db, job, { used, cost = null, provider = null, p
       await ledgerRow(t, { orgId: job.org_id, unit, delta: held, reason: 'release', jobId: job.id, ruleId: job.rule_id, charge: heldValue, note: 'Hold released' });
     }
     let charged = 0;
+    let value = 0;
     const want = num(used);
     if (want > 0) {
-      const w = await t.q1('SELECT balance FROM followup_balances WHERE org_id = ? AND unit = ?', [job.org_id, unit]);
-      charged = Math.min(want, Math.max(0, num(w?.balance)));
-      const value = charged > 0 ? await take(t, job.org_id, unit, charged) : 0;
+      // Another job can spend from the same balance between the read and the
+      // conditional take; when the take finds less than it read, read again.
+      // The usage row always records exactly what was taken, so the ledger and
+      // the balance can never disagree.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const w = await t.q1('SELECT balance FROM followup_balances WHERE org_id = ? AND unit = ?', [job.org_id, unit]);
+        const can = Math.min(want, Math.max(0, num(w?.balance)));
+        if (can <= 0) break;
+        const v = await take(t, job.org_id, unit, can);
+        if (v !== null) { charged = can; value = v; break; }
+      }
       await ledgerRow(t, {
         orgId: job.org_id, unit, delta: -charged, reason: 'usage', jobId: job.id, ruleId: job.rule_id, provider, providerRef,
-        charge: value || 0, cost, pricingVersion, note: charged < want ? `Used ${want}; balance covered ${charged}` : null,
+        charge: value, cost, pricingVersion, note: charged < want ? `Used ${want}; balance covered ${charged}` : null,
       });
     }
     await t.run('UPDATE followup_jobs SET units_held = 0, units = ?, updated_at = ? WHERE id = ?', [charged, now(), job.id]);
     return charged;
-  }, { orgId: job.org_id });
+  }, { orgId: job.org_id }), async () => num((await db.q1('SELECT units FROM followup_jobs WHERE id = ?', [job.id]))?.units));
 }
 
 /** Charge a message on provider acceptance. False when short. */
 export async function chargeMessage(db, job, unit, n, { cost = null, provider = null, pricingVersion = null } = {}) {
-  return db.tx(async (t) => {
+  return once(() => db.tx(async (t) => {
+    await lockJob(t, job.id);
+    if (await t.q1(`SELECT id FROM followup_ledger WHERE job_id = ? AND reason = 'usage' LIMIT 1`, [job.id])) return true;   // already charged
     const value = await take(t, job.org_id, unit, n);
     if (value === null) return false;
     await ledgerRow(t, { orgId: job.org_id, unit, delta: -n, reason: 'usage', jobId: job.id, ruleId: job.rule_id, provider, charge: value, cost, pricingVersion });
     await t.run('UPDATE followup_jobs SET units = ?, unit = ?, updated_at = ? WHERE id = ?', [n, unit, now(), job.id]);
     return true;
-  }, { orgId: job.org_id });
+  }, { orgId: job.org_id }), () => true);
+}
+
+/**
+ * A message is charged BEFORE it is handed to the provider (so nothing is sent
+ * without capacity), which means its usage row is written before the provider
+ * has given it a reference. Fill that one column in once the send returns, so
+ * every usage row can be traced to the provider's record. Amounts are never
+ * touched, and a reference already set is never overwritten.
+ */
+export async function attachProviderRef(db, jobId, providerRef) {
+  if (!jobId || !providerRef) return;
+  await db.run(`UPDATE followup_ledger SET provider_ref = ? WHERE job_id = ? AND reason = 'usage' AND provider_ref IS NULL`, [String(providerRef).slice(0, 200), jobId]);
 }
 
 /** A provider-confirmed failure: give a message's units and value back. Once. */
 export async function refundJob(db, job, note) {
-  return db.tx(async (t) => {
-    const used = await t.q1(`SELECT unit, SUM(-delta) AS n, SUM(charge_inr) AS v FROM followup_ledger WHERE job_id = ? AND reason = 'usage' GROUP BY unit`, [job.id]);
+  return once(() => db.tx(async (t) => {
+    await lockJob(t, job.id);
+    const used = await t.q1(`SELECT unit, SUM(-delta) AS n, SUM(charge_inr) AS v, MAX(provider) AS provider, MAX(provider_ref) AS provider_ref, MAX(pricing_version) AS pricing_version
+                               FROM followup_ledger WHERE job_id = ? AND reason = 'usage' GROUP BY unit`, [job.id]);
     const done = await t.q1(`SELECT id FROM followup_ledger WHERE job_id = ? AND reason = 'refund' LIMIT 1`, [job.id]);
     if (!used || done || num(used.n) <= 0) return false;
     await add(t, job.org_id, used.unit, num(used.n), num(used.v));
-    await ledgerRow(t, { orgId: job.org_id, unit: used.unit, delta: num(used.n), reason: 'refund', jobId: job.id, ruleId: job.rule_id, charge: num(used.v), note });
+    await ledgerRow(t, {
+      orgId: job.org_id, unit: used.unit, delta: num(used.n), reason: 'refund', jobId: job.id, ruleId: job.rule_id, charge: num(used.v), note,
+      provider: used.provider, providerRef: used.provider_ref, pricingVersion: used.pricing_version === null || used.pricing_version === undefined ? null : num(used.pricing_version),
+    });
     await t.run('UPDATE followup_jobs SET units = 0, updated_at = ? WHERE id = ?', [now(), job.id]);
     return true;
-  }, { orgId: job.org_id });
+  }, { orgId: job.org_id }), () => false);
 }
 
 /** The once-per-gym trial units (no value: free). Idempotent. */
@@ -381,12 +439,17 @@ export async function grantTrialOnce(db, orgId) {
   if (had) return false;
   const book = await getPriceBook(db);
   const units = Object.fromEntries(Object.entries(book.trial || {}).filter(([, v]) => num(v) > 0));
-  if (!Object.keys(units).length) {
-    await db.run(`INSERT INTO followup_ledger (id, org_id, unit, delta, reason, note, created_at) VALUES (?, ?, 'sms', 0, 'trial', 'No trial configured', ?)`, [id('fl'), orgId, now()]);
-    return false;
-  }
-  await creditUnits(db, orgId, units, { reason: 'trial', note: 'Free test capacity' });
-  return true;
+  // A marker row with a FIXED id makes the grant exactly-once even when two
+  // first visits race (two tabs, a double fetch): the second insert hits the
+  // primary key and its whole transaction, credits included, rolls back.
+  const marker = `fltrial_${orgId}`.slice(0, 120);
+  const configured = Object.keys(units).length > 0;
+  return once(() => db.tx(async (t) => {
+    await t.run(`INSERT INTO followup_ledger (id, org_id, unit, delta, reason, note, created_at) VALUES (?, ?, 'sms', 0, 'trial', ?, ?)`,
+      [marker, orgId, configured ? 'Free test capacity granted' : 'No trial configured', now()]);
+    if (configured) await creditUnits(db, orgId, units, { reason: 'trial', note: 'Free test capacity', tx: t });
+    return configured;
+  }, { orgId }), () => false);
 }
 
 /* ---------------- line capacity ---------------- */

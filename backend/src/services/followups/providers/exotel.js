@@ -90,7 +90,9 @@ export async function sendSms({ from, to, body, dltEntityId, dltTemplateId, smsT
 export function parseSmsStatus(payload) {
   const p = payload || {};
   const raw = String(p.Status || p.status || p.SmsStatus || '').toLowerCase();
-  const status = /deliver/.test(raw) ? 'delivered' : /fail|undeliv|reject|expired|dnd/.test(raw) ? 'failed' : (raw ? 'sent' : null);
+  // Failure first: "undelivered" contains "deliver", and reading it as
+  // delivered would keep a failed SMS's charge instead of refunding it.
+  const status = /fail|undeliv|reject|expired|dnd/.test(raw) ? 'failed' : /deliver/.test(raw) ? 'delivered' : (raw ? 'sent' : null);
   return { ref: p.SmsSid || p.Sid || p.sid || null, status, segments: Number(p.SmsUnits || p.NumSegments || 0) || null, detail: p.DetailedStatus || p.DetailedStatusCode || null };
 }
 
@@ -160,26 +162,94 @@ export async function templateStatus({ name }) {
 /* ---- callback parsing: tolerant of form vs JSON and naming variants ---- */
 const pick = (o, ...keys) => { for (const k of keys) if (o?.[k] !== undefined && o[k] !== '') return o[k]; return undefined; };
 
-/** Normalise a call status callback into { ref, status, duration, customField }. */
+const STATUS_MAP = { completed: 'completed', 'in-progress': 'answered', answered: 'answered', ringing: null, queued: null, 'no-answer': 'no_answer', busy: 'busy', failed: 'failed', canceled: 'failed', cancelled: 'failed' };
+const mapStatus = (raw) => { const k = String(raw || '').toLowerCase(); return k in STATUS_MAP ? STATUS_MAP[k] : (k ? 'failed' : null); };
+
+/** Seconds, or null when the payload does not say (never a silent 0). */
+function seconds(...values) {
+  for (const v of values) {
+    if (v === undefined || v === null || v === '') continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0) return Math.round(n);
+  }
+  return null;
+}
+
+/**
+ * Normalise a call status callback into { ref, status, duration, customField }.
+ *
+ * Exotel documents CallSid, Status (completed | failed | busy | no-answer),
+ * DateUpdated and RecordingUrl as always sent; ConversationDuration, Legs and
+ * CustomField only with StatusCallbackEvents (docs: voice-v1 status-callback).
+ * Its docs do not promise a duration for calls connected to a FLOW, so a
+ * missing duration is returned as null -- "unknown" -- and the engine keeps
+ * the hold and reconciles through fetchCall() instead of billing 0 minutes.
+ */
 export function parseCallStatus(payload) {
   const p = payload || {};
-  const raw = String(pick(p, 'Status', 'CallStatus', 'DialCallStatus', 'status') || '').toLowerCase();
-  const map = { completed: 'completed', 'in-progress': 'answered', answered: 'answered', 'no-answer': 'no_answer', busy: 'busy', failed: 'failed', canceled: 'failed', cancelled: 'failed' };
   const legs = Array.isArray(p.Legs) ? p.Legs : [];
-  const legDur = legs.reduce((m, l) => Math.max(m, Number(l?.OnCallDuration || l?.Duration || 0)), 0);
-  const duration = Number(pick(p, 'ConversationDuration', 'DialCallDuration', 'Duration', 'duration') || legDur || 0);
+  const legDur = legs.length ? legs.reduce((m, l) => Math.max(m, Number(l?.OnCallDuration ?? l?.Duration ?? 0) || 0), 0) : null;
   return {
     ref: pick(p, 'CallSid', 'Sid', 'callSid') || null,
-    status: map[raw] || (raw ? 'failed' : null),
-    duration: Number.isFinite(duration) ? Math.round(duration) : 0,
+    status: mapStatus(pick(p, 'Status', 'CallStatus', 'DialCallStatus', 'status')),
+    duration: seconds(pick(p, 'ConversationDuration'), pick(p, 'DialCallDuration'), pick(p, 'Duration', 'duration'), legDur),
     customField: pick(p, 'CustomField', 'customField') || null,
   };
 }
 
+/**
+ * The provider's own record of a call (Call Details API,
+ * GET /v1/Accounts/{sid}/Calls/{CallSid}.json?details=true): the fallback
+ * Exotel recommends when a status callback is late, missing or incomplete.
+ * Duration is filled in asynchronously (~2 minutes after the call ends), so
+ * it may still be null. Returns { status, duration } or null.
+ */
+export async function fetchCall(callSid) {
+  if (!callSid) return null;
+  const { ex, header } = auth();
+  const res = await fetch(`https://${ex.subdomain}/v1/Accounts/${ex.sid}/Calls/${encodeURIComponent(callSid)}.json?details=true`, {
+    headers: { Authorization: header, Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw await readError(res, 'Reading the call');
+  const j = await res.json().catch(() => ({}));
+  const c = j?.Call || {};
+  return { status: mapStatus(c.Status), duration: seconds(c?.Details?.ConversationDuration, c.Duration) };
+}
+
+/**
+ * Exotel WhatsApp callbacks (delivery statuses and member replies) as
+ * provider-neutral events: { statuses: [{ ref, status }], replies: [{ from, to, text }] }.
+ * The exact shape could not be confirmed from Exotel's public docs, so the
+ * known variants are read and anything else is ignored, never thrown on.
+ * `to` (the business number replied to) is passed through when present.
+ */
+export function parseWhatsAppEvents(body) {
+  const b = body && typeof body === 'object' ? body : {};
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const items = [...arr(b?.whatsapp?.messages), ...arr(b?.messages), ...arr(b?.statuses), ...arr(b?.whatsapp?.statuses)];
+  const out = { statuses: [], replies: [] };
+  for (const m of items.length ? items : [b]) {
+    if (!m || typeof m !== 'object') continue;
+    const ref = m.sid || m.id || m.message_id || m?.data?.sid || null;
+    const raw = String(m.status || m.exo_status_code || m?.data?.status || '').toLowerCase();
+    // Failure first ("undelivered" contains "deliver"): a failed message is refunded.
+    const status = /fail|undeliv|reject|expired/.test(raw) ? 'failed' : /read/.test(raw) ? 'read' : /deliver/.test(raw) ? 'delivered' : /sent/.test(raw) ? 'sent' : null;
+    if (ref && status) out.statuses.push({ ref: String(ref).slice(0, 200), status });
+    const from = m.from || m?.content?.from || null;
+    const to = m.to || m?.content?.to || null;
+    const text = m?.content?.text?.body || m?.content?.button?.text || m?.content?.interactive?.button_reply?.title || m.text || m.body || null;
+    if (from && typeof text === 'string' && text.trim()) out.replies.push({ from: String(from).slice(0, 30), to: to ? String(to).slice(0, 30) : null, text: text.slice(0, 200) });
+  }
+  return out;
+}
+
 /** "\"2\"" -> "2"; anything but a single keypad digit -> null. */
 export function parseDigits(raw) {
-  const s = String(raw ?? '').replace(/["'\s#*]/g, '');
-  return /^[0-9]$/.test(s) ? s : (s ? s[0] : null);
+  // Exotel's Passthru sends digits quoted ("\"2\""); the first keypad digit
+  // pressed is the member's choice. Anything without a digit is no choice.
+  const m = String(raw ?? '').match(/[0-9]/);
+  return m ? m[0] : null;
 }
 
 /* ---------------- provider-neutral adapters (see ./index.js) ---------------- */
@@ -189,8 +259,9 @@ export const telephony = {
   placeMessageCall: ({ to, callerId, token, statusUrl }) => placeFlowCall({ to, callerId, customField: token, statusUrl }),
   parseCallStatus,
   parseDigits,
+  fetchCall,
 };
 
 export const sms = { id: 'exotel', send: sendSms, parseStatus: parseSmsStatus };
 
-export const whatsapp = { id: 'exotel', sendTemplate, createTemplate, templateStatus, toMetaBody };
+export const whatsapp = { id: 'exotel', sendTemplate, createTemplate, templateStatus, toMetaBody, parseEvents: parseWhatsAppEvents };

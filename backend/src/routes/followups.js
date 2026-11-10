@@ -38,6 +38,7 @@ import * as engine from '../services/followups/engine.js';
 import { ensureAudio, readAudio } from '../services/followups/audio.js';
 import * as exotel from '../services/followups/providers/exotel.js';
 import { usableNumbers } from '../services/followups/numbers.js';
+import { auditOwner, changedFrom } from '../services/followups/audit.js';
 
 const KINDS = ['missed_visits', 'membership_ending', 'payment_due', 'onboarding'];
 const CHANNELS = ['call', 'agent', 'sms', 'whatsapp'];
@@ -53,7 +54,10 @@ const monthStart = () => { const d = new Date(); return new Date(Date.UTC(d.getU
 
 export function followupPublicRoutes(db) {
   const r = Router();
-  const hookLimit = rateLimit({ windowMs: 60_000, max: 1200, keyFn: () => 'followup-hooks' });
+  // Per sender IP (trust proxy is on behind Vercel): one noisy or hostile
+  // source can never use up the budget the providers' own callbacks need --
+  // a dropped status callback is a call that is never billed.
+  const hookLimit = rateLimit({ windowMs: 60_000, max: 1200, keyFn: (req) => `followup-hooks:${req.ip || 'unknown'}` });
 
   const cron = wrap(async (req, res) => {
     const auth = cronAuthorized(req);
@@ -127,20 +131,12 @@ export function followupPublicRoutes(db) {
   // signed key the operator copies from the admin console.
   r.post('/hooks/exotel/whatsapp', hookLimit, wrap(async (req, res) => {
     if (!verify('whatsapp-inbound', String(req.query.k || ''))) return res.status(403).end();
-    const body = req.body || {};
-    const items = [].concat(body?.whatsapp?.messages || [], body?.messages || [], body?.statuses || [], body?.whatsapp?.statuses || []);
-    for (const m of items.length ? items : [body]) {
-      const ref = m.sid || m.id || m.message_id || m?.data?.sid;
-      const raw = String(m.status || m.exo_status_code || m?.data?.status || '').toLowerCase();
-      if (ref && raw) {
-        const job = await db.q1(`SELECT * FROM followup_jobs WHERE provider_ref = ? AND channel = 'whatsapp'`, [ref]);
-        const mapped = /read/.test(raw) ? 'read' : /deliver/.test(raw) ? 'delivered' : /fail|undeliv|reject/.test(raw) ? 'failed' : /sent/.test(raw) ? 'sent' : null;
-        if (job && mapped) await engine.applyMessageStatus(db, job, mapped);
-      }
-      const from = m.from || m?.content?.from;
-      const text = m?.content?.text?.body || m?.content?.button?.text || m?.content?.interactive?.button_reply?.title || m.text || m.body;
-      if (from && text) await engine.applyWhatsAppReply(db, { from, text });
+    const events = exotel.parseWhatsAppEvents(req.body);
+    for (const s of events.statuses) {
+      const job = await db.q1(`SELECT * FROM followup_jobs WHERE provider_ref = ? AND channel = 'whatsapp'`, [s.ref]);
+      if (job) await engine.applyMessageStatus(db, job, s.status);
     }
+    for (const r of events.replies) await engine.applyWhatsAppReply(db, r);
     res.json({ ok: true });
   }));
 
@@ -152,7 +148,8 @@ export function followupPublicRoutes(db) {
     let conv;
     try { conv = providers.conversationProvider(providerId); } catch { return res.status(404).end(); }
     if (!conv.verifyWebhook(raw, req.headers)) return res.status(401).json({ error: 'bad signature' });
-    const result = conv.parseResult(raw);
+    let result;
+    try { result = conv.parseResult(raw); } catch { return res.status(400).json({ error: 'malformed payload' }); }   // signed but unreadable: retrying will not help
     if (!result) return res.json({ ok: true, ignored: true });
     const jobId = readJobToken(result.token);
     const job = jobId ? await db.q1('SELECT * FROM followup_jobs WHERE id = ?', [jobId])
@@ -251,7 +248,8 @@ export default function followupRoutes(db) {
     const settings = await engine.getSettings(db, orgId);
     const tz = await getOrgTzCached(db, orgId);
     const todayKey = dayKey(new Date(), tz);
-    const [wallet, holds, usage, lines, rules, callbacks, todayRows, members, orders] = await Promise.all([
+    const [platform, wallet, holds, usage, lines, rules, callbacks, todayRows, members, orders] = await Promise.all([
+      engine.platformSwitches(db),
       getWallet(db, orgId, book), pendingHolds(db, orgId), usageSince(db, orgId, monthStart(), book), lineCapacity(db, orgId), engine.loadRules(db, orgId),
       db.q(`SELECT COUNT(*) AS n FROM followup_callbacks WHERE org_id = ? AND status IN ('new','assigned','in_progress')`, [orgId]),
       db.q(`SELECT channel, status, outcome FROM followup_jobs WHERE org_id = ? AND day_key = ? AND is_test = 0`, [orgId, todayKey]),
@@ -276,6 +274,9 @@ export default function followupRoutes(db) {
     }
     res.json({
       setup: status, settings: publicSettings(settings), wallet, holds, usage, lines, today, products: productList(book),
+      // The founder's platform switch (admin console): owners are told when
+      // Barbell has paused sending, so silence is never a mystery.
+      platform: { paused: platform.paused, channels: [...platform.channels] },
       campaigns: rules.map(publicRule), callbacks_open: Number(callbacks[0]?.n || 0), reach, purchases: Number(orders[0]?.n || 0),
       in_hours: engine.inCallingHours(settings, tz), tick: tick ? { queued: tick.queued, placed: tick.placed } : null,
     });
@@ -302,7 +303,7 @@ export default function followupRoutes(db) {
     monthly_cap_inr: z.number().min(0).max(10_000_000).nullable().optional(),
   })), wrap(async (req, res) => {
     const b = req.body;
-    await engine.getSettings(db, req.orgId);
+    const current = await engine.getSettings(db, req.orgId);
     const sets = [];
     const vals = [];
     const put = (col, v) => { sets.push(`${col} = ?`); vals.push(v); };
@@ -311,7 +312,13 @@ export default function followupRoutes(db) {
     if (b.languages) put('languages_json', JSON.stringify(b.languages));
     if (b.voices) put('voices_json', JSON.stringify(b.voices));
     if (b.lines) put('lines_json', JSON.stringify(b.lines));
-    if (sets.length) await db.run(`UPDATE followup_settings SET ${sets.join(', ')}, updated_at = ? WHERE org_id = ?`, [...vals, now(), req.orgId]);
+    if (sets.length) {
+      const action = Object.keys(b).length === 1 && b.enabled !== undefined ? (b.enabled ? 'switched_on' : 'switched_off') : 'settings_updated';
+      await db.tx(async (tx) => {
+        await tx.run(`UPDATE followup_settings SET ${sets.join(', ')}, updated_at = ? WHERE org_id = ?`, [...vals, now(), req.orgId]);
+        await auditOwner(tx, req, { action, entityType: 'followup_settings', entityId: req.orgId, before: changedFrom(current, b), after: b });
+      }, { orgId: req.orgId });
+    }
     res.json({ settings: publicSettings(await engine.getSettings(db, req.orgId)) });
   }));
 
@@ -322,15 +329,18 @@ export default function followupRoutes(db) {
     whatsapp_optin_collected: z.boolean().optional(), accepted_terms: z.literal(true),
   })), wrap(async (req, res) => {
     const record = { ...req.body, by: req.user.sub, at: now(), version: '2026-11' };
-    await engine.getSettings(db, req.orgId);
-    await db.run('UPDATE followup_settings SET compliance_json = ?, updated_at = ? WHERE org_id = ?', [JSON.stringify(record), now(), req.orgId]);
+    const current = await engine.getSettings(db, req.orgId);
+    await db.tx(async (tx) => {
+      await tx.run('UPDATE followup_settings SET compliance_json = ?, updated_at = ? WHERE org_id = ?', [JSON.stringify(record), now(), req.orgId]);
+      await auditOwner(tx, req, { action: 'compliance_confirmed', entityType: 'followup_settings', entityId: req.orgId, before: current.compliance || null, after: record });
+    }, { orgId: req.orgId });
     res.json({ compliance: record });
   }));
 
   // ---- buying capacity ----
   o.get('/catalogue', wrap(async (req, res) => {
     const book = await getPriceBook(db);
-    res.json({ packs: catalogue(book, (product, tier) => providers.tierAvailable(product, tier)), products: productList(book), version: book.version, wallet: await getWallet(db, req.orgId, book), lines: await lineCapacity(db, req.orgId) });
+    res.json({ packs: catalogue(book, (product, tier) => providers.tierAvailable(product, tier), { selling: providers.salesOpen() }), products: productList(book), version: book.version, wallet: await getWallet(db, req.orgId, book), lines: await lineCapacity(db, req.orgId) });
   }));
   o.post('/orders', rateLimit({ windowMs: 60_000, max: 10, keyFn: (req) => req.user?.sub || 'anon' }),
     validate(z.object({ packId: z.string().min(1).max(40), quantity: z.number().int().min(1).max(20).optional() })),
@@ -412,17 +422,23 @@ export default function followupRoutes(db) {
     const c = ruleCols(req.body);
     const rid = id('fr');
     const ts = now();
-    await db.run(`INSERT INTO followup_rules (id, org_id, ${Object.keys(c).join(', ')}, status, created_by, created_at, updated_at) VALUES (?, ?, ${Object.keys(c).map(() => '?').join(', ')}, 'paused', ?, ?, ?)`,
-      [rid, req.orgId, ...Object.values(c), req.user.sub, ts, ts]);
+    await db.tx(async (tx) => {
+      await tx.run(`INSERT INTO followup_rules (id, org_id, ${Object.keys(c).join(', ')}, status, created_by, created_at, updated_at) VALUES (?, ?, ${Object.keys(c).map(() => '?').join(', ')}, 'paused', ?, ?, ?)`,
+        [rid, req.orgId, ...Object.values(c), req.user.sub, ts, ts]);
+      await auditOwner(tx, req, { action: 'campaign_created', entityType: 'followup_rules', entityId: rid, after: { ...c, status: 'paused' } });
+    }, { orgId: req.orgId });
     res.json({ campaign: publicRule(engine.parseRule(await db.q1('SELECT * FROM followup_rules WHERE id = ?', [rid]))) });
   }));
   o.put('/rules/:id', validate(campaign), wrap(async (req, res) => {
-    const cur = await db.q1('SELECT id FROM followup_rules WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
+    const cur = await db.q1('SELECT * FROM followup_rules WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
     if (!cur) return res.status(404).json({ error: 'Campaign not found' });
     const problem = await checkCampaign(req.orgId, req.body);
     if (problem) return res.status(422).json({ error: problem });
     const c = ruleCols(req.body);
-    await db.run(`UPDATE followup_rules SET ${Object.keys(c).map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, [...Object.values(c), now(), cur.id]);
+    await db.tx(async (tx) => {
+      await tx.run(`UPDATE followup_rules SET ${Object.keys(c).map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, [...Object.values(c), now(), cur.id]);
+      await auditOwner(tx, req, { action: 'campaign_updated', entityType: 'followup_rules', entityId: cur.id, before: changedFrom(cur, c), after: c });
+    }, { orgId: req.orgId });
     res.json({ campaign: publicRule(engine.parseRule(await db.q1('SELECT * FROM followup_rules WHERE id = ?', [cur.id]))) });
   }));
   o.post('/rules/:id/status', validate(z.object({ status: z.enum(['active', 'paused']) })), wrap(async (req, res) => {
@@ -432,16 +448,24 @@ export default function followupRoutes(db) {
       const s = await engine.getSettings(db, req.orgId);
       if (!s.compliance?.accepted_terms) return res.status(409).json({ error: 'Confirm the compliance checklist in Settings before starting a campaign', code: 'compliance_required' });
     }
-    await db.run('UPDATE followup_rules SET status = ?, updated_at = ? WHERE id = ?', [req.body.status, now(), cur.id]);
-    if (req.body.status === 'paused') {
-      await db.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Campaign paused', ended_at = ?, updated_at = ? WHERE rule_id = ? AND status = 'queued'`, [now(), now(), cur.id]);
-    }
+    await db.tx(async (tx) => {
+      await tx.run('UPDATE followup_rules SET status = ?, updated_at = ? WHERE id = ?', [req.body.status, now(), cur.id]);
+      if (req.body.status === 'paused') {
+        await tx.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Campaign paused', ended_at = ?, updated_at = ? WHERE rule_id = ? AND org_id = ? AND status = 'queued'`, [now(), now(), cur.id, req.orgId]);
+      }
+      await auditOwner(tx, req, { action: req.body.status === 'active' ? 'campaign_started' : 'campaign_paused', entityType: 'followup_rules', entityId: cur.id, before: { status: cur.status }, after: { status: req.body.status } });
+    }, { orgId: req.orgId });
     res.json({ ok: true });
   }));
   o.delete('/rules/:id', wrap(async (req, res) => {
-    await db.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Campaign deleted', ended_at = ?, updated_at = ? WHERE rule_id = ? AND org_id = ? AND status = 'queued'`, [now(), now(), req.params.id, req.orgId]);
-    const r2 = await db.run('DELETE FROM followup_rules WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
-    res.json({ ok: r2.changes === 1 });
+    const cur = await db.q1('SELECT id, name, kind, status FROM followup_rules WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
+    if (!cur) return res.json({ ok: false });
+    await db.tx(async (tx) => {
+      await tx.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Campaign deleted', ended_at = ?, updated_at = ? WHERE rule_id = ? AND org_id = ? AND status = 'queued'`, [now(), now(), cur.id, req.orgId]);
+      await tx.run('DELETE FROM followup_rules WHERE id = ? AND org_id = ?', [cur.id, req.orgId]);
+      await auditOwner(tx, req, { action: 'campaign_deleted', entityType: 'followup_rules', entityId: cur.id, before: cur });
+    }, { orgId: req.orgId });
+    res.json({ ok: true });
   }));
   // Who it would reach today and what that would use -- before it is switched on.
   o.post('/rules/preview', validate(campaign.partial({ name: true })), wrap(async (req, res) => {
@@ -660,11 +684,14 @@ export default function followupRoutes(db) {
     const n = await db.q1('SELECT * FROM followup_numbers WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
     if (!n) return res.status(404).json({ error: 'Number not found' });
     if (req.body.branch_id && !(await db.q1('SELECT id FROM branches WHERE id = ? AND org_id = ?', [req.body.branch_id, req.orgId]))) return res.status(422).json({ error: 'Unknown branch' });
-    if (req.body.is_primary) await db.run('UPDATE followup_numbers SET is_primary = 0 WHERE org_id = ?', [req.orgId]);
     const cols = ['label', 'branch_id'].filter((k) => req.body[k] !== undefined);
     const vals = cols.map((k) => req.body[k]);
     if (req.body.is_primary !== undefined) { cols.push('is_primary'); vals.push(req.body.is_primary ? 1 : 0); }
-    if (cols.length) await db.run(`UPDATE followup_numbers SET ${cols.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, [...vals, now(), n.id]);
+    await db.tx(async (tx) => {
+      if (req.body.is_primary) await tx.run('UPDATE followup_numbers SET is_primary = 0 WHERE org_id = ?', [req.orgId]);
+      if (cols.length) await tx.run(`UPDATE followup_numbers SET ${cols.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, [...vals, now(), n.id]);
+      await auditOwner(tx, req, { action: 'number_updated', entityType: 'followup_numbers', entityId: n.id, before: { number: n.number, label: n.label, branch_id: n.branch_id, is_primary: Number(n.is_primary) }, after: req.body });
+    }, { orgId: req.orgId });
     res.json({ ok: true });
   }));
 

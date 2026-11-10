@@ -14,6 +14,9 @@ const GROUPS = [
       { to: '/demos', label: 'Demos', icon: 'sparkle' },
       { to: '/payments', label: 'Payments', icon: 'payments' },
       { to: '/coupons', label: 'Coupon Management', icon: 'coupon' },
+      // The follow-ups add-on: price book, per-gym usage and margin, caller
+      // numbers, the platform pause switch (docs/FOLLOWUPS.md).
+      { to: '/communication', label: 'AI Communication', icon: 'phone' },
       { to: '/refunds', label: 'Refunds', icon: 'refunds' },
       { to: '/reconciliation', label: 'Reconciliation', icon: 'reconciliation' },
     ],

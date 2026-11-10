@@ -378,8 +378,13 @@ const MIGRATIONS = [
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).
 // Synthesized rows are explicitly marked is_synthesized = 1 so ML training
 // can exclude them — they are NOT user-entered per-set data.
+// RETURNS the statement's promise and is AWAITED on Postgres: un-awaited, the
+// INSERT ... SELECT FROM workout_logs ran on one pooled connection while the
+// next migration steps locked workout_logs on another, and on a database
+// with workout data `npm run db:init` died with "deadlock detected" (40P01)
+// half-way -- before rls.sql, leaving new tables without their policies.
 function backfillSetLogs(exec, idExpr) {
-  exec(`
+  return exec(`
     INSERT INTO exercise_set_logs (id, workout_log_id, client_id, exercise_id, set_number, prescribed_reps, actual_reps, prescribed_weight, actual_weight, rest_seconds, completed, is_synthesized)
     SELECT ${idExpr}, wl.id, wl.client_id, wl.exercise_id, s.n, wl.reps, wl.reps, wl.weight, wl.weight, NULL, 1, 1
       FROM workout_logs wl
@@ -853,7 +858,7 @@ async function applyPgMigrations(pool) {
     WHERE barcode IS NOT NULL
   `);
   await pool.query(`UPDATE workout_logs SET created_at = date || 'T00:00:00Z' WHERE created_at IS NULL`);
-  backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
+  await backfillSetLogs((sql) => pool.query(sql), `'stl_' || substr(md5(random()::text), 1, 10)`);
   // See the SQLite branch's identical backfill above for why this is
   // safe to run on every startup (guarded by IS NULL).
   await pool.query(`

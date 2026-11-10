@@ -14,7 +14,7 @@
 import { id, now } from '../../ids.js';
 import { createProviderOrder, verifyCheckoutSignature, providerName } from '../payments/paymentProvider.js';
 import { getPriceBook, catalogue, taxed, unitCosts, creditUnits, grantLines } from './wallet.js';
-import { tierAvailable } from './providers/index.js';
+import { tierAvailable, salesOpen } from './providers/index.js';
 import { track } from '../events.js';
 
 const err = (msg, status = 422) => Object.assign(new Error(msg), { status });
@@ -38,7 +38,7 @@ function unitValues(pack, net, book) {
 
 export async function createOrder(db, { orgId, userId, packId, quantity = 1 }) {
   const book = await getPriceBook(db);
-  const pack = catalogue(book, tierAvailable).find((p) => p.id === packId);
+  const pack = catalogue(book, tierAvailable, { selling: salesOpen() }).find((p) => p.id === packId);
   if (!pack) throw err('That pack is not available', 404);
   if (!pack.available) throw err('That quality is not available yet', 409);
   const q = pack.plan === 'lines' ? Math.min(pack.max_quantity || 1, Math.max(1, Math.round(Number(quantity) || 1))) : 1;
@@ -60,7 +60,16 @@ export async function createOrder(db, { orgId, userId, packId, quantity = 1 }) {
   return db.q1('SELECT * FROM followup_orders WHERE id = ?', [orderId]);
 }
 
-/** Turn a paid order into capacity. Exactly once, whichever path gets here first. */
+/**
+ * Turn a paid order into capacity. Exactly once, whichever path gets here first.
+ *
+ * A VERIFIED PAYMENT ALWAYS WINS. An order can be marked CANCELLED (the owner
+ * closed the checkout while their UPI app was still finishing the payment) or
+ * FAILED (a first attempt failed, a retry on the same order succeeded) before
+ * the money actually lands. Activation therefore accepts any status except
+ * SUCCESS -- otherwise the gym is charged and never credited. The single
+ * conditional UPDATE is still what makes it exactly-once.
+ */
 export async function activateOrder(db, order, { providerPaymentId }) {
   const pack = JSON.parse(order.pack_json);
   const book = await getPriceBook(db);
@@ -68,7 +77,7 @@ export async function activateOrder(db, order, { providerPaymentId }) {
   let activated = false;
   await db.tx(async (tx) => {
     const upd = await tx.run(
-      `UPDATE followup_orders SET status = 'SUCCESS', provider_payment_id = ?, invoice_number = ?, updated_at = ? WHERE id = ? AND status = 'CREATED'`,
+      `UPDATE followup_orders SET status = 'SUCCESS', provider_payment_id = ?, invoice_number = ?, updated_at = ? WHERE id = ? AND status != 'SUCCESS'`,
       [providerPaymentId, number, now(), order.id]);
     if (upd.changes !== 1) return;
     activated = true;
@@ -89,8 +98,9 @@ export async function verifyOrder(db, { orgId, orderId, providerPaymentId, signa
   const order = await db.q1('SELECT * FROM followup_orders WHERE id = ? AND org_id = ?', [orderId, orgId]);
   if (!order) throw err('Order not found', 404);
   if (order.status === 'SUCCESS') return order;
-  if (order.status !== 'CREATED') throw err('This order can no longer be paid', 409);
-  if (order.provider !== providerName() || !verifyCheckoutSignature({ providerOrderId: order.provider_order_id, providerPaymentId, signature })) {
+  // A CANCELLED / FAILED order is still activated by a payment that verifies:
+  // the signature proves the money was taken for THIS order (see activateOrder).
+  if (!order.provider_order_id || order.provider !== providerName() || !verifyCheckoutSignature({ providerOrderId: order.provider_order_id, providerPaymentId, signature })) {
     throw err('This payment could not be verified. You have not been charged twice; contact support if money left your account.');
   }
   return activateOrder(db, order, { providerPaymentId });

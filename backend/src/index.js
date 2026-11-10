@@ -46,6 +46,7 @@ import receiptRoutes from './routes/receipts.js';
 import planRoutes, { planGate } from './routes/plan.js';
 import attendanceRoutes from './routes/attendance.js';
 import followupRoutes, { followupPublicRoutes } from './routes/followups.js';
+import { redactUrl } from './utils/redactUrl.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
 import healthRoutes from './routes/health.js';
@@ -180,11 +181,13 @@ export async function buildApp() {
 
   // Request ID + access log (method, path, status, duration — never bodies,
   // tokens, or headers). Gives every logged error a traceable id.
+  // Query strings can carry credentials too (signed provider-callback URLs,
+  // ?token=, ?signature=): their VALUES are masked -- see utils/redactUrl.js.
   app.use((req, res, next) => {
     req.id = randomUUID();
     const t0 = Date.now();
     res.on('finish', () => {
-      console.log(`[req] ${req.id} ${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - t0}ms`);
+      console.log(`[req] ${req.id} ${req.method} ${redactUrl(req.originalUrl)} ${res.statusCode} ${Date.now() - t0}ms`);
     });
     next();
   });

@@ -192,15 +192,28 @@ export async function exotelOutboundCall({ agentId, agentPhoneId, to, variables 
  * ElevenLabs-Signature: "t=<unix>,v0=<hex hmac-sha256 of `<t>.<body>`>".
  * Rejects stale timestamps (replays) and anything unsigned.
  */
-export function verifyWebhook(rawBody, header, secret = elevenEnv().webhookSecret, toleranceSec = 1800) {
+/**
+ * The ElevenLabs-Signature header: `t=<unix seconds>,v0=<hex HMAC-SHA256 of
+ * "<t>.<raw body>" keyed with the webhook secret>` -- the scheme the official
+ * SDKs' constructEvent verifies, with the same 30-minute timestamp window as
+ * replay protection. The header may carry more than one v0 (a secret being
+ * rotated); any one matching is valid. Comparison is constant-time.
+ */
+export function verifyWebhook(rawBody, header, secret = elevenEnv().webhookSecret, toleranceSec = 1800, nowSec = Date.now() / 1000) {
   if (!secret || !header) return false;
-  const parts = Object.fromEntries(String(header).split(',').map((p) => p.trim().split('=')));
-  const t = Number(parts.t);
-  if (!Number.isFinite(t) || Math.abs(Date.now() / 1000 - t) > toleranceSec || !parts.v0) return false;
-  const expected = crypto.createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex');
-  const a = Buffer.from(expected);
-  const b = Buffer.from(String(parts.v0));
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  let t = NaN;
+  const sigs = [];
+  for (const part of String(header).split(',')) {
+    const i = part.indexOf('=');
+    if (i < 1) continue;
+    const k = part.slice(0, i).trim();
+    const v = part.slice(i + 1).trim();
+    if (k === 't') t = Number(v);
+    else if (k === 'v0' && v) sigs.push(v);
+  }
+  if (!Number.isFinite(t) || Math.abs(nowSec - t) > toleranceSec || !sigs.length) return false;
+  const expected = Buffer.from(crypto.createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex'));
+  return sigs.some((s) => { const b = Buffer.from(s); return b.length === expected.length && crypto.timingSafeEqual(expected, b); });
 }
 
 export const _resetModelCacheForTests = () => { modelCache = { at: 0, list: null }; };

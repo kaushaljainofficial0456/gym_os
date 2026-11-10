@@ -30,25 +30,9 @@ const today = dayKey(new Date(), TZ);
 const noon = new Date(`${today}T12:00:00+05:30`);
 const K = (n) => shiftDayKey(today, n);
 
-async function memDb() {
-  const { DatabaseSync } = await import('node:sqlite');
-  const raw = new DatabaseSync(':memory:');
-  raw.exec('PRAGMA foreign_keys = ON;');
-  raw.exec(schema);
-  const db = {
-    driver: 'sqlite',
-    async q(sql, p = []) { return raw.prepare(sql).all(...p); },
-    async q1(sql, p = []) { return raw.prepare(sql).all(...p)[0] || null; },
-    async run(sql, p = []) { const r = raw.prepare(sql).run(...p); return { changes: Number(r.changes) }; },
-    exec(sql) { raw.exec(sql); },
-    async tx(fn) {
-      raw.exec('BEGIN');
-      try { const out = await fn(db); raw.exec('COMMIT'); return out; } catch (e) { try { raw.exec('ROLLBACK'); } catch { /* */ } throw e; }
-    },
-    raw,
-  };
-  return db;
-}
+// One fresh database per test: in-memory SQLite, or a fresh schema on real
+// PostgreSQL when TEST_DATABASE_URL is set (see helpers/followupsDb.js).
+const { memDb } = await import('./helpers/followupsDb.js');
 
 async function seedGym(db, org, { phoneOwner = '9876500000' } = {}) {
   await db.run(`INSERT INTO organizations (id, name, slug, created_at) VALUES (?, ?, ?, ?)`, [org, `Gym ${org}`, org, '2026-01-01T00:00:00Z']);
@@ -235,7 +219,7 @@ test('engine: contacts only members with permission, settles usage, and a "press
   const again = await engine.planOrg(db, 'g1', { at: noon });
   assert.equal(again.queued, 0, 'planning twice does not double-queue');
 
-  await engine.dispatchOrg(db, 'g1');
+  await engine.dispatchOrg(db, 'g1', { at: noon });
   const job = await db.q1(`SELECT * FROM followup_jobs WHERE client_id = ?`, [ok.cid]);
   assert.ok(['completed', 'no_answer', 'busy'].includes(job.status), job.status);
   assert.match(job.message_text, /automated call from Gym g1.*Hi Rahul! We have not seen you for 10 days.*press 9/);
@@ -244,7 +228,7 @@ test('engine: contacts only members with permission, settles usage, and a "press
   const w = await wallet.getWallet(db, 'g1');
   assert.equal(w['voice:standard'], 50 - Number(job.units), 'charged exactly what was settled');
   if (job.status !== 'completed') assert.equal(Number(job.units), 0, 'unanswered calls cost nothing');
-  assert.equal((await db.q1(`SELECT COUNT(*) AS n FROM followup_jobs WHERE client_id = ?`, [noPerm.cid])).n, 0);
+  assert.equal(Number((await db.q1(`SELECT COUNT(*) AS n FROM followup_jobs WHERE client_id = ?`, [noPerm.cid])).n), 0);
 
   // The member presses 9: suppressed for every campaign and every number.
   // (Test mode simulates a key press from the job id -- clear it, so this
@@ -298,6 +282,96 @@ test('engine: a sequence skips a channel the member refused and goes straight to
   await engine.planOrg(db, 'g3', { at: noon });
   const jobs = await db.q('SELECT channel FROM followup_jobs WHERE client_id = ?', [m.cid]);
   assert.deepEqual(jobs.map((j) => j.channel), ['call'], 'no WhatsApp permission: straight to the call, no 4-hour wait');
+});
+
+test('dispatch: a queue left over is never placed after hours, when switched off, or to a member paused since', async () => {
+  const db = await memDb();
+  await seedGym(db, 'g8');
+  await enableGym(db, 'g8');
+  await db.run(`UPDATE followup_settings SET window_end = '20:00' WHERE org_id = 'g8'`);
+  await wallet.creditUnits(db, 'g8', { 'voice:standard': 20 }, { reason: 'purchase' });
+  const a = await addMember(db, 'g8', { lastVisit: 9 });
+  const b = await addMember(db, 'g8', { lastVisit: 9 });
+  await voiceCampaign(db, 'g8');
+  assert.equal((await engine.planOrg(db, 'g8', { at: noon })).queued, 2);
+  const status = async (cid) => (await db.q1('SELECT status, error FROM followup_jobs WHERE client_id = ?', [cid]));
+
+  // 20:30 at the gym: past its window. Nothing placed; still queued for later today.
+  const late = new Date(`${today}T20:30:00+05:30`);
+  assert.equal((await engine.dispatchOrg(db, 'g8', { at: late })).reason, 'outside_hours');
+  assert.equal((await status(a.cid)).status, 'queued');
+
+  // The owner switches automations off: nothing placed.
+  await db.run(`UPDATE followup_settings SET enabled = 0 WHERE org_id = 'g8'`);
+  assert.equal((await engine.dispatchOrg(db, 'g8', { at: noon })).placed, 0);
+  assert.equal((await status(a.cid)).status, 'queued');
+  await db.run(`UPDATE followup_settings SET enabled = 1 WHERE org_id = 'g8'`);
+
+  // Member b was paused by the owner after planning: skipped, a still called.
+  await db.run('UPDATE followup_member_prefs SET paused_until = ? WHERE client_id = ?', [K(2), b.cid]);
+  await engine.dispatchOrg(db, 'g8', { at: noon });
+  assert.notEqual((await status(a.cid)).status, 'queued', 'a was placed');
+  const sb = await status(b.cid);
+  assert.equal(sb.status, 'skipped');
+  assert.equal(sb.error, 'Paused by the gym');
+
+  // A job from an earlier day is never placed late.
+  await db.run(`INSERT INTO followup_jobs (id, org_id, rule_id, client_id, channel, dedupe_key, day_key, status, to_number, unit, created_at, updated_at)
+                VALUES ('fj_old', 'g8', NULL, ?, 'call', 'old', ?, 'queued', ?, 'voice:standard', ?, ?)`, [a.cid, K(-1), a.phone, noon.toISOString(), noon.toISOString()]);
+  await engine.dispatchOrg(db, 'g8', { at: noon });
+  const old = await db.q1(`SELECT status, error FROM followup_jobs WHERE id = 'fj_old'`);
+  assert.equal(old.status, 'skipped');
+  assert.match(old.error, /day it was due/);
+});
+
+test('ledger: a message usage row carries the provider reference, and a failed delivery is refunded once with it', async () => {
+  const db = await memDb();
+  await seedGym(db, 'g7');
+  await enableGym(db, 'g7');
+  await wallet.creditUnits(db, 'g7', { whatsapp: 5 }, { values: { whatsapp: 10 }, reason: 'purchase' });
+  const m = await addMember(db, 'g7', { lastVisit: 9, consent: ['whatsapp'] });
+  await voiceCampaign(db, 'g7', { sequence: [{ channel: 'whatsapp' }] });
+  await db.run(`INSERT INTO followup_templates (id, org_id, group_id, name, body, language, status, created_at, updated_at) VALUES ('t7', 'g7', 'ftg_7', 'Miss you', 'Hi {name}', 'en', 'approved', ?, ?)`, [noon.toISOString(), noon.toISOString()]);
+  await db.run(`UPDATE followup_rules SET template_group_id = 'ftg_7' WHERE org_id = 'g7'`);
+  await engine.planOrg(db, 'g7', { at: noon });
+  await engine.dispatchOrg(db, 'g7', { at: noon });
+  const job = await db.q1(`SELECT * FROM followup_jobs WHERE client_id = ? AND channel = 'whatsapp'`, [m.cid]);
+  assert.ok(job?.provider_ref, 'the message was handed to the provider');
+  const usage = await db.q1(`SELECT * FROM followup_ledger WHERE job_id = ? AND reason = 'usage'`, [job.id]);
+  assert.equal(usage.provider_ref, job.provider_ref, 'usage row is traceable to the provider record');
+  assert.equal(usage.provider, 'test');
+  assert.equal(Number(usage.pricing_version), 0, 'priced from the price book in force (the defaults, version 0)');
+  assert.ok(usage.cost_estimate > 0);
+  // The provider later reports it failed: refunded once, with the same reference.
+  await engine.applyMessageStatus(db, job, 'failed');
+  await engine.applyMessageStatus(db, job, 'failed');
+  const refunds = await db.q(`SELECT * FROM followup_ledger WHERE job_id = ? AND reason = 'refund'`, [job.id]);
+  assert.equal(refunds.length, 1, 'refunded exactly once (whether the failure came at send time or later)');
+  assert.equal(refunds[0].provider_ref, job.provider_ref);
+  assert.equal((await wallet.getWallet(db, 'g7')).whatsapp, 5, 'capacity given back');
+});
+
+test('WhatsApp STOP belongs to the gym whose number the member replied to', async () => {
+  const db = await memDb();
+  await seedGym(db, 'ga');
+  await seedGym(db, 'gb');
+  const phone = '9876512399';
+  const a = await addMember(db, 'ga', { phone, consent: ['whatsapp'] });
+  const b = await addMember(db, 'gb', { phone, consent: ['whatsapp'] });
+  const job = (jid, org, cid, from, ts) => db.run(
+    `INSERT INTO followup_jobs (id, org_id, client_id, channel, dedupe_key, day_key, status, to_number, from_number, created_at, updated_at) VALUES (?, ?, ?, 'whatsapp', ?, ?, 'delivered', ?, ?, ?, ?)`,
+    [jid, org, cid, jid, today, a.phone, from, ts, ts]);
+  await job('fj_a', 'ga', a.cid, '+919800000001', `${today}T05:00:00.000Z`);
+  await job('fj_b', 'gb', b.cid, '+919800000002', `${today}T06:00:00.000Z`);   // gym B messaged LATER
+  const r = await engine.applyWhatsAppReply(db, { from: phone, to: '+91 98000 00001', text: 'STOP' });
+  assert.equal(r.outcome, 'opted_out');
+  const pa = await db.q1('SELECT wa_opted_out_at FROM followup_member_prefs WHERE client_id = ?', [a.cid]);
+  const pb = await db.q1('SELECT wa_opted_out_at FROM followup_member_prefs WHERE client_id = ?', [b.cid]);
+  assert.ok(pa.wa_opted_out_at, 'stopped at the gym they replied to');
+  assert.equal(pb.wa_opted_out_at, null, 'the other gym is untouched');
+  // No business number in the payload: the latest message is the one answered.
+  await engine.applyWhatsAppReply(db, { from: phone, text: 'STOP' });
+  assert.ok((await db.q1('SELECT wa_opted_out_at FROM followup_member_prefs WHERE client_id = ?', [b.cid])).wa_opted_out_at);
 });
 
 test('engine: campaign budget, end date and the owner monthly cap all stop contact', async () => {
@@ -482,7 +556,7 @@ test('tiers: a campaign spends from its own tier, and a tier without a live prov
   const rid = await voiceCampaign(db, 't1');
   await db.run(`UPDATE followup_rules SET voice_tier = 'basic' WHERE id = ?`, [rid]);
   await engine.planOrg(db, 't1', { at: noon });
-  await engine.dispatchOrg(db, 't1');
+  await engine.dispatchOrg(db, 't1', { at: noon });
   const job = await db.q1('SELECT * FROM followup_jobs WHERE rule_id = ?', [rid]);
   assert.equal(job.unit, 'voice:basic');
   const w = await wallet.getWallet(db, 't1');
