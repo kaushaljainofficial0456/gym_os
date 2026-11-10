@@ -3,6 +3,7 @@ package com.gymos.app;
 import android.net.Uri;
 import android.util.Base64;
 import android.widget.Toast;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Logger;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -56,6 +57,37 @@ public class GymOSShellPlugin extends Plugin {
             ((MainActivity) getActivity()).setLightTheme(light);
             call.resolve();
         });
+    }
+
+    /**
+     * Google sign-in for the page's "Continue with Google" button -- see
+     * GoogleSignIn for why the web button cannot be used in the app. Resolves
+     * { idToken }; rejects with code CANCELED (closed by the user), NO_ACCOUNT
+     * or FAILED, and a message the page can show as it is.
+     */
+    @PluginMethod
+    public void googleSignIn(PluginCall call) {
+        String serverClientId = call.getString("serverClientId");
+        if (!GoogleSignIn.isClientId(serverClientId)) {
+            call.reject("Google sign-in is not set up for the app.", "FAILED");
+            return;
+        }
+        getActivity().runOnUiThread(() -> GoogleSignIn.start(getActivity(), serverClientId, new GoogleSignIn.Callback() {
+            @Override
+            public void onToken(String idToken) {
+                JSObject result = new JSObject();
+                result.put("idToken", idToken);
+                call.resolve(result);
+            }
+
+            @Override
+            public void onFailure(GoogleSignIn.Failure failure) {
+                if (!"CANCELED".equals(failure.code)) {
+                    Logger.warn("GymOSShell", "Google sign-in failed: " + failure.message);
+                }
+                call.reject(failure.message, failure.code);
+            }
+        }));
     }
 
     @PluginMethod

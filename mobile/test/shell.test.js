@@ -199,3 +199,46 @@ test('installing twice does not wrap anything twice', () => {
   assert.equal(win.URL.createObjectURL, create);
   assert.equal(typeof win.__gymosShell.back, 'function');
 });
+
+// ── Native Google sign-in ─────────────────────────────────────────────
+// Google refuses to sign in inside a WebView, so the page's "Continue with
+// Google" calls window.__gymosShell.googleSignIn, which asks the native side.
+
+const CLIENT_ID = '1234-abc.apps.googleusercontent.com';
+
+test('Google sign-in hands the page the ID token the native side returned', async () => {
+  const { win } = fakeWindow();
+  const asked = [];
+  win.Capacitor.Plugins.GymOSShell.googleSignIn = async (options) => { asked.push(options); return { idToken: 'header.payload.sig' }; };
+  shell.install(win);
+  assert.equal(typeof win.__gymosShell.googleSignIn, 'function', 'the page feature-detects this');
+  assert.deepEqual(await win.__gymosShell.googleSignIn({ serverClientId: CLIENT_ID }), { idToken: 'header.payload.sig' });
+  assert.deepEqual(asked, [{ serverClientId: CLIENT_ID }], 'only the client id crosses to native code');
+});
+
+test('closing Google\'s sheet is reported as CANCELED, so the page can stay quiet', async () => {
+  const { win } = fakeWindow();
+  win.Capacitor.Plugins.GymOSShell.googleSignIn = async () => { throw Object.assign(new Error('Google sign-in was closed.'), { code: 'CANCELED' }); };
+  shell.install(win);
+  await assert.rejects(win.__gymosShell.googleSignIn({ serverClientId: CLIENT_ID }), (err) => err.code === 'CANCELED');
+});
+
+test('a native failure keeps its message for the page to show', async () => {
+  const { win } = fakeWindow();
+  win.Capacitor.Plugins.GymOSShell.googleSignIn = async () => { throw Object.assign(new Error('No Google account is available on this phone.'), { code: 'NO_ACCOUNT' }); };
+  shell.install(win);
+  await assert.rejects(win.__gymosShell.googleSignIn({ serverClientId: CLIENT_ID }),
+    (err) => err.code === 'NO_ACCOUNT' && /No Google account/.test(err.message));
+});
+
+test('Google sign-in fails cleanly without a client id, a native method, or a token', async () => {
+  const { win } = fakeWindow();
+  shell.install(win);
+  await assert.rejects(win.__gymosShell.googleSignIn({ serverClientId: CLIENT_ID }), /not available in this version/);
+
+  const second = fakeWindow();
+  second.win.Capacitor.Plugins.GymOSShell.googleSignIn = async () => ({});
+  shell.install(second.win);
+  await assert.rejects(second.win.__gymosShell.googleSignIn({}), /not set up/);
+  await assert.rejects(second.win.__gymosShell.googleSignIn({ serverClientId: CLIENT_ID }), (err) => err.code === 'FAILED');
+});

@@ -214,6 +214,36 @@
     else win.document.addEventListener('DOMContentLoaded', observe, { once: true });
   }
 
+  // Native Google sign-in for the page's "Continue with Google" button.
+  // Google refuses to sign in inside a WebView, so the website's own Google
+  // button cannot work in the app; the page calls this instead when it sees
+  // window.__gymosShell.googleSignIn (older APKs do not have it, and the page
+  // keeps the button hidden there). Resolves { idToken }, which the page posts
+  // to the same /auth/google routes as on the web. Rejects with an Error whose
+  // `code` is CANCELED when the user just closed Google's sheet.
+  function googleSignIn(win, plugin, options) {
+    const fail = (message, code) => {
+      const err = new Error(message);
+      err.code = code || 'FAILED';
+      return Promise.reject(err);
+    };
+    const shell = plugin('GymOSShell');
+    if (!shell || typeof shell.googleSignIn !== 'function') return fail('Google sign-in is not available in this version of the app.');
+    const serverClientId = options && options.serverClientId ? String(options.serverClientId) : '';
+    if (!serverClientId) return fail('Google sign-in is not set up for the app.');
+    return shell.googleSignIn({ serverClientId }).then(
+      (result) => {
+        if (!result || typeof result.idToken !== 'string' || !result.idToken) {
+          throw Object.assign(new Error('Google did not return a sign-in. Try again.'), { code: 'FAILED' });
+        }
+        return { idToken: result.idToken };
+      },
+      (err) => {
+        throw Object.assign(new Error(String((err && err.message) || 'Google sign-in failed.')), { code: (err && err.code) || 'FAILED' });
+      },
+    );
+  }
+
   function install(win) {
     if (win.__gymosShell) return;
     // Resolved on every use: this script runs before Capacitor's own bridge
@@ -223,9 +253,12 @@
     installDownloads(win, plugin);
     installThemeSync(win, plugin);
     Object.defineProperty(win, '__gymosShell', {
-      value: Object.freeze({ back: (canGoBack) => handleBack(win, canGoBack === true) }),
+      value: Object.freeze({
+        back: (canGoBack) => handleBack(win, canGoBack === true),
+        googleSignIn: (options) => googleSignIn(win, plugin, options),
+      }),
     });
   }
 
-  return { install, backAction, findBackControl, normalizePath, toShareOptions, topmostDialog, HOME_PATHS };
+  return { install, backAction, findBackControl, googleSignIn, normalizePath, toShareOptions, topmostDialog, HOME_PATHS };
 });

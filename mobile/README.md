@@ -157,15 +157,20 @@ web app.
 
 ## Known limitations
 
-- **Google Sign-In** (the *Independent client* screen, and *Continue with
-  Google* when setting up a gym). Google does not allow its sign-in inside
-  embedded WebViews, so these buttons are expected to be refused in the app.
-  This has not yet been confirmed on a device. Email and password sign-in is
-  unaffected.
-  - The fix is native sign-in: Android Credential Manager, posting the same
-    ID token to `/auth/google`.
-  - That fix also needs an Android OAuth client (package `com.gymos.app` plus
-    the signing key's SHA-1) in the Google Cloud project.
+- **Google Sign-In needs an Android OAuth client.** Google does not allow
+  its web sign-in inside embedded WebViews, so the app signs in natively:
+  `GoogleSignIn.java` asks Android's Credential Manager for a Google ID
+  token, `shell.js` exposes it as `window.__gymosShell.googleSignIn`, and the
+  web app's Google button uses it when present and posts the token to the
+  same `/auth/google` routes. The token's audience is the web OAuth client
+  ID (`VITE_GOOGLE_CLIENT_ID`), so the backend is unchanged. Google only
+  issues it once the same Google Cloud project has an **Android** OAuth
+  client for package `com.barbell.gymapp` and the SHA-1 of the key the APK
+  is signed with (debug and release keys are different SHA-1s; register
+  each one in use). Until then, the app's button shows Google's "developer
+  console is not set up" error. APKs built before this have no native
+  sign-in, and the web app hides the Google button in them. Email and
+  password sign-in works everywhere.
 - **Browser notifications.** WebView has no Notification API, so the app's
   "enable notifications" prompt stays hidden, as in any browser without one.
   The in-app notification bell works normally. System push notifications
@@ -224,4 +229,7 @@ errors, check `adb logcat --pid=$(adb shell pidof com.gymos.app)` throughout.
     `adb shell am start -a android.intent.action.VIEW -d https://<host>/invite/<code>`
     opens the invite page inside the app.
 18. **Sign out.** It returns to sign-in, and Back does not re-enter the app.
-19. **Google Sign-In.** Record what happens (see Known limitations).
+19. **Google Sign-In.** On the Independent client screen, *Continue with
+    Google* opens Android's Google account sheet; picking an account lands
+    in the client app. Closing the sheet shows no error. *Sign in with
+    Google* on the Sign in screen signs an existing account in.
