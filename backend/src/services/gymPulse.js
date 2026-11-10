@@ -107,14 +107,17 @@ export async function gymPulse(db, orgId, { tz = 'Asia/Kolkata', days = 30, now 
      * mostly lapsed, which is the most expensive number on the dashboard
      * to get wrong: it is the one that says the business is fine.
      *
-     * The CASE is repeated in GROUP BY rather than referencing the alias,
-     * which is the form both SQLite and PostgreSQL accept. */
-    db.q(`SELECT CASE WHEN status = 'active' AND end_date IS NOT NULL AND end_date < ?
-                      THEN 'lapsed' ELSE status END AS bucket,
-                 COUNT(*) AS n
-            FROM subscriptions WHERE org_id = ?
-           GROUP BY CASE WHEN status = 'active' AND end_date IS NOT NULL AND end_date < ?
-                         THEN 'lapsed' ELSE status END`, [today, orgId, today]),
+     * The bucket is computed ONCE, in a derived table, and grouped by name.
+     * Repeating the CASE in GROUP BY does NOT work on PostgreSQL: its two
+     * `?` become two different parameters ($1, $3), Postgres cannot prove
+     * the expressions equal, and rejects the query ("status must appear in
+     * the GROUP BY clause") -- this endpoint 500'd on production while
+     * SQLite tests passed. test/groupByParamsPg.test.js holds both. */
+    db.q(`SELECT bucket, COUNT(*) AS n
+            FROM (SELECT CASE WHEN status = 'active' AND end_date IS NOT NULL AND end_date < ?
+                              THEN 'lapsed' ELSE status END AS bucket
+                    FROM subscriptions WHERE org_id = ?) AS s
+           GROUP BY bucket`, [today, orgId]),
 
     db.q1(`SELECT COUNT(*) AS n FROM subscriptions
             WHERE org_id = ? AND status = 'active' AND end_date IS NOT NULL

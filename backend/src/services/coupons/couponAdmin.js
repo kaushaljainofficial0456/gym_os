@@ -423,9 +423,13 @@ export async function getCouponAnalytics(db, couponId) {
               COALESCE(SUM(cr.late_confirmation), 0) AS late
          FROM coupon_redemptions cr JOIN organizations o ON o.id = cr.org_id
         WHERE cr.coupon_id = ? AND cr.status = 'REDEEMED'`, [couponId]),
-    db.q(`SELECT CASE WHEN release_reason = ? THEN 'HELD' ELSE status END AS status, COUNT(*) AS n
-            FROM coupon_redemptions WHERE coupon_id = ? AND status <> 'REDEEMED'
-           GROUP BY CASE WHEN release_reason = ? THEN 'HELD' ELSE status END`, [HELD_FOR_REVIEW, couponId, HELD_FOR_REVIEW]),
+    // Grouped over a derived table: repeating the parameterised CASE in
+    // GROUP BY is rejected by PostgreSQL (two different $n parameters) --
+    // see test/groupByParamsPg.test.js.
+    db.q(`SELECT status, COUNT(*) AS n
+            FROM (SELECT CASE WHEN release_reason = ? THEN 'HELD' ELSE status END AS status
+                    FROM coupon_redemptions WHERE coupon_id = ? AND status <> 'REDEEMED') AS h
+           GROUP BY status`, [HELD_FOR_REVIEW, couponId]),
     db.q1(
       `SELECT (SELECT COALESCE(SUM(rf.amount), 0) FROM refunds rf
                 WHERE rf.status = 'SUCCESS'
