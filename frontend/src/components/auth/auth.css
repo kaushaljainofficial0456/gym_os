@@ -465,6 +465,19 @@
    frame inherited color-scheme: dark, and a mismatch makes the browser paint
    an opaque white canvas behind the document: a bright box around the pill. */
 .auth-google iframe { color-scheme: light; }
+/* The Android app's own Google button (native sign-in), drawn to match
+   Google's large pill button in its outline / filled-black themes. */
+.auth-google-native {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; max-width: 400px; height: 44px; padding: 0 16px;
+  border-radius: 999px; cursor: pointer;
+  font: 500 14px/1 Roboto, 'DM Sans', system-ui, sans-serif; letter-spacing: .25px;
+  transition: opacity .2s ease, background-color .2s ease;
+}
+.auth-google-native[data-theme='light'] { background: #fff; color: #1f1f1f; border: 1px solid #747775; }
+.auth-google-native[data-theme='dark'] { background: #131314; color: #e3e3e3; border: 1px solid #8e918f; }
+.auth-google-native:active:not(:disabled) { transform: scale(.99); }
+.auth-google-native:disabled { opacity: .6; cursor: default; }
 
 /* ── brand mark & wordmark draw-in ─────────────────────────────────── */
 .brand-mark--draw .bm-ring {
