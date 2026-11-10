@@ -505,6 +505,48 @@ ALTER TABLE risk_events             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE risk_events             FORCE ROW LEVEL SECURITY;
 ALTER TABLE support_tickets         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_tickets         FORCE ROW LEVEL SECURITY;
+-- AI Communication / follow-ups (docs/FOLLOWUPS.md): every table with org_id.
+-- followup_price_versions and followup_platform are platform-level (the
+-- founder's price book and switches), like coupons: no policy.
+ALTER TABLE followup_settings         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_settings         FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_numbers          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_numbers          FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_line_terms       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_line_terms       FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_scripts          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_scripts          FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_script_versions  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_script_versions  FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_templates        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_templates        FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_sms_templates    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_sms_templates    FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_agents           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_agents           FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_agent_versions   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_agent_versions   FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_voices           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_voices           FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_rules            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_rules            FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_member_prefs     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_member_prefs     FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_consent_log      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_consent_log      FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_jobs             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_jobs             FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_callbacks        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_callbacks        FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_audio            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_audio            FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_balances         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_balances         FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_ledger           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_ledger           FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_orders           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_orders           FORCE ROW LEVEL SECURITY;
+
 
 DO $$
 DECLARE t text;
@@ -513,7 +555,8 @@ BEGIN
     'billing_quotes','coupon_redemptions','branches','enrollment_tokens','gym_memberships','gym_onboarding',
     'invoices','membership_status_history','org_billing_state','org_capacity_purchases',
     'org_subscriptions','payment_accounts','payment_orders','reconciliation_issues',
-    'refunds','risk_events','support_tickets'
+    'refunds','risk_events','support_tickets',
+    'followup_settings','followup_numbers','followup_line_terms','followup_scripts','followup_script_versions','followup_templates','followup_sms_templates','followup_agents','followup_agent_versions','followup_voices','followup_rules','followup_member_prefs','followup_consent_log','followup_jobs','followup_callbacks','followup_audio','followup_balances','followup_ledger','followup_orders'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (

@@ -1,0 +1,30 @@
+/* AI Communication -- the few styles the shared components do not cover. */
+
+/* The client app's switch: a 42x24 track inside a 44px tap target. */
+.cm-switch {
+  position: relative; flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 999px; background: transparent;
+}
+.cm-switch::before {
+  content: ''; position: absolute; left: 1px; top: 10px; width: 42px; height: 24px; border-radius: 999px;
+  background: var(--line); transition: background .15s;
+}
+.cm-switch::after {
+  content: ''; position: absolute; left: 4px; top: 13px; width: 18px; height: 18px; border-radius: 999px;
+  background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s;
+}
+.cm-switch[data-on='true']::before { background: var(--accent); }
+.cm-switch[data-on='true']::after { background: var(--accent-contrast); transform: translateX(18px); }
+.cm-switch:disabled { opacity: .5; }
+
+/* Rows in a card list. */
+.cm-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.cm-row + .cm-row { border-top: 1px solid var(--line); }
+
+/* A textarea that reads like the rest of the inputs. */
+.cm-text { min-height: 120px; line-height: 1.5; resize: vertical; padding-top: 12px; padding-bottom: 12px; }
+
+/* Usage bars. */
+.cm-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
+.cm-bar { flex: 1; min-width: 4px; border-radius: 4px 4px 0 0; display: flex; flex-direction: column-reverse; overflow: hidden; background: rgb(var(--tint-rgb) / .05); }
+.cm-bar > span { display: block; width: 100%; }

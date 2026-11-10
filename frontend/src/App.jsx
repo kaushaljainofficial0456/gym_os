@@ -59,6 +59,7 @@ const WorkoutBuilder = lazy(() => import('./pages/trainer/WorkoutBuilder.jsx'));
 const NutritionBuilder = lazy(() => import('./pages/trainer/NutritionBuilder.jsx'));
 const Alerts = lazy(() => import('./pages/trainer/Alerts.jsx'));
 const Reports = lazy(() => import('./pages/trainer/Reports.jsx'));
+const Communication = lazy(() => import('./pages/trainer/Communication.jsx'));
 const Messages = lazy(() => import('./pages/trainer/Messages.jsx'));
 const Business = lazy(() => import('./pages/trainer/Business.jsx'));
 const EnterpriseOnboarding = lazy(() => import('./pages/trainer/EnterpriseOnboarding.jsx'));
@@ -313,6 +314,7 @@ export default function App() {
         <Route path="nutrition" element={page(NutritionBuilder)} />
         <Route path="alerts" element={page(Alerts)} />
         <Route path="reports" element={page(Reports)} />
+        <Route path="communication" element={page(Communication)} />
         <Route path="messages" element={page(Messages)} />
         {/* ONE ROUTE, TWO JOBS -- because "attendance" means different
             things to the two people who open it. An owner wants the

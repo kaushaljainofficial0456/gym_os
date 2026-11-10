@@ -47,6 +47,7 @@ import {
 import { seedDemoTenant, findDemoOrg, listDemoOrgIds, DEMO_ORG_SLUG, DEMO_GYM_NAME } from '../services/demo/seed.js';
 import { sendDemoLinkEmail } from '../services/demo/notify.js';
 import consoleCouponRoutes from './consoleCoupons.js';
+import consoleFollowupRoutes from './consoleFollowups.js';
 
 const safeParse = (json) => { try { return JSON.parse(json || 'null'); } catch { return null; } };
 
@@ -80,6 +81,8 @@ export default function consoleRoutes(db) {
   // but mounted HERE so it sits behind this router's SUPER_ADMIN gate and
   // rate limit above and records through this same writeAuditLog. ----
   r.use('/coupons', consoleCouponRoutes(db, { writeAuditLog }));
+  // ---- AI Communication: price book, gyms' usage and margin, caller numbers. ----
+  r.use('/communication', consoleFollowupRoutes(db, { writeAuditLog }));
 
   // ---- dashboard: real aggregate KPIs, never fabricated -- an empty
   // platform shows zeros, not example numbers (spec: "NEVER hardcode... if

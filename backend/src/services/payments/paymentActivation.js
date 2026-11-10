@@ -158,7 +158,11 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
   const planOrder = !order && parsed.providerOrderId
     ? await db.q1('SELECT * FROM barbell_plan_orders WHERE provider_order_id = ?', [parsed.providerOrderId])
     : null;
-  const provider = order?.provider || planOrder?.provider || 'unknown';
+  // Or a gym buying AI Communication capacity (followup_orders).
+  const commsOrder = !order && !planOrder && parsed.providerOrderId
+    ? await db.q1('SELECT * FROM followup_orders WHERE provider_order_id = ?', [parsed.providerOrderId])
+    : null;
+  const provider = order?.provider || planOrder?.provider || commsOrder?.provider || 'unknown';
   const eventKey = parsed.providerOrderId ? `${parsed.eventType}:${parsed.providerOrderId}:${parsed.providerPaymentId || ''}` : null;
 
   // Log the raw event FIRST, unconditionally -- this is the
@@ -216,6 +220,15 @@ export async function recordWebhookEvent(db, { rawBody, signature }) {
     });
     await db.run('UPDATE payment_events SET processed_at = ? WHERE id = ?', [now(), eventId]);
     return planResult;
+  }
+  if (!order && commsOrder) {
+    // Loaded lazily for the same reason as barbellPlan.js above.
+    const { confirmFromWebhook } = await import('../followups/orders.js');
+    const commsResult = await confirmFromWebhook(db, commsOrder, {
+      status, providerPaymentId: parsed.providerPaymentId, amount: parsed.amount, currency: parsed.currency,
+    });
+    await db.run('UPDATE payment_events SET processed_at = ? WHERE id = ?', [now(), eventId]);
+    return commsResult;
   }
   if (!order) return { ok: false, reason: 'order_not_found', eventType: parsed.eventType };
 
