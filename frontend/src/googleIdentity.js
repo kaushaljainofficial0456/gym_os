@@ -15,7 +15,13 @@ export function loadGoogleIdentity() {
       s.async = true;
       s.defer = true;
       s.onload = resolve;
-      s.onerror = () => reject(new Error('Could not load Google Sign-In. Check your connection and try again.'));
+      s.onerror = () => {
+        // Forget the failure, so the next mount tries again instead of
+        // getting the same rejected promise until the page is reloaded.
+        gsiPromise = null;
+        s.remove();
+        reject(new Error('Could not load Google Sign-In. Check your connection, or use email instead.'));
+      };
       document.head.appendChild(s);
     });
   }

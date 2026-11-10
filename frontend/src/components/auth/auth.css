@@ -400,6 +400,11 @@
 }
 .auth-foot a:hover, .auth-foot button:hover { text-decoration-color: var(--ink); }
 
+/* A quiet aside under the form: "No gym? ...", "Made your account with Google? ..." */
+.auth-hint { margin-top: 12px; text-align: center; font-size: 12.5px; line-height: 1.5; color: var(--mute); }
+.auth-hint a { font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+.auth-hint a:hover { text-decoration-color: var(--ink); }
+
 .auth-error {
   display: flex;
   gap: 10px;

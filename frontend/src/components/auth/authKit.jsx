@@ -115,7 +115,21 @@ export function Steps({ count, at }) {
 }
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-export const googleConfigured = !!GOOGLE_CLIENT_ID;
+
+/**
+ * Google refuses to sign anyone in inside an embedded WebView ("Error 403:
+ * disallowed_useragent"). That is exactly what the Barbell Android app is
+ * (a WebView around this site, which appends "GymOS-Android" to its user
+ * agent), and also what in-app browsers like Instagram's and Facebook's
+ * are. There the Google button could only ever fail, so it is not shown
+ * and people sign in with email and password instead.
+ */
+export function isEmbeddedWebView(ua = typeof navigator !== 'undefined' ? navigator.userAgent : '') {
+  return /GymOS-Android|; wv\)|FBAN|FBAV|Instagram/.test(ua || '');
+}
+export const googleBlockedHere = isEmbeddedWebView();
+/** True where Google sign-in can actually work: configured, and not inside an embedded WebView. */
+export const googleAvailable = !!GOOGLE_CLIENT_ID && !googleBlockedHere;
 
 /**
  * Google's own button (Google Identity Services draws it; it cannot be
@@ -130,7 +144,7 @@ export function GoogleButton({ onCredential, onError, text = 'continue_with' }) 
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return undefined;
+    if (!googleAvailable) return undefined;
     let cancelled = false;
     loadGoogleIdentity().then(() => {
       if (cancelled || !ref.current) return;
@@ -153,7 +167,7 @@ export function GoogleButton({ onCredential, onError, text = 'continue_with' }) 
     return () => { cancelled = true; };
   }, [resolved, text]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!GOOGLE_CLIENT_ID) return null;
+  if (!googleAvailable) return null;
   return (
     <div className="auth-google" aria-busy={!ready}>
       <div ref={ref} style={{ width: '100%', display: 'flex', justifyContent: 'center' }} />

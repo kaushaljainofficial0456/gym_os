@@ -105,6 +105,15 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// A second account for an email that already has one. SQLite says
+// "UNIQUE constraint failed"; Postgres (production) says "duplicate key
+// value violates unique constraint" with SQLSTATE 23505. Checking only
+// for "UNIQUE" missed Postgres entirely, so signing up again with a
+// registered email was a 500 in production instead of a clear 409.
+function isUniqueViolation(e) {
+  return e?.code === '23505' || /UNIQUE constraint|duplicate key/i.test(String(e?.message || ''));
+}
+
 export default function authRoutes(db) {
   const r = Router();
   // Per-IP ceiling on auth endpoints (login + org setup) — 30/min.
@@ -197,7 +206,7 @@ export default function authRoutes(db) {
           user: { id: userId, name: req.body.name, email, role: 'CLIENT', orgId: null, pendingGymEnrollment: true }
         });
       } catch (e) {
-        if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+        if (isUniqueViolation(e)) return res.status(409).json({ error: 'Email already registered' });
         throw e;
       }
     }
@@ -236,7 +245,7 @@ export default function authRoutes(db) {
         user: { id: userId, name: req.body.name, email, role: 'CLIENT', orgId: org.id, orgName: org.name, orgSlug: org.slug }
       });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      if (isUniqueViolation(e)) return res.status(409).json({ error: 'Email already registered' });
       throw e;
     }
   });
@@ -270,7 +279,7 @@ export default function authRoutes(db) {
         user: { id: userId, name: req.body.name, email, role: 'TRAINER', orgId: null, pendingGymEnrollment: true }
       });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      if (isUniqueViolation(e)) return res.status(409).json({ error: 'Email already registered' });
       throw e;
     }
   });
@@ -383,44 +392,141 @@ export default function authRoutes(db) {
       });
     }
 
-    const orgId = await ensureIndependentOrg();
-    const userId = id('usr');
-    const clientId = id('cli');
     const name = String(payload.name || email.split('@')[0]).slice(0, 80);
     try {
       // Google users never set a password -- a random unusable hash fills
-      // the NOT NULL column without anyone knowing (or needing) it; the
-      // account can only ever be reached via Google sign-in.
+      // the NOT NULL column without anyone knowing (or needing) it. They
+      // get back in with Google, or set a real password through Forgot
+      // password (the way in from the Android app, where Google refuses
+      // to sign in inside an embedded WebView).
       const passwordHash = await hashPassword(crypto.randomUUID() + crypto.randomUUID());
+      // F-10: email_verified mirrors Google's own claim -- when Google has
+      // confirmed the address (nearly always), issuing this app's own
+      // separate verification email would be redundant, not safer.
+      const { userId, orgId } = await createIndependentClient({
+        email, name, passwordHash, avatar: payload.picture || null, emailVerified: payload.verified,
+      });
+      await track(db, { orgId, userId, type: 'client_google_registered', data: {} });
+      sendIndependentSession(res, 201, { userId, orgId, name, email });
+    } catch (e) {
+      if (isUniqueViolation(e)) return res.status(409).json({ error: 'Email already registered' });
+      throw e;
+    }
+  });
+
+  // A new Independent client's rows -- user, client and profile -- in one
+  // transaction, so a failure part-way never leaves an account that can
+  // sign in but has no client to load. Shared by Google and email sign-up
+  // so the two can never build a different account.
+  async function createIndependentClient({ email, name, passwordHash, avatar = null, emailVerified = false }) {
+    const orgId = await ensureIndependentOrg();
+    const userId = id('usr');
+    const clientId = id('cli');
+    await db.tx(async (tx) => {
+      await tx.run(
+        `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, email_verified, created_at)
+         VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1, ?, ?)`,
+        [userId, orgId, email, passwordHash, name, avatar, emailVerified ? 1 : 0, now()]);
+      await tx.run(
+        `INSERT INTO clients (id, user_id, org_id, status, goal, created_at)
+         VALUES (?, ?, ?, 'ON_TRACK', 'GENERAL', ?)`,
+        [clientId, userId, orgId, now()]);
+      await tx.run(
+        `INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`,
+        [clientId]);
+    });
+    await syncPrimaryMembership(db, { userId, orgId, role: 'CLIENT' }).catch(() => {});
+    return { userId, orgId, clientId };
+  }
+
+  function sendIndependentSession(res, status, { userId, orgId, name, email }) {
+    const token = signToken({ id: userId, org_id: orgId, role: 'CLIENT', name, email });
+    setAuthCookie(res, token);
+    res.status(status).json({
+      token,
+      user: { id: userId, name, email, role: 'CLIENT', orgId, orgName: 'Independent Clients', orgSlug: INDEPENDENT_ORG_SLUG }
+    });
+  }
+
+  // Email + password sign-up for Independent clients. Google used to be
+  // the ONLY way to become one, and Google refuses to sign in inside an
+  // embedded WebView -- which is exactly what the Barbell Android app is
+  // -- so nobody could create an Independent account in the app at all.
+  // Signing back in afterwards is the ordinary POST /auth/login, which
+  // already works for every role.
+  r.post('/register-independent', rateLimit({ windowMs: 60_000, max: 10 }),
+    validate(z.object({
+      name: z.string().trim().min(1).max(80),
+      email: z.string().email(),
+      password: z.string().min(6).max(200)
+    })), async (req, res) => {
+    const email = req.body.email.toLowerCase().trim();
+    const name = req.body.name;
+    const taken = await db.q1('SELECT id FROM users WHERE email = ?', [email]);
+    if (taken) {
+      return res.status(409).json({
+        error: 'An account with this email already exists. Sign in instead, or use Forgot password if you signed up with Google.',
+        code: 'EMAIL_TAKEN',
+      });
+    }
+    try {
+      const passwordHash = await hashPassword(req.body.password);
+      const { userId, orgId } = await createIndependentClient({ email, name, passwordHash });
+      await track(db, { orgId, userId, type: 'client_independent_registered', data: {} });
+      sendVerificationEmail(db, { userId, email, name }).catch(() => {});
+      sendIndependentSession(res, 201, { userId, orgId, name, email });
+    } catch (e) {
+      if (isUniqueViolation(e)) return res.status(409).json({ error: 'An account with this email already exists. Sign in instead.', code: 'EMAIL_TAKEN' });
+      throw e;
+    }
+  });
+
+  // "Train on my own" from the Join your gym screen. A client who signed
+  // up through "Create an account" without a gym code is held on that
+  // screen until they scan a gym's QR -- with no way out if they never
+  // meant to join a gym. This moves such an account into the shared
+  // Independent org instead. Scanning a gym's QR later still works: an
+  // Independent client brings their whole history into the gym (see
+  // enrollment.js's activateClientMembership).
+  r.post('/independent', requireAuth, rateLimit({ windowMs: 60_000, max: 10 }), async (req, res) => {
+    const user = await db.q1('SELECT id, org_id, role, name, email, active FROM users WHERE id = ?', [req.user.sub]);
+    if (!user || !user.active) return res.status(403).json({ error: 'Account disabled' });
+    if (user.role !== 'CLIENT') return res.status(403).json({ error: 'Only a client account can train independently.' });
+    if (user.org_id) {
+      const org = await db.q1('SELECT slug FROM organizations WHERE id = ?', [user.org_id]);
+      if (org?.slug === INDEPENDENT_ORG_SLUG) {
+        // Already independent (a double tap, or a second device): answer
+        // with a fresh session rather than an error.
+        return sendIndependentSession(res, 200, { userId: user.id, orgId: user.org_id, name: user.name, email: user.email });
+      }
+      return res.status(409).json({ error: 'You already belong to a gym.' });
+    }
+    const orgId = await ensureIndependentOrg();
+    const existingClient = await db.q1('SELECT id, org_id FROM clients WHERE user_id = ?', [user.id]);
+    if (existingClient) return res.status(409).json({ error: 'You already belong to a gym.' });
+    const clientId = id('cli');
+    const ALREADY_IN_A_GYM = 'already_in_a_gym';
+    try {
       await db.tx(async (tx) => {
-        await tx.run(
-          // F-10: email_verified mirrors Google's own claim -- when Google
-          // has confirmed the address (nearly always), issuing this app's
-          // own separate verification email would be redundant, not safer.
-          `INSERT INTO users (id, org_id, email, password_hash, role, name, avatar, active, email_verified, created_at)
-           VALUES (?, ?, ?, ?, 'CLIENT', ?, ?, 1, ?, ?)`,
-          [userId, orgId, email, passwordHash, name, payload.picture || null, payload.verified ? 1 : 0, now()]);
+        // org_id IS NULL in the WHERE: a QR join that lands between the
+        // read above and this write keeps its gym rather than being undone.
+        const moved = await tx.run('UPDATE users SET org_id = ? WHERE id = ? AND org_id IS NULL', [orgId, user.id]);
+        if (!moved.changes) throw new Error(ALREADY_IN_A_GYM);
         await tx.run(
           `INSERT INTO clients (id, user_id, org_id, status, goal, created_at)
            VALUES (?, ?, ?, 'ON_TRACK', 'GENERAL', ?)`,
-          [clientId, userId, orgId, now()]);
+          [clientId, user.id, orgId, now()]);
         await tx.run(
           `INSERT INTO client_profiles (client_id, meals_per_day, sleep_target_h, water_target_l) VALUES (?, 5, 8, 3)`,
           [clientId]);
       });
-      await track(db, { orgId, userId, type: 'client_google_registered', data: {} });
-      await syncPrimaryMembership(db, { userId, orgId, role: 'CLIENT' }).catch(() => {});
-      const user = { id: userId, org_id: orgId, role: 'CLIENT', name, email };
-      const token = signToken(user);
-      setAuthCookie(res, token);
-      res.status(201).json({
-        token,
-        user: { id: userId, name, email, role: 'CLIENT', orgId, orgName: 'Independent Clients', orgSlug: INDEPENDENT_ORG_SLUG }
-      });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      if (e.message === ALREADY_IN_A_GYM || isUniqueViolation(e)) return res.status(409).json({ error: 'You already belong to a gym.' });
       throw e;
     }
+    await syncPrimaryMembership(db, { userId: user.id, orgId, role: 'CLIENT' }).catch(() => {});
+    await track(db, { orgId, userId: user.id, type: 'client_chose_independent', data: {} }).catch(() => {});
+    sendIndependentSession(res, 200, { userId: user.id, orgId, name: user.name, email: user.email });
   });
 
   // Google Sign-In for GYM OWNERS -- the "Enterprise" flow's Google
@@ -523,7 +629,7 @@ export default function authRoutes(db) {
         user: { id: userId, name, email, role: 'GYM_OWNER', orgId, orgName, orgSlug: slug }
       });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      if (isUniqueViolation(e)) return res.status(409).json({ error: 'Email already registered' });
       throw e;
     }
   });
@@ -664,7 +770,7 @@ export default function authRoutes(db) {
       setAuthCookie(res, token);
       res.status(201).json({ token, user: { id: userId, name: ownerName, email: user.email, role: 'GYM_OWNER', orgId, orgName, orgSlug: slug } });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Email already registered' });
+      if (isUniqueViolation(e)) return res.status(409).json({ error: 'Email already registered' });
       throw e;
     }
   });

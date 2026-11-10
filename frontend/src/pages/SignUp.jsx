@@ -70,6 +70,9 @@ export default function SignUp() {
         <Cta busy={busy}>Create account</Cta>
       </form>
       <p className="auth-foot">Already a member? <Link to="/login" state={{ view: 'signin' }}>Sign in</Link></p>
+      {/* Without a gym code this form makes an account that waits on the
+          Join your gym screen -- the wrong place for someone with no gym. */}
+      <p className="auth-hint">No gym? <Link to="/independent">Train on your own</Link> instead.</p>
     </>
   );
 }

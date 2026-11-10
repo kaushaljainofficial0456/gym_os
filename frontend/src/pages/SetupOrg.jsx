@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { PasswordInput } from '../components/UI.jsx';
 import { useAuthStage } from '../components/auth/AuthLayout.jsx';
-import { AuthTitle, Cta, Divider, ErrorNote, Field, GoogleButton, Steps, googleConfigured } from '../components/auth/authKit.jsx';
+import { AuthTitle, Cta, Divider, ErrorNote, Field, GoogleButton, Steps, googleAvailable } from '../components/auth/authKit.jsx';
 import { afterTerms } from '../afterTerms.js';
 
 const HEADLINE = [{ text: 'Run your gym.' }, { text: 'Not spreadsheets.', accent: true }];
@@ -99,7 +99,7 @@ export default function SetupOrg() {
             <ErrorNote>{err}</ErrorNote>
             <Cta busy={busy}>Create gym</Cta>
           </form>
-          {googleConfigured && (
+          {googleAvailable && (
             <>
               <Divider />
               <GoogleButton onCredential={google} onError={setErr} text="signup_with" />

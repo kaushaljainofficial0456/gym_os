@@ -133,6 +133,18 @@ export function AuthProvider({ children }) {
     return full;
   };
 
+  // "Independent client" with email and password (POST
+  // /auth/register-independent) -- the way in where Google cannot be used,
+  // above all the Android app, whose WebView Google refuses to sign into.
+  const registerIndependent = async (data) => {
+    const res = await api('/auth/register-independent', { method: 'POST', body: JSON.stringify(data) });
+    setSession(res);
+    const { user: full } = await api('/auth/me');
+    setStoredUser(full);
+    setUser(full);
+    return full;
+  };
+
   // Sign in screen's Google option -- signs an EXISTING account in, any
   // role, and never creates one (POST /auth/google/signin). Without it an
   // account made with Google had no way back in from Sign in.
@@ -227,7 +239,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, demo, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, signInWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
+    <AuthCtx.Provider value={{ user, demo, ready, login, register, registerTrainer, setupOrg, loginWithGoogle, registerIndependent, signInWithGoogle, loginWithGoogleEnterprise, completeOnboarding, refreshSession, logout, isTrainer, isOwner, isClient, isIndependent, termsAccepted, acceptTerms, requiredTermsVersion: REQUIRED_TERMS_VERSION }}>
       {children}
     </AuthCtx.Provider>
   );

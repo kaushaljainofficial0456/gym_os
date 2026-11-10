@@ -6,7 +6,7 @@ import { consumeReturnTo } from '../api.js';
 import { announceArrival } from '../components/ArrivalHost.jsx';
 import { PasswordInput } from '../components/UI.jsx';
 import { useAuthStage } from '../components/auth/AuthLayout.jsx';
-import { AuthTitle, ChoiceRow, Cta, Divider, ErrorNote, Field, GoogleButton, RoleSwitch, googleConfigured } from '../components/auth/authKit.jsx';
+import { AuthTitle, ChoiceRow, Cta, Divider, ErrorNote, Field, GoogleButton, RoleSwitch, googleAvailable, googleBlockedHere } from '../components/auth/authKit.jsx';
 
 // The three top-level paths onto Barbell. Each is a genuinely different
 // account-creation story, not a cosmetic split of one login form:
@@ -146,12 +146,21 @@ export default function Login() {
             <Cta busy={busy}>Sign in</Cta>
           </form>
 
-          {googleConfigured && (
+          {googleAvailable && (
             <>
               <Divider />
               <GoogleButton onCredential={google} onError={setGoogleErr} text="signin_with" />
               {googleErr && <div className="mt-3"><ErrorNote>{googleErr}</ErrorNote></div>}
             </>
+          )}
+          {/* Inside the Android app Google sign-in is refused, so an account
+              made with Google on the website has no way in here except a
+              password -- which Forgot password lets them set. */}
+          {googleBlockedHere && (
+            <p className="auth-hint">
+              Made your account with Google? Google sign-in doesn&rsquo;t work inside the app.
+              Tap <Link to="/forgot-password">Forgot password</Link> to set a password for your email.
+            </p>
           )}
 
           <p className="auth-foot">{newQ} <Link to={newTo}>{newA}</Link></p>

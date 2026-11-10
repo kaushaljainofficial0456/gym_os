@@ -100,6 +100,19 @@ export default function JoinGym() {
     finally { setBusy(false); }
   };
 
+  // A client who signed up without a gym code waits here for a QR scan.
+  // Someone with no gym at all had no way past this screen; this moves
+  // their account into the Independent org (POST /auth/independent). They
+  // can still join a gym later by scanning its QR, history included.
+  const trainSolo = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api('/auth/independent', { method: 'POST' });
+      await refreshSession();
+      nav('/app/client', { replace: true });
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
   const plan = preview?.membershipPlan;
 
   return (
@@ -144,6 +157,11 @@ export default function JoinGym() {
           </button>
           <ErrorNote>{err}</ErrorNote>
           <Cta onClick={() => setScanning(true)} disabled={busy}>Scan QR code</Cta>
+          {isClient && (
+            <button type="button" className="auth-ghost mt-3" onClick={trainSolo} disabled={busy}>
+              No gym? Train on my own
+            </button>
+          )}
         </>
       )}
 
