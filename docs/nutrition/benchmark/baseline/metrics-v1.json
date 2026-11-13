@@ -1,0 +1,243 @@
+{
+ "meta": {
+  "engine": "v1",
+  "engine_label": "current production engine (foodEstimator.js / skos-food-v1, deterministic Tier 1)",
+  "dataset_version": "v1",
+  "n_cases": 324,
+  "run_at": "2026-11-13T20:22:49.910Z"
+ },
+ "weighted_overall": 0.786,
+ "metrics": {
+  "1_food_identity_accuracy": 0.92,
+  "1b_food_identity_graded": 0.917,
+  "2_food_class_accuracy": 0.663,
+  "2_note": "V1 has no class output — computed from a heuristic proxy over the matched row",
+  "3_prep_state_accuracy": 0.703,
+  "3b_prep_state_graded": 0.66,
+  "4_portion_accuracy": 0.804,
+  "4b_portion_graded": 0.917,
+  "5_composite_decomposition": {
+   "decomposition_attempt_rate": 0,
+   "kcal_total_in_range_rate": 0.687,
+   "category_case_score": 0.731
+  },
+  "6_kcal": {
+   "n_cases_declared": 306,
+   "resolution_rate": 0.971,
+   "in_range_rate": 0.7,
+   "mae_resolved": 55.1,
+   "mae_all": 65.1,
+   "mape_edge_resolved_median": 0,
+   "mape_edge_all_median": 0,
+   "mape_edge_all_mean": 0.423,
+   "mape_mid_resolved_median": 0.193,
+   "mape_mid_all_median": 0.202,
+   "mape_mid_all_mean": 0.615
+  },
+  "7_protein": {
+   "n_cases_declared": 305,
+   "resolution_rate": 0.974,
+   "in_range_rate": 0.741,
+   "mae_resolved": 1.4,
+   "mae_all": 1.9,
+   "mape_edge_resolved_median": 0,
+   "mape_edge_all_median": 0,
+   "mape_edge_all_mean": 0.245,
+   "mape_mid_resolved_median": 0.224,
+   "mape_mid_all_median": 0.233,
+   "mape_mid_all_mean": 0.483
+  },
+  "8_carb": {
+   "n_cases_declared": 297,
+   "resolution_rate": 0.973,
+   "in_range_rate": 0.678,
+   "mae_resolved": 5.8,
+   "mae_all": 6.7,
+   "mape_edge_resolved_median": 0,
+   "mape_edge_all_median": 0,
+   "mape_edge_all_mean": 0.462,
+   "mape_mid_resolved_median": 0.255,
+   "mape_mid_all_median": 0.278,
+   "mape_mid_all_mean": 0.704
+  },
+  "9_fat": {
+   "n_cases_declared": 305,
+   "resolution_rate": 0.974,
+   "in_range_rate": 0.68,
+   "mae_resolved": 4.1,
+   "mae_all": 4.5,
+   "mape_edge_resolved_median": 0,
+   "mape_edge_all_median": 0,
+   "mape_edge_all_mean": 1.366,
+   "mape_mid_resolved_median": 0.333,
+   "mape_mid_all_median": 0.36,
+   "mape_mid_all_mean": 1.664
+  },
+  "10_plausibility_false_positive": {
+   "rate": 0.027,
+   "count": 8,
+   "eligible": 297
+  },
+  "11_plausibility_false_negative": {
+   "rate": 0.08,
+   "count": 24,
+   "eligible": 300
+  },
+  "12_unresolved_rate": 0.035,
+  "13_fabrication_rate": 0,
+  "13b_fabrication_count": 0,
+  "13c_nonfood_resolved_low_conf": 3,
+  "13d_silent_drop_rate_multi_food": 0.1,
+  "14_confidence_calibration": {
+   "ece": 0.113,
+   "table": {
+    "high": {
+     "n": 174,
+     "observed_accuracy": 0.707,
+     "nominal": 0.9
+    },
+    "medium": {
+     "n": 96,
+     "observed_accuracy": 0.646,
+     "nominal": 0.65
+    },
+    "low": {
+     "n": 30,
+     "observed_accuracy": 0.4,
+     "nominal": 0.4
+    },
+    "unreliable": {
+     "n": 0,
+     "observed_accuracy": null,
+     "nominal": 0.15
+    }
+   }
+  },
+  "15_brand_generic_accuracy": {
+   "n": 298,
+   "overall": 0.896,
+   "branded": 0.538,
+   "generic": 0.912
+  },
+  "16_latency": {
+   "mean_ms": 15.2,
+   "p50_ms": 8.5,
+   "p90_ms": 30.4,
+   "p95_ms": 46.6,
+   "max_ms": 121.3,
+   "total_wall_ms": 5004.8
+  },
+  "17_llm_escalation_rate": 0,
+  "18_est_cost_usd_per_estimate": 0
+ },
+ "categories": {
+  "single_ingredient": {
+   "n": 90,
+   "weight": 0.17,
+   "label": "Single ingredient",
+   "case_score": 0.846,
+   "identity_accuracy": 0.944,
+   "kcal_mape_mid_median": 0.068,
+   "kcal_in_range_rate": 0.761,
+   "unresolved_rate": 0,
+   "confident_wrong": 9,
+   "fabrication": 0
+  },
+  "prepared_food": {
+   "n": 43,
+   "weight": 0.17,
+   "label": "Prepared food",
+   "case_score": 0.769,
+   "identity_accuracy": 0.884,
+   "kcal_mape_mid_median": 0.207,
+   "kcal_in_range_rate": 0.651,
+   "unresolved_rate": 0,
+   "confident_wrong": 8,
+   "fabrication": 0
+  },
+  "composite_dish": {
+   "n": 95,
+   "weight": 0.22,
+   "label": "Composite dish",
+   "case_score": 0.731,
+   "identity_accuracy": 0.843,
+   "kcal_mape_mid_median": 0.252,
+   "kcal_in_range_rate": 0.687,
+   "unresolved_rate": 0.117,
+   "confident_wrong": 10,
+   "fabrication": 0
+  },
+  "meal": {
+   "n": 20,
+   "weight": 0.12,
+   "label": "Meal (multi-food)",
+   "case_score": 0.934,
+   "identity_accuracy": 1,
+   "kcal_mape_mid_median": 0.145,
+   "kcal_in_range_rate": 0.889,
+   "unresolved_rate": 0,
+   "confident_wrong": 0,
+   "fabrication": 0
+  },
+  "beverage": {
+   "n": 24,
+   "weight": 0.1,
+   "label": "Beverage",
+   "case_score": 0.836,
+   "identity_accuracy": 0.958,
+   "kcal_mape_mid_median": 0.218,
+   "kcal_in_range_rate": 0.583,
+   "unresolved_rate": 0,
+   "confident_wrong": 2,
+   "fabrication": 0
+  },
+  "snack": {
+   "n": 17,
+   "weight": 0.08,
+   "label": "Snack",
+   "case_score": 0.687,
+   "identity_accuracy": 1,
+   "kcal_mape_mid_median": 0.256,
+   "kcal_in_range_rate": 0.625,
+   "unresolved_rate": 0,
+   "confident_wrong": 3,
+   "fabrication": 0
+  },
+  "dessert": {
+   "n": 13,
+   "weight": 0.06,
+   "label": "Dessert",
+   "case_score": 0.674,
+   "identity_accuracy": 1,
+   "kcal_mape_mid_median": 0.498,
+   "kcal_in_range_rate": 0.385,
+   "unresolved_rate": 0,
+   "confident_wrong": 3,
+   "fabrication": 0
+  },
+  "sauce_condiment": {
+   "n": 12,
+   "weight": 0.04,
+   "label": "Sauce / condiment",
+   "case_score": 0.759,
+   "identity_accuracy": 1,
+   "kcal_mape_mid_median": 0.111,
+   "kcal_in_range_rate": 0.917,
+   "unresolved_rate": 0,
+   "confident_wrong": 2,
+   "fabrication": 0
+  },
+  "nonfood_or_malformed": {
+   "n": 10,
+   "weight": 0.04,
+   "label": "Non-food / malformed",
+   "case_score": 0.73,
+   "identity_accuracy": 0,
+   "kcal_mape_mid_median": 0,
+   "kcal_in_range_rate": 0,
+   "unresolved_rate": 0,
+   "confident_wrong": 0,
+   "fabrication": 0
+  }
+ }
+}
