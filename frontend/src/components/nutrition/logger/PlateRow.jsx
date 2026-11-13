@@ -12,7 +12,7 @@
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from '../../../design/motion/index.jsx';
-import { priceItem, stepQty, switchUnit, unitOf, setOil, unitGramsHint } from './plate.js';
+import { priceItem, stepQty, switchUnit, unitOf, setOil, unitGramsHint, confidenceNote, confidenceSummary } from './plate.js';
 
 const Glyph = ({ d, size = 16, sw = 2 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -28,7 +28,9 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
   const p = priceItem(item);
   const unit = unitOf(item);
   const weak = item.confidence === 'low' || item.confidence === 'unreliable';
-  const flag = item.assumed || weak || item.unmatchedTerms?.length > 0;
+  const note = confidenceNote(item);
+  const summary = confidenceSummary(item);
+  const flag = item.assumed || weak || item.unmatchedTerms?.length > 0 || !!note;
   // Any change to the amount is the person setting it.
   const onChange = (next) => change({ ...next, assumed: false });
   const amount = unit?.key === 'g' ? `${fmtQty(item.qty)} g` : `${unit?.label || 'serving'}${p.grams != null ? ` · ${Math.round(p.grams)} g` : ''}`;
@@ -93,10 +95,11 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
             className="overflow-hidden"
           >
             <div className="pb-3 space-y-2.5">
-              {flag && (
-                <p className="font-grotesk text-[11.5px]" style={{ color: 'var(--warn)' }}>
-                  {item.assumed ? 'Amount guessed — set how much you had.' : item.origin === 'ai' ? 'Rough AI estimate — check the amount and calories.' : 'Closest match — check it is what you ate.'}
-                </p>
+              {note && (
+                <p className="font-grotesk text-[11.5px]" style={{ color: 'var(--warn)' }}>{note}</p>
+              )}
+              {summary && (
+                <p className="font-grotesk text-[11px]" style={{ color: 'var(--faint)' }}>{summary}</p>
               )}
 
               {item.units.length > 1 && (

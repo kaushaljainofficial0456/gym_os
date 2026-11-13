@@ -20,6 +20,8 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 >   Scorer change, documented: a case whose expected `strategy` is `decompose` and which the engine answers with several
 >   items is now judged on the combined dish (identity) and combined weight (portion) instead of `items[0]` only
 >   (`decomposedView` in `backend/src/eval/score.js`); this affects cmp-007 (+0.55) and cmp-008 (−0.03) only.
+> - 2026-11-13 — Phase 5 (confidence by dimension, `food/confidence.js`). Item `confidence` is now the weakest of
+>   identification / portion / composition. Weighted 0.814 → 0.821, ECE 0.101 → 0.083 (`high` observed 73% → 86%).
 
 ## 1. Files
 

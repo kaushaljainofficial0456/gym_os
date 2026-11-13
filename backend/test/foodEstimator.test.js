@@ -54,7 +54,12 @@ test('"2 roti" uses COUNT_PORTIONS roti reference: 40g x 2 = 80g', () => {
   assert.equal(item.qty, 2);
   assert.equal(item.unit, '2 x roti');
   assert.ok(item.source_id, 'has source_id');
-  assert.equal(item.confidence, 'high');
+  // Confidence is per dimension since the nutrition overhaul (food/
+  // confidence.js): the FOOD is certain, but "2 roti" is a household amount
+  // (rotis run 30-50 g), so the overall estimate is medium, not high.
+  assert.equal(item.confidence_breakdown.identification, 'high');
+  assert.equal(item.confidence_breakdown.portion, 'medium');
+  assert.equal(item.confidence, 'medium');
   assert.equal(item.trustworthy, true);
   assert.equal(item.match_kind, 'alias_exact');
 });
@@ -117,7 +122,11 @@ test('"2 bowls dal" uses volume portion: 2 x 250ml bowl x ~1.0 density', () => {
   assert.equal(r.items[0].grams, 500);
   assert.equal(r.items[0].unit, '2 x bowl');
   assert.equal(r.items[0].qty, 2);
-  assert.equal(r.items[0].confidence, 'high');
+  // Per-dimension confidence (food/confidence.js): dal is identified with
+  // certainty; a bowl is a household amount and dal recipes vary, so the
+  // overall estimate is medium.
+  assert.equal(r.items[0].confidence_breakdown.identification, 'high');
+  assert.equal(r.items[0].confidence, 'medium');
 });
 
 test('"1 plate rice" uses volume portion: 1 x 350ml plate', () => {

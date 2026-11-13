@@ -239,3 +239,19 @@ describe('AI estimates on the plate', () => {
     expect(toLogItems([roti])[0].ai_provider).toBeUndefined();
   });
 });
+
+describe('confidence in words', () => {
+  it('names the weakest dimension, never a percentage', async () => {
+    const { confidenceNote, confidenceSummary } = await import('../src/components/nutrition/logger/plate.js');
+    const base = { name: 'Dal', per100: { calories: 110, protein: 5, carbs: 12, fat: 4.6 }, units: [{ key: 'g', label: 'g', grams: 1 }], unit_key: 'g', qty: 150 };
+    const portionLow = fromPlateItem({ ...base, confidence: 'low', confidence_breakdown: { identification: 'high', portion: 'low', composition: 'medium', overall: 'low', reasons: { portion: ['no amount given'] } } });
+    expect(confidenceNote(portionLow)).toBe('Amount guessed — set how much you had.');
+    expect(confidenceSummary(portionLow)).toBe('Food sure · Amount unsure · Nutrition data likely');
+    const idLow = fromPlateItem({ ...base, confidence_breakdown: { identification: 'low', portion: 'high', composition: 'high', overall: 'low', reasons: { identification: ['matched on part of the name only'] } } });
+    expect(confidenceNote(idLow)).toMatch(/^Closest match/);
+    const restaurant = fromPlateItem({ ...base, confidence_breakdown: { identification: 'high', portion: 'medium', composition: 'low', overall: 'low', reasons: { composition: ['cooked dish', 'restaurant preparation — oil and portions often higher'] } } });
+    expect(confidenceNote(restaurant)).toBe('Restaurant preparation — oil and portions often higher.');
+    const fine = fromPlateItem({ ...base, confidence_breakdown: { identification: 'high', portion: 'medium', composition: 'high', overall: 'medium', reasons: {} } });
+    expect(confidenceNote(fine)).toBeNull();
+  });
+});

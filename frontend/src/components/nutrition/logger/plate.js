@@ -73,8 +73,40 @@ export function fromPlateItem(it) {
     // Words from the description this item does NOT account for ("bhurji"
     // on plain paneer). Shown on the row so the person can fix it.
     unmatchedTerms: Array.isArray(it.unmatched_terms) ? it.unmatched_terms : [],
+    // identification / portion / composition, each with reasons -- see
+    // backend food/confidence.js.
+    breakdown: it.confidence_breakdown || null,
     origin: 'model',
   };
+}
+
+const LEVEL_WORD = { high: 'sure', medium: 'likely', low: 'unsure', unreliable: 'unsure' };
+
+/**
+ * The one thing worth telling the person about this item, from its WEAKEST
+ * confidence dimension, or null when nothing is weak. Plain words, not
+ * percentages: "Amount guessed — set how much you had."
+ */
+export function confidenceNote(item) {
+  if (item.origin === 'ai') return 'Rough AI estimate — check the amount and calories.';
+  if (item.unmatchedTerms?.length) return `“${item.unmatchedTerms.join('”, “')}” isn't reflected — check this is what you ate.`;
+  const b = item.breakdown;
+  if (!b) {
+    if (item.assumed) return 'Amount guessed — set how much you had.';
+    if (item.confidence === 'low' || item.confidence === 'unreliable') return 'Closest match — check it is what you ate.';
+    return null;
+  }
+  if (b.identification === 'low') return `Closest match — check it is what you ate. (${b.reasons?.identification?.[0] || 'weak name match'})`;
+  if (b.portion === 'low' || item.assumed) return 'Amount guessed — set how much you had.';
+  if (b.composition === 'low') return `${(b.reasons?.composition?.at(-1) || 'Nutrition values are a rough estimate').replace(/^./, (c) => c.toUpperCase())}.`;
+  return null;
+}
+
+/** "Food sure · Amount likely · Nutrition sure" -- the breakdown in words. */
+export function confidenceSummary(item) {
+  const b = item.breakdown;
+  if (!b) return null;
+  return `Food ${LEVEL_WORD[b.identification]} · Amount ${LEVEL_WORD[b.portion]} · Nutrition data ${LEVEL_WORD[b.composition]}`;
 }
 
 /** A /me/foods/search result, at its default portion. */

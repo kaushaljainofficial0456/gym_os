@@ -55,6 +55,7 @@ import {
 import {
   CONTEXT_WORDS, contentTokens, uncoveredRuns, sharesFoodWord, isPreparationRun,
 } from './food/coverage.js';
+import { confidenceBreakdown } from './food/confidence.js';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -221,6 +222,7 @@ function withStaples(inner) {
           _matchKind: indexKind.get(row.source_id) || `staple_${h.kind}`,
           match_kind: indexKind.get(row.source_id) || `staple_${h.kind}`,
           staple_match: h.kind,
+          staple_vague: !!h.vague,
           // An umbrella word ("sabzi", "biryani") or a partial match is the
           // right staple at medium certainty: a variant is just as likely.
           confidence: h.vague ? lower(row.confidence, 'medium') : row.confidence,
@@ -1074,6 +1076,21 @@ export function estimateFood(text) {
   const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
   let worst = 'high';
   for (const it of items) {
+    /* CONFIDENCE BY DIMENSION (food/confidence.js). `confidence` becomes the
+       weakest of identification / portion / composition, each computed from
+       evidence -- not the matched row's own label, which said nothing about
+       how much was eaten. The breakdown and its reasons travel with the
+       item so the UI can say WHY and ask the right question. */
+    if (it._evidence) {
+      const b = confidenceBreakdown({
+        ...it._evidence,
+        grams_assumed: it._evidence.grams_assumed || !!it.recovered_from,
+        unmatched_terms: it.unmatched_terms || [],
+      });
+      it.confidence_breakdown = b;
+      it.confidence = b.overall;
+      delete it._evidence;
+    }
     total.calories += it._kcal ?? it.calories ?? 0;
     total.protein += it.protein ?? 0;
     total.carbs += it.carbs ?? 0;
@@ -1207,6 +1224,25 @@ function resolveParsed(parsed, fragment, search) {
     // The exact energy, so the meal total is summed before rounding, as it
     // always was. Removed before the response leaves estimateFood.
     _kcal: t.energy_kcal ?? 0,
+    // What the confidence breakdown is computed from (food/confidence.js).
+    // Removed before the response leaves estimateFood.
+    _evidence: {
+      match_kind: food.match_kind || null,
+      staple_match: food.staple_match || null,
+      vague: !!food.staple_vague,
+      query_relaxed: !!food.query_relaxed,
+      fuzzy_corrected: !!food.fuzzy_corrected,
+      grams_basis: q.basis,
+      grams_assumed: !!q.assumed,
+      qty_stated: parsed.qty != null,
+      unit_stated: !!parsed.unit,
+      source: food.source,
+      category: food.category,
+      cooking_state: food.cooking_state,
+      basis: food.basis || null,
+      context: parsed.context || [],
+      sizes: contentTokens(parsed.raw || fragment).sizes,
+    },
   };
   return { item, food };
 }
@@ -1850,6 +1886,9 @@ function toPlateItem(it, row) {
     unmatched_terms: it.unmatched_terms || [],
     context: it.context || [],
     recovered_from: it.recovered_from || null,
+    // identification / portion / composition, each with its reasons
+    // (food/confidence.js). `confidence` above is their weakest.
+    confidence_breakdown: it.confidence_breakdown || null,
     per100: per100Of(row),
     oil: plateOil(row),
     units,
