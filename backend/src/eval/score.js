@@ -104,6 +104,23 @@ function scoreNutrition(totals, nutrition) {
   return out;
 }
 
+/* --------------------------------------- decomposition-expected cases -- */
+
+/** For a non-meal case whose expected strategy is 'decompose', a synthetic
+ *  item standing for the whole dish: the item names joined, the summed
+ *  grams, and the class/prep of its most energy-dense component. Null when
+ *  the case does not expect decomposition or the engine returned one item. */
+function decomposedView(r, c) {
+  if (c?.expect?.strategy !== 'decompose' || !Array.isArray(r?.items) || r.items.length < 2) return null;
+  const main = [...r.items].sort((a, b) => (Number(b.kcal) || 0) - (Number(a.kcal) || 0))[0];
+  return {
+    ...main,
+    name: r.items.map((it) => it.name).join(' + '),
+    grams: r.items.reduce((s, it) => s + (Number(it.grams) || 0), 0),
+    kcal: r.items.reduce((s, it) => s + (Number(it.kcal) || 0), 0),
+  };
+}
+
 /* -------------------------------------------------- meal matching ------ */
 
 function matchMealItems(returnedItems, expectedItems, unresolved, flagged = []) {
@@ -205,7 +222,12 @@ export function gradeCase(c, r) {
       g.notes.push(`silent drop: ${drops.map((d) => d.exp.entity?.name_matches).join(', ')} neither matched nor reported unresolved`);
     }
   } else {
-    const item0 = r.items[0];
+    // A case that EXPECTS decomposition ("1 plate chole bhature", strategy
+    // 'decompose') is answered correctly by several items -- chole + bhature.
+    // Judging only items[0] made a correct decomposition unscoreable. For
+    // these cases only, identity is judged on the combined dish and the
+    // portion on the combined weight (nutrition already uses the totals).
+    const item0 = decomposedView(r, c) || r.items[0];
     const e = scoreEntity(item0, c.expect?.entity || {});
     g.identity_graded = e.score;
     g.identity_ok = e.score >= 0.6 ? 1 : (e.score >= 0.5 ? 0.75 : 0);
@@ -213,7 +235,7 @@ export function gradeCase(c, r) {
   }
 
   /* ---- class / prep / portion (single-item cases; meals: over item[0]) ---- */
-  const primaryItem = r.items[0];
+  const primaryItem = (!isMeal && decomposedView(r, c)) || r.items[0];
   if (c.expect?.food_class && c.expect.food_class !== 'any' && primaryItem) {
     g.class_ok = classCompatibility(c.expect.food_class, primaryItem.class_proxy);
   }

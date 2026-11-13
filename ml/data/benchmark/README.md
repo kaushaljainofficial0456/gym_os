@@ -16,6 +16,10 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 >   Weighted 0.786 → 0.811, unresolved 3.5% → 3.2%, ECE 0.113 → 0.100, silent-drop 10% → 0%
 >   (10% → 5% from parser fixes; the last case is now *reported* via `needs_clarification`, which the scorer
 >   counts as reported). No case scored lower. See `NUTRITION_BENCHMARK_REPORT.md`.
+> - 2026-11-13 — Phases 2-4 (recipe-priced regional dishes, multi-food segmentation, pair quantities). Weighted 0.811 → 0.814.
+>   Scorer change, documented: a case whose expected `strategy` is `decompose` and which the engine answers with several
+>   items is now judged on the combined dish (identity) and combined weight (portion) instead of `items[0]` only
+>   (`decomposedView` in `backend/src/eval/score.js`); this affects cmp-007 (+0.55) and cmp-008 (−0.03) only.
 
 ## 1. Files
 

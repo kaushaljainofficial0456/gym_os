@@ -46,6 +46,8 @@
 // ============================================================
 'use strict';
 
+import { RECIPES, priceRecipe } from './recipes.js';
+
 /* ── unit specs ─────────────────────────────────────────────────────── */
 
 // A catalogue unit: grams come from portionToGrams (volume x the row's
@@ -662,6 +664,17 @@ const STAPLES = [
     aliases: ['sugar', 'cheeni', 'white sugar'],
     units: [fix('teaspoon', 'tsp', 4), fix('tablespoon', 'tbsp', 12.5)],
   }),
+  S('jam', 'Jam', 'sweet', {
+    ref: 'usda:2710301',
+    aliases: ['jam', 'fruit jam', 'mixed fruit jam', 'jelly', 'preserve', 'kissan jam'],
+    units: [fix('teaspoon', 'tsp', 7), fix('tablespoon', 'tbsp', 20)],
+  }),
+  S('papad', 'Papad (roasted)', 'snack', {
+    ref: 'usda:168106',                          // USDA "Papad" (same values as CNF Indian papadum); a roasted papad, not fried
+    aliases: ['papad', 'papads', 'papadum', 'pappadam', 'appalam', 'roasted papad', 'masala papad'],
+    alts: [],
+    units: [fixCount('papad', 'papad', 10)],
+  }),
   S('honey', 'Honey', 'sweet', {
     ref: 'usda:169640',
     aliases: ['honey', 'shahad'],
@@ -755,6 +768,109 @@ const STAPLES = [
     ref: 'indb:ASC282',
     aliases: ['kheer', 'payasam', 'rice kheer', 'rice pudding'],
     units: [KATORI],
+  }),
+
+  /* ---------------- regional dishes priced from recipes (food/recipes.js) ----------------
+     No usable measured row exists for these (none at all, or INDB's row counts
+     the frying bath as eaten). Each is priced from MEASURED ingredients by a
+     documented standard recipe -- see recipes.js for the proportions, yield
+     and oil assumptions. Labelled recipe_calculation, never verified. */
+  S('misal', 'Misal', 'dish', {
+    recipe: 'misal',
+    aliases: ['misal', 'misal usal', 'puneri misal', 'kolhapuri misal', 'nashik misal', 'matki misal'],
+    units: [fix('plate', 'plate', 230), fix('katori', 'katori', 150)],
+  }),
+  S('usal', 'Usal (matki)', 'dish', {
+    recipe: 'usal',
+    aliases: ['usal', 'matki usal', 'sprouts usal', 'matki chi usal', 'moth bean curry'],
+    units: [fix('katori', 'katori', 150), fix('bowl', 'bowl', 250)],
+  }),
+  S('pav', 'Pav', 'bread', {
+    ref: 'usda:172793',                          // plain dinner roll: same dough and bake as a ladi pav
+    aliases: ['pav', 'pao', 'paav', 'ladi pav', 'pav bread', 'pavs', 'paos'],
+    units: [fixCount('pav', 'pav', 40)],
+    // Served in pairs alongside misal / bhaji / usal when no count is said.
+    pairQty: 2,
+  }),
+  S('bhatura', 'Bhatura', 'bread', {
+    recipe: 'bhatura',
+    aliases: ['bhatura', 'bhature', 'bhaturas', 'bhatoora', 'bhatooras', 'batura'],
+    units: [fixCount('bhatura', 'bhatura', 60)],
+    pairQty: 2,
+  }),
+  S('kachori', 'Kachori', 'snack', {
+    recipe: 'kachori',
+    aliases: ['kachori', 'kachoris', 'khasta kachori', 'moong dal kachori', 'dal kachori'],
+    units: [fixCount('kachori', 'kachori', 54)],
+  }),
+  S('thalipeeth', 'Thalipeeth', 'bread', {
+    recipe: 'thalipeeth',
+    aliases: ['thalipeeth', 'thalipith', 'thalipeet', 'bhajani thalipeeth', 'thalipeeths'],
+    units: [fixCount('thalipeeth', 'thalipeeth', 90)],
+  }),
+  S('pithla', 'Pithla', 'dish', {
+    recipe: 'pithla',
+    aliases: ['pithla', 'pitla', 'pithale', 'pitle', 'besan pithla'],
+    units: [fix('katori', 'katori', 140)],
+  }),
+  S('zunka', 'Zunka', 'dish', {
+    recipe: 'zunka',
+    aliases: ['zunka', 'jhunka', 'zunka bhakri zunka'],
+    units: [fix('katori', 'katori', 100)],
+  }),
+  S('jowar_bhakri', 'Jowar bhakri', 'bread', {
+    recipe: 'jowar_bhakri',
+    aliases: ['jowar bhakri', 'jowar roti', 'jwarichi bhakri', 'jowari bhakri', 'bhakri', 'bhakris', 'jowar bhakris'],
+    vague: ['bhakri', 'bhakris'],
+    alts: ['bajra_bhakri'],
+    units: [fixCount('bhakri', 'bhakri', 75)],
+  }),
+  S('bajra_bhakri', 'Bajra bhakri', 'bread', {
+    recipe: 'bajra_bhakri',
+    aliases: ['bajra bhakri', 'bajra roti', 'bajrichi bhakri', 'bajri bhakri', 'bajra rotla', 'rotla'],
+    units: [fixCount('bhakri', 'bhakri', 75)],
+  }),
+  S('puran_poli', 'Puran poli', 'sweet', {
+    ref: 'indb:ASC467',                          // INDB "Sweet split chickpea roti (... Puranpoli)" -- one word in the title, so "puran poli" never reached it
+    aliases: ['puran poli', 'puranpoli', 'puran polis', 'holige', 'obbattu', 'bobbatlu', 'pooran poli'],
+    units: [fixCount('poli', 'puran poli', 55)],
+  }),
+  S('ven_pongal', 'Ven pongal', 'grain', {
+    recipe: 'ven_pongal',
+    aliases: ['ven pongal', 'khara pongal', 'pongal', 'ghee pongal', 'milagu pongal'],
+    vague: ['pongal'],
+    units: [fix('bowl', 'bowl', 200), fix('katori', 'katori', 150)],
+  }),
+  S('paneer_bhurji', 'Paneer bhurji', 'protein', {
+    recipe: 'paneer_bhurji',
+    aliases: ['paneer bhurji', 'paneer ki bhurji', 'scrambled paneer', 'paneer scramble'],
+    units: [fix('katori', 'katori', 150), fix('plate', 'plate', 200)],
+  }),
+  S('paneer_tikka', 'Paneer tikka', 'protein', {
+    recipe: 'paneer_tikka',
+    aliases: ['paneer tikka', 'paneer tikkas', 'tandoori paneer', 'paneer tikka dry'],
+    units: [fix('plate', 'plate (6 pieces)', 150), fixCount('piece', 'piece', 25)],
+  }),
+  S('aloo_tikki', 'Aloo tikki', 'snack', {
+    recipe: 'aloo_tikki',
+    aliases: ['aloo tikki', 'aloo tikkis', 'alu tikki', 'potato tikki', 'aloo patty', 'tikki'],
+    vague: ['tikki'],
+    units: [fixCount('tikki', 'tikki', 53)],
+  }),
+  S('sabudana_vada', 'Sabudana vada', 'snack', {
+    recipe: 'sabudana_vada',
+    aliases: ['sabudana vada', 'sabudana vadas', 'sago vada', 'sabudana wada'],
+    units: [fixCount('vada', 'vada', 42)],
+  }),
+  S('ukadiche_modak', 'Modak (steamed)', 'sweet', {
+    recipe: 'ukadiche_modak',
+    aliases: ['modak', 'modaks', 'ukadiche modak', 'steamed modak', 'kozhukattai', 'kozhukatai'],
+    units: [fixCount('modak', 'modak', 35)],
+  }),
+  S('rava_sheera', 'Rava sheera', 'sweet', {
+    recipe: 'rava_sheera',
+    aliases: ['sheera', 'rava sheera', 'sooji halwa', 'suji halwa', 'suji ka halwa', 'sooji ka halwa', 'shira'],
+    units: [fix('katori', 'katori', 140)],
   }),
 ];
 
@@ -875,6 +991,16 @@ export function matchStaples(query, { limit = 3, allowPrefix = true } = {}) {
   return [...out.values()].sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
+/**
+ * The staple a complete name means EXACTLY (word for word, plurals
+ * tolerated), or null. Used by the phrase splitter, which must never split
+ * on a partial or prefix match.
+ */
+export function exactStaple(name) {
+  const hit = name ? matchStaples(name, { limit: 1, allowPrefix: false })[0] : null;
+  return hit?.kind === 'exact' ? hit.staple : null;
+}
+
 /** The single staple a complete food name means, or null. */
 export function stapleFor(name) {
   const hit = matchStaples(name, { limit: 1, allowPrefix: false })[0];
@@ -905,6 +1031,7 @@ export function stapleRow(st, rowsById) {
     staple_name: st.name,
     match_kind: 'staple',
   };
+  if (st.recipe) return recipeRow(st, rowsById, staple);
   if (ref && ref.data_quality_flag == null && ref.trustworthy !== false) {
     // The measured row, byte-faithful. Confidence is the MATCH certainty:
     // this row is the one the word means. (An umbrella word lowers it at
@@ -938,6 +1065,57 @@ export function stapleRow(st, rowsById) {
     trustworthy: true,
     basis: st.basis,
     basis_note: st.note || null,
+    ...staple,
+  };
+}
+
+export const RECIPE_SOURCE = 'SKOS_RECIPE';
+
+/**
+ * A recipe staple's row: per-100 g values COMPUTED from the recipe's
+ * measured ingredients (food/recipes.js), shaped like an index row so every
+ * downstream step -- scaling, units, the plate, server re-pricing -- treats
+ * it exactly like any other food. Null if any ingredient row is missing:
+ * a dish priced without one of its ingredients would be silently wrong.
+ */
+function recipeRow(st, rowsById, staple) {
+  const rec = RECIPES[st.recipe];
+  const priced = rec ? priceRecipe(rec, rowsById) : null;
+  if (!priced) return null;
+  const p = priced.per100;
+  return {
+    source: RECIPE_SOURCE,
+    source_id: `recipe:${st.recipe}`,
+    food_name: st.name,
+    search_name: normStaple(st.name),
+    category: 'indian_dish',
+    cuisine: rec.region || 'indian',
+    cooking_state: 'cooked',
+    energy_kcal: p.energy_kcal,
+    protein_g: p.protein_g,
+    carb_g: p.carb_g,
+    fat_g: p.fat_g,
+    fiber_g: p.fiber_g,
+    sugar_g: p.sugar_g,
+    sodium_mg: p.sodium_mg,
+    calcium_mg: p.calcium_mg,
+    iron_mg: p.iron_mg,
+    brand: null,
+    // The dish is identified with certainty when its name is used; its
+    // COMPOSITION is a standard recipe, not a measurement of this plate.
+    confidence: 'medium',
+    trustworthy: true,
+    basis: 'recipe',
+    basis_note: rec.basis,
+    recipe: {
+      key: st.recipe,
+      name: rec.name,
+      batch_serves: rec.batch_serves,
+      raw_g: priced.raw_g,
+      cooked_g: priced.cooked_g,
+      components: priced.components,
+      incomplete: priced.incomplete,
+    },
     ...staple,
   };
 }

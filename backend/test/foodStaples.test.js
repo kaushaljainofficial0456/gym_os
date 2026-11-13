@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ALL_STAPLES, matchStaples, stapleFor } from '../src/services/food/staples.js';
+import { RECIPES } from '../src/services/food/recipes.js';
 import { searchFoods, estimateFood, resolveFoodQuantity } from '../src/services/foodEstimator.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,13 @@ test('every staple points at a real, trustworthy measured row -- or says why not
       const row = ROWS.get(s.ref);
       assert.ok(row, `${s.key}: ref ${s.ref} is not in the index`);
       assert.ok(row.data_quality_flag == null, `${s.key}: ref ${s.ref} is quarantined (${row.data_quality_flag})`);
+    } else if (s.recipe) {
+      // Priced from measured ingredients by a documented standard recipe
+      // (food/recipes.js) -- every ingredient is itself a ref, checked in
+      // foodRecipes.test.js; here: the recipe exists and states its basis.
+      const rec = RECIPES[s.recipe];
+      assert.ok(rec, `${s.key}: recipe "${s.recipe}" does not exist`);
+      assert.ok(rec.basis && rec.basis.length > 10 && rec.cooked_g > 0, `${s.key}: recipe with no stated basis or yield`);
     } else {
       // No measured row: an inline value is allowed only with its basis
       // and the reason stated, so it can be checked and argued with.

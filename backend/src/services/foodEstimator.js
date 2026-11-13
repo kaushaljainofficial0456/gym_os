@@ -50,7 +50,7 @@ import fs from 'node:fs';
 import { round1 } from '../utils/time.js';
 import {
   ALL_STAPLES, matchStaples, stapleRow, stapleByKey, stapleUnit,
-  stapleUnitByPortionKey, unitGroup, leadingUnit,
+  stapleUnitByPortionKey, unitGroup, leadingUnit, exactStaple,
 } from './food/staples.js';
 import {
   CONTEXT_WORDS, contentTokens, uncoveredRuns, sharesFoodWord, isPreparationRun,
@@ -974,19 +974,47 @@ function splitTwoStaples(fragment, search) {
   if (!p0?.name) return null;
   const p = p0.companion ? { ...p0, unit: null, name: `${p0.name} ${p0.companion.name}` } : p0;
   const words = p.name.split(' ').filter(Boolean);
-  if (words.length < 2 || words.length > 4) return null;
+  if (words.length < 2 || words.length > 6) return null;
   if (isStapleName(p.name)) return null;
   const whole = search.search(p.name, { limit: 1, staplePrefix: false })[0];
   if (whole && !whole.query_relaxed && isSameDish(p.name, whole)) return null;
-  for (let i = 1; i < words.length; i += 1) {
-    const headWords = words.slice(0, i);
-    const tailWords = words.slice(i);
-    if (isPreparationRun(tailWords)) continue;
-    const head = headWords.join(' ');
-    const tail = tailWords.join(' ');
-    if (!isStapleName(head) || !isStapleName(tail)) continue;
-    const count = p.qty != null && (!p.unit || isCountableFood(p.unit)) ? `${p.qty} ` : '';
-    return [`${count}${head}`, tail];
+  const segs = segmentIntoStaples(words);
+  if (!segs || segs.length < 2) return null;
+
+  /* AMOUNTS. A leading number counts the COUNTABLE side when exactly one
+     side comes in pieces ("2 chole bhature" is two bhature with chole, not
+     two katoris of chole); otherwise it counts the first food. A container
+     ("1 plate misal pav") describes the plate, so every food takes its own
+     natural serving. A food customarily served in pairs alongside a dish
+     (pav with misal, bhature with chole) defaults to that pair when no
+     number was said -- shown as an assumed amount the person can change. */
+  const hasCount = p.qty != null && (!p.unit || isCountableFood(p.unit));
+  const staples = segs.map((sg) => exactStaple(sg));
+  const countable = staples.map((st) => !!st?.units?.[0]?.count);
+  const countTarget = hasCount
+    ? (countable.filter(Boolean).length === 1 && !countable[0] ? countable.indexOf(true) : 0)
+    : -1;
+  return segs.map((sg, i) => {
+    if (i === countTarget) return `${p.qty} ${sg}`;
+    if (i > 0 && countTarget !== i && staples[i]?.pairQty) return `${staples[i].pairQty} ${sg}`;
+    return sg;
+  });
+}
+
+/**
+ * Split a run of words into consecutive curated staple names, longest
+ * first, or null if it cannot be covered entirely. "idli vada sambar" ->
+ * [idli, vada, sambar]; "paneer bhurji" -> null (bhurji is a preparation
+ * word after the first segment, never a second food).
+ */
+function segmentIntoStaples(words, start = 0) {
+  if (start === words.length) return [];
+  for (let end = words.length; end > start; end -= 1) {
+    const seg = words.slice(start, end);
+    if (start > 0 && isPreparationRun(seg)) continue;
+    if (!isStapleName(seg.join(' '))) continue;
+    const rest = segmentIntoStaples(words, end);
+    if (rest) return [seg.join(' '), ...rest];
   }
   return null;
 }
