@@ -10,6 +10,13 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 
 ---
 
+> **Re-baseline log**
+> - 2026-11-13 — `feature/nutrition-engine-overhaul` Phase 1 (zero silent drops). Approved re-baseline as part of the
+>   nutrition overhaul. The original frozen baseline is preserved unchanged as `baseline.v1.pre-overhaul.json`.
+>   Weighted 0.786 → 0.811, unresolved 3.5% → 3.2%, ECE 0.113 → 0.100, silent-drop 10% → 0%
+>   (10% → 5% from parser fixes; the last case is now *reported* via `needs_clarification`, which the scorer
+>   counts as reported). No case scored lower. See `NUTRITION_BENCHMARK_REPORT.md`.
+
 ## 1. Files
 
 | Path | What it is | Committed? |

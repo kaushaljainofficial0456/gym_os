@@ -192,6 +192,10 @@ function runAndShape(c, call, { engine }) {
     },
     confidence: raw.confidence ?? null,
     unresolved: raw.unresolved || [],
+    // Words the engine could not account for but REPORTED on an item (food/
+    // coverage.js). Reported is not silent: the scorer treats these like
+    // unresolved fragments when deciding whether a food was dropped silently.
+    needs_clarification: raw.needs_clarification || [],
     llm_calls: 0,               // Phase 2/3 add no external calls (kNN rescue + composite decomposition are local + deterministic)
     est_cost_usd: 0,
     latency_ms,

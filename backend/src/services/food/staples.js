@@ -786,6 +786,18 @@ function stripLeadingUnits(norm) {
 
 const FILLER = new Set(['of', 'a', 'an', 'some', 'my']);
 
+/** "aloo parathas" -> ["aloo paratha", "aloo parath"]: the last word with a
+ *  plural ending removed, most literal first. Candidates only -- the caller
+ *  accepts one solely if it is a curated name. */
+function singularForms(q) {
+  const toks = q.split(' ');
+  const last = toks.at(-1) || '';
+  const forms = [];
+  if (last.length > 3 && last.endsWith('s') && !last.endsWith('ss')) forms.push(last.slice(0, -1));
+  if (last.length > 4 && last.endsWith('es')) forms.push(last.slice(0, -2));
+  return forms.map((f) => [...toks.slice(0, -1), f].join(' '));
+}
+
 /**
  * The unit word a food name still starts with, if any: "cup almonds" ->
  * "cup". The parser leaves one there when filler sits between the amount and
@@ -839,8 +851,14 @@ export function matchStaples(query, { limit = 3, allowPrefix = true } = {}) {
     if (!prev || prev.score < score) out.set(staple.key, { staple, score, kind, vague });
   };
 
-  const exact = BY_ALIAS.get(q);
-  if (exact) take(exact, 1000, 'exact', q);
+  // A plural is the same food: "aloo parathas", "2 idlis", "samosas". Only
+  // the LAST word is singularised (that is where English and Hinglish put
+  // the plural), and only when the singular is itself a curated name --
+  // "parathas" -> "paratha" is checked against the alias table, never
+  // guessed. Without this, "2 homemade aloo parathas" missed the aloo
+  // paratha staple and fell through to USDA "Potato pancake".
+  const exact = BY_ALIAS.get(q) || singularForms(q).map((f) => BY_ALIAS.get(f)).find(Boolean);
+  if (exact) take(exact, 1000, 'exact', BY_ALIAS.has(q) ? q : normStaple(exact.name));
 
   const qTokens = q.split(' ');
   for (const { phrase, tokens, staple } of ALIAS_LIST) {

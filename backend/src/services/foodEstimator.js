@@ -52,6 +52,9 @@ import {
   ALL_STAPLES, matchStaples, stapleRow, stapleByKey, stapleUnit,
   stapleUnitByPortionKey, unitGroup, leadingUnit,
 } from './food/staples.js';
+import {
+  CONTEXT_WORDS, contentTokens, uncoveredRuns, sharesFoodWord, isPreparationRun,
+} from './food/coverage.js';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -413,8 +416,18 @@ function splitWithConjunction(fragment, search) {
   // recognised.
   const wholePhrase = `${before} with ${after}`;
   const whole = search.search(wholePhrase, { limit: 1 })[0];
+  /* ...but only if that row really IS the whole phrase. A strong match KIND
+     is not proof: the search backs off to a shorter phrase when the full one
+     finds nothing, and reports the shorter hit with the same kind. "masala
+     dosa with sambar" came back as an `exact_name` hit on plain "Masala
+     dosa", which blocked the split -- and the sambar was never counted. The
+     dish row has to account for every food word on both sides ("Poha with
+     curd (Poha aur dahi)" names both poha and dahi; "Masala dosa" names no
+     sambar), and it must not have been reached by dropping words. */
   if (whole && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact'
-                || whole.staple_match === 'exact')) return null;
+                || whole.staple_match === 'exact')
+      && !whole.query_relaxed
+      && uncoveredRuns(wholePhrase, matchPhrases(whole, wholePhrase)).length === 0) return null;
 
   // Each half must parse to a named food AND that name must retrieve
   // something. Anything less and the split would trade one honest answer for
@@ -427,6 +440,30 @@ function splitWithConjunction(fragment, search) {
     if (!hits.length || hits[0].trustworthy === false) return null;
   }
   return halves;
+}
+
+/**
+ * Every phrase a matched row can account for, for coverage accounting
+ * (food/coverage.js): its display name, the measured row's own title (INDB
+ * titles carry regional names: "Curd rice (Dahi bhaat/Dahi chawal/...)"),
+ * and, for a curated staple, every alias the staple answers to.
+ *
+ * An alias-table hit vouches for the query only when the query is a single
+ * word ("dahi" -> curd). Multi-word aliases in food_aliases.json are bulk
+ * extractions and some are wrong in exactly the way that hides a drop:
+ * "rajma chawal" is an alias of RAW DRIED rajma, a row with no rice in it.
+ */
+function matchPhrases(food, query) {
+  const phrases = [food.food_name, food.staple_name, food.source_name];
+  if (food.staple_key) {
+    const st = stapleByKey(food.staple_key);
+    if (st) phrases.push(st.name, ...(st.aliases || []));
+  }
+  const q = String(query || '').trim();
+  const singleWord = q && !/\s/.test(q);
+  if ((food.match_kind === 'alias_exact' && singleWord && !food.query_relaxed)
+      || food.staple_match === 'exact') phrases.push(q);
+  return phrases.filter(Boolean);
 }
 
 /** Pull a leading quantity off a fragment: "2.5 bowls dal" -> 2.5. */
@@ -498,6 +535,27 @@ export function parseFragment(fragment) {
      still reports as unresolved instead of becoming empty. */
   while (tokens.length > 1 && NOISE.has(tokens[0]) && WORD_NUMBERS[tokens[0]] === undefined) {
     tokens = tokens.slice(1);
+  }
+
+  /* CONTEXT WORDS ARE NOT PART OF THE NAME. "2 homemade aloo parathas" was
+     searched as "homemade aloo parathas" and matched USDA "Potato pancake,
+     homemade" -- at HIGH confidence -- because "homemade" was the strongest
+     shared word. Where a food was made is real information (a restaurant
+     dish carries more oil), so it is kept on the parse as `context`, but it
+     is never a search term. See food/coverage.js for the list and for the
+     words deliberately NOT treated as context ("cold coffee", "plain dosa"). */
+  const context = [];
+  if (tokens.some((t) => CONTEXT_WORDS.has(t))) {
+    const kept = [];
+    for (const t of tokens) {
+      if (CONTEXT_WORDS.has(t)) {
+        const c = CONTEXT_WORDS.get(t);
+        if (c && !context.includes(c)) context.push(c);
+      } else kept.push(t);
+    }
+    // Never strip a fragment down to nothing: "homemade" alone stays put
+    // so it is reported, not silently emptied.
+    if (kept.length) tokens = kept;
   }
 
   const { qty, rest } = parseQuantity(tokens);
@@ -582,19 +640,19 @@ export function parseFragment(fragment) {
      plus a 580 g plate of pav bhaji. When the whole phrase is a curated
      everyday dish, it is that dish; a leading number counts servings of it. */
   if (name && unit && name !== unit && isCountableFood(unit) && isStapleName(spoken)) {
-    return { qty, unit: null, name: spoken, raw: fragment };
+    return { qty, unit: null, name: spoken, raw: fragment, context };
   }
   if (name && unit && name !== unit && isCountableFood(unit)) {
     return {
-      qty, unit, name: unit, raw: fragment,
-      companion: { qty: null, unit: null, name, raw: fragment },
+      qty, unit, name: unit, raw: fragment, context,
+      companion: { qty: null, unit: null, name, raw: fragment, context },
     };
   }
 
   // A fragment that names no food even after that ("2 bowls" alone) is
   // genuinely ambiguous. Report it rather than guessing.
-  if (!name) return { qty, unit, name: null, raw: fragment };
-  return packGrams ? { qty, unit, name, raw: fragment, packGrams } : { qty, unit, name, raw: fragment };
+  if (!name) return { qty, unit, name: null, raw: fragment, context };
+  return packGrams ? { qty, unit, name, raw: fragment, packGrams, context } : { qty, unit, name, raw: fragment, context };
 }
 
 /* ------------------------------------------------------------------ */
@@ -880,12 +938,66 @@ function splitPairedDish(fragment, search) {
   return [`${count}${head}`, `${count}${tail}`];
 }
 
+/**
+ * "bread butter", "idli vada", "chole bhature", "misal pav": two everyday
+ * foods said side by side with nothing to split on.
+ *
+ * splitPairedDish covers the rice/roti/toast tails with their own counting
+ * rules; this is the general case it does not reach, and each of these was
+ * a silent loss or a wrong identity -- "bread butter" became one "Almond
+ * butter sandwich", "chole bhature" became a curry with the bhature gone.
+ *
+ * Split only when (a) the whole phrase is NOT itself a curated name or a
+ * measured row that names every word, (b) BOTH sides are curated staple
+ * names word for word, and (c) the second side is not a preparation word
+ * ("paneer bhurji" is one dish; "bhurji" alone is a curated name for egg
+ * bhurji, and splitting would count an egg nobody ate). A leading number
+ * stays with the first food; the second takes its own natural serving and
+ * is shown as an assumed amount.
+ */
+/**
+ * Is this row the WHOLE phrase, rather than a row that merely contains its
+ * words? Coverage both ways: the row explains every word of the phrase, and
+ * the phrase explains every food word of the row's main title (the part
+ * before any bracketed regional names). "poha curd" vs "Poha with curd (Poha
+ * aur dahi)" -> same dish. "bread butter" vs "Almond butter sandwich, on
+ * wheat bread" -> no: the row adds almond, sandwich and wheat.
+ */
+function isSameDish(phrase, row) {
+  if (uncoveredRuns(phrase, matchPhrases(row, phrase)).length) return false;
+  const title = String(row.staple_name || row.food_name || '').split('(')[0];
+  return uncoveredRuns(title, [phrase]).length === 0;
+}
+
+function splitTwoStaples(fragment, search) {
+  const p0 = parseFragment(fragment);
+  if (!p0?.name) return null;
+  const p = p0.companion ? { ...p0, unit: null, name: `${p0.name} ${p0.companion.name}` } : p0;
+  const words = p.name.split(' ').filter(Boolean);
+  if (words.length < 2 || words.length > 4) return null;
+  if (isStapleName(p.name)) return null;
+  const whole = search.search(p.name, { limit: 1, staplePrefix: false })[0];
+  if (whole && !whole.query_relaxed && isSameDish(p.name, whole)) return null;
+  for (let i = 1; i < words.length; i += 1) {
+    const headWords = words.slice(0, i);
+    const tailWords = words.slice(i);
+    if (isPreparationRun(tailWords)) continue;
+    const head = headWords.join(' ');
+    const tail = tailWords.join(' ');
+    if (!isStapleName(head) || !isStapleName(tail)) continue;
+    const count = p.qty != null && (!p.unit || isCountableFood(p.unit)) ? `${p.qty} ` : '';
+    return [`${count}${head}`, tail];
+  }
+  return null;
+}
+
 export function expandFragments(text, search = getFoodSearch()) {
   const fragments = splitItems(text);
   if (!search) return fragments;
   return fragments
     .flatMap((f) => splitWithConjunction(f, search) || [f])
-    .flatMap((f) => splitPairedDish(f, search) || [f]);
+    .flatMap((f) => splitPairedDish(f, search) || [f])
+    .flatMap((f) => splitTwoStaples(f, search) || [f]);
 }
 
 export function estimateFood(text) {
@@ -901,14 +1013,14 @@ export function estimateFood(text) {
       schema_version: 'food-v1',
       model_available: false,
       unresolved: fragments.map((f) => ({ fragment: f, reason: 'food model not available on this deployment' })),
+      needs_clarification: [],
       disclaimer: 'Food model unavailable — no estimate produced.',
     };
   }
 
   const items = [];
   const unresolved = [];
-  const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  let worst = 'high';
+  const needsClarification = [];
   const RANK = { high: 0, medium: 1, low: 2, unreliable: 3 };
 
   for (const fragment of fragments) {
@@ -922,96 +1034,24 @@ export function estimateFood(text) {
     }
     // A fragment can name two foods ("two rotis with dal") -- see parseFragment.
     const parsedItems = first.companion ? [first, first.companion] : [first];
-
+    const fragItems = [];
     for (const parsed of parsedItems) {
-    if (!parsed.name) {
-      unresolved.push({ fragment, reason: 'no food named in this part' });
-      continue;
+      const r = resolveParsed(parsed, fragment, search);
+      if (r.unresolved) unresolved.push(r.unresolved);
+      else { items.push(r.item); fragItems.push({ item: r.item, parsed, food: r.food }); }
     }
+    if (fragItems.length) accountForFragment(fragment, fragItems, items, needsClarification, search);
+  }
 
-    /* limit 4, not 1, to see whether the top hit was a CLEAR winner or one of
-       several equally good answers. This costs nothing: FoodSearch already
-       scores all 21,353 rows on every query and `limit` only slices the
-       result, so nothing extra is computed and no second search runs. */
-    const hits = search.search(parsed.name, { limit: 4, staplePrefix: false });
-    if (!hits.length) {
-      unresolved.push({ fragment, reason: `no match for "${parsed.name}"` });
-      continue;
-    }
-    const food = hits[0];
-    const alternatives = isStapleHit(food) ? stapleAlternatives(food, search) : ambiguousAlternatives(hits);
-
-    // A row flagged unreliable must not contribute a NUMBER to a total the
-    // user will trust -- see CONTRACT §5. It is reported, not silently
-    // added and not silently dropped.
-    if (food.trustworthy === false) {
-      unresolved.push({
-        fragment,
-        matched: food.food_name,
-        reason: food.data_quality_flag || 'matched food has a known data-quality problem',
-      });
-      continue;
-    }
-
-    const q = resolveGrams(parsed, food);
-    const scaled = scaleNutrition(food, q.grams);
-    if (!scaled) {
-      unresolved.push({ fragment, matched: food.food_name, reason: 'could not resolve a quantity' });
-      continue;
-    }
-
-    const t = scaled.totals;
-    if (RANK[food.confidence] > RANK[worst]) worst = food.confidence;
-
-    items.push({
-      // Legacy fields the current client renders. A staple shows the name
-      // the person used ("Milk (toned)"), not its measured row's database
-      // title ("Milk, whole"), which would read as a different milk.
-      name: isStapleHit(food) ? food.staple_name : food.food_name,
-      source_name: food.food_name,
-      staple_key: food.staple_key ?? null,
-      unit_key: q.unit_key ?? null,
-      unit: q.description,
-      qty: parsed.qty == null ? 1 : parsed.qty,
-      calories: Math.round(t.energy_kcal ?? 0),
-      protein: t.protein_g,
-      carbs: t.carb_g,
-      fat: t.fat_g,
-      // Contract fields.
-      source_id: food.source_id,
-      source: food.source,
-      grams: scaled.grams,
-      grams_basis: q.basis,
-      grams_assumed: q.assumed,
-      confidence: food.confidence,
-      // Available on `food` since the trustworthy gate above already reads
-      // it — just wasn't being copied through to the response. Same fields,
-      // same meaning, as me.js's /foods/search route exposes for search
-      // results from the same underlying engine.
-      trustworthy: food.trustworthy !== false,
-      match_kind: food.match_kind || null,
-      cooking_state: food.cooking_state,
-      matched_from: fragment,
-      /* Runners-up that matched this fragment just as well but would give a
-         materially different number (see ambiguousAlternatives). Empty for
-         the overwhelming majority of items. The chosen food, the totals and
-         every existing field are unchanged whether or not this is populated:
-         it is strictly additional information for the UI to offer a
-         "did you mean?" switch, never a change to what was logged. */
-      ambiguous: alternatives.length > 0,
-      alternatives,
-      // null means NOT MEASURED. Passed through as null on purpose so the
-      // UI can render "—" instead of a fabricated 0.
-      fiber_g: t.fiber_g,
-      sugar_g: t.sugar_g,
-      sodium_mg: t.sodium_mg,
-    });
-
-    total.calories += t.energy_kcal ?? 0;
-    total.protein += t.protein_g ?? 0;
-    total.carbs += t.carb_g ?? 0;
-    total.fat += t.fat_g ?? 0;
-    }
+  const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  let worst = 'high';
+  for (const it of items) {
+    total.calories += it._kcal ?? it.calories ?? 0;
+    total.protein += it.protein ?? 0;
+    total.carbs += it.carbs ?? 0;
+    total.fat += it.fat ?? 0;
+    if (RANK[it.confidence] > RANK[worst]) worst = it.confidence;
+    delete it._kcal;
   }
 
   return {
@@ -1029,10 +1069,178 @@ export function estimateFood(text) {
     model_version: 'skos-food-v1',
     confidence: items.length ? worst : null,
     unresolved,
+    // Words the person wrote that no logged item accounts for, attached to
+    // the item they were most likely describing ("paneer BHURJI" logged as
+    // plain paneer). Empty for the overwhelming majority of meals. The UI
+    // must show these -- see food/coverage.js for why they exist.
+    needs_clarification: needsClarification,
     disclaimer: unresolved.length
       ? 'Some items could not be matched and are NOT included in the total.'
-      : 'Matched against measured food-composition data. Portion sizes are estimates.',
+      : needsClarification.length
+        ? 'Part of what you described was not matched exactly — check the flagged items.'
+        : 'Matched against measured food-composition data. Portion sizes are estimates.',
   };
+}
+
+/**
+ * Resolve ONE parsed food to a priced item, or say exactly why it could not
+ * be. Returns { item, food } or { unresolved }.
+ */
+function resolveParsed(parsed, fragment, search) {
+  if (!parsed.name) return { unresolved: { fragment, reason: 'no food named in this part' } };
+
+  /* limit 4, not 1, to see whether the top hit was a CLEAR winner or one of
+     several equally good answers. This costs nothing: FoodSearch already
+     scores all 21,353 rows on every query and `limit` only slices the
+     result, so nothing extra is computed and no second search runs. */
+  const hits = search.search(parsed.name, { limit: 4, staplePrefix: false });
+  if (!hits.length) return { unresolved: { fragment, reason: `no match for "${parsed.name}"` } };
+  const food = hits[0];
+
+  // A row flagged unreliable must not contribute a NUMBER to a total the
+  // user will trust -- see CONTRACT §5. It is reported, not silently
+  // added and not silently dropped.
+  if (food.trustworthy === false) {
+    return { unresolved: {
+      fragment,
+      matched: food.food_name,
+      reason: food.data_quality_flag || 'matched food has a known data-quality problem',
+    } };
+  }
+
+  /* A MATCH MUST SHARE A FOOD WORD WITH WHAT WAS WRITTEN. "puran poli"
+     matched "Polish sausage" because "poli" is inside "polish"; "misal" and
+     several regional names reach unrelated rows the same way. A lexical
+     accident is not an estimate: it is reported as unresolved, with the
+     closest row named, so the person can pick or ask the AI -- never summed
+     as if it were their food. Alias-table and staple matches are vouched for
+     by curation and are not second-guessed here; a spelling-corrected hit is
+     compared against the corrected spelling. */
+  const curated = isStapleHit(food) || (food.match_kind === 'alias_exact' && !food.query_relaxed);
+  const compareTo = food.fuzzy_corrected && food.matched_on ? food.matched_on : parsed.name;
+  if (!curated && !sharesFoodWord(compareTo, matchPhrases(food, compareTo))) {
+    return { unresolved: {
+      fragment,
+      reason: `no confident match for "${parsed.name}"`,
+      closest: food.food_name,
+    } };
+  }
+
+  const alternatives = isStapleHit(food) ? stapleAlternatives(food, search) : ambiguousAlternatives(hits);
+  const q = resolveGrams(parsed, food);
+  const scaled = scaleNutrition(food, q.grams);
+  if (!scaled) return { unresolved: { fragment, matched: food.food_name, reason: 'could not resolve a quantity' } };
+
+  const t = scaled.totals;
+  const item = {
+    // Legacy fields the current client renders. A staple shows the name
+    // the person used ("Milk (toned)"), not its measured row's database
+    // title ("Milk, whole"), which would read as a different milk.
+    name: isStapleHit(food) ? food.staple_name : food.food_name,
+    source_name: food.food_name,
+    staple_key: food.staple_key ?? null,
+    unit_key: q.unit_key ?? null,
+    unit: q.description,
+    qty: parsed.qty == null ? 1 : parsed.qty,
+    calories: Math.round(t.energy_kcal ?? 0),
+    protein: t.protein_g,
+    carbs: t.carb_g,
+    fat: t.fat_g,
+    // Contract fields.
+    source_id: food.source_id,
+    source: food.source,
+    grams: scaled.grams,
+    grams_basis: q.basis,
+    grams_assumed: q.assumed,
+    confidence: food.confidence,
+    // Available on `food` since the trustworthy gate above already reads
+    // it — just wasn't being copied through to the response. Same fields,
+    // same meaning, as me.js's /foods/search route exposes for search
+    // results from the same underlying engine.
+    trustworthy: food.trustworthy !== false,
+    match_kind: food.match_kind || null,
+    cooking_state: food.cooking_state,
+    matched_from: fragment,
+    /* Runners-up that matched this fragment just as well but would give a
+       materially different number (see ambiguousAlternatives). Empty for
+       the overwhelming majority of items. The chosen food, the totals and
+       every existing field are unchanged whether or not this is populated:
+       it is strictly additional information for the UI to offer a
+       "did you mean?" switch, never a change to what was logged. */
+    ambiguous: alternatives.length > 0,
+    alternatives,
+    // null means NOT MEASURED. Passed through as null on purpose so the
+    // UI can render "—" instead of a fabricated 0.
+    fiber_g: t.fiber_g,
+    sugar_g: t.sugar_g,
+    sodium_mg: t.sodium_mg,
+    // Where/how it was made, when the person said so ("homemade").
+    ...(parsed.context?.length ? { context: parsed.context } : {}),
+    // The exact energy, so the meal total is summed before rounding, as it
+    // always was. Removed before the response leaves estimateFood.
+    _kcal: t.energy_kcal ?? 0,
+  };
+  return { item, food };
+}
+
+/**
+ * ZERO SILENT DROPS. After a fragment has produced its items, check that
+ * every food word in it is accounted for (food/coverage.js). A word nothing
+ * explains is either:
+ *
+ *   - a curated food in its own right ("sambar" left over from a phrase the
+ *     search answered with only "Masala dosa") -> RECOVERED as its own item
+ *     at its natural default serving, flagged as an assumed amount; or
+ *   - a descriptor of the dish that was matched ("bhurji" on plain paneer)
+ *     -> the item is kept but its confidence drops to 'low' and the words
+ *     are reported in `needs_clarification`, so the UI can ask.
+ *
+ * It never adds a food on a weak guess: recovery requires an EXACT curated
+ * staple name, because a wrong extra item is a double count.
+ */
+function accountForFragment(fragment, fragItems, items, needsClarification, search) {
+  const phrases = [];
+  const dropped = new Set();
+  for (const { item, parsed, food } of fragItems) {
+    phrases.push(...matchPhrases(food, parsed.name));
+    // Words the search itself had to discard to find anything at all.
+    for (const w of food.unmatched_query_terms || []) dropped.add(w);
+  }
+  let runs = uncoveredRuns(fragment, phrases);
+  // A word the search dropped is uncovered even if a synonym elsewhere in
+  // the fragment happens to explain it -- but only if it is a food word.
+  const content = new Set(contentTokens(fragment).tokens);
+  for (const w of dropped) {
+    if (content.has(w) && !runs.some((r) => r.includes(w))) runs.push([w]);
+  }
+  if (!runs.length) return;
+
+  const unexplained = [];
+  for (const run of runs) {
+    const phrase = run.join(' ');
+    const staple = isPreparationRun(run) ? null : matchStaples(phrase, { limit: 1, allowPrefix: false })[0];
+    if (staple?.kind === 'exact' && !staple.vague) {
+      const r = resolveParsed({ qty: null, unit: null, name: phrase, raw: fragment }, fragment, search);
+      if (r.item) {
+        items.push({ ...r.item, grams_assumed: true, recovered_from: phrase });
+        continue;
+      }
+    }
+    unexplained.push(phrase);
+  }
+  if (!unexplained.length) return;
+
+  // Attach to the first item from this fragment: it is the dish the words
+  // were written next to.
+  const target = fragItems[0].item;
+  target.unmatched_terms = unexplained;
+  if (target.confidence === 'high' || target.confidence === 'medium') target.confidence = 'low';
+  needsClarification.push({
+    fragment,
+    matched: target.name,
+    terms: unexplained,
+    question: `We matched “${target.name}”, but “${unexplained.join('”, “')}” isn't reflected. Is this right?`,
+  });
 }
 
 /**

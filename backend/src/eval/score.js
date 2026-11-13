@@ -106,7 +106,7 @@ function scoreNutrition(totals, nutrition) {
 
 /* -------------------------------------------------- meal matching ------ */
 
-function matchMealItems(returnedItems, expectedItems, unresolved) {
+function matchMealItems(returnedItems, expectedItems, unresolved, flagged = []) {
   // greedy: each expected sub-item claims its best name-regex match among the
   // still-unclaimed returned items.
   const claimed = new Set();
@@ -121,8 +121,11 @@ function matchMealItems(returnedItems, expectedItems, unresolved) {
     });
     const matched = best >= 0 && bestScore > 0 ? returnedItems[best] : null;
     if (matched) claimed.add(best);
-    const inUnresolved = !matched && (unresolved || []).some((u) =>
-      re && (re.test(u.fragment || '') || re.test(u.matched || '') || re.test(u.name || '')));
+    const inUnresolved = !matched && ((unresolved || []).some((u) =>
+      re && (re.test(u.fragment || '') || re.test(u.matched || '') || re.test(u.name || '')))
+      // A fragment whose unaccounted words were REPORTED for clarification is
+      // not a silent drop: the person is told and asked (food/coverage.js).
+      || (flagged || []).some((n) => re && re.test(n.fragment || '')));
     rows.push({ exp, matched, entityScore: matched ? bestScore : 0,
                 accounted: !!matched || inUnresolved });
   }
@@ -192,7 +195,7 @@ export function gradeCase(c, r) {
 
   /* ---- identity ---- */
   if (isMeal && Array.isArray(c.expect.items)) {
-    const rows = matchMealItems(r.items, c.expect.items, r.unresolved);
+    const rows = matchMealItems(r.items, c.expect.items, r.unresolved, r.needs_clarification);
     const scores = rows.map((row) => row.entityScore);
     g.identity_graded = scores.reduce((a, b) => a + b, 0) / rows.length;
     g.identity_ok = rows.filter((row) => row.entityScore >= 0.6).length / rows.length;
