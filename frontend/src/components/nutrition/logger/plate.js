@@ -70,6 +70,9 @@ export function fromPlateItem(it) {
     // No amount was said ("dal", not "1 katori dal"), so the amount shown is
     // the parser's default -- worth a glance before it is logged.
     assumed: !!it.assumed,
+    // Words from the description this item does NOT account for ("bhurji"
+    // on plain paneer). Shown on the row so the person can fix it.
+    unmatchedTerms: Array.isArray(it.unmatched_terms) ? it.unmatched_terms : [],
     origin: 'model',
   };
 }
@@ -280,6 +283,7 @@ const CONFIDENCE = new Set(['high', 'medium', 'low', 'unreliable']);
 /** Where the numbers came from. An AI estimate stays an estimate in the log,
  *  and one whose amount the person changed says so. */
 function logSource(it) {
+  if (it.origin === 'usual') return { source: 'manual', nutrition_source: 'previous_log' };
   if (it.origin !== 'ai') return { source: 'manual' };
   const asServed = it.unitKey === 'serving' && it.qty === 1;
   return {
@@ -308,8 +312,33 @@ export function toLogItems(items) {
       unit: (u?.key === 'g' ? 'g' : u?.label || 'serving').slice(0, 30),
       ...logSource(it),
       ...(CONFIDENCE.has(it.confidence) ? { confidence: it.confidence } : {}),
+      // The row and the grams, so the SERVER prices a database food itself
+      // and records where the numbers came from. The numbers above are what
+      // this screen showed; the server's are what is stored.
+      ...(it.sourceId && it.origin !== 'ai' && p.grams > 0
+        ? { source_id: String(it.sourceId).slice(0, 80), grams: p.grams,
+            ...(it.stapleKey ? { staple_key: String(it.stapleKey).slice(0, 60) } : {}),
+            ...(it.oilKey ? { oil: it.oilKey } : {}) }
+        : {}),
     };
   });
+}
+
+/**
+ * One id per plate, reused if the same plate is sent again (a retry after a
+ * dropped connection), so the server logs it once. A changed plate is a new
+ * request and gets a new id.
+ */
+export function newRequestId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return `plate_${globalThis.crypto.randomUUID().replace(/-/g, '')}`;
+  } catch { /* fall through */ }
+  return `plate_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** A stable signature of what is on the plate, to know when it changed. */
+export function plateSignature(items) {
+  return items.map((it) => `${it.sourceId || it.name}:${it.unitKey}:${it.qty}:${it.oilKey || ''}`).join('|');
 }
 
 /** The order a day happens in: snacks sit in the afternoon, before dinner. */

@@ -83,6 +83,53 @@ describe('logging', () => {
     expect(rows[0]).toMatchObject({ name: 'Roti / Chapati', quantity: 2, unit: 'roti', calories: 162, confidence: 'high' });
     expect(rows[1]).toMatchObject({ quantity: 206, unit: 'g' });
   });
+
+  it('a database item carries its row and grams so the server prices it', () => {
+    const [r] = toLogItems([roti]);
+    expect(r).toMatchObject({ source_id: 'indb:ASC096', staple_key: 'roti', grams: 80 });
+    expect(r.nutrition_source).toBeUndefined(); // "verified" is never claimed by the client
+  });
+
+  it('an item with no row sends no source_id; a usual says it is a previous log', () => {
+    expect(toLogItems([milk])[0].source_id).toBeUndefined();
+    const usual = fromUsual({ name: 'Poha', quantity: 1, unit: 'bowl', calories: 250, protein: 5, carbs: 40, fat: 8 });
+    expect(toLogItems([usual])[0]).toMatchObject({ nutrition_source: 'previous_log' });
+  });
+
+  it('an AI item never sends a source_id, even if one is present', () => {
+    const ai = { ...fromAIEstimate({ food_name: 'Mystery curry', serving: { estimated_weight_g: 250, description: 'bowl' }, totals: { calories: 300, protein: 10, carbs: 20, fat: 18 } }), sourceId: 'indb:ASC096' };
+    const [r] = toLogItems([ai]);
+    expect(r.source).toBe('ai_estimated');
+    expect(r.source_id).toBeUndefined();
+  });
+
+  it('the oil choice travels with the row', () => {
+    const dal = fromPlateItem({
+      name: 'Dal', source_id: 'staple:dal', staple_key: 'dal',
+      per100: { calories: 110, protein: 5, carbs: 12, fat: 4.6 },
+      oil: { options: [{ key: 'less', per100: { calories: 95, protein: 5, carbs: 12, fat: 3 } }] },
+      units: [{ key: 'staple_katori', label: 'katori', grams: 150 }, { key: 'g', label: 'g', grams: 1 }],
+      unit_key: 'staple_katori', qty: 1,
+    });
+    expect(toLogItems([setOil(dal, 'less')])[0]).toMatchObject({ oil: 'less', grams: 150 });
+  });
+
+  it('unmatched words from the description stay on the plate item', () => {
+    const p = fromPlateItem({ name: 'Paneer', per100: { calories: 305, protein: 19, carbs: 0, fat: 25 }, units: [{ key: 'g', label: 'g', grams: 1 }], unit_key: 'g', qty: 100, unmatched_terms: ['bhurji'] });
+    expect(p.unmatchedTerms).toEqual(['bhurji']);
+  });
+});
+
+describe('request ids', () => {
+  it('a changed plate has a different signature; the same plate the same one', async () => {
+    const { plateSignature, newRequestId } = await import('../src/components/nutrition/logger/plate.js');
+    expect(plateSignature([roti])).toBe(plateSignature([roti]));
+    expect(plateSignature([roti])).not.toBe(plateSignature([{ ...roti, qty: 3 }]));
+    const a = newRequestId(); const b = newRequestId();
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^plate_[A-Za-z0-9]+$/);
+    expect(a.length).toBeLessThanOrEqual(80);
+  });
 });
 
 describe('the day', () => {

@@ -29,6 +29,7 @@ import {
   plateItemFor,
 } from '../services/food/index.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
+import { writeMealLogs } from '../services/nutrition/mealLogWriter.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import {
@@ -1183,7 +1184,6 @@ export default function meRoutes(db) {
     res.json({ item });
   });
 
-  const ESTIMATED = new Set(['ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']);
   r.post('/nutrition/log-batch', plateLimit, validate(schemas.mealLogBatch), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const tz = req.tz || 'Asia/Kolkata';
@@ -1192,31 +1192,18 @@ export default function meRoutes(db) {
     // A past day can be filled in; a future one cannot be "eaten".
     if (date > today) return res.status(400).json({ error: 'Cannot log food for a future day' });
     const slot = req.body.slot;
-    const r1v = (n) => Math.round(Number(n) * 10) / 10;
-    const ids = [];
-    // All or nothing: half a meal in the log is worse than none, because
-    // the person sees "logged" and stops checking.
-    await db.tx(async (tx) => {
-      for (const it of req.body.items) {
-        const lId = id('mlg');
-        ids.push(lId);
-        await tx.run(
-          `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat,
-                                  eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
-           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?)`,
-          [lId, c.id, date, slot, it.name, Math.round(it.calories), r1v(it.protein), r1v(it.carbs), r1v(it.fat),
-           // The ai_* columns are AI/kNN provenance; a measured match leaves them empty.
-           it.source, ESTIMATED.has(it.source) ? 1 : 0,
-           ESTIMATED.has(it.source) ? (it.ai_provider ?? null) : null,
-           ESTIMATED.has(it.source) ? (it.ai_model ?? null) : null,
-           ESTIMATED.has(it.source) ? (it.confidence ?? null) : null,
-           r1v(it.quantity), it.unit]);
-      }
+    // Idempotent, server-priced, provenance-stamped, all-or-nothing -- see
+    // services/nutrition/mealLogWriter.js.
+    const { replayed, response } = await writeMealLogs(db, {
+      clientId: c.id, date, slot, items: req.body.items,
+      requestId: req.body.client_request_id || null,
+      excluded: req.body.acknowledged_unresolved || [],
     });
-    track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'plate', items: ids.length, slot: mealGroup(slot) });
+    if (replayed) return res.status(200).json({ ...response, replayed: true });
+    track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'plate', items: response.ids.length, slot: mealGroup(slot) });
     await trackOnce(db, { type: 'first_meal_logged', orgId: c.org_id, userId: c.user_id, data: { client_id: c.id, source: 'plate' } });
     recalculateForEditedDate(db, c, date).catch(() => {});
-    res.status(201).json({ ids, date, slot });
+    res.status(201).json(response);
   });
 
   // Logs the logger can learn from: the person's own, eaten, one food each.
@@ -1307,11 +1294,16 @@ export default function meRoutes(db) {
         ids.push(lId);
         await tx.run(
           `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat,
-                                  eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit, unit_type)
-           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)`,
+                                  eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit, unit_type,
+                                  nutrition_source, source_id, grams, fiber, sugar, sodium, confidence)
+           VALUES (?,?,NULL,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [lId, c.id, today, slot, row.name, row.calories, row.protein, row.carbs, row.fat,
            row.source, row.estimate ? 1 : 0, row.ai_provider ?? null, row.ai_model ?? null,
-           row.ai_confidence ?? null, row.quantity ?? null, row.unit ?? null, row.unit_type ?? null]);
+           row.ai_confidence ?? null, row.quantity ?? null, row.unit ?? null, row.unit_type ?? null,
+           // A repeat is the same food at the same amount: its provenance
+           // travels with it rather than being re-labelled as typed-in.
+           row.nutrition_source ?? 'previous_log', row.source_id ?? null, row.grams ?? null,
+           row.fiber ?? null, row.sugar ?? null, row.sodium ?? null, row.confidence ?? null]);
       }
     });
     track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'repeat', items: ids.length });
@@ -1367,8 +1359,8 @@ export default function meRoutes(db) {
     const lId = id('mlg');
     const r1 = (n) => Math.round(n * 10) / 10;
     await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit, meal_template_id)
-       VALUES (?,?,NULL,?,?,?,?,?,?,?,1,'custom',?,?,?)`,
+      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit, meal_template_id, nutrition_source)
+       VALUES (?,?,NULL,?,?,?,?,?,?,?,1,'custom',?,?,?,'user_provided')`,
       [lId, c.id, d, m.slot, m.name, Math.round(m.calories * scale), r1(m.protein * scale), r1(m.carbs * scale), r1(m.fat * scale),
        scale, 'serving', m.id]);
     track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'client_custom', servings: scale });

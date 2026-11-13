@@ -45,6 +45,14 @@ async function memDb() {
     async q1(sql, params = []) { const rows = await mk().q(sql, params); return rows[0] || null; },
     async run(sql, params = []) { const stmt = db.prepare(sql); const res = params.length ? stmt.run(...params) : stmt.run(); return { changes: Number(res.changes) }; },
     exec(sql) { db.exec(sql); },
+    // The log route now writes through services/nutrition/mealLogWriter.js,
+    // which is transactional (idempotency row + logs, all or nothing) --
+    // same shape as src/db.js's tx().
+    async tx(fn) {
+      db.exec('BEGIN');
+      try { const out = await fn(mk()); db.exec('COMMIT'); return out; }
+      catch (e) { try { db.exec('ROLLBACK'); } catch { /* already rolled back */ } throw e; }
+    },
     raw: db
   });
   return mk();
@@ -155,7 +163,13 @@ test('valid meal log -> 201 and persisted in database', async (t) => {
   const payload = { name: 'Chicken Rice Bowl', calories: 520, protein: 35, carbs: 55, fat: 14, slot: 'lunch', source: 'manual' };
   const r = await call('POST', '/api/nutrition/clients/c1/meals/log', payload);
   assert.equal(r.status, 201);
-  assert.deepEqual(r.json, { ok: true });
+  // Additive since the nutrition overhaul: the new row id and what the
+  // server STORED, with its provenance class. A typed-in entry with no
+  // database row behind it is user_provided, never "verified".
+  assert.equal(r.json.ok, true);
+  assert.equal(typeof r.json.id, 'string');
+  assert.equal(r.json.nutrition.calories, 520);
+  assert.equal(r.json.nutrition.nutrition_source, 'user_provided');
 
   // Verify database persistence
   const row = await db.q1('SELECT * FROM meal_logs WHERE client_id = ? ORDER BY rowid DESC LIMIT 1', ['c1']);

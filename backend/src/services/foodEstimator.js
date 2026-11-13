@@ -1816,6 +1816,12 @@ function toPlateItem(it, row) {
     matched_from: it.matched_from ?? null,
     grams_basis: it.grams_basis ?? null,
     assumed: !!it.grams_assumed,
+    // Coverage (food/coverage.js): words of the description this item does
+    // not account for, where/how it was made, and whether it was recovered
+    // from a phrase the search answered only in part.
+    unmatched_terms: it.unmatched_terms || [],
+    context: it.context || [],
+    recovered_from: it.recovered_from || null,
     per100: per100Of(row),
     oil: plateOil(row),
     units,
@@ -1844,6 +1850,41 @@ export function describeMeal(text) {
     return row ? toPlateItem(it, row) : null;
   }).filter(Boolean);
   return { ...est, items };
+}
+
+/**
+ * Price `grams` of a known food on the SERVER, for logging. The row is found
+ * exactly the way the plate found it (plateRow: staple-decorated where a
+ * staple chose it), and an optional "less"/"more" oil choice uses the same
+ * oil model the plate offered (plateOil). This is what lets the log route
+ * store numbers it computed itself rather than numbers a client sent.
+ *
+ * Returns null when the row is unknown, quarantined, or the grams are not a
+ * positive number -- the caller then stores the client's numbers under a
+ * cautious provenance class instead (services/nutrition/provenance.js).
+ */
+export function priceBySourceId(sourceId, grams, { stapleKey = null, oil = null } = {}) {
+  const search = getFoodSearch();
+  if (!search || !sourceId) return null;
+  const g = Number(grams);
+  if (!(g > 0) || g > 20000) return null;
+  const row = plateRow(search, sourceId, stapleKey);
+  if (!row || row.data_quality_flag || row.trustworthy === false) return null;
+  const scaled = scaleNutrition(row, g);
+  if (!scaled) return null;
+  const t = scaled.totals;
+  const f = g / 100;
+  const opt = oil ? plateOil(row)?.options.find((o) => o.key === oil) : null;
+  const totals = {
+    calories: opt ? opt.per100.calories * f : (t.energy_kcal ?? 0),
+    protein: opt ? opt.per100.protein * f : (t.protein_g ?? 0),
+    carbs: opt ? opt.per100.carbs * f : (t.carb_g ?? 0),
+    fat: opt ? opt.per100.fat * f : (t.fat_g ?? 0),
+    fiber: t.fiber_g ?? null,
+    sugar: t.sugar_g ?? null,
+    sodium: t.sodium_mg ?? null,
+  };
+  return { row, grams: g, totals, oil_applied: !!opt };
 }
 
 /**

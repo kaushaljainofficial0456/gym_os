@@ -10,6 +10,7 @@ import { estimateFoodAI, isFoodAIAvailable } from '../services/intelligence/food
 import { track, trackOnce } from '../services/events.js';
 import { rateLimit } from '../rateLimit.js';
 import { recalculateForEditedDate } from '../services/nutrition/flexibleBalance.js';
+import { writeMealLogs } from '../services/nutrition/mealLogWriter.js';
 
 // Single source of truth for "sum eaten macros over a set of meal_logs
 // rows" (Part 37) -- nutrition-summary and history below used to each
@@ -215,13 +216,15 @@ export default function nutritionRoutes(db) {
     if (!client) return;
     const b = req.body;
     const logDate = b.date || await clientLogDay(db, client.id, req.tz);
-    await db.run(
-      `INSERT INTO meal_logs (id, client_id, meal_id, date, slot, name, calories, protein, carbs, fat, eaten, source, estimate, ai_provider, ai_model, ai_confidence, quantity, unit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id('mlg'), client.id, b.meal_id || null, logDate, b.slot || 'snack', b.name,
-       b.calories, b.protein, b.carbs, b.fat, b.eaten ? 1 : 0, b.source, b.estimate ? 1 : 0,
-       b.ai_provider || null, b.ai_model || null, b.ai_confidence || null,
-       b.quantity ?? null, b.unit ?? null]);
+    // Same writer as the plate (services/nutrition/mealLogWriter.js):
+    // idempotent on client_request_id, server-priced when a source_id and
+    // grams are supplied, provenance-stamped. A plan meal is a plan meal.
+    const item = { ...b, confidence: b.ai_confidence };
+    const { replayed, response } = await writeMealLogs(db, {
+      clientId: client.id, date: logDate, slot: b.slot || 'snack', items: [item],
+      requestId: b.client_request_id || null, eaten: !!b.eaten, mealId: b.meal_id || null,
+    });
+    if (replayed) return res.status(200).json({ ok: true, replayed: true, id: response.ids[0] });
     await track(db, { orgId: client.org_id, userId: req.user.sub, type: 'meal_logged', data: { clientId: client.id, source: b.source } });
     // Under the member's own id: a trainer may be logging on their behalf.
     // A meal logged as not eaten is a plan, not a first meal.
@@ -236,7 +239,7 @@ export default function nutritionRoutes(db) {
       // user_adjusted_ai_estimates) can be measured without re-parsing data.
       await track(db, { orgId: client.org_id, userId: req.user.sub, type: `food_ai_${b.source === 'ai_estimated_user_adjusted' ? 'user_adjusted' : 'user_confirmed'}`, data: { clientId: client.id, name: b.name } });
     }
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, id: response.ids[0], nutrition: response.items[0] });
   });
 
   // ---- AI food estimate (clearly labeled estimate) ----
@@ -380,7 +383,8 @@ export default function nutritionRoutes(db) {
     const plan = await db.q1(
       'SELECT * FROM nutrition_plans WHERE client_id = ? ORDER BY created_at DESC LIMIT 1', [client.id]);
     const rows = await db.q(
-      `SELECT id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit, unit_type
+      `SELECT id, date, slot, name, calories, protein, carbs, fat, eaten, source, quantity, unit, unit_type,
+              nutrition_source, grams, confidence
          FROM meal_logs WHERE client_id = ? AND date >= ? AND date <= ? ORDER BY date ASC`,
       [client.id, from, to]);
     const byDate = new Map();
@@ -394,7 +398,12 @@ export default function nutritionRoutes(db) {
         id: row.id, name: row.name, calories: row.calories, protein: row.protein,
         carbs: row.carbs, fat: row.fat, slot: row.slot || null,
         quantity: row.quantity ?? null, unit: row.unit || null,
-        eaten: !!row.eaten, source: row.source
+        eaten: !!row.eaten, source: row.source,
+        // Where the numbers came from (null on rows logged before this was
+        // recorded -- unknown, never presumed verified).
+        nutrition_source: row.nutrition_source ?? null,
+        grams: row.grams ?? null,
+        confidence: row.confidence ?? null,
       });
     }
     // Totals count only eaten=1 rows -- matches nutrition-summary above

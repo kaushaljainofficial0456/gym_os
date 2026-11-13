@@ -55,7 +55,7 @@ export default function trackingRoutes(db) {
     res.json({ supplements: await db.q('SELECT * FROM supplements WHERE client_id = ? AND active = 1', [client.id]) });
   });
 
-  r.post('/clients/:id/supplements', async (req, res) => {
+  r.post('/clients/:id/supplements', validate(schemas.supplementCreate), async (req, res) => {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const b = req.body || {};

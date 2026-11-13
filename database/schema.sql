@@ -781,7 +781,16 @@ CREATE TABLE IF NOT EXISTS meal_logs (
   quantity  REAL,                           -- original parsed quantity (for provenance)
   unit      TEXT,                           -- original parsed unit, e.g. 'g' | 'rotis' | 'ml'
   unit_type TEXT,                           -- original parsed unitType, e.g. 'gram' | 'piece' | 'ml'
-  meal_template_id TEXT                      -- FK to client_meal_templates (used for delete-cascade of today's log)
+  meal_template_id TEXT,                     -- FK to client_meal_templates (used for delete-cascade of today's log)
+  -- Provenance (nutrition overhaul). Decided by the server, never asserted
+  -- by a client -- see backend/src/services/nutrition/provenance.js.
+  -- Also in init-db.js MIGRATIONS for databases that predate them.
+  nutrition_source TEXT,                     -- verified_database | brand_label | recipe_calculation | ai_estimate | user_provided | previous_log | plan
+  source_id TEXT,                            -- the food-database row the numbers were priced from
+  grams     REAL,                            -- edible grams logged (null when not known)
+  fiber     REAL, sugar REAL, sodium REAL,   -- null = not measured, never a fabricated 0
+  confidence TEXT,                           -- identification confidence at log time
+  request_id TEXT                            -- meal_log_requests.request_id that wrote this row
 );
 CREATE INDEX IF NOT EXISTS idx_meal_logs_client ON meal_logs(client_id, date);
 -- idx_ml_template intentionally NOT created here: meal_template_id is also a
@@ -792,6 +801,23 @@ CREATE INDEX IF NOT EXISTS idx_meal_logs_client ON meal_logs(client_id, date);
 -- instead in applySqliteMigrations/applyPgMigrations, after the column is
 -- guaranteed to exist either way.
 CREATE INDEX IF NOT EXISTS idx_ml_eaten ON meal_logs(client_id, date, eaten);
+
+-- One row per meal-log REQUEST (POST /me/nutrition/log-batch). Two jobs:
+--  1. Idempotency: (client_id, request_id) is the primary key, inserted in
+--     the SAME transaction as the meal_logs rows, so a retried request (a
+--     flaky network, a double tap) can never log a meal twice -- the retry
+--     gets the first request's stored response back instead.
+--  2. Audit: what the person knowingly chose NOT to log ("“bhature” not
+--     found -- log without it?") is recorded in excluded_json, so a missing
+--     food is a recorded decision, never an unexplained gap.
+CREATE TABLE IF NOT EXISTS meal_log_requests (
+  client_id     TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  request_id    TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  response_json TEXT,
+  excluded_json TEXT,
+  PRIMARY KEY (client_id, request_id)
+);
 
 CREATE TABLE IF NOT EXISTS water_logs (
   id        TEXT PRIMARY KEY,

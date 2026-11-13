@@ -184,6 +184,23 @@ const MIGRATIONS = [
   ['meal_logs', 'ai_model', `ai_model TEXT`],
   ['meal_logs', 'ai_confidence', `ai_confidence TEXT`],
 
+  // --- Nutrition overhaul: provenance + measured amounts on every log ---
+  // nutrition_source is decided by the SERVER (services/nutrition/
+  // provenance.js), never asserted by a client: verified_database |
+  // brand_label | recipe_calculation | ai_estimate | user_provided |
+  // previous_log | plan. NULL on rows that predate it (unknown, shown as
+  // such -- never back-filled as "verified"). grams/source_id let a log be
+  // re-priced and audited; fiber/sugar/sodium were computed and discarded
+  // before. All nullable and additive: no existing read path changes.
+  ['meal_logs', 'nutrition_source', `nutrition_source TEXT`],
+  ['meal_logs', 'source_id', `source_id TEXT`],
+  ['meal_logs', 'grams', `grams REAL`],
+  ['meal_logs', 'fiber', `fiber REAL`],
+  ['meal_logs', 'sugar', `sugar REAL`],
+  ['meal_logs', 'sodium', `sodium REAL`],
+  ['meal_logs', 'confidence', `confidence TEXT`],
+  ['meal_logs', 'request_id', `request_id TEXT`],
+
   // --- AI-estimated ingredients inside a custom meal (Customize My Meals'
   // AI fallback) -- distinguishes a "✨ AI Estimated" meal_item from a
   // "✓ Database" one. Default 'database' so every pre-existing row (all

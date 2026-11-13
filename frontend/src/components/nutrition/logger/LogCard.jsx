@@ -13,11 +13,13 @@
  * tool (a restaurant dish, a home recipe); anything the parser could not
  * read offers the same, right where it says so.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../../api.js';
 import Icon from '../../Icon.jsx';
 import { motion, AnimatePresence, useReducedMotion } from '../../../design/motion/index.jsx';
-import { fromPlateItem, fromUsual, fromSearchFood, plateTotals, toLogItems, looksLikeMeal } from './plate.js';
+import {
+  fromPlateItem, fromUsual, fromSearchFood, plateTotals, toLogItems, looksLikeMeal, newRequestId, plateSignature,
+} from './plate.js';
 import FoodResults, { useFoodSearch } from './FoodResults.jsx';
 import { aiEstimateItem } from './ai.js';
 import { useSpeech } from './useSpeech.js';
@@ -36,6 +38,11 @@ export default function LogCard({ slot, usuals, meals, onLogged, onAdjust, onOpe
   const [text, setText] = useState('');
   const [items, setItems] = useState([]);
   const [unresolved, setUnresolved] = useState([]);
+  // Same two guarantees as PlateSheet: a "not found" item is never left out
+  // without a second, deliberate tap, and a retried send logs once.
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const requestRef = useRef({ sig: null, id: null });
+  useEffect(() => { setConfirmSkip(false); }, [unresolved, items.length]);
   const [busy, setBusy] = useState(null);        // 'describe' | 'ai' | 'log' | `ai:${i}` | `usual:${name}`
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -93,11 +100,27 @@ export default function LogCard({ slot, usuals, meals, onLogged, onAdjust, onOpe
 
   const log = async (list, key = 'log') => {
     if (!list.length || busy) return;
+    // Only the previewed plate carries the unresolved parts of what was typed.
+    const withUnresolved = key === 'log' && unresolved.length > 0;
+    if (withUnresolved && !confirmSkip) {
+      setConfirmSkip(true);
+      fail(`${unresolved.map((u) => `“${u.fragment}”`).join(', ')} won't be counted. Use “AI estimate” on it, or tap Log again to log without it.`);
+      return false;
+    }
     setBusy(key); setError('');
+    const sig = `${key}|${plateSignature(list)}`;
+    if (requestRef.current.sig !== sig) requestRef.current = { sig, id: newRequestId() };
     try {
       const totals = plateTotals(list);
-      const r = await api('/me/nutrition/log-batch', { method: 'POST', body: JSON.stringify({ slot, items: toLogItems(list) }) });
-      onLogged?.({ ids: r.ids, slot, count: list.length, calories: totals.calories });
+      const r = await api('/me/nutrition/log-batch', { method: 'POST', body: JSON.stringify({
+        slot,
+        items: toLogItems(list),
+        client_request_id: requestRef.current.id,
+        ...(withUnresolved ? { acknowledged_unresolved: unresolved.map((u) => String(u.fragment).slice(0, 150)).slice(0, 20) } : {}),
+      }) });
+      requestRef.current = { sig: null, id: null };
+      const stored = (r.items || []).reduce((s, x) => s + (Number(x.calories) || 0), 0);
+      onLogged?.({ ids: r.ids, slot, count: list.length, calories: r.items?.length ? stored : totals.calories });
       return true;
     } catch (e) {
       fail(e.message || 'Could not log that');
@@ -216,7 +239,7 @@ export default function LogCard({ slot, usuals, meals, onLogged, onAdjust, onOpe
                              style={items.length
                                ? { background: 'var(--accent)', color: 'var(--accent-contrast)' }
                                : { background: 'var(--accent-soft)', color: 'var(--faint)' }}>
-                {busy === 'log' ? 'Logging…' : items.length ? `Log · ${totals.calories} kcal` : 'Log'}
+                {busy === 'log' ? 'Logging…' : !items.length ? 'Log' : confirmSkip ? `Log anyway · ${totals.calories} kcal` : `Log · ${totals.calories} kcal`}
               </motion.button>
             </div>
           </motion.div>

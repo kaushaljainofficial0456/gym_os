@@ -17,6 +17,7 @@ import Icon from '../../Icon.jsx';
 import { motion, AnimatePresence, useReducedMotion, AnimatedNumber } from '../../../design/motion/index.jsx';
 import {
   slotLabel, fromPlateItem, fromSearchFood, fromUsual, plateTotals, unitOf, toLogItems, looksLikeMeal, amountLabel,
+  newRequestId, plateSignature,
 } from './plate.js';
 import { aiEstimateItem } from './ai.js';
 import { useSpeech } from './useSpeech.js';
@@ -72,6 +73,13 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
   const [text, setText] = useState('');
   const [items, setItems] = useState([]);
   const [unresolved, setUnresolved] = useState([]);
+  // ZERO SILENT DROPS at log time: with "not found" items still listed, the
+  // first tap on Log asks; only a second tap logs without them, and the
+  // server records what was left out.
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  // One request id per plate, reused when the SAME plate is re-sent (a retry
+  // after a dropped connection), so the server logs it exactly once.
+  const requestRef = useRef({ sig: null, id: null });
   const [showAll, setShowAll] = useState(false);
   const search = useFoodSearch(text, { enabled: open });
   const type = (v) => { setText(v); setShowAll(false); };
@@ -177,12 +185,28 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
     setTimeout(() => { onLogged?.(payload); onClose?.(); }, reduced ? 250 : 900);
   };
 
+  useEffect(() => { setConfirmSkip(false); }, [unresolved, items.length]);
+
   const logPlate = async () => {
     if (!items.length || busy) return;
+    if (unresolved.length && !confirmSkip) {
+      setConfirmSkip(true);
+      setError(`${unresolved.map((u) => `“${u.fragment}”`).join(', ')} won't be counted. Use “AI estimate” on it, or tap Log again to log without it.`);
+      return;
+    }
     setBusy('log'); setError('');
+    const sig = plateSignature(items);
+    if (requestRef.current.sig !== sig) requestRef.current = { sig, id: newRequestId() };
     try {
-      const r = await api('/me/nutrition/log-batch', { method: 'POST', body: JSON.stringify({ slot, items: toLogItems(items) }) });
-      finish(totals.calories, { ids: r.ids, slot, count: items.length, calories: totals.calories });
+      const r = await api('/me/nutrition/log-batch', { method: 'POST', body: JSON.stringify({
+        slot,
+        items: toLogItems(items),
+        client_request_id: requestRef.current.id,
+        ...(unresolved.length ? { acknowledged_unresolved: unresolved.map((u) => String(u.fragment).slice(0, 150)).slice(0, 20) } : {}),
+      }) });
+      requestRef.current = { sig: null, id: null };
+      const logged = (r.items || []).reduce((s, x) => s + (Number(x.calories) || 0), 0);
+      finish(r.items?.length ? logged : totals.calories, { ids: r.ids, slot, count: items.length, calories: r.items?.length ? logged : totals.calories });
     } catch (e) {
       setError(e.message || 'Could not log that meal');
     } finally { setBusy(null); }
@@ -219,7 +243,7 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
           ? { background: 'var(--accent)', color: 'var(--accent-contrast)', boxShadow: '0 8px 24px rgb(var(--accent-rgb) / .28)' }
           : { background: 'var(--accent-soft)', color: 'var(--faint)' }}
       >
-        {busy === 'log' ? 'Logging…' : 'Log'}
+        {busy === 'log' ? 'Logging…' : confirmSkip ? 'Log anyway' : 'Log'}
       </motion.button>
     </div>
   );

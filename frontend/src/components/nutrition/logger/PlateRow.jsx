@@ -28,7 +28,7 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
   const p = priceItem(item);
   const unit = unitOf(item);
   const weak = item.confidence === 'low' || item.confidence === 'unreliable';
-  const flag = item.assumed || weak;
+  const flag = item.assumed || weak || item.unmatchedTerms?.length > 0;
   // Any change to the amount is the person setting it.
   const onChange = (next) => change({ ...next, assumed: false });
   const amount = unit?.key === 'g' ? `${fmtQty(item.qty)} g` : `${unit?.label || 'serving'}${p.grams != null ? ` · ${Math.round(p.grams)} g` : ''}`;
@@ -55,6 +55,13 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
             {flag && <span className="shrink-0 w-1.5 h-1.5 rounded-full" style={{ background: 'var(--warn)' }} aria-label="Worth a check" />}
           </span>
           <span className="block font-grotesk text-[11.5px] truncate tabular-nums" style={{ color: 'var(--mute)' }}>{amount}</span>
+          {/* Words from the description this match does not cover -- the
+              person is told, not left to assume the number includes them. */}
+          {item.unmatchedTerms?.length > 0 && (
+            <span className="block font-grotesk text-[11px] leading-snug mt-0.5" style={{ color: 'var(--warn)' }} role="note">
+              “{item.unmatchedTerms.join('”, “')}” not reflected{onAskAI ? ' — open to estimate with AI' : ''}
+            </span>
+          )}
         </button>
 
         <div className="flex items-center shrink-0 rounded-xl" style={{ background: 'var(--accent-soft)' }}>

@@ -131,7 +131,16 @@ export const schemas = {
     // logged without one, found during a live end-to-end verification
     // pass).
     quantity: z.number().finite().positive().max(100000).optional(),
-    unit: z.string().max(30).optional()
+    unit: z.string().max(30).optional(),
+    // Same provenance / idempotency fields as mealLogBatch (all optional).
+    source_id: z.string().trim().min(1).max(80).optional(),
+    staple_key: z.string().trim().min(1).max(60).optional(),
+    grams: z.number().finite().positive().max(20000).optional(),
+    nutrition_source: z.enum(['ai_estimate', 'user_provided', 'previous_log']).optional(),
+    fiber: z.number().finite().min(0).max(500).optional(),
+    sugar: z.number().finite().min(0).max(1000).optional(),
+    sodium: z.number().finite().min(0).max(50000).optional(),
+    client_request_id: z.string().trim().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   }),
   // ---- the plate logger: describe -> adjust -> log, one meal at a time ----
   plateDescribe: z.object({ text: z.string().trim().min(1).max(300) }),
@@ -142,6 +151,14 @@ export const schemas = {
   // A whole plate logged as one meal. Every item carries its own quantity
   // and unit: a row written without them cannot be edited honestly later
   // (PUT /me/meal-logs/:id scales from that baseline).
+  // POST /tracking/clients/:id/supplements had no validation at all: any
+  // JSON value reached the INSERT (an object became "[object Object]" on
+  // SQLite and an error on Postgres), with no length bound.
+  supplementCreate: z.object({
+    name: z.string().trim().min(1).max(80).optional(),
+    dose: z.string().trim().max(60).nullable().optional(),
+    schedule_time: z.string().trim().max(30).nullable().optional(),
+  }),
   mealLogBatch: z.object({
     slot: z.string().trim().min(1).max(30),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -159,7 +176,29 @@ export const schemas = {
       // same two fields the single-item log route already records.
       ai_provider: z.string().trim().max(40).optional(),
       ai_model: z.string().trim().max(80).optional(),
+      // --- provenance + server pricing (all optional; older clients that
+      // send none of these keep working exactly as before) ---
+      // The database row this item was priced from, and the grams. With
+      // both, the SERVER re-prices the item and stores its own numbers
+      // (services/nutrition/provenance.js).
+      source_id: z.string().trim().min(1).max(80).optional(),
+      staple_key: z.string().trim().min(1).max(60).optional(),
+      grams: z.number().finite().positive().max(20000).optional(),
+      oil: z.enum(['less', 'more']).optional(),
+      // A HINT that can only lower trust (ai_estimate / user_provided /
+      // previous_log). "verified" is never accepted from a client.
+      nutrition_source: z.enum(['ai_estimate', 'user_provided', 'previous_log']).optional(),
+      fiber: z.number().finite().min(0).max(500).optional(),
+      sugar: z.number().finite().min(0).max(1000).optional(),
+      sodium: z.number().finite().min(0).max(50000).optional(),
     })).min(1).max(30),
+    // Idempotency key: generated once per plate by the client and REUSED on
+    // retry, so a retried request returns the first result instead of
+    // logging the meal twice.
+    client_request_id: z.string().trim().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    // Parts of the description the person chose to leave out after being
+    // told they were not found. Recorded, so a gap is a decision on file.
+    acknowledged_unresolved: z.array(z.string().trim().min(1).max(150)).max(20).optional(),
   }),
   mealRepeat: z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
