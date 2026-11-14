@@ -373,6 +373,11 @@ const MIGRATIONS = [
   // limits is held for a founder instead of activated; this is the lock
   // that keeps any later callback from activating it (couponEngine.js).
   ['barbell_plan_orders', 'review_reason', `review_reason TEXT`],
+  // Supersets: neighbouring exercises that share a value are done back to
+  // back. On a session's exercises and on a member's saved workouts, so a
+  // superset built once survives being repeated every week.
+  ['workout_exercises', 'superset_group', `superset_group TEXT`],
+  ['client_workout_exercises', 'superset_group', `superset_group TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

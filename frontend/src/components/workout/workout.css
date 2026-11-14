@@ -249,28 +249,89 @@
 }
 .wk-exc.is-open { border-color: rgb(var(--accent-rgb) / .35); box-shadow: var(--card-shadow); }
 .wk-exc.is-done { border-color: rgb(var(--good-rgb) / .45); background-color: rgb(var(--good-rgb) / .05); }
-.wk-exc__head { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; }
-.wk-exc__toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; min-height: 44px; }
-.wk-exc__ring { position: relative; display: grid; place-items: center; flex: none; }
-.wk-exc__tick { position: absolute; color: var(--good); }
-.wk-exc__titles { min-width: 0; }
+.wk-exc__head { display: flex; align-items: center; gap: 6px; padding: 8px 4px 8px 8px; }
+.wk-exc__toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; min-height: 48px; padding-left: 4px; border-radius: 12px; }
+.wk-exc__toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-exc__ring { position: relative; display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; }
+.wk-exc__ring > * { grid-area: 1 / 1; }
+.wk-exc__tick { color: var(--good); }
+.wk-exc__minus { color: var(--mute); transition: color var(--dur-base) ease; }
+.wk-exc__remove { transition: transform var(--dur-fast) ease, background-color var(--dur-base) ease; }
+.wk-exc__remove:hover { background: rgb(var(--bad-rgb) / .07); }
+.wk-exc__remove:hover .wk-exc__minus, .wk-exc__remove:focus-visible .wk-exc__minus { color: var(--bad); }
+.wk-exc__remove:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-exc__remove:active { transform: scale(.92); }
+.wk-exc__titles { flex: 1; min-width: 0; }
 .wk-exc__name { display: block; font-size: 15px; font-weight: 650; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wk-exc__meta { display: block; margin-top: 2px; font-size: 12px; color: var(--mute); }
-
-.wk-menu { position: relative; }
-.wk-menu__pop {
-  position: absolute;
-  right: 0; top: calc(100% + 6px);
-  z-index: 5;
-  min-width: 190px;
-  padding: 6px;
-  border-radius: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .45);
+.wk-exc__tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--accent);
+  background: var(--accent-soft);
 }
-.wk-menu__pop button { width: 100%; padding: 10px 12px; border-radius: 10px; text-align: left; font-size: 13.5px; color: var(--bad); }
-.wk-menu__pop button:hover { background: rgb(var(--bad-rgb) / .08); }
+.wk-exc__chev { flex: none; color: var(--faint); transition: transform var(--dur-base) ease; }
+.wk-exc.is-open .wk-exc__chev { transform: rotate(180deg); }
+
+/* The three-line handle. touch-action: none is what lets a thumb drag it
+   instead of scrolling the page (useDragSort.js). */
+.wk-grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px; height: 46px;
+  border-radius: 12px;
+  color: var(--faint);
+  touch-action: none;
+  cursor: grab;
+  transition: color var(--dur-base) ease, background-color var(--dur-base) ease;
+}
+.wk-grip:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .05); }
+.wk-grip:focus-visible { outline: none; color: var(--ink); box-shadow: var(--focus-ring); }
+.wk-dragging, .wk-dragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+
+/* While a card is dragged the others slide out of its way. */
+.wk-exlist { display: grid; }
+.wk-exlist.is-sorting .wk-exc,
+.wk-exlist.is-sorting .wk-bex { transition: transform .2s cubic-bezier(.2, .8, .3, 1); }
+.wk-exlist .is-dragging { transition: box-shadow .15s ease !important; box-shadow: 0 22px 44px -18px rgba(0, 0, 0, .5); border-color: rgb(var(--accent-rgb) / .55); }
+
+/* Superset: a rail down the left of every card in it, and the link
+   between two cards turning solid. */
+.wk-exc.is-ss, .wk-bex.is-ss { box-shadow: inset 3px 0 0 var(--accent); }
+.wk-exc.is-ss.is-open { box-shadow: inset 3px 0 0 var(--accent), var(--card-shadow); }
+.wk-exc.is-ss.is-done { box-shadow: inset 3px 0 0 var(--good); }
+.wk-link { position: relative; display: flex; align-items: center; justify-content: center; height: 38px; }
+.wk-link::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  border-left: 1.5px dashed var(--line);
+}
+.wk-link.is-on::before { border-left: 2px solid var(--accent); }
+.wk-link__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px dashed var(--line);
+  background: var(--bg);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--faint);
+  transition: color var(--dur-base) ease, border-color var(--dur-base) ease, background-color var(--dur-base) ease;
+}
+.wk-link__btn:hover { color: var(--ink); border-color: rgb(var(--accent-rgb) / .45); }
+.wk-link__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-link.is-on .wk-link__btn { color: var(--accent); border: 1px solid rgb(var(--accent-rgb) / .45); background: var(--accent-soft); }
 
 .wk-sets { display: grid; gap: 4px; padding: 0 12px 12px; }
 .wk-hint {
@@ -306,6 +367,17 @@
 }
 .wk-setrow--head { padding: 0 0 2px; font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
 .wk-setrow__n { font-size: 13px; font-weight: 600; color: var(--mute); font-variant-numeric: tabular-nums; text-align: center; }
+.wk-setrow__n.is-drop {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 24px; height: 24px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 .input.wk-setrow__in { min-height: 46px; padding: 0 12px; font-size: 16px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 .wk-setrow.is-done .input.wk-setrow__in { color: var(--mute); background-color: rgb(var(--good-rgb) / .06); border-color: rgb(var(--good-rgb) / .3); }
 .wk-check {
@@ -339,6 +411,7 @@
 }
 .wk-ghost:hover:not(:disabled) { border-color: rgb(var(--accent-rgb) / .45); color: var(--ink); }
 .wk-ghost:disabled { opacity: .4; }
+.wk-ghost--icon { flex: none; width: 44px; }
 .wk-add { width: 100%; min-height: 50px; }
 
 .wk-endbar {
@@ -402,11 +475,185 @@
 .wk-pick__name { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
 .wk-pick__meta { display: block; font-size: 12px; color: var(--mute); }
 
+/* ── builder & saved workouts ──────────────────────────────────────── */
+.wk-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.wk-tip { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--mute); }
+.wk-tip svg { flex: none; margin-top: 2px; color: var(--faint); }
+.wk-tip b { color: var(--ink); }
+
+.wk-search { position: relative; display: block; }
+.wk-search svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+.wk-search .input { padding-left: 38px; }
+
+.wk-fchips { display: flex; gap: 6px; overflow-x: auto; margin: 0 -2px; padding: 0 2px 2px; }
+.wk-fchip {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mute);
+  transition: color var(--dur-base) ease, border-color var(--dur-base) ease, background-color var(--dur-base) ease;
+}
+.wk-fchip:hover { color: var(--ink); }
+.wk-fchip[aria-pressed="true"] { color: var(--bg); background: var(--ink); border-color: var(--ink); }
+.wk-iconbtn--add { color: var(--accent); border-color: rgb(var(--accent-rgb) / .45); background: var(--accent-soft); }
+.wk-iconbtn:disabled { opacity: .7; }
+
+.wk-added {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px 8px 8px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  border: 1px solid rgb(var(--accent-rgb) / .35);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wk-added__n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-width: 28px; height: 28px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-size: 13px;
+  font-weight: 800;
+}
+.wk-added__go { flex: none; font-size: 12.5px; font-weight: 700; color: var(--accent); }
+
+/* One exercise in the builder: remove, name + three fields, handle. */
+.wk-bex {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 10px 8px;
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.wk-bex__remove {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  color: var(--mute);
+  transition: color var(--dur-base) ease, border-color var(--dur-base) ease, background-color var(--dur-base) ease;
+}
+.wk-bex__remove:hover { color: var(--bad); border-color: rgb(var(--bad-rgb) / .45); background: rgb(var(--bad-rgb) / .06); }
+.wk-bex__remove:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-bex__body { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.wk-bex__name { font-size: 14px; font-weight: 650; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-bex__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.wk-bex__f { display: grid; gap: 2px; }
+.wk-bex__f > span { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.wk-bex__f .input { min-height: 40px; padding: 0 8px; font-size: 16px; font-weight: 600; text-align: center; }
+
+/* "When is it for?" -- three radio cards; the chosen one opens its options. */
+.wk-when { border-radius: 16px; border: 1.5px solid var(--line); transition: border-color var(--dur-base) ease, background-color var(--dur-base) ease; }
+.wk-when.is-on { border-color: var(--ink); background: rgb(var(--tint-rgb) / .03); }
+.wk-when__pick { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 14px 10px 10px; text-align: left; border-radius: 15px; }
+.wk-when__pick:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-when__icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.wk-when__title { display: block; font-size: 15px; font-weight: 700; color: var(--ink); }
+.wk-when__sub { display: block; margin-top: 1px; font-size: 12.5px; color: var(--mute); }
+.wk-when__dot { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); }
+.wk-when.is-on .wk-when__dot { border: 6px solid var(--ink); }
+.wk-when__more { padding: 0 12px 12px; }
+.wk-check-line { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 13.5px; color: var(--ink); }
+.wk-check-line input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* Weekday chips. */
+.wk-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.wk-dayc {
+  position: relative;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mute);
+  transition: color var(--dur-base) ease, background-color var(--dur-base) ease, border-color var(--dur-base) ease;
+}
+.wk-dayc:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--ink); border-color: rgb(var(--accent-rgb) / .45); }
+.wk-dayc[aria-pressed="true"] { color: var(--accent-contrast, #fff); background: var(--accent); border-color: var(--accent); }
+.wk-dayc.is-today::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 4px;
+  width: 4px; height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wk-dayc:disabled { opacity: .35; border-style: dashed; }
+.wk-dayc.is-blocked[aria-pressed="true"] { color: var(--faint); background: transparent; border-style: dashed; text-decoration: line-through; }
+.wk-dayc:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-dayc__taken { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.wk-days--compact { gap: 4px; }
+.wk-days--compact .wk-dayc { min-height: 34px; border-radius: 10px; font-size: 12px; }
+
+/* A saved workout. */
+.wk-saved {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
+}
+.wk-saved__top { display: flex; align-items: flex-start; gap: 12px; }
+.wk-saved__name { margin: 0; font-size: 16px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-saved__meta { margin-top: 2px; font-size: 12.5px; color: var(--mute); }
+.wk-saved__list { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--faint); }
+.wk-saved__days { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.wk-saved__label { font-size: 12px; font-weight: 600; color: var(--mute); }
+.wk-saved__actions { display: flex; flex-wrap: wrap; gap: 4px; margin: -2px -6px -6px; }
+.wk-textbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.wk-textbtn:hover { color: var(--ink); background: rgb(var(--tint-rgb) / .05); }
+.wk-textbtn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-textbtn--bad { margin-left: auto; }
+.wk-textbtn--bad:hover { color: var(--bad); background: rgb(var(--bad-rgb) / .07); }
+
+.wk-empty { display: grid; justify-items: center; gap: 6px; padding: 26px 12px; text-align: center; }
+.wk-empty__icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 4px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.wk-empty__title { font-size: 15px; font-weight: 700; color: var(--ink); }
+.wk-empty__body { max-width: 300px; margin: 0; font-size: 13px; line-height: 1.5; color: var(--mute); }
+
+.wk-hero__link { display: block; margin: 10px auto 0; min-height: 36px; padding: 0 10px; font-size: 13px; font-weight: 600; color: var(--mute); }
+.wk-hero__link:hover { color: var(--ink); }
+
+/* Today's plan: a superset reads as one block. */
+.wk-ex.is-ss { box-shadow: inset 3px 0 0 var(--accent); }
+.wk-ss-tag { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--accent); }
+
 @media (min-width: 768px) {
   .wk-tools { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wk-ring__fill, .wk-check, .wk-tool, .wk-iconbtn { transition: none; }
+  .wk-ring__fill, .wk-check, .wk-tool, .wk-iconbtn, .wk-exc__chev, .wk-link__btn { transition: none; }
+  .wk-exlist.is-sorting .wk-exc, .wk-exlist.is-sorting .wk-bex { transition: none; }
   .wk-check[aria-pressed="true"] { animation: none; }
 }

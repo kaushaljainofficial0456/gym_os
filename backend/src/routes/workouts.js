@@ -4,7 +4,7 @@ import { requireAuth, requireRole, orgScope, resolveClient } from '../auth.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
-import { dayKey } from '../utils/time.js';
+import { dayKey, getOrgTz } from '../utils/time.js';
 import { suggestNextTarget } from '../services/progressiveOverload.js';
 import { evaluatePRs } from '../services/personalRecords.js';
 import { track, trackOnce } from '../services/events.js';
@@ -271,7 +271,11 @@ export default function workoutRoutes(db) {
     const client = await resolveClient(db, req, res, req.params.id);
     if (!client) return;
     const wId = id('wko');
-    const scheduled = req.body.scheduled_date || dayKey();
+    // The gym's day, not UTC's: assigned between midnight and 05:30 in
+    // India, a bare dayKey() dated it yesterday -- and a workout dated
+    // yesterday is never today's session (ensureTodayWorkout no longer
+    // falls back to other days).
+    const scheduled = req.body.scheduled_date || dayKey(new Date(), req.tz || await getOrgTz(db, client.org_id));
     await db.run(
       `INSERT INTO workouts (id, org_id, client_id, trainer_id, name, day_label, scheduled_date, status, created_at, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?)`,

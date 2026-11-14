@@ -103,15 +103,24 @@ export const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86
 export const todayKey = (tz = DEFAULT_TZ) => dayKey(new Date(), tz);
 export const lastNDays = (n, tz = DEFAULT_TZ) => Array.from({ length: n }, (_, i) => dayKey(daysAgo(n - 1 - i), tz));
 
-// 0=Sun...6=Sat, using the given timezone
-export function weekDay(dateKeyStr, tz = DEFAULT_TZ) {
-  return new Date(dateKeyStr + 'T00:00:00').toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' }).toUpperCase() === 'SUN' ? 0 :
-    new Date(dateKeyStr + 'T00:00:00').toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' }).toUpperCase() === 'SAT' ? 6 :
-    new Date(dateKeyStr + 'T00:00:00').toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' }).toUpperCase() === 'FRI' ? 5 :
-    new Date(dateKeyStr + 'T00:00:00').toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' }).toUpperCase() === 'THU' ? 4 :
-    new Date(dateKeyStr + 'T00:00:00').toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' }).toUpperCase() === 'WED' ? 3 :
-    new Date(dateKeyStr + 'T00:00:00').toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' }).toUpperCase() === 'TUE' ? 2 : 1;
+/**
+ * Day of the week of a YYYY-MM-DD gym day: 0=Sun...6=Sat.
+ *
+ * A calendar date's weekday does not depend on any timezone, so none is
+ * used. This used to parse the key as the SERVER's local midnight and
+ * then format it in `tz` -- on a UTC server that is fine for India, but
+ * for any gym west of UTC midnight lands on the previous day and every
+ * program day came out one day early. The second argument is ignored and
+ * kept only so existing callers read the same.
+ */
+export function weekDay(dateKeyStr) {
+  const [y, m, d] = String(dateKeyStr).slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
+
+/** The member's own weekly schedule counts Monday as 0 (see
+ *  client_workout_schedule in schema.sql); this turns a gym day into it. */
+export const plannerDay = (dateKeyStr) => (weekDay(dateKeyStr) + 6) % 7;
 
 export const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));

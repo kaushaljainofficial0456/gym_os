@@ -2,16 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch, exerciseLabel } from '../../utils.js';
-import { ErrorState, CheckIcon, Sheet, Spinner, useConfirm } from '../../components/UI.jsx';
+import { ErrorState, CheckIcon, Sheet, useConfirm } from '../../components/UI.jsx';
 import { SessionRow } from './SessionHistory.jsx';
 import ExerciseAnim from '../../components/exerciseSVG.jsx';
 import { Pressable } from '../../design/index.js';
 import {
-  Activity, Check, ChevronLeft, ChevronRight, ClipboardList, HeartPulse, History, Info, ListPlus, Play, Plus, Trophy, X,
+  Activity, Bookmark, Check, ChevronLeft, HeartPulse, History, Info, ListPlus, Play, Plus, Trophy, X,
 } from 'lucide-react';
 import ShareWorkoutSheet from '../../components/workout/ShareWorkoutSheet.jsx';
 import { TodayHero, WeekStrip, ToolGrid, PlanList, SectionLink, planWeight } from '../../components/workout/TodayView.jsx';
-import { PlayerHeader, ExerciseCard } from '../../components/workout/SessionView.jsx';
+import { PlayerHeader, ExerciseCard, SortableExercises } from '../../components/workout/SessionView.jsx';
+import WorkoutBuilder, { dayList, plannerToday } from '../../components/workout/WorkoutBuilder.jsx';
+import SavedWorkouts from '../../components/workout/SavedWorkouts.jsx';
+import ExerciseSearchList from '../../components/workout/ExerciseSearchList.jsx';
+import { moveItem } from '../../components/workout/useDragSort.js';
+import {
+  groupMembers, groupsAfterMove, groupsFromExercises, insertDropSet, isLinked, normalizeGroups, sessionNote, toggleLink,
+} from '../../components/workout/supersets.js';
 import CardioLive, { CardioParamsForm } from '../../components/workout/CardioLive.jsx';
 import '../../components/workout/workout.css';
 import SessionRecap from '../../components/workout/SessionRecap.jsx';
@@ -24,7 +31,6 @@ import { useUnits } from '../../unitsContext.jsx';
 import {
   ACTIVITIES, activityName, activityFields, metFor,
 } from '../../cardioActivities.js';
-import WeightInput from '../../components/WeightInput.jsx';
 
 
 /**
@@ -71,6 +77,21 @@ export function mergeDraftSets(fresh, draft) {
   }));
 }
 
+/**
+ * The session's exercises as the user left them: removed ones out, the
+ * rest in the order they were dragged into. An exercise the saved order
+ * does not know (added after it was saved) keeps its place at the end.
+ */
+export function sessionLayout(exercises, draft) {
+  const removed = new Set(Array.isArray(draft?.__removed) ? draft.__removed : []);
+  const pos = new Map((Array.isArray(draft?.__order) ? draft.__order : []).map((id, i) => [id, i]));
+  return (exercises || [])
+    .filter((e) => !removed.has(e.id))
+    .map((e, i) => ({ e, k: pos.has(e.id) ? pos.get(e.id) : 1e6 + i }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.e);
+}
+
 function buildSets(list) {
   return Object.fromEntries((list || []).map((e) => [
     e.id,
@@ -82,122 +103,6 @@ function buildSets(list) {
   ]));
 }
 
-// Progressive-discovery filters for the exercise picker. Region maps to the
-// backend muscles.region model; equipment is a compact subset of the library's
-// equipment vocabulary (functional kit like TRX/rings stays searchable by name).
-
-const PICKER_REGIONS = [['', 'All'], ['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['arms', 'Arms'], ['legs', 'Legs'], ['core', 'Core']];
-const PICKER_EQUIP = [['', 'All'], ['barbell', 'Barbell'], ['dumbbell', 'Dumbbell'], ['machine', 'Machine'], ['cable', 'Cable'], ['bodyweight', 'Bodyweight'], ['kettlebell', 'Kettlebell'], ['bands', 'Bands']];
-
-function ChipRow({ options, value, onChange, label }) {
-  return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5" aria-label={label}>
-      {options.map(([v, text]) => (
-        <button key={v} type="button" onClick={() => onChange(v === value ? '' : v)}
-          className={`chip shrink-0 !text-[10px] !px-2 !py-0.5 border transition-colors ${value === v ? 'border-gold/50 text-gold bg-gold/10' : 'border-line text-mute hover:text-ink'}`}>
-          {text}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
- * The one exercise picker — search + region/equipment chips + result list.
- * Used by BOTH the "Build my workout" modal and the personal planner form so
- * they share the exact same alias-aware search (GET /workouts/exercises).
- * No text/filters => shows `fallback` (the cached full library).
- *
- * `onQuickAdd` (optional): when passed, each row splits into two controls
- * -- tapping the name still opens the detail view via `onPick` (demo,
- * muscle/equipment, form cues), but a separate "+" icon adds the exercise
- * to the session immediately with sensible defaults (3×10, bodyweight --
- * all editable afterward in the session list), without leaving this
- * search screen. Matches the Add Cardio list's own quick-add pattern a
- * few hundred lines down in this same file. Omitted entirely, this
- * reverts to the original single-button row (the personal planner form's
- * call site already adds on tap with no detail step, so it never needs
- * a second control here).
- */
-function ExerciseSearchList({ fallback, addedIds, onPick, onQuickAdd, dense }) {
-  const [q, setQ] = useState('');
-  const [region, setRegion] = useState('');
-  const [equip, setEquip] = useState('');
-  const [results, setResults] = useState(null); // null => show fallback
-  const [loading, setLoading] = useState(false);
-  const cache = useRef(new Map());
-
-  useEffect(() => {
-    const active = q.trim() || region || equip;
-    if (!active) { setResults(null); setLoading(false); return undefined; }
-    const key = `${q.trim().toLowerCase()}|${region}|${equip}`;
-    if (cache.current.has(key)) { setResults(cache.current.get(key)); return undefined; }
-    setLoading(true);
-    const h = setTimeout(async () => {
-      try {
-        const p = new URLSearchParams();
-        if (q.trim()) p.set('q', q.trim());
-        if (region) p.set('region', region);
-        if (equip) p.set('equipment', equip);
-        const r = await api(`/workouts/exercises?${p.toString()}`);
-        const list = r.exercises || [];
-        cache.current.set(key, list);
-        setResults(list);
-      } catch { setResults([]); } finally { setLoading(false); }
-    }, 250);
-    return () => clearTimeout(h);
-  }, [q, region, equip]);
-
-  const list = results ?? (fallback || []);
-  return (
-    <div className="space-y-2">
-      <input className="input" placeholder="Search exercises… (e.g. DB curl, incline)" value={q} onChange={(e) => setQ(e.target.value)} />
-      <ChipRow options={PICKER_REGIONS} value={region} onChange={setRegion} label="Filter by muscle group" />
-      <ChipRow options={PICKER_EQUIP} value={equip} onChange={setEquip} label="Filter by equipment" />
-      <div className={`space-y-1.5 ${dense ? 'max-h-40 overflow-y-auto pr-1' : ''}`}>
-        {loading && <div className="text-[10px] text-mute px-1 py-1">Searching…</div>}
-        {!loading && !list.length && <div className="text-[11px] text-mute px-1 py-3 text-center">No exercises match — try fewer filters.</div>}
-        {list.slice(0, 40).map((x) => {
-          const added = addedIds?.has(x.id);
-          if (!onQuickAdd) {
-            return (
-              <button key={x.id} type="button" disabled={added} onClick={() => onPick(x)}
-                className={`w-full flex items-center justify-between gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 text-left transition-all active:scale-[.98] ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
-                  <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-                </span>
-                {added && <span className="text-[10px] text-good shrink-0"><CheckIcon /></span>}
-              </button>
-            );
-          }
-          return (
-            <div key={x.id}
-              className={`flex items-center gap-2 rounded-xl border bg-tint/[.02] px-3 py-2.5 transition-all ${added ? 'border-line/40 opacity-50' : 'border-line hover:border-gold/30'}`}>
-              <button type="button" className="flex-1 min-w-0 text-left" onClick={() => onPick(x)}>
-                <span className="block text-[13px] font-grotesk font-semibold truncate">{exerciseLabel(x.name)}</span>
-                <span className="text-[10px] text-mute">{x.primary_muscle || ''}{x.equipment ? ` · ${x.equipment}` : ''}</span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); if (!added) onQuickAdd(x); }}
-                className="shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-all active:scale-90"
-                style={added
-                  ? { color: 'rgb(var(--good-rgb))' }
-                  : { color: 'var(--accent)', border: '1px solid rgb(var(--accent-rgb) / .4)', background: 'rgb(var(--accent-rgb) / .10)' }}
-                aria-label={added ? `${exerciseLabel(x.name)} added` : `Add ${exerciseLabel(x.name)}`}
-                disabled={added}>
-                {added ? <CheckIcon /> : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                )}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 /* ── localStorage active-session marker ──────────────────────────────
 
    The server's `started_at` can survive after a workout is completed or
@@ -328,27 +233,20 @@ export default function Workout() {
   const perms = useFetch(() => api('/me/permissions'));
   const [exState, setExState] = useState(null);
   const [toast, setToast] = useState('');
-  // build-my-workout — one-shot "save today's session" modal (uses /me/workouts)
-  const [builderOpen, setBuilderOpen] = useState(false);
-  const [builderName, setBuilderName] = useState('');
-  const [builderExs, setBuilderExs] = useState([]); // {exercise_id, name, muscle, sets, reps, weight}
+  /* The builder: { mode: 'new' | 'edit', initial, defaultWhen } while
+     open, null when shut. It builds for today, for chosen weekdays, or
+     just saves (components/workout/WorkoutBuilder.jsx). */
+  const [builder, setBuilder] = useState(null);
   const [libList, setLibList] = useState(null);
-  const [savingBuilder, setSavingBuilder] = useState(false);
-  const [selectedLibEx, setSelectedLibEx] = useState(null); // exercise selected in Build Today detail view
-  const [justAdded, setJustAdded] = useState(null); // exercise ID just added — triggers confirmation animation
   // in-session add-exercise picker (only visible during execute mode)
   const [addExOpen, setAddExOpen] = useState(false);
-  const [addExSearch, setAddExSearch] = useState('');
   const [addExSelected, setAddExSelected] = useState(null); // library exercise selected in detail view
   const [addExSaving, setAddExSaving] = useState(false);
-  // personal workout planner — reusable workouts + weekly schedule (uses /me/planner)
-  const [plannerOpen, setPlannerOpen] = useState(false);
+  // Saved workouts -- reusable workouts and the days they repeat on (/me/planner).
+  const [savedOpen, setSavedOpen] = useState(false);
   const [logPastOpen, setLogPastOpen] = useState(false);
-  const [planner, setPlanner] = useState(null); // { workouts, schedule }
-  const [planForm, setPlanForm] = useState(null); // { id: null|workoutId, name, notes, exercises } when creating/editing
-  const [savingPlan, setSavingPlan] = useState(false);
-  // Which weekday the assignment picker is open for (0=Sun..6=Sat), or null.
-  const [assignDow, setAssignDow] = useState(null);
+  const [planner, setPlanner] = useState(null); // { workouts, schedule } -- schedule days are 0=Mon..6=Sun
+  const [busyPlan, setBusyPlan] = useState(null); // id of the saved workout being made today's
   const [mode, setMode] = useState('browse'); // browse | execute | summary
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -364,6 +262,13 @@ export default function Workout() {
      after the fact. */
   const [exSets, setExSets] = useState({});
   const [openEx, setOpenEx] = useState(null);   // accordion: one exercise open
+  /* Supersets in the running session: { exerciseId: key }, neighbours
+     sharing a key (components/workout/supersets.js). Seeded from the
+     plan, changed with the link between two cards. */
+  const [groups, setGroups] = useState({});
+  // Exercises taken out of this session, so a refresh does not bring them back.
+  const [removedIds, setRemovedIds] = useState([]);
+  const dropHinted = useRef(false);
   const [infoEx, setInfoEx] = useState(null);   // main-page info panel
   const [burn, setBurn] = useState(null);   // skos-cal-v1 estimate + interval
   const [burnInput, setBurnInput] = useState(null); // { duration_minutes, exercises } captured at finish, sent once intensity is answered
@@ -442,7 +347,9 @@ export default function Workout() {
      by sending the whole checklist rather than a delta.
 
      Also persists accumulatedPausedMs so a page-refresh during a paused
-     session can restore the correct active-duration baseline. */
+     session can restore the correct active-duration baseline, and the
+     session's own layout -- the order it was dragged into, what was
+     removed, the supersets -- which is just as much the user's work. */
   useEffect(() => {
     if (mode !== 'execute' || !workout?.id) return undefined;
     const h = setTimeout(() => {
@@ -451,12 +358,18 @@ export default function Workout() {
       api(`/workouts/${workout.id}/progress`, {
         method: 'PUT',
         body: JSON.stringify({
-          progress: { ...exSets, __paused_ms: accumulatedPausedMs },
+          progress: {
+            ...exSets,
+            __paused_ms: accumulatedPausedMs,
+            __order: (exState || exercises).map((e) => e.id),
+            __removed: removedIds,
+            __groups: groups,
+          },
         }),
       }).catch(() => {});
     }, 800);
     return () => clearTimeout(h);
-  }, [exSets, accumulatedPausedMs, mode, workout?.id]);
+  }, [exSets, accumulatedPausedMs, mode, workout?.id, exState, removedIds, groups]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // session elapsed timer — ticks every second during execute mode
   // Paused time is excluded: the timer freezes visually and the
@@ -533,15 +446,21 @@ export default function Workout() {
     // `restored` is a flat map: exercise IDs -> set arrays, plus the
     // sentinel key __paused_ms that we stashed during autosave.
     const restoredPausedMs = (restored?.__paused_ms || 0);
-    const fresh = buildSets(state);
+    const list = sessionLayout(exercises, restored);
+    const fresh = buildSets(list);
     // Merge rather than trust the draft wholesale: the plan may have been
     // edited since. The per-set values come from the draft, and the COUNT
     // is whichever is larger -- see mergeDraftSets for why taking the
     // plan's count alone deleted sets the user had added.
     const merged = mergeDraftSets(fresh, restored);
+    setExState(list);
+    setRemovedIds(Array.isArray(restored?.__removed) ? restored.__removed.filter((x) => typeof x === 'string') : []);
+    setGroups(restored?.__groups && typeof restored.__groups === 'object'
+      ? normalizeGroups(list.map((e) => e.id), restored.__groups)
+      : groupsFromExercises(list));
     setExSets(merged);
-    const firstUnfinished = state.find((e) => (merged[e.id] || []).some((r) => !r.done));
-    setOpenEx((firstUnfinished || state[0])?.id ?? null);
+    const firstUnfinished = list.find((e) => (merged[e.id] || []).some((r) => !r.done));
+    setOpenEx((firstUnfinished || list[0])?.id ?? null);
     // Restore accumulated paused time from the persisted draft
     setAccumulatedPausedMs(restoredPausedMs);
     setElapsed(0);
@@ -558,85 +477,101 @@ export default function Workout() {
     catch (e) { setToast(e.message || 'Could not load your workouts'); }
   };
 
-  const openPlanner = async () => {
-    setPlannerOpen(true);
-    if (!planner) await loadPlanner();
+  const openSaved = async () => {
+    setSavedOpen(true);
+    await loadPlanner();
   };
 
-  const savePlan = async () => {
-    if (!planForm?.name?.trim() || !planForm?.exercises?.length) return;
-    setSavingPlan(true);
-    try {
-      const body = { name: planForm.name, notes: planForm.notes, exercises: planForm.exercises.map((e) => ({
-        exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec
-      })) };
-      if (planForm.id) await api(`/me/planner/workouts/${planForm.id}`, { method: 'PUT', body: JSON.stringify(body) });
-      else await api('/me/planner/workouts', { method: 'POST', body: JSON.stringify(body) });
-      setPlanForm(null);
-      setToast(planForm.id ? 'Workout updated' : 'Workout saved to My Workouts');
-      await loadPlanner();
-    } catch (e) { setToast(e.message || 'Could not save workout'); }
-    setSavingPlan(false);
+  const reloadAll = () => {
+    // silent: a bare reload() swaps this page for its skeleton while it
+    // refetches, unmounting anything open (see utils.js's useFetch).
+    today.reload({ silent: true }); week.reload({ silent: true }); hist.reload({ silent: true });
   };
 
   const duplicatePlan = async (w) => {
     try {
       await api(`/me/planner/workouts/${w.id}/duplicate`, { method: 'POST' });
-      setToast('Workout duplicated');
+      setToast(`Copied ${w.name}`);
       await loadPlanner();
     } catch (e) { setToast(e.message); }
   };
 
   const deletePlan = async (w) => {
-    if (!(await confirm({ title: `Delete "${w.name}"?`, confirmLabel: 'Delete workout' }))) return;
+    if (!(await confirm({ title: `Delete "${w.name}"?`, body: 'Its repeat days are cleared too. Sessions you already did stay in your history.', confirmLabel: 'Delete workout' }))) return;
     try {
       await api(`/me/planner/workouts/${w.id}`, { method: 'DELETE' });
       setToast('Workout deleted');
       await loadPlanner();
+      week.reload({ silent: true });
     } catch (e) { setToast(e.message); }
   };
 
-  /** Assigns an EXPLICIT workout (or null for a rest day) to a weekday.
-   *
-   *  It used to take whatever the caller had pre-computed as "the next
-   *  one", and the grid computed that as `workouts[0]` for any unassigned
-   *  day -- findIndex returned -1 on an empty slot and (-1 + 1) % len is
-   *  0. So a day could only ever become Rest or the FIRST saved workout:
-   *  with six saved, five of them could not be put on any day at all,
-   *  under a label that read "tap a day to assign". The caller now passes
-   *  the id it actually means. */
-  const setDayWorkout = async (dow, wid) => {
-    const sched = planner?.schedule || [];
-    const next = wid || null;
+  /** One day chip on a saved workout. A day holds one workout, so turning
+   *  a day on that another workout had moves it, and the toast says so. */
+  const setPlanDays = async (w, days, day, turnedOn) => {
+    const prior = (planner?.schedule || []).find((x) => x.day_of_week === day && x.workout_id !== w.id);
+    const priorName = prior && (planner?.workouts || []).find((x) => x.id === prior.workout_id)?.name;
+    // Optimistic: the chip flips under the thumb, the server confirms.
+    setPlanner((p) => p && {
+      ...p,
+      schedule: [
+        ...p.schedule.filter((x) => x.workout_id !== w.id && !days.includes(x.day_of_week)),
+        ...days.map((d) => ({ day_of_week: d, workout_id: w.id })),
+      ],
+    });
     try {
-      const map = {};
-      for (let d = 0; d <= 6; d++) {
-        const s = sched.find((x) => x.day_of_week === d);
-        map[d] = d === dow ? next : (s?.workout_id || null);
-      }
-      await api('/me/planner/schedule', { method: 'PUT', body: JSON.stringify({ schedule: map }) });
-      await loadPlanner();
-      setToast(next ? 'Assigned to your week' : 'Rest day');
-    } catch (e) { setToast(e.message || 'Could not update schedule'); }
+      const r = await api(`/me/planner/workouts/${w.id}/days`, { method: 'PUT', body: JSON.stringify({ days }) });
+      if (r?.schedule) setPlanner((p) => p && { ...p, schedule: r.schedule });
+      const LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      setToast(turnedOn
+        ? (priorName ? `${LONG[day]} moved from ${priorName} to ${w.name}` : `${w.name} every ${LONG[day]}`)
+        : `${w.name} is off ${LONG[day]}s`);
+      week.reload({ silent: true });
+      if (day === plannerToday()) today.reload({ silent: true });
+    } catch (e) {
+      setToast(e.message || 'Could not change the days');
+      loadPlanner();
+    }
   };
 
   const startPlanToday = async (w) => {
+    if (busyPlan) return;
+    setBusyPlan(w.id);
     try {
       await api('/me/workouts', { method: 'POST', body: JSON.stringify({
         name: w.name,
-        exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec }))
+        exercises: (w.exercises || []).map((e) => ({ exercise_id: e.exercise_id, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec, superset_group: e.superset_group || null })),
       }) });
-      setPlannerOpen(false);
-      setToast(`${w.name} is today's session`);
-      // silent: true -- same fix as Nutrition.jsx's own reload() calls
-      // (see utils.js's useFetch): a bare reload() flips `loading` back
-      // to true and this page's own `if (today.loading || ...) return
-      // <Spinner/>` (below) would swap the ENTIRE returned tree to just
-      // that spinner, unmounting everything under it -- including an
-      // in-progress execute-mode session with its own local set/rep
-      // state -- for the duration of the background refetch.
-      today.reload({ silent: true }); hist.reload({ silent: true });
-    } catch (e) { setToast(e.message || 'Could not schedule today'); }
+      setSavedOpen(false);
+      setToast(`${w.name} is today's workout`);
+      reloadAll();
+    } catch (e) { setToast(e.message || 'Could not make it today\u2019s workout'); }
+    setBusyPlan(null);
+  };
+
+  const openBuilder = (opts = {}) => {
+    if (!libList) loadLib();
+    if (!planner) loadPlanner();
+    setBuilder({ mode: 'new', initial: null, defaultWhen: 'today', ...opts });
+  };
+  const editPlan = (w, days) => {
+    if (!libList) loadLib();
+    setBuilder({ mode: 'edit', initial: { ...w, days }, defaultWhen: 'weekly' });
+  };
+  const loadLib = () => api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
+
+  /** After the builder saves: say plainly what happened and where. */
+  const builderSaved = ({ kind, name, days, res, keepCopy }) => {
+    setBuilder(null);
+    if (kind === 'edit') setToast(`${name} saved`);
+    else if (kind === 'today') setToast(keepCopy ? `${name} is today's workout, and saved` : `${name} is today's workout`);
+    else if (kind === 'weekly') {
+      setToast(res?.today_workout_id ? `${name}: today, and every ${dayList(days)}`
+        : res?.today_skipped === 'in_progress' ? `Saved for every ${dayList(days)}. Today's session already started, so it begins next time.`
+          : `${name} every ${dayList(days)}`);
+    } else setToast(`${name} saved. Find it in Saved workouts`);
+    reloadAll();
+    if (kind !== 'today' || keepCopy || planner) loadPlanner();
   };
 
   const locked = perms.data?.workout_mode === 'prescribed';
@@ -649,6 +584,10 @@ export default function Workout() {
     return js === 0 ? 0 : js; // training_days: Mon=1..Sat=6, Sun=0
   })();
   const weekRows = week.data?.week || [];
+  /* The coach's program days in the saved-workout numbering (0=Mon..6=Sun;
+     /me/week counts 1=Mon..0=Sun). A saved workout cannot take one: the
+     program wins on its days, so offering them would only mislead. */
+  const coachDays = new Set(weekRows.filter((d) => d.source === 'program').map((d) => (d.day_of_week + 6) % 7));
 
   /* Shaped like the screen it becomes rather than a centred spinner — this
      page is four stacked bands, so a spinner guarantees a hard layout jump
@@ -717,6 +656,8 @@ export default function Workout() {
     }
     // API succeeded — proceed with local timer/UI
     setExSets(buildSets(state));
+    setGroups(groupsFromExercises(state));
+    setRemovedIds([]);
     setOpenEx(state[0]?.id ?? null);
     setElapsed(0);
     const now = Date.now();
@@ -740,16 +681,28 @@ export default function Workout() {
   const toggleSet = (exId, i) => setExSets((prev) => {
     const rows = [...(prev[exId] || [])];
     if (!rows[i]) return prev;
-    rows[i] = { ...rows[i], done: !rows[i].done };
+    const ticking = !rows[i].done;
+    rows[i] = { ...rows[i], done: ticking };
     const next = { ...prev, [exId]: rows };
+    const unfinished = (id) => (next[id] || []).some((r) => !r.done);
+    /* In a superset the next thing to do is the PARTNER's set, not this
+       exercise's next one: open the next member that still has a set to
+       do, going round. Only when the whole superset is done does it move
+       on, like any finished exercise. */
+    const ids = state.map((e) => e.id);
+    const members = groupMembers(ids, groups, exId);
+    if (ticking && members.length > 1) {
+      const at = members.indexOf(exId);
+      for (let k = 1; k <= members.length; k += 1) {
+        const m = members[(at + k) % members.length];
+        if (unfinished(m)) { setOpenEx(m); return next; }
+      }
+    }
     // Auto-advance to the next unfinished exercise once this one is fully
     // ticked, so the next thing to do is already open rather than requiring
     // a tap on a screen the user is holding at arm's length.
     if (rows.every((r) => r.done)) {
-      const following = state.find((e) => {
-        const rs = next[e.id] || [];
-        return e.id !== exId && (rs.length === 0 || rs.some((r) => !r.done));
-      });
+      const following = state.find((e) => !members.includes(e.id) && ((next[e.id] || []).length === 0 || unfinished(e.id)));
       setOpenEx(following ? following.id : null);
     }
     return next;
@@ -757,7 +710,10 @@ export default function Workout() {
 
   // ---- remove exercise from active session ----
   const removeExercise = (exId) => {
-    setExState((prev) => (prev || state).filter((e) => e.id !== exId));
+    const list = state.filter((e) => e.id !== exId);
+    setExState(list);
+    setRemovedIds((r) => (r.includes(exId) ? r : [...r, exId]));
+    setGroups((g) => { const n = { ...g }; delete n[exId]; return normalizeGroups(list.map((e) => e.id), n); });
     setExSets((prev) => {
       const next = { ...prev };
       delete next[exId];
@@ -765,6 +721,33 @@ export default function Workout() {
     });
     // If the removed exercise was the open accordion, close it
     if (openEx === exId) setOpenEx(null);
+  };
+
+  // ---- reorder: the three-line handle, or the arrow keys on it ----
+  const moveExercise = (from, to) => {
+    const list = moveItem(state, from, to);
+    setExState(list);
+    setGroups((g) => groupsAfterMove(list.map((e) => e.id), g, to));
+  };
+
+  // ---- superset: the link between two cards ----
+  const toggleSuperset = (i) => {
+    const ids = state.map((e) => e.id);
+    const next = toggleLink(ids, groups, i);
+    setGroups(next);
+    if (isLinked(ids, next, i)) {
+      const names = groupMembers(ids, next, ids[i]).map((id) => exerciseLabel(state.find((e) => e.id === id)?.name || ''));
+      setToast(`Superset: ${names.join(', then ')}. Rest after the round.`);
+    }
+  };
+
+  // ---- drop set: a lighter set straight after the one just done ----
+  const addDropSet = (exId) => {
+    setExSets((prev) => ({ ...prev, [exId]: insertDropSet(prev[exId] || []) }));
+    if (!dropHinted.current) {
+      dropHinted.current = true;
+      setToast('Drop set added: same move, about 20% lighter, no rest');
+    }
   };
 
   // ---- add exercise during active session ----
@@ -799,7 +782,6 @@ export default function Workout() {
       // Close the picker
       setAddExOpen(false);
       setAddExSelected(null);
-      setAddExSearch('');
       setToast(`${newEx.name} added`);
     } catch (e) {
       setToast(e.message || 'Could not add exercise');
@@ -855,11 +837,19 @@ export default function Workout() {
          shared input box, so a session where the last set dropped from 60 kg
          to 50 kg was recorded as three sets at 60 -- inflating both volume
          and the burn estimate derived from it. */
+      const ids = state.map((e) => e.id);
       const logs = state.map((e) => {
         const rows = (exSets[e.id] || []).filter((r) => r.done);
         if (!rows.length) return null;
+        // How it was done, for history: its superset partners and drops.
+        const notes = sessionNote({
+          partners: groupMembers(ids, groups, e.id).filter((id) => id !== e.id)
+            .map((id) => exerciseLabel(state.find((x) => x.id === id)?.name || '')).filter(Boolean),
+          drops: rows.filter((r) => r.drop).length,
+        });
         return {
           exercise_id: e.id,
+          ...(notes ? { notes } : {}),
           sets: rows.map((r, i) => ({
             set_number: i + 1,
             actual_reps: Number(r.reps) || 0,
@@ -872,6 +862,8 @@ export default function Workout() {
         // should return to browse, not surface a validation error.
         setSubmitting(false);
         clearActiveSession();
+        // Back to the plan as it is, not the session's reordered, trimmed copy.
+        setExState(null); setGroups({}); setRemovedIds([]);
         setMode('browse');
         setToast('Session ended — no sets were logged');
         return;
@@ -982,6 +974,8 @@ export default function Workout() {
       setAccumulatedPausedMs(0);
       setElapsed(0);
       setExState(null);
+      setGroups({});
+      setRemovedIds([]);
 
     } catch (e) {
       clearActiveSession();
@@ -1184,21 +1178,14 @@ export default function Workout() {
   const totalCardioCals = calcAllCardioCalories(cardioItems, activeCardioItem, cardioElapsed - (activeCardioItem?.segments || []).reduce((s, seg) => s + seg.durationSec, 0), clientWeight);
 
   // ---- small view helpers (no hooks below the loading return) ----
-  const openBuilder = () => {
-    if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
-    setSelectedLibEx(null);
-    setBuilderOpen(true);
-  };
-  const closeBuilder = () => { setBuilderOpen(false); setSelectedLibEx(null); setJustAdded(null); };
   const openCardioPicker = () => { setCardioOpen(true); setCardioSearch(''); setCardioConfigItem(null); };
   const closeCardioPicker = () => { setCardioOpen(false); setCardioConfigItem(null); setCardioSearch(''); };
   const openAddExercise = () => {
     if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load exercises'));
     setAddExSelected(null);
-    setAddExSearch('');
     setAddExOpen(true);
   };
-  const closeAddExercise = () => { setAddExOpen(false); setAddExSelected(null); setAddExSearch(''); };
+  const closeAddExercise = () => { setAddExOpen(false); setAddExSelected(null); };
   const shareToday = () => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); };
   const askRemoveExercise = async (ex) => {
     if (await confirm({ title: `Remove ${exerciseLabel(ex.name)}?`, body: 'Sets you have ticked for it are not logged.', confirmLabel: 'Remove' })) removeExercise(ex.id);
@@ -1230,8 +1217,8 @@ export default function Workout() {
   })();
 
   const tools = [
-    canBuild && { key: 'planner', label: 'My workouts', icon: ClipboardList, onClick: openPlanner },
-    canBuild && { key: 'build', label: 'Build today', icon: ListPlus, onClick: openBuilder },
+    canBuild && { key: 'build', label: 'Build workout', icon: ListPlus, onClick: () => openBuilder() },
+    canBuild && { key: 'saved', label: 'Saved workouts', icon: Bookmark, onClick: openSaved },
     { key: 'cardio', label: 'Cardio', icon: Activity, onClick: openCardioPicker },
     { key: 'past', label: 'Log past', icon: History, onClick: () => setLogPastOpen(true) },
     { key: 'pastCardio', label: 'Log cardio', icon: HeartPulse, onClick: () => setLogCardioOpen(true) },
@@ -1263,102 +1250,21 @@ export default function Workout() {
   // ---- every sheet this page can open, rendered in whichever mode is up ----
   const sheets = (
     <>
-      {/* BUILD TODAY -- saved as today's session (/me/workouts). */}
-      <Sheet open={builderOpen} onClose={closeBuilder} title="Build today" sub="What you build replaces today's session"
-        footer={(
-          <button className="btn-primary btn-block"
-            disabled={savingBuilder || !builderName.trim() || !builderExs.length}
-            onClick={async () => {
-              setSavingBuilder(true);
-              try {
-                await api('/me/workouts', { method: 'POST', body: JSON.stringify({ name: builderName, exercises: builderExs.map((b) => ({ exercise_id: b.exercise_id, sets: b.sets, reps: b.reps, weight: b.weight })) }) });
-                setBuilderOpen(false); setBuilderName(''); setBuilderExs([]); setSelectedLibEx(null); setJustAdded(null);
-                setToast('Your workout is scheduled for today');
-                today.reload({ silent: true }); hist.reload({ silent: true });
-              } catch (e) { setToast(e.message); }
-              setSavingBuilder(false);
-            }}>
-            {savingBuilder ? 'Saving…' : `Save as today's session${builderExs.length ? ` · ${builderExs.length}` : ''}`}
-          </button>
-        )}>
-        <div className="p-4 space-y-3">
-          <input className="input" aria-label="Workout name" placeholder="Name it (e.g. My Upper Day)" value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
-          <div key={selectedLibEx?.id || '__library__'} className="anim-slideUp">
-            {selectedLibEx ? (
-              <div className="space-y-3">
-                <button onClick={() => setSelectedLibEx(null)} className="btn btn-sm">
-                  <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back to library
-                </button>
-                <ExerciseAnim anim={selectedLibEx.animation_key || 'fallback'} muscle={selectedLibEx.primary_muscle} label="" />
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-grotesk font-bold text-lg leading-tight" style={{ color: 'var(--ink)' }}>{exerciseLabel(selectedLibEx.name)}</div>
-                    <div className="wk-chips mt-1.5">
-                      {[selectedLibEx.primary_muscle, selectedLibEx.secondary_muscles, selectedLibEx.equipment].filter(Boolean).map((t) => (
-                        <span key={t} className="wk-chip">{String(t).replace(/_/g, ' ').toLowerCase()}</span>
-                      ))}
-                    </div>
-                  </div>
-                  {(() => {
-                    const added = builderExs.some((b) => b.exercise_id === selectedLibEx.id);
-                    return (
-                      <button className={`btn-primary btn-sm shrink-0 ${justAdded === selectedLibEx.id ? 'anim-confirmPulse' : ''}`}
-                        disabled={added}
-                        onClick={() => {
-                          setJustAdded(selectedLibEx.id);
-                          setTimeout(() => setJustAdded(null), 500);
-                          setBuilderExs((b) => [...b, { exercise_id: selectedLibEx.id, name: selectedLibEx.name, muscle: selectedLibEx.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
-                          setTimeout(() => setSelectedLibEx(null), 350);
-                        }}>
-                        {added ? 'Added' : 'Add'}
-                      </button>
-                    );
-                  })()}
-                </div>
-                <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--mute)' }}>
-                  {selectedLibEx.instructions
-                    || `${selectedLibEx.movement === 'compound' ? 'Compound' : 'Isolation'} ${selectedLibEx.movement?.replace(/_/g, ' ') || ''} movement for the ${(selectedLibEx.primary_muscle || '').replace(/_/g, ' ').toLowerCase()}${selectedLibEx.secondary_muscles ? `, also working the ${selectedLibEx.secondary_muscles.replace(/,/g, ' ').replace(/_/g, ' ').toLowerCase()}` : ''}.`}
-                </p>
-                {selectedLibEx.cues && (
-                  <div className="wk-hint"><Info size={15} strokeWidth={2} aria-hidden="true" /><span><b>Form cue</b> · {selectedLibEx.cues}</span></div>
-                )}
-              </div>
-            ) : (
-              <ExerciseSearchList
-                fallback={libList}
-                addedIds={new Set(builderExs.map((b) => b.exercise_id))}
-                onPick={(x) => setSelectedLibEx(x)}
-                onQuickAdd={(x) => {
-                  setJustAdded(x.id);
-                  setTimeout(() => setJustAdded(null), 500);
-                  setBuilderExs((b) => [...b, { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW' }]);
-                }}
-              />
-            )}
-          </div>
-          {!!builderExs.length && (
-            <div className="space-y-2 pt-1">
-              <div className="wk-h">Your session</div>
-              {builderExs.map((b, i) => (
-                <div key={b.exercise_id} className="wk-card p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-grotesk text-[13.5px] font-semibold truncate">{i + 1}. {exerciseLabel(b.name)}</span>
-                    <button className="text-[12px] font-semibold shrink-0" style={{ color: 'var(--bad)' }} onClick={() => setBuilderExs((x) => x.filter((_, j) => j !== i))}>Remove</button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <label className="grid gap-1 text-[10.5px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Sets
-                      <input type="number" className="input !py-1.5 !text-sm" value={b.sets} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, sets: e.target.value } : y))} /></label>
-                    <label className="grid gap-1 text-[10.5px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Reps
-                      <input className="input !py-1.5 !text-sm" value={b.reps} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, reps: e.target.value } : y))} /></label>
-                    <label className="grid gap-1 text-[10.5px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>Weight
-                      <input className="input !py-1.5 !text-sm" value={b.weight} onChange={(e) => setBuilderExs((x) => x.map((y, j) => j === i ? { ...y, weight: e.target.value } : y))} /></label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Sheet>
+      {/* BUILD A WORKOUT -- for today, for chosen weekdays, or just saved. */}
+      <WorkoutBuilder
+        open={!!builder}
+        onClose={() => setBuilder(null)}
+        mode={builder?.mode}
+        initial={builder?.initial}
+        defaultWhen={builder?.defaultWhen}
+        libList={libList}
+        loadLib={loadLib}
+        schedule={planner?.schedule || []}
+        workouts={planner?.workouts || []}
+        coachDays={coachDays}
+        toast={setToast}
+        onSaved={builderSaved}
+      />
 
       <LogPastCardio
         open={logCardioOpen}
@@ -1379,169 +1285,20 @@ export default function Workout() {
 
       {confirmDialog}
 
-      {/* MY WORKOUTS -- reusable sessions + the member's own week. */}
-      <Sheet open={plannerOpen} onClose={() => { setPlannerOpen(false); setAssignDow(null); }} title="My workouts" sub="Saved sessions and your week" wide>
-        <div className="p-4 space-y-5">
-          <div>
-            <div className="wk-head !mx-0">
-              <span className="flex items-center gap-1">
-                <span className="wk-h">My week</span>
-                {/* Each cell carries its real day_of_week (Sun=0..Sat=6, the
-                    API's convention) while the row reads Monday first. */}
-                <InfoDot label="My week" title="Setting your week" size={28}>
-                  Tap any day to put one of your saved workouts on it, or to make it a
-                  rest day. This is your own schedule — it does not change a plan your
-                  coach has set.
-                </InfoDot>
-              </span>
-              <span className="wk-head__aside">{(planner?.schedule || []).filter((x) => x.workout_id).length} training days</span>
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {[{ d: 'Mon', dow: 1 }, { d: 'Tue', dow: 2 }, { d: 'Wed', dow: 3 }, { d: 'Thu', dow: 4 },
-                { d: 'Fri', dow: 5 }, { d: 'Sat', dow: 6 }, { d: 'Sun', dow: 0 }].map(({ d, dow }) => {
-                const sch = (planner?.schedule || []).find((x) => x.day_of_week === dow);
-                const w = planner?.workouts?.find((x) => x.id === sch?.workout_id);
-                return (
-                  <button key={dow} onClick={() => setAssignDow(dow)}
-                    aria-label={`${d}: ${w ? w.name : 'rest day'}. Tap to change.`}
-                    aria-pressed={assignDow === dow}
-                    className="rounded-xl border px-1 py-2 text-center transition-all"
-                    style={{
-                      minHeight: 58,
-                      borderColor: assignDow === dow ? 'var(--ink)' : w ? 'rgb(var(--accent-rgb) / .5)' : 'var(--line)',
-                      background: w ? 'rgb(var(--accent-rgb) / .08)' : 'transparent',
-                      boxShadow: dow === todayDow ? 'inset 0 0 0 1.5px var(--accent)' : 'none',
-                    }}>
-                    <div className="text-[10px] font-semibold" style={{ color: 'var(--mute)' }}>{d}</div>
-                    <div className="text-[10px] font-grotesk font-semibold mt-0.5 leading-tight line-clamp-2"
-                      style={{ color: w ? 'var(--accent)' : 'var(--faint)' }}>
-                      {w ? w.name : 'Rest'}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {assignDow != null && (
-            <div className="wk-card p-3 space-y-1.5">
-              <div className="flex items-center justify-between mb-1">
-                <div className="wk-h" style={{ color: 'var(--accent)' }}>
-                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignDow]}
-                </div>
-                <button className="text-[12px] font-semibold" style={{ color: 'var(--mute)' }} onClick={() => setAssignDow(null)}>Cancel</button>
-              </div>
-              <div className="wk-pick">
-                {(planner?.workouts || []).map((w) => {
-                  const current = (planner?.schedule || []).find((x) => x.day_of_week === assignDow)?.workout_id === w.id;
-                  return (
-                    <button key={w.id} className="wk-pick__row" style={current ? { borderColor: 'var(--accent)' } : undefined}
-                      onClick={async () => { await setDayWorkout(assignDow, w.id); setAssignDow(null); }}>
-                      <span className="flex-1 min-w-0">
-                        <span className="wk-pick__name truncate">{w.name}</span>
-                        <span className="wk-pick__meta">
-                          {(w.exercises || []).length} exercises · {(w.exercises || []).reduce((a, e) => a + (Number(e.sets) || 0), 0)} sets
-                        </span>
-                      </span>
-                      {current && <span className="text-[11px] font-bold shrink-0" style={{ color: 'var(--accent)' }}>Assigned</span>}
-                    </button>
-                  );
-                })}
-                <button className="wk-pick__row" onClick={async () => { await setDayWorkout(assignDow, null); setAssignDow(null); }}>
-                  <span className="wk-pick__name" style={{ color: 'var(--mute)' }}>Rest day</span>
-                </button>
-              </div>
-              {!(planner?.workouts || []).length && (
-                <div className="text-[12px] py-2" style={{ color: 'var(--faint)' }}>Create a workout first, then you can put it on a day.</div>
-              )}
-            </div>
-          )}
-
-          {planForm ? (
-            <div className="wk-card p-3 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="wk-h" style={{ color: 'var(--accent)' }}>{planForm.id ? 'Edit workout' : 'New workout'}</div>
-                <button className="text-[12px] font-semibold" style={{ color: 'var(--mute)' }} onClick={() => setPlanForm(null)}>Cancel</button>
-              </div>
-              <input className="input" aria-label="Workout name" placeholder="Name it (e.g. Push A, Legs)" value={planForm.name || ''} onChange={(e) => setPlanForm((f) => ({ ...f, name: e.target.value }))} />
-              <ExerciseSearchList
-                dense
-                fallback={libList}
-                addedIds={new Set((planForm.exercises || []).map((b) => b.exercise_id))}
-                onPick={(x) => setPlanForm((f) => ({ ...f, exercises: [...(f.exercises || []), { exercise_id: x.id, name: x.name, muscle: x.primary_muscle, sets: 3, reps: '10', weight: 'BW', rest_sec: 90 }] }))}
-              />
-              {(planForm.exercises || []).map((b, i) => (
-                <div key={b.exercise_id} className="rounded-xl border p-2.5" style={{ borderColor: 'var(--line)' }}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-grotesk text-[13px] font-semibold truncate">{i + 1}. {exerciseLabel(b.name)}</span>
-                    <button className="text-[12px] font-semibold shrink-0" style={{ color: 'var(--bad)' }} onClick={() => setPlanForm((f) => ({ ...f, exercises: f.exercises.filter((_, j) => j !== i) }))}>Remove</button>
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[['sets', 'Sets', 'number'], ['reps', 'Reps', 'text'], ['weight', 'Weight', 'text'], ['rest_sec', 'Rest s', 'number']].map(([k, l, t]) => (
-                      <label key={k} className="grid gap-1 text-[10px] uppercase tracking-wider" style={{ color: 'var(--faint)' }}>{l}
-                        <input type={t} className="input !py-1 !text-[12.5px]" value={b[k] ?? ''}
-                          onChange={(e) => setPlanForm((f) => ({ ...f, exercises: f.exercises.map((y, j) => j === i ? { ...y, [k]: e.target.value } : y) }))} />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <button className="btn-primary btn-block" disabled={savingPlan || !planForm?.name?.trim() || !planForm?.exercises?.length} onClick={savePlan}>
-                {savingPlan ? 'Saving…' : (planForm.id ? 'Save changes' : 'Create workout')}
-              </button>
-            </div>
-          ) : (
-            <>
-              <button className="btn-primary btn-block" onClick={() => {
-                if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load the exercise library'));
-                setPlanForm({ id: null, name: '', exercises: [], search: '' });
-              }}>
-                <Plus size={16} strokeWidth={2.2} aria-hidden="true" />New workout
-              </button>
-              <div className="space-y-2">
-                {planner?.workouts?.length === 0 && (
-                  <div className="text-center text-[12.5px] py-6" style={{ color: 'var(--mute)' }}>No saved workouts yet — create one, then put it on your week.</div>
-                )}
-                {(planner?.workouts || []).map((w) => {
-                  const exs = w.exercises || [];
-                  const sets = exs.reduce((a, e) => a + (Number(e.sets) || 0), 0);
-                  const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                  const onDays = (planner?.schedule || []).filter((x) => x.workout_id === w.id).map((x) => DAY_ABBR[x.day_of_week]).filter(Boolean);
-                  return (
-                    <div key={w.id} className="wk-card p-3">
-                      <div className="font-grotesk text-[14px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{w.name}</div>
-                      <div className="text-[12px] mt-0.5" style={{ color: 'var(--mute)' }}>
-                        {exs.length} exercises · {sets} sets
-                        {onDays.length > 0 && <span style={{ color: 'var(--accent)' }}> · {onDays.join(', ')}</span>}
-                      </div>
-                      {exs.length > 0 && (
-                        <div className="text-[11.5px] mt-1.5 leading-snug" style={{ color: 'var(--faint)' }}>
-                          {exs.slice(0, 4).map((e) => exerciseLabel(e.name)).filter(Boolean).join(' · ')}{exs.length > 4 && ` +${exs.length - 4} more`}
-                        </div>
-                      )}
-                      {/* Wraps: the four labels need ~267px and a 360px phone
-                          leaves this card ~263px. The three secondary actions
-                          are one group so they wrap together under a
-                          full-width "Do today", not "Delete" on its own. */}
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        <button className="btn-primary btn-sm flex-1" onClick={() => startPlanToday(w)}>Do today</button>
-                        <div className="flex gap-1.5">
-                          <button className="btn btn-sm" onClick={() => setPlanForm({
-                            id: w.id, name: w.name, search: '',
-                            exercises: exs.map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })),
-                          })}>Edit</button>
-                          <button className="btn btn-sm" onClick={() => duplicatePlan(w)} aria-label={`Duplicate ${w.name}`}>Copy</button>
-                          <button className="btn btn-sm" style={{ color: 'var(--bad)' }} onClick={() => deletePlan(w)} aria-label={`Delete ${w.name}`}>Delete</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      </Sheet>
+      {/* SAVED WORKOUTS -- reusable workouts and the days they repeat on. */}
+      <SavedWorkouts
+        open={savedOpen}
+        onClose={() => setSavedOpen(false)}
+        planner={planner}
+        coachDays={coachDays}
+        busyId={busyPlan}
+        onNew={() => { setSavedOpen(false); openBuilder({ defaultWhen: 'later' }); }}
+        onEdit={(w, days) => { setSavedOpen(false); editPlan(w, days); }}
+        onDoToday={startPlanToday}
+        onCopy={duplicatePlan}
+        onDelete={deletePlan}
+        onSetDays={setPlanDays}
+      />
 
       {/* A DAY OF THIS WEEK */}
       <Sheet open={!!weekDay} onClose={() => setWeekDay(null)}
@@ -1552,7 +1309,7 @@ export default function Workout() {
             <Play size={15} strokeWidth={2.4} fill="currentColor" aria-hidden="true" />Start today
           </button>
         ) : null}>
-        <div className="p-4">
+        <div>
           {weekDay?.exercises?.length ? (
             <ol className="wk-card wk-plan">
               {weekDay.exercises.map((ex, i) => (
@@ -1577,7 +1334,7 @@ export default function Workout() {
       <Sheet open={cardioOpen} onClose={closeCardioPicker}
         title={cardioConfigItem ? cardioName(cardioConfigItem) : 'Add cardio'}
         sub={cardioConfigItem ? 'Set it up — you can change it while it runs' : 'Machines, running and sports'}>
-        <div className="p-4 space-y-3">
+        <div className="space-y-3">
           {cardioConfigItem ? (
             <>
               <button onClick={() => setCardioConfigItem(null)} className="btn btn-sm">
@@ -1628,11 +1385,11 @@ export default function Workout() {
             {addExSaving ? 'Adding…' : 'Add to session'}
           </button>
         ) : null}>
-        <div className="p-4 space-y-3">
+        <div className="grid gap-3">
           {addExSelected ? (
             <>
-              <button onClick={() => setAddExSelected(null)} className="btn btn-sm">
-                <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back to library
+              <button onClick={() => setAddExSelected(null)} className="btn btn-sm justify-self-start">
+                <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back to search
               </button>
               <ExerciseAnim anim={addExSelected.animation_key || 'fallback'} muscle={addExSelected.primary_muscle} label="" />
               <div className="wk-chips">
@@ -1645,24 +1402,14 @@ export default function Workout() {
               )}
             </>
           ) : (
-            <>
-              <input className="input" aria-label="Search exercises" placeholder="Search by name or muscle…" value={addExSearch} onChange={(e) => setAddExSearch(e.target.value)} autoFocus />
-              <div className="wk-pick">
-                {libList == null && <div className="py-6 grid place-items-center"><Spinner /></div>}
-                {(libList || [])
-                  .filter((x) => !addExSearch || (x.name + ' ' + (x.primary_muscle || '')).toLowerCase().includes(addExSearch.toLowerCase()))
-                  .slice(0, 30)
-                  .map((x) => (
-                    <button key={x.id} className="wk-pick__row" onClick={() => setAddExSelected(x)}>
-                      <span className="flex-1 min-w-0">
-                        <span className="wk-pick__name truncate">{exerciseLabel(x.name)}</span>
-                        <span className="wk-pick__meta">{String(x.primary_muscle || '').replace(/_/g, ' ').toLowerCase()}{x.equipment ? ` · ${String(x.equipment).toLowerCase()}` : ''}</span>
-                      </span>
-                      <ChevronRight size={16} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--faint)' }} />
-                    </button>
-                  ))}
-              </div>
-            </>
+            /* The builder's search: aliases ("DB curl"), muscle and
+               equipment chips, and "+" to add without opening the detail. */
+            <ExerciseSearchList
+              fallback={libList}
+              addedIds={new Set(state.map((e) => e.exercise_id).filter(Boolean))}
+              onPick={setAddExSelected}
+              onQuickAdd={(x) => { if (!addExSaving) addExerciseToSession(x); }}
+            />
           )}
         </div>
       </Sheet>
@@ -1702,7 +1449,8 @@ export default function Workout() {
           onStart={startWorkout}
           onShare={shareToday}
           onAddCardio={openCardioPicker}
-          onBuild={canBuild ? openBuilder : null}
+          onBuild={canBuild ? () => openBuilder() : null}
+          onSaved={canBuild ? openSaved : null}
         />
 
         <WeekStrip
@@ -1721,6 +1469,7 @@ export default function Workout() {
         {workout && (
           <PlanList
             exercises={state}
+            groups={groupsFromExercises(state)}
             equipMap={equipMap}
             suggestionByEx={suggestionByEx}
             infoEx={infoEx}
@@ -1821,31 +1570,39 @@ export default function Workout() {
           onResume={resumeWorkout}
         />
 
-        {state.map((ex) => (
-          <ExerciseCard
-            key={ex.id}
-            ex={ex}
-            sets={exSets[ex.id] || []}
-            open={openEx === ex.id}
-            u={u}
-            suggestion={suggestionByEx[ex.id]}
-            onToggleOpen={() => setOpenEx(openEx === ex.id ? null : ex.id)}
-            onPatch={(i, field, value) => patchSet(ex.id, i, field, value)}
-            onToggleSet={(i) => toggleSet(ex.id, i)}
-            onAddSet={() => addSet(ex.id)}
-            onRemoveLast={() => removeSet(ex.id, (exSets[ex.id] || []).length - 1)}
-            onUseTarget={(target) => {
-              // The coach's progression, applied to every set still to do;
-              // ticked sets keep what was actually lifted.
-              (exSets[ex.id] || []).forEach((st, i) => {
-                if (st.done) return;
-                patchSet(ex.id, i, 'weight', target.weight);
-                if (target.reps) patchSet(ex.id, i, 'reps', target.reps);
-              });
-            }}
-            onRemove={() => askRemoveExercise(ex)}
-          />
-        ))}
+        <SortableExercises
+          items={state}
+          groups={groups}
+          onMove={moveExercise}
+          onToggleLink={toggleSuperset}
+          edges={{ top: 96, bottom: 150 }}
+          renderItem={(ex, sortProps) => (
+            <ExerciseCard
+              {...sortProps}
+              ex={ex}
+              sets={exSets[ex.id] || []}
+              open={openEx === ex.id}
+              u={u}
+              suggestion={suggestionByEx[ex.id]}
+              onToggleOpen={() => setOpenEx(openEx === ex.id ? null : ex.id)}
+              onPatch={(i, field, value) => patchSet(ex.id, i, field, value)}
+              onToggleSet={(i) => toggleSet(ex.id, i)}
+              onAddSet={() => addSet(ex.id)}
+              onAddDrop={() => addDropSet(ex.id)}
+              onRemoveLast={() => removeSet(ex.id, (exSets[ex.id] || []).length - 1)}
+              onUseTarget={(target) => {
+                // The coach's progression, applied to every set still to do;
+                // ticked sets keep what was actually lifted.
+                (exSets[ex.id] || []).forEach((st, i) => {
+                  if (st.done) return;
+                  patchSet(ex.id, i, 'weight', target.weight);
+                  if (target.reps) patchSet(ex.id, i, 'reps', target.reps);
+                });
+              }}
+              onRemove={() => askRemoveExercise(ex)}
+            />
+          )}
+        />
 
         {activeCardioPanel}
 
@@ -1921,7 +1678,7 @@ export default function Workout() {
         onShareCommunities={() => setShareCommunitiesFor(result.workoutId)}
         onDone={() => {
           clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0);
-          setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null);
+          setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setGroups({}); setRemovedIds([]);
           setBurn(null); setBurnInput(null); setIntensity(null); setIntensitySkipped(false);
           setBurnSource(null); setSharing(false); setShareToast('');
           setCardioMode('browse'); setCardioResult(null); setCardioItems([]);

@@ -7,7 +7,7 @@
 // exactly as they do for trainer-assigned workouts.
 // ============================================================
 import { id, now } from '../ids.js';
-import { dayKey, weekDay, getOrgTz } from '../utils/time.js';
+import { dayKey, weekDay, plannerDay, getOrgTz } from '../utils/time.js';
 import { suggestNextTarget } from './progressiveOverload.js';
 import { requiredItems, parseAvailable, suggestAlternatives } from './equipment.js';
 import { estimateWorkoutCalories, buildWorkoutCalorieInput, resolveBodyWeight, completedSetCount, mlCanonicalExerciseId } from './intelligence/calorieModel.js';
@@ -34,31 +34,96 @@ export async function materializeWorkout(db, { orgId, clientId, trainerId, templ
     : [];
   for (const ex of tmplExs) {
     await db.run(
-      `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes, superset_group)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id('wxe'), wId, ex.exercise_id, ex.position, ex.name, ex.sets, ex.reps, ex.weight,
-       ex.rest_sec, ex.tempo || null, ex.notes || null]);
+       ex.rest_sec, ex.tempo || null, ex.notes || null, ex.superset_group || null]);
   }
   return db.q1('SELECT * FROM workouts WHERE id = ?', [wId]);
 }
 
-// Resolve "today's session" for a client:
-//   1. an existing assigned workout scheduled for today
-//   2. the active program's template for today's day-of-week (materialized)
-//   3. the most recent assigned workout (fallback)
+/**
+ * A member's saved workout (client_workouts) becomes a real session for
+ * one day. Same row shape as POST /me/workouts -- source 'client_custom'
+ * -- so it can be replaced by the builder and deleted by its owner.
+ *
+ * Any other un-started, un-logged client-built session for that day is
+ * replaced: a day holds one plan of the member's own, the latest one.
+ */
+export async function materializeClientWorkout(db, { client, workoutId, scheduledDate }) {
+  const cw = await db.q1('SELECT * FROM client_workouts WHERE id = ? AND client_id = ?', [workoutId, client.id]);
+  if (!cw) return null;
+  const exs = await db.q('SELECT * FROM client_workout_exercises WHERE workout_id = ? ORDER BY position', [cw.id]);
+  if (!exs.length) return null;
+  const wId = id('wko');
+  const createdAt = now();
+  await db.run(
+    `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'assigned', 'client_custom', ?)`,
+    [wId, client.org_id, client.id, String(cw.name).slice(0, 80), String(cw.name).slice(0, 40), scheduledDate, createdAt]);
+  for (const [i, ex] of exs.entries()) {
+    await db.run(
+      `INSERT INTO workout_exercises (id, workout_id, template_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes, superset_group)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id('wxe'), wId, ex.exercise_id, i, ex.name, ex.sets, ex.reps, ex.weight,
+       ex.rest_sec, ex.tempo || null, ex.notes || null, ex.superset_group || null]);
+  }
+  // Only OLDER rows go. Two requests materializing the same day at once
+  // (two tabs, Home and Workout loading together) would otherwise each
+  // delete the other's row and leave none; ordering on (created_at, id)
+  // makes both agree on one survivor.
+  await db.run(
+    `DELETE FROM workouts WHERE client_id = ? AND source = 'client_custom' AND status = 'assigned' AND scheduled_date = ? AND id != ?
+       AND (created_at < ? OR (created_at = ? AND id < ?))
+       AND started_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM workout_logs wl WHERE wl.workout_id = workouts.id)`,
+    [client.id, scheduledDate, wId, createdAt, createdAt, wId]);
+  // The survivor, which is this row unless a racing request won.
+  return (await db.q1('SELECT * FROM workouts WHERE id = ?', [wId]))
+    || db.q1(`SELECT * FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'assigned' ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [client.id, scheduledDate]);
+}
+
+/**
+ * Resolve "today's session" for a client:
+ *   1. a workout still to do, scheduled for today (newest first)
+ *   2. one already finished today -- the page then reads "Done today"
+ *   3. the coach's program day for today (materialized)
+ *   4. the member's own weekly schedule for today (materialized)
+ *   5. nothing: a rest day
+ *
+ * THERE IS NO "ANY DAY" FALLBACK ANY MORE. Step 5 used to return the most
+ * recent pending workout from ANY date, so a workout a member built on
+ * Monday and did not finish was Tuesday's, Wednesday's and every day's
+ * after, until it was done -- reported as "after building a workout it
+ * always shows that workout only". A coach's assignment is dated (today
+ * by default, in the gym's timezone), so it still appears on its day.
+ *
+ * Step 2 matters for the same reason: with nothing pending today, a
+ * finished session used to fall through to the program and be
+ * materialized again, so the page offered the workout just done.
+ */
 export async function ensureTodayWorkout(db, clientId, tz) {
   const client = await db.q1('SELECT * FROM clients WHERE id = ?', [clientId]);
-  const orgTz = tz || await getOrgTz(db, client?.org_id);
+  if (!client) return null;
+  const orgTz = tz || await getOrgTz(db, client.org_id);
   const d = dayKey(new Date(), orgTz);
+  // created_at DESC is a deliberate tiebreaker: two rows on one day must
+  // resolve to the same one for every caller, or Home and the Workout
+  // page disagree about which session is today's (seen live).
   let w = await db.q1(
-    `SELECT * FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'assigned' ORDER BY created_at DESC LIMIT 1`,
+    `SELECT * FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'assigned' ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [clientId, d]);
+  if (w) return w;
+
+  w = await db.q1(
+    `SELECT * FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'completed' ORDER BY completed_at DESC, created_at DESC LIMIT 1`,
     [clientId, d]);
   if (w) return w;
 
   const prog = await getActiveProgram(db, clientId);
   if (prog) {
-    const dow = weekDay(d, orgTz);
-    const day = await db.q1('SELECT * FROM training_days WHERE program_id = ? AND day_of_week = ?', [prog.id, dow]);
+    const day = await db.q1('SELECT * FROM training_days WHERE program_id = ? AND day_of_week = ?', [prog.id, weekDay(d)]);
     if (day && day.template_id) {
       w = await materializeWorkout(db, {
         orgId: client.org_id, clientId: client.id, trainerId: prog.trainer_id || null,
@@ -74,23 +139,12 @@ export async function ensureTodayWorkout(db, clientId, tz) {
     }
   }
 
-  // Rest day (no training-day template for today): resume the most recent
-  // still-pending workout instead of showing nothing. `created_at DESC` is
-  // a deliberate tiebreaker -- without it, two rows sharing the same
-  // scheduled_date (confirmed live: seed data can carry more than one
-  // 'assigned' workout dated the same day) sort in whatever order SQLite's
-  // query plan happens to produce, which is not guaranteed stable across
-  // separate connections/requests. That's the actual mechanism behind a
-  // real bug hit while testing this: /tracking/me/home and
-  // /tracking/me/today, called moments apart with no write in between,
-  // resolved "today's" workout to two DIFFERENT rows -- Home's dashboard
-  // and the Workout page disagreed about which session was "today's",
-  // even though both call this exact function. Tiebreaking on created_at
-  // makes every caller agree on the same row deterministically.
-  w = await db.q1(
-    `SELECT * FROM workouts WHERE client_id = ? AND status = 'assigned' ORDER BY scheduled_date DESC, created_at DESC LIMIT 1`,
-    [clientId]);
-  return w || null;
+  const mine = await db.q1('SELECT workout_id FROM client_workout_schedule WHERE client_id = ? AND day_of_week = ?', [clientId, plannerDay(d)]);
+  if (mine?.workout_id) {
+    w = await materializeClientWorkout(db, { client, workoutId: mine.workout_id, scheduledDate: d });
+    if (w) return w;
+  }
+  return null;
 }
 
 // Full "today's session" bundle used by the client portal:
