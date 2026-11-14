@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "v1",
-    "built_at": "2026-08-28T07:14:01.287Z",
+    "built_at": "2026-11-14T11:12:58.501Z",
     "n_cases": 324,
     "n_with_nutrition_ground_truth": 306,
     "source_db": {
@@ -1484,7 +1484,7 @@
       "difficulty": "medium",
       "expect": {
         "entity": {
-          "name_matches": "kidney bean|rajma|rajmah",
+          "name_matches": "kidney bean|beans, kidney|rajma|rajmah",
           "reject_name_matches": "curry|masala|chawal|canned.*sauce"
         },
         "food_class": "ingredient",
@@ -11094,7 +11094,7 @@
       "difficulty": "easy",
       "expect": {
         "entity": {
-          "name_matches": "black bean",
+          "name_matches": "black bean|beans, black",
           "reject_name_matches": "raw|soup|sauce|refried.*lard heavy|dip"
         },
         "prep_state": "boiled",
@@ -12226,7 +12226,7 @@
       "difficulty": "easy",
       "expect": {
         "entity": {
-          "name_matches": "kidney bean|rajma",
+          "name_matches": "kidney bean|beans, kidney|rajma",
           "reject_name_matches": "raw|curry|masala|chawal|canned.*sauce"
         },
         "prep_state": "boiled",
@@ -14193,7 +14193,7 @@
       "difficulty": "easy",
       "expect": {
         "entity": {
-          "name_matches": "iced tea|ice tea|sweet tea",
+          "name_matches": "iced tea|ice tea|sweet tea|tea, iced",
           "reject_name_matches": "unsweetened|green tea plain|leaves"
         },
         "food_class": "beverage",

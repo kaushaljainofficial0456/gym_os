@@ -22,6 +22,16 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 >   (`decomposedView` in `backend/src/eval/score.js`); this affects cmp-007 (+0.55) and cmp-008 (−0.03) only.
 > - 2026-11-13 — Phase 5 (confidence by dimension, `food/confidence.js`). Item `confidence` is now the weakest of
 >   identification / portion / composition. Weighted 0.814 → 0.821, ECE 0.101 → 0.083 (`high` observed 73% → 86%).
+> - 2026-11-14 — Segmenter amount guards + liquid density (see NUTRITION_BENCHMARK_REPORT.md). Three v1 case specs
+>   corrected because their regex rejected the correct USDA row on word order alone (`sng-026`, `sng-048`,
+>   `x-sng-018` "Beans, kidney/black, ..."; `x-bev-005` "Tea, iced, ..."); each carries a dated comment in the spec.
+>   v1 rebuilt (only those regexes changed) and re-baselined.
+
+> **v2 dataset (534 cases)** — `npm run bench:build:v2` builds `food_eval_set.v2.json` = the v1 specs +
+> `case_specs.v2.mjs` (210 cases: Indian dishes/ingredients at explicit weights, weighed multi-food meals with the new
+> `db_sum_scaled` method, natural-language Indian meals, recipe-priced regional dishes scored on identity only,
+> international and packaged foods, silent-drop traps). `npm run bench:v2` runs it against `baseline.v2.json`;
+> `backend/test/foodBenchmarkV2Gate.test.js` enforces zero silent drops and zero fabrication on every commit.
 
 ## 1. Files
 

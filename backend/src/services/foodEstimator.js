@@ -697,7 +697,27 @@ function stapleUnitPortion(food, unit, n = 1) {
 /** toGrams knows one spelling of some units ("tablespoon", not
  *  "tablespoons"), and "4 tablespoons rice" fell through to an assumed
  *  400 g. Try the singular forms too. */
+/* A DRINK OR SOUP MEASURED IN ML WEIGHS ABOUT WHAT WATER WEIGHS. The
+   reference model's density table keys on words anywhere in a food's NAME,
+   so "Tea, iced, brewed, black, pre-sweetened WITH SUGAR" was weighed like
+   granulated sugar (0.85 g/ml: 330 ml -> 280 g) and "lentil soup" like dry
+   lentils. The table lives in the shared reference file (byte-identical to
+   the Python parity version), so the correction is made here: a liquid in
+   ml / litres uses ~1.0 g/ml, ~1.03 for milk-based drinks (the table's own
+   milk value). Spoons and cups are left to the table and the staples. */
+const LIQUID_FOOD = /\b(tea|chai|coffee|milk|juice|lassi|shake|smoothie|soda|cola|drink|buttermilk|chaas|sharbat|beer|wine|water|latte|soup|rasam|broth|kanji|kombucha|lemonade|nimbu pani|coconut water)\b/i;
+const MILKY = /\b(milk|lassi|shake|smoothie|buttermilk|chaas|latte)\b/i;
+const ML_PER_UNIT = { ml: 1, millilitre: 1, milliliter: 1, millilitres: 1, milliliters: 1, l: 1000, litre: 1000, liter: 1000, litres: 1000, liters: 1000 };
+
+function liquidGrams(qty, unit, foodName) {
+  const per = ML_PER_UNIT[String(unit || '').toLowerCase()];
+  if (!per || !LIQUID_FOOD.test(String(foodName || ''))) return null;
+  return qty * per * (MILKY.test(String(foodName || '')) ? 1.03 : 1.0);
+}
+
 function massVolumeGrams(qty, unit, foodName) {
+  const liquid = liquidGrams(qty, unit, foodName);
+  if (liquid > 0) return liquid;
   for (const u of new Set([unit, unit.replace(/es$/i, ''), unit.replace(/s$/i, '')])) {
     const { grams } = toGrams(qty, u, foodName);
     if (grams > 0) return grams;
@@ -982,6 +1002,14 @@ function splitTwoStaples(fragment, search) {
   if (whole && !whole.query_relaxed && isSameDish(p.name, whole)) return null;
   const segs = segmentIntoStaples(words);
   if (!segs || segs.length < 2) return null;
+  // Two names for the SAME food ("parle g biscuits" -> parle g + biscuits,
+  // both curated aliases of one biscuit) are one food, not two.
+  const keys = segs.map((sg) => exactStaple(sg)?.key);
+  if (new Set(keys).size < keys.length) return null;
+  // "chana DAL", "moong DAL": a dal variety. "paneer PARATHA", "aloo KULCHA":
+  // a stuffed bread. The last word names the dish; what precedes it is its
+  // variety or filling -- never a second food.
+  if (ONE_DISH_TAILS.has(stemTail(words.at(-1)))) return null;
 
   /* AMOUNTS. A leading number counts the COUNTABLE side when exactly one
      side comes in pieces ("2 chole bhature" is two bhature with chole, not
@@ -991,17 +1019,36 @@ function splitTwoStaples(fragment, search) {
      (pav with misal, bhature with chole) defaults to that pair when no
      number was said -- shown as an assumed amount the person can change. */
   const hasCount = p.qty != null && (!p.unit || isCountableFood(p.unit));
+  /* AN AMOUNT MUST NEVER BE DROPPED. A weight or volume ("150g paneer
+     paratha", "30g parle g biscuits") measures ONE food -- splitting it left
+     the grams attached to nothing and both foods at a default serving. Any
+     other amount the split cannot attribute (2 plates of misal pav) keeps
+     the fragment whole too. One container ("1 plate misal pav") describes
+     the plate, and each food takes its natural serving. */
+  if (p.unit && MASS_VOLUME.test(p.unit)) return null;
+  // "2 plates misal pav": a COUNT OF CONTAINERS is that many servings of
+  // the whole pairing, so it multiplies every food's natural serving (2
+  // misal, 4 pav). Without a container a number counts pieces (below).
+  const containers = p.qty != null && p.unit && !hasCount ? p.qty : null;
   const staples = segs.map((sg) => exactStaple(sg));
   const countable = staples.map((st) => !!st?.units?.[0]?.count);
   const countTarget = hasCount
     ? (countable.filter(Boolean).length === 1 && !countable[0] ? countable.indexOf(true) : 0)
     : -1;
+  if (containers != null) {
+    const n = (x) => Math.round(x * 100) / 100;
+    return segs.map((sg, i) => `${n((i > 0 && staples[i]?.pairQty ? staples[i].pairQty : 1) * containers)} ${sg}`);
+  }
   return segs.map((sg, i) => {
     if (i === countTarget) return `${p.qty} ${sg}`;
     if (i > 0 && countTarget !== i && staples[i]?.pairQty) return `${staples[i].pairQty} ${sg}`;
     return sg;
   });
 }
+
+/** Dish words whose preceding word is a variety or filling, not a food. */
+const ONE_DISH_TAILS = new Set(['dal', 'daal', 'dhal', 'paratha', 'parantha', 'prantha', 'kulcha']);
+const stemTail = (w) => String(w || '').toLowerCase().replace(/s$/, '');
 
 /**
  * Split a run of words into consecutive curated staple names, longest

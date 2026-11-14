@@ -28,7 +28,11 @@ const ROOT = path.resolve(HERE, '..', '..', '..');
 const DB_PATH = path.join(ROOT, 'ml', 'data', 'processed', 'unified_food_db.json');
 
 const args = process.argv.slice(2);
-const OUT = argVal('--out') || path.join(HERE, 'food_eval_set.v1.json');
+// v1 = the original frozen 324-case set; v2 = v1 + the nutrition-overhaul
+// expansion (case_specs.v2.mjs). v1 is never rewritten by a v2 build.
+const VERSION = argVal('--version') || 'v1';
+if (!['v1', 'v2'].includes(VERSION)) { console.error(`unknown --version ${VERSION}`); process.exit(2); }
+const OUT = argVal('--out') || path.join(HERE, `food_eval_set.${VERSION}.json`);
 const STRICT = args.includes('--strict');
 function argVal(flag) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : null; }
 
@@ -39,7 +43,8 @@ const VALID_PRIMARY = new Set([
 
 const specsA = (await import('./case_specs.v1.mjs')).default;
 const specsB = (await import('./case_specs.v1.extra.mjs')).default;
-const SPECS = [...specsA, ...specsB];
+const specsC = VERSION === 'v2' ? (await import('./case_specs.v2.mjs')).default : [];
+const SPECS = [...specsA, ...specsB, ...specsC];
 
 const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
 console.error(`loaded ${db.length} DB rows from ${path.relative(ROOT, DB_PATH)}`);
@@ -134,6 +139,38 @@ for (const spec of SPECS) {
       dbUnmatched.push(id);
       problems.push(`${id}: db ground-truth criteria matched no usable row (/${gt.name.source}/) — nutrition metrics will skip this case`);
     }
+  } else if (gt.m === 'dbsum') {
+    // Every component weighed in the input: each row chosen by the spec's own
+    // criteria, the band is the SUM of row x grams, +/- tolerance.
+    const rows = gt.parts.map((pt) => ({ pt, row: findAuthoritativeRow(pt) }));
+    const missing = rows.filter((x) => !x.row);
+    if (missing.length) {
+      c.expect.nutrition = null;
+      c.ground_truth = { method: 'db_unmatched', source: `NO ROW for ${missing.map((x) => `/${x.pt.name.source}/`).join(', ')} — nutrition not scored` };
+      dbUnmatched.push(id);
+      problems.push(`${id}: dbsum component(s) matched no usable row: ${missing.map((x) => x.pt.name.source).join(', ')}`);
+    } else {
+      const tol = gt.tol ?? 0.2;
+      const sum = { energy_kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0 };
+      const has = { protein_g: true, carb_g: true, fat_g: true };
+      for (const { pt, row } of rows) {
+        const f = pt.grams / 100;
+        sum.energy_kcal += Number(row.energy_kcal) * f;
+        for (const k of ['protein_g', 'carb_g', 'fat_g']) {
+          if (row[k] == null) has[k] = false; else sum[k] += Number(row[k]) * f;
+        }
+      }
+      const band = (mid) => [round(Math.max(0, mid * (1 - tol))), round(mid * (1 + tol))];
+      c.expect.nutrition = { kcal: band(sum.energy_kcal) };
+      for (const k of ['protein_g', 'carb_g', 'fat_g']) if (has[k]) c.expect.nutrition[k] = band(sum[k]);
+      c.ground_truth = {
+        method: 'db_sum_scaled',
+        source: rows.map(({ pt, row }) => `${row.source_id} "${row.food_name}" × ${pt.grams}g`).join(' + ') + ` ±${Math.round(tol * 100)}%`,
+        components: rows.map(({ pt, row }) => ({ source_id: row.source_id, name: row.food_name, grams: pt.grams })),
+        reference_grams: rows.reduce((s, x) => s + x.pt.grams, 0),
+      };
+      dbMatched.push(id);
+    }
   } else if (gt.m === 'authored' || gt.m === 'std' || gt.m === 'published') {
     c.expect.nutrition = gt.nutrition || expect.nutrition || null;
     if (!c.expect.portion && gt.gramsRef) c.expect.portion = { grams: [round(gt.gramsRef * 0.9), round(gt.gramsRef * 1.1)] };
@@ -167,7 +204,7 @@ const nWithNutrition = out.filter((c) => c.expect.nutrition && Object.keys(c.exp
 
 const dataset = {
   meta: {
-    version: 'v1',
+    version: VERSION,
     built_at: new Date().toISOString(),
     n_cases: out.length,
     n_with_nutrition_ground_truth: nWithNutrition,

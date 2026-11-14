@@ -1,0 +1,118 @@
+══════════════════════════════════════════════════════════════════════
+ SKOS FOOD BENCHMARK — V1   (534 cases, dataset v2)
+ current production engine (foodEstimator.js / skos-food-v1, deterministic Tier 1)
+ run 2026-11-14T11:14:17.474Z
+══════════════════════════════════════════════════════════════════════
+
+ WEIGHTED OVERALL ....... 86.0%      (unweighted 87.2%)
+
+ ── 18 METRICS ────────────────────────────────────────────────────────
+  1  Food identity accuracy ........  95.3%   (graded  95.0%)
+  2  Food-class accuracy (proxy) ...  65.8%
+  3  Preparation-state accuracy ....  70.3%   (graded  66.1%)
+  4  Portion accuracy .............  86.2%   (graded  94.0%)
+  5  Composite decomposition ...... attempt   0.0%  · kcal-in-range  78.9%  · score  85.3%
+  6  KCAL    MAE(res)    40.9  MAE(all)    48.4  · in-range  75.5%  · MAPE-mid(all,med)   9.6%  · resolve  97.9%
+  7  PROTEIN MAE(res)     1.2  MAE(all)     1.5  · in-range  77.7%  · MAPE-mid(all,med)  14.3%  · resolve  98.1%
+  8  CARB    MAE(res)     4.1  MAE(all)     4.8  · in-range  73.9%  · MAPE-mid(all,med)  15.3%  · resolve  98.1%
+  9  FAT     MAE(res)     3.1  MAE(all)     3.4  · in-range  72.4%  · MAPE-mid(all,med)  22.5%  · resolve  98.1%
+ 10  Plausibility false positives ..   3.4%   (14/417)
+ 11  Plausibility false negatives ..   3.6%   (18/507)   ◄ confident-wrong slipping through
+ 12  Unresolved rate ..............   2.3%
+ 13  Fabrication rate .............   0.0%   (0 cases;  2 non-food resolved at low conf;  silent-drop   0.0%)
+ 14  Confidence calibration (ECE) . 0.202
+        high        n=  61   observed  86.9%   nominal 90%
+        medium      n= 240   observed  82.5%   nominal 65%
+        low         n= 206   observed  68.4%   nominal 40%
+ 15  Brand/generic accuracy .......  92.5%   (branded  64.0% · generic  93.9% · n=504)
+ 16  Latency ..................... p50 13.9ms · p95 65.3ms · mean 21.5ms · max 165.8ms
+ 17  LLM escalation rate .........   0.0%
+ 18  Est. cost / estimate ........ $0.000000
+
+ ── PER-CATEGORY (all visible; weighted into overall) ─────────────────
+   category                 n   score   identity  kcalMAPEmid  kcalInRng  unres   cWrong  fab
+   single_ingredient      129   88.5%    97.7%     4.7%     76.2%     0.0%      7    0
+   prepared_food           51   84.3%    90.2%    18.3%     67.4%     0.0%      3    0
+   composite_dish         164   85.3%    91.4%    16.4%     78.9%     6.7%      5    0
+   meal                    89   95.3%    98.8%     3.2%     87.8%     1.1%      1    0
+   beverage                31   88.7%   100.0%    19.6%     61.5%     0.0%      2    0
+   snack                   29   83.3%    96.6%     3.1%     75.0%     0.0%      1    0
+   dessert                 15   70.1%    93.3%    49.8%     38.5%     0.0%      1    0
+   sauce_condiment         14   82.4%   100.0%     7.7%     92.9%     0.0%      1    0
+   nonfood_or_malformed    12   85.0%     0.0%     0.0%      0.0%     0.0%      0    0
+
+ ── DIFFICULTY (case_score · identity · kcalMAPE-mid · cWrong · plausFN) 
+     easy       n=228    88.7%   98.2%    3.5%    12    9
+     medium     n=230    88.8%   94.2%   15.9%     6    8
+     hard       n= 76    78.1%   88.7%   34.7%     3    1
+
+ ── TAG SLICES (case_score · identity · kcalMAPE-mid · cWrong · plausFN) 
+   [cuisine]
+     indian                 n=236    92.3%   97.4%    1.3%     9    8
+     south_asian            n= 19    87.7%   89.5%   24.4%     0    1
+     east_asian             n= 24    72.5%   78.3%   26.5%     2    2
+     middle_eastern         n= 10    69.4%  100.0%    3.2%     0    0
+     european               n= 22    79.4%   95.2%   26.4%     1    2
+     american               n= 32    77.9%   96.9%   42.2%     2    2
+     latin_american         n= 10    78.5%   80.0%    6.3%     0    0
+     african                n=  5    51.4%   25.0%   35.6%     0    0
+     mediterranean          n= 14    78.0%   84.6%   33.3%     0    2
+     global                 n=160    89.5%   98.7%    8.0%     7    1
+   [prep]
+     raw                    n=131    85.2%   97.7%   10.3%     7    7
+     boiled                 n= 27    87.3%   96.3%    9.4%     3    0
+     steamed                n=  4    60.9%   50.0%   18.1%     0    0
+     grilled                n= 12    70.3%   81.8%   33.3%     0    0
+     roasted                n=  6    85.5%   83.3%    7.0%     0    1
+     baked                  n= 22    70.3%   90.5%   53.6%     1    0
+     fried                  n= 30    80.2%   90.0%   23.9%     2    2
+     cooked_wet             n=170    91.3%   96.3%    0.4%     4    4
+     cooked_dry             n= 22    80.7%   90.9%   21.3%     2    2
+     ready_to_eat           n= 12    95.8%   91.7%    1.0%     0    2
+   [namespace]
+     branded                n= 25    84.9%   96.0%    2.4%     0    2
+     generic                n=491    87.5%   95.2%    8.7%    21   16
+   [portion_style]
+     explicit_grams         n=249    88.2%   94.7%    1.2%    13    9
+     count_portion          n= 70    79.3%   94.1%   30.6%     2    1
+     volume_portion         n= 58    82.1%   94.7%   21.3%     6    7
+     nl_quantity            n= 45    94.2%   97.7%    3.0%     0    0
+     no_quantity            n= 58    86.9%   94.5%   30.3%     0    0
+   [linguistic]
+     alias                  n= 17    87.2%   88.2%   18.2%     0    0
+     transliteration        n= 39    81.5%   94.6%   26.5%     2    0
+     spelling_variant       n=  5    97.3%  100.0%    0.1%     0    0
+     ambiguous              n= 20    86.0%   93.8%   18.3%     2    1
+   [structure]
+     multi_food             n= 87    95.2%   98.8%    3.2%     1    0
+     stuffed                n= 11    79.5%   90.9%   30.0%     0    1
+     topped                 n= 10    64.5%   77.8%   53.3%     1    1
+     combo                  n= 26    85.2%  100.0%   28.0%     0    0
+   [difficulty]
+     hard                   n=  8    82.5%  100.0%    0.0%     0    0
+   [expectation]
+     low_confidence_expected n=  8    82.5%  100.0%    0.0%     0    0
+     unresolved_expected    n= 10    82.0%    0.0%    0.0%     0    0
+
+ ── 10 WORST CASES ───────────────────────────────────────────────────
+   gl3-015          dessert                0%  
+       no identity match ("Apple" vs /apple pie|pie/)
+   cmp-006          composite_dish         6%  cWRONG plausFN
+       matched reject pattern in "Quinoa Puffs - Dahi Papdi Chaat"
+   in2-012          single_ingredient      7%  cWRONG
+       no identity match ("Dal" vs /moong|green gram/)
+   snk-005          snack                  8%  cWRONG plausFN
+       grams 240 outside 6–20
+   cmp-023          composite_dish         9%  
+       no identity match ("Animal fat, lard (pork)" vs /dumpling|gyoza|momo|potsticker|jiaozi/)
+   in1-004          composite_dish        10%  cWRONG
+       no identity match ("Paneer butter masala" vs /shahi paneer/)
+   x-cmp-004        composite_dish        10%  cWRONG
+       no identity match ("Rice, fried, with chicken" vs /fried rice/)
+   non-006          nonfood_or_malformed  10%  
+       resolved a non-food input at low confidence (should be unresolved)
+   non-007          nonfood_or_malformed  10%  
+       resolved a non-food input at medium confidence (should be unresolved)
+   cmp-020          composite_dish        10%  cWRONG
+       no identity match ("Rice, fried, with chicken" vs /fried rice/)
+══════════════════════════════════════════════════════════════════════

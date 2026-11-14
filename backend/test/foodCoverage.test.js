@@ -195,3 +195,32 @@ test('totals equal the sum of the items (no hidden adjustments)', { skip: !live 
     assert.ok(Math.abs(sum - r.total.calories) <= r.items.length, `${meal}: items ${sum} vs total ${r.total.calories}`);
   }
 });
+
+/* ---------------- amounts are never dropped by a split ---------------- */
+
+test('a weighed fragment is one food, and keeps its weight ("150g paneer paratha", "50g chana dal")', { skip: !live }, () => {
+  for (const [text, grams, re] of [['150g paneer paratha', 150, /paneer par/i], ['50g chana dal', 50, /chana|channa|bengal gram/i], ['30g parle g biscuits', 30, /parle|biscuit/i]]) {
+    const r = estimateFood(text);
+    assert.equal(r.items.length, 1, `${text} -> ${names(r).join(' | ')}`);
+    assert.equal(r.items[0].grams, grams, text);
+    assert.match(r.items[0].name, re, text);
+  }
+});
+
+test('two names for the same food are not two foods ("parle g biscuits")', { skip: !live }, () => {
+  assert.equal(estimateFood('parle g biscuits').items.length, 1);
+});
+
+test('a count of containers multiplies every food in the pairing ("2 plates misal pav")', { skip: !live }, () => {
+  const r = estimateFood('2 plates misal pav');
+  assert.deepEqual(r.items.map((i) => [i.name, i.qty]), [['Misal', 2], ['Pav', 4]]);
+});
+
+test('a drink measured in ml weighs like a liquid, not like the sugar in its name', { skip: !live }, () => {
+  const tea = estimateFood('330ml sweetened iced tea').items[0];
+  assert.ok(Math.abs(tea.grams - 330) <= 1, `${tea.grams} g`);
+  const milk = estimateFood('200 ml milk').items[0];
+  assert.ok(Math.abs(milk.grams - 206) <= 1, `milk keeps its 1.03 g/ml: ${milk.grams} g`);
+  // Not a liquid: the table's own density still applies.
+  assert.ok(estimateFood('300 ml dal').items[0].grams < 300);
+});

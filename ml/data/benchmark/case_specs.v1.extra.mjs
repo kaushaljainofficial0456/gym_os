@@ -74,7 +74,8 @@ add('x-sng-017', '120g grilled tofu', 'prepared_food', ['east_asian', 'grilled',
   { entity: { name_matches: 'tofu', reject_name_matches: 'silken.*raw|dessert|scramble' }, prep_state: 'grilled', portion: { grams: [117, 123] }, strategy: 'prep_variant' },
   db(['USDA_FDC'], /tofu.*(cooked|grilled|baked|fried)/i, null, 120, 0.30));
 add('x-sng-018', '100g cooked kidney beans', 'single_ingredient', ['latin_american', 'boiled', 'generic', 'explicit_grams'], 'easy',
-  { entity: { name_matches: 'kidney bean|rajma', reject_name_matches: 'raw|curry|masala|chawal|canned.*sauce' }, prep_state: 'boiled', portion: { grams: [98, 102] }, strategy: 'direct' },
+  // 2026-11-14 spec fix: also 'beans, kidney' (USDA word order), see sng-026.
+  { entity: { name_matches: 'kidney bean|beans, kidney|rajma', reject_name_matches: 'raw|curry|masala|chawal|canned.*sauce' }, prep_state: 'boiled', portion: { grams: [98, 102] }, strategy: 'direct' },
   std(n(100, 155, 6, 11, 15, 27, 0.2, 2), 100, 'USDA cooked kidney beans ≈ 127 kcal/100g'));
 add('x-sng-019', '100g cooked couscous', 'single_ingredient', ['african', 'steamed', 'generic', 'explicit_grams'], 'easy',
   { entity: { name_matches: 'couscous', reject_name_matches: 'raw|dry|salad.*dressing' }, prep_state: 'steamed', portion: { grams: [98, 102] }, strategy: 'direct' },
@@ -191,7 +192,8 @@ add('x-bev-004', '1 latte', 'beverage', ['european', 'cooked_wet', 'generic', 'n
   { entity: { name_matches: 'latte|caffe? latte|coffee.*milk', reject_name_matches: 'black coffee|espresso.*plain|frappe' }, food_class: 'beverage', prep_state: 'any', portion: { grams: [200, 400] }, strategy: 'direct' },
   std(n(80, 220, 4, 12, 8, 22, 3, 10), 240, 'medium latte w/ whole milk ≈ 120–190 kcal'));
 add('x-bev-005', '330ml sweetened iced tea', 'beverage', ['american', 'raw', 'generic', 'volume_portion'], 'easy',
-  { entity: { name_matches: 'iced tea|ice tea|sweet tea', reject_name_matches: 'unsweetened|green tea plain|leaves' }, food_class: 'beverage', prep_state: 'any', portion: { grams: [320, 350] }, strategy: 'direct' },
+  // 2026-11-14 spec fix: also 'tea, iced' (USDA word order).
+  { entity: { name_matches: 'iced tea|ice tea|sweet tea|tea, iced', reject_name_matches: 'unsweetened|green tea plain|leaves' }, food_class: 'beverage', prep_state: 'any', portion: { grams: [320, 350] }, strategy: 'direct' },
   std(n(60, 160, 0, 1, 15, 40, 0, 0.5), 335, 'sweetened iced tea ≈ 30 kcal/100g'));
 add('x-bev-006', '1 glass fresh lime soda (sweet)', 'beverage', ['indian', 'raw', 'generic', 'volume_portion'], 'medium',
   { entity: { name_matches: 'lime soda|nimbu.*soda|lemonade|nimbu pani|shikanji', reject_name_matches: 'lime, raw|salted only.*no sugar' }, food_class: 'beverage', prep_state: 'any', portion: { grams: [200, 320] }, strategy: 'direct' },

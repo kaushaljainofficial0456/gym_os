@@ -145,7 +145,9 @@ add('sng-025', '200g plain yogurt', 'single_ingredient', ['global', 'raw', 'gene
   std(n(90, 170, 5, 14, 6, 18, 2, 10), 200, 'plain whole-milk yogurt ≈ 60–75 kcal/100g'));
 
 add('sng-026', '150g cooked kidney beans', 'single_ingredient', ['global', 'boiled', 'generic', 'explicit_grams'], 'medium',
-  { entity: { name_matches: 'kidney bean|rajma|rajmah', reject_name_matches: 'curry|masala|chawal|canned.*sauce' }, food_class: 'ingredient', prep_state: 'boiled', portion: { grams: [146, 154] }, strategy: 'direct' },
+  // 2026-11-14 spec fix: USDA titles the row "Beans, kidney, red, ... cooked" -- the original regex
+  // 'kidney bean|rajma|rajmah' rejected the correct food on word order alone.
+  { entity: { name_matches: 'kidney bean|beans, kidney|rajma|rajmah', reject_name_matches: 'curry|masala|chawal|canned.*sauce' }, food_class: 'ingredient', prep_state: 'boiled', portion: { grams: [146, 154] }, strategy: 'direct' },
   std(n(150, 230, 8, 15, 22, 40, 0.3, 3), 150, 'USDA cooked kidney beans ≈ 127 kcal/100g'));
 
 add('sng-027', '100g tempeh', 'single_ingredient', ['east_asian', 'raw', 'generic', 'explicit_grams', 'ambiguous'], 'hard',
@@ -993,7 +995,8 @@ add('sng-047', '50g feta cheese', 'single_ingredient', ['mediterranean', 'raw', 
   db(['USDA_FDC'], /cheese, feta/i, null, 50, 0.18));
 
 add('sng-048', '100g cooked black beans', 'single_ingredient', ['latin_american', 'boiled', 'generic', 'explicit_grams'], 'easy',
-  { entity: { name_matches: 'black bean', reject_name_matches: 'raw|soup|sauce|refried.*lard heavy|dip' }, prep_state: 'boiled', portion: { grams: [98, 102] }, strategy: 'direct' },
+  // 2026-11-14 spec fix: 'black bean' -> also 'beans, black' (USDA word order), see sng-026.
+  { entity: { name_matches: 'black bean|beans, black', reject_name_matches: 'raw|soup|sauce|refried.*lard heavy|dip' }, prep_state: 'boiled', portion: { grams: [98, 102] }, strategy: 'direct' },
   std(n(100, 160, 6, 11, 15, 28, 0.2, 2), 100, 'USDA cooked black beans ≈ 132 kcal/100g'));
 
 add('sng-049', '80g hummus', 'sauce_condiment', ['middle_eastern', 'raw', 'generic', 'explicit_grams'], 'easy',
