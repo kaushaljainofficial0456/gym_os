@@ -15,11 +15,12 @@ import { Card, ErrorState, Modal, PageSkeleton, Seg, Toast } from '../../UI.jsx'
 import Select from '../../Select.jsx';
 import Icon from '../../Icon.jsx';
 import { KIND, Field, SectionHead, Tag, PlaceholderChips, insertAtCursor, smsSegments, AudioButton, useApi } from './shared.jsx';
+import Recordings from './Recordings.jsx';
 
 const PURPOSES = [...Object.entries(KIND).map(([value, v]) => ({ value, label: v.label })), { value: 'general', label: 'Something else' }];
 
 export default function Studio() {
-  const [kind, setKind] = useState('voice');
+  const [kind, setKind] = useState('recordings');
   const settings = useApi('/followups/settings');
   const [toast, setToast] = useState({ msg: '', tone: 'success' });
   if (settings.loading) return <PageSkeleton label="Loading messages" />;
@@ -27,7 +28,8 @@ export default function Studio() {
   const ctx = { languages: settings.data.languages, placeholders: settings.data.placeholders, settings: settings.data.settings, notify: (msg, tone = 'success') => setToast({ msg, tone }) };
   return (
     <div className="space-y-5">
-      <div className="max-w-md"><Seg value={kind} onChange={setKind} options={[{ value: 'voice', label: 'Voice messages' }, { value: 'sms', label: 'SMS' }, { value: 'whatsapp', label: 'WhatsApp' }]} /></div>
+      <div className="max-w-xl"><Seg value={kind} onChange={setKind} options={[{ value: 'recordings', label: 'Recordings' }, { value: 'voice', label: 'Read-out text' }, { value: 'sms', label: 'SMS' }, { value: 'whatsapp', label: 'WhatsApp' }]} /></div>
+      {kind === 'recordings' && <Recordings ctx={ctx} />}
       {kind === 'voice' && <VoiceScripts ctx={ctx} />}
       {kind === 'sms' && <SmsTemplates ctx={ctx} />}
       {kind === 'whatsapp' && <WhatsAppTemplates ctx={ctx} />}

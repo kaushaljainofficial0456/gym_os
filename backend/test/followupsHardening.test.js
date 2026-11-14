@@ -612,7 +612,12 @@ test('contract: Exotel WhatsApp events -- statuses and replies from every known 
 test('contract: ElevenLabs and self-hosted agent results; an unknown status cannot break settlement', async () => {
   const tok = jobToken('fj_e');
   const pc = elevenlabs.conversation.parseResult(JSON.stringify({ type: 'post_call_transcription', event_timestamp: 1, data: { agent_id: 'a', conversation_id: 'conv_9', status: 'done', metadata: { call_duration_secs: 22 }, analysis: { transcript_summary: 'Will come Monday', data_collection_results: { outcome: { value: 'coming_back' } } }, conversation_initiation_client_data: { dynamic_variables: { followup_job: tok } } } }));
-  assert.deepEqual(pc, { token: tok, ref: 'conv_9', status: 'completed', duration: 22, outcome: 'coming_back', summary: 'Will come Monday' });
+  // Every original field, exactly ...
+  const core = ({ token, ref, status, duration, outcome, summary }) => ({ token, ref, status, duration, outcome, summary });
+  assert.deepEqual(core(pc), { token: tok, ref: 'conv_9', status: 'completed', duration: 22, outcome: 'coming_back', summary: 'Will come Monday' });
+  // ... and the AI Communication 2.0 fields, empty when the provider sent none.
+  assert.deepEqual({ provider: pc.provider, renewal_interest: pc.renewal_interest, unanswered_question: pc.unanswered_question, objection: pc.objection, understood: pc.understood, transcript: pc.transcript, cost: pc.cost },
+    { provider: 'elevenlabs', renewal_interest: null, unanswered_question: null, objection: null, understood: null, transcript: [], cost: null });
   const fail = (reason) => elevenlabs.conversation.parseResult(JSON.stringify({ type: 'call_initiation_failure', data: { conversation_id: 'c', failure_reason: reason, conversation_initiation_client_data: { dynamic_variables: { followup_job: tok } } } }));
   assert.equal(fail('busy').status, 'busy');
   assert.equal(fail('no-answer').status, 'no_answer');

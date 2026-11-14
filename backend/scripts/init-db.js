@@ -9,6 +9,9 @@ import { id, now } from '../src/ids.js';
 import {
   upgradeCouponRedemptionsSqlite, upgradeCouponRedemptionsPg, COUPON_REDEMPTION_INDEXES,
 } from './lib/couponRedemptionsUpgrade.js';
+import {
+  prepareFollowupsSqlite, upgradeFollowupsSqlite, prepareFollowupsPg, upgradeFollowupsPg,
+} from './lib/followupsUpgrade.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -912,8 +915,12 @@ if (config.databaseUrl) {
   const { default: pg } = await import('pg');
   const pool = new pg.Pool({ connectionString: config.databaseUrl });
   const sql = fs.readFileSync(schemaPath, 'utf8');
+  // AI Communication 2.0: new columns on follow-up tables that already exist,
+  // before schema.sql creates indexes on them (scripts/lib/followupsUpgrade.js).
+  await prepareFollowupsPg((s) => pool.query(s));
   await pool.query(sql);
   await applyPgMigrations(pool);
+  await upgradeFollowupsPg((s) => pool.query(s));
   await seedDefaultPricing((s) => pool.query(s));
   await seedDefaultFeatureFlags((s) => pool.query(s));
   // Defense-in-depth: Row-Level Security policies (PG only; idempotent).
@@ -930,8 +937,11 @@ if (config.databaseUrl) {
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA foreign_keys = ON;');
+  prepareFollowupsSqlite(db);
   db.exec(fs.readFileSync(schemaPath, 'utf8'));
   await applySqliteMigrations(db);
+  const rebuilt = upgradeFollowupsSqlite(db, fs.readFileSync(schemaPath, 'utf8'));
+  if (rebuilt.length) console.log(`AI Communication 2.0: upgraded ${rebuilt.join(', ')}`);
   await seedDefaultPricing((s) => db.exec(s));
   await seedDefaultFeatureFlags((s) => db.exec(s));
   db.close();

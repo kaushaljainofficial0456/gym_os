@@ -3156,6 +3156,8 @@ CREATE TABLE IF NOT EXISTS followup_settings (
   monthly_cap_inr REAL,                              -- owner's spending cap on usage per month (NULL = none)
   compliance_json TEXT,                              -- owner's confirmations (registration, consent basis), versioned
   last_tick_at    TEXT,
+  keep_transcripts INTEGER NOT NULL DEFAULT 1,       -- keep AI conversation transcripts at all
+  transcript_days INTEGER NOT NULL DEFAULT 90,       -- and for how long (7-365); summaries are kept
   updated_at      TEXT NOT NULL
 );
 
@@ -3276,6 +3278,11 @@ CREATE TABLE IF NOT EXISTS followup_agents (
   purpose         TEXT,
   knowledge       TEXT,
   faqs_json       TEXT,
+  tone            TEXT NOT NULL DEFAULT 'warm' CHECK (tone IN ('warm','professional','energetic')),
+  max_minutes     INTEGER NOT NULL DEFAULT 3,        -- the call's length limit (1-5), and its minute hold
+  allow_callbacks INTEGER NOT NULL DEFAULT 1,        -- may book a call back at the member's chosen time
+  allow_handover  INTEGER NOT NULL DEFAULT 1,        -- may record that the member wants a person
+  answer_plans    INTEGER NOT NULL DEFAULT 1,        -- may quote the gym's own plans (packages table)
   version         INTEGER NOT NULL DEFAULT 1,
   provider        TEXT,                              -- who runs it (providers/index.js): elevenlabs | http | test
   provider_agent_id TEXT,
@@ -3320,8 +3327,10 @@ CREATE TABLE IF NOT EXISTS followup_rules (
   org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   branch_id       TEXT REFERENCES branches(id) ON DELETE SET NULL,
   name            TEXT NOT NULL,
-  kind            TEXT NOT NULL CHECK (kind IN ('missed_visits','membership_ending','payment_due','onboarding')),
+  kind            TEXT NOT NULL CHECK (kind IN ('missed_visits','membership_ending','payment_due','onboarding','announcement')),
   status          TEXT NOT NULL DEFAULT 'paused' CHECK (status IN ('active','paused')),
+  purpose         TEXT NOT NULL DEFAULT 'service' CHECK (purpose IN ('service','promotional')),   -- promotional needs the member's separate permission
+  recording_id    TEXT,                              -- prerecorded calls: followup_recordings (else the voice message is read by TTS)
   config_json     TEXT NOT NULL,
   sequence_json   TEXT NOT NULL,
   per_day         INTEGER NOT NULL DEFAULT 1,        -- call attempts on a contact day while unanswered (1-3)
@@ -3361,6 +3370,10 @@ CREATE TABLE IF NOT EXISTS followup_member_prefs (
   paused_until    TEXT,                               -- gym-day key
   max_per_day     INTEGER,
   number_id       TEXT REFERENCES followup_numbers(id) ON DELETE SET NULL,
+  -- Offers, events and other promotional contact: a SEPARATE permission. A
+  -- call back the member asked for never grants it.
+  promo_consent   TEXT CHECK (promo_consent IS NULL OR promo_consent IN ('granted','refused')),
+  promo_opted_out_at TEXT,
   updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_followup_prefs_org ON followup_member_prefs(org_id);
@@ -3414,6 +3427,7 @@ CREATE TABLE IF NOT EXISTS followup_jobs (
   duration_secs   INTEGER,
   error           TEXT,
   variables_json  TEXT,
+  callback_id     TEXT,                              -- set when this job carries out a scheduled call back
   created_at      TEXT NOT NULL,
   dialed_at       TEXT,
   ended_at        TEXT,
@@ -3430,7 +3444,15 @@ CREATE INDEX IF NOT EXISTS idx_followup_jobs_ref ON followup_jobs(provider_ref);
 CREATE INDEX IF NOT EXISTS idx_followup_jobs_org_day ON followup_jobs(org_id, day_key);
 CREATE INDEX IF NOT EXISTS idx_followup_jobs_to ON followup_jobs(to_number, channel, created_at);
 
--- Human follow-ups: a member asked for a person.
+-- Call backs: a member asked to be called back.
+--   mode 'human'  a person from the gym calls (new -> assigned -> in_progress
+--                 -> completed | unreachable | cancelled); automated contact
+--                 pauses for the member while it is open.
+--   mode 'agent'  the AI calls back at scheduled_for; mode 'call' plays the
+--                 recording / voice message then. scheduled -> processing ->
+--                 completed | scheduled (retry) | failed | cancelled | expired.
+-- Each attempt is a followup_jobs row with dedupe_key 'cb:<id>:<attempt>', so
+-- two workers can never place the same call back twice.
 CREATE TABLE IF NOT EXISTS followup_callbacks (
   id              TEXT PRIMARY KEY,
   org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -3438,19 +3460,104 @@ CREATE TABLE IF NOT EXISTS followup_callbacks (
   client_id       TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   phone           TEXT,
   rule_id         TEXT,
-  job_id          TEXT,
+  job_id          TEXT,                              -- the call or message where it was asked for
   channel         TEXT,
   reason          TEXT,
-  requested_time  TEXT,
+  requested_time  TEXT,                              -- the member's own words ("next Monday at 6")
   assigned_to     TEXT REFERENCES users(id) ON DELETE SET NULL,
   priority        TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','high')),
-  status          TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','assigned','in_progress','completed','unreachable','cancelled')),
+  status          TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','assigned','in_progress','completed','unreachable','cancelled','scheduled','processing','failed','expired')),
   note            TEXT,
+  mode            TEXT NOT NULL DEFAULT 'human' CHECK (mode IN ('human','agent','call')),
+  scheduled_for   TEXT,                              -- UTC instant an automated call back is due
+  scheduled_local TEXT,                              -- the same, gym-local 'YYYY-MM-DD HH:MM', as confirmed to the member
+  timezone        TEXT,
+  conversation_id TEXT,                              -- the AI conversation it came from
+  context         TEXT,                              -- what the member said, for whoever calls back
+  agent_id        TEXT,
+  recording_id    TEXT,
+  script_group_id TEXT,
+  language        TEXT,
+  source          TEXT,                              -- member_request | keypad | whatsapp | owner
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  max_attempts    INTEGER NOT NULL DEFAULT 2,
+  last_job_id     TEXT,
+  last_error      TEXT,
+  events_json     TEXT,                              -- lifecycle trail: [{ at, event, by, note }]
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL,
-  closed_at       TEXT
+  closed_at       TEXT,
+  completed_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_followup_callbacks_org ON followup_callbacks(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_followup_callbacks_due ON followup_callbacks(status, scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_callback ON followup_jobs(callback_id);
+
+-- Prerecorded messages: the owner's own audio, stored as phone-ready WAV
+-- (8 kHz, 16-bit, mono -- what Exotel plays). Converted in the browser from
+-- MP3/M4A/OGG/WAV/WebM, validated again on the server. Never pruned while
+-- active; archived recordings stay for the history of past calls.
+CREATE TABLE IF NOT EXISTS followup_recordings (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  language        TEXT NOT NULL DEFAULT 'en',
+  purpose         TEXT,
+  mime            TEXT NOT NULL DEFAULT 'audio/wav',
+  data_b64        TEXT NOT NULL,
+  bytes           INTEGER NOT NULL,
+  duration_secs   REAL NOT NULL,
+  sha256          TEXT NOT NULL,
+  original_name   TEXT,
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+  created_by      TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_recordings_org ON followup_recordings(org_id, status);
+
+-- One row per AI conversation: what happened, in a form the owner can act on.
+-- summary is written by the server from the structured fields (never "call
+-- completed"); transcript_json is kept only while the gym keeps transcripts
+-- and is cleared at transcript_expires_at.
+CREATE TABLE IF NOT EXISTS followup_conversations (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  job_id          TEXT NOT NULL UNIQUE,
+  client_id       TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  rule_id         TEXT,
+  agent_id        TEXT,
+  from_callback_id TEXT,                             -- set when this call WAS a scheduled call back
+  language        TEXT,
+  status          TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress','completed','incomplete','no_answer','busy','failed')),
+  outcome         TEXT,
+  intent          TEXT,
+  renewal_interest TEXT CHECK (renewal_interest IS NULL OR renewal_interest IN ('yes','maybe','no','unknown')),
+  questions       TEXT,
+  objections      TEXT,
+  callback_requested INTEGER NOT NULL DEFAULT 0,
+  callback_id     TEXT,                              -- the call back booked during this conversation
+  human_escalation INTEGER NOT NULL DEFAULT 0,
+  owner_action_required INTEGER NOT NULL DEFAULT 0,
+  owner_action    TEXT,
+  owner_action_done_at TEXT,
+  owner_action_done_by TEXT,
+  summary         TEXT,
+  provider_summary TEXT,
+  transcript_json TEXT,
+  transcript_expires_at TEXT,
+  tools_json      TEXT,                              -- what the agent asked the server during the call, and the answers
+  duration_secs   INTEGER,
+  provider        TEXT,
+  provider_ref    TEXT,
+  cost_json       TEXT,                              -- provider-reported usage (credits, LLM charge) when sent
+  simulated       INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  ended_at        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_followup_conversations_org ON followup_conversations(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_followup_conversations_member ON followup_conversations(client_id, created_at);
 
 -- Spoken audio, cached by what was said and in which voice.
 CREATE TABLE IF NOT EXISTS followup_audio (

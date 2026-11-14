@@ -4,8 +4,7 @@
  *   Members     who can be reached on which channel, and why not. The owner
  *               records permission members gave (with what proves it); a
  *               member's own "stop" is never overridden from here.
- *   Call backs  members who asked for a person. Automated contact pauses for
- *               them until a call back is closed.
+ *   (Call backs have their own section: Callbacks.jsx.)
  */
 import { useMemo, useState } from 'react';
 import { api } from '../../../api.js';
@@ -14,8 +13,8 @@ import Select from '../../Select.jsx';
 import Icon from '../../Icon.jsx';
 import { CHANNEL, OUTCOME, STATUS, Field, Pill, SectionHead, Tag, statusTone, when, useApi } from './shared.jsx';
 
-export default function People({ view }) {
-  return view === 'callbacks' ? <Callbacks /> : <Members />;
+export default function People() {
+  return <Members />;
 }
 
 const CH = [['call', 'Calls'], ['sms', 'SMS'], ['whatsapp', 'WhatsApp']];
@@ -95,8 +94,8 @@ function ConsentModal({ ids, onClose, onDone }) {
     <Modal open onClose={onClose} title={`Record permission for ${ids.length} member${ids.length === 1 ? '' : 's'}`}
       footer={<div className="flex justify-end gap-2 w-full"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="button" className="btn-primary" disabled={!attest || !channels.size || evidence.trim().length < 5} onClick={save}>Record</button></div>}>
       <div className="space-y-4">
-        <Field label="They agreed to">
-          <div className="flex gap-1.5 flex-wrap">{CH.map(([k, l]) => <Pill key={k} on={channels.has(k)} onClick={() => setChannels((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; })}>{l}</Pill>)}</div>
+        <Field label="They agreed to" hint="Offers & events is a separate permission: only members who agreed to it hear promotional announcements. A call back they asked for never counts as agreeing.">
+          <div className="flex gap-1.5 flex-wrap">{[...CH, ['promo', 'Offers & events']].map(([k, l]) => <Pill key={k} on={channels.has(k)} onClick={() => setChannels((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; })}>{l}</Pill>)}</div>
         </Field>
         <Field label="How you know" hint="Kept with each member’s record, as proof."><input className="input w-full" value={evidence} maxLength={300} onChange={(e) => setEvidence(e.target.value)} /></Field>
         <label className="flex gap-3 items-start text-[14px]" style={{ color: 'var(--ink)' }}>
@@ -124,6 +123,7 @@ function MemberDetail({ member, languages, onClose, onChanged }) {
       <div className="space-y-5">
         <div className="flex flex-wrap gap-2">
           {CH.map(([k, l]) => <Tag key={k} tone={member.reach[k] ? 'good' : member.opted_out[k] ? 'bad' : 'mute'}>{l}: {member.opted_out[k] ? 'asked to stop' : member.reach[k] ? 'yes' : 'no permission'}</Tag>)}
+          <Tag tone={member.offers ? 'good' : 'mute'}>Offers & events: {member.offers ? 'yes' : 'no'}</Tag>
         </div>
         <div className="grid sm:grid-cols-3 gap-4">
           <Field label="Pause automated contact">
@@ -166,54 +166,5 @@ function MemberDetail({ member, languages, onClose, onChanged }) {
         </section>
       </div>
     </Modal>
-  );
-}
-
-/* ───────────── call backs ───────────── */
-
-const CB_STATUS = { new: 'New', assigned: 'Assigned', in_progress: 'In progress', completed: 'Done', unreachable: 'Could not reach', cancelled: 'Cancelled' };
-
-function Callbacks() {
-  const [show, setShow] = useState('open');
-  const c = useApi(`/followups/callbacks${show === 'open' ? '' : `?status=${show}`}`);
-  const [toast, setToast] = useState({ msg: '' });
-  if (c.loading) return <PageSkeleton label="Loading call backs" />;
-  if (c.error) return <ErrorState error={c.error} onRetry={c.reload} />;
-  const update = async (cb, body) => {
-    try { await api(`/followups/callbacks/${cb.id}`, { method: 'PUT', body: JSON.stringify(body) }); c.reload(); setToast({ msg: 'Updated' }); } catch (e) { setToast({ msg: e.message, tone: 'error' }); }
-  };
-  const list = c.data.callbacks;
-  return (
-    <div className="space-y-4">
-      <SectionHead title="Call backs" />
-      <p className="text-[14px] -mt-1" style={{ color: 'var(--mute)' }}>Members who asked to talk to a person. Automated calls and messages pause for them until you close their call back.</p>
-      <div className="flex gap-1.5">{[['open', 'Open'], ['completed', 'Done'], ['unreachable', 'Could not reach']].map(([k, l]) => <Pill key={k} on={show === k} onClick={() => setShow(k)}>{l}</Pill>)}</div>
-      {list.length === 0 ? <Card className="p-5 text-[15px]" style={{ color: 'var(--mute)' }}>{show === 'open' ? 'Nobody is waiting for a call back.' : 'Nothing here.'}</Card> : (
-        <div className="space-y-3">
-          {list.map((cb) => (
-            <Card key={cb.id} className="p-4 space-y-3">
-              <div className="flex items-start gap-3 flex-wrap">
-                <div className="flex-1 min-w-[180px]">
-                  <div className="font-semibold" style={{ color: 'var(--ink)' }}>{cb.member_name}</div>
-                  <div className="text-[13px]" style={{ color: 'var(--mute)' }}>{when(cb.created_at)} · {CHANNEL[cb.channel]?.label || cb.channel}{cb.campaign ? ` · ${cb.campaign}` : ''}</div>
-                </div>
-                <Tag tone={cb.priority === 'high' ? 'warn' : 'mute'}>{CB_STATUS[cb.status]}</Tag>
-                {cb.phone && <a className="btn btn-sm" href={`tel:${cb.phone}`}><Icon name="phone" size={14} /> Call</a>}
-              </div>
-              {cb.reason && <p className="text-[14px]" style={{ color: 'var(--ink)' }}>{cb.reason}</p>}
-              {show === 'open' && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="w-52"><Select aria-label="Assign to" value={cb.assigned_to || ''} onChange={(v) => update(cb, { assigned_to: v || null })} placeholder="Assign to" options={(c.data.staff || []).map((s) => ({ value: s.id, label: s.name }))} /></div>
-                  <button type="button" className="btn btn-sm" onClick={() => update(cb, { status: 'completed', note: window.prompt('What happened? (optional)') || undefined })}>Done</button>
-                  <button type="button" className="btn btn-sm" onClick={() => update(cb, { status: 'unreachable' })}>Could not reach</button>
-                </div>
-              )}
-              {cb.note && <p className="text-[13px]" style={{ color: 'var(--mute)' }}>Note: {cb.note}</p>}
-            </Card>
-          ))}
-        </div>
-      )}
-      {toast.msg && <Toast message={toast.msg} tone={toast.tone} onDone={() => setToast({ msg: '' })} />}
-    </div>
   );
 }

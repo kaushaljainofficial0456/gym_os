@@ -97,9 +97,12 @@ export function fill(text, formatted) {
 export function buildVoiceMessage({ script, language, kind, overrides, vars }) {
   const f = formatVariables(vars, language);
   const lines = spokenLines(language, kind, overrides);
-  const menu = [lines.press1, lines.press2, lines.press9].map((l) => fill(l, f)).join(' ');
+  // An announcement asks nothing of the member: only "talk to us" and "stop".
+  const menu = [lines.press1, kind === 'announcement' ? null : lines.press2, lines.press9].filter(Boolean).map((l) => fill(l, f)).join(' ');
+  const notice = fill(lines.disclosure, f);
   return {
-    full: [fill(lines.disclosure, f), fill(script, f), menu].filter(Boolean).join(' '),
+    full: [notice, fill(script, f), menu].filter(Boolean).join(' '),
+    notice,
     menu,
     after: { 1: fill(lines.after1, f), 2: fill(lines.after2, f), 9: fill(lines.after9, f) },
   };

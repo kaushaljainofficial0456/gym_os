@@ -77,6 +77,7 @@ export async function startApi({ db = null } = {}) {
   app.set('db', db);
   app.use(['/api/followups/hooks/elevenlabs', '/api/followups/hooks/agent'], express.raw({ type: 'application/json' }));
   app.use('/api/followups/hooks', express.urlencoded({ extended: false }));
+  app.use('/api/followups/recordings', express.raw({ type: ['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave'], limit: '4mb' }));
   app.use(express.json({ limit: '2mb' }));
   app.use('/api/followups', routes.followupPublicRoutes(db));
   app.use('/api/followups', routes.default(db));

@@ -159,3 +159,51 @@ test('RLS: inside a gym\'s transaction, Postgres itself hides and refuses every 
   assert.equal(upd.changes, 0, 'cannot touch rb\'s balance');
   assert.equal((await wallet.getWallet(db, 'rb')).sms, 5);
 });
+
+/* ---------------- AI Communication 2.0 ---------------- */
+
+test('concurrency: 12 scheduler workers racing for one due call back place it exactly once', { skip }, async (t) => {
+  const { db } = await pgPoolDb({ max: 16, t });
+  const cbs = await import('../src/services/followups/callbacks.js');
+  await seedGym(db, 'cr');
+  await enableGym(db, 'cr');
+  const m = await addMember(db, 'cr', { lastVisit: 1 });
+  const due = new Date(noon.getTime() + 3600_000);
+  const cb = await cbs.scheduleCallback(db, { orgId: 'cr', clientId: m.cid, phone: m.phone, mode: 'call', at: due.toISOString(), local: '2026-01-01 13:00', timezone: 'Asia/Kolkata', scriptGroupId: 'any', source: 'owner' });
+  await db.run(`UPDATE followup_callbacks SET script_group_id = 'g' WHERE id = ?`, [cb.id]);
+  // Warm the pool so the workers really overlap.
+  await Promise.all(Array.from({ length: 12 }, () => db.q('SELECT pg_sleep(0.01)')));
+  const results = await Promise.all(Array.from({ length: 12 }, () => cbs.queueDueCallbacks(db, 'cr', { at: due })));
+  assert.equal(results.reduce((s, r) => s + r.queued, 0), 1, 'one worker queued it');
+  const jobs = await db.q('SELECT id, dedupe_key FROM followup_jobs WHERE callback_id = ?', [cb.id]);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].dedupe_key, `cb:${cb.id}:1`);
+  const after = await cbs.getCallback(db, 'cr', cb.id);
+  assert.equal(after.status, 'processing');
+  assert.equal(n(after.attempts), 1, 'claimed once');
+});
+
+test('RLS: conversations, call backs and recordings are invisible and untouchable across gyms', { skip }, async (t) => {
+  const { db, admin, schema } = await pgPoolDb({ t });
+  const ts = new Date().toISOString();
+  for (const g of ['xa', 'xb']) {
+    await seedGym(db, g);
+    const m = await addMember(db, g);
+    await db.run(`INSERT INTO followup_conversations (id, org_id, job_id, client_id, status, summary, transcript_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'completed', 'Agreed to renew.', '[]', ?, ?)`, [`cv_${g}`, g, `j_${g}`, m.cid, ts, ts]);
+    await db.run(`INSERT INTO followup_callbacks (id, org_id, client_id, status, mode, scheduled_for, created_at, updated_at) VALUES (?, ?, ?, 'scheduled', 'agent', ?, ?, ?)`, [`cb_${g}`, g, m.cid, ts, ts, ts]);
+    await db.run(`INSERT INTO followup_recordings (id, org_id, name, data_b64, bytes, duration_secs, sha256, created_at, updated_at) VALUES (?, ?, 'Offer', 'UklGRg==', 4, 2, ?, ?, ?)`, [`rec_${g}`, g, `h_${g}`, ts, ts]);
+  }
+  const role = 'fu_rls_probe2';
+  await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN CREATE ROLE ${role} NOLOGIN NOBYPASSRLS; END IF; END $$`);
+  await admin.query(`GRANT USAGE ON SCHEMA ${schema} TO ${role}; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schema} TO ${role}`);
+  const asGym = (org, fn) => db.tx(async (tx) => { await tx.run(`SET LOCAL ROLE ${role}`); return fn(tx); }, { orgId: org });
+  for (const tbl of ['followup_conversations', 'followup_callbacks', 'followup_recordings']) {
+    const seen = await asGym('xa', (q) => q.q(`SELECT DISTINCT org_id FROM ${tbl}`));
+    assert.deepEqual(seen.map((r) => r.org_id), ['xa'], `${tbl}: only gym xa's rows`);
+    const upd = await asGym('xa', (q) => q.run(`UPDATE ${tbl} SET updated_at = 'x' WHERE org_id = 'xb'`));
+    assert.equal(upd.changes, 0, `${tbl}: cannot touch xb`);
+  }
+  await assert.rejects(asGym('xa', (q) => q.run(`INSERT INTO followup_callbacks (id, org_id, client_id, status, mode, created_at, updated_at) VALUES ('evil', 'xb', 'c', 'scheduled', 'agent', ?, ?)`, [ts, ts])), /row-level security/);
+  const leak = await asGym('xa', (q) => q.q1(`SELECT transcript_json FROM followup_conversations WHERE id = 'cv_xb'`));
+  assert.equal(leak, null, 'another gym\'s transcript cannot be read by id');
+});

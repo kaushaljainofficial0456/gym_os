@@ -28,3 +28,11 @@
 .cm-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
 .cm-bar { flex: 1; min-width: 4px; border-radius: 4px 4px 0 0; display: flex; flex-direction: column-reverse; overflow: hidden; background: rgb(var(--tint-rgb) / .05); }
 .cm-bar > span { display: block; width: 100%; }
+
+/* Conversations: stacked on a phone, four columns from tablet width up. */
+.cm-conv { flex-direction: column; align-items: stretch; gap: 6px; }
+.cm-conv-head { display: none; }
+@media (min-width: 768px) {
+  .cm-conv, .cm-conv-head { display: grid; grid-template-columns: minmax(140px, 1.1fr) minmax(0, 2.6fr) minmax(120px, 1fr) 120px; gap: 12px; align-items: start; }
+  .cm-conv-head { padding: 10px 16px; color: var(--faint); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+}

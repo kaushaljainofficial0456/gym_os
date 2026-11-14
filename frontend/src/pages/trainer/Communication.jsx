@@ -17,13 +17,15 @@ const Campaigns = lazy(() => import('../../components/trainer/comms/Campaigns.js
 const Studio = lazy(() => import('../../components/trainer/comms/Studio.jsx'));
 const VoicesAgents = lazy(() => import('../../components/trainer/comms/VoicesAgents.jsx'));
 const People = lazy(() => import('../../components/trainer/comms/People.jsx'));
+const Callbacks = lazy(() => import('../../components/trainer/comms/Callbacks.jsx'));
+const Conversations = lazy(() => import('../../components/trainer/comms/Conversations.jsx'));
 const Activity = lazy(() => import('../../components/trainer/comms/Activity.jsx'));
 const Billing = lazy(() => import('../../components/trainer/comms/Billing.jsx'));
 const Settings = lazy(() => import('../../components/trainer/comms/Settings.jsx'));
 
 const TABS = [
-  ['overview', 'Overview'], ['campaigns', 'Campaigns'], ['messages', 'Messages'], ['voices', 'Voices & AI agents'],
-  ['members', 'Members'], ['callbacks', 'Call backs'], ['history', 'History'], ['plans', 'Plans & usage'], ['settings', 'Settings'],
+  ['overview', 'Overview'], ['campaigns', 'Campaigns'], ['messages', 'Messages & recordings'], ['voices', 'Voices & AI agents'],
+  ['conversations', 'Conversations'], ['callbacks', 'Call backs'], ['members', 'Members'], ['history', 'History'], ['plans', 'Plans & usage'], ['settings', 'Settings'],
 ];
 
 export default function Communication() {
@@ -33,7 +35,7 @@ export default function Communication() {
   useQueryAction('tab', (v) => { if (TABS.some(([k]) => k === v)) setTab(v); });
   const go = (t) => { setTab(t); nav(`${loc.pathname}?tab=${t}`, { replace: true }); window.scrollTo({ top: 0 }); };
 
-  const Body = { overview: Overview, campaigns: Campaigns, messages: Studio, voices: VoicesAgents, members: People, callbacks: People, history: Activity, plans: Billing, settings: Settings }[tab];
+  const Body = { overview: Overview, campaigns: Campaigns, messages: Studio, voices: VoicesAgents, conversations: Conversations, callbacks: Callbacks, members: People, history: Activity, plans: Billing, settings: Settings }[tab];
 
   return (
     <div className="space-y-5">

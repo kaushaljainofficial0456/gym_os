@@ -27,6 +27,7 @@ import { getPriceBook, savePriceBook, evaluatePack, unitCosts, getWallet, lineCa
 import * as providers from '../services/followups/providers/index.js';
 import { normalizePhone } from '../services/followups/render.js';
 import { recentOwnerChanges } from '../services/followups/audit.js';
+import { usageReport, usageTrend } from '../services/followups/usageReport.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -184,10 +185,18 @@ export default function consoleFollowupRoutes(db, { writeAuditLog }) {
     res.json({ since, gyms: out, totals });
   }));
 
+  // Usage by calling mode, campaign, gym and month; call-back counts.
+  // ?period=YYYY-MM (default this month), ?org=<id> for one gym.
+  r.get('/usage', wrap(async (req, res) => {
+    const orgId = req.query.org ? String(req.query.org) : null;
+    res.json({ report: await usageReport(db, { orgId, period: req.query.period }), trend: await usageTrend(db, { orgId, months: 6 }) });
+  }));
+
   r.get('/gyms/:orgId', wrap(async (req, res) => {
     const org = await db.q1('SELECT id, name FROM organizations WHERE id = ?', [req.params.orgId]);
     if (!org) return res.status(404).json({ error: 'Gym not found' });
     res.json({
+      usage: await usageReport(db, { orgId: org.id, period: req.query.period }),
       gym: org,
       wallet: await getWallet(db, org.id, await getPriceBook(db)),
       lines: await lineCapacity(db, org.id),

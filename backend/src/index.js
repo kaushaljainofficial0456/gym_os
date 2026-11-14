@@ -226,6 +226,10 @@ export async function buildApp() {
   app.use(['/api/followups/hooks/elevenlabs', '/api/followups/hooks/agent'], express.raw({ type: 'application/json', limit: '2mb' }));
   app.use('/api/followups/hooks', express.urlencoded({ extended: false, limit: '256kb' }));
   app.use('/api/followups/voices/clone', express.json({ limit: '9mb' }));
+  // Prerecorded messages arrive as WAV (8 kHz mono after the page converts
+  // them; 2 minutes is ~1.9 MB). Only audio bodies are read raw here; JSON
+  // requests to the same path fall through to express.json() below.
+  app.use('/api/followups/recordings', express.raw({ type: ['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave'], limit: '4mb' }));
   // eSSL / ZKTeco terminals post tab-separated attendance lines, labelled
   // text/plain or not labelled at all -- read every body there as text.
   app.use('/iclock', express.text({ type: () => true, limit: '1mb' }));

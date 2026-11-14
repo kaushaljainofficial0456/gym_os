@@ -1,5 +1,10 @@
 # AI Communication — Production Readiness
 
+> Superseded for 2.0 features by [AI_COMMUNICATION_TEST_REPORT.md](AI_COMMUNICATION_TEST_REPORT.md)
+> (results and status) and [AI_COMMUNICATION_DEPLOYMENT.md](AI_COMMUNICATION_DEPLOYMENT.md)
+> (migration and go-live). This report still describes the Phase 2 hardening it covered;
+> its migration counts (22 tables) are now 24 tables, 22 with row-level security.
+
 Branch `feat/ai-communication` (Sambhav's commit `5548dd7` + this phase, uncommitted in worktree
 `gym_os/.claude/worktrees/ai-communication`). Assessed 2026-11-10. Design and operating guide:
 [`docs/FOLLOWUPS.md`](FOLLOWUPS.md).

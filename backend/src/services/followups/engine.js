@@ -32,7 +32,7 @@ import { config as appConfig } from '../../config.js';
 import { dayKey, getOrgTzCached, shiftDayKey } from '../../utils/time.js';
 import { setupStatus, jobToken, publicBase, exotelEnv } from './config.js';
 import * as providers from './providers/index.js';
-import { dueStep, normalizeConfig } from './schedule.js';
+import { dueStep, normalizeConfig, situationKey } from './schedule.js';
 import { quickRepliesFor, spokenLines, isLanguage, LANGUAGE_CODES } from './languages.js';
 import { normalizePhone, firstName, buildVoiceMessage, buildText, formatVariables, missingDetails, smsSegments, fill, toMetaBody } from './render.js';
 import { evaluate, recordConsent, consentKey, REASONS } from './consent.js';
@@ -40,10 +40,16 @@ import { getWallet, holdUnits, settleJob, chargeMessage, refundJob, attachProvid
 import { lineFor } from './numbers.js';
 import { ensureAudio } from './audio.js';
 import { pickVariant, agentPrompt, agentHash, openCallback } from './studio.js';
+import { queueDueCallbacks, syncCallbackFromJob } from './callbacks.js';
+import { agentTools, closeConversation, ensureConversation, pruneTranscripts, DATA_COLLECTION } from './conversations.js';
+import { simulateConversation } from './simulator.js';
+import { callAudio } from './recordings.js';
 
 const HARD_START = 9 * 60;
 const HARD_END = 21 * 60;
-export const AGENT_MAX_MIN = 3;                    // an AI call's hold, and its length limit
+export const AGENT_MAX_MIN = 3;                    // default AI call length limit (and its minute hold)
+/** An agent's own length limit, 1-5 minutes; the hold placed for its calls. */
+export const agentMinutes = (agent) => Math.min(5, Math.max(1, Math.round(Number(agent?.max_minutes) || AGENT_MAX_MIN)));
 const POSITIVE = new Set(['on_it', 'coming_back', 'renewing', 'will_pay']);
 const FINAL = new Set(['completed', 'no_answer', 'busy', 'failed', 'skipped', 'sent', 'delivered', 'read']);
 const CALLISH = new Set(['call', 'agent']);
@@ -208,13 +214,21 @@ async function loadContent(db, orgId) {
   const sms = await db.q(`SELECT * FROM followup_sms_templates WHERE org_id = ? AND status = 'active'`, [orgId]);
   const wa = await db.q(`SELECT * FROM followup_templates WHERE org_id = ?`, [orgId]);
   const agents = await db.q(`SELECT * FROM followup_agents WHERE org_id = ? AND status = 'active'`, [orgId]);
+  const recordings = await db.q(`SELECT id, name, language, duration_secs FROM followup_recordings WHERE org_id = ? AND status = 'active'`, [orgId]);
   const group = (rows) => { const m = new Map(); for (const r of rows) { if (!m.has(r.group_id)) m.set(r.group_id, []); m.get(r.group_id).push(r); } return m; };
   return {
     scripts: group(scripts),
     sms: group(sms.map((t) => ({ ...t, approved_at: t.dlt_template_id || setupStatus().mode !== 'live' ? t.updated_at : null }))),
     wa: group(wa.map((t) => ({ ...t, approved_at: t.status === 'approved' ? t.updated_at : null }))),
     agents: new Map(agents.map((a) => [a.id, a])),
+    recordings: new Map(recordings.map((r) => [r.id, r])),
   };
+}
+
+/** The gym's own plans (packages), for an agent allowed to quote them. */
+export async function gymPlans(db, orgId) {
+  return (await db.q('SELECT name, amount, currency, period_days, features FROM packages WHERE org_id = ? ORDER BY amount', [orgId]))
+    .map((p) => ({ name: p.name, amount: Number(p.amount) || 0, currency: p.currency || 'INR', period_days: Number(p.period_days) || null, features: p.features || null }));
 }
 
 /**
@@ -231,6 +245,13 @@ export function contentFor({ channel, rule, member, settings, content }) {
     if (!agent) return { missing: 'no_agent' };
     if (wanted && wanted !== agent.language) return { missing: 'no_language' };
     return { language: agent.language, agent };
+  }
+  if (channel === 'call' && rule.recording_id) {
+    // A prerecorded message: one language, the one it was recorded in.
+    const rec = content.recordings?.get(rule.recording_id);
+    if (!rec) return { missing: 'no_message' };
+    if (wanted && wanted !== rec.language) return { missing: 'no_language' };
+    return { language: rec.language, recording: rec, body: '' };
   }
   const groupId = channel === 'call' ? rule.script_group_id : channel === 'sms' ? rule.sms_group_id : rule.template_group_id;
   const map = channel === 'call' ? content.scripts : channel === 'sms' ? content.sms : content.wa;
@@ -249,14 +270,20 @@ async function loadHistory(db, orgId, todayKey) {
     `SELECT id, rule_id, client_id, channel, cycle_key, step_key, seq_index, day_key, status, outcome, to_number, attempt, created_at, ended_at
        FROM followup_jobs WHERE org_id = ? AND day_key >= ? AND client_id IS NOT NULL AND is_test = 0`, [orgId, since]);
   const callbacks = await db.q(`SELECT client_id FROM followup_callbacks WHERE org_id = ? AND status IN ('new','assigned','in_progress')`, [orgId]);
+  // An automated call back is booked: campaigns wait for it, so the member is
+  // not called on Saturday after asking for Monday.
+  const booked = await db.q(`SELECT client_id FROM followup_callbacks WHERE org_id = ? AND mode != 'human' AND status IN ('scheduled','processing')`, [orgId]);
   const spentByRule = await db.q(`SELECT rule_id, unit, SUM(-delta) AS n FROM followup_ledger WHERE org_id = ? AND reason = 'usage' AND rule_id IS NOT NULL GROUP BY rule_id, unit`, [orgId]);
   const budgetUsed = new Map();
   for (const r of spentByRule) {
     const k = `${r.rule_id}:${productOf(r.unit)}`;
     budgetUsed.set(k, (budgetUsed.get(k) || 0) + (Number(r.n) || 0));
   }
-  return { rows, callbacks: new Set(callbacks.map((c) => c.client_id)), budgetUsed, weekStart: shiftDayKey(todayKey, -6) };
+  return { rows, callbacks: new Set(callbacks.map((c) => c.client_id)), booked: new Set(booked.map((c) => c.client_id)), budgetUsed, weekStart: shiftDayKey(todayKey, -6) };
 }
+
+/** Promotional campaigns need the member's own, separate permission for offers. */
+export const promoAllowed = (prefs) => prefs?.promo_consent === 'granted' && !prefs?.promo_opted_out_at;
 
 const responded = (j) => (CALLISH.has(j.channel) ? ['answered', 'completed'].includes(j.status) && (j.channel === 'call' || j.outcome) : !!j.outcome);
 
@@ -268,6 +295,8 @@ export function decide({ rule, member, settings, todayKey, history, nowMs, local
   const step = dueStep(rule.kind, rule.config, member.facts, todayKey);
   if (!step) return { skip: 'not_due' };
   if (rule.ends_on && todayKey > rule.ends_on) return { skip: 'campaign_ended', step };
+  if (rule.purpose === 'promotional' && !promoAllowed(member.prefs)) return { skip: 'no_promo_permission', step };
+  if (history.booked?.has(member.id)) return { skip: 'callback_scheduled', step };
 
   const mine = history.rows.filter((j) => j.client_id === member.id);
   const wrongNumber = mine.some((j) => j.outcome === 'wrong_number' && j.to_number === member.phone);
@@ -360,13 +389,13 @@ export async function planOrg(db, orgId, { at = new Date() } = {}) {
       if (d.skip) { if (d.skip !== 'not_due') bump(d.skip); continue; }
       if (platform.channels.has(d.channel)) { bump('channel_paused'); continue; }
       const unit = unitFor(d.channel, rule);
-      const need = d.channel === 'agent' ? AGENT_MAX_MIN : 1;
       if (CALLISH.has(d.channel) && !providers.tierAvailable(productOf(unit), tierOf(book, productOf(unit), unit.split(':')[1]))) { bump('tier_unavailable'); continue; }
+      const c = contentFor({ channel: d.channel, rule, member, settings, content });
+      if (c.missing) { bump(c.missing); continue; }
+      const need = d.channel === 'agent' ? agentMinutes(c.agent) : 1;
       if ((balance[unit] || 0) < need) { bump('no_capacity'); continue; }
       const product = productOf(unit);
       if (rule.budget?.[product] && (history.budgetUsed.get(`${rule.id}:${product}`) || 0) >= Number(rule.budget[product])) { bump('budget_reached'); continue; }
-      const c = contentFor({ channel: d.channel, rule, member, settings, content });
-      if (c.missing) { bump(c.missing); continue; }
       const vars = memberVariables(member, gymInfo, d.step.variables);
       const textForCheck = d.channel === 'agent' ? '' : c.body;
       const missing = missingDetails(textForCheck, vars);
@@ -395,12 +424,15 @@ async function patchJob(db, jobId, patch) {
   const keys = Object.keys(patch);
   if (!keys.length) return;
   await db.run(`UPDATE followup_jobs SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, [...keys.map((k) => patch[k]), now(), jobId]);
+  // A scheduled call back moves on (completed, retry, failed...) when its job ends.
+  if (patch.status && FINAL.has(patch.status)) await syncCallbackFromJob(db, jobId);
 }
 const skipJob = (db, jobId, reason) => patchJob(db, jobId, { status: 'skipped', error: reason, ended_at: now() });
 
 /** Build (or rebuild, when the agent changed) the agent on its provider. */
-async function ensureProviderAgent(db, agent, kind, settings, gymName, conv) {
-  const hash = agentHash(agent, kind);
+async function ensureProviderAgent(db, agent, kind, settings, gymName, conv, plans = []) {
+  const extra = { plans: Number(agent.answer_plans ?? 1) ? plans : [], gymName };
+  const hash = agentHash(agent, kind, extra);
   if (agent.provider_agent_id && agent.provider === conv.id && agent.provider_hash === hash) return agent.provider_agent_id;
   const lines = spokenLines(agent.language, kind, settings.lines);
   const greeting = (agent.greeting || lines.agentIntro).replace(/\{name\}/g, '{{member_name}}').replace(/\{gym\}/g, '{{gym_name}}');
@@ -409,8 +441,9 @@ async function ensureProviderAgent(db, agent, kind, settings, gymName, conv) {
   const v = ref ? providers.parseVoiceRef(ref) : null;
   const voiceId = !v ? null : conv.id === 'http' ? ref : (v.providerId === conv.id ? v.voiceId : null);
   const providerId = await conv.upsertAgent({
-    agentId: agent.provider === conv.id ? agent.provider_agent_id : null, name: `${gymName} · ${agent.name}`, prompt: agentPrompt(agent, kind),
-    firstMessage: greeting, language: agent.language, voiceId, maxSecs: AGENT_MAX_MIN * 60,
+    agentId: agent.provider === conv.id ? agent.provider_agent_id : null, name: `${gymName} · ${agent.name}`, prompt: agentPrompt(agent, kind, extra),
+    firstMessage: greeting, language: agent.language, voiceId, maxSecs: agentMinutes(agent) * 60,
+    tools: agentTools(agent), dataCollection: DATA_COLLECTION,
   });
   await db.run('UPDATE followup_agents SET provider = ?, provider_agent_id = ?, provider_hash = ?, updated_at = ? WHERE id = ?', [conv.id, providerId, hash, now(), agent.id]);
   return providerId;
@@ -434,12 +467,16 @@ async function placeJob(db, job, ctx) {
     const k = consentKey(job.channel);
     const p = member.prefs || {};
     if (p[`${k}_consent`] !== 'granted' || p[`${k}_opted_out_at`] || Number(p.human_only)) return skipJob(db, job.id, 'The member is no longer reachable on this channel');
-    if (!rule) return skipJob(db, job.id, 'The campaign was deleted');
-    if (!rule.active) return skipJob(db, job.id, 'The campaign is paused');
+    // A call back the member asked for still happens if its campaign was
+    // paused or deleted since; a campaign contact does not.
+    if (!job.callback_id && !rule) return skipJob(db, job.id, 'The campaign was deleted');
+    if (!job.callback_id && !rule.active) return skipJob(db, job.id, 'The campaign is paused');
   }
 
-  const c = job.is_test ? ctx.testContent : contentFor({ channel: job.channel, rule, member: { prefs: { ...member.prefs, language: job.language } }, settings, content });
-  if (!c || c.missing) return skipJob(db, job.id, 'The message for this language is no longer available');
+  const c = job.is_test ? ctx.testContent
+    : job.callback_id ? await callbackContent(db, job, rule, ctx)
+      : contentFor({ channel: job.channel, rule, member: { prefs: { ...member.prefs, language: job.language } }, settings, content });
+  if (!c || c.missing) return skipJob(db, job.id, job.callback_id ? 'The AI agent or recording for this call back is no longer available' : 'The message for this language is no longer available');
 
   /* ---- WhatsApp ---- */
   if (job.channel === 'whatsapp') {
@@ -492,33 +529,44 @@ async function placeJob(db, job, ctx) {
   const unit = job.unit || unitFor(job.channel, rule);
   const tier = tierOf(book, productOf(unit), unit.split(':')[1]);
   if (live && !providers.tierAvailable(productOf(unit), tier)) return skipJob(db, job.id, 'This call quality is not available right now');
-  const hold = job.channel === 'agent' ? AGENT_MAX_MIN : 1;
+  const hold = job.channel === 'agent' ? agentMinutes(c.agent) : 1;
   if (!(await holdUnits(db, job.org_id, unit, hold, { jobId: job.id, ruleId: job.rule_id }))) {
     return skipJob(db, job.id, job.channel === 'agent' ? 'Not enough AI conversation minutes left' : 'No voice minutes left');
   }
   const held = { ...job, unit, units_held: hold };
+  const kind = rule?.kind || null;
 
   if (job.channel === 'agent') {
     try {
       const conv = providers.conversationProvider(live ? tier.provider : 'test');
-      const agentId = await ensureProviderAgent(db, c.agent, rule?.kind, settings, gymInfo.gym, conv);
+      const plans = Number(c.agent.answer_plans ?? 1) ? await gymPlans(db, job.org_id) : [];
+      const agentId = await ensureProviderAgent(db, c.agent, kind, settings, gymInfo.gym, conv, plans);
       const f = formatVariables(vars, c.language);
+      const clock = new Date();
       const r = await conv.startCall({
-        agentId, lineRef: line.agentPhoneId, to: job.to_number, seed: job.id, kind: rule?.kind,
-        variables: { member_name: f.name || '', gym_name: f.gym || gymInfo.gym, days_absent: f.days_absent || '', end_date: f.end_date || '', amount_due: f.amount_due || '', followup_job: jobToken(job.id) },
+        agentId, lineRef: line.agentPhoneId, to: job.to_number, seed: job.id, kind,
+        variables: {
+          member_name: f.name || '', gym_name: f.gym || gymInfo.gym, days_absent: f.days_absent || '', end_date: f.end_date || '', amount_due: f.amount_due || '',
+          gym_phone: f.gym_phone || '', callback_context: vars.callback_context || '',
+          today: new Intl.DateTimeFormat('en-IN', { timeZone: ctx.tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(clock),
+          time_now: new Intl.DateTimeFormat('en-IN', { timeZone: ctx.tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(clock),
+          followup_job: jobToken(job.id),
+        },
       });
       await patchJob(db, job.id, { provider: conv.id, provider_ref: r.ref, from_number: line.number });
-      if (r.simulated) await applyAgentResult(db, held, r.simulated);
+      await ensureConversation(db, { ...job, provider: conv.id, provider_ref: r.ref }, { agentId: c.agent.id, provider: conv.id, providerRef: r.ref, simulated: !!r.simulate });
+      if (r.simulate) await applyAgentResult(db, held, await simulateConversation(db, job, { kind, plans }));
     } catch (e) {
       await settleJob(db, held, { used: 0 });
       await patchJob(db, job.id, { status: 'failed', error: String(e.message).slice(0, 300), ended_at: now() });
+      if (await db.q1('SELECT id FROM followup_conversations WHERE job_id = ?', [job.id])) await closeConversation(db, job, { status: 'failed', duration: 0, error: String(e.message).slice(0, 200) }, { kind });
     }
     return;
   }
 
   try {
     const tel = ctx.telephony;
-    const msg = buildVoiceMessage({ script: c.body, language: c.language, kind: rule?.kind || 'missed_visits', overrides: settings.lines, vars });
+    const msg = buildVoiceMessage({ script: c.body, language: c.language, kind: kind || 'missed_visits', overrides: settings.lines, vars });
     let audio = null;
     if (live) {
       // Exotel's flow waits only seconds for audio: make all of it first.
@@ -526,14 +574,20 @@ async function placeJob(db, job, ctx) {
       const voiceId = [rule?.voice_id, settings.voices?.[`${tier.id}:${c.language}`], settings.voices?.[c.language]]
         .find((ref) => ref && providers.parseVoiceRef(ref).providerId === tier.provider);
       if (!voiceId) throw err(`Pick a ${tier.name} voice for ${c.language} first`);
-      audio = { main: (await ensureAudio(db, job.org_id, { voiceId, language: c.language, text: msg.full })).id, menu: (await ensureAudio(db, job.org_id, { voiceId, language: c.language, text: msg.menu })).id, after: {} };
-      for (const k of ['1', '2', '9']) audio.after[k] = (await ensureAudio(db, job.org_id, { voiceId, language: c.language, text: msg.after[k] })).id;
+      const say = (text) => ensureAudio(db, job.org_id, { voiceId, language: c.language, text }).then((a) => a.id);
+      // A recording plays between the fixed notice and the keypad menu, as one file.
+      const main = c.recording
+        ? await callAudio(db, job.org_id, { recordingId: c.recording.id, voiceId, language: c.language, notice: msg.notice, menu: msg.menu })
+        : await say(msg.full);
+      audio = { main, menu: await say(msg.menu), after: {} };
+      for (const k of ['1', '2', '9']) audio.after[k] = await say(msg.after[k]);
     }
     const r = await tel.placeMessageCall({
       to: job.to_number, callerId: line.number, token: jobToken(job.id), seed: job.id,
       statusUrl: `${publicBase()}/api/followups/hooks/exotel/status?j=${encodeURIComponent(jobToken(job.id))}`,
     });
-    await patchJob(db, job.id, { provider: tel.id, provider_ref: r.ref, from_number: line.number, audio_json: audio ? JSON.stringify(audio) : null, message_text: msg.full });
+    const spoken = c.recording ? `${msg.notice} [Recording: ${c.recording.name}, ${Math.round(Number(c.recording.duration_secs) || 0)}s] ${msg.menu}` : msg.full;
+    await patchJob(db, job.id, { provider: tel.id, provider_ref: r.ref, from_number: line.number, audio_json: audio ? JSON.stringify(audio) : null, message_text: spoken });
     if (r.simulated) {
       await applyCallStatus(db, held, { status: r.simulated.status, duration: r.simulated.duration });
       if (r.simulated.digits) await applyKeypress(db, held, r.simulated.digits);
@@ -544,10 +598,31 @@ async function placeJob(db, job, ctx) {
   }
 }
 
+/**
+ * What a call back plays or who speaks: its own agent / recording / voice
+ * message, else its campaign's. In the language it was booked in.
+ */
+async function callbackContent(db, job, rule, ctx) {
+  const cb = await db.q1('SELECT * FROM followup_callbacks WHERE id = ? AND org_id = ?', [job.callback_id, job.org_id]);
+  if (!cb) return null;
+  if (job.channel === 'agent') {
+    const agent = ctx.content.agents.get(cb.agent_id || rule?.agent_id);
+    return agent ? { language: agent.language, agent } : null;
+  }
+  const recId = cb.recording_id || (!cb.script_group_id ? rule?.recording_id : null);
+  if (recId) {
+    const rec = ctx.content.recordings.get(recId);
+    return rec ? { language: rec.language, recording: rec, body: '' } : null;
+  }
+  const variants = ctx.content.scripts.get(cb.script_group_id || rule?.script_group_id);
+  const v = variants ? pickVariant(variants, { memberLanguage: job.language, fallback: rule?.language || ctx.settings.language }) : null;
+  return v ? { language: v.language, body: v.body, ref: v } : null;
+}
+
 async function dispatchContext(db, orgId, mode) {
   const settings = await getSettings(db, orgId);
   return {
-    settings, mode,
+    settings, mode, tz: await getOrgTzCached(db, orgId),
     rules: new Map((await loadRules(db, orgId)).map((r) => [r.id, r])),
     book: await getPriceBook(db),
     gymInfo: await gymDetails(db, orgId, settings),
@@ -572,12 +647,26 @@ async function sendGate(db, job, { todayKey, localMinutes, callbacks, rules, mem
   if (rule) {
     const m = members.get(job.client_id);
     if (!m) return { skip: 'The member is no longer active at this gym' };
-    const step = dueStep(rule.kind, rule.config, m.facts, todayKey);
-    if (!step || step.cycleKey !== job.cycle_key) return { skip: 'No longer due: the member visited, renewed or paid' };
+    if (job.callback_id) {
+      // A call back is still wanted while its situation is the same one it
+      // was booked about (schedule.situationKey), even between campaign steps.
+      if (job.cycle_key && !job.cycle_key.startsWith('cb:') && situationKey(rule.kind, rule.config, m.facts, todayKey) !== job.cycle_key) {
+        return { skip: 'No longer due: the member visited, renewed or paid since asking' };
+      }
+    } else {
+      const step = dueStep(rule.kind, rule.config, m.facts, todayKey);
+      if (!step || step.cycleKey !== job.cycle_key) return { skip: 'No longer due: the member visited, renewed or paid' };
+    }
     if (m.phone !== job.to_number) return { skip: "The member's number changed since planning" };
-  }
+    if (!job.callback_id && rule.purpose === 'promotional' && !promoAllowed(m.prefs)) return { skip: 'The member has not agreed to offers and promotions' };
+  } else if (job.callback_id && !members.has(job.client_id)) return { skip: 'The member is no longer active at this gym' };
   const prefs = job.client_id ? await db.q1('SELECT * FROM followup_member_prefs WHERE client_id = ?', [job.client_id]) : null;
-  const v = evaluate({ prefs, phone: job.to_number, channel: job.channel, todayKey, localMinutes, inGymHours: true, callbackPending: callbacks.has(job.client_id) });
+  // A call back is at the time the MEMBER chose: their general preferred
+  // window and the staff call-back pause do not apply to it.
+  const v = evaluate({
+    prefs, phone: job.to_number, channel: job.channel, todayKey, localMinutes: job.callback_id ? undefined : localMinutes,
+    inGymHours: true, callbackPending: job.callback_id ? false : callbacks.has(job.client_id),
+  });
   if (v.decision === 'ALLOW') return null;
   if (v.decision === 'DEFER' && v.reason === 'outside_member_window') return { defer: true };   // later today, inside their window
   return { skip: REASONS[v.reason] || 'The member can no longer be reached on this channel' };
@@ -650,6 +739,7 @@ export async function sweep(db, orgId, { telephony = providers.telephony(), at =
     if (j.channel === 'call') { if (await reconcileCall(db, j, telephony, at)) closed += 1; continue; }
     await settleJob(db, j, { used: 0 });   // AI conversation / message with no result: nothing charged; reconciliation can correct
     await patchJob(db, j.id, { status: 'failed', error: 'No result from the provider (pending reconciliation)', ended_at: now() });
+    if (j.channel === 'agent') await closeConversation(db, j, { status: 'failed', duration: 0, error: 'The provider never reported how the call went' });
     closed += 1;
   }
   const b = await db.run(`UPDATE followup_jobs SET status = 'skipped', error = 'Not placed in time', ended_at = ?, updated_at = ? WHERE org_id = ? AND status = 'queued' AND created_at < ?`, [now(), now(), orgId, iso(at - 6 * 3600_000)]);
@@ -684,10 +774,18 @@ async function reconcileCall(db, j, telephony, at) {
 
 export async function tickOrg(db, orgId, opts = {}) {
   await db.run('UPDATE followup_settings SET last_tick_at = ? WHERE org_id = ?', [now(), orgId]);
+  const at = opts.at || new Date();
   const swept = await sweep(db, orgId);
+  // Call backs first: they are at a time the member chose, and while one is
+  // booked campaigns leave that member alone (decide()).
+  const platform = await platformSwitches(db);
+  const callbacks = platform.paused || setupStatus().mode === 'off'
+    ? { expired: 0, queued: 0 }
+    : await queueDueCallbacks(db, orgId, { at });
   const plan = await planOrg(db, orgId, opts);
   const sent = await dispatchOrg(db, orgId, opts);
-  return { swept, ...plan, ...sent };
+  await pruneTranscripts(db, orgId, at);
+  return { swept, callbacks, ...plan, ...sent };
 }
 
 export async function maybeTick(db, orgId) {
@@ -782,28 +880,38 @@ export async function applyKeypress(db, job, digit) {
   if (outcome === 'opted_out') await stopChannel(db, j, 'call', 'keypad', `Pressed 9 on call ${j.id}`);
 }
 
-const AGENT_OUTCOMES = {
-  coming_back: 'coming_back', renewing: 'renewing', will_pay: 'will_pay', callback_requested: 'callback',
-  not_interested: 'not_interested', opted_out: 'opted_out', wrong_number: 'wrong_number', no_conversation: null, other: 'other',
+/** A conversation's outcome as the job records it (what campaigns plan on). */
+const JOB_OUTCOME = {
+  callback_scheduled: 'callback_scheduled', person_requested: 'callback', declined: 'not_interested', question_open: 'question',
+  opted_out: 'opted_out', wrong_number: 'wrong_number', renewing: 'renewing', will_pay: 'will_pay', coming_back: 'coming_back', other: 'other',
+  not_understood: null, incomplete: null,
 };
 
-/** An AI conversation's result. Settles to the minutes actually talked. */
-export async function applyAgentResult(db, job, { status, duration = 0, outcome, summary }) {
+/**
+ * An AI conversation's result. Settles to the minutes actually talked, then
+ * closes its conversation record (conversations.js), whose outcome and
+ * summary the job carries. Facts the agent's tools recorded DURING the call
+ * (a booked call back, a stop, a wrong number) win over the after-call
+ * analysis. A duplicate webhook changes nothing.
+ */
+export async function applyAgentResult(db, job, result) {
   const j = await fresh(db, job.id);
   if (!j) return;
   const done = await db.q1(`SELECT id FROM followup_ledger WHERE job_id = ? AND reason IN ('usage','release') LIMIT 1`, [j.id]);
   if (done) return;                                         // a duplicate webhook
-  const mapped = AGENT_OUTCOMES[String(outcome || '').toLowerCase()] ?? null;
   // Whatever a provider (or a self-hosted agent server) calls it, a job holds
   // one of these -- an unknown status must not fail every retry on a CHECK.
-  status = ['completed', 'no_answer', 'busy', 'failed'].includes(status) ? status : 'failed';
-  duration = Math.max(0, Math.round(Number(duration) || 0));
+  const status = ['completed', 'no_answer', 'busy', 'failed'].includes(result?.status) ? result.status : 'failed';
+  const duration = Math.max(0, Math.round(Number(result?.duration) || 0));
   const minutes = status === 'completed' && duration > 0 ? Math.ceil(duration / 60) : 0;
   const book = await getPriceBook(db);
   await settleJob(db, j, { used: minutes, cost: minutes * (unitCosts(book)[j.unit] || 0), provider: j.provider, providerRef: j.provider_ref, pricingVersion: book.version });
-  await patchJob(db, j.id, { status, duration_secs: duration || null, outcome: mapped, summary: summary ? String(summary).slice(0, 500) : null, ended_at: now() });
-  if (mapped === 'callback') await requestCallback(db, j, 'agent', summary ? `On the AI call: "${String(summary).slice(0, 200)}"` : 'Asked to talk to someone on the AI call.');
-  if (mapped === 'opted_out') await stopChannel(db, j, 'call', 'agent', `Asked the AI to stop calls (${j.id})`);
+  await patchJob(db, j.id, { status, duration_secs: duration || null, ended_at: now() });
+  const rule = j.rule_id ? await db.q1('SELECT kind FROM followup_rules WHERE id = ?', [j.rule_id]) : null;
+  const conv = await closeConversation(db, j, { ...result, status, duration }, { kind: rule?.kind || null });
+  const outcome = conv?.outcome ? JOB_OUTCOME[conv.outcome] ?? null : null;
+  await db.run('UPDATE followup_jobs SET outcome = COALESCE(outcome, ?), summary = ?, updated_at = ? WHERE id = ?', [outcome, conv?.summary || null, now(), j.id]);
+  if (conv?.outcome === 'opted_out') await stopChannel(db, j, 'call', 'agent', `Asked the AI to stop calls (${j.id})`);
 }
 
 /** Delivery reports for SMS and WhatsApp. Failures are refunded once. */

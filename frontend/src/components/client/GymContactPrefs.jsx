@@ -43,6 +43,7 @@ export default function GymContactPrefs() {
         <Row key={k} label={label} hint={hint} checked={!!d.channels[k]} disabled={saving} onChange={(v) => save({ channels: { [k]: v } })} />
       ))}
       <Row label="Only a person, never automated" hint="Your gym’s team can still call you themselves" checked={!!d.human_only} disabled={saving} onChange={(v) => save({ human_only: v })} />
+      <Row label="Offers and events" hint="Promotions and event news. Separate from reminders, and off unless you turn it on" checked={!!d.offers} disabled={saving} onChange={(v) => save({ offers: v })} />
       <div className="grid grid-cols-2 gap-2 pt-2">
         <label className="block text-[12px] font-semibold" style={{ color: 'var(--ink)' }}>Language
           <div className="mt-1"><Select aria-label="Language for calls and messages" value={d.language || ''} onChange={(v) => save({ language: v || null })}

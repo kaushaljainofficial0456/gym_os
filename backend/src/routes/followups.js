@@ -39,8 +39,14 @@ import { ensureAudio, readAudio } from '../services/followups/audio.js';
 import * as exotel from '../services/followups/providers/exotel.js';
 import { usableNumbers } from '../services/followups/numbers.js';
 import { auditOwner, changedFrom } from '../services/followups/audit.js';
+import { checkToolKey } from '../services/followups/config.js';
+import { handleTool, TOOL_NAMES } from '../services/followups/conversations.js';
+import * as callbacks from '../services/followups/callbacks.js';
+import { saveRecording, listRecordings, recordingAudio, updateRecording, recordingInUse, getRecording } from '../services/followups/recordings.js';
+import { TONES } from '../services/followups/studio.js';
+import { localToUtc } from '../services/followups/when.js';
 
-const KINDS = ['missed_visits', 'membership_ending', 'payment_due', 'onboarding'];
+const KINDS = ['missed_visits', 'membership_ending', 'payment_due', 'onboarding', 'announcement'];
 const CHANNELS = ['call', 'agent', 'sms', 'whatsapp'];
 const lang = z.string().refine(isLanguage, 'Unsupported language');
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
@@ -161,6 +167,19 @@ export function followupPublicRoutes(db) {
   r.post('/hooks/elevenlabs', hookLimit, agentHook('elevenlabs'));
   r.post('/hooks/agent/:provider', hookLimit, (req, res, next) => (['http'].includes(req.params.provider) ? agentHook(req.params.provider)(req, res, next) : res.status(404).end()));
 
+  // The AI agent's tools, DURING a call (conversations.js). Two locks: the
+  // platform's tool key header, and the call's own signed job token in the
+  // body -- a tool can only ever act on that call's gym and member.
+  r.post('/hooks/tools/:tool', hookLimit, wrap(async (req, res) => {
+    if (!TOOL_NAMES.includes(req.params.tool)) return res.status(404).json({ status: 'error' });
+    if (!checkToolKey(req.get('x-barbell-tool-key'))) return res.status(401).json({ status: 'error', say: 'Not authorised.' });
+    const body = req.body && typeof req.body === 'object' ? (req.body.parameters && typeof req.body.parameters === 'object' ? req.body.parameters : req.body) : {};
+    const args = {};
+    for (const k of ['when_text', 'date', 'time', 'reason']) if (typeof body[k] === 'string') args[k] = body[k].slice(0, 300);
+    const out = await handleTool(db, { tool: req.params.tool, token: body.followup_job, args });
+    res.status(out.status === 'error' ? 400 : 200).json(out);
+  }));
+
   return r;
 }
 
@@ -188,13 +207,14 @@ export default function followupRoutes(db) {
         sms: prefs.sms_consent === 'granted' && !prefs.sms_opted_out_at,
         whatsapp: prefs.wa_consent === 'granted' && !prefs.wa_opted_out_at,
       },
+      offers: prefs.promo_consent === 'granted' && !prefs.promo_opted_out_at,
       human_only: !!Number(prefs.human_only), language: prefs.language, window_start: prefs.window_start, window_end: prefs.window_end,
       languages: languageList().filter((l) => langs.includes(l.code)),
       history: await db.q(`SELECT channel, action, source, created_at FROM followup_consent_log WHERE client_id = ? ORDER BY created_at DESC LIMIT 10`, [c.id]),
     });
   }));
   me.put('/', validate(z.object({
-    call: z.boolean().optional(), sms: z.boolean().optional(), whatsapp: z.boolean().optional(),
+    call: z.boolean().optional(), sms: z.boolean().optional(), whatsapp: z.boolean().optional(), offers: z.boolean().optional(),
     human_only: z.boolean().optional(), language: lang.nullable().optional(),
     window_start: hhmm.nullable().optional(), window_end: hhmm.nullable().optional(),
   })), wrap(async (req, res) => {
@@ -204,6 +224,15 @@ export default function followupRoutes(db) {
     for (const ch of ['call', 'sms', 'whatsapp']) {
       if (b[ch] === true) await recordConsent(db, { orgId: c.org_id, clientId: c.id, channels: [ch], action: 'opted_in', source: 'member', evidence: 'Turned on in the app', actorId: req.user.sub });
       if (b[ch] === false) await recordConsent(db, { orgId: c.org_id, clientId: c.id, channels: [ch], action: 'opted_out', source: 'member', evidence: 'Turned off in the app', actorId: req.user.sub });
+    }
+    // Offers and events: a separate permission the member gives or takes back.
+    if (b.offers === true) await recordConsent(db, { orgId: c.org_id, clientId: c.id, channels: ['promo'], action: 'opted_in', source: 'member', evidence: 'Turned on offers and events in the app', actorId: req.user.sub });
+    if (b.offers === false) await recordConsent(db, { orgId: c.org_id, clientId: c.id, channels: ['promo'], action: 'opted_out', source: 'member', evidence: 'Turned off offers and events in the app', actorId: req.user.sub });
+    // A member who stops calls has no use for a call back they booked earlier.
+    if (b.call === false) {
+      for (const cb of await db.q(`SELECT id FROM followup_callbacks WHERE org_id = ? AND client_id = ? AND mode != 'human' AND status = 'scheduled'`, [c.org_id, c.id])) {
+        await callbacks.cancelCallback(db, c.org_id, cb.id, 'member', 'The member turned off calls in the app');
+      }
     }
     const patch = {};
     if (b.human_only !== undefined) patch.human_only = b.human_only ? 1 : 0;
@@ -248,14 +277,17 @@ export default function followupRoutes(db) {
     const settings = await engine.getSettings(db, orgId);
     const tz = await getOrgTzCached(db, orgId);
     const todayKey = dayKey(new Date(), tz);
-    const [platform, wallet, holds, usage, lines, rules, callbacks, todayRows, members, orders] = await Promise.all([
+    const [platform, wallet, holds, usage, lines, rules, openCallbacks, todayRows, members, orders, booked, actions] = await Promise.all([
       engine.platformSwitches(db),
       getWallet(db, orgId, book), pendingHolds(db, orgId), usageSince(db, orgId, monthStart(), book), lineCapacity(db, orgId), engine.loadRules(db, orgId),
       db.q(`SELECT COUNT(*) AS n FROM followup_callbacks WHERE org_id = ? AND status IN ('new','assigned','in_progress')`, [orgId]),
       db.q(`SELECT channel, status, outcome FROM followup_jobs WHERE org_id = ? AND day_key = ? AND is_test = 0`, [orgId, todayKey]),
       engine.loadMembers(db, orgId, tz),
       db.q(`SELECT COUNT(*) AS n FROM followup_orders WHERE org_id = ? AND status = 'SUCCESS'`, [orgId]),
+      db.q(`SELECT COUNT(*) AS n FROM followup_callbacks WHERE org_id = ? AND mode != 'human' AND status IN ('scheduled','processing')`, [orgId]),
+      db.q(`SELECT COUNT(*) AS n FROM followup_conversations WHERE org_id = ? AND owner_action_required = 1 AND owner_action_done_at IS NULL`, [orgId]),
     ]);
+    const callbacks = openCallbacks;
     const today = {
       calls: todayRows.filter((j) => j.channel === 'call' || j.channel === 'agent').length,
       connected: todayRows.filter((j) => (j.channel === 'call' || j.channel === 'agent') && j.status === 'completed').length,
@@ -277,7 +309,8 @@ export default function followupRoutes(db) {
       // The founder's platform switch (admin console): owners are told when
       // Barbell has paused sending, so silence is never a mystery.
       platform: { paused: platform.paused, channels: [...platform.channels] },
-      campaigns: rules.map(publicRule), callbacks_open: Number(callbacks[0]?.n || 0), reach, purchases: Number(orders[0]?.n || 0),
+      campaigns: rules.map(publicRule), callbacks_open: Number(callbacks[0]?.n || 0), callbacks_booked: Number(booked[0]?.n || 0),
+      actions_open: Number(actions[0]?.n || 0), reach, purchases: Number(orders[0]?.n || 0),
       in_hours: engine.inCallingHours(settings, tz), tick: tick ? { queued: tick.queued, placed: tick.placed } : null,
     });
   }));
@@ -301,6 +334,8 @@ export default function followupRoutes(db) {
     sms_header: z.string().trim().max(11).nullable().optional(),
     dlt_entity_id: z.string().trim().max(30).nullable().optional(),
     monthly_cap_inr: z.number().min(0).max(10_000_000).nullable().optional(),
+    keep_transcripts: z.boolean().optional(),
+    transcript_days: z.number().int().min(7).max(365).optional(),
   })), wrap(async (req, res) => {
     const b = req.body;
     const current = await engine.getSettings(db, req.orgId);
@@ -308,6 +343,8 @@ export default function followupRoutes(db) {
     const vals = [];
     const put = (col, v) => { sets.push(`${col} = ?`); vals.push(v); };
     if (b.enabled !== undefined) put('enabled', b.enabled ? 1 : 0);
+    if (b.keep_transcripts !== undefined) put('keep_transcripts', b.keep_transcripts ? 1 : 0);
+    if (b.transcript_days !== undefined) put('transcript_days', b.transcript_days);
     for (const k of ['window_start', 'window_end', 'days_mask', 'max_per_day', 'max_per_week', 'language', 'gym_display_name', 'sms_header', 'dlt_entity_id', 'monthly_cap_inr']) if (b[k] !== undefined) put(k, b[k]);
     if (b.languages) put('languages_json', JSON.stringify(b.languages));
     if (b.voices) put('voices_json', JSON.stringify(b.voices));
@@ -317,6 +354,8 @@ export default function followupRoutes(db) {
       await db.tx(async (tx) => {
         await tx.run(`UPDATE followup_settings SET ${sets.join(', ')}, updated_at = ? WHERE org_id = ?`, [...vals, now(), req.orgId]);
         await auditOwner(tx, req, { action, entityType: 'followup_settings', entityId: req.orgId, before: changedFrom(current, b), after: b });
+        // Transcripts switched off: the ones already kept are deleted now, not later.
+        if (b.keep_transcripts === false) await tx.run('UPDATE followup_conversations SET transcript_json = NULL, transcript_expires_at = NULL, updated_at = ? WHERE org_id = ? AND transcript_json IS NOT NULL', [now(), req.orgId]);
       }, { orgId: req.orgId });
     }
     res.json({ settings: publicSettings(await engine.getSettings(db, req.orgId)) });
@@ -389,14 +428,24 @@ export default function followupRoutes(db) {
     sms_group_id: z.string().max(40).nullable().optional(),
     template_group_id: z.string().max(40).nullable().optional(),
     agent_id: z.string().max(40).nullable().optional(),
+    recording_id: z.string().max(40).nullable().optional(),
+    purpose: z.enum(['service', 'promotional']).optional(),
     ends_on: dayKeyRe.nullable().optional(),
     budget: z.object({ voice: z.number().min(0), agent: z.number().min(0), sms: z.number().min(0), whatsapp: z.number().min(0) }).partial().optional(),
   });
   const checkCampaign = async (orgId, b) => {
     const channels = new Set(b.sequence.map((s) => s.channel));
     if (channels.size !== b.sequence.length) return 'Each channel can appear once in the sequence';
-    if (channels.has('call') && channels.has('agent')) return 'Choose either a voice message call or an AI conversation, not both';
-    if (channels.has('call') && !b.script_group_id) return 'Pick the message the call will read';
+    if (channels.has('call') && channels.has('agent')) return 'Choose either a prerecorded call or an AI conversation, not both';
+    if (channels.has('call') && !b.script_group_id && !b.recording_id) return 'Pick the recording (or the voice message) the call will play';
+    if (b.kind !== 'announcement' && b.purpose === 'promotional') return 'Only announcements can be promotional; reminders about a member\'s own membership are service calls';
+    if (b.kind === 'announcement') {
+      const send = normalizeConfig('announcement', b.config || {}).send_on;
+      if (!send) return 'Pick the day the announcement goes out';
+      const tz = await getOrgTzCached(db, orgId);
+      if (send < dayKey(new Date(), tz)) return 'The announcement day has already passed';
+    }
+    if (b.recording_id && !(await db.q1(`SELECT id FROM followup_recordings WHERE id = ? AND org_id = ? AND status = 'active'`, [b.recording_id, orgId]))) return 'Pick one of your recordings';
     if (channels.has('agent') && !b.agent_id) return 'Pick the AI agent for the conversation';
     if (channels.has('sms') && !b.sms_group_id) return 'Pick the SMS template';
     if (channels.has('whatsapp') && !b.template_group_id) return 'Pick the WhatsApp template';
@@ -414,6 +463,7 @@ export default function followupRoutes(db) {
     per_day: b.per_day ?? 1, gap_hours: b.gap_hours ?? 3, language: b.language || 'en', voice_tier: b.voice_tier || 'standard', agent_tier: b.agent_tier || 'advanced', voice_id: b.voice_id || null,
     script_group_id: b.script_group_id || null, sms_group_id: b.sms_group_id || null, template_group_id: b.template_group_id || null,
     agent_id: b.agent_id || null, ends_on: b.ends_on || null, budget_json: b.budget ? JSON.stringify(b.budget) : null,
+    recording_id: b.recording_id || null, purpose: b.kind === 'announcement' && b.purpose === 'promotional' ? 'promotional' : 'service',
   });
   o.get('/rules', wrap(async (req, res) => res.json({ campaigns: (await engine.loadRules(db, req.orgId)).map(publicRule), defaults: RULE_DEFAULTS })));
   o.post('/rules', validate(campaign), wrap(async (req, res) => {
@@ -469,7 +519,10 @@ export default function followupRoutes(db) {
   }));
   // Who it would reach today and what that would use -- before it is switched on.
   o.post('/rules/preview', validate(campaign.partial({ name: true })), wrap(async (req, res) => {
-    const preview = await engine.previewRule(db, req.orgId, { ...req.body, config: normalizeConfig(req.body.kind, req.body.config || {}), name: req.body.name || 'Preview' });
+    const config = normalizeConfig(req.body.kind, req.body.config || {});
+    // An announcement is previewed on its own day (who it would reach then).
+    const at = req.body.kind === 'announcement' && config.send_on ? localToUtc(config.send_on, 12 * 60, await getOrgTzCached(db, req.orgId)) : new Date();
+    const preview = await engine.previewRule(db, req.orgId, { ...req.body, config, name: req.body.name || 'Preview' }, { at });
     const book = await getPriceBook(db);
     const est = {};
     for (const m of preview.members) {
@@ -666,6 +719,8 @@ export default function followupRoutes(db) {
   const agentInput = z.object({
     name: z.string().trim().min(2).max(60), language: lang, voice_id: z.string().max(80).nullable().optional(), greeting: z.string().max(300).nullable().optional(),
     purpose: z.string().trim().min(10).max(600), knowledge: z.string().max(4000).optional(), faqs: z.array(z.object({ q: z.string().max(200), a: z.string().max(500) })).max(30).optional(),
+    tone: z.enum(TONES).optional(), max_minutes: z.number().int().min(1).max(5).optional(),
+    allow_callbacks: z.boolean().optional(), allow_handover: z.boolean().optional(), answer_plans: z.boolean().optional(),
   });
   o.post('/agents', validate(agentInput), wrap(async (req, res) => { try { res.json({ agent: await saveAgent(db, req.orgId, req.user.sub, req.body) }); } catch (e) { fail(res, e); } }));
   o.put('/agents/:id', validate(agentInput), wrap(async (req, res) => { try { res.json({ agent: await saveAgent(db, req.orgId, req.user.sub, { ...req.body, id: req.params.id }) }); } catch (e) { fail(res, e); } }));
@@ -705,13 +760,14 @@ export default function followupRoutes(db) {
         consent: { call: m.prefs?.call_consent || null, sms: m.prefs?.sms_consent || null, whatsapp: m.prefs?.wa_consent || null },
         opted_out: { call: !!m.prefs?.call_opted_out_at, sms: !!m.prefs?.sms_opted_out_at, whatsapp: !!m.prefs?.wa_opted_out_at },
         human_only: !!Number(m.prefs?.human_only), language: m.prefs?.language || null, paused_until: m.prefs?.paused_until || null, max_per_day: m.prefs?.max_per_day || null,
+        offers: engine.promoAllowed(m.prefs),
       })),
     });
   }));
   // The owner records that members gave permission, with the evidence. A
   // member's own "stop" is never overridden here (consent.js).
   o.post('/members/consent', validate(z.object({
-    client_ids: z.array(z.string().max(40)).max(5000), channels: z.array(z.enum(['call', 'sms', 'whatsapp'])).min(1),
+    client_ids: z.array(z.string().max(40)).max(5000), channels: z.array(z.enum(['call', 'sms', 'whatsapp', 'promo'])).min(1),
     action: z.enum(['granted', 'withdrawn']), evidence: z.string().trim().min(5).max(300), attest: z.literal(true),
   })), wrap(async (req, res) => {
     const owned = new Set((await db.q('SELECT id FROM clients WHERE org_id = ?', [req.orgId])).map((c) => c.id));
@@ -774,21 +830,175 @@ export default function followupRoutes(db) {
     res.json({ days });
   }));
 
-  // ---- callbacks ----
+  // ---- call backs ----
+  // view=scheduled  booked automated call backs (AI or recording), soonest first
+  // view=staff      a person from the gym has to call (the original queue)
+  // view=done       finished, failed, expired or cancelled, last 60 days
+  // status=...      the original filter on one status (kept for older screens)
+  const CB_COLS = `cb.*, u.name AS member_name, a.name AS assignee_name, r.name AS campaign, ag.name AS agent_name, rec.name AS recording_name,
+                   cv.summary AS conversation_summary`;
+  const CB_FROM = `FROM followup_callbacks cb JOIN clients c ON c.id = cb.client_id JOIN users u ON u.id = c.user_id
+                   LEFT JOIN users a ON a.id = cb.assigned_to LEFT JOIN followup_rules r ON r.id = cb.rule_id
+                   LEFT JOIN followup_agents ag ON ag.id = cb.agent_id LEFT JOIN followup_recordings rec ON rec.id = cb.recording_id
+                   LEFT JOIN followup_conversations cv ON cv.id = cb.conversation_id`;
+  const shapeCallback = (cb, todayKey) => ({
+    // Staff need the number to dial; an automated call back does not show it.
+    ...cb, events: JSON.parse(cb.events_json || '[]'), events_json: undefined, phone: cb.mode === 'human' ? cb.phone : undefined,
+    when_label: callbacks.callbackLabel(cb, todayKey),
+  });
   o.get('/callbacks', wrap(async (req, res) => {
-    const status = CALLBACK_STATUSES.includes(req.query.status) ? [req.query.status] : ['new', 'assigned', 'in_progress'];
+    const tz = await getOrgTzCached(db, req.orgId);
+    const todayKey = dayKey(new Date(), tz);
+    let where;
+    let vals;
+    let order = 'cb.priority DESC, cb.created_at DESC';
+    if (req.query.view === 'scheduled') {
+      where = `cb.mode != 'human' AND cb.status IN ('scheduled','processing')`; vals = []; order = 'cb.scheduled_for';
+    } else if (req.query.view === 'done') {
+      where = `cb.status IN ('completed','unreachable','cancelled','failed','expired') AND cb.updated_at >= ?`; vals = [new Date(Date.now() - 60 * 86_400_000).toISOString()]; order = 'cb.updated_at DESC';
+    } else {
+      const status = CALLBACK_STATUSES.includes(req.query.status) ? [req.query.status] : ['new', 'assigned', 'in_progress'];
+      where = `cb.mode = 'human' AND cb.status IN (${status.map(() => '?').join(',')})`; vals = status;
+    }
+    const rows = await db.q(`SELECT ${CB_COLS} ${CB_FROM} WHERE cb.org_id = ? AND ${where} ORDER BY ${order} LIMIT 200`, [req.orgId, ...vals]);
     res.json({
-      callbacks: await db.q(
-        `SELECT cb.*, u.name AS member_name, a.name AS assignee_name, r.name AS campaign FROM followup_callbacks cb
-           JOIN clients c ON c.id = cb.client_id JOIN users u ON u.id = c.user_id
-           LEFT JOIN users a ON a.id = cb.assigned_to LEFT JOIN followup_rules r ON r.id = cb.rule_id
-          WHERE cb.org_id = ? AND cb.status IN (${status.map(() => '?').join(',')}) ORDER BY cb.priority DESC, cb.created_at DESC LIMIT 200`, [req.orgId, ...status]),
+      callbacks: rows.map((cb) => shapeCallback(cb, todayKey)),
       staff: await db.q(`SELECT id, name FROM users WHERE org_id = ? AND role IN ('TRAINER','GYM_OWNER') AND active = 1 ORDER BY name`, [req.orgId]),
+      window: engine.callingWindow(await engine.getSettings(db, req.orgId)),
     });
   }));
   o.put('/callbacks/:id', validate(z.object({ status: z.enum(CALLBACK_STATUSES).optional(), note: z.string().max(1000).optional(), assigned_to: z.string().max(40).nullable().optional() })), wrap(async (req, res) => {
     if (req.body.assigned_to && !(await db.q1(`SELECT id FROM users WHERE id = ? AND org_id = ?`, [req.body.assigned_to, req.orgId]))) return res.status(422).json({ error: 'Unknown staff member' });
+    const cur = await callbacks.getCallback(db, req.orgId, req.params.id);
+    if (cur && cur.mode !== 'human' && req.body.status) return res.status(422).json({ error: 'This call back is automated: reschedule, change who calls, or cancel it instead' });
     try { res.json({ callback: await updateCallback(db, req.orgId, req.params.id, req.body) }); } catch (e) { fail(res, e); }
+  }));
+  const cbAudit = (req, action, cb, after) => auditOwner(db, req, { action, entityType: 'followup_callbacks', entityId: cb.id, after });
+  // Book a call back for a member yourself: the AI calls, or a recording plays, at that time.
+  o.post('/callbacks', validate(z.object({
+    client_id: z.string().max(40), date: dayKeyRe, time: hhmm, mode: z.enum(['agent', 'call']),
+    agent_id: z.string().max(40).nullable().optional(), recording_id: z.string().max(40).nullable().optional(), script_group_id: z.string().max(40).nullable().optional(),
+    reason: z.string().trim().max(300).optional(),
+  })), wrap(async (req, res) => {
+    try {
+      const b = req.body;
+      const cb = await callbacks.createCallback(db, req.orgId, req.user.sub, { clientId: b.client_id, date: b.date, time: b.time, mode: b.mode, agentId: b.agent_id, recordingId: b.recording_id, scriptGroupId: b.script_group_id, reason: b.reason });
+      await cbAudit(req, 'callback_booked', cb, { client_id: b.client_id, mode: b.mode, scheduled_local: cb.scheduled_local });
+      res.json({ callback: cb });
+    } catch (e) { fail(res, e); }
+  }));
+  o.put('/callbacks/:id/schedule', validate(z.object({ date: dayKeyRe, time: hhmm })), wrap(async (req, res) => {
+    try {
+      const cb = await callbacks.rescheduleCallback(db, req.orgId, req.params.id, req.body, req.user.sub);
+      await cbAudit(req, 'callback_rescheduled', cb, { scheduled_local: cb.scheduled_local });
+      res.json({ callback: cb });
+    } catch (e) { fail(res, e); }
+  }));
+  o.put('/callbacks/:id/mode', validate(z.object({
+    mode: z.enum(['human', 'agent', 'call']), agent_id: z.string().max(40).nullable().optional(), recording_id: z.string().max(40).nullable().optional(), script_group_id: z.string().max(40).nullable().optional(),
+  })), wrap(async (req, res) => {
+    try {
+      const cb = await callbacks.changeCallbackMode(db, req.orgId, req.params.id, { mode: req.body.mode, agentId: req.body.agent_id, recordingId: req.body.recording_id, scriptGroupId: req.body.script_group_id }, req.user.sub);
+      await cbAudit(req, 'callback_mode_changed', cb, { mode: cb.mode });
+      res.json({ callback: cb });
+    } catch (e) { fail(res, e); }
+  }));
+  o.post('/callbacks/:id/cancel', validate(z.object({ note: z.string().trim().max(300).optional() })), wrap(async (req, res) => {
+    try {
+      const cb = await callbacks.cancelCallback(db, req.orgId, req.params.id, req.user.sub, req.body.note || null);
+      await cbAudit(req, 'callback_cancelled', cb, { status: cb.status });
+      res.json({ callback: cb });
+    } catch (e) { fail(res, e); }
+  }));
+  // "Call now": place it at once (inside calling hours, with every check a scheduled one gets).
+  o.post('/callbacks/:id/call-now', providerLimit, wrap(async (req, res) => {
+    try {
+      const cb = await callbacks.callNow(db, req.orgId, req.params.id, req.user.sub);
+      await cbAudit(req, 'callback_called_now', cb, {});
+      await callbacks.queueDueCallbacks(db, req.orgId, { max: 5 });
+      await engine.dispatchOrg(db, req.orgId, { max: 5, budgetMs: 15_000 });
+      res.json({ callback: await callbacks.getCallback(db, req.orgId, req.params.id) });
+    } catch (e) { fail(res, e); }
+  }));
+
+  // ---- prerecorded messages (the audio library) ----
+  o.get('/recordings', wrap(async (req, res) => res.json({ recordings: await listRecordings(db, req.orgId, { archived: req.query.archived === '1' }) })));
+  // Body: the audio as WAV (the page converts MP3/M4A/OGG/WebM first); details in the query string.
+  o.post('/recordings', rateLimit({ windowMs: 60_000, max: 20, keyFn: (req) => `fu-rec:${req.orgId}` }), wrap(async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(422).json({ error: 'Choose an audio file to upload' });
+    try {
+      const rec = await saveRecording(db, req.orgId, req.user.sub, {
+        buffer: req.body, name: req.query.name, language: req.query.language || 'en', purpose: req.query.purpose || null, originalName: req.query.file || null,
+      });
+      await auditOwner(db, req, { action: 'recording_saved', entityType: 'followup_recordings', entityId: rec.id, after: { name: rec.name, language: rec.language, seconds: rec.duration_secs } });
+      res.json({ recording: rec });
+    } catch (e) { fail(res, e); }
+  }));
+  o.get('/recordings/:id/audio', wrap(async (req, res) => {
+    const buf = await recordingAudio(db, req.orgId, req.params.id);
+    if (!buf) return res.status(404).end();
+    res.set({ 'Content-Type': 'audio/wav', 'Cache-Control': 'private, max-age=300' }).send(buf);
+  }));
+  o.put('/recordings/:id', validate(z.object({ name: z.string().max(80).optional(), language: lang.optional(), status: z.enum(['active', 'archived']).optional() })), wrap(async (req, res) => {
+    try {
+      if (req.body.status === 'archived') {
+        const use = await recordingInUse(db, req.orgId, req.params.id);
+        const live = use.campaigns.filter((c) => c.status === 'active');
+        if (live.length || use.callbacks) return res.status(409).json({ error: `In use by ${[live.length ? `${live.length} running campaign${live.length === 1 ? '' : 's'}` : null, use.callbacks ? `${use.callbacks} booked call back${use.callbacks === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}. Change those first.` });
+      }
+      const before = await getRecording(db, req.orgId, req.params.id);
+      const rec = await updateRecording(db, req.orgId, req.params.id, req.body);
+      await auditOwner(db, req, { action: 'recording_updated', entityType: 'followup_recordings', entityId: rec.id, before: before ? { name: before.name, language: before.language, status: before.status } : null, after: req.body });
+      res.json({ recording: rec });
+    } catch (e) { fail(res, e); }
+  }));
+
+  // ---- AI conversations ----
+  const CONV_LIST_COLS = `cv.id, cv.job_id, cv.client_id, cv.rule_id, cv.status, cv.outcome, cv.intent, cv.renewal_interest, cv.callback_requested, cv.callback_id,
+                          cv.human_escalation, cv.owner_action_required, cv.owner_action, cv.owner_action_done_at, cv.summary, cv.duration_secs, cv.language,
+                          cv.simulated, cv.from_callback_id, cv.created_at, cv.ended_at, u.name AS member_name, r.name AS campaign,
+                          cb.status AS callback_status, cb.scheduled_local AS callback_local`;
+  o.get('/conversations', wrap(async (req, res) => {
+    const where = ['cv.org_id = ?'];
+    const vals = [req.orgId];
+    if (req.query.filter === 'action') where.push('cv.owner_action_required = 1 AND cv.owner_action_done_at IS NULL');
+    if (req.query.filter === 'callbacks') where.push('cv.callback_id IS NOT NULL');
+    if (req.query.filter === 'completed') where.push(`cv.status = 'completed'`);
+    if (req.query.member) { where.push('cv.client_id = ?'); vals.push(String(req.query.member)); }
+    if (req.query.before) { where.push('cv.created_at < ?'); vals.push(String(req.query.before)); }
+    const tz = await getOrgTzCached(db, req.orgId);
+    const todayKey = dayKey(new Date(), tz);
+    const rows = await db.q(
+      `SELECT ${CONV_LIST_COLS} FROM followup_conversations cv
+         LEFT JOIN clients c ON c.id = cv.client_id LEFT JOIN users u ON u.id = c.user_id
+         LEFT JOIN followup_rules r ON r.id = cv.rule_id LEFT JOIN followup_callbacks cb ON cb.id = cv.callback_id
+        WHERE ${where.join(' AND ')} ORDER BY cv.created_at DESC LIMIT 80`, vals);
+    res.json({ conversations: rows.map((x) => ({ ...x, callback_label: x.callback_local ? callbacks.callbackLabel({ scheduled_local: x.callback_local }, todayKey) : null })) });
+  }));
+  o.get('/conversations/:id', wrap(async (req, res) => {
+    const cv = await db.q1(
+      `SELECT cv.*, u.name AS member_name, r.name AS campaign, ag.name AS agent_name, j.channel, j.from_number, j.unit, j.units
+         FROM followup_conversations cv LEFT JOIN clients c ON c.id = cv.client_id LEFT JOIN users u ON u.id = c.user_id
+         LEFT JOIN followup_rules r ON r.id = cv.rule_id LEFT JOIN followup_agents ag ON ag.id = cv.agent_id LEFT JOIN followup_jobs j ON j.id = cv.job_id
+        WHERE cv.id = ? AND cv.org_id = ?`, [req.params.id, req.orgId]);
+    if (!cv) return res.status(404).json({ error: 'Conversation not found' });
+    const tz = await getOrgTzCached(db, req.orgId);
+    const cb = cv.callback_id ? await db.q1('SELECT id, status, mode, scheduled_local, last_error FROM followup_callbacks WHERE id = ? AND org_id = ?', [cv.callback_id, req.orgId]) : null;
+    res.json({
+      conversation: {
+        ...cv, cost_json: undefined, provider_ref: undefined,
+        transcript: cv.transcript_json ? JSON.parse(cv.transcript_json) : null, transcript_json: undefined,
+        tools: cv.tools_json ? JSON.parse(cv.tools_json) : [], tools_json: undefined,
+        callback: cb ? { ...cb, when_label: callbacks.callbackLabel(cb, dayKey(new Date(), tz)) } : null,
+      },
+    });
+  }));
+  o.post('/conversations/:id/done', wrap(async (req, res) => {
+    const cv = await db.q1('SELECT id, owner_action FROM followup_conversations WHERE id = ? AND org_id = ?', [req.params.id, req.orgId]);
+    if (!cv) return res.status(404).json({ error: 'Conversation not found' });
+    await db.run('UPDATE followup_conversations SET owner_action_done_at = ?, owner_action_done_by = ?, updated_at = ? WHERE id = ? AND org_id = ?', [now(), req.user.sub, now(), cv.id, req.orgId]);
+    await auditOwner(db, req, { action: 'conversation_action_done', entityType: 'followup_conversations', entityId: cv.id, after: { owner_action: cv.owner_action } });
+    res.json({ ok: true });
   }));
 
   // ---- a test to the owner's own phone ----
@@ -874,6 +1084,7 @@ function publicSettings(s) {
     enabled: s.enabled, window_start: s.window_start, window_end: s.window_end, days_mask: s.days_mask, max_per_day: s.max_per_day, max_per_week: s.max_per_week,
     language: s.language, languages: s.languages, voices: s.voices, lines: s.lines, gym_display_name: s.gym_display_name, whatsapp_from: s.whatsapp_from,
     sms_header: s.sms_header, dlt_entity_id: s.dlt_entity_id, monthly_cap_inr: s.monthly_cap_inr, compliance: s.compliance, effective_window: engine.callingWindow(s),
+    keep_transcripts: Number(s.keep_transcripts ?? 1) === 1, transcript_days: Number(s.transcript_days) || 90,
   };
 }
 
@@ -882,6 +1093,8 @@ function publicRule(r) {
     id: r.id, name: r.name, kind: r.kind, status: r.status, branch_id: r.branch_id, config: r.config, sequence: r.sequence, per_day: r.per_day, gap_hours: r.gap_hours,
     language: r.language, voice_tier: r.voice_tier, agent_tier: r.agent_tier, voice_id: r.voice_id, script_group_id: r.script_group_id, sms_group_id: r.sms_group_id, template_group_id: r.template_group_id,
     agent_id: r.agent_id, ends_on: r.ends_on, budget: r.budget, schedule: describeSchedule(r.kind, r.config), created_at: r.created_at, updated_at: r.updated_at,
+    recording_id: r.recording_id || null, purpose: r.purpose || 'service',
+    mode: r.sequence.some((s) => s.channel === 'agent') ? 'interactive' : r.sequence.some((s) => s.channel === 'call') ? 'prerecorded' : 'messages',
   };
 }
 

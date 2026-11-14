@@ -11,15 +11,21 @@ import { api } from '../../../api.js';
 import { Card, ErrorState, Modal, PageSkeleton, Toast } from '../../UI.jsx';
 import Select from '../../Select.jsx';
 import Icon from '../../Icon.jsx';
-import { CHANNEL, KIND, REASON, Field, SectionHead, Stepper, Tag, Tile, Pill, TierPicker, num, productName, productShort, useApi } from './shared.jsx';
+import { CHANNEL, KIND, REASON, CALL_MODES, Field, SectionHead, Stepper, Tag, Tile, Pill, TierPicker, num, productName, productShort, useApi } from './shared.jsx';
 
 const BEFORE_CHOICES = [14, 10, 7, 5, 4, 3, 2, 1, 0];
 const MISS_CHOICES = [2, 3, 5, 7, 10, 14, 21, 30];
+const AUDIENCE = [['all', 'Every member'], ['active', 'Active members'], ['expiring', 'Ending soon'], ['expired', 'Ended recently']];
 
 const blank = (kind = 'missed_visits') => ({
   name: KIND[kind].label, kind, config: {}, sequence: [{ channel: 'call', after_hours: 0 }], per_day: 1, gap_hours: 3,
   language: 'en', voice_tier: 'standard', agent_tier: 'advanced', voice_id: null, script_group_id: null, sms_group_id: null, template_group_id: null, agent_id: null, ends_on: null, budget: {}, branch_id: null,
+  recording_id: null, purpose: 'service',
 });
+
+/** Which calling mode a sequence uses: prerecorded, interactive, or messages only. */
+const modeOf = (sequence) => (sequence.some((s) => s.channel === 'agent') ? 'interactive' : sequence.some((s) => s.channel === 'call') ? 'prerecorded' : 'messages');
+const MODE_LABEL = { prerecorded: 'Prerecorded call', interactive: 'AI conversation', messages: 'Messages' };
 
 export default function Campaigns({ go }) {
   const rules = useApi('/followups/rules');
@@ -66,7 +72,12 @@ export default function Campaigns({ go }) {
             <div key={c.id} className="cm-row">
               <Tile icon={KIND[c.kind].icon} tone={KIND[c.kind].hue} size={40} />
               <button type="button" className="flex-1 min-w-0 text-left" onClick={() => setEditing({ ...c })}>
-                <div className="flex items-center gap-2"><span className="font-semibold truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>{c.status !== 'active' && <Tag>Paused</Tag>}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>
+                  <Tag tone={modeOf(c.sequence) === 'interactive' ? 'good' : 'mute'}>{MODE_LABEL[modeOf(c.sequence)]}</Tag>
+                  {c.purpose === 'promotional' && <Tag tone="warn">Promotional</Tag>}
+                  {c.status !== 'active' && <Tag>Paused</Tag>}
+                </div>
                 <div className="text-[13px]" style={{ color: 'var(--mute)' }}>{c.sequence.map((s) => CHANNEL[s.channel].short).join(' → ')} · {c.schedule}</div>
               </button>
               <button type="button" className="btn btn-sm hidden sm:inline-flex" onClick={() => remove(c)} aria-label={`Delete ${c.name}`}>Delete</button>
@@ -97,12 +108,24 @@ function CampaignEditor({ initial, defaults, onClose, onSaved, go }) {
   const settings = useApi('/followups/settings');
   const numbers = useApi('/followups/numbers');
   const cat = useApi('/followups/catalogue');
+  const recordings = useApi('/followups/recordings');
   const [preview, setPreview] = useState(null);
+  const [voiceSource, setVoiceSource] = useState(initial.script_group_id && !initial.recording_id ? 'text' : 'recording');
   const set = (patch) => setC((x) => ({ ...x, ...patch }));
   const cfg = (patch) => setC((x) => ({ ...x, config: { ...x.config, ...patch } }));
 
   const used = new Set(c.sequence.map((s) => s.channel));
-  const addable = Object.keys(CHANNEL).filter((ch) => !used.has(ch) && !(ch === 'agent' && used.has('call')) && !(ch === 'call' && used.has('agent')));
+  const mode = modeOf(c.sequence);
+  // The call itself is chosen with the mode cards; only messages are added here.
+  const addable = ['sms', 'whatsapp'].filter((ch) => !used.has(ch));
+  const setMode = (m) => {
+    const messages = c.sequence.filter((s) => s.channel === 'sms' || s.channel === 'whatsapp');
+    const call = m === 'prerecorded' ? [{ channel: 'call', after_hours: 0 }] : m === 'interactive' ? [{ channel: 'agent', after_hours: 0 }] : [];
+    const seq = [...call, ...messages.map((s, i) => ({ ...s, after_hours: call.length || i ? s.after_hours || 4 : 0 }))];
+    set({ sequence: seq.length ? seq : [{ channel: 'sms', after_hours: 0 }] });
+  };
+  const recs = recordings.data?.recordings || [];
+  const pickedRec = recs.find((r) => r.id === c.recording_id);
 
   // Live preview, debounced.
   const timer = useRef();
@@ -139,7 +162,7 @@ function CampaignEditor({ initial, defaults, onClose, onSaved, go }) {
     <Modal open onClose={onClose} title={c.id ? 'Edit campaign' : 'New campaign'} wide
       footer={(
         <div className="flex items-center justify-between gap-3 w-full flex-wrap">
-          <span className="text-[14px]" style={{ color: 'var(--mute)' }}>{preview ? `Would reach ${num(preview.count)} member${preview.count === 1 ? '' : 's'} today` : ' '}</span>
+          <span className="text-[14px]" style={{ color: 'var(--mute)' }}>{preview ? `Would reach ${num(preview.count)} member${preview.count === 1 ? '' : 's'} ${c.kind === 'announcement' && c.config?.send_on ? `on ${c.config.send_on}` : 'today'}` : ' '}</span>
           <div className="flex gap-2"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="button" className="btn-primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save'}</button></div>
         </div>
       )}>
@@ -149,7 +172,7 @@ function CampaignEditor({ initial, defaults, onClose, onSaved, go }) {
           <Step n={1} title="When" />
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(KIND).map(([k, v]) => (
-              <button key={k} type="button" onClick={() => set({ kind: k, config: { ...defaults[k] }, name: c.name === KIND[c.kind].label ? v.label : c.name })}
+              <button key={k} type="button" onClick={() => set({ kind: k, config: { ...defaults[k] }, name: c.name === KIND[c.kind].label ? v.label : c.name, purpose: k === 'announcement' ? c.purpose : 'service' })}
                 className="flex items-center gap-2.5 p-3 rounded-2xl text-left" aria-pressed={c.kind === k}
                 style={{ border: `1.5px solid ${c.kind === k ? 'var(--ink)' : 'var(--line)'}`, background: c.kind === k ? 'rgb(var(--tint-rgb) / .05)' : 'transparent' }}>
                 <Tile icon={v.icon} tone={v.hue} size={34} />
@@ -157,13 +180,22 @@ function CampaignEditor({ initial, defaults, onClose, onSaved, go }) {
               </button>
             ))}
           </div>
-          <ScheduleControls kind={c.kind} config={c.config} onChange={cfg} />
+          <ScheduleControls kind={c.kind} config={c.config} onChange={cfg} purpose={c.purpose} onPurpose={(p) => set({ purpose: p })} />
           {preview?.schedule && <p className="text-[14px] rounded-xl p-3" style={{ background: 'rgb(var(--tint-rgb) / .05)', color: 'var(--ink)' }}>{preview.schedule}.</p>}
         </section>
 
         {/* 2 · How */}
         <section className="space-y-3">
-          <Step n={2} title="How" hint="In order. Each step only happens if the one before got no reply." />
+          <Step n={2} title="How" hint="Pick how the call goes. SMS and WhatsApp can follow if there is no reply." />
+          <div className="grid sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Calling mode">
+            {[...Object.entries(CALL_MODES), ['messages', { label: 'Messages only', icon: 'chat', hue: 'strength', what: 'No call: an SMS and/or a WhatsApp message.' }]].map(([k, m]) => (
+              <button key={k} type="button" role="radio" aria-checked={mode === k} onClick={() => setMode(k)}
+                className="text-left p-3.5 rounded-2xl flex flex-col gap-2" style={{ border: `1.5px solid ${mode === k ? 'var(--ink)' : 'var(--line)'}`, background: mode === k ? 'rgb(var(--tint-rgb) / .05)' : 'transparent' }}>
+                <span className="flex items-center gap-2.5"><Tile icon={m.icon} tone={m.hue} size={32} /><span className="font-semibold leading-tight" style={{ color: 'var(--ink)' }}>{m.label}</span></span>
+                <span className="text-[13px] leading-snug" style={{ color: 'var(--mute)' }}>{m.what}</span>
+              </button>
+            ))}
+          </div>
           {c.sequence.map((s, i) => (
             <div key={s.channel} className="flex items-center gap-3 flex-wrap">
               <span className="w-6 text-center text-[13px] font-bold" style={{ color: 'var(--faint)' }}>{i + 1}</span>
@@ -175,7 +207,7 @@ function CampaignEditor({ initial, defaults, onClose, onSaved, go }) {
                     onChange={(v) => set({ sequence: c.sequence.map((x, j) => (j === i ? { ...x, after_hours: v } : x)) })} />
                 </span>
               )}
-              {c.sequence.length > 1 && <button type="button" className="btn btn-sm" aria-label={`Remove ${CHANNEL[s.channel].label}`} onClick={() => set({ sequence: c.sequence.filter((_, j) => j !== i) })}>Remove</button>}
+              {c.sequence.length > 1 && !['call', 'agent'].includes(s.channel) && <button type="button" className="btn btn-sm" aria-label={`Remove ${CHANNEL[s.channel].label}`} onClick={() => set({ sequence: c.sequence.filter((_, j) => j !== i) })}>Remove</button>}
             </div>
           ))}
           {addable.length > 0 && c.sequence.length < 4 && (
@@ -211,22 +243,54 @@ function CampaignEditor({ initial, defaults, onClose, onSaved, go }) {
             </Field>
           )}
           {used.has('call') && (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Voice message" hint={<button type="button" className="underline" onClick={() => go('messages')}>Write a new one</button>}>
-                <Select aria-label="Voice message" value={c.script_group_id || ''} onChange={(v) => set({ script_group_id: v })} placeholder="Pick a message" options={groupOptions(voiceGroups)} />
+            <div className="space-y-3">
+              <Field label="What the call plays">
+                <div className="flex gap-1.5 flex-wrap">
+                  <Pill on={voiceSource === 'recording'} onClick={() => { setVoiceSource('recording'); set({ script_group_id: null }); }}>Your recording</Pill>
+                  <Pill on={voiceSource === 'text'} onClick={() => { setVoiceSource('text'); set({ recording_id: null }); }}>Text read out by a voice</Pill>
+                </div>
               </Field>
-              <Field label="Voice" hint="Only voices of this call quality. Empty uses your default for the language.">
-                <Select aria-label="Voice" value={c.voice_id || ''} onChange={(v) => set({ voice_id: v || null })} placeholder="Default voice"
-                  options={[{ value: '', label: 'Default voice' }, ...(voices.data?.saved || [])
-                    .filter((v) => v.provider === (voices.data?.tiers || []).find((t) => t.id === c.voice_tier)?.provider)
-                    .map((v) => ({ value: v.provider_voice_id, label: v.name, hint: v.source }))]} />
-              </Field>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {voiceSource === 'recording' ? (
+                  <Field label="Recording" hint={<button type="button" className="underline" onClick={() => go('messages')}>Upload or record one</button>}>
+                    <Select aria-label="Recording" value={c.recording_id || ''} onChange={(v) => set({ recording_id: v })} placeholder={recs.length ? 'Pick a recording' : 'No recordings yet'}
+                      options={recs.map((r) => ({ value: r.id, label: r.name, hint: `${Math.round(r.duration_secs)}s · ${r.language.toUpperCase()}` }))} />
+                    {pickedRec && <audio controls preload="none" className="w-full mt-2" src={`/api/followups/recordings/${pickedRec.id}/audio`} aria-label={`Preview ${pickedRec.name}`} />}
+                  </Field>
+                ) : (
+                  <Field label="Voice message" hint={<button type="button" className="underline" onClick={() => go('messages')}>Write a new one</button>}>
+                    <Select aria-label="Voice message" value={c.script_group_id || ''} onChange={(v) => set({ script_group_id: v })} placeholder="Pick a message" options={groupOptions(voiceGroups)} />
+                  </Field>
+                )}
+                <Field label="Voice" hint={voiceSource === 'recording' ? 'Speaks the fixed opening notice and the keypad menu around your recording.' : 'Only voices of this call quality. Empty uses your default for the language.'}>
+                  <Select aria-label="Voice" value={c.voice_id || ''} onChange={(v) => set({ voice_id: v || null })} placeholder="Default voice"
+                    options={[{ value: '', label: 'Default voice' }, ...(voices.data?.saved || [])
+                      .filter((v) => v.provider === (voices.data?.tiers || []).find((t) => t.id === c.voice_tier)?.provider)
+                      .map((v) => ({ value: v.provider_voice_id, label: v.name, hint: v.source }))]} />
+                </Field>
+              </div>
+              <p className="text-[13px]" style={{ color: 'var(--mute)' }}>
+                Every call starts with “This is an automated call from your gym” and ends with the keypad menu: 1 to talk to you, 9 to stop. Those lines are added for you and cannot be removed.
+              </p>
             </div>
           )}
           {used.has('agent') && (
-            <Field label="AI agent" hint={<button type="button" className="underline" onClick={() => go('voices')}>Create an agent</button>}>
+            <Field label="AI agent" hint={<button type="button" className="underline" onClick={() => go('voices')}>Create or change an agent</button>}>
               <Select aria-label="AI agent" value={c.agent_id || ''} onChange={(v) => set({ agent_id: v })} placeholder="Pick an agent"
                 options={(agents.data?.agents || []).map((a) => ({ value: a.id, label: a.name, hint: a.language.toUpperCase() }))} />
+              {(() => {
+                const a = (agents.data?.agents || []).find((x) => x.id === c.agent_id);
+                if (!a) return null;
+                const on = (v) => Number(v ?? 1) === 1;
+                return (
+                  <span className="flex flex-wrap gap-1.5 mt-2">
+                    <Tag tone={on(a.allow_callbacks) ? 'good' : 'mute'}>{on(a.allow_callbacks) ? 'Books call backs' : 'No call backs'}</Tag>
+                    <Tag tone={on(a.allow_handover) ? 'good' : 'mute'}>{on(a.allow_handover) ? 'Hands over to your team' : 'No hand-over'}</Tag>
+                    <Tag tone={on(a.answer_plans) ? 'good' : 'mute'}>{on(a.answer_plans) ? 'Quotes your plans' : 'Does not quote plans'}</Tag>
+                    <Tag>Up to {a.max_minutes || 3} min</Tag>
+                  </span>
+                );
+              })()}
             </Field>
           )}
           {used.has('sms') && (
@@ -302,8 +366,32 @@ function Step({ n, title, hint }) {
   );
 }
 
-function ScheduleControls({ kind, config, onChange }) {
+function ScheduleControls({ kind, config, onChange, purpose, onPurpose }) {
   const c = config || {};
+  if (kind === 'announcement') {
+    const today = new Date().toISOString().slice(0, 10);
+    return (
+      <div className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Send on" hint="Once, on this day, inside your calling hours. Never sent late.">
+            <input type="date" className="input w-full" min={today} value={c.send_on || ''} onChange={(e) => onChange({ send_on: e.target.value || null })} />
+          </Field>
+          {c.audience === 'expiring' && <Field label="Ending within"><Stepper value={c.expiring_days ?? 7} min={1} max={60} suffix="days" onChange={(v) => onChange({ expiring_days: v })} label="days" /></Field>}
+        </div>
+        <Field label="To">
+          <div className="flex flex-wrap gap-1.5">{AUDIENCE.map(([k, l]) => <Pill key={k} on={(c.audience || 'active') === k} onClick={() => onChange({ audience: k })}>{l}</Pill>)}</div>
+        </Field>
+        <Field label="What kind of message" hint={purpose === 'promotional'
+          ? 'Offers and events reach only members who agreed to offers (a separate permission). A call back they asked for never counts.'
+          : 'Service news every member needs, such as a holiday closure or a change in timings.'}>
+          <div className="flex flex-wrap gap-1.5">
+            <Pill on={purpose !== 'promotional'} onClick={() => onPurpose('service')}>Service: closures, timings</Pill>
+            <Pill on={purpose === 'promotional'} onClick={() => onPurpose('promotional')}>Promotional: offers, events</Pill>
+          </div>
+        </Field>
+      </div>
+    );
+  }
   if (kind === 'membership_ending') {
     const before = new Set(c.before || []);
     return (
@@ -354,5 +442,6 @@ function payload(c) {
     per_day: c.per_day, gap_hours: c.gap_hours, language: c.language, voice_tier: c.voice_tier || 'standard', agent_tier: c.agent_tier || 'advanced', voice_id: c.voice_id || null, script_group_id: c.script_group_id || null,
     sms_group_id: c.sms_group_id || null, template_group_id: c.template_group_id || null, agent_id: c.agent_id || null, ends_on: c.ends_on || null,
     budget: Object.keys(budget).length ? budget : undefined, branch_id: c.branch_id || null,
+    recording_id: c.recording_id || null, purpose: c.kind === 'announcement' ? c.purpose || 'service' : 'service',
   };
 }

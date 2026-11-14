@@ -88,6 +88,14 @@ export function verify(value, mac) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+/**
+ * The key the platform's agent tools are called with (header
+ * X-Barbell-Tool-Key). Derived from the server secret, so it is never stored
+ * and rotates with it; each request ALSO carries the call's signed job token.
+ */
+export const toolKey = () => sign('agent-tools:v1');
+export const checkToolKey = (k) => verify('agent-tools:v1', String(k || ''));
+
 /** `<jobId>.<mac>` -- what goes in Exotel's CustomField (max 128 chars). */
 export const jobToken = (jobId) => `${jobId}.${sign(jobId)}`;
 export function readJobToken(token) {

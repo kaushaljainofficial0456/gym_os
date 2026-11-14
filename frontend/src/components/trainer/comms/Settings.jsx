@@ -78,6 +78,25 @@ export default function Settings() {
       </section>
 
       <section>
+        <SectionHead title="AI conversation transcripts" />
+        <Card className="p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <button type="button" role="switch" aria-checked={f.keep_transcripts} aria-label="Keep transcripts" className="cm-switch mt-0.5" data-on={f.keep_transcripts}
+              onClick={() => save({ keep_transcripts: !f.keep_transcripts }, f.keep_transcripts ? 'Transcripts off. Kept ones were deleted.' : 'Transcripts on')} />
+            <div>
+              <div className="text-[15px] font-semibold" style={{ color: 'var(--ink)' }}>Keep what was said on AI calls</div>
+              <div className="text-[13px]" style={{ color: 'var(--mute)' }}>Only you and your gym’s owners can read them. Summaries are always kept; switching this off deletes the transcripts already kept.</div>
+            </div>
+          </div>
+          {f.keep_transcripts && (
+            <Field label="Delete transcripts after" hint="Each transcript is deleted automatically after this many days.">
+              <div className="flex flex-wrap gap-1.5">{[30, 90, 180, 365].map((d) => <Pill key={d} on={Number(f.transcript_days) === d} onClick={() => save({ transcript_days: d }, `Kept for ${d} days`)}>{d} days</Pill>)}</div>
+            </Field>
+          )}
+        </Card>
+      </section>
+
+      <section>
         <SectionHead title="Languages and voices" />
         <Card className="p-5 space-y-5">
           <p className="text-[14px]" style={{ color: 'var(--mute)' }}>Choose which languages each channel may use. A member who picked one of these in their app gets it; everyone else gets the campaign’s fallback language.</p>

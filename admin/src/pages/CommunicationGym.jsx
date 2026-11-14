@@ -17,7 +17,7 @@ import { useFetch, moneyExact, formatDateTime } from '../utils.js';
 import { useToast } from '../components/Toast.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { SkeletonBlock } from '../components/Skeleton.jsx';
-import { unitLabel } from './Communication.jsx';
+import { unitLabel, UsageReport } from './Communication.jsx';
 
 const REASON_LABEL = { purchase: 'Purchase', trial: 'Free trial', adjustment: 'Adjustment', hold: 'Held for a call', release: 'Hold released', usage: 'Used', refund: 'Refunded' };
 const ORDER_TONE = { SUCCESS: 'good', PENDING: 'warn', CREATED: 'warn', FAILED: 'bad', CANCELLED: 'mute' };
@@ -257,6 +257,13 @@ export default function CommunicationGym() {
           </div>
         )}
       </div>
+
+      {d.usage && (
+        <div style={{ marginBottom: 16 }}>
+          <h2>This month by calling mode</h2>
+          <UsageReport report={d.usage} showGyms={false} />
+        </div>
+      )}
 
       <div className="card">
         <h2>Owner changes</h2>

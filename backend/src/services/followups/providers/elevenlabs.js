@@ -14,7 +14,7 @@
 // screen can say what went wrong.
 // ============================================================
 import crypto from 'node:crypto';
-import { elevenEnv } from '../config.js';
+import { elevenEnv, toolKey } from '../config.js';
 
 const TIMEOUT_MS = 20_000;
 
@@ -147,22 +147,45 @@ export async function deleteVoice(voiceId) {
  * opening line, pursues the owner's goal, and reports a structured
  * outcome the engine acts on (data_collection).
  */
-export async function upsertAgent({ agentId, name, prompt, firstMessage, language, voiceId, maxSecs = 180 }) {
+/**
+ * Our provider-neutral tool definitions (conversations.agentTools) as
+ * ElevenLabs server ("webhook") tools, plus the built-in end_call. The tool
+ * key travels as a request header; followup_job is filled from the call's
+ * dynamic variable, never by the model.
+ */
+export function elevenTools(tools = []) {
+  const prop = (p) => (p.dynamic_variable ? { type: 'string', description: p.description, dynamic_variable: p.dynamic_variable } : { type: p.type || 'string', description: p.description });
+  return [
+    ...tools.map((t) => ({
+      type: 'webhook', name: t.name, description: t.description,
+      response_timeout_secs: 10,
+      api_schema: {
+        url: t.url, method: 'POST',
+        request_headers: { 'X-Barbell-Tool-Key': toolKey() },
+        request_body_schema: {
+          type: 'object', description: t.description, required: t.parameters.required || [],
+          properties: Object.fromEntries(Object.entries(t.parameters.properties || {}).map(([k, p]) => [k, prop(p)])),
+        },
+      },
+    })),
+    { type: 'system', name: 'end_call', description: 'End the call once the conversation is finished, or when the member wants to stop.' },
+  ];
+}
+
+export async function upsertAgent({ agentId, name, prompt, firstMessage, language, voiceId, maxSecs = 180, tools = [], dataCollection = null }) {
+  const collect = dataCollection || {
+    outcome: 'How the call ended for the gym. Exactly one of: coming_back, renewing, will_pay, callback_requested, not_interested, opted_out, wrong_number, no_conversation, other.',
+    reason: 'In one short sentence, why the member has not been coming, or their main objection. Empty if not said.',
+  };
   const body = {
     name: name.slice(0, 80),
     conversation_config: {
-      agent: { first_message: firstMessage, language, prompt: { prompt } },
+      agent: { first_message: firstMessage, language, prompt: { prompt, tools: elevenTools(tools) } },
       tts: voiceId ? { voice_id: voiceId } : undefined,
       conversation: { max_duration_seconds: maxSecs },
     },
     platform_settings: {
-      data_collection: {
-        outcome: {
-          type: 'string',
-          description: 'How the call ended for the gym. Exactly one of: coming_back, renewing, will_pay, callback_requested, not_interested, opted_out, wrong_number, no_conversation, other.',
-        },
-        reason: { type: 'string', description: 'In one short sentence, why the member has not been coming, or their main objection. Empty if not said.' },
-      },
+      data_collection: Object.fromEntries(Object.entries(collect).map(([k, description]) => [k, { type: k === 'understood' ? 'boolean' : 'string', description }])),
     },
   };
   if (agentId) {
@@ -259,6 +282,18 @@ export const conversation = {
     if (evt.type !== 'post_call_transcription') return null;
     const dc = data.analysis?.data_collection_results || {};
     const val = (k) => (dc[k] && typeof dc[k] === 'object' ? dc[k].value : dc[k]);
-    return { token, ref: data.conversation_id || null, status: 'completed', duration: Number(data.metadata?.call_duration_secs) || 0, outcome: val('outcome') || null, summary: val('reason') || data.analysis?.transcript_summary || null };
+    const understood = val('understood');
+    const transcript = (Array.isArray(data.transcript) ? data.transcript : [])
+      .filter((t) => t && typeof t.message === 'string' && t.message.trim())
+      .map((t) => ({ role: t.role === 'agent' ? 'agent' : 'member', text: t.message, ...(Number.isFinite(Number(t.time_in_call_secs)) ? { secs: Number(t.time_in_call_secs) } : {}) }));
+    const m = data.metadata || {};
+    const cost = m.cost !== undefined || m.charging ? { credits: m.cost ?? null, llm_charge: m.charging?.llm_charge ?? null, call_charge: m.charging?.call_charge ?? null } : null;
+    return {
+      provider: 'elevenlabs', token, ref: data.conversation_id || null, status: 'completed', duration: Number(m.call_duration_secs) || 0,
+      outcome: val('outcome') || null, summary: val('reason') || data.analysis?.transcript_summary || null,
+      renewal_interest: val('renewal_interest') || null, unanswered_question: val('unanswered_question') || null, objection: val('objection') || null,
+      understood: understood === false || understood === 'false' ? false : understood === true || understood === 'true' ? true : null,
+      transcript, cost,
+    };
   },
 };

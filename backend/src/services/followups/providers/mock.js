@@ -83,7 +83,9 @@ export const conversation = {
   label: 'Test mode',
   configured: () => true,
   async upsertAgent({ agentId, name }) { return agentId || `test_agent_${crypto.createHash('sha1').update(String(name)).digest('hex').slice(0, 10)}`; },
-  async startCall({ seed, kind }) { return { ref: mockRef('ai', seed), simulated: simulateAgentCall(seed, kind) }; },
+  // The engine runs the conversation through simulator.js, which exercises
+  // the real server tools (call backs, hand-over, stop) against the database.
+  async startCall({ seed }) { return { ref: mockRef('ai', seed), simulate: true }; },
   verifyWebhook: () => false,
   parseResult: () => null,
 };

@@ -16,10 +16,17 @@ export const KIND = {
   membership_ending: { label: 'Membership ending', hint: 'Before and after it ends', icon: 'card', hue: 'strength' },
   payment_due: { label: 'Payment pending', hint: 'Until it is paid', icon: 'receipt', hue: 'energy' },
   onboarding: { label: 'New member, not in yet', hint: 'A nudge after joining', icon: 'sparkle', hue: 'body' },
+  announcement: { label: 'Announcement', hint: 'Once, to a group: holiday, event, offer', icon: 'bell', hue: 'training' },
+};
+
+/** The two ways a call can go. Shown side by side wherever a call is set up. */
+export const CALL_MODES = {
+  prerecorded: { channel: 'call', label: 'Prerecorded voice call', icon: 'phone', hue: 'training', what: 'Plays a fixed recording or message. The member can press keys (1 to talk to you, 9 to stop), but nothing they say is understood.' },
+  interactive: { channel: 'agent', label: 'Interactive AI conversation', icon: 'robot', hue: 'nutrition', what: 'An AI talks with the member, answers from your facts, understands "call me next Monday at 6" and books it, and writes you a summary.' },
 };
 
 export const CHANNEL = {
-  call: { label: 'AI voice call', short: 'Call', icon: 'phone', hue: 'training', product: 'voice' },
+  call: { label: 'Prerecorded call', short: 'Call', icon: 'phone', hue: 'training', product: 'voice' },
   agent: { label: 'AI conversation', short: 'AI talk', icon: 'robot', hue: 'nutrition', product: 'agent' },
   sms: { label: 'SMS', short: 'SMS', icon: 'chat', hue: 'strength', product: 'sms' },
   whatsapp: { label: 'WhatsApp', short: 'WhatsApp', icon: 'chat', hue: 'body', product: 'whatsapp' },
@@ -36,9 +43,25 @@ export const STATUS = {
 };
 
 export const OUTCOME = {
-  callback: 'Wants a call back', on_it: 'Said they’re on it', opted_out: 'Asked to stop', coming_back: 'Coming back',
+  callback: 'Wants a person', callback_scheduled: 'Call back booked', question: 'Question for you', on_it: 'Said they’re on it', opted_out: 'Asked to stop', coming_back: 'Coming back',
   renewing: 'Will renew', will_pay: 'Will pay', not_interested: 'Not interested', wrong_number: 'Wrong number', other: 'Other',
 };
+
+/** An AI conversation's result, as the owner reads it. */
+export const CONV_OUTCOME = {
+  renewing: ['Agreed to renew', 'good'], will_pay: ['Will pay', 'good'], coming_back: ['Coming back', 'good'],
+  callback_scheduled: ['Call back booked', 'good'], person_requested: ['Wants a person', 'warn'], question_open: ['Question for you', 'warn'],
+  declined: ['Declined', 'mute'], opted_out: ['Asked to stop', 'bad'], wrong_number: ['Wrong number', 'bad'],
+  not_understood: ['Not understood', 'warn'], incomplete: ['Ended early', 'warn'], other: ['No clear outcome', 'mute'],
+};
+export const CONV_STATUS = { in_progress: 'On the call', completed: 'Completed', incomplete: 'Incomplete', no_answer: 'No answer', busy: 'Busy', failed: 'Failed' };
+
+export const CALLBACK_STATUS = {
+  scheduled: ['Booked', 'good'], processing: ['Calling now', 'warn'], completed: ['Done', 'good'], failed: ['Could not be placed', 'bad'],
+  expired: ['Missed its time', 'bad'], cancelled: ['Cancelled', 'mute'], new: ['New', 'warn'], assigned: ['Assigned', 'mute'],
+  in_progress: ['In progress', 'warn'], unreachable: ['Could not reach', 'bad'],
+};
+export const CALLBACK_MODE = { agent: 'The AI calls', call: 'A recording plays', human: 'A person calls' };
 
 /** Why someone was not contacted -- the engine's reason codes, in words. */
 export const REASON = {
@@ -49,6 +72,7 @@ export const REASON = {
   campaign_ended: 'Campaign ended', not_interested: 'Said not interested', snoozed: 'Said they’re on it', step_done: 'Already contacted',
   responded: 'Already responded', in_progress: 'In progress', waiting_gap: 'Waiting before the next try', waiting_to_escalate: 'Waiting before the next channel',
   sequence_done: 'All channels tried', channel_paused: 'Channel paused', no_capacity: 'Out of capacity', budget_reached: 'Campaign budget used',
+  callback_scheduled: 'A call back is booked', no_promo_permission: 'Has not agreed to offers',
   no_message: 'No message picked', no_agent: 'No AI agent picked', tier_unavailable: 'That quality is not available yet', template_not_approved: 'WhatsApp template not approved', template_pending: 'WhatsApp template awaiting approval',
 };
 

@@ -1,5 +1,16 @@
 # Follow-ups: automated calls and WhatsApp to members
 
+> **AI Communication 2.0** (November 2026) adds prerecorded calls from the gym's
+> own recordings, interactive AI conversations that book call backs at the time
+> the member asks for, a conversation history with server-written summaries,
+> announcements, and a separate permission for promotional contact. See
+> [AI_COMMUNICATION_ARCHITECTURE.md](AI_COMMUNICATION_ARCHITECTURE.md),
+> [AI_CALLBACK_ENGINE.md](AI_CALLBACK_ENGINE.md),
+> [AI_COMMUNICATION_DEPLOYMENT.md](AI_COMMUNICATION_DEPLOYMENT.md) and
+> [AI_COMMUNICATION_TEST_REPORT.md](AI_COMMUNICATION_TEST_REPORT.md). The audit
+> it started from is [AI_COMMUNICATION_AUDIT.md](AI_COMMUNICATION_AUDIT.md). This
+> page remains the product spec and operator guide.
+
 Gym owners set up **automations** that follow up with members by **phone call**
 (an AI voice reading the owner's message, or a two-way AI conversation) and/or
 **WhatsApp**. Each automation is triggered by a condition the owner picks:

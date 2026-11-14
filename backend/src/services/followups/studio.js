@@ -17,6 +17,7 @@ import { id, now } from '../../ids.js';
 import { writeText } from '../intelligence/aiProvider.js';
 import { normalizePlaceholders, unknownPlaceholders, PLACEHOLDERS } from './render.js';
 import { isLanguage, languageList, starterFor } from './languages.js';
+import { toolKey } from './config.js';
 
 const err = (msg, status = 422) => Object.assign(new Error(msg), { status });
 const langName = (code) => languageList().find((l) => l.code === code)?.name || code;
@@ -122,7 +123,12 @@ export async function translateScript({ body, from, to }) {
 
 /* ---------------- agents ---------------- */
 
-const agentSnapshot = (a) => ({ name: a.name, language: a.language, voice_id: a.voice_id, greeting: a.greeting, purpose: a.purpose, knowledge: a.knowledge, faqs: a.faqs });
+const agentSnapshot = (a) => ({
+  name: a.name, language: a.language, voice_id: a.voice_id, greeting: a.greeting, purpose: a.purpose, knowledge: a.knowledge, faqs: a.faqs,
+  tone: a.tone, max_minutes: a.max_minutes, allow_callbacks: a.allow_callbacks, allow_handover: a.allow_handover, answer_plans: a.answer_plans,
+});
+export const TONES = ['warm', 'professional', 'energetic'];
+const flag = (v, dflt = 1) => (v === undefined || v === null ? dflt : (v ? 1 : 0));
 
 export async function saveAgent(db, orgId, userId, input) {
   const a = {
@@ -134,24 +140,33 @@ export async function saveAgent(db, orgId, userId, input) {
     knowledge: String(input.knowledge || '').trim().slice(0, 4000),
     faqs: (Array.isArray(input.faqs) ? input.faqs : []).slice(0, 30)
       .map((f) => ({ q: String(f?.q || '').trim().slice(0, 200), a: String(f?.a || '').trim().slice(0, 500) })).filter((f) => f.q && f.a),
+    tone: TONES.includes(input.tone) ? input.tone : 'warm',
+    max_minutes: Math.min(5, Math.max(1, Math.round(Number(input.max_minutes) || 3))),
+    allow_callbacks: flag(input.allow_callbacks),
+    allow_handover: flag(input.allow_handover),
+    answer_plans: flag(input.answer_plans),
   };
   if (!a.name) throw err('Give the agent a name');
   if (a.purpose.length < 10) throw err('Describe what the agent should achieve on the call');
+  // The member must hear at once that this is an AI. Every default opening
+  // line says so; an owner's own line has to as well.
+  if (a.greeting && !/\bAI\b/i.test(a.greeting)) throw err('The opening line must say that this is an AI assistant (for example "I\'m an AI assistant calling from {gym}").');
   const ts = now();
+  const cols = ['name', 'language', 'voice_id', 'greeting', 'purpose', 'knowledge', 'tone', 'max_minutes', 'allow_callbacks', 'allow_handover', 'answer_plans'];
   if (input.id) {
     const cur = await db.q1('SELECT * FROM followup_agents WHERE id = ? AND org_id = ?', [input.id, orgId]);
     if (!cur) throw err('Agent not found', 404);
     const version = Number(cur.version) + 1;
-    await db.run(`UPDATE followup_agents SET name = ?, language = ?, voice_id = ?, greeting = ?, purpose = ?, knowledge = ?, faqs_json = ?, version = ?, updated_at = ? WHERE id = ?`,
-      [a.name, a.language, a.voice_id, a.greeting, a.purpose, a.knowledge, JSON.stringify(a.faqs), version, ts, cur.id]);
+    await db.run(`UPDATE followup_agents SET ${cols.map((c) => `${c} = ?`).join(', ')}, faqs_json = ?, version = ?, updated_at = ? WHERE id = ?`,
+      [...cols.map((c) => a[c]), JSON.stringify(a.faqs), version, ts, cur.id]);
     await db.run('INSERT INTO followup_agent_versions (id, org_id, agent_id, version, snapshot_json, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [id('fav'), orgId, cur.id, version, JSON.stringify(agentSnapshot(a)), userId, ts]);
     return db.q1('SELECT * FROM followup_agents WHERE id = ?', [cur.id]);
   }
   const aid = id('fag');
-  await db.run(`INSERT INTO followup_agents (id, org_id, name, language, voice_id, greeting, purpose, knowledge, faqs_json, version, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [aid, orgId, a.name, a.language, a.voice_id, a.greeting, a.purpose, a.knowledge, JSON.stringify(a.faqs), ts, ts]);
+  await db.run(`INSERT INTO followup_agents (id, org_id, ${cols.join(', ')}, faqs_json, version, created_at, updated_at)
+                VALUES (?, ?, ${cols.map(() => '?').join(', ')}, ?, 1, ?, ?)`,
+    [aid, orgId, ...cols.map((c) => a[c]), JSON.stringify(a.faqs), ts, ts]);
   await db.run('INSERT INTO followup_agent_versions (id, org_id, agent_id, version, snapshot_json, created_by, created_at) VALUES (?, ?, ?, 1, ?, ?, ?)',
     [id('fav'), orgId, aid, JSON.stringify(agentSnapshot(a)), userId, ts]);
   return db.q1('SELECT * FROM followup_agents WHERE id = ?', [aid]);
@@ -162,33 +177,67 @@ const KIND_CONTEXT = {
   membership_ending: 'Their membership ends on {{end_date}}.',
   payment_due: 'A payment of {{amount_due}} is pending.',
   onboarding: 'They joined recently and have not come in yet.',
+  announcement: 'The gym has an announcement for its members (your goal below says what it is).',
+};
+const TONE_LINE = {
+  warm: 'Be warm, friendly and unhurried.',
+  professional: 'Be polite, clear and businesslike.',
+  energetic: 'Be upbeat and encouraging, without being pushy.',
 };
 
-/** The system prompt the provider agent runs on. Boundaries are not editable. */
-export function agentPrompt(agent, kind) {
+const planLine = (p) => `- ${p.name}: ₹${Math.round(p.amount)}${p.period_days ? ` for ${p.period_days} days` : ''}${p.features ? ` (${String(p.features).slice(0, 120)})` : ''}`;
+
+/**
+ * The system prompt the provider agent runs on. The call flow and the
+ * boundaries are fixed; the owner supplies the goal, tone, facts and FAQs.
+ * `extra.plans` are the gym's own plans (packages) when the agent may quote them.
+ */
+export function agentPrompt(agent, kind, extra = {}) {
   let faqs = [];
   try { faqs = JSON.parse(agent.faqs_json || '[]'); } catch { faqs = []; }
+  const plans = Array.isArray(extra.plans) ? extra.plans : [];
+  const callbacksOn = Number(agent.allow_callbacks ?? 1);
+  const minutes = Math.min(5, Math.max(1, Math.round(Number(agent.max_minutes) || 3)));
   return [
-    'You are a warm, respectful AI phone assistant calling on behalf of {{gym_name}}, a gym, to speak with its member {{member_name}}.',
+    `You are an AI phone assistant calling on behalf of {{gym_name}}, a gym, to speak with its member {{member_name}}. ${TONE_LINE[agent.tone] || TONE_LINE.warm}`,
+    'Today is {{today}} and it is {{time_now}} at the gym.',
     kind ? `Context: ${KIND_CONTEXT[kind] || ''}` : '',
+    'If {{callback_context}} is not empty, this call is a call back the member asked for: say so first. Context: {{callback_context}}',
     `Your goal on this call: ${agent.purpose}`,
     agent.knowledge ? `Facts about the gym you may share (and ONLY these):\n${agent.knowledge}` : 'You have no gym facts beyond the context above.',
+    plans.length ? `The gym's current membership plans (quote ONLY these, exactly):\n${plans.slice(0, 12).map(planLine).join('\n')}` : 'You do not know the gym\'s plan prices: do not quote any.',
     faqs.length ? `Approved answers:\n${faqs.map((f) => `Q: ${f.q}\nA: ${f.a}`).join('\n')}` : '',
+    '',
+    'How the call goes:',
+    '1. Your first sentence says you are an AI assistant calling from {{gym_name}}.',
+    '2. Check you are speaking to {{member_name}} before mentioning anything about their membership. If not, use wrong_number, apologise and end the call.',
+    '3. Say why you are calling, in one sentence. Then listen.',
+    '4. Answer questions only from the facts, plans and approved answers above. If the answer is not there, say the gym team can tell them, and offer to have someone call (request_person).',
+    callbacksOn
+      ? '5. If they are busy or want to talk later, ask when suits them and call schedule_callback with their own words. If it asks a question, ask the member exactly that. Only after it returns "scheduled", confirm the exact time it gives you. Never say a call back is booked otherwise.'
+      : '5. If they are busy, thank them and say the gym will be in touch. You cannot book call backs on this call.',
+    '6. When the purpose is settled, or they want to stop, thank them and end the call. Do not repeat questions they already answered.',
     '',
     'Rules you must always follow:',
     `- Speak only in ${langName(agent.language)}. Keep replies to one or two short sentences: this is a phone call.`,
-    '- You are an AI assistant and must say so if asked. Never claim to be a person.',
-    '- State only facts given above. If you do not know, offer a call back from the gym team.',
-    '- Never invent or promise discounts, price changes, refunds, free days or anything not written above.',
-    '- No medical advice. Never discuss other members. Never ask for card numbers, OTPs or passwords.',
-    '- If they ask to stop these calls: apologise, confirm they will not be called again, end the call.',
-    '- If they want a person: say someone from the gym will call them back soon, end the call.',
-    '- If it is the wrong person: apologise and end the call.',
-    '- Never pressure, threaten, shame or argue. Wrap up politely within two minutes.',
+    '- You are an AI assistant. Never claim or imply that you are a person.',
+    '- Never invent or promise discounts, offers, price changes, refunds, free days, opening hours or facilities that are not written above.',
+    '- Never say a payment was made or a renewal is done: you cannot see payments.',
+    '- No medical advice. Never discuss other members. Never ask for card numbers, OTPs, passwords or anything you do not need.',
+    '- If they ask to stop these calls: call stop_calls at once, apologise, confirm, and end the call.',
+    '- If they want a person, the owner or staff: call request_person, say someone from the gym will call them back, and end the call.',
+    '- If you hear silence or cannot understand twice, say the gym will try another time, and end the call.',
+    `- Never pressure, threaten, shame or argue. Finish within ${minutes} minute${minutes === 1 ? '' : 's'}.`,
   ].filter(Boolean).join('\n');
 }
 
-export const agentHash = (agent, kind) => crypto.createHash('sha256').update(JSON.stringify({ p: agentPrompt(agent, kind), g: agent.greeting, l: agent.language, v: agent.voice_id, n: 2 })).digest('hex').slice(0, 24);
+// `k` is a fingerprint of the tool key the provider sends back on every tool
+// call (derived from the server secret): rotate the secret and every agent is
+// re-sent with the new key on its next call, instead of its tools being refused.
+export const agentHash = (agent, kind, extra = {}) => crypto.createHash('sha256').update(JSON.stringify({
+  p: agentPrompt(agent, kind, extra), g: agent.greeting, l: agent.language, v: agent.voice_id, m: agent.max_minutes, c: agent.allow_callbacks, h: agent.allow_handover, n: 3,
+  k: crypto.createHash('sha256').update(toolKey()).digest('hex').slice(0, 8),
+})).digest('hex').slice(0, 24);
 
 /* ---------------- callbacks ---------------- */
 

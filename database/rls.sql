@@ -548,6 +548,10 @@ ALTER TABLE followup_orders           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE followup_orders           FORCE ROW LEVEL SECURITY;
 ALTER TABLE followup_audit            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE followup_audit            FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_recordings       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_recordings       FORCE ROW LEVEL SECURITY;
+ALTER TABLE followup_conversations    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_conversations    FORCE ROW LEVEL SECURITY;
 
 
 DO $$
@@ -558,7 +562,7 @@ BEGIN
     'invoices','membership_status_history','org_billing_state','org_capacity_purchases',
     'org_subscriptions','payment_accounts','payment_orders','reconciliation_issues',
     'refunds','risk_events','support_tickets',
-    'followup_settings','followup_numbers','followup_line_terms','followup_scripts','followup_script_versions','followup_templates','followup_sms_templates','followup_agents','followup_agent_versions','followup_voices','followup_rules','followup_member_prefs','followup_consent_log','followup_jobs','followup_callbacks','followup_audio','followup_balances','followup_ledger','followup_orders','followup_audit'
+    'followup_settings','followup_numbers','followup_line_terms','followup_scripts','followup_script_versions','followup_templates','followup_sms_templates','followup_agents','followup_agent_versions','followup_voices','followup_rules','followup_member_prefs','followup_consent_log','followup_jobs','followup_callbacks','followup_audio','followup_balances','followup_ledger','followup_orders','followup_audit','followup_recordings','followup_conversations'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I USING (

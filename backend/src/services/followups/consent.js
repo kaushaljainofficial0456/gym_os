@@ -33,6 +33,8 @@ export const REASONS = {
   paused: 'Paused by the gym',
   wrong_number: 'Number belongs to someone else',
   callback_pending: 'Waiting for the gym to call back',
+  callback_scheduled: 'A call back is booked at a time they chose',
+  no_promo_permission: 'Has not agreed to offers and promotions',
   outside_hours: "Outside the gym's calling hours",
   outside_member_window: "Outside the member's preferred time",
   daily_cap: 'Reached today’s limit',
@@ -95,7 +97,11 @@ async function ensurePrefs(db, orgId, clientId) {
   return db.q1('SELECT * FROM followup_member_prefs WHERE client_id = ?', [clientId]);
 }
 
-const COLS = { call: ['call_consent', 'call_opted_out_at'], sms: ['sms_consent', 'sms_opted_out_at'], whatsapp: ['wa_consent', 'wa_opted_out_at'] };
+// 'promo' is not a channel: it is the member's SEPARATE permission for offers,
+// events and other promotional contact, on top of a channel's permission. A
+// call back the member asked for never grants it. Logged as channel 'all'
+// with purpose 'promotional'.
+const COLS = { call: ['call_consent', 'call_opted_out_at'], sms: ['sms_consent', 'sms_opted_out_at'], whatsapp: ['wa_consent', 'wa_opted_out_at'], promo: ['promo_consent', 'promo_opted_out_at'] };
 
 /**
  * Record a permission change for one member, with its evidence.
@@ -127,12 +133,18 @@ export async function recordConsent(db, { orgId, clientId, channels, action, sou
     await db.run(
       `INSERT INTO followup_consent_log (id, org_id, client_id, channel, action, source, purpose, evidence, policy_version, actor_id, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id('fcl'), orgId, clientId, ch, action, source, purpose, evidence, CONSENT_POLICY_VERSION, actorId, ts]);
+      [id('fcl'), orgId, clientId, ch === 'promo' ? 'all' : ch, action, source, ch === 'promo' ? 'promotional' : purpose, evidence, CONSENT_POLICY_VERSION, actorId, ts]);
     changed.push(ch);
   }
+  // A stop on promotions cancels queued promotional contact (any channel).
+  if ((action === 'opted_out' || action === 'refused' || action === 'withdrawn') && changed.includes('promo')) {
+    await db.run(
+      `UPDATE followup_jobs SET status = 'skipped', error = 'Member stopped offers and promotions', ended_at = ?, updated_at = ?
+        WHERE client_id = ? AND status = 'queued' AND rule_id IN (SELECT id FROM followup_rules WHERE purpose = 'promotional')`, [ts, ts, clientId]);
+  }
   // An opt-out cancels everything still queued for this member on that channel.
-  if ((action === 'opted_out' || action === 'refused' || action === 'withdrawn') && changed.length) {
-    const jobChannels = changed.flatMap((ch) => (ch === 'call' ? ['call', 'agent'] : [ch]));
+  if ((action === 'opted_out' || action === 'refused' || action === 'withdrawn') && changed.some((ch) => ch !== 'promo')) {
+    const jobChannels = changed.filter((ch) => ch !== 'promo').flatMap((ch) => (ch === 'call' ? ['call', 'agent'] : [ch]));
     await db.run(
       `UPDATE followup_jobs SET status = 'skipped', error = 'Member stopped this channel', ended_at = ?, updated_at = ?
         WHERE client_id = ? AND status = 'queued' AND channel IN (${jobChannels.map(() => '?').join(',')})`,

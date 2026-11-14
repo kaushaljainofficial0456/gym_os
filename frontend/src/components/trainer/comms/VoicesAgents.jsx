@@ -13,7 +13,7 @@ import { api } from '../../../api.js';
 import { Card, ErrorState, Modal, PageSkeleton, Seg, Toast } from '../../UI.jsx';
 import Select from '../../Select.jsx';
 import Icon from '../../Icon.jsx';
-import { Field, SectionHead, Tag, Tile, useApi } from './shared.jsx';
+import { Field, Pill, SectionHead, Stepper, Tag, Tile, useApi } from './shared.jsx';
 
 export default function VoicesAgents() {
   const [tab, setTab] = useState('voices');
@@ -226,7 +226,11 @@ function AgentEditor({ initial, onClose, onSaved }) {
   const set = (p) => setX((v) => ({ ...v, ...p }));
   const save = async () => {
     setBusy(true); setErr('');
-    const body = { name: x.name, language: x.language, voice_id: x.voice_id || null, greeting: x.greeting || null, purpose: x.purpose, knowledge: x.knowledge || '', faqs: x.faqs.filter((f) => f.q && f.a) };
+    const on = (v) => Number(v ?? 1) === 1;
+    const body = {
+      name: x.name, language: x.language, voice_id: x.voice_id || null, greeting: x.greeting || null, purpose: x.purpose, knowledge: x.knowledge || '', faqs: x.faqs.filter((f) => f.q && f.a),
+      tone: x.tone || 'warm', max_minutes: Number(x.max_minutes) || 3, allow_callbacks: on(x.allow_callbacks), allow_handover: on(x.allow_handover), answer_plans: on(x.answer_plans),
+    };
     try {
       await api(initial.id ? `/followups/agents/${initial.id}` : '/followups/agents', { method: initial.id ? 'PUT' : 'POST', body: JSON.stringify(body) });
       onSaved();
@@ -258,10 +262,33 @@ function AgentEditor({ initial, onClose, onSaved }) {
           ))}
           <button type="button" className="btn btn-sm" onClick={() => set({ faqs: [...x.faqs, { q: '', a: '' }] })}>+ Add an answer</button>
         </div>
-        <Field label="Opening line (optional)" hint="Leave empty for: Hi {name}! I'm an AI assistant calling from {gym}. Do you have a minute?"><input className="input w-full" value={x.greeting || ''} maxLength={300} onChange={(e) => set({ greeting: e.target.value })} /></Field>
+        <Field label="Opening line (optional)" hint="Must say it is an AI. Leave empty for: Hi {name}! I'm an AI assistant calling from {gym}. Do you have a minute?"><input className="input w-full" value={x.greeting || ''} maxLength={300} onChange={(e) => set({ greeting: e.target.value })} /></Field>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Tone">
+            <div className="flex gap-1.5 flex-wrap">{[['warm', 'Warm'], ['professional', 'Professional'], ['energetic', 'Upbeat']].map(([k, l]) => <Pill key={k} on={(x.tone || 'warm') === k} onClick={() => set({ tone: k })}>{l}</Pill>)}</div>
+          </Field>
+          <Field label="Longest call" hint="AI minutes are held for this long when a call starts; only the minutes talked are charged.">
+            <Stepper value={Number(x.max_minutes) || 3} min={1} max={5} suffix="min" onChange={(v) => set({ max_minutes: v })} label="minutes" />
+          </Field>
+        </div>
+        <div className="space-y-2">
+          {[
+            ['allow_callbacks', 'Book call backs', 'When a member says "call me next Monday at 6", the AI books that time and calls back then.'],
+            ['allow_handover', 'Hand over to your team', 'When a member asks for a person, it records a call back for your staff.'],
+            ['answer_plans', 'Quote your plans', 'Uses the plans and prices set up in your gym (Packages). Off: it never names a price.'],
+          ].map(([k, l, hint]) => {
+            const v = Number(x[k] ?? 1) === 1;
+            return (
+              <div key={k} className="flex items-start gap-3">
+                <button type="button" role="switch" aria-checked={v} aria-label={l} className="cm-switch mt-0.5" data-on={v} onClick={() => set({ [k]: v ? 0 : 1 })} />
+                <div><div className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>{l}</div><div className="text-[13px]" style={{ color: 'var(--mute)' }}>{hint}</div></div>
+              </div>
+            );
+          })}
+        </div>
         <div className="rounded-2xl p-4 text-[13px] space-y-1" style={{ background: 'rgb(var(--tint-rgb) / .05)', color: 'var(--mute)' }}>
           <div className="font-semibold" style={{ color: 'var(--ink)' }}>Always on, whatever you write</div>
-          <div>Says it is an AI · only states your facts · no discounts or promises you did not write · no medical advice · never asks for card numbers or OTPs · stops calling when asked · hands over to your team on request · under two minutes</div>
+          <div>Says it is an AI · checks it is speaking to the member before mentioning their membership · only states your facts · no discounts or promises you did not write · never says a payment was made · confirms a call back only once it is booked · stops calling at once when asked · no medical advice · never asks for card numbers or OTPs</div>
         </div>
         {versions.data?.versions?.length > 1 && <div className="text-[13px]" style={{ color: 'var(--mute)' }}>{versions.data.versions.length} versions saved. The latest is used.</div>}
         {err && <div role="alert" className="text-[14px]" style={{ color: err.startsWith('Test call placed') ? 'var(--m-body)' : 'var(--bad)' }}>{err}</div>}

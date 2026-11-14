@@ -31,6 +31,7 @@ import { SkeletonRows, SkeletonCards, SkeletonBlock } from '../components/Skelet
 
 const TABS = [
   { id: 'gyms', label: 'Gyms' },
+  { id: 'usage', label: 'Usage' },
   { id: 'ops', label: 'Operations' },
   { id: 'pricing', label: 'Price book' },
   { id: 'setup', label: 'Setup' },
@@ -78,9 +79,138 @@ export default function Communication() {
       </div>
 
       {tab === 'gyms' && <GymsTab />}
+      {tab === 'usage' && <UsageTab />}
       {tab === 'ops' && <OperationsTab />}
       {tab === 'pricing' && <PriceBookTab />}
       {tab === 'setup' && <SetupTab setup={setup} />}
+    </div>
+  );
+}
+
+/* ═════════════════════════ Usage ═════════════════════════ */
+
+export const MODE_NAMES = { prerecorded: 'Prerecorded calls', interactive: 'AI conversations', sms: 'SMS', whatsapp: 'WhatsApp' };
+const MODE_UNIT = { prerecorded: 'min', interactive: 'min', sms: 'segments', whatsapp: 'messages' };
+const lastMonths = (n) => Array.from({ length: n }, (_, i) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - i); return d.toISOString().slice(0, 7); });
+
+/** One report (platform or one gym): by calling mode, call backs, campaigns. Reused on a gym's page. */
+export function UsageReport({ report, showGyms = true }) {
+  const m = report.modes;
+  const cb = report.callbacks;
+  return (
+    <>
+      <div className="kpi-grid">
+        {Object.keys(MODE_NAMES).map((k) => (
+          <StatCard key={k} label={MODE_NAMES[k]} value={m[k].revenue} format={moneyExact}
+            description={`${m[k].units} ${MODE_UNIT[k]} · ${m[k].connected}/${m[k].attempts} connected · cost ${moneyExact(m[k].cost)}`} />
+        ))}
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Calling modes</h3>
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Mode</th><th className="num">Attempts</th><th className="num">Connected</th><th className="num">Used</th><th className="num">Revenue</th><th className="num">Provider cost</th><th className="num">Margin</th></tr></thead>
+            <tbody>
+              {Object.keys(MODE_NAMES).map((k) => (
+                <tr key={k}>
+                  <td>{MODE_NAMES[k]}</td><td className="num">{m[k].attempts}</td><td className="num">{m[k].connected}</td><td className="num">{m[k].units} {MODE_UNIT[k]}</td>
+                  <td className="num">{moneyExact(m[k].revenue)}</td><td className="num">{moneyExact(m[k].cost)}</td>
+                  <td className="num" style={{ color: m[k].margin < 0 ? 'var(--bad)' : undefined }}>{moneyExact(m[k].margin)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="faint" style={{ marginBottom: 0 }}>
+          AI conversations: {m.interactive.conversations} live conversation{m.interactive.conversations === 1 ? '' : 's'}, {m.interactive.completed} completed
+          {m.interactive.cost_per_conversation !== null ? `, about ${moneyExact(m.interactive.cost_per_conversation)} provider cost each (speech recognition, AI and speech are one per-minute price)` : ''}.
+          Money is counted from the usage ledger once per call, so a provider retrying its webhook is never counted twice.
+        </p>
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Call backs</h3>
+        <div className="kpi-grid" style={{ marginBottom: 0 }}>
+          <StatCard label="Booked" value={cb.scheduled} description={`${cb.waiting} still waiting`} />
+          <StatCard label="Done" value={cb.executed} description={`${cb.attempts} call attempts`} />
+          <StatCard label="Failed or missed" value={cb.failed + cb.expired} description={`${cb.failed} not answered, ${cb.expired} missed their time`} />
+          <StatCard label="Cancelled" value={cb.cancelled} description="By the member, the gym, or because they renewed" />
+          <StatCard label="For a person" value={cb.staff_open + cb.staff_done} description={`${cb.staff_open} open`} />
+        </div>
+      </div>
+      {showGyms && report.gyms.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0 }}>By gym</h3>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Gym</th><th className="num">Prerecorded</th><th className="num">AI conversations</th><th className="num">SMS</th><th className="num">WhatsApp</th><th className="num">Revenue</th><th className="num">Margin</th></tr></thead>
+              <tbody>
+                {report.gyms.map((g) => {
+                  const rev = Object.values(g.modes).reduce((s, x) => s + x.revenue, 0);
+                  const mar = Object.values(g.modes).reduce((s, x) => s + x.margin, 0);
+                  return (
+                    <tr key={g.org_id}>
+                      <td><Link to={`/communication/gyms/${g.org_id}`}>{g.name}</Link></td>
+                      <td className="num">{g.modes.prerecorded.units} min</td><td className="num">{g.modes.interactive.units} min</td>
+                      <td className="num">{g.modes.sms.units}</td><td className="num">{g.modes.whatsapp.units}</td>
+                      <td className="num">{moneyExact(rev)}</td><td className="num" style={{ color: mar < 0 ? 'var(--bad)' : undefined }}>{moneyExact(mar)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {report.campaigns.length > 0 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>By campaign</h3>
+          <div className="table-scroll">
+            <table>
+              <thead><tr>{showGyms && <th>Gym</th>}<th>Campaign</th><th>Modes</th><th className="num">Attempts</th><th className="num">Connected</th><th className="num">Revenue</th><th className="num">Provider cost</th></tr></thead>
+              <tbody>
+                {report.campaigns.map((c) => (
+                  <tr key={`${c.org_id}:${c.rule_id || '-'}`}>
+                    {showGyms && <td>{c.gym}</td>}<td>{c.name}</td><td className="faint">{c.modes.map((x) => MODE_NAMES[x]).join(', ')}</td>
+                    <td className="num">{c.attempts}</td><td className="num">{c.connected}</td><td className="num">{moneyExact(c.revenue)}</td><td className="num">{moneyExact(c.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function UsageTab() {
+  const months = useMemo(() => lastMonths(12), []);
+  const [period, setPeriod] = useState(months[0]);
+  const u = useFetch(() => api(`/console/communication/usage?period=${period}`), [period]);
+  return (
+    <div>
+      <div className="filter-bar">
+        <div className="field">
+          <label htmlFor="usage-period">Billing period</label>
+          <select id="usage-period" className="input" value={period} onChange={(e) => setPeriod(e.target.value)}>
+            {months.map((p) => <option key={p} value={p}>{new Date(`${p}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</option>)}
+          </select>
+        </div>
+      </div>
+      {u.loading && <SkeletonCards count={4} />}
+      {u.error && <div className="error-text">{u.error.message}</div>}
+      {u.data && <UsageReport report={u.data.report} />}
+      {u.data?.trend && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3 style={{ marginTop: 0 }}>Last six months</h3>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Month</th><th className="num">Prerecorded min</th><th className="num">AI conversation min</th><th className="num">Revenue</th><th className="num">Provider cost</th></tr></thead>
+              <tbody>{u.data.trend.map((t) => <tr key={t.period}><td>{t.period}</td><td className="num">{t.prerecorded}</td><td className="num">{t.interactive}</td><td className="num">{moneyExact(t.revenue)}</td><td className="num">{moneyExact(t.cost)}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

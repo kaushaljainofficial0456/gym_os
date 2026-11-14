@@ -13,17 +13,25 @@
 //        -> audio/wav (8 kHz mono preferred; anything WAV works)
 //
 // AGENT contract (your agent places the call and talks; we decide who and why)
-//   PUT  {url}/agents/{id?}   { name, prompt, first_message, language, voice, max_seconds }
+//   PUT  {url}/agents/{id?}   { name, prompt, first_message, language, voice, max_seconds,
+//                               tools: [{ name, description, url, parameters (JSON schema) }],
+//                               tool_key, data_collection: { field: description } }
 //        -> { id }
+//        During a call, call a tool by POSTing JSON to its url with header
+//        X-Barbell-Tool-Key: <tool_key> and `followup_job` set to the call's
+//        variables.followup_job. Say only what the tool's answer allows
+//        (e.g. confirm a call back only when it returns status "scheduled").
 //   POST {url}/calls          { agent_id, line, to, variables }   (variables.followup_job is opaque: echo it back)
 //        -> { id }
 //   When the call ends, POST https://<app>/api/followups/hooks/agent/http with JSON
 //        { followup_job, call_id, status: completed|no_answer|busy|failed, duration_secs,
-//          outcome: coming_back|renewing|will_pay|callback_requested|not_interested|opted_out|wrong_number|other,
-//          summary }
+//          outcome: renewing|will_pay|coming_back|not_interested|callback_requested|opted_out|wrong_number|question_open|not_understood|no_conversation|other,
+//          summary, renewal_interest?: yes|maybe|no|unknown, unanswered_question?, objection?, understood?: boolean,
+//          transcript?: [{ role: agent|member, text, secs? }] }
 //        and header X-Followup-Signature: hex HMAC-SHA256 of the raw body with FOLLOWUP_HTTP_TOKEN.
 // ============================================================
 import crypto from 'node:crypto';
+import { toolKey } from '../config.js';
 
 const env = (k) => String(process.env[k] || '').trim().replace(/\/+$/, '');
 const token = () => env('FOLLOWUP_HTTP_TOKEN');
@@ -56,9 +64,11 @@ export const conversation = {
   id: 'http',
   label: 'Your agent server',
   configured: () => !!env('FOLLOWUP_AGENT_HTTP_URL'),
-  async upsertAgent({ agentId, name, prompt, firstMessage, language, voiceId, maxSecs }) {
+  async upsertAgent({ agentId, name, prompt, firstMessage, language, voiceId, maxSecs, tools = [], dataCollection = null }) {
     const r = await call(env('FOLLOWUP_AGENT_HTTP_URL'), `/agents${agentId ? `/${encodeURIComponent(agentId)}` : ''}`, {
-      method: 'PUT', body: { name, prompt, first_message: firstMessage, language, voice: voiceId, max_seconds: maxSecs }, what: 'Saving the AI agent',
+      method: 'PUT',
+      body: { name, prompt, first_message: firstMessage, language, voice: voiceId, max_seconds: maxSecs, tools, tool_key: toolKey(), data_collection: dataCollection },
+      what: 'Saving the AI agent',
     });
     return String(r.id);
   },
@@ -74,6 +84,12 @@ export const conversation = {
   },
   parseResult(rawBody) {
     const e = JSON.parse(rawBody);
-    return { token: e.followup_job, ref: e.call_id || null, status: e.status, duration: Number(e.duration_secs) || 0, outcome: e.outcome || null, summary: e.summary || null };
+    const transcript = (Array.isArray(e.transcript) ? e.transcript : []).filter((t) => t && typeof t.text === 'string')
+      .map((t) => ({ role: t.role === 'agent' ? 'agent' : 'member', text: t.text, ...(Number.isFinite(Number(t.secs)) ? { secs: Number(t.secs) } : {}) }));
+    return {
+      provider: 'http', token: e.followup_job, ref: e.call_id || null, status: e.status, duration: Number(e.duration_secs) || 0, outcome: e.outcome || null, summary: e.summary || null,
+      renewal_interest: e.renewal_interest || null, unanswered_question: e.unanswered_question || null, objection: e.objection || null,
+      understood: typeof e.understood === 'boolean' ? e.understood : null, transcript,
+    };
   },
 };

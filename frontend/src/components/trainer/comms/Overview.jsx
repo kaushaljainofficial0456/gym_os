@@ -110,6 +110,12 @@ export default function Overview({ go }) {
             <TodayTile icon="bell" tone="energy" label="Waiting for a call back" value={d.callbacks_open} sub="Members who asked for a person" />
           </button>
         </div>
+        {(d.callbacks_booked > 0 || d.actions_open > 0) && (
+          <div className="flex gap-2 flex-wrap mt-3">
+            {d.callbacks_booked > 0 && <button type="button" className="btn btn-sm" onClick={() => go('callbacks')}><Icon name="clock" size={14} /> {num(d.callbacks_booked)} call back{d.callbacks_booked === 1 ? '' : 's'} booked by members</button>}
+            {d.actions_open > 0 && <button type="button" className="btn btn-sm" onClick={() => go('conversations')}><Icon name="alert" size={14} /> {num(d.actions_open)} AI conversation{d.actions_open === 1 ? '' : 's'} need you</button>}
+          </div>
+        )}
       </section>
 
       <section>
