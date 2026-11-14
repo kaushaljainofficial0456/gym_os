@@ -1519,14 +1519,20 @@ export default function Workout() {
                           {exs.slice(0, 4).map((e) => exerciseLabel(e.name)).filter(Boolean).join(' · ')}{exs.length > 4 && ` +${exs.length - 4} more`}
                         </div>
                       )}
-                      <div className="flex gap-1.5 mt-3">
+                      {/* Wraps: the four labels need ~267px and a 360px phone
+                          leaves this card ~263px. The three secondary actions
+                          are one group so they wrap together under a
+                          full-width "Do today", not "Delete" on its own. */}
+                      <div className="flex flex-wrap gap-1.5 mt-3">
                         <button className="btn-primary btn-sm flex-1" onClick={() => startPlanToday(w)}>Do today</button>
-                        <button className="btn btn-sm" onClick={() => setPlanForm({
-                          id: w.id, name: w.name, search: '',
-                          exercises: exs.map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })),
-                        })}>Edit</button>
-                        <button className="btn btn-sm" onClick={() => duplicatePlan(w)} aria-label={`Duplicate ${w.name}`}>Copy</button>
-                        <button className="btn btn-sm" style={{ color: 'var(--bad)' }} onClick={() => deletePlan(w)} aria-label={`Delete ${w.name}`}>Delete</button>
+                        <div className="flex gap-1.5">
+                          <button className="btn btn-sm" onClick={() => setPlanForm({
+                            id: w.id, name: w.name, search: '',
+                            exercises: exs.map((e) => ({ exercise_id: e.exercise_id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest_sec: e.rest_sec })),
+                          })}>Edit</button>
+                          <button className="btn btn-sm" onClick={() => duplicatePlan(w)} aria-label={`Duplicate ${w.name}`}>Copy</button>
+                          <button className="btn btn-sm" style={{ color: 'var(--bad)' }} onClick={() => deletePlan(w)} aria-label={`Delete ${w.name}`}>Delete</button>
+                        </div>
                       </div>
                     </div>
                   );

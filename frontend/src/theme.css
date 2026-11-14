@@ -975,7 +975,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .btn:hover:not(:disabled) { border-color: rgb(var(--accent-rgb) / .45); background: rgb(var(--tint-rgb) / .085); }
 
   .btn-primary {
-    @apply btn-base overflow-hidden;
+    @apply btn-base;
+    /* Clips the ::after sheen strip below. `clip`, not `hidden`: hidden
+       makes the button a scroll container, and a scroll container's
+       automatic minimum width in a flex row is 0 -- so `btn-primary flex-1`
+       next to a plain `.btn flex-1` shrank below its own nowrap label and
+       cut it ("ulate succ") while the .btn kept its width. clip clips the
+       same way without being a scroll container, so the button keeps a
+       content-based minimum like every other variant. Browsers without
+       clip (Safari < 16) keep the hidden fallback: today's behaviour. */
+    overflow: hidden;
+    overflow: clip;
     background: var(--accent-grad);
     box-shadow: var(--accent-grad-shadow);
     border: 1px solid var(--cta-edge);
