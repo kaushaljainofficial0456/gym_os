@@ -331,7 +331,8 @@ CREATE TABLE IF NOT EXISTS workout_exercises (
   rest_sec    INTEGER NOT NULL DEFAULT 90,
   tempo       TEXT,
   notes       TEXT,
-  done        INTEGER NOT NULL DEFAULT 0
+  done        INTEGER NOT NULL DEFAULT 0,
+  superset_group TEXT                         -- neighbours sharing a value are done as a superset
 );
 CREATE INDEX IF NOT EXISTS idx_wx_workout ON workout_exercises(workout_id);
 CREATE INDEX IF NOT EXISTS idx_wx_template ON workout_exercises(template_id);
@@ -725,13 +726,14 @@ CREATE TABLE IF NOT EXISTS client_workout_exercises (
   weight      TEXT NOT NULL DEFAULT 'BW',
   rest_sec    INTEGER NOT NULL DEFAULT 90,
   tempo       TEXT,
-  notes       TEXT
+  notes       TEXT,
+  superset_group TEXT                         -- see workout_exercises.superset_group
 );
 CREATE INDEX IF NOT EXISTS idx_cwe_workout ON client_workout_exercises(workout_id);
 
 CREATE TABLE IF NOT EXISTS client_workout_schedule (
   client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  day_of_week INTEGER NOT NULL,   -- 0=Monday .. 6=Sunday
+  day_of_week INTEGER NOT NULL,   -- 0=Monday .. 6=Sunday (NOT JS getDay; training_days uses 1=Mon..0=Sun)
   workout_id  TEXT NOT NULL REFERENCES client_workouts(id) ON DELETE CASCADE,
   PRIMARY KEY (client_id, day_of_week)
 );

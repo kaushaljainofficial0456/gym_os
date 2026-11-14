@@ -8,14 +8,20 @@
  *    stay editable because what was lifted is what gets logged.
  *  - The coach's numbers and the last session's are in view, so the
  *    question "what do I put on the bar?" is answered where it is asked.
+ *  - The order is the member's: drag the three-line handle (or use the
+ *    arrow keys on it) at any point in the session. Two neighbours can be
+ *    linked into a superset, and a drop set is one tap after any set.
+ *    Neither adds a rest timer -- the one-clock rule above still holds.
  *
  * Presentation only -- every change goes back through Workout.jsx.
  */
-import { useState } from 'react';
-import { Check, Ellipsis, Minus, Pause, Play, Plus, TrendingUp } from 'lucide-react';
+import { Fragment } from 'react';
+import { Check, ChevronDown, Link2, Menu, Minus, Pause, Play, Plus, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
 import WeightInput from '../WeightInput.jsx';
 import { loadedTarget, repsText } from './TodayView.jsx';
+import { useDragSort } from './useDragSort.js';
+import { groupPosition, isLinked, setLabels } from './supersets.js';
 
 export const clock = (sec) => {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -61,7 +67,7 @@ export function PlayerHeader({ name, elapsed, paused, doneSets, totalSets, onPau
   );
 }
 
-function SetRow({ index, set, onPatch, onToggle, u }) {
+function SetRow({ label, name, set, onPatch, onToggle, u }) {
   const tick = () => {
     if (!set.done) {
       try { navigator.vibrate?.(12); } catch { /* not supported */ }
@@ -69,54 +75,88 @@ function SetRow({ index, set, onPatch, onToggle, u }) {
     onToggle();
   };
   return (
-    <div className={`wk-setrow${set.done ? ' is-done' : ''}`}>
-      <span className="wk-setrow__n">{index + 1}</span>
+    <div className={`wk-setrow${set.done ? ' is-done' : ''}${set.drop ? ' is-drop' : ''}`}>
+      <span className={`wk-setrow__n${set.drop ? ' is-drop' : ''}`} title={set.drop ? 'Drop set: same move, lighter, no rest' : undefined}>{label}</span>
       <input type="number" inputMode="numeric" min={0} className="input wk-setrow__in"
-        value={set.reps} aria-label={`Set ${index + 1} reps`}
+        value={set.reps} aria-label={`${name} reps`}
         onChange={(e) => onPatch('reps', e.target.value)} />
       <WeightInput className="input wk-setrow__in" valueKg={set.weight}
-        ariaLabel={`Set ${index + 1} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
+        ariaLabel={`${name} weight in ${u.isImperial ? 'pounds' : 'kilograms'}`}
         onChangeKg={(kg) => onPatch('weight', kg)} />
       <button type="button" className="wk-check" onClick={tick} aria-pressed={set.done}
-        aria-label={`Mark set ${index + 1} ${set.done ? 'not done' : 'done'}`}>
+        aria-label={`Mark ${name.toLowerCase()} ${set.done ? 'not done' : 'done'}`}>
         <Check size={20} strokeWidth={3} aria-hidden="true" />
       </button>
     </div>
   );
 }
 
-export function ExerciseCard({ ex, sets = [], open, onToggleOpen, onPatch, onToggleSet, onAddSet, onRemoveLast, onRemove, onUseTarget, suggestion, u }) {
-  const [menu, setMenu] = useState(false);
+/** What each row is called out loud: "Set 2", "Drop set 1". */
+function rowNames(sets) {
+  let n = 0;
+  let d = 0;
+  return sets.map((s) => (s.drop ? `Drop set ${(d += 1)}` : `Set ${(n += 1)}`));
+}
+
+/** The three-line handle that reorders a card (see useDragSort). */
+export function Grip({ name, grip }) {
+  return (
+    <button type="button" className="wk-grip" {...grip} aria-label={`Move ${name}. Drag, or use the arrow keys.`} title="Drag to reorder">
+      <Menu size={19} strokeWidth={2} aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * One exercise in the session.
+ *
+ *  - The ring on the left shows how many sets are done; the minus inside
+ *    it removes the exercise from today (asked first -- see Workout.jsx).
+ *    A finished exercise shows a tick there instead: a tick that deletes
+ *    would be a trap.
+ *  - The three lines on the right drag it to a new place in the order.
+ *  - Inside: one row per set, "Add set", and "Drop set" -- a lighter set
+ *    straight after the one just done.
+ */
+export function ExerciseCard({
+  ex, sets = [], open, onToggleOpen, onPatch, onToggleSet, onAddSet, onAddDrop, onRemoveLast, onRemove, onUseTarget,
+  suggestion, u, grip, cardRef, style, dragging, groupPos,
+}) {
   const done = sets.filter((s) => s.done).length;
   const complete = sets.length > 0 && done === sets.length;
   const name = exerciseLabel(ex.name);
+  const labels = setLabels(sets);
+  const names = rowNames(sets);
+  const drops = sets.filter((s) => s.drop).length;
+  const cls = ['wk-exc', open && 'is-open', complete && 'is-done', dragging && 'is-dragging', groupPos && 'is-ss', groupPos && `is-ss-${groupPos}`]
+    .filter(Boolean).join(' ');
   return (
-    <section className={`wk-exc${open ? ' is-open' : ''}${complete ? ' is-done' : ''}`} aria-label={name}>
+    <section ref={cardRef} style={style} className={cls} aria-label={name}>
       <div className="wk-exc__head">
-        <button type="button" className="wk-exc__toggle" onClick={onToggleOpen} aria-expanded={open}>
-          <span className="wk-exc__ring">
-            <Ring value={sets.length ? done / sets.length : 0} size={38} stroke={4} />
-            {complete && <Check size={15} strokeWidth={3} className="wk-exc__tick" aria-hidden="true" />}
+        {complete ? (
+          <span className="wk-exc__ring" aria-hidden="true">
+            <Ring value={1} size={40} stroke={4} />
+            <Check size={16} strokeWidth={3} className="wk-exc__tick" />
           </span>
+        ) : (
+          <button type="button" className="wk-exc__ring wk-exc__remove" onClick={onRemove}
+            aria-label={`Remove ${name} from this session`} title="Remove from this session">
+            <Ring value={sets.length ? done / sets.length : 0} size={40} stroke={4} />
+            <Minus size={17} strokeWidth={2.6} className="wk-exc__minus" aria-hidden="true" />
+          </button>
+        )}
+        <button type="button" className="wk-exc__toggle" onClick={onToggleOpen} aria-expanded={open}>
           <span className="wk-exc__titles">
             <span className="wk-exc__name">{name}</span>
             <span className="wk-exc__meta">
               {complete ? 'Done' : `${done}/${sets.length} sets`}{ex.reps ? ` · ${repsText(ex.reps)}` : ''}
               {ex.primary_muscle ? ` · ${String(ex.primary_muscle).replace(/_/g, ' ').toLowerCase()}` : ''}
+              {drops > 0 && <span className="wk-exc__tag">{drops === 1 ? '1 drop' : `${drops} drops`}</span>}
             </span>
           </span>
+          <ChevronDown size={17} strokeWidth={2} className="wk-exc__chev" aria-hidden="true" />
         </button>
-        <div className="wk-menu">
-          <button type="button" className="wk-iconbtn wk-iconbtn--sm" aria-label={`More for ${name}`}
-            aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
-            <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
-          </button>
-          {menu && (
-            <div className="wk-menu__pop" role="menu">
-              <button type="button" role="menuitem" onClick={() => { setMenu(false); onRemove(); }}>Remove from session</button>
-            </div>
-          )}
-        </div>
+        {grip && <Grip name={name} grip={grip} />}
       </div>
 
       {open && (
@@ -139,20 +179,76 @@ export function ExerciseCard({ ex, sets = [], open, onToggleOpen, onPatch, onTog
             <span>Set</span><span>Reps</span><span>{u.isImperial ? 'lb' : 'kg'}</span><span />
           </div>
           {sets.map((st, i) => (
-            <SetRow key={i} index={i} set={st} u={u}
+            <SetRow key={i} label={labels[i]} name={names[i]} set={st} u={u}
               onPatch={(field, value) => onPatch(i, field, value)}
               onToggle={() => onToggleSet(i)} />
           ))}
           <div className="wk-sets__actions">
-            <button type="button" className="wk-ghost" onClick={onAddSet}>
+            <button type="button" className="wk-ghost" onClick={onAddSet} disabled={sets.length >= 20}>
               <Plus size={15} strokeWidth={2.2} aria-hidden="true" />Add set
             </button>
-            <button type="button" className="wk-ghost" onClick={onRemoveLast} disabled={sets.length <= 1}>
-              <Minus size={15} strokeWidth={2.2} aria-hidden="true" />Remove last
+            <button type="button" className="wk-ghost" onClick={onAddDrop} disabled={!sets.length || sets.length >= 20}
+              title="Same exercise, lighter weight, no rest">
+              <TrendingDown size={15} strokeWidth={2.2} aria-hidden="true" />Drop set
+            </button>
+            <button type="button" className="wk-ghost wk-ghost--icon" onClick={onRemoveLast} disabled={sets.length <= 1}
+              aria-label="Remove the last set" title="Remove the last set">
+              <Minus size={15} strokeWidth={2.4} aria-hidden="true" />
             </button>
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+/** Between two cards: tap to do them as a superset, tap again to undo. */
+export function SupersetLink({ linked, onToggle, a, b, hidden }) {
+  return (
+    <div className={`wk-link${linked ? ' is-on' : ''}`} style={hidden ? { visibility: 'hidden' } : undefined}>
+      <button type="button" className="wk-link__btn" aria-pressed={linked} onClick={onToggle}
+        aria-label={linked ? `${a} and ${b} are a superset. Tap to separate them.` : `Make ${a} and ${b} a superset`}
+        title={linked ? 'Tap to separate' : 'Do these back to back, then rest'}>
+        <Link2 size={13} strokeWidth={2.2} aria-hidden="true" />
+        Superset
+        {linked && <X size={12} strokeWidth={2.6} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A list of exercises that can be dragged into a new order, with the
+ * superset link between each pair. Used by the session and the builder,
+ * so both read and work the same way.
+ *
+ * renderItem(item, { cardRef, style, grip, dragging, groupPos }) draws one.
+ */
+export function SortableExercises({ items, groups = {}, onMove, onToggleLink, renderItem, edges, className = '' }) {
+  const ids = items.map((e) => e.key ?? e.id);
+  const nameOf = (id) => exerciseLabel(items[ids.indexOf(id)]?.name || 'Exercise');
+  const sort = useDragSort({ ids, onMove, nameOf, edges });
+  return (
+    <div className={`wk-exlist${sort.drag ? ' is-sorting' : ''} ${className}`}>
+      {items.map((it, i) => {
+        const id = ids[i];
+        return (
+          <Fragment key={id}>
+            {renderItem(it, {
+              cardRef: sort.itemRef(id),
+              style: sort.styleFor(id),
+              grip: sort.handleProps(id),
+              dragging: sort.drag?.id === id,
+              groupPos: groupPosition(ids, groups, i),
+            })}
+            {i < items.length - 1 && onToggleLink && (
+              <SupersetLink linked={isLinked(ids, groups, i)} hidden={!!sort.drag} onToggle={() => onToggleLink(i)}
+                a={exerciseLabel(it.name)} b={exerciseLabel(items[i + 1].name)} />
+            )}
+          </Fragment>
+        );
+      })}
+      <div className="sr-only" aria-live="polite">{sort.announcement}</div>
+    </div>
   );
 }

@@ -562,7 +562,8 @@ export const schemas = {
       sets: z.union([z.number(), z.string()]).optional(),
       reps: z.union([z.number(), z.string()]).optional(),
       weight: z.union([z.number(), z.string()]).optional(),
-      rest_sec: z.union([z.number(), z.string()]).optional()
+      rest_sec: z.union([z.number(), z.string()]).optional(),
+      superset_group: z.string().max(20).nullable().optional()
     })).min(1).max(20),
     // Retroactive logging: when the session actually happened. Absent means
     // today, which is every pre-existing caller's behaviour unchanged.
@@ -581,8 +582,15 @@ export const schemas = {
       weight: z.union([z.number(), z.string()]).optional(),
       rest_sec: z.union([z.number(), z.string()]).optional(),
       tempo: z.string().max(20).optional(),
-      notes: z.string().max(200).optional()
-    })).min(1).max(20)
+      notes: z.string().max(200).optional(),
+      superset_group: z.string().max(20).nullable().optional()
+    })).min(1).max(20),
+    // Weekdays this workout repeats on, 0=Monday..6=Sunday (the
+    // client_workout_schedule convention). Each day holds one workout, so
+    // a day already taken moves to this one.
+    days: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    // Also make it today's session now (the builder's "today, and keep it").
+    today: z.boolean().optional()
   }),
   // Partial update -- name/notes/exercises all independently optional,
   // exactly matching the route's own existing "only touch what's present" logic.
@@ -597,8 +605,13 @@ export const schemas = {
       weight: z.union([z.number(), z.string()]).optional(),
       rest_sec: z.union([z.number(), z.string()]).optional(),
       tempo: z.string().max(20).optional(),
-      notes: z.string().max(200).optional()
-    })).max(20).optional()
+      notes: z.string().max(200).optional(),
+      superset_group: z.string().max(20).nullable().optional()
+    })).max(20).optional(),
+    days: z.array(z.number().int().min(0).max(6)).max(7).optional()
+  }),
+  plannerWorkoutDays: z.object({
+    days: z.array(z.number().int().min(0).max(6)).max(7)
   }),
   // Keys are day-of-week strings ("0".."6") once JSON round-trips a plain
   // object -- the route itself already validates 0..6 by looping and

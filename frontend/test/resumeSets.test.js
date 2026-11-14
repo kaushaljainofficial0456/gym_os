@@ -9,7 +9,7 @@
  * after a refresh, a phone lock, or switching tabs and back.
  */
 import { describe, it, expect } from 'vitest';
-import { mergeDraftSets } from '../src/pages/client/Workout.jsx';
+import { mergeDraftSets, sessionLayout } from '../src/pages/client/Workout.jsx';
 
 const plan = (n, reps = 10, weight = 40) => Array.from({ length: n }, () => ({ reps, weight, done: false }));
 
@@ -66,5 +66,25 @@ describe('mergeDraftSets', () => {
     );
     expect(merged.a).toHaveLength(6);
     expect(merged.b).toHaveLength(4);
+  });
+});
+
+/* The order a session was dragged into, and the exercises taken out of
+   it, are the user's work too: a refresh must not undo them. */
+describe('sessionLayout', () => {
+  const exs = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+  const ids = (list) => list.map((e) => e.id);
+
+  it('restores the dragged order and leaves removed exercises out', () => {
+    expect(ids(sessionLayout(exs, { __order: ['c', 'a', 'd'], __removed: ['b'] }))).toEqual(['c', 'a', 'd']);
+  });
+
+  it('keeps an exercise the saved order does not know at the end', () => {
+    expect(ids(sessionLayout(exs, { __order: ['b', 'a'] }))).toEqual(['b', 'a', 'c', 'd']);
+  });
+
+  it('is the plan as it was with no draft', () => {
+    expect(ids(sessionLayout(exs, null))).toEqual(['a', 'b', 'c', 'd']);
+    expect(ids(sessionLayout(exs, { __order: 'junk' }))).toEqual(['a', 'b', 'c', 'd']);
   });
 });

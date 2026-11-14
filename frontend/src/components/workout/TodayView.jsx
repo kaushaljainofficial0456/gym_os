@@ -6,9 +6,10 @@
  * Presentation only. Every action is a prop owned by Workout.jsx, so the
  * session logic (start, restore, autosave) stays in one place.
  */
-import { ChevronRight, Info, Moon, Play, Share2, TrendingUp, TriangleAlert } from 'lucide-react';
+import { ChevronRight, Info, Link2, Moon, Play, Share2, TrendingUp, TriangleAlert } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
 import BodyFocus from './BodyFocus.jsx';
+import { groupPosition } from './supersets.js';
 
 const LB_PER_KG = 2.20462;
 
@@ -48,18 +49,29 @@ function StartButton({ onStart, starting, disabled }) {
   );
 }
 
-export function TodayHero({ workout, meta = {}, focus = [], suggestions = [], u, onStart, starting, onShare, onAddCardio, onBuild }) {
+export function TodayHero({ workout, meta = {}, focus = [], suggestions = [], u, onStart, starting, onShare, onAddCardio, onBuild, onSaved }) {
   if (!workout) {
     return (
       <section className="wk-hero wk-hero--rest">
         <div className="wk-hero__rest-icon"><Moon size={22} strokeWidth={1.7} aria-hidden="true" /></div>
         <div className="wk-kicker">Rest day</div>
         <h2 className="wk-hero__name">Recovery is training too</h2>
-        <p className="wk-hero__lede">Nothing is scheduled today. Eat well, sleep well, or log something light.</p>
-        <div className="wk-hero__row">
-          <button type="button" className="btn flex-1" onClick={onAddCardio}>Add cardio</button>
-          {onBuild && <button type="button" className="btn flex-1" onClick={onBuild}>Build a session</button>}
-        </div>
+        <p className="wk-hero__lede">
+          {onBuild ? 'Nothing is planned for today. Rest, or put a workout together.' : 'Nothing is scheduled today. Eat well, sleep well, or log something light.'}
+        </p>
+        {onBuild ? (
+          <>
+            <div className="wk-hero__row">
+              <button type="button" className="btn-primary flex-1" onClick={onBuild}>Build a workout</button>
+              {onSaved && <button type="button" className="btn flex-1" onClick={onSaved}>Saved workouts</button>}
+            </div>
+            <button type="button" className="wk-hero__link" onClick={onAddCardio}>Or add cardio</button>
+          </>
+        ) : (
+          <div className="wk-hero__row">
+            <button type="button" className="btn flex-1" onClick={onAddCardio}>Add cardio</button>
+          </div>
+        )}
       </section>
     );
   }
@@ -104,7 +116,15 @@ export function TodayHero({ workout, meta = {}, focus = [], suggestions = [], u,
       )}
 
       {done ? (
-        <p className="wk-hero__lede">Session logged. See it in your history, or build another if you are not finished.</p>
+        <>
+          <p className="wk-hero__lede">Session logged. Not finished for the day? Do another.</p>
+          {onBuild && (
+            <div className="wk-hero__row">
+              <button type="button" className="btn flex-1" onClick={onBuild}>Build another</button>
+              {onSaved && <button type="button" className="btn flex-1" onClick={onSaved}>Saved workouts</button>}
+            </div>
+          )}
+        </>
       ) : (
         <StartButton onStart={onStart} starting={starting} disabled={!exCount} />
       )}
@@ -166,8 +186,9 @@ export function ToolGrid({ tools }) {
 
 /** Today's plan as a list a person reads top to bottom. The coach's cues,
  *  muscles and equipment open in place behind each row's info button. */
-export function PlanList({ exercises = [], equipMap = {}, suggestionByEx = {}, infoEx, onToggleInfo, u }) {
+export function PlanList({ exercises = [], groups = {}, equipMap = {}, suggestionByEx = {}, infoEx, onToggleInfo, u }) {
   if (!exercises.length) return null;
+  const ids = exercises.map((e) => e.id);
   return (
     <section aria-label="Today's exercises">
       <div className="wk-head">
@@ -181,8 +202,9 @@ export function PlanList({ exercises = [], equipMap = {}, suggestionByEx = {}, i
           const s = suggestionByEx[ex.id];
           const up = loadedTarget(s);
           const w = planWeight(ex.weight, u);
+          const ss = groupPosition(ids, groups, i);
           return (
-            <li key={ex.id} className={`wk-ex${open ? ' is-open' : ''}`}>
+            <li key={ex.id} className={`wk-ex${open ? ' is-open' : ''}${ss ? ' is-ss' : ''}`}>
               <div className="wk-ex__row">
                 <span className="wk-ex__n" aria-hidden="true">{i + 1}</span>
                 <div className="wk-ex__body">
@@ -196,6 +218,7 @@ export function PlanList({ exercises = [], equipMap = {}, suggestionByEx = {}, i
                   </div>
                   <div className="wk-ex__meta">
                     {ex.sets} × {ex.reps}{w ? ` · ${w}` : ''}
+                    {ss && <span className="wk-ss-tag"><Link2 size={12} strokeWidth={2.2} aria-hidden="true" />Superset</span>}
                     {up && <span className="wk-up"><TrendingUp size={12} strokeWidth={2.2} aria-hidden="true" />{u.fmtWeight(s.suggested.weight)}</span>}
                   </div>
                 </div>

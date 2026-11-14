@@ -12,7 +12,8 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { requireAuth, orgScope, hashPassword, clearAuthCookie, invalidateUserActive } from '../auth.js';
 import { id, now } from '../ids.js';
-import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR, shiftDayKey } from '../utils/time.js';
+import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR, shiftDayKey, plannerDay } from '../utils/time.js';
+import { materializeClientWorkout } from '../services/trainingProgram.js';
 import { invalidateDayStart } from '../services/logDay.js';
 import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
@@ -1532,6 +1533,38 @@ export default function meRoutes(db) {
     res.json({ overlapping });
   });
 
+  /** A superset label as stored: short, or nothing. Neighbouring
+   *  exercises that share one are done back to back. */
+  const supersetGroup = (ex) => (ex?.superset_group ? String(ex.superset_group).slice(0, 20) : null);
+
+  /** Make `days` (0=Monday..6=Sunday) exactly the days a saved workout
+   *  repeats on. Its other days are cleared; a listed day another workout
+   *  held is taken over, since the schedule holds one workout per day. */
+  const setWorkoutDays = async (tx, clientId, workoutId, days) => {
+    const want = [...new Set((days || []).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
+    await tx.run('DELETE FROM client_workout_schedule WHERE client_id = ? AND workout_id = ?', [clientId, workoutId]);
+    for (const dow of want) {
+      await tx.run('DELETE FROM client_workout_schedule WHERE client_id = ? AND day_of_week = ?', [clientId, dow]);
+      await tx.run('INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES (?,?,?)', [clientId, dow, workoutId]);
+    }
+  };
+
+  /** The builder's "today" half: when the member asked for it, or picked
+   *  today among the repeat days, a saved workout becomes today's session
+   *  now rather than next week. Never over a session already under way. */
+  const sessionForToday = async (req, c, workoutId, { forToday, days }) => {
+    const tz = req.tz || await getOrgTz(db, c.org_id);
+    const today = dayKey(new Date(), tz);
+    const wanted = forToday === true || (Array.isArray(days) && days.map(Number).includes(plannerDay(today)));
+    if (!wanted) return { today_workout_id: null };
+    const busy = await db.q1(
+      `SELECT id FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'assigned' AND started_at IS NOT NULL LIMIT 1`,
+      [c.id, today]);
+    if (busy) return { today_workout_id: null, today_skipped: 'in_progress' };
+    const w = await materializeClientWorkout(db, { client: c, workoutId, scheduledDate: today });
+    return { today_workout_id: w?.id || null };
+  };
+
   r.post('/workouts', workoutWriteLimit, validate(schemas.clientWorkoutCreate), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     const { name, exercises, date, started_at: startedAtIn, source: sourceIn } = req.body || {};
@@ -1566,9 +1599,9 @@ export default function meRoutes(db) {
       const weight = String(ex.weight ?? 'BW').slice(0, 12);
       const rest = Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90));
       await db.run(
-        `INSERT INTO workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
-        [id('wxe'), wId, lib.id, i, lib.name, sets, reps, weight, rest]);
+        `INSERT INTO workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, superset_group)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [id('wxe'), wId, lib.id, i, lib.name, sets, reps, weight, rest, supersetGroup(ex)]);
       added++;
     }
     if (added === 0) { await db.run('DELETE FROM workouts WHERE id = ?', [wId]); return res.status(400).json({ error: 'No valid exercises found in the library' }); }
@@ -1912,7 +1945,7 @@ export default function meRoutes(db) {
 
   r.post('/planner/workouts', workoutWriteLimit, validate(schemas.plannerWorkoutCreate), async (req, res) => {
     const c = await plannerAccess(req, res); if (!c) return;
-    const { name, notes, exercises } = req.body || {};
+    const { name, notes, exercises, days, today: forToday } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Workout name is required' });
     if (!Array.isArray(exercises) || exercises.length === 0) return res.status(400).json({ error: 'Add at least one exercise' });
     if (exercises.length > 20) return res.status(400).json({ error: 'Too many exercises (max 20)' });
@@ -1930,17 +1963,20 @@ export default function meRoutes(db) {
         [wId, c.org_id, c.id, String(name).trim().slice(0, 80), notes ? String(notes).slice(0, 300) : null, now()]);
       for (const [i, ex] of valid.entries()) {
         await tx.run(
-          `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes, superset_group)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
           [id('cwe'), wId, ex.exercise_id, i, String(ex.name || '').slice(0, 80),
            Math.max(1, Math.min(12, parseInt(ex.sets, 10) || 3)),
            String(ex.reps ?? 10).slice(0, 12), String(ex.weight ?? 'BW').slice(0, 12),
            Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90)),
-           ex.tempo ? String(ex.tempo).slice(0, 20) : null, ex.notes ? String(ex.notes).slice(0, 200) : null]);
+           ex.tempo ? String(ex.tempo).slice(0, 20) : null, ex.notes ? String(ex.notes).slice(0, 200) : null,
+           supersetGroup(ex)]);
       }
+      if (Array.isArray(days)) await setWorkoutDays(tx, c.id, wId, days);
     });
     track(db, 'client_workout_created', req.user.org, req.user.sub, { client_id: c.id });
-    res.json({ id: wId });
+    const todaySession = await sessionForToday(req, c, wId, { forToday, days });
+    res.json({ id: wId, days: Array.isArray(days) ? [...new Set(days)].sort() : [], ...todaySession });
   });
 
   r.put('/planner/workouts/:id', workoutWriteLimit, validate(schemas.plannerWorkoutUpdate), async (req, res) => {
@@ -1951,7 +1987,7 @@ export default function meRoutes(db) {
     }
     const w = await db.q1('SELECT * FROM client_workouts WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
     if (!w) return res.status(404).json({ error: 'Workout not found' });
-    const { name, notes, exercises } = req.body || {};
+    const { name, notes, exercises, days } = req.body || {};
     await db.tx(async (tx) => {
       if (name !== undefined || notes !== undefined) {
         await tx.run('UPDATE client_workouts SET name = COALESCE(?, name), notes = COALESCE(?, notes) WHERE id = ?',
@@ -1972,17 +2008,35 @@ export default function meRoutes(db) {
         await tx.run('DELETE FROM client_workout_exercises WHERE workout_id = ?', [w.id]);
         for (const [i, ex] of exercises.entries()) {
           await tx.run(
-            `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes, superset_group)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             [id('cwe'), w.id, ex.exercise_id || null, i, String(ex.name || '').slice(0, 80),
              Math.max(1, Math.min(12, parseInt(ex.sets, 10) || 3)),
              String(ex.reps ?? 10).slice(0, 12), String(ex.weight ?? 'BW').slice(0, 12),
              Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90)),
-             ex.tempo ? String(ex.tempo).slice(0, 20) : null, ex.notes ? String(ex.notes).slice(0, 200) : null]);
+             ex.tempo ? String(ex.tempo).slice(0, 20) : null, ex.notes ? String(ex.notes).slice(0, 200) : null,
+             supersetGroup(ex)]);
         }
       }
+      if (Array.isArray(days)) await setWorkoutDays(tx, c.id, w.id, days);
     });
     res.json({ ok: true });
+  });
+
+  /* Which weekdays a saved workout repeats on -- the Saved workouts list
+     toggles one day at a time through this. 0=Monday..6=Sunday. A day
+     another workout held moves to this one (a day holds one workout).
+     Today's session is left alone: it is materialized from the schedule
+     the next time it is asked for if today has nothing else, and a
+     member who wants this one right now has "Do today". */
+  r.put('/planner/workouts/:id/days', workoutWriteLimit, validate(schemas.plannerWorkoutDays), async (req, res) => {
+    const c = await plannerAccess(req, res); if (!c) return;
+    const w = await db.q1('SELECT id FROM client_workouts WHERE id = ? AND client_id = ?', [req.params.id, c.id]);
+    if (!w) return res.status(404).json({ error: 'Workout not found' });
+    await db.tx((tx) => setWorkoutDays(tx, c.id, w.id, req.body.days));
+    track(db, 'workout_schedule_saved', req.user.org, req.user.sub, { client_id: c.id });
+    const schedule = await db.q('SELECT day_of_week, workout_id FROM client_workout_schedule WHERE client_id = ?', [c.id]);
+    res.json({ ok: true, schedule });
   });
 
   r.post('/planner/workouts/:id/duplicate', workoutWriteLimit, async (req, res) => {
@@ -1996,9 +2050,9 @@ export default function meRoutes(db) {
         [nId, c.org_id, c.id, `${w.name} (copy)`, w.notes, now()]);
       for (const ex of exs) {
         await tx.run(
-          `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          [id('cwe'), nId, ex.exercise_id, ex.position, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
+          `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes, superset_group)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [id('cwe'), nId, ex.exercise_id, ex.position, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes, ex.superset_group || null]);
       }
     });
     res.json({ id: nId });

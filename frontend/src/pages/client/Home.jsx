@@ -233,7 +233,10 @@ export default function Home() {
   const today = data.todayWorkout;
   const doneEx = today ? today.exercises.filter((e) => e.done).length : 0;
   const totalEx = today?.exercises.length || 0;
-  const complete = totalEx > 0 && doneEx === totalEx;
+  // A finished session is finished even if an exercise was skipped or
+  // taken out of it -- today's session is the completed one until another
+  // is planned (see ensureTodayWorkout).
+  const complete = today?.status === 'completed' || (totalEx > 0 && doneEx === totalEx);
 
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
