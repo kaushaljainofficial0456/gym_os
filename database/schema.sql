@@ -3122,3 +3122,455 @@ CREATE TABLE IF NOT EXISTS tournament_audit (
   created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tournament_audit_t ON tournament_audit(tournament_id, created_at);
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- AI COMMUNICATION (follow-ups): automated calls, AI conversations, SMS and
+-- WhatsApp to members. docs/FOLLOWUPS.md has the whole design.
+--
+-- A separately purchased add-on. Each PRODUCT has its own balance --
+-- voice minutes, AI-conversation minutes, SMS segments, WhatsApp messages --
+-- plus caller-line subscriptions (followup_line_terms). Every use is a
+-- followup_ledger row tied to a job and a provider reference; a call HOLDS
+-- capacity when it is placed and SETTLES on the provider's result, so an
+-- unanswered call is never charged as a connected one.
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- One row per gym. Calling hours are gym-local and clamped to 09:00-21:00
+-- by the engine whatever is stored here.
+CREATE TABLE IF NOT EXISTS followup_settings (
+  org_id          TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  enabled         INTEGER NOT NULL DEFAULT 0,
+  window_start    TEXT NOT NULL DEFAULT '10:00',
+  window_end      TEXT NOT NULL DEFAULT '19:30',
+  days_mask       TEXT NOT NULL DEFAULT '1111110',   -- Mon..Sun
+  max_per_day     INTEGER NOT NULL DEFAULT 2,        -- calls per member per day, all campaigns (1-3)
+  max_per_week    INTEGER NOT NULL DEFAULT 6,        -- contacts per member per week, all channels
+  language        TEXT NOT NULL DEFAULT 'en',        -- the gym's default language
+  languages_json  TEXT,                              -- enabled languages per channel: { voice:[], agent:[], sms:[], whatsapp:[] }
+  voices_json     TEXT,                              -- default voice per language: { en: voiceId }
+  lines_json      TEXT,                              -- the gym's rewording of the fixed spoken lines, per language
+  gym_display_name TEXT,
+  whatsapp_from   TEXT,                              -- the gym's WhatsApp sender (separate from its calling numbers)
+  sms_header      TEXT,                              -- DLT-registered sender header
+  dlt_entity_id   TEXT,                              -- DLT principal entity id
+  monthly_cap_inr REAL,                              -- owner's spending cap on usage per month (NULL = none)
+  compliance_json TEXT,                              -- owner's confirmations (registration, consent basis), versioned
+  last_tick_at    TEXT,
+  updated_at      TEXT NOT NULL
+);
+
+-- Caller lines: registered business numbers the platform rents and assigns
+-- (from the admin console). Several per gym, optionally per branch. A member
+-- is called from ONE of them every time (followup_member_prefs.number_id) and
+-- moves only when that line is retired or outside paid capacity -- never
+-- because they blocked or ignored it.
+CREATE TABLE IF NOT EXISTS followup_numbers (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id       TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  number          TEXT NOT NULL,
+  label           TEXT,
+  provider        TEXT NOT NULL DEFAULT 'exotel',
+  number_type     TEXT,                              -- e.g. 140-series, landline, mobile
+  agent_phone_id  TEXT,                              -- the number's id in ElevenLabs (AI conversations)
+  is_primary      INTEGER NOT NULL DEFAULT 0,
+  health          TEXT NOT NULL DEFAULT 'ok' CHECK (health IN ('ok','flagged')),
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','retired')),
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (org_id, number)
+);
+CREATE INDEX IF NOT EXISTS idx_followup_numbers_org ON followup_numbers(org_id, status);
+
+-- Paid line capacity: "N numbers for D days". While a gym has capacity its
+-- first N active numbers are used; without it, calls use the shared line.
+CREATE TABLE IF NOT EXISTS followup_line_terms (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  lines           INTEGER NOT NULL,
+  starts_at       TEXT NOT NULL,
+  ends_at         TEXT NOT NULL,
+  order_id        TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_line_terms_org ON followup_line_terms(org_id, ends_at);
+
+-- Script Studio. A script is one language variant; variants of the same
+-- message share group_id. channel_type: voice (read aloud) or text (SMS).
+CREATE TABLE IF NOT EXISTS followup_scripts (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  group_id        TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  purpose         TEXT NOT NULL DEFAULT 'general',
+  channel_type    TEXT NOT NULL DEFAULT 'voice' CHECK (channel_type IN ('voice','text')),
+  language        TEXT NOT NULL DEFAULT 'en',
+  body            TEXT NOT NULL,
+  version         INTEGER NOT NULL DEFAULT 1,
+  approved_at     TEXT,                              -- owner approved this variant for use
+  approved_by     TEXT,
+  created_by      TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (group_id, language)
+);
+CREATE INDEX IF NOT EXISTS idx_followup_scripts_org ON followup_scripts(org_id, group_id);
+
+CREATE TABLE IF NOT EXISTS followup_script_versions (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  script_id       TEXT NOT NULL REFERENCES followup_scripts(id) ON DELETE CASCADE,
+  version         INTEGER NOT NULL,
+  body            TEXT NOT NULL,
+  created_by      TEXT,
+  created_at      TEXT NOT NULL,
+  UNIQUE (script_id, version)
+);
+
+-- WhatsApp templates (Meta-approved before use). Variants share group_id.
+CREATE TABLE IF NOT EXISTS followup_templates (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  group_id        TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  purpose         TEXT NOT NULL DEFAULT 'general',
+  body            TEXT NOT NULL,
+  language        TEXT NOT NULL DEFAULT 'en',
+  category        TEXT NOT NULL DEFAULT 'UTILITY' CHECK (category IN ('UTILITY','MARKETING')),
+  provider_name   TEXT,
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','pending','approved','rejected','paused','disabled')),
+  rejection_reason TEXT,
+  submitted_at    TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_templates_org ON followup_templates(org_id, group_id);
+
+-- SMS templates. In India every commercial SMS needs a DLT-registered
+-- template; the owner registers it on a DLT portal and enters its id here.
+CREATE TABLE IF NOT EXISTS followup_sms_templates (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  group_id        TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  purpose         TEXT NOT NULL DEFAULT 'general',
+  body            TEXT NOT NULL,
+  language        TEXT NOT NULL DEFAULT 'en',
+  dlt_template_id TEXT,
+  sms_type        TEXT NOT NULL DEFAULT 'transactional' CHECK (sms_type IN ('transactional','promotional')),
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','disabled')),
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_sms_templates_org ON followup_sms_templates(org_id, group_id);
+
+-- Conversational agents (a separate, premium product). Knowledge and FAQs are
+-- the ONLY facts the agent may state; every saved change is a new version.
+CREATE TABLE IF NOT EXISTS followup_agents (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  language        TEXT NOT NULL DEFAULT 'en',
+  voice_id        TEXT,
+  greeting        TEXT,
+  purpose         TEXT,
+  knowledge       TEXT,
+  faqs_json       TEXT,
+  version         INTEGER NOT NULL DEFAULT 1,
+  provider        TEXT,                              -- who runs it (providers/index.js): elevenlabs | http | test
+  provider_agent_id TEXT,
+  provider_hash   TEXT,
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_agents_org ON followup_agents(org_id);
+
+CREATE TABLE IF NOT EXISTS followup_agent_versions (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  agent_id        TEXT NOT NULL REFERENCES followup_agents(id) ON DELETE CASCADE,
+  version         INTEGER NOT NULL,
+  snapshot_json   TEXT NOT NULL,
+  created_by      TEXT,
+  created_at      TEXT NOT NULL,
+  UNIQUE (agent_id, version)
+);
+
+-- Voices a gym can use: picked from the library, designed from a
+-- description, or cloned WITH the speaker's recorded authorization.
+CREATE TABLE IF NOT EXISTS followup_voices (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider_voice_id TEXT NOT NULL,                  -- provider-qualified: "elevenlabs:...", "sarvam:priya", "http:..."
+  provider        TEXT NOT NULL DEFAULT 'elevenlabs',
+  name            TEXT NOT NULL,
+  source          TEXT NOT NULL DEFAULT 'library' CHECK (source IN ('library','designed','cloned')),
+  description     TEXT,
+  authorization_json TEXT,                           -- cloned voices: who authorised, the statement, when, by whom
+  deleted_at      TEXT,
+  created_at      TEXT NOT NULL,
+  UNIQUE (org_id, provider_voice_id)
+);
+
+-- Campaigns ("automations"). sequence_json is the ordered channels for each
+-- contact step, e.g. [{"channel":"whatsapp"},{"channel":"call","after_hours":4}].
+CREATE TABLE IF NOT EXISTS followup_rules (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id       TEXT REFERENCES branches(id) ON DELETE SET NULL,
+  name            TEXT NOT NULL,
+  kind            TEXT NOT NULL CHECK (kind IN ('missed_visits','membership_ending','payment_due','onboarding')),
+  status          TEXT NOT NULL DEFAULT 'paused' CHECK (status IN ('active','paused')),
+  config_json     TEXT NOT NULL,
+  sequence_json   TEXT NOT NULL,
+  per_day         INTEGER NOT NULL DEFAULT 1,        -- call attempts on a contact day while unanswered (1-3)
+  gap_hours       INTEGER NOT NULL DEFAULT 3,
+  language        TEXT NOT NULL DEFAULT 'en',        -- fallback when the member has no enabled preference
+  voice_tier      TEXT NOT NULL DEFAULT 'standard',  -- which voice-call tier (price book) this campaign uses
+  agent_tier      TEXT NOT NULL DEFAULT 'advanced',  -- which AI-conversation tier
+  voice_id        TEXT,
+  script_group_id TEXT,                              -- voice message (followup_scripts, voice)
+  sms_group_id    TEXT,                              -- followup_sms_templates
+  template_group_id TEXT,                            -- followup_templates (WhatsApp)
+  agent_id        TEXT REFERENCES followup_agents(id) ON DELETE SET NULL,
+  ends_on         TEXT,                              -- gym-day key; no contact after it
+  budget_json     TEXT,                              -- caps on units this campaign may spend
+  created_by      TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_rules_org ON followup_rules(org_id);
+
+-- A member's communication preferences and permissions, per channel.
+-- No permission (NULL) = not contacted on that channel. An opt-out is set by
+-- the member (keypad 9, STOP, the app) and cleared only by the member.
+CREATE TABLE IF NOT EXISTS followup_member_prefs (
+  client_id       TEXT PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  call_consent    TEXT CHECK (call_consent IS NULL OR call_consent IN ('granted','refused')),
+  sms_consent     TEXT CHECK (sms_consent IS NULL OR sms_consent IN ('granted','refused')),
+  wa_consent      TEXT CHECK (wa_consent IS NULL OR wa_consent IN ('granted','refused')),
+  call_opted_out_at TEXT,
+  sms_opted_out_at  TEXT,
+  wa_opted_out_at   TEXT,
+  human_only      INTEGER NOT NULL DEFAULT 0,         -- member wants a person, never an automated call
+  language        TEXT,                               -- preferred language (only if the member chose it)
+  window_start    TEXT,                               -- preferred contact window, gym-local
+  window_end      TEXT,
+  paused_until    TEXT,                               -- gym-day key
+  max_per_day     INTEGER,
+  number_id       TEXT REFERENCES followup_numbers(id) ON DELETE SET NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_prefs_org ON followup_member_prefs(org_id);
+
+-- Every consent change, append-only: the evidence trail.
+CREATE TABLE IF NOT EXISTS followup_consent_log (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id       TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  channel         TEXT NOT NULL CHECK (channel IN ('call','sms','whatsapp','all')),
+  action          TEXT NOT NULL CHECK (action IN ('granted','refused','opted_out','opted_in','withdrawn')),
+  source          TEXT NOT NULL,                      -- member | owner | keypad | sms | whatsapp | agent
+  purpose         TEXT,
+  evidence        TEXT,                               -- e.g. "Signed membership form", "Pressed 9 on call fj_..."
+  policy_version  TEXT,
+  actor_id        TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_consent_member ON followup_consent_log(client_id, created_at);
+
+-- Every call, AI conversation, SMS and WhatsApp message, planned to outcome.
+CREATE TABLE IF NOT EXISTS followup_jobs (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id       TEXT,
+  rule_id         TEXT REFERENCES followup_rules(id) ON DELETE SET NULL,
+  client_id       TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  channel         TEXT NOT NULL CHECK (channel IN ('call','agent','sms','whatsapp')),
+  is_test         INTEGER NOT NULL DEFAULT 0,
+  dedupe_key      TEXT NOT NULL UNIQUE,
+  cycle_key       TEXT,
+  step_key        TEXT,
+  seq_index       INTEGER NOT NULL DEFAULT 0,
+  day_key         TEXT NOT NULL,
+  attempt         INTEGER NOT NULL DEFAULT 1,
+  language        TEXT,
+  status          TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','dialing','answered','completed','no_answer','busy','failed','skipped','sent','delivered','read')),
+  outcome         TEXT,
+  digits          TEXT,
+  summary         TEXT,
+  message_text    TEXT,
+  to_number       TEXT,
+  from_number     TEXT,
+  provider        TEXT,
+  provider_ref    TEXT,
+  audio_json      TEXT,
+  unit            TEXT,
+  units_held      REAL NOT NULL DEFAULT 0,
+  units           REAL NOT NULL DEFAULT 0,
+  segments        INTEGER,
+  duration_secs   INTEGER,
+  error           TEXT,
+  variables_json  TEXT,
+  created_at      TEXT NOT NULL,
+  dialed_at       TEXT,
+  ended_at        TEXT,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_org ON followup_jobs(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_member ON followup_jobs(client_id, day_key);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_status ON followup_jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_ref ON followup_jobs(provider_ref);
+-- Load-tested (docs/AI_COMMUNICATION_PRODUCTION_READINESS.md): every tick reads
+-- one gym's last 120 days of jobs, and every inbound WhatsApp reply finds the
+-- member's latest message by number. Without these both are full-table scans
+-- that grow with EVERY gym on the platform.
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_org_day ON followup_jobs(org_id, day_key);
+CREATE INDEX IF NOT EXISTS idx_followup_jobs_to ON followup_jobs(to_number, channel, created_at);
+
+-- Human follow-ups: a member asked for a person.
+CREATE TABLE IF NOT EXISTS followup_callbacks (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id       TEXT,
+  client_id       TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  phone           TEXT,
+  rule_id         TEXT,
+  job_id          TEXT,
+  channel         TEXT,
+  reason          TEXT,
+  requested_time  TEXT,
+  assigned_to     TEXT REFERENCES users(id) ON DELETE SET NULL,
+  priority        TEXT NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','high')),
+  status          TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','assigned','in_progress','completed','unreachable','cancelled')),
+  note            TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  closed_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_followup_callbacks_org ON followup_callbacks(org_id, status);
+
+-- Spoken audio, cached by what was said and in which voice.
+CREATE TABLE IF NOT EXISTS followup_audio (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  hash            TEXT NOT NULL,
+  voice_id        TEXT NOT NULL,
+  model_id        TEXT,
+  chars           INTEGER NOT NULL DEFAULT 0,
+  data_b64        TEXT NOT NULL,
+  bytes           INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  last_used_at    TEXT NOT NULL,
+  UNIQUE (org_id, hash)
+);
+
+-- Balances: one row per gym and product unit -- "voice:premium",
+-- "voice:standard", "agent:advanced", "sms", "whatsapp" (the units come from
+-- the price book's tiers, so a new tier needs no migration) -- with the
+-- pre-tax INR value paid for what is left: deferred, not-yet-earned revenue.
+-- The CHECKs are a backstop under the conditional UPDATEs in wallet.js: no
+-- code path, race or operator adjustment can leave a negative balance.
+CREATE TABLE IF NOT EXISTS followup_balances (
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  unit            TEXT NOT NULL,
+  balance         REAL NOT NULL DEFAULT 0 CHECK (balance >= 0),
+  value           REAL NOT NULL DEFAULT 0 CHECK (value >= 0),
+  updated_at      TEXT NOT NULL,
+  PRIMARY KEY (org_id, unit)
+);
+
+-- Append-only usage ledger. hold = capacity reserved for a call in progress;
+-- release = a hold given back; usage = settled consumption (charge_inr is the
+-- revenue it earned, cost_estimate what it cost the platform).
+CREATE TABLE IF NOT EXISTS followup_ledger (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  unit            TEXT NOT NULL,                     -- a balance unit (see followup_balances)
+  delta           REAL NOT NULL,
+  reason          TEXT NOT NULL CHECK (reason IN ('purchase','hold','release','usage','refund','trial','adjustment')),
+  job_id          TEXT,
+  order_id        TEXT,
+  rule_id         TEXT,
+  provider        TEXT,
+  provider_ref    TEXT,
+  charge_inr      REAL NOT NULL DEFAULT 0,
+  cost_estimate   REAL,
+  pricing_version INTEGER,
+  note            TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_ledger_org ON followup_ledger(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_followup_ledger_job ON followup_ledger(job_id);
+-- DURABLE IDEMPOTENCY. A job has at most one hold, one release, one usage and
+-- one refund row. The checks in wallet.js run under a row lock (Postgres), and
+-- this index is the guarantee underneath them: a duplicate or concurrent
+-- provider callback can never charge, release or refund the same job twice.
+-- A plain CREATE UNIQUE INDEX (not part of CREATE TABLE) so it also lands on
+-- a database where the table already exists.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_followup_ledger_job_reason ON followup_ledger(job_id, reason) WHERE job_id IS NOT NULL;
+-- Per-campaign budget totals (engine.loadHistory) without scanning the ledger.
+CREATE INDEX IF NOT EXISTS idx_followup_ledger_rule ON followup_ledger(org_id, rule_id, reason);
+
+-- Purchases. Their own order table, like barbell_plan_orders.
+CREATE TABLE IF NOT EXISTS followup_orders (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id         TEXT,
+  pack_id         TEXT NOT NULL,
+  quantity        INTEGER NOT NULL DEFAULT 1,
+  pack_json       TEXT NOT NULL,                      -- what was bought, priced at the time
+  pricing_version INTEGER,
+  amount          REAL NOT NULL,                      -- charged, including tax
+  tax_amount      REAL NOT NULL DEFAULT 0,
+  currency        TEXT NOT NULL DEFAULT 'INR',
+  provider        TEXT,
+  provider_order_id TEXT,
+  provider_payment_id TEXT,
+  status          TEXT NOT NULL DEFAULT 'CREATED' CHECK (status IN ('CREATED','SUCCESS','FAILED','CANCELLED')),
+  invoice_number  TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_orders_org ON followup_orders(org_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_followup_orders_provider ON followup_orders(provider_order_id);
+
+-- The platform's price book, versioned (founder-edited in the admin console).
+-- The highest version is current; orders keep the version they were sold at.
+-- Platform-level like coupons: no org_id, no tenant policy.
+CREATE TABLE IF NOT EXISTS followup_price_versions (
+  id              TEXT PRIMARY KEY,
+  version         INTEGER NOT NULL UNIQUE,
+  config_json     TEXT NOT NULL,
+  created_by      TEXT,
+  created_at      TEXT NOT NULL
+);
+
+-- Platform-wide switches (founder): pause all outbound, pause a provider.
+CREATE TABLE IF NOT EXISTS followup_platform (
+  id              TEXT PRIMARY KEY,
+  paused          INTEGER NOT NULL DEFAULT 0,
+  paused_channels TEXT,                               -- JSON array, e.g. ["sms"]
+  updated_by      TEXT,
+  updated_at      TEXT NOT NULL
+);
+
+-- Owner-side changes to AI Communication (settings, the compliance checklist,
+-- campaigns, caller-number labels): who changed what, when, before and after.
+-- Founder actions are in admin_audit_logs; consent changes are in
+-- followup_consent_log. Values pass through a redactor before they are stored.
+CREATE TABLE IF NOT EXISTS followup_audit (
+  id              TEXT PRIMARY KEY,
+  org_id          TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  actor_id        TEXT REFERENCES users(id) ON DELETE SET NULL,
+  actor_role      TEXT,
+  action          TEXT NOT NULL,
+  entity_type     TEXT,
+  entity_id       TEXT,
+  before_json     TEXT,
+  after_json      TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_followup_audit_org ON followup_audit(org_id, created_at);

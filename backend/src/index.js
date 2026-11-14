@@ -45,6 +45,8 @@ import tournamentRoutes, { tournamentPublicRoutes } from './routes/tournaments.j
 import receiptRoutes from './routes/receipts.js';
 import planRoutes, { planGate } from './routes/plan.js';
 import attendanceRoutes from './routes/attendance.js';
+import followupRoutes, { followupPublicRoutes } from './routes/followups.js';
+import { redactUrl } from './utils/redactUrl.js';
 import workoutShareRoutes from './routes/workoutShare.js';
 import consoleRoutes from './routes/console.js';
 import healthRoutes from './routes/health.js';
@@ -179,11 +181,13 @@ export async function buildApp() {
 
   // Request ID + access log (method, path, status, duration — never bodies,
   // tokens, or headers). Gives every logged error a traceable id.
+  // Query strings can carry credentials too (signed provider-callback URLs,
+  // ?token=, ?signature=): their VALUES are masked -- see utils/redactUrl.js.
   app.use((req, res, next) => {
     req.id = randomUUID();
     const t0 = Date.now();
     res.on('finish', () => {
-      console.log(`[req] ${req.id} ${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - t0}ms`);
+      console.log(`[req] ${req.id} ${req.method} ${redactUrl(req.originalUrl)} ${res.statusCode} ${Date.now() - t0}ms`);
     });
     next();
   });
@@ -217,6 +221,11 @@ export async function buildApp() {
   // providers/builtin.js is computed over the exact bytes the panel sent,
   // so a re-serialized body would fail a valid signature.
   app.use('/api/access/hook', express.raw({ type: 'application/json', limit: '512kb' }));
+  // AI Communication: ElevenLabs signs the RAW body; Exotel posts forms; a
+  // cloned-voice sample is bigger than the default JSON limit.
+  app.use(['/api/followups/hooks/elevenlabs', '/api/followups/hooks/agent'], express.raw({ type: 'application/json', limit: '2mb' }));
+  app.use('/api/followups/hooks', express.urlencoded({ extended: false, limit: '256kb' }));
+  app.use('/api/followups/voices/clone', express.json({ limit: '9mb' }));
   // eSSL / ZKTeco terminals post tab-separated attendance lines, labelled
   // text/plain or not labelled at all -- read every body there as text.
   app.use('/iclock', express.text({ type: () => true, limit: '1mb' }));
@@ -269,6 +278,8 @@ app.use('/api/share', shareRoutes(db)); // PUBLIC: preview a shared meals/foods 
 app.use('/api/workout-share', workoutShareRoutes(db)); // PUBLIC: preview a shared workout link (no auth) -- importing requires auth, see POST /api/me/workout-share/:id/import
 app.use('/api/client-error', clientErrorRoutes(db)); // PUBLIC: frontend ErrorBoundary crash reports -- see clientError.js
 app.use('/api/access', accessWebhookRoutes(db));   // PUBLIC: signed door events -- see access.js's own header
+app.use('/api/followups', followupPublicRoutes(db)); // PUBLIC: provider webhooks, signed audio, the scheduler tick -- see followups.js
+app.use('/api/followups', followupRoutes(db));        // AI Communication: owner API, a member's own preferences, trainers' callbacks
 app.use(['/api/admin/access', '/api/business/access'], accessRoutes(db)); // owner: providers, devices, mappings, events, audit
 app.use('/iclock', admsRoutes(db)); // PUBLIC: eSSL / ZKTeco terminals push punches here (ADMS) -- see routes/adms.js
 app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js

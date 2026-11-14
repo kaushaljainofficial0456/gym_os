@@ -8,6 +8,7 @@ import { useTheme } from '../../themeContext.jsx';
 import { useUnits } from '../../unitsContext.jsx';
 import { Sheet, Toast } from '../../components/UI.jsx';
 import TournamentIdentity from '../../components/TournamentIdentity.jsx';
+import GymContactPrefs from '../../components/client/GymContactPrefs.jsx';
 
 const SETTINGS_SECTIONS = [
   {
@@ -212,6 +213,7 @@ export default function Settings() {
         <UnitsCard />
         <DayStartCard />
         <NotificationSettingsCard />
+        <GymContactPrefs />
       </Group>
 
       <Group title="Data & connections" hint="What Barbell reads, stores and remembers.">

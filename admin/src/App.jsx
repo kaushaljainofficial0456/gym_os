@@ -35,6 +35,8 @@ const SystemHealth = lazy(() => import('./pages/SystemHealth.jsx'));
 const Coupons = lazy(() => import('./pages/Coupons.jsx'));
 const CouponForm = lazy(() => import('./pages/CouponForm.jsx'));
 const CouponDetail = lazy(() => import('./pages/CouponDetail.jsx'));
+const Communication = lazy(() => import('./pages/Communication.jsx'));
+const CommunicationGym = lazy(() => import('./pages/CommunicationGym.jsx'));
 
 const PageFallback = <div style={{ padding: 24 }}><SkeletonBlock height={280} /></div>;
 // One-liner per route, same shape as the main frontend's own `page()`
@@ -57,6 +59,8 @@ export default function App() {
             <Route path="coupons/new" element={page(CouponForm)} />
             <Route path="coupons/:id" element={page(CouponDetail)} />
             <Route path="coupons/:id/edit" element={page(CouponForm)} />
+            <Route path="communication" element={page(Communication)} />
+            <Route path="communication/gyms/:orgId" element={page(CommunicationGym)} />
             <Route path="refunds" element={page(Refunds)} />
             <Route path="reconciliation" element={page(Reconciliation)} />
             <Route path="support" element={page(Support)} />

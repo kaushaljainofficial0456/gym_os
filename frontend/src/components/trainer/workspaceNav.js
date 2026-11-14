@@ -46,6 +46,7 @@ const NUTRITION = { to: '/app/trainer/nutrition', label: 'Nutrition', icon: 'pla
 const REPORTS = { to: '/app/trainer/reports', label: 'Client reports', icon: 'doc', tint: TINT.cyan };
 const ALERTS = { to: '/app/trainer/alerts', label: 'Alerts', icon: 'bell', tint: TINT.red };
 const MESSAGES = { to: '/app/trainer/messages', label: 'Messages', icon: 'chat', tint: TINT.teal, badgeKey: 'messages' };
+const COMMS = { to: '/app/trainer/communication', label: 'AI Communication', icon: 'phone', tint: TINT.purple };
 const TOURNAMENTS = { to: '/app/trainer/tournaments', label: 'Tournaments', icon: 'trophy', tint: TINT.gold };
 
 export function workspaceSections(isOwner) {
@@ -60,7 +61,7 @@ export function workspaceSections(isOwner) {
     { items: [HOME] },
     {
       title: 'Members & money',
-      items: [CLIENTS, PAYMENTS, { to: '/app/trainer/attendance', label: 'Attendance', icon: 'calendar', tint: TINT.orange }],
+      items: [CLIENTS, PAYMENTS, { to: '/app/trainer/attendance', label: 'Attendance', icon: 'calendar', tint: TINT.orange }, COMMS],
     },
     { title: 'Coaching', items: [WORKOUTS, NUTRITION, REPORTS, ALERTS, MESSAGES] },
     {
@@ -113,9 +114,9 @@ export function quickActions(isOwner) {
     { to: '/app/trainer/business?record=1', label: 'Record payment', icon: 'receipt', tint: TINT.green },
     { to: '/app/trainer/attendance', label: 'Attendance', icon: 'calendar', tint: TINT.orange },
     { to: '/app/trainer/messages', label: 'Messages', icon: 'chat', tint: TINT.teal, badgeKey: 'messages' },
+    { to: '/app/trainer/communication', label: 'AI follow-ups', icon: 'phone', tint: TINT.purple },
     { to: '/app/trainer/workouts?new=1', label: 'New workout', icon: 'strength', tint: TINT.indigo },
     { to: '/app/trainer/nutrition?new=1', label: 'New meal plan', icon: 'plate', tint: TINT.mint },
     { to: '/app/trainer/enterprise/qr?for=trainer', label: 'Invite trainer', icon: 'whistle', tint: TINT.purple },
-    { to: '/app/trainer/enterprise/qr', label: 'Join QR codes', icon: 'qr', tint: TINT.graphite },
   ];
 }

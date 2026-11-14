@@ -38,6 +38,7 @@ const PATHS = {
   plus: 'M12 5v14M5 12h14',
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
   edit: 'M4 20h4L19 9l-4-4L4 16ZM14 6l4 4',
+  phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z',
 };
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8 }) {

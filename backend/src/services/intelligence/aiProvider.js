@@ -524,6 +524,14 @@ export async function coach(userMessage, contextSummary) {
   }
 }
 
+/** Plain text from the configured provider, or null when none is set up.
+ *  Used by AI Communication's Script Studio (write / translate a message). */
+export async function writeText(system, user) {
+  if (!isConfigured()) return null;
+  const raw = await callAI(system, user, { json: false });
+  return String(raw || '').trim();
+}
+
 export default {
   providerName, isConfigured, isProviderConfigured, configSummary, ping,
   interpret, visionLabel, estimateMeal, coach, callProviderRaw, parseJSON

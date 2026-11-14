@@ -11,6 +11,7 @@ import { useAuth } from '../../auth.jsx';
 import { useFetch, fmt1, kg1 } from '../../utils.js';
 import { Card, Kpi, ErrorState, StatusChip, Avatar, Skeleton } from '../../components/UI.jsx';
 import { TrendChart } from '../../components/charts.jsx';
+import CallbackCard from '../../components/trainer/CallbackCard.jsx';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -160,6 +161,7 @@ export default function Dashboard() {
         </p>
       </div>
       <QuickActions isOwner={false} unread={unread.data?.total || 0} />
+      <CallbackCard />
 
       {(crowd.data || crowdClients.data) && <TrainerCrowdCard crowd={crowd.data} clients={crowdClients.data} />}
 
