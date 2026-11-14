@@ -465,8 +465,12 @@ test('dispatch: retries stop at the campaign\'s attempts per day, spaced by its 
   const noAnswer = async ({ seed }) => ({ ref: `CA_${seed}`, simulated: { status: 'no_answer', digits: null, duration: 0 } });
   await withStub(mock.telephony, 'placeMessageCall', noAnswer, async () => {
     await engine.planOrg(db, 'gr', { at: at('10:00') }); await engine.dispatchOrg(db, 'gr', { at: at('10:00') });
-    assert.equal((await engine.planOrg(db, 'gr', { at: at('10:00') })).queued, 0, 'not again inside the gap');
+    // The engine stamps ended_at with the REAL clock while this test plans at a
+    // simulated 10:00. Pin the stamps to the simulated time BEFORE the gap
+    // check, or the test fails whenever it runs in the early hours IST (the
+    // real stamp is then hours "before" 10:00 and the gap looks over).
     await db.run(`UPDATE followup_jobs SET ended_at = ?, created_at = ? WHERE client_id = ?`, [at('10:00').toISOString(), at('10:00').toISOString(), m.cid]);
+    assert.equal((await engine.planOrg(db, 'gr', { at: at('10:00') })).queued, 0, 'not again inside the gap');
     assert.equal((await engine.planOrg(db, 'gr', { at: at('11:30') })).queued, 1, 'second attempt after the gap');
     await engine.dispatchOrg(db, 'gr', { at: at('11:30') });
     await db.run(`UPDATE followup_jobs SET ended_at = ?, created_at = ? WHERE client_id = ?`, [at('11:30').toISOString(), at('11:30').toISOString(), m.cid]);
