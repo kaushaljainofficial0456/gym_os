@@ -378,7 +378,8 @@ html.ws .stat-label { font-size: .8125rem; font-weight: 500; letter-spacing: -.0
 /* ── Owner Home ── */
 .oh { display: flex; flex-direction: column; gap: 28px; }
 .oh-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
-.oh-lede { margin-top: 6px; font-size: 16px; color: var(--mute); }
+.oh-date { font-size: 14px; font-weight: 500; color: var(--mute); margin-bottom: 4px; }
+.oh-title { overflow-wrap: anywhere; }
 .oh-new { display: none; flex-shrink: 0; }
 @media (min-width: 1024px) { .oh-new { display: block; } }
 .oh-label { font-size: 15px; font-weight: 600; color: var(--mute); margin-bottom: 12px; }

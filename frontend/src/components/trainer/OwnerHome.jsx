@@ -30,12 +30,27 @@ import { TINT, tileStyle } from './workspaceNav.js';
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const monthName = (key) => new Date(`${key}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'long' });
 
-const greeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
+/* The header is the gym and the day, the way a dashboard is titled, not a
+   chat-style greeting. A name stored in capitals ("IRONFORGE FITNESS") is
+   shown in title case; one in mixed case is left exactly as the owner typed it. */
+const gymTitle = (name) => {
+  const n = String(name || '').trim();
+  if (!n) return 'Overview';
+  return n === n.toUpperCase() ? n.toLowerCase().replace(/(^|[\s\-/&(])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase()) : n;
 };
+const todayLabel = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+function Header({ user, children }) {
+  return (
+    <div className="oh-head">
+      <div className="min-w-0">
+        <p className="oh-date">{todayLabel()}</p>
+        <h1 className="t-title oh-title">{gymTitle(user?.orgName)}</h1>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 const Arrow = ({ up }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={up ? 'var(--good)' : 'var(--bad)'} strokeWidth="2.2"
@@ -99,8 +114,6 @@ const names = (clients) => {
 export default function OwnerHome({ user, kpis, pulse, pulseError, onPulseRetry, attention, attentionError, onAttentionRetry }) {
   const [openFollowUps, setOpenFollowUps] = useState(false);
   const listId = useId();
-  const firstName = user?.name?.split(' ')[0] || 'there';
-  const gymName = user?.orgName || 'your gym';
 
   const m = pulse?.money;
   const today = pulse?.today;
@@ -192,16 +205,10 @@ export default function OwnerHome({ user, kpis, pulse, pulseError, onPulseRetry,
 
   return (
     <div className="oh">
-      <div className="oh-head">
-        <div className="min-w-0">
-          <h1 className="t-title">{greeting()}, {firstName}</h1>
-          <p className="oh-lede">Here&apos;s how {gymName} is doing today.</p>
-        </div>
-        <div className="oh-new"><NewMenu /></div>
-      </div>
+      <Header user={user}><div className="oh-new"><NewMenu /></div></Header>
 
       <section aria-labelledby="oh-glance" data-tour="trainer-dashboard-hero">
-        <h2 id="oh-glance" className="oh-label">At a glance</h2>
+        <h2 id="oh-glance" className="sr-only">Key numbers</h2>
         <div className="oh-glance">
           {pulseError && !pulse ? <GlanceError onRetry={onPulseRetry} /> : (
             <>
@@ -250,17 +257,10 @@ export default function OwnerHome({ user, kpis, pulse, pulseError, onPulseRetry,
 /* Shaped like the page it stands in for, so nothing jumps when the
    numbers land (e2e/performance.spec.js holds Home to a CLS under 0.1). */
 export function OwnerHomeSkeleton({ user }) {
-  const firstName = user?.name?.split(' ')[0] || 'there';
   return (
     <div className="oh" aria-busy="true">
-      <div className="oh-head">
-        <div className="min-w-0">
-          <h1 className="t-title">{greeting()}, {firstName}</h1>
-          <p className="oh-lede">Here&apos;s how {user?.orgName || 'your gym'} is doing today.</p>
-        </div>
-      </div>
+      <Header user={user} />
       <section>
-        <div className="oh-label">At a glance</div>
         <div className="oh-glance">
           {[0, 1, 2].map((i) => <div key={i} className="card oh-card" style={{ minHeight: 190 }}><div className="skeleton h-3 w-32" /><div className="skeleton h-9 w-40 mt-5" /><div className="skeleton h-3 w-44 mt-4" /></div>)}
         </div>
