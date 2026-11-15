@@ -135,3 +135,13 @@ test('a bhatura is priced with absorbed oil, not the frying bath', { skip: !live
   // INDB's quarantined row is 793 kcal/100 g (frying bath counted).
   assert.ok(kcalPer100 > 300 && kcalPer100 < 450, `${kcalPer100.toFixed(0)} kcal/100g`);
 });
+
+test('an egg in front of a dish is part of the dish, not a separate boiled egg', { skip: !live }, () => {
+  for (const [input, re] of [['egg fried rice', /egg fried rice/i], ['egg biryani', /egg biryani/i], ['egg roll', /egg roll/i], ['egg sandwich', /egg sandwich/i]]) {
+    const r = estimateFood(input);
+    assert.equal(r.items.length, 1, `${input} -> ${names(r).join(' | ')}`);
+    assert.match(r.items[0].name, re, input);
+    assert.ok(!/chicken/i.test(r.items[0].name), 'egg biryani is never chicken biryani');
+  }
+  assert.equal(estimateFood('2 eggs').items[0].qty, 2, 'plain eggs still count as eggs');
+});

@@ -74,6 +74,7 @@ const ROW = Object.freeze({
   SUGAR: 'usda:169655',       // Sugars, granulated (same row as the sugar staple)
   JAGGERY: 'ifct:I001',       // Jaggery, cane
   FARSAN: 'off:8904071702349', // Mix Farsan (packaged label) -- the misal topping
+  EGG: 'usda:171287',         // Egg, whole, raw, fresh
 });
 
 const ing = (ref, g, note) => ({ ref, g, ...(note ? { note } : {}) });
@@ -252,6 +253,30 @@ export const RECIPES = Object.freeze({
     cooked_g: 350,
     batch_serves: '10 modaks (~35 g each)',
     basis: 'Steamed rice-flour modak with coconut-jaggery filling.',
+  },
+  egg_biryani: {
+    name: 'Egg biryani',
+    region: 'indian',
+    ingredients: [
+      ing(ROW.RICE, 150), ing(ROW.EGG, 100, '2 eggs, boiled'), ing(ROW.ONION, 60, 'fried onions + masala'),
+      ing(ROW.TOMATO, 40), ing(ROW.CURD, 30), ing(ROW.OIL, 20), ing(ROW.GHEE, 5),
+    ],
+    // 150 g raw rice cooks to ~450 g; masala cooks down; ~20 g water lost on dum.
+    cooked_g: 680,
+    batch_serves: '2 plates (~340 g each, one egg per plate)',
+    basis: 'Home egg biryani: rice cooked with an onion-tomato-curd masala, oil and a little ghee, one boiled egg per plate.',
+  },
+  egg_roll: {
+    name: 'Egg roll (kathi / frankie)',
+    region: 'indian',
+    ingredients: [
+      ing(ROW.MAIDA, 60, 'paratha'), ing(ROW.OIL, 10, 'tawa'), ing(ROW.EGG, 50, 'one egg cooked onto the paratha'),
+      ing(ROW.ONION, 25), ing(ROW.GREEN_CHILLI, 3),
+    ],
+    // + ~30 g water in the dough, ~10 g lost on the tawa.
+    cooked_g: 168,
+    batch_serves: '1 roll',
+    basis: 'Kolkata-style egg roll: maida paratha with one egg, onion and chilli. Not the Chinese deep-fried egg roll (ask for "chinese egg roll").',
   },
   rava_sheera: {
     name: 'Rava sheera',

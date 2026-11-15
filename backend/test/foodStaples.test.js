@@ -93,7 +93,9 @@ test('the words people type mean the food they mean', () => {
 });
 
 test('a phrase the staples do not know is left to the full index', () => {
-  assert.equal(stapleFor('egg biryani'), null);
+  // ("egg biryani" was the example here until it became a curated recipe
+  // dish in the nutrition overhaul; prawn biryani still has no staple.)
+  assert.equal(stapleFor('prawn biryani'), null);
   assert.equal(stapleFor('rice flour'), null);
   assert.equal(stapleFor('apple juice'), null);
 });

@@ -867,6 +867,30 @@ const STAPLES = [
     aliases: ['modak', 'modaks', 'ukadiche modak', 'steamed modak', 'kozhukattai', 'kozhukatai'],
     units: [fixCount('modak', 'modak', 35)],
   }),
+  // Egg-led dishes: without a curated name the parser read "egg fried rice"
+  // as a boiled egg PLUS fried rice, and "egg biryani" as an egg plus
+  // CHICKEN biryani -- a countable food word in front of a dish.
+  S('egg_biryani', 'Egg biryani', 'grain', {
+    recipe: 'egg_biryani',
+    aliases: ['egg biryani', 'egg biriyani', 'anda biryani', 'egg dum biryani'],
+    units: [fix('plate', 'plate', 340), fix('katori', 'katori', 150)],
+  }),
+  S('egg_roll', 'Egg roll (kathi)', 'snack', {
+    recipe: 'egg_roll',
+    aliases: ['egg roll', 'egg rolls', 'anda roll', 'egg kathi roll', 'egg frankie', 'egg wrap'],
+    units: [fixCount('roll', 'roll', 168)],
+  }),
+  S('egg_fried_rice', 'Egg fried rice', 'grain', {
+    ref: 'usda:2708951',                         // USDA FNDDS "Rice, fried, meatless" -- its standard recipe includes egg
+    aliases: ['egg fried rice', 'egg rice', 'anda fried rice', 'egg schezwan fried rice'],
+    units: [fix('plate', 'plate', 300), fix('katori', 'katori', 150)],
+  }),
+  S('egg_sandwich', 'Egg sandwich', 'snack', {
+    ref: 'indb:ASC024',                          // INDB "Egg sandwich (Ande ka sandwich)"
+    aliases: ['egg sandwich', 'egg sandwiches', 'anda sandwich', 'boiled egg sandwich', 'egg mayo sandwich'],
+    // INDB's 51 g serving is half a sandwich; a two-slice sandwich is ~110 g.
+    units: [fixCount('sandwich', 'sandwich', 110)],
+  }),
   S('rava_sheera', 'Rava sheera', 'sweet', {
     recipe: 'rava_sheera',
     aliases: ['sheera', 'rava sheera', 'sooji halwa', 'suji halwa', 'suji ka halwa', 'sooji ka halwa', 'shira'],
