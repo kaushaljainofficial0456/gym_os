@@ -145,3 +145,35 @@ test('an egg in front of a dish is part of the dish, not a separate boiled egg',
   }
   assert.equal(estimateFood('2 eggs').items[0].qty, 2, 'plain eggs still count as eggs');
 });
+
+// P2-3: the everyday staples that used to carry hand-typed per-100 g values
+// are now computed from measured ingredients. Each value must stay a
+// plausible member of its own food family, and a drink must stay a drink.
+test('the converted everyday staples are computed, plausible, and keep their food family', { skip: !live }, () => {
+  const s = getFoodSearch();
+  // kcal / 100 g windows from IFCT/INDB/USDA ranges for each family -- wide
+  // enough for honest recipe variation, narrow enough to catch a unit slip.
+  const expect = {
+    dal: [60, 130, 'indian_dish'], dal_tadka: [80, 150, 'indian_dish'], kadhi: [50, 130, 'indian_dish'],
+    jeera_rice: [120, 190, 'indian_dish'], chicken_biryani: [120, 220, 'indian_dish'], oats_porridge: [80, 150, 'indian_dish'],
+    mix_veg: [50, 140, 'indian_dish'], butter_chicken: [130, 240, 'indian_dish'], mutton_curry: [110, 230, 'indian_dish'],
+    vada_pav: [180, 300, 'indian_dish'], pakora: [220, 380, 'indian_dish'],
+    chai: [40, 90, 'beverage'], chai_no_sugar: [25, 60, 'beverage'], coffee: [40, 100, 'beverage'],
+  };
+  for (const [key, [lo, hi, category]] of Object.entries(expect)) {
+    const row = s.stapleRowByKey(key);
+    assert.ok(row, `${key}: no row`);
+    assert.equal(row.basis, 'recipe', `${key}: should be computed from a recipe`);
+    assert.ok(row.recipe?.components?.length >= 1, `${key}: ingredients listed`); // unsweetened chai is milk + water (water carries no nutrients)
+    assert.ok(row.energy_kcal >= lo && row.energy_kcal <= hi, `${key}: ${row.energy_kcal} kcal/100 g outside ${lo}-${hi}`);
+    assert.equal(row.category, category, `${key}: category`);
+    assert.equal(nutritionSourceForRow(row), 'recipe_calculation', key);
+  }
+});
+
+test('the plain home dal is no longer the USDA FNDDS row that was twice INDB home dal', { skip: !live }, () => {
+  const row = getFoodSearch().stapleRowByKey('dal');
+  assert.equal(row.source_id, 'recipe:dal_home');
+  assert.ok(row.energy_kcal < 120, `${row.energy_kcal}`);
+  assert.ok(row.protein_g >= 3.5 && row.protein_g <= 7, `${row.protein_g}`);
+});

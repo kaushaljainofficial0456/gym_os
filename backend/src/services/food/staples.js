@@ -144,13 +144,12 @@ const STAPLES = [
     units: [KATORI, PLATE, fix('cup', 'cup', 160)],
   }),
   S('jeera_rice', 'Jeera rice', 'grain', {
-    inline: [151, 3.0, 27, 3.5, 0.6], basis: 'recipe', note: 'cooked rice with ~4 g ghee per 100 g; no measured row',
+    recipe: 'jeera_rice',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['jeera rice', 'cumin rice', 'zeera rice'],
     units: [KATORI, PLATE],
   }),
   S('chicken_biryani', 'Chicken biryani', 'grain', {
-    inline: [170, 8.0, 20, 6.5, 0.8], basis: 'recipe',
-    note: 'no measured chicken biryani row (USDA "Biryani with chicken" 104 kcal is low-confidence); between INDB mutton (191) and veg (175)',
+    recipe: 'chicken_biryani',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['biryani', 'biriyani', 'chicken biryani', 'chicken biriyani', 'hyderabadi biryani'],
     vague: ['biryani', 'biriyani'],
     alts: ['veg_biryani', 'mutton_biryani'],
@@ -207,7 +206,7 @@ const STAPLES = [
     units: [fix('half_cup', '½ cup', 40), fix('cup', 'cup', 80), TBSP],
   }),
   S('oats_porridge', 'Oats porridge (with milk)', 'grain', {
-    inline: [114, 5.4, 15, 3.7, 1.8], basis: 'recipe', note: '40 g oats + 200 ml toned milk; no measured row',
+    recipe: 'oats_porridge',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['oats porridge', 'oatmeal', 'oats with milk', 'porridge', 'milk oats'],
     units: [BOWL, KATORI],
   }),
@@ -234,13 +233,15 @@ const STAPLES = [
 
   /* ---------------- dal, curries, sabzi ---------------- */
   S('dal', 'Dal', 'dish', {
-    ref: 'usda:2707427',
+    // Was USDA FNDDS "Dal" (145 kcal/100 g), about twice INDB's plain home
+    // dals; now a medium-consistency home toor dal computed from IFCT.
+    recipe: 'dal_home',
     aliases: ['dal', 'daal', 'dahl', 'toor dal', 'arhar dal', 'moong dal', 'masoor dal', 'yellow dal', 'plain dal', 'dal fry'],
     alts: ['dal_makhani'],
     units: [KATORI, BOWL],
   }),
   S('dal_tadka', 'Dal tadka', 'dish', {
-    inline: [110, 5.0, 12, 4.6, 2.4], basis: 'recipe', note: 'thick dal with ghee tadka; no measured row',
+    recipe: 'dal_tadka',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['dal tadka', 'tadka dal', 'dal tarka'],
     units: [KATORI, BOWL],
   }),
@@ -265,7 +266,7 @@ const STAPLES = [
     units: [KATORI, BOWL],
   }),
   S('kadhi', 'Kadhi', 'dish', {
-    inline: [95, 3.0, 8, 5.5, 0.5], basis: 'recipe', note: 'besan + curd, light tadka; INDB kadhi is quarantined',
+    recipe: 'kadhi',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['kadhi', 'kadi', 'punjabi kadhi', 'gujarati kadhi'],
     units: [KATORI, BOWL],
   }),
@@ -280,7 +281,7 @@ const STAPLES = [
     units: [KATORI, BOWL],
   }),
   S('mix_veg', 'Mixed veg sabzi', 'veg', {
-    inline: [86, 2.5, 9, 4.5, 3.0], basis: 'recipe', note: 'seasonal vegetables, ~4 g oil per 100 g; no measured mixed-veg row',
+    recipe: 'mix_veg',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['sabzi', 'sabji', 'subzi', 'mix veg', 'mixed veg', 'mixed vegetable', 'veg sabzi', 'vegetable curry'],
     vague: ['sabzi', 'sabji', 'subzi', 'veg sabzi', 'vegetable curry'],
     units: [KATORI, BOWL],
@@ -302,7 +303,7 @@ const STAPLES = [
     units: [KATORI, BOWL],
   }),
   S('butter_chicken', 'Butter chicken', 'dish', {
-    inline: [189, 13, 6, 12.5, 0.8], basis: 'recipe', note: 'restaurant-style; INDB butter chicken is quarantined',
+    recipe: 'butter_chicken',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['butter chicken', 'murgh makhani', 'chicken makhani'],
     units: [KATORI, BOWL],
   }),
@@ -323,7 +324,7 @@ const STAPLES = [
     units: [KATORI, BOWL],
   }),
   S('mutton_curry', 'Mutton curry', 'dish', {
-    inline: [198, 15, 3, 14, 0.6], basis: 'recipe', note: 'goat on the bone, edible portion; no measured mutton-curry row',
+    recipe: 'mutton_curry',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['mutton curry', 'mutton', 'goat curry', 'mutton masala', 'rogan josh', 'lamb curry'],
     vague: ['mutton'],
     units: [KATORI, BOWL],
@@ -474,19 +475,18 @@ const STAPLES = [
 
   /* ---------------- drinks ---------------- */
   S('chai', 'Chai (milk tea, with sugar)', 'beverage', {
-    inline: [60, 2.1, 8.5, 2.0, 0], basis: 'recipe',
-    note: 'per 150 ml cup: 100 ml toned milk, 50 ml water, 2 tsp sugar. The index has no plain Indian chai row: INDB "Hot tea" (16 kcal) is milk-less, and a top-ranked OFF "Tea" row claims 20 g protein',
+    recipe: 'chai',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['chai', 'tea', 'masala chai', 'milk tea', 'cutting chai', 'adrak chai', 'ginger tea', 'elaichi chai', 'chaha', 'cha', 'indian tea', 'tea with milk', 'chai with milk'],
     alts: ['chai_no_sugar'],
     units: [CUP_TEA, fix('cutting', 'cutting (½ cup)', 75), fix('mug', 'mug', 250), fix('glass', 'glass', 200)],
   }),
   S('chai_no_sugar', 'Chai (no sugar)', 'beverage', {
-    inline: [39, 2.1, 3.1, 2.0, 0], basis: 'recipe', note: 'same chai, no sugar',
+    recipe: 'chai_no_sugar',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['chai without sugar', 'tea without sugar', 'sugar free chai', 'chai no sugar', 'tea no sugar', 'sugarless tea'],
     units: [CUP_TEA, fix('mug', 'mug', 250)],
   }),
   S('coffee', 'Coffee (with milk and sugar)', 'beverage', {
-    inline: [64, 2.6, 8.4, 2.3, 0], basis: 'recipe', note: 'per 150 ml: 120 ml toned milk, 2 tsp sugar; no measured row',
+    recipe: 'milk_coffee',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['coffee', 'milk coffee', 'filter coffee', 'nescafe', 'cold coffee', 'hot coffee', 'kaapi'],
     alts: ['black_coffee'],
     units: [CUP_TEA, fix('mug', 'mug', 250)],
@@ -692,7 +692,7 @@ const STAPLES = [
     units: [catCount('samosa')],
   }),
   S('vada_pav', 'Vada pav', 'snack', {
-    inline: [200, 5.0, 28, 7.5, 2.0], basis: 'recipe', note: 'pav + potato vada + chutney; no measured row',
+    recipe: 'vada_pav',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['vada pav', 'vada pao', 'wada pav'],
     units: [fixCount('piece', 'vada pav', 150)],
   }),
@@ -715,7 +715,7 @@ const STAPLES = [
     units: [fixCount('roll', 'roll', 50)],
   }),
   S('pakora', 'Pakora', 'snack', {
-    inline: [282, 6.0, 25, 17.5, 3.0], basis: 'recipe', note: 'besan-battered, deep-fried; USDA "Pakora" (125 kcal) is implausible for a fritter',
+    recipe: 'pakora',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
     aliases: ['pakora', 'pakoda', 'pakodas', 'bhajiya', 'bhaji', 'onion pakora', 'pakoras'],
     units: [fixCount('piece', 'piece', 20), fix('plate', 'plate', 120)],
   }),
@@ -1116,7 +1116,10 @@ function recipeRow(st, rowsById, staple) {
     source_id: `recipe:${st.recipe}`,
     food_name: st.name,
     search_name: normStaple(st.name),
-    category: 'indian_dish',
+    // Same rule as a hand-entered recipe value: a cooked dish is an Indian
+    // dish; a drink stays a beverage (its millilitres, plausibility range and
+    // composition reason depend on that).
+    category: ['dish', 'veg', 'grain', 'snack', 'sweet'].includes(st.kind) ? 'indian_dish' : st.kind,
     cuisine: rec.region || 'indian',
     cooking_state: 'cooked',
     energy_kcal: p.energy_kcal,
@@ -1143,6 +1146,7 @@ function recipeRow(st, rowsById, staple) {
       cooked_g: priced.cooked_g,
       components: priced.components,
       incomplete: priced.incomplete,
+      cooking_fat_g_per_100g: priced.cooking_fat_g_per_100g,
     },
     ...staple,
   };

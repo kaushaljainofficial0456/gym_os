@@ -34,9 +34,36 @@ test('a cooked dish offers less and more oil, each moving calories the right way
     assert.ok(less.per100.calories < it.per100.calories, `${text}: less oil lowers calories`);
     assert.ok(more.per100.calories > it.per100.calories, `${text}: more oil raises calories`);
     assert.ok(less.per100.fat < it.per100.fat && more.per100.fat > it.per100.fat, `${text}: and fat with it`);
-    // Never more than 70% of the dish's fat taken away as "oil".
-    assert.ok(less.oil_g_per_100g >= it.per100.fat * 0.3, `${text}: less oil keeps the food's own fat`);
+    if (it.oil.baseline_basis === 'recipe') {
+      // A computed recipe knows its cooking oil, so the food's own fat (the
+      // dal's, the chicken's) is exactly what remains at the lowest level --
+      // "less oil" can never take any of it away.
+      const ownFat = it.per100.fat - it.oil.baseline_g_per_100g;
+      assert.ok(less.per100.fat >= ownFat - 0.15, `${text}: less oil keeps the food's own fat (${less.per100.fat} < ${ownFat})`);
+    } else {
+      // fat_g stands in for oil: never more than 70% of it taken away.
+      assert.ok(less.oil_g_per_100g >= it.per100.fat * 0.3, `${text}: less oil keeps the food's own fat`);
+    }
   }
+});
+
+test('a computed recipe uses its own cooking oil as the baseline, not its total fat', () => {
+  const search = getFoodSearch();
+  // Home dal: 5 g ghee in a 300 g batch = 1.67 g oil per 100 g; the other
+  // ~0.4 g of fat is the dal's own.
+  const dal = item('1 katori dal');
+  assert.equal(dal.oil.baseline_basis, 'recipe');
+  assert.ok(Math.abs(dal.oil.baseline_g_per_100g - 1.7) < 0.05, JSON.stringify(dal.oil));
+  assert.ok(dal.oil.baseline_g_per_100g < dal.per100.fat);
+  // The classic picker reads the same baseline.
+  const row = search.stapleRowByKey(dal.staple_key);
+  const none = resolveFoodQuantity(row, { grams: 100, oilLevel: 'none' });
+  assert.ok(none.oil?.applied, JSON.stringify(none.oil));
+  assert.equal(none.oil.baseline_oil_g_per_100g, Math.round(row.recipe.cooking_fat_g_per_100g * 100) / 100);
+  assert.ok(none.totals.fat_g > 0.3, 'the dal keeps its own fat with no tadka');
+  // A dish with no cooking oil in its recipe (oats porridge: the fat is the
+  // milk's) offers no oil choice at all.
+  assert.equal(item('1 bowl oats porridge').oil, null);
 });
 
 test('the plate and the classic picker price the same oil level identically', () => {

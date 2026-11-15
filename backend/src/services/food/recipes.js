@@ -75,6 +75,19 @@ const ROW = Object.freeze({
   JAGGERY: 'ifct:I001',       // Jaggery, cane
   FARSAN: 'off:8904071702349', // Mix Farsan (packaged label) -- the misal topping
   EGG: 'usda:171287',         // Egg, whole, raw, fresh
+  TOOR_DAL: 'ifct:B021',      // Red gram, dal (toor / arhar)
+  MILK_TONED: 'usda:2705385', // the milk staple's row (USDA "Milk, whole", 61 kcal -- close to Indian toned milk ~58-60)
+  CUMIN: 'ifct:G025',         // Cumin seeds
+  CARROT: 'ifct:F002',        // Carrot, orange
+  CAULIFLOWER: 'ifct:D036',   // Cauliflower
+  PEAS: 'ifct:D061',          // Peas, fresh
+  OATS: 'usda:169705',        // Oats
+  PAV: 'usda:172793',         // Rolls, dinner, plain (same row as the pav staple)
+  CHICKEN_LEG: 'usda:173619', // Chicken, broilers or fryers, leg, meat only, raw
+  GOAT: 'usda:175303',        // Game meat, goat, raw
+  BUTTER: 'cnf:118',          // Butter, regular (same row as the butter staple)
+  CREAM: 'usda:170859',       // Cream, fluid, heavy whipping
+  TOMATO_PASTE: 'usda:170459', // Tomato products, canned, paste
 });
 
 const ing = (ref, g, note) => ({ ref, g, ...(note ? { note } : {}) });
@@ -278,6 +291,143 @@ export const RECIPES = Object.freeze({
     batch_serves: '1 roll',
     basis: 'Kolkata-style egg roll: maida paratha with one egg, onion and chilli. Not the Chinese deep-fried egg roll (ask for "chinese egg roll").',
   },
+  /* ---- Phase 2: everyday staples that used to carry HAND-ENTERED values ----
+     Each replaces a typed [kcal, protein, carbs, fat] with a calculation from
+     measured ingredients. The old hand value is in the comment, so the change
+     can be checked. */
+  dal_home: {
+    name: 'Dal (home, medium consistency)',
+    region: 'indian',
+    // Was USDA FNDDS "Dal" (145 kcal / 8.6 g protein per 100 g -- about
+    // twice INDB's own plain home dals, 35-111 kcal / 100 g).
+    ingredients: [ing(ROW.TOOR_DAL, 60), ing(ROW.ONION, 20), ing(ROW.TOMATO, 30), ing(ROW.GHEE, 5, 'tadka'), ing(ROW.CUMIN, 1)],
+    cooked_g: 300,
+    batch_serves: '2 katoris (~150 g each)',
+    basis: 'Toor dal pressure-cooked to a medium consistency (1 part dry dal to 5 parts finished) with a light ghee tadka. Thin dals are lower, thick dals higher -- the consistency is the assumption.',
+  },
+  dal_tadka: {
+    name: 'Dal tadka',
+    region: 'indian',
+    // hand value was [110, 5, 12, 4.6]
+    ingredients: [ing(ROW.TOOR_DAL, 60), ing(ROW.ONION, 30), ing(ROW.TOMATO, 30), ing(ROW.GHEE, 12, 'tadka'), ing(ROW.CUMIN, 2)],
+    cooked_g: 300,
+    batch_serves: '2 katoris',
+    basis: 'Dal with a fuller ghee tadka (~6 g per katori), restaurant/dhaba style.',
+  },
+  chai: {
+    name: 'Chai (milk tea, with sugar)',
+    region: 'indian',
+    // hand value was [60, 2.1, 8.5, 2]
+    ingredients: [ing(ROW.MILK_TONED, 100), ing(ROW.SUGAR, 8, '2 tsp')],
+    cooked_g: 150,
+    batch_serves: '1 cup (150 ml)',
+    basis: '100 ml milk + 50 ml water + 2 tsp sugar per 150 ml cup; tea leaves contribute ~0 kcal.',
+  },
+  chai_no_sugar: {
+    name: 'Chai (no sugar)',
+    region: 'indian',
+    // hand value was [39, 2.1, 3.1, 2]
+    ingredients: [ing(ROW.MILK_TONED, 100)],
+    cooked_g: 150,
+    batch_serves: '1 cup (150 ml)',
+    basis: '100 ml milk + 50 ml water per cup, no sugar.',
+  },
+  milk_coffee: {
+    name: 'Coffee (with milk and sugar)',
+    region: 'indian',
+    // hand value was [64, 2.6, 8.4, 2.3]
+    ingredients: [ing(ROW.MILK_TONED, 120), ing(ROW.SUGAR, 8, '2 tsp')],
+    cooked_g: 150,
+    batch_serves: '1 cup (150 ml)',
+    basis: 'Filter / instant coffee: 120 ml milk + 30 ml decoction + 2 tsp sugar per cup; coffee contributes ~2 kcal.',
+  },
+  kadhi: {
+    name: 'Kadhi',
+    region: 'indian',
+    // hand value was [95, 3, 8, 5.5]
+    ingredients: [ing(ROW.CURD, 200), ing(ROW.BESAN, 30), ing(ROW.OIL, 10, 'tadka')],
+    cooked_g: 380,
+    batch_serves: '2-3 katoris',
+    basis: 'Curd + besan simmered with ~200 g water, oil tadka; no pakoras (add them separately).',
+  },
+  mix_veg: {
+    name: 'Mixed vegetable sabzi',
+    region: 'indian',
+    // hand value was [86, 2.5, 9, 4.5]
+    ingredients: [ing(ROW.POTATO, 100), ing(ROW.CAULIFLOWER, 100), ing(ROW.PEAS, 50), ing(ROW.CARROT, 50), ing(ROW.TOMATO, 50), ing(ROW.ONION, 40), ing(ROW.OIL, 15)],
+    cooked_g: 380,
+    batch_serves: '2-3 katoris',
+    basis: 'Seasonal dry/semi-dry sabzi, ~4 g oil per 100 g; ~25 g water lost in cooking.',
+  },
+  vada_pav: {
+    name: 'Vada pav',
+    region: 'maharashtrian',
+    // hand value was [200, 5, 28, 7.5] per 100 g at 150 g
+    ingredients: [ing(ROW.PAV, 40, 'one pav'), ing(ROW.POTATO, 70, 'boiled, spiced'), ing(ROW.BESAN, 15, 'batter'), ing(ROW.OIL, 10, 'ABSORBED while deep frying')],
+    cooked_g: 140,
+    batch_serves: '1 vada pav',
+    basis: 'One pav with one batata vada (besan-coated, deep-fried); chutneys contribute little.',
+  },
+  jeera_rice: {
+    name: 'Jeera rice',
+    region: 'indian',
+    // hand value was [151, 3, 27, 3.5]
+    ingredients: [ing(ROW.RICE, 100), ing(ROW.GHEE, 10), ing(ROW.CUMIN, 3)],
+    cooked_g: 310,
+    batch_serves: '2 katoris',
+    basis: 'Rice cooked to ~3x its raw weight, tempered with ghee and cumin.',
+  },
+  oats_porridge: {
+    name: 'Oats porridge (with milk)',
+    region: 'global',
+    // hand value was [114, 5.4, 15, 3.7]
+    ingredients: [ing(ROW.OATS, 40), ing(ROW.MILK_TONED, 200)],
+    cooked_g: 240,
+    batch_serves: '1 bowl',
+    basis: '40 g oats cooked in 200 ml milk, no sugar.',
+  },
+  pakora: {
+    name: 'Pakora (onion)',
+    region: 'indian',
+    // hand value was [282, 6, 25, 17.5]
+    ingredients: [ing(ROW.BESAN, 50), ing(ROW.ONION, 60), ing(ROW.OIL, 20, 'ABSORBED while deep frying')],
+    cooked_g: 140,
+    batch_serves: '~7 pakoras (20 g each)',
+    basis: 'Besan batter with onion, deep-fried; ~14% of fried weight is absorbed oil.',
+  },
+  chicken_biryani: {
+    name: 'Chicken biryani',
+    region: 'indian',
+    // hand value was [170, 8, 20, 6.5]
+    ingredients: [
+      ing(ROW.RICE, 150), ing(ROW.CHICKEN_LEG, 200, 'edible meat'), ing(ROW.ONION, 80, 'fried onions + masala'),
+      ing(ROW.TOMATO, 40), ing(ROW.CURD, 50, 'marinade'), ing(ROW.OIL, 25), ing(ROW.GHEE, 5),
+    ],
+    cooked_g: 750,
+    batch_serves: '2-3 plates (~300 g each)',
+    basis: 'Home/restaurant dum biryani: rice cooked to ~3x, chicken loses ~25% water, ~20 g lost on dum.',
+  },
+  butter_chicken: {
+    name: 'Butter chicken (restaurant style)',
+    region: 'north_indian',
+    // hand value was [189, 13, 6, 12.5]
+    ingredients: [
+      ing(ROW.CHICKEN_LEG, 250, 'edible meat'), ing(ROW.BUTTER, 30), ing(ROW.CREAM, 60), ing(ROW.TOMATO_PASTE, 30),
+      ing(ROW.TOMATO, 150), ing(ROW.ONION, 50), ing(ROW.OIL, 10),
+    ],
+    cooked_g: 500,
+    batch_serves: '3 katoris',
+    basis: 'Tandoori chicken in a tomato-butter-cream makhani gravy, restaurant proportions.',
+  },
+  mutton_curry: {
+    name: 'Mutton curry',
+    region: 'indian',
+    // hand value was [198, 15, 3, 14]
+    ingredients: [ing(ROW.GOAT, 250, 'edible meat'), ing(ROW.ONION, 100), ing(ROW.TOMATO, 80), ing(ROW.OIL, 30), ing(ROW.CURD, 30)],
+    cooked_g: 450,
+    batch_serves: '3 katoris',
+    basis: 'Goat curry, ~7 g oil per 100 g. USDA goat meat is lean (109 kcal/100 g raw); fattier cuts read higher.',
+  },
   rava_sheera: {
     name: 'Rava sheera',
     region: 'maharashtrian',
@@ -300,8 +450,17 @@ export const RECIPES = Object.freeze({
  *   all-or-nothing; a dish priced without one of its ingredients would be a
  *   silently wrong number.
  */
+/**
+ * Cooking fats: the oil, ghee and butter a cook ADDS (tadka, frying oil
+ * absorbed, butter in a gravy). Their fat is the part of a dish's fat that
+ * "less oil" / "more oil" changes -- the dal's, paneer's or meat's own fat is
+ * not. Cream is left out: it is an ingredient of the gravy, not cooking oil.
+ */
+const COOKING_FATS = new Set([ROW.GHEE, ROW.OIL, ROW.BUTTER]);
+
 export function priceRecipe(recipe, rowsById) {
   if (!recipe || !Array.isArray(recipe.ingredients) || !(recipe.cooked_g > 0)) return null;
+  let cookingFatG = 0;
   const sums = Object.fromEntries(RECIPE_NUTRIENTS.map((k) => [k, 0]));
   const measured = Object.fromEntries(RECIPE_NUTRIENTS.map((k) => [k, true]));
   const incomplete = [];
@@ -323,6 +482,7 @@ export function priceRecipe(recipe, rowsById) {
       sums[k] += Number(v) * f;
     }
     rawG += it.g;
+    if (COOKING_FATS.has(it.ref) && row.fat_g != null) cookingFatG += Number(row.fat_g) * f;
     components.push({
       source_id: it.ref,
       food_name: row.food_name,
@@ -342,7 +502,16 @@ export function priceRecipe(recipe, rowsById) {
       ? Math.round((sums[k] / recipe.cooked_g) * 100 * 1000) / 1000
       : null;
   }
-  return { per100, components, incomplete, raw_g: rawG, cooked_g: recipe.cooked_g };
+  return {
+    per100,
+    components,
+    incomplete,
+    raw_g: rawG,
+    cooked_g: recipe.cooked_g,
+    // Fat from added cooking fat, per 100 g of the finished dish: the known
+    // oil baseline for "less oil" / "more oil" (no approximation needed).
+    cooking_fat_g_per_100g: Math.round((cookingFatG / recipe.cooked_g) * 100 * 1000) / 1000,
+  };
 }
 
 /** The row ids every recipe needs (for tests and data checks). */

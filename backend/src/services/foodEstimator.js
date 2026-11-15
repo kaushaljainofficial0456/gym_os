@@ -1786,7 +1786,12 @@ export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLev
        approximation would over-subtract, so oil adjustment is refused
        rather than guessed, and the response says which happened. */
     const isCookedDish = food.cooking_state === 'cooked' || food.category === 'indian_dish';
-    const baselineOilG = isCookedDish && Number(food.fat_g) >= 0 ? Number(food.fat_g) : null;
+    // A computed recipe KNOWS its cooking oil (food/recipes.js); use that
+    // instead of the fat_g approximation, exactly as the plate does.
+    const known = oilBaseline(food);
+    const baselineOilG = known?.basis === 'recipe'
+      ? known.g
+      : (isCookedDish && Number(food.fat_g) >= 0 ? Number(food.fat_g) : null);
 
     if (baselineOilG === null) {
       oil = { level, applied: false, reason: 'no oil baseline for this food — its fat is not mostly added oil' };
@@ -1814,7 +1819,9 @@ export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLev
           g_per_100g: OIL_LEVELS[level],
           baseline_oil_g_per_100g: adj.baseline_oil_g_per_100g ?? baselineOilG,
           delta_kcal: (totals.energy_kcal ?? 0) - before,
-          basis: 'approximated from this dish fat content',
+          basis: known?.basis === 'recipe'
+            ? 'the cooking oil in this dish\'s standard recipe'
+            : 'approximated from this dish fat content',
         };
       } else {
         oil = { level, applied: false, reason: (adj && adj.reason) || 'adjustment unavailable' };
@@ -2018,6 +2025,23 @@ function oilApplies(row) {
 }
 
 /**
+ * The oil a dish already contains, per 100 g, as the baseline "less oil" /
+ * "more oil" move from.
+ *
+ *   recipe     a computed recipe (food/recipes.js) knows the oil, ghee and
+ *              butter its cook added -- the dal's own fat is not counted
+ *   dish_fat   anything else: the dish's whole fat stands in for its oil,
+ *              which over-states it for paneer or meat dishes (hence the
+ *              70% limit in plateOil)
+ */
+export function oilBaseline(row) {
+  const known = row?.recipe?.cooking_fat_g_per_100g;
+  if (known != null && Number.isFinite(Number(known))) return { g: Number(known), basis: 'recipe' };
+  const fat = Number(row?.fat_g);
+  return row?.fat_g != null && Number.isFinite(fat) && fat >= 0 ? { g: fat, basis: 'dish_fat' } : null;
+}
+
+/**
  * "Less oil" and "more oil" for a cooked dish, as the per-100 g values the
  * plate re-prices from.
  *
@@ -2039,12 +2063,20 @@ function oilApplies(row) {
  */
 export function plateOil(row) {
   if (!oilApplies(row) || row.energy_kcal == null) return null;
-  const baseline = Number(row.fat_g);
-  // Under 2 g of fat per 100 g nothing was cooked in oil to speak of --
-  // plain rice, a phulka -- and "more oil" would describe a different dish.
-  if (!(baseline >= 2)) return null;
+  const base = oilBaseline(row);
+  if (!base) return null;
+  const baseline = base.g;
+  const fromRecipe = base.basis === 'recipe';
+  // Under 2 g of fat per 100 g (1.5 g of KNOWN cooking oil) nothing was
+  // cooked in oil to speak of -- plain rice, a phulka, oats porridge whose
+  // fat is the milk's -- and "more oil" would describe a different dish.
+  if (!(baseline >= (fromRecipe ? 1.5 : 2))) return null;
   const levels = Object.entries(OIL_LEVELS).sort((a, b) => a[1] - b[1]);
-  const less = [...levels].reverse().find(([, g]) => g <= baseline - 1.5 && g >= baseline * 0.3);
+  // With the recipe's own oil known, "less" may go down to no added oil:
+  // the food's own fat is not part of the baseline, so it cannot be taken
+  // away. With fat_g standing in for oil, at most 70% of it is removed.
+  const floor = fromRecipe ? 0 : baseline * 0.3;
+  const less = [...levels].reverse().find(([, g]) => g <= baseline - 1.5 && g >= floor);
   const more = levels.find(([, g]) => g >= baseline + 2);
   const at = (level) => {
     const adj = adjustOil(row, { level, baselineOilG: baseline });
@@ -2061,7 +2093,7 @@ export function plateOil(row) {
     const per100 = pick && at(pick[0]);
     if (per100) options.push({ key, level: pick[0], oil_g_per_100g: pick[1], per100 });
   }
-  return options.length ? { baseline_g_per_100g: round1(baseline), options } : null;
+  return options.length ? { baseline_g_per_100g: round1(baseline), baseline_basis: base.basis, options } : null;
 }
 
 function toPlateItem(it, row) {
