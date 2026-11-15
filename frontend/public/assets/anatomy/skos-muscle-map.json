@@ -1,47 +1,23 @@
 {
-  "pectoralis_major": {
-    "displayName": "Chest",
-    "exerciseMuscleGroup": "CHEST"
-  },
   "anterior_deltoid": {
     "displayName": "Front Delts",
     "exerciseMuscleGroup": "FRONT DELTS"
   },
-  "lateral_deltoid": {
-    "displayName": "Side Delts",
-    "exerciseMuscleGroup": "SIDE DELTS"
-  },
-  "posterior_deltoid": {
-    "displayName": "Rear Delts",
-    "exerciseMuscleGroup": "REAR DELTS"
-  },
-  "trapezius": {
-    "displayName": "Traps",
-    "exerciseMuscleGroup": "TRAPS"
-  },
-  "latissimus_dorsi": {
-    "displayName": "Lats",
-    "exerciseMuscleGroup": "LATS"
-  },
-  "rhomboids": {
-    "displayName": "Upper Back",
-    "exerciseMuscleGroup": "UPPER BACK"
-  },
-  "serratus_anterior": {
-    "displayName": "Serratus Anterior",
-    "exerciseMuscleGroup": "CORE"
-  },
-  "rectus_abdominis": {
-    "displayName": "Abs",
-    "exerciseMuscleGroup": "ABS"
-  },
-  "obliques": {
-    "displayName": "Obliques",
-    "exerciseMuscleGroup": "CORE"
+  "biceps": {
+    "displayName": "Biceps",
+    "exerciseMuscleGroup": "BICEPS"
   },
   "erector_spinae": {
     "displayName": "Lower Back",
     "exerciseMuscleGroup": "LOWER BACK"
+  },
+  "forearms": {
+    "displayName": "Forearms",
+    "exerciseMuscleGroup": "FOREARMS"
+  },
+  "gastrocnemius": {
+    "displayName": "Calves",
+    "exerciseMuscleGroup": "CALVES"
   },
   "gluteus_maximus": {
     "displayName": "Glutes",
@@ -51,33 +27,53 @@
     "displayName": "Glutes (Medius)",
     "exerciseMuscleGroup": "GLUTES"
   },
-  "gluteus_minimus": {
-    "displayName": "Glutes (Minimus)",
-    "exerciseMuscleGroup": "GLUTES"
+  "hamstrings": {
+    "displayName": "Hamstrings",
+    "exerciseMuscleGroup": "HAMSTRINGS"
+  },
+  "lateral_deltoid": {
+    "displayName": "Side Delts",
+    "exerciseMuscleGroup": "SIDE DELTS"
+  },
+  "latissimus_dorsi": {
+    "displayName": "Lats",
+    "exerciseMuscleGroup": "LATS"
+  },
+  "obliques": {
+    "displayName": "Obliques",
+    "exerciseMuscleGroup": "CORE"
+  },
+  "pectoralis_major": {
+    "displayName": "Chest",
+    "exerciseMuscleGroup": "CHEST"
+  },
+  "posterior_deltoid": {
+    "displayName": "Rear Delts",
+    "exerciseMuscleGroup": "REAR DELTS"
   },
   "quadriceps": {
     "displayName": "Quads",
     "exerciseMuscleGroup": "QUADS"
   },
-  "hamstrings": {
-    "displayName": "Hamstrings",
-    "exerciseMuscleGroup": "HAMSTRINGS"
+  "rectus_abdominis": {
+    "displayName": "Abs",
+    "exerciseMuscleGroup": "ABS"
   },
-  "gastrocnemius": {
-    "displayName": "Calves",
-    "exerciseMuscleGroup": "CALVES"
+  "rhomboids": {
+    "displayName": "Upper Back",
+    "exerciseMuscleGroup": "UPPER BACK"
+  },
+  "serratus_anterior": {
+    "displayName": "Serratus Anterior",
+    "exerciseMuscleGroup": "CORE"
   },
   "soleus": {
     "displayName": "Calves (Soleus)",
     "exerciseMuscleGroup": "CALVES"
   },
-  "forearms": {
-    "displayName": "Forearms",
-    "exerciseMuscleGroup": "FOREARMS"
-  },
-  "biceps": {
-    "displayName": "Biceps",
-    "exerciseMuscleGroup": "BICEPS"
+  "trapezius": {
+    "displayName": "Traps",
+    "exerciseMuscleGroup": "TRAPS"
   },
   "triceps": {
     "displayName": "Triceps",

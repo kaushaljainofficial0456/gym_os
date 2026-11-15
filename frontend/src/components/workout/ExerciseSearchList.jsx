@@ -8,9 +8,12 @@
  * muscles, form cue) through `onPick`, and the round "+" adds it straight
  * away through `onQuickAdd`, without leaving the search. Without
  * `onQuickAdd` a row is a single button that picks.
+ *
+ * "By muscle" swaps the search for the 3D body: turn it, tap a muscle,
+ * and the list underneath is that muscle's exercises (MusclePicker).
  */
-import { useEffect, useRef, useState } from 'react';
-import { Check, Plus, Search } from 'lucide-react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, PersonStanding, Plus, Search } from 'lucide-react';
 import { api } from '../../api.js';
 import { exerciseLabel } from '../../utils.js';
 
@@ -18,6 +21,24 @@ const REGIONS = [['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'
 const EQUIP = [['barbell', 'Barbell'], ['dumbbell', 'Dumbbell'], ['machine', 'Machine'], ['cable', 'Cable'], ['bodyweight', 'Bodyweight'], ['kettlebell', 'Kettlebell'], ['bands', 'Bands']];
 
 const pretty = (s) => String(s || '').replace(/_/g, ' ').toLowerCase();
+
+// The picker (and with it the muscle map) loads only when "By muscle" is
+// opened; the 3D body inside it is lazier still.
+const MusclePicker = lazy(() => import('../anatomy/MusclePicker.jsx'));
+const MUSCLE_ALIASES = {
+  CHEST: ['CHEST', 'UPPER CHEST', 'LOWER CHEST'],
+  'FRONT DELTS': ['FRONT DELTS', 'SHOULDERS'],
+  'SIDE DELTS': ['SIDE DELTS', 'SHOULDERS'],
+  'REAR DELTS': ['REAR DELTS', 'SHOULDERS'],
+  'LOWER BACK': ['LOWER BACK', 'POSTERIOR CHAIN'],
+  HAMSTRINGS: ['HAMSTRINGS', 'POSTERIOR CHAIN'],
+  ABS: ['ABS', 'CORE'],
+};
+const GROUP_LABEL = {
+  CHEST: 'Chest', 'FRONT DELTS': 'Front delts', 'SIDE DELTS': 'Side delts', 'REAR DELTS': 'Rear delts', TRAPS: 'Traps',
+  'UPPER BACK': 'Upper back', LATS: 'Lats', BICEPS: 'Biceps', TRICEPS: 'Triceps', FOREARMS: 'Forearms', ABS: 'Abs',
+  CORE: 'Core', 'LOWER BACK': 'Lower back', GLUTES: 'Glutes', QUADS: 'Quads', HAMSTRINGS: 'Hamstrings', CALVES: 'Calves',
+};
 
 function ChipRow({ options, value, onChange, label }) {
   return (
@@ -33,6 +54,8 @@ function ChipRow({ options, value, onChange, label }) {
 }
 
 export default function ExerciseSearchList({ fallback, addedIds, onPick, onQuickAdd, placeholder = 'Search exercises — e.g. incline, DB curl' }) {
+  const [mode, setMode] = useState('search'); // search | body
+  const [muscle, setMuscle] = useState(null);
   const [q, setQ] = useState('');
   const [region, setRegion] = useState('');
   const [equip, setEquip] = useState('');
@@ -61,20 +84,52 @@ export default function ExerciseSearchList({ fallback, addedIds, onPick, onQuick
     return () => clearTimeout(h);
   }, [q, region, equip]);
 
-  const list = results ?? (fallback || []);
+  const byMuscle = useMemo(() => {
+    if (!muscle) return [];
+    const want = new Set(MUSCLE_ALIASES[muscle] || [muscle]);
+    return (fallback || []).filter((x) => want.has(String(x.primary_muscle || '').toUpperCase()));
+  }, [muscle, fallback]);
+
+  const list = mode === 'body' ? byMuscle : (results ?? (fallback || []));
   return (
     <div className="grid gap-2.5">
-      <label className="wk-search">
-        <Search size={16} strokeWidth={2} aria-hidden="true" />
-        <input className="input" aria-label="Search exercises" placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} />
-      </label>
-      <ChipRow options={REGIONS} value={region} onChange={setRegion} label="Filter by muscle group" />
-      <ChipRow options={EQUIP} value={equip} onChange={setEquip} label="Filter by equipment" />
+      <div className="wk-modes" role="tablist" aria-label="Find exercises">
+        <button type="button" role="tab" aria-selected={mode === 'search'} onClick={() => setMode('search')}>
+          <Search size={15} strokeWidth={2} aria-hidden="true" />Search
+        </button>
+        <button type="button" role="tab" aria-selected={mode === 'body'} onClick={() => setMode('body')}>
+          <PersonStanding size={16} strokeWidth={2} aria-hidden="true" />By muscle
+        </button>
+      </div>
+      {mode === 'search' ? (
+        <>
+          <label className="wk-search">
+            <Search size={16} strokeWidth={2} aria-hidden="true" />
+            <input className="input" aria-label="Search exercises" placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} />
+          </label>
+          <ChipRow options={REGIONS} value={region} onChange={setRegion} label="Filter by muscle group" />
+          <ChipRow options={EQUIP} value={equip} onChange={setEquip} label="Filter by equipment" />
+        </>
+      ) : (
+        <>
+          <Suspense fallback={<div className="wk-bodywait" aria-hidden="true" />}>
+            <MusclePicker selected={muscle} onSelect={setMuscle} />
+          </Suspense>
+          <div className="wk-musclehead" aria-live="polite">
+            {muscle
+              ? <><b>{GROUP_LABEL[muscle] || pretty(muscle)}</b> · {fallback ? `${byMuscle.length} ${byMuscle.length === 1 ? 'exercise' : 'exercises'}` : 'loading…'}</>
+              : 'Tap a muscle to see its exercises'}
+          </div>
+        </>
+      )}
       <div className="wk-pick" aria-busy={loading || undefined}>
-        {loading && <div className="text-[12px] px-1 py-1" style={{ color: 'var(--mute)' }}>Searching…</div>}
-        {!loading && fallback == null && results == null && <div className="text-[12px] px-1 py-3 text-center" style={{ color: 'var(--mute)' }}>Loading the library…</div>}
-        {!loading && (results != null || fallback != null) && !list.length && (
+        {mode === 'search' && loading && <div className="text-[12px] px-1 py-1" style={{ color: 'var(--mute)' }}>Searching…</div>}
+        {!loading && fallback == null && (mode === 'body' || results == null) && <div className="text-[12px] px-1 py-3 text-center" style={{ color: 'var(--mute)' }}>Loading the library…</div>}
+        {mode === 'search' && !loading && (results != null || fallback != null) && !list.length && (
           <div className="text-[12.5px] px-1 py-4 text-center" style={{ color: 'var(--mute)' }}>No exercises match — try fewer filters.</div>
+        )}
+        {mode === 'body' && muscle && fallback && !list.length && (
+          <div className="text-[12.5px] px-1 py-4 text-center" style={{ color: 'var(--mute)' }}>No exercises for this muscle in your library yet.</div>
         )}
         {list.slice(0, 40).map((x) => {
           const added = addedIds?.has(x.id);

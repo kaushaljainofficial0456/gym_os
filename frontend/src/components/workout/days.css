@@ -1,0 +1,30 @@
+/* Weekday chips -- components/workout/days.jsx. */
+.wk-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.wk-dayc {
+  position: relative;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mute);
+  transition: color var(--dur-base) ease, background-color var(--dur-base) ease, border-color var(--dur-base) ease;
+}
+.wk-dayc:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--ink); border-color: rgb(var(--accent-rgb) / .45); }
+.wk-dayc[aria-pressed="true"] { color: var(--accent-contrast, #fff); background: var(--accent); border-color: var(--accent); }
+.wk-dayc.is-today::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 4px;
+  width: 4px; height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wk-dayc:disabled { opacity: .35; border-style: dashed; }
+.wk-dayc.is-blocked[aria-pressed="true"] { color: var(--faint); background: transparent; border-style: dashed; text-decoration: line-through; }
+.wk-dayc:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wk-dayc__taken { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.wk-days--compact { gap: 4px; }
+.wk-days--compact .wk-dayc { min-height: 34px; border-radius: 10px; font-size: 12px; }
+

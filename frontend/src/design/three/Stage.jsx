@@ -65,6 +65,10 @@ export default function Stage({
   maxTier = 'high',
   camera = { position: [0, 0, 5], fov: 45 },
   onCreated,
+  // 'demand' renders only when the scene asks (invalidate()) or React
+  // changes it -- right for anything that comes to rest. 'always' redraws
+  // every frame and is only for scenes that never stop moving.
+  frameloop = 'always',
   ...rest
 }) {
   const hostRef = useRef(null);
@@ -108,7 +112,7 @@ export default function Stage({
             }}
             shadows={q.shadows}
             camera={camera}
-            frameloop={active ? 'always' : 'never'}
+            frameloop={active ? frameloop : 'never'}
             onCreated={onCreated}
             {...rest}
           >

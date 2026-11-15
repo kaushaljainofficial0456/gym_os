@@ -1,5 +1,58 @@
 # 3D muscle-selection asset — source, licence, and pipeline
 
+> **Current model: v2, `frontend/public/assets/anatomy/skos-body-v2.glb`** (2026-11-15).
+> v1 (`skos-muscular-body.glb`, described further down) shipped 21 muscles as
+> separate floating pieces: no head, hands or feet, a gap between every
+> muscle, the left external oblique missing. v2 is one continuous sculpted
+> body from the same Z-Anatomy data, cut into tappable regions.
+
+## v2 — one sculpted body, tappable regions
+
+Built by two headless Blender scripts (Blender 5.2), from the same read-only
+working copy (`D:\Z-Anatomy-SKOS-working.blend`; neither .blend is ever
+saved over):
+
+1. **`scripts/anatomy/build_body_v2_stage_a.py`** — every structure in the
+   muscular system plus the skull, hand/foot bones and eyes (teeth, vessels,
+   nerves, the diaphragm and other deep sheets left out) is sampled into
+   points and fused through a signed distance field: points → SDF (union of
+   4.5 mm spheres, 2.2 mm voxels) → mean-smoothed → offset back 2.8 mm →
+   mesh. Seams between neighbouring muscles close; the real anatomical
+   grooves stay. Saves a small scratch .blend with the shell and, per
+   tappable group, its source geometry for labelling.
+2. **`scripts/anatomy/build_body_v2_stage_b.py`** — drops stray fragments,
+   decimates to ~266k triangles, labels each vertex with the nearest real
+   muscle (thin sheets left out; abs and lower back given ~12 mm priority
+   over the aponeurosis/lat that covers them; the RIGHT half labelled from
+   the anatomy and MIRRORED to the left, because Z-Anatomy is not
+   symmetric), majority-filters the labels and absorbs specks, bakes Cycles
+   ambient occlusion into vertex colours, sets custom normals on the whole
+   surface (so splitting leaves no shading seams), splits into
+   `<muscleId>.l` / `<muscleId>.r` plus `body`, and exports a Draco GLB
+   (~1.5 MB) and `skos-muscle-map.json`.
+
+```bash
+blender --background D:/Z-Anatomy-SKOS-working.blend \
+  --python scripts/anatomy/build_body_v2_stage_a.py -- \
+  scripts/anatomy/muscle_spec.json D:/gym_tmp/anat/shell.blend
+blender --background D:/gym_tmp/anat/shell.blend \
+  --python scripts/anatomy/build_body_v2_stage_b.py -- \
+  scripts/anatomy/muscle_spec.json \
+  frontend/public/assets/anatomy/skos-body-v2.glb \
+  frontend/public/assets/anatomy/skos-muscle-map.json \
+  D:/gym_tmp/anat/preview 300000
+```
+
+"Upper back" (`rhomboids`) also takes teres major/minor and infraspinatus in
+v2: the rhomboids sit under the trapezius and barely reach the surface.
+The deep gluteus minimus never surfaces, so glutes are maximus + medius.
+
+Licence and attribution below apply to v2 unchanged (same source data).
+
+---
+
+## v1 (superseded) — notes kept for the licence and history
+
 ## What this is
 
 `frontend/public/assets/anatomy/skos-muscular-body.glb` is a web-ready 3D

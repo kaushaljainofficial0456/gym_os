@@ -9,14 +9,15 @@
  *   - Repeats: seven day chips, toggled in place. A day holds one
  *     workout, so picking a day another one has moves it (the chip says
  *     so before you tap). The coach's days are greyed out.
- *   - Edit (opens the builder), Copy, Delete.
+ *   - Share (the icon by Do today): send it in the app or as a link.
+ *   - Edit (opens the builder), Delete.
  */
-import { Bookmark, Copy, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { Bookmark, Pencil, Play, Plus, Share2, Trash2 } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
 import { Sheet, Spinner } from '../UI.jsx';
-import { DayPicker, dayList } from './WorkoutBuilder.jsx';
+import { DayPicker, dayList } from './days.jsx';
 
-function WorkoutCard({ w, days, taken, coachDays, onDoToday, onEdit, onCopy, onDelete, onToggleDay, busy }) {
+function WorkoutCard({ w, days, taken, coachDays, onDoToday, onEdit, onShare, onDelete, onToggleDay, busy }) {
   const exs = w.exercises || [];
   // The days it really runs on: the coach's program wins on its own days.
   const runs = new Set([...days].filter((d) => !coachDays.has(d)));
@@ -31,6 +32,9 @@ function WorkoutCard({ w, days, taken, coachDays, onDoToday, onEdit, onCopy, onD
             {exs.length} {exs.length === 1 ? 'exercise' : 'exercises'} · {sets} sets{supersets ? ` · ${supersets} superset${supersets > 1 ? 's' : ''}` : ''}
           </div>
         </div>
+        <button type="button" className="wk-iconbtn" onClick={onShare} aria-label={`Share ${w.name}`} title="Share">
+          <Share2 size={17} strokeWidth={1.9} aria-hidden="true" />
+        </button>
         <button type="button" className="btn-primary btn-sm shrink-0" onClick={onDoToday} disabled={busy}>
           <Play size={13} strokeWidth={2.4} fill="currentColor" aria-hidden="true" />Do today
         </button>
@@ -46,7 +50,6 @@ function WorkoutCard({ w, days, taken, coachDays, onDoToday, onEdit, onCopy, onD
       </div>
       <div className="wk-saved__actions">
         <button type="button" className="wk-textbtn" onClick={onEdit}><Pencil size={14} strokeWidth={2} aria-hidden="true" />Edit</button>
-        <button type="button" className="wk-textbtn" onClick={onCopy} aria-label={`Copy ${w.name}`}><Copy size={14} strokeWidth={2} aria-hidden="true" />Copy</button>
         <button type="button" className="wk-textbtn wk-textbtn--bad" onClick={onDelete} aria-label={`Delete ${w.name}`}><Trash2 size={14} strokeWidth={2} aria-hidden="true" />Delete</button>
       </div>
     </article>
@@ -54,9 +57,10 @@ function WorkoutCard({ w, days, taken, coachDays, onDoToday, onEdit, onCopy, onD
 }
 
 export default function SavedWorkouts({
-  open, onClose, planner, coachDays, onNew, onEdit, onDoToday, onCopy, onDelete, onSetDays, busyId,
+  open, onClose, planner, coachDays, onNew, onEdit, onDoToday, onShare, onDelete, onSetDays, busyId,
 }) {
-  const workouts = planner?.workouts || [];
+  // Newest first: what was just built or copied is what is wanted next.
+  const workouts = [...(planner?.workouts || [])].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
   const schedule = planner?.schedule || [];
   const daysOf = (id) => new Set(schedule.filter((s) => s.workout_id === id).map((s) => s.day_of_week));
   const takenFor = (id) => {
@@ -89,7 +93,7 @@ export default function SavedWorkouts({
             <WorkoutCard key={w.id} w={w} days={days} taken={takenFor(w.id)} coachDays={coachDays} busy={busyId === w.id}
               onDoToday={() => onDoToday(w)}
               onEdit={() => onEdit(w, [...days])}
-              onCopy={() => onCopy(w)}
+              onShare={() => onShare(w)}
               onDelete={() => onDelete(w)}
               onToggleDay={(d) => {
                 const next = new Set(days);

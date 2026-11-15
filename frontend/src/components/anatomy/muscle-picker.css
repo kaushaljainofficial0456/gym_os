@@ -1,0 +1,55 @@
+/* MusclePicker.jsx -- the body on its stage, and the muscle chips. */
+
+/* A studio: a soft spotlight behind the figure and a floor shadow under
+   its feet, so it stands somewhere instead of floating on a card. */
+.mp-stage {
+  position: relative;
+  isolation: isolate;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--tint-rgb) / .09);
+  background:
+    radial-gradient(48% 46% at 50% 40%, rgb(var(--tint-rgb) / .10), transparent 72%),
+    radial-gradient(90% 70% at 50% 0%, rgb(var(--tint-rgb) / .05), transparent 70%),
+    linear-gradient(180deg, rgb(var(--tint-rgb) / .035), rgb(var(--tint-rgb) / .012));
+  box-shadow: inset 0 1px 0 rgb(var(--tint-rgb) / .06);
+}
+.mp-stage::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 7%;
+  width: 46%; height: 7%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .38), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+.light .mp-stage::after { background: radial-gradient(closest-side, rgba(60, 40, 30, .2), transparent); }
+.mp-stage__wait { position: absolute; inset: 0; display: grid; place-items: center; }
+.mp-stage__wait span {
+  width: 30%; max-width: 110px; aspect-ratio: 1 / 3.1;
+  border-radius: 40% 40% 30% 30% / 14% 14% 10% 10%;
+  background: rgb(var(--tint-rgb) / .07);
+  animation: softPulse 1.8s ease-in-out infinite;
+}
+
+.mp-chips { display: flex; gap: 6px; overflow-x: auto; margin: 0 -2px; padding: 0 2px 2px; scroll-padding-inline: 24px; }
+.mp-chip {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--tint-rgb) / .12);
+  background: rgb(var(--tint-rgb) / .03);
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--mute);
+  transition: color var(--dur-base) ease, background-color var(--dur-base) ease, border-color var(--dur-base) ease, transform var(--dur-fast) ease;
+}
+.mp-chip:hover { color: var(--ink); border-color: rgb(var(--tint-rgb) / .22); }
+.mp-chip:active { transform: scale(.96); }
+/* The same warm red the muscle glows, so chip and body read as one pick. */
+.mp-chip[aria-pressed="true"] { color: #fff; background: var(--m-energy); border-color: var(--m-energy); }
+.mp-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) { .mp-stage__wait span { animation: none; } }

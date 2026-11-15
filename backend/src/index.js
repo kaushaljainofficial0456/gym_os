@@ -40,6 +40,7 @@ import accessRoutes, { accessWebhookRoutes } from './routes/access.js';
 import admsRoutes from './routes/adms.js';
 import communityRoutes from './routes/community.js';
 import communitiesRoutes from './routes/communities.js';
+import appShareRoutes from './routes/appShares.js';
 import communityInviteRoutes from './routes/communityInvite.js';
 import tournamentRoutes, { tournamentPublicRoutes } from './routes/tournaments.js';
 import receiptRoutes from './routes/receipts.js';
@@ -285,6 +286,7 @@ app.use('/iclock', admsRoutes(db)); // PUBLIC: eSSL / ZKTeco terminals push punc
 app.use('/api/notifications', notificationRoutes(db)); // client/trainer notification center: list, read, preferences -- see notifications.js
 app.use('/api/community', communityRoutes(db)); // gym community: leaderboards, workout sharing, membership
 app.use('/api/communities', communitiesRoutes(db)); // friend communities: private, invite-only, cross-gym -- see routes/communities.js
+app.use('/api/app-shares', appShareRoutes(db)); // in-app sharing: a workout or meal sent to a person -- see routes/appShares.js
 app.use('/api/receipts', receiptRoutes(db)); // the PDF receipt for a payment: the member who paid, or that gym's owner
 app.use('/api/tournaments-public', tournamentPublicRoutes(db)); // PUBLIC: what a tournament QR opens, with guest sign-up
 app.use('/api/tournaments', tournamentRoutes(db)); // gym wars: hosting, QR enrolment, co-hosts, live scoring, results

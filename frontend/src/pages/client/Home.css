@@ -23,13 +23,13 @@
   width: 85%; height: 120%;
   left: -20%; top: -35%;
   background: radial-gradient(closest-side, rgba(150, 40, 64, .30), rgba(150, 40, 64, .08) 55%, transparent 75%);
-  animation: homeAurA 22s ease-in-out infinite alternate;
+  animation: homeAurA 22s ease-in-out 1 forwards;
 }
 .home-aurora::after {
   width: 70%; height: 100%;
   right: -15%; top: -10%;
   background: radial-gradient(closest-side, rgba(222, 186, 140, .16), rgba(222, 186, 140, .04) 55%, transparent 75%);
-  animation: homeAurB 27s ease-in-out infinite alternate;
+  animation: homeAurB 27s ease-in-out 1 forwards;
 }
 .light .home-aurora::before {
   background: radial-gradient(closest-side, rgba(150, 40, 64, .14), rgba(150, 40, 64, .04) 55%, transparent 75%);
@@ -37,6 +37,9 @@
 .light .home-aurora::after {
   background: radial-gradient(closest-side, rgba(196, 150, 96, .18), rgba(196, 150, 96, .05) 55%, transparent 75%);
 }
+/* One slow pass, then still. Looping forever kept the header's backdrop
+   blur re-rendering every frame for as long as Home was open (see the
+   note on .dark body::before in theme.css). */
 @keyframes homeAurA { to { transform: translate(18%, 10%) scale(1.12); } }
 @keyframes homeAurB { to { transform: translate(-14%, 8%) scale(.9); } }
 @media (prefers-reduced-motion: reduce) {

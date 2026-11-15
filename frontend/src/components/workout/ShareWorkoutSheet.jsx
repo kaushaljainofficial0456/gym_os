@@ -1,198 +1,192 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../api.js';
-import SavingOverlay from '../nutrition/SavingOverlay.jsx';
-import { XIcon, useDialog } from './../UI.jsx';
-
 /**
- * SHARE WORKOUT SHEET — select exercises from a workout, bundle them into
- * one shareable link (POST /me/workout-share), then hand off to whatever
- * the platform actually offers: navigator.share() or a clipboard-copy fallback.
+ * SHARE A WORKOUT -- two ways, chosen up front:
  *
- * Props:
- *   open      — boolean, whether the sheet is visible
- *   onClose   — callback to close
- *   workoutId — the workout to share (from planner or today's session)
- *   workoutName — display name
- *   exercises — array of exercise objects [{id, name, sets, reps, weight, rest_sec, tempo, notes}]
- *   t         — theme object
+ *   Send in app   to people in your gym, friends and communities. They get
+ *                 a popup and a bell notification, and can do it today,
+ *                 save it, or put it on days (POST /app-shares).
+ *   Share link    the public link, for WhatsApp or anywhere else
+ *                 (POST /me/workout-share), handed to the phone's own share
+ *                 sheet where there is one, with a copy fallback.
+ *
+ * All exercises go by default; "Choose exercises" narrows it.
+ *
+ * Built on the shared Sheet, so it is portalled to <body>: the old sheet
+ * rendered in place and, inside the page's transformed wrapper, a
+ * position: fixed overlay is fixed to that wrapper, not the screen.
  */
-export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutName, exercises, t }) {
-  const [selected, setSelected] = useState(() => new Set());
-  const [selectAll, setSelectAll] = useState(true);
-  const [stage, setStage] = useState(null); // null | 'sharing' | 'success' | 'error'
-  const [shared, setShared] = useState(false);
-  const [shareUrl, setShareUrl] = useState('');
+import { useEffect, useMemo, useState } from 'react';
+import { Check, ChevronLeft, Copy, Link2, Send } from 'lucide-react';
+import { api } from '../../api.js';
+import { exerciseLabel } from '../../utils.js';
+import { Sheet } from '../UI.jsx';
+import PeoplePicker from '../share/PeoplePicker.jsx';
+import { shareLink } from '../share/shareLink.js';
+import '../share/share.css';
+
+export default function ShareWorkoutSheet({ open, onClose, workoutId, workoutName, exercises = [], onSent }) {
+  const [view, setView] = useState('choose'); // choose | exercises | people | link
+  const [picked, setPicked] = useState(() => new Set());
+  const [people, setPeople] = useState(() => new Map());
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
-  // Escape is withheld mid-share for the same reason the backdrop is below.
-  const panelRef = useDialog(open, stage ? null : onClose);
+  const [sent, setSent] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    // Default: all exercises selected
-    setSelected(new Set(exercises.map((_, i) => i)));
-    setSelectAll(true);
-    setStage(null);
-    setShared(false);
-    setShareUrl('');
-    setCopied(false);
-  }, [open, exercises]);
+    setView('choose'); setPicked(new Set(exercises.map((_, i) => i))); setPeople(new Map());
+    setNote(''); setBusy(false); setErr(''); setUrl(''); setCopied(false); setSent(null);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep selectAll in sync — MUST be before any early return
-  useEffect(() => {
-    if (selected.size === exercises.length && exercises.length > 0) {
-      setSelectAll(true);
-    } else {
-      setSelectAll(false);
-    }
-  }, [selected.size, exercises.length]);
+  const all = picked.size === exercises.length;
+  const exerciseIds = useMemo(() => (all ? [] : [...picked].map((i) => exercises[i]?.id).filter(Boolean)), [all, picked, exercises]);
+  const name = workoutName || 'Workout';
 
-  if (!open) return null;
-
-  const toggleSelect = (idx) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(idx) ? next.delete(idx) : next.add(idx);
-      return next;
-    });
-    setSelectAll(false);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectAll) {
-      setSelected(new Set());
-      setSelectAll(false);
-    } else {
-      setSelected(new Set(exercises.map((_, i) => i)));
-      setSelectAll(true);
-    }
-  };
-
-  const doShare = async () => {
-    if (selected.size === 0 || !workoutId) return;
-    setStage('sharing');
+  const send = async () => {
+    if (busy || !people.size) return;
+    setBusy(true); setErr('');
     try {
-      const res = await api('/me/workout-share', {
-        method: 'POST',
-        body: JSON.stringify({
-          workout_id: workoutId,
-          exercise_ids: [...selected].map((i) => exercises[i].id).filter(Boolean),
-        }),
-      });
-      const url = `${window.location.origin}/workout-share/${res.id}`;
-      setShareUrl(url);
-      setShared(true);
-      setStage('success');
-      setTimeout(async () => {
-        setStage(null);
-        if (navigator.share) {
-          try {
-            await navigator.share({
-              title: `${workoutName || 'Workout'} on Barbell`,
-              text: `Check out this workout: ${workoutName}`,
-              url,
-            });
-          } catch { /* user cancelled */ }
-        }
-      }, 900);
-    } catch (e) {
-      setStage('error');
-      setTimeout(() => setStage(null), 1600);
-    }
+      const r = await api('/app-shares', { method: 'POST', body: JSON.stringify({
+        kind: 'workout', workout_id: workoutId, exercise_ids: exerciseIds.length ? exerciseIds : undefined,
+        recipients: [...people.keys()], message: note.trim() || undefined,
+      }) });
+      setSent([...people.values()].slice(0, r.sent || people.size));
+      onSent?.(r);
+    } catch (e) { setErr(e.message || 'Could not send it'); }
+    setBusy(false);
   };
 
-  const copyLink = async () => {
+  const makeLink = async () => {
+    if (busy) return;
+    setBusy(true); setErr('');
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* clipboard unavailable */ }
+      const r = await api('/me/workout-share', { method: 'POST', body: JSON.stringify({
+        workout_id: workoutId, exercise_ids: exerciseIds.length ? exerciseIds : undefined,
+      }) });
+      const link = `${window.location.origin}/workout-share/${r.id}`;
+      setUrl(link); setView('link');
+      const how = await shareLink(link, `${name} on Barbell`, `Try this workout: ${name}`);
+      if (how === 'copied') setCopied(true);
+    } catch (e) { setErr(e.message || 'Could not make a link'); }
+    setBusy(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center anim-fadeIn"
-         style={{ background: 'rgb(var(--bg-rgb) / .72)', backdropFilter: 'blur(4px)' }}
-         onClick={(e) => { if (e.target === e.currentTarget && !stage) onClose(); }}
-         role="dialog" aria-modal="true" aria-label="Share workout">
-      <div ref={panelRef} className="card w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-b-none sm:rounded-2xl anim-scaleIn">
-        <div className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: 'var(--panel)' }}>
-          <div className="text-[11px] uppercase tracking-[.18em]" style={{ color: 'var(--faint)' }}>Share Workout</div>
-          <button onClick={onClose} aria-label="Close" style={{ color: 'var(--mute)' }}><XIcon /></button>
-        </div>
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* the link stays visible */ }
+  };
 
-        <div className="px-4 pb-5 space-y-4">
-          {/* Workout name */}
-          <div>
-            <div className="font-grotesk text-sm font-bold" style={{ color: 'var(--ink)' }}>{workoutName || 'Workout'}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: 'var(--mute)' }}>
-              {selected.size} of {exercises.length} exercises selected
-            </div>
-          </div>
+  const back = (
+    <button type="button" className="btn btn-sm justify-self-start" onClick={() => { setView('choose'); setErr(''); }}>
+      <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back
+    </button>
+  );
 
-          {/* Select all toggle */}
-          <button onClick={toggleSelectAll}
-            className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
-            style={{ background: selectAll ? 'var(--accent-soft)' : 'var(--glass, rgba(128,128,128,.04))', border: `1px solid ${selectAll ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--line)'}` }}>
-            <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all"
-              style={{ background: selectAll ? 'var(--accent)' : 'transparent', border: `2px solid ${selectAll ? 'var(--accent)' : 'var(--line)'}` }}>
-              {selectAll && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-            </span>
-            <span className="font-grotesk text-[12px] font-semibold" style={{ color: 'var(--ink)' }}>Select all</span>
-          </button>
+  const summary = (
+    <div className="sh-what">
+      <div className="sh-what__name">{name}</div>
+      <div className="sh-what__meta">{all ? `All ${exercises.length} exercises` : `${picked.size} of ${exercises.length} exercises`}</div>
+      {exercises.length > 1 && view === 'choose' && (
+        <button type="button" className="sh-what__change" onClick={() => setView('exercises')}>Choose exercises</button>
+      )}
+    </div>
+  );
 
-          {/* Exercise list */}
-          <div className="space-y-1.5">
-            {exercises.map((ex, i) => {
-              const sel = selected.has(i);
-              return (
-                <button key={i} onClick={() => toggleSelect(i)}
-                  className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
-                  style={{ background: sel ? 'var(--accent-soft)' : 'transparent', border: `1px solid ${sel ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--line)'}` }}>
-                  <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all"
-                    style={{ background: sel ? 'var(--accent)' : 'transparent', border: `2px solid ${sel ? 'var(--accent)' : 'var(--line)'}` }}>
-                    {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-grotesk text-[12px] font-semibold truncate" style={{ color: 'var(--ink)' }}>{ex.name}</span>
-                    <span className="block text-[10px]" style={{ color: 'var(--mute)' }}>
-                      {ex.sets} × {ex.reps} · {ex.weight}{ex.rest_sec ? ` · ${ex.rest_sec}s` : ''}
-                      {ex.tempo ? ` · ${ex.tempo}` : ''}
-                      {ex.notes ? ` · ${ex.notes}` : ''}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Share URL display (after sharing) */}
-          {shared && shareUrl && (
-            <div className="rounded-xl p-3 flex items-center gap-2 anim-fadeIn" style={{ background: 'var(--glass, rgba(128,128,128,.04))', border: '1px solid var(--line)' }}>
-              <input readOnly value={shareUrl} className="flex-1 min-w-0 bg-transparent font-grotesk text-[11px] outline-none" style={{ color: 'var(--mute)' }} onFocus={(e) => e.target.select()} />
-              <button onClick={copyLink} className="shrink-0 px-2.5 py-1.5 rounded-lg font-grotesk text-[10px] font-bold" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
-                {copied ? 'Copied ✓' : 'Copy link'}
+  let body;
+  let footer = null;
+  if (sent) {
+    body = (
+      <div className="sh-done">
+        <span className="sh-done__icon"><Check size={26} strokeWidth={2.6} aria-hidden="true" /></span>
+        <div className="sh-done__title">Sent</div>
+        <p className="sh-done__body">
+          {sent.length === 1 ? sent[0].name : `${sent.length} people`} will see {name} in Barbell and can do it today, save it or put it on their days.
+        </p>
+      </div>
+    );
+    footer = <button type="button" className="btn-primary btn-block" onClick={onClose}>Done</button>;
+  } else if (view === 'exercises') {
+    body = (
+      <div className="grid gap-3">
+        {back}
+        <div className="sh-pick">
+          {exercises.map((ex, i) => {
+            const on = picked.has(i);
+            return (
+              <button key={ex.id || i} type="button" className="sh-pickrow" aria-pressed={on}
+                onClick={() => setPicked((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}>
+                <span className="sh-box" aria-hidden="true">{on && <Check size={13} strokeWidth={3} />}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="sh-pickrow__name truncate">{exerciseLabel(ex.name)}</span>
+                  <span className="sh-pickrow__meta">{ex.sets} × {ex.reps}{ex.weight ? ` · ${ex.weight}` : ''}</span>
+                </span>
               </button>
-            </div>
-          )}
-
-          {/* Share button */}
-          <button onClick={doShare} disabled={selected.size === 0 || stage === 'sharing'}
-            className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-[.98]"
-            style={{
-              background: selected.size === 0 ? 'var(--surface)' : 'var(--accent)',
-              color: selected.size === 0 ? 'var(--mute)' : 'var(--accent-contrast)',
-              border: `1px solid ${selected.size === 0 ? 'var(--line)' : 'var(--accent)'}`,
-              opacity: selected.size === 0 ? 0.6 : 1, cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
-            }}>
-            {shared ? 'Share again' : `Create share link${selected.size ? ` (${selected.size})` : ''}`}
-          </button>
+            );
+          })}
         </div>
       </div>
+    );
+    footer = <button type="button" className="btn-primary btn-block" disabled={!picked.size} onClick={() => setView('choose')}>{picked.size ? `Use ${picked.size} ${picked.size === 1 ? 'exercise' : 'exercises'}` : 'Pick at least one'}</button>;
+  } else if (view === 'people') {
+    body = (
+      <div className="grid gap-3">
+        {back}
+        <PeoplePicker selected={people} onChange={setPeople} />
+        <label className="grid gap-1.5">
+          <span className="text-[12.5px] font-semibold" style={{ color: 'var(--mute)' }}>Add a note (optional)</span>
+          <input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. This one wrecked me, try it" />
+        </label>
+        {err && <p className="text-[13px]" role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+      </div>
+    );
+    footer = (
+      <button type="button" className="btn-primary btn-block" disabled={!people.size || busy} onClick={send}>
+        <Send size={15} strokeWidth={2.2} aria-hidden="true" />
+        {busy ? 'Sending…' : people.size ? `Send to ${people.size === 1 ? [...people.values()][0].name.split(' ')[0] : `${people.size} people`}` : 'Pick someone'}
+      </button>
+    );
+  } else if (view === 'link') {
+    body = (
+      <div className="grid gap-3">
+        {back}
+        <p className="text-[13.5px]" style={{ color: 'var(--mute)' }}>Anyone with this link can see {name} and add it in Barbell. It works for 30 days.</p>
+        <div className="sh-link">
+          <input readOnly value={url} aria-label="Share link" onFocus={(e) => e.target.select()} />
+          <button type="button" className="btn btn-sm" onClick={copy}><Copy size={14} strokeWidth={2} aria-hidden="true" />{copied ? 'Copied' : 'Copy'}</button>
+        </div>
+      </div>
+    );
+    footer = <button type="button" className="btn-primary btn-block" onClick={() => shareLink(url, `${name} on Barbell`, `Try this workout: ${name}`)}>Share link…</button>;
+  } else {
+    body = (
+      <div className="grid gap-3">
+        {summary}
+        <div className="sh-ways">
+          <button type="button" className="sh-way" onClick={() => setView('people')} disabled={!picked.size}>
+            <span className="sh-way__icon"><Send size={20} strokeWidth={1.9} aria-hidden="true" /></span>
+            <span className="flex-1 min-w-0">
+              <span className="sh-way__title">Send in app</span>
+              <span className="sh-way__sub">To people in your gym, friends and communities. They can add it in one tap.</span>
+            </span>
+          </button>
+          <button type="button" className="sh-way" onClick={makeLink} disabled={busy || !picked.size}>
+            <span className="sh-way__icon"><Link2 size={20} strokeWidth={1.9} aria-hidden="true" /></span>
+            <span className="flex-1 min-w-0">
+              <span className="sh-way__title">{busy ? 'Making the link…' : 'Share a link'}</span>
+              <span className="sh-way__sub">For WhatsApp, messages or anywhere else.</span>
+            </span>
+          </button>
+        </div>
+        {err && <p className="text-[13px]" role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+      </div>
+    );
+  }
 
-      <SavingOverlay open={stage === 'sharing' || stage === 'success' || stage === 'error'}
-        stage={stage === 'sharing' ? 'saving' : stage === 'success' ? 'success' : 'error'}
-        label={stage === 'sharing' ? 'Sharing' : stage === 'success' ? 'Workout Shared' : 'Could not share'}
-        sublabel={stage === 'sharing' ? 'Preparing your workout…' : stage === 'success' ? 'Your workout is ready to share.' : 'Please try again'}
-        mode="overlay" />
-    </div>
+  return (
+    <Sheet open={open} onClose={busy ? undefined : onClose} title="Share workout"
+      sub={view === 'people' ? 'Pick who gets it' : view === 'exercises' ? 'Pick the exercises' : name} footer={footer}>
+      {body}
+    </Sheet>
   );
 }

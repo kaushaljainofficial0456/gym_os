@@ -15,7 +15,7 @@
  *
  * Presentation only -- every change goes back through Workout.jsx.
  */
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Check, ChevronDown, Link2, Menu, Minus, Pause, Play, Plus, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
 import WeightInput from '../WeightInput.jsx';
@@ -45,8 +45,24 @@ export function Ring({ value = 0, size = 64, stroke = 6, label }) {
   );
 }
 
-export function PlayerHeader({ name, elapsed, paused, doneSets, totalSets, onPause, onResume }) {
+/** Active seconds: wall clock since the start, minus time spent paused. */
+const activeSeconds = (startedAt, pausedAt, pausedMs) => {
+  if (!startedAt) return 0;
+  const end = pausedAt || Date.now();
+  return Math.max(0, Math.floor((end - startedAt - (pausedMs || 0)) / 1000));
+};
+
+export function PlayerHeader({ name, startedAt, pausedAt, pausedMs, paused, doneSets, totalSets, onPause, onResume }) {
   const pct = totalSets ? doneSets / totalSets : 0;
+  // The clock owns its tick, so only this header re-renders each second.
+  const [elapsed, setElapsed] = useState(() => activeSeconds(startedAt, pausedAt, pausedMs));
+  useEffect(() => {
+    const tick = () => setElapsed(activeSeconds(startedAt, pausedAt, pausedMs));
+    tick();
+    if (pausedAt || !startedAt) return undefined;
+    const h = setInterval(tick, 1000);
+    return () => clearInterval(h);
+  }, [startedAt, pausedAt, pausedMs]);
   return (
     <section className={`wk-player${paused ? ' is-paused' : ''}`} aria-label="Session">
       <div className="wk-player__main">
