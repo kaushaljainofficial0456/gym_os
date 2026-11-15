@@ -8,6 +8,7 @@ import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
 import SharedInboxGate from '../../components/share/SharedInboxGate.jsx';
+import { prefetchBody } from '../../components/anatomy/prefetchBody.js';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
 import GlassTabBar from '../../components/GlassTabBar.jsx';
@@ -100,6 +101,10 @@ export default function ClientLayout() {
   // this state never flips for them (TEST 10: existing users log straight in).
   const [tourActive, setTourActive] = useState(false);
   const dropdownRef = useRef(null);
+
+  // The 3D body (Workout hero, muscle picker) is fetched and decoded while
+  // the app sits idle after start-up, so it is ready the moment it is shown.
+  useEffect(() => { prefetchBody({ delay: 1500 }); }, []);
 
   // Help page's "Replay app tour" button — same activation path, no URL hacks.
   useEffect(() => {

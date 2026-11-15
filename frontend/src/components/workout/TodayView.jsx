@@ -8,7 +8,7 @@
  */
 import { ChevronRight, Info, Link2, Moon, Play, Share2, TrendingUp, TriangleAlert } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
-import BodyFocus from './BodyFocus.jsx';
+import BodyFocus3D from './BodyFocus3D.jsx';
 import { groupPosition } from './supersets.js';
 
 const LB_PER_KG = 2.20462;
@@ -96,7 +96,7 @@ export function TodayHero({ workout, meta = {}, focus = [], suggestions = [], u,
       </div>
 
       <div className="wk-hero__body">
-        <BodyFocus muscles={muscles} />
+        <BodyFocus3D muscles={muscles} />
         <dl className="wk-stats">
           <div className="wk-stat"><dt>Exercises</dt><dd>{exCount}</dd></div>
           <div className="wk-stat"><dt>Sets</dt><dd>{sets}</dd></div>

@@ -20,11 +20,24 @@ const Impl = lazy(() => import('./MuscleBody3DImpl.jsx'));
 
 const MAP_URL = '/assets/anatomy/skos-muscle-map.json';
 
+// Fetched once per app session and shared: the Workout hero and the
+// picker both need it, and a second fetch is a second wait.
+let mapCache = null;
+let mapPromise = null;
+export function loadMuscleMap() {
+  if (!mapPromise) {
+    mapPromise = fetch(MAP_URL).then((r) => r.json()).then((d) => { mapCache = d; return d; })
+      .catch(() => { mapPromise = null; return {}; });
+  }
+  return mapPromise;
+}
+
 export function useMuscleMap() {
-  const [map, setMap] = useState(null);
+  const [map, setMap] = useState(mapCache);
   useEffect(() => {
+    if (mapCache) return undefined;
     let live = true;
-    fetch(MAP_URL).then((r) => r.json()).then((d) => { if (live) setMap(d); }).catch(() => { if (live) setMap({}); });
+    loadMuscleMap().then((d) => { if (live) setMap(d); });
     return () => { live = false; };
   }, []);
   return map;
