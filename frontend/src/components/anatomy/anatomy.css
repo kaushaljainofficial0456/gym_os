@@ -1,6 +1,8 @@
 /* The 3D muscle picker (MuscleBody3DImpl.jsx). Loaded with it, never up front. */
 .mb3d { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: inherit; }
-.mb3d__canvas { position: absolute; inset: 0; z-index: 1; }
+.mb3d__canvas { position: absolute; inset: 0; z-index: 1; opacity: 0; transition: opacity .35s ease; }
+/* Shown only once framed: no first frame of a body cut in half. */
+.mb3d.is-ready .mb3d__canvas { opacity: 1; }
 /* Sideways swipes turn the body; up/down stays the page's scroll.
    OrbitControls writes touch-action: none inline, hence !important. */
 .mb3d canvas { touch-action: pan-y !important; outline: none; cursor: grab; }
@@ -14,14 +16,14 @@
   animation: softPulse 1.8s ease-in-out infinite;
 }
 
-/* What you picked: a pill in the same warm red the muscle glows. */
+/* What you picked, top-left -- clear of the body, never over its legs. */
 .mb3d__label, .mb3d__hint {
-  position: absolute; left: 50%; bottom: 14px; z-index: 2;
-  display: inline-flex; align-items: center; gap: 8px;
-  transform: translateX(-50%);
-  padding: 7px 15px 7px 12px; border-radius: 999px;
-  white-space: nowrap; pointer-events: none;
-  font-size: 13.5px; font-weight: 700; letter-spacing: .005em;
+  position: absolute; left: 12px; top: 12px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 7px;
+  max-width: calc(50% - 40px);
+  padding: 6px 12px 6px 10px; border-radius: 999px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .005em;
 }
 .mb3d__label {
   color: #fff;
@@ -38,7 +40,8 @@
   font-weight: 600;
 }
 .mb3d__hint svg { color: var(--m-energy); }
-@keyframes mbPop { from { transform: translateX(-50%) scale(.86); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+@keyframes mbPop { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .mb3d__loading span, .mb3d__label { animation: none; }
+  .mb3d__canvas { transition: none; }
 }

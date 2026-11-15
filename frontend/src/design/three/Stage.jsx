@@ -69,6 +69,10 @@ export default function Stage({
   // changes it -- right for anything that comes to rest. 'always' redraws
   // every frame and is only for scenes that never stop moving.
   frameloop = 'always',
+  // Keep the canvas (and its WebGL context) once it has been on screen,
+  // and only stop drawing while it is off. Without this, scrolling a
+  // scene away and back rebuilds it -- a flash of the fallback each time.
+  keepMounted = false,
   ...rest
 }) {
   const hostRef = useRef(null);
@@ -89,6 +93,9 @@ export default function Stage({
   const q = capped === tier ? settings : perf[capped];
 
   const disabled = reduced || !hasWebGL();
+  const [seen, setSeen] = useState(false);
+  useEffect(() => { if (active) setSeen(true); }, [active]);
+  const mounted = active || (keepMounted && seen);
 
   return (
     <div
@@ -96,7 +103,7 @@ export default function Stage({
       className={cn('relative', !interactive && 'pointer-events-none', className)}
       aria-hidden="true"     // decorative: never announced to screen readers
     >
-      {disabled || !ready || !active ? (
+      {disabled || !ready || !mounted ? (
         fallback
       ) : (
         <Suspense fallback={fallback}>

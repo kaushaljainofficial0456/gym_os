@@ -562,6 +562,7 @@ body {
   background-color: var(--bg);
   color: var(--ink);
   overflow-x: hidden;
+  overflow-x: clip;   /* where supported: clips without making <body> a scroller */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color .35s ease, color .35s ease;
@@ -638,7 +639,10 @@ body {
 .dark body::before {
   content: '';
   position: fixed;
-  inset: -20%;
+  /* Exactly the screen. It was inset -20% (bleed for the old drift
+     animation): a fixed layer 40% wider than the screen, which phone
+     browsers counted as page width -- everything sat shifted sideways. */
+  inset: 0;
   z-index: -2;
   pointer-events: none;
   background:
@@ -1450,13 +1454,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .toast-bad  { border-color: rgb(var(--bad-rgb) / .45); }
 }
 
-/* ── Scrollbars ── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-.dark ::-webkit-scrollbar-thumb { background: rgba(255,223,221,.12); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
-.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,223,221,.20); border: 2px solid transparent; background-clip: content-box; }
-.light ::-webkit-scrollbar-thumb { background: rgba(140,106,77,.15); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
-.light ::-webkit-scrollbar-thumb:hover { background: rgba(140,106,77,.25); border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-track { background: transparent; }
+/* ── Scrollbars ──
+   Styled for a mouse only. On a phone (and in the app's webview) a styled
+   scrollbar stops being the native thin one that fades away and becomes a
+   permanent translucent bar down the right edge of every page. */
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  .dark ::-webkit-scrollbar-thumb { background: rgba(255,223,221,.12); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,223,221,.20); border: 2px solid transparent; background-clip: content-box; }
+  .light ::-webkit-scrollbar-thumb { background: rgba(140,106,77,.15); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+  .light ::-webkit-scrollbar-thumb:hover { background: rgba(140,106,77,.25); border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
