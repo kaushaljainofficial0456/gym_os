@@ -341,8 +341,12 @@ export function Modal({ open, onClose, title, children, wide, sub, footer, onBac
   // sheet opens far below the fold and looks like a dead button. Verified
   // live: the community comments sheet measured 2804px tall, starting 221px
   // above the viewport, until this portal was added.
+  // z-[60], the same layer as Sheet: both portal to the end of <body>, so
+  // whichever opened LAST is on top. At z-50 a confirmation asked from
+  // inside a sheet ("Delete this workout?") opened BEHIND it, and the
+  // Delete button looked dead.
   return createPortal((
-    <div className="scrim z-50 flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
+    <div className="scrim z-[60] flex items-end sm:items-center sm:justify-center sm:p-4 anim-fadeIn"
       // stopPropagation: a portal moves the DOM, not the React tree, so a
       // scrim click still bubbled to whatever rendered this -- a confirmation
       // opened from inside a clickable row also "clicked" the row.

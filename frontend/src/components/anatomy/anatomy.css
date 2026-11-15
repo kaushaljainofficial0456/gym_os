@@ -1,0 +1,44 @@
+/* The 3D muscle picker (MuscleBody3DImpl.jsx). Loaded with it, never up front. */
+.mb3d { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: inherit; }
+.mb3d__canvas { position: absolute; inset: 0; z-index: 1; }
+/* Sideways swipes turn the body; up/down stays the page's scroll.
+   OrbitControls writes touch-action: none inline, hence !important. */
+.mb3d canvas { touch-action: pan-y !important; outline: none; cursor: grab; }
+.mb3d canvas:active { cursor: grabbing; }
+
+.mb3d__loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.mb3d__loading span {
+  width: 30%; max-width: 110px; aspect-ratio: 1 / 3.1;
+  border-radius: 40% 40% 30% 30% / 14% 14% 10% 10%;
+  background: rgb(var(--tint-rgb) / .07);
+  animation: softPulse 1.8s ease-in-out infinite;
+}
+
+/* What you picked: a pill in the same warm red the muscle glows. */
+.mb3d__label, .mb3d__hint {
+  position: absolute; left: 50%; bottom: 14px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 8px;
+  transform: translateX(-50%);
+  padding: 7px 15px 7px 12px; border-radius: 999px;
+  white-space: nowrap; pointer-events: none;
+  font-size: 13.5px; font-weight: 700; letter-spacing: .005em;
+}
+.mb3d__label {
+  color: #fff;
+  background: var(--m-energy);
+  box-shadow: 0 10px 24px -10px var(--m-energy), inset 0 1px 0 rgba(255, 255, 255, .25);
+  animation: mbPop .28s cubic-bezier(.34, 1.56, .64, 1);
+}
+.mb3d__label i { width: 7px; height: 7px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, .28); }
+.mb3d__hint {
+  color: var(--ink);
+  background: rgb(var(--bg-rgb) / .62);
+  border: 1px solid rgb(var(--tint-rgb) / .12);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  font-weight: 600;
+}
+.mb3d__hint svg { color: var(--m-energy); }
+@keyframes mbPop { from { transform: translateX(-50%) scale(.86); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mb3d__loading span, .mb3d__label { animation: none; }
+}

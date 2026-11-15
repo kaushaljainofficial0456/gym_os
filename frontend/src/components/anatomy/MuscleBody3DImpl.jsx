@@ -1,193 +1,287 @@
 /**
- * MuscleBody3DImpl — the actual 3D muscle picker.
+ * MuscleBody3DImpl -- the 3D muscle picker (v2 body).
  *
- * Loads frontend/public/assets/anatomy/skos-muscular-body.glb (isolated,
- * decimated Z-Anatomy geometry -- see docs/anatomy-asset.md), attaches a
- * click/hover handler to every mesh, tints the selected/hovered muscle(s)
- * using the app's own --accent token (read live so it follows the trainer
- * theme, not a hardcoded colour), and exposes front/rear/360 camera control.
+ * The model is one continuous sculpted body built from Z-Anatomy geometry
+ * (scripts/anatomy/build_body_v2_stage_*.py): every superficial muscle plus
+ * the skull, hands and feet, fused into a single surface, then cut back
+ * into tappable regions -- "<muscleId>.l" / "<muscleId>.r" -- and "body"
+ * for everything that is not a muscle group in the exercise library.
+ * Soft shadow is baked into the vertex colours, so it reads as a sculpt.
  *
- * Mesh names in the GLB are "<muscleId>.l" / "<muscleId>.r" (see
- * skos-muscle-map.json, keyed by muscleId without the side suffix) --
- * clicking either side reports the same exerciseMuscleGroup.
+ *  - Turn it with a finger: swipe sideways and it spins like a turntable,
+ *    with momentum. Up and down is left to the page (touch-action: pan-y
+ *    in anatomy.css), so a body inside a scrolling sheet never traps the
+ *    scroll. A mouse wheel zooms.
+ *  - Tap a muscle: the whole group lights up, both sides, and onSelect
+ *    reports it. A drag never counts as a tap.
+ *  - It only draws while something moves (frameloop "demand"): a still
+ *    body costs nothing, which is the difference between a premium feel
+ *    and a phone that runs hot.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Rotate3d } from 'lucide-react';
 import { useGLTF, OrbitControls } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import Stage from '../../design/three/Stage.jsx';
+import './anatomy.css';
 
-const GLB_URL = '/assets/anatomy/skos-muscular-body.glb';
+export const BODY_URL = '/assets/anatomy/skos-body-v2.glb';
 
-// The .glb is Draco-compressed (6.85MB -> 1.21MB), so it cannot be decoded
-// without the Draco decoder. drei's useGLTF defaults that decoder to
-// Google's CDN (https://www.gstatic.com/draco/versioned/decoders/...),
-// which this app's Content-Security-Policy does not allow in connect-src --
-// the .glb then downloads with a 200 and silently fails to decode, leaving
-// the muscle picker with no model and a stream of "Failed to fetch" errors
-// from three's loader. Serving the decoder from our own origin fixes that
-// without punching a hole in the CSP for a third-party host, and removes
-// the runtime dependency on an external CDN being reachable at all.
-// Files are copied from three/examples/jsm/libs/draco/gltf/ into
-// frontend/public/draco/ and must stay in sync with the installed three.
+// The model is Draco-compressed; the decoder is served from our own origin
+// (frontend/public/draco/) because the CSP does not allow Google's CDN.
 useGLTF.setDecoderPath('/draco/');
 
-const stripSide = (name) => name.replace(/\.[lr]$/i, '');
-
-function readCssColor(varName, fallbackHex) {
-  if (typeof document === 'undefined') return new THREE.Color(fallbackHex);
-  const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-  try {
-    return new THREE.Color(v || fallbackHex);
-  } catch {
-    return new THREE.Color(fallbackHex);
-  }
+/**
+ * The muscle a mesh belongs to. Names are "<muscleId>.l" / ".r" in the
+ * file, but three's GLTFLoader sanitizes node names and DROPS THE DOT
+ * ("pectoralis_major.l" arrives as "pectoralis_majorl"), so a plain
+ * ".l" strip matched nothing and no tap ever reached a muscle.
+ */
+function muscleIdOf(name, map) {
+  const n = String(name || '');
+  const dotted = n.replace(/\.[lr]$/i, '');
+  if (map?.[dotted]) return dotted;
+  const bare = n.replace(/[._]?[lr]$/i, '');
+  if (map?.[bare]) return bare;
+  return dotted;
 }
 
-function Body({ map, selectedGroup, onSelect, hovered, setHovered, onReady }) {
-  const { scene } = useGLTF(GLB_URL);
+function cssColor(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return new THREE.Color(v || fallback);
+  } catch { return new THREE.Color(fallback); }
+}
+const isDark = () => document.documentElement.classList.contains('dark');
 
-  // Give every mesh its OWN material instance (the GLB ships one shared
-  // material) so tinting one muscle never affects its siblings, and tag it
-  // with the muscle-map entry it resolves to.
+/**
+ * THE CLAY: a matcap, drawn here on a canvas -- the technique a ZBrush
+ * anatomy render uses. Lighting lives in a small picture of a lit sphere,
+ * read by the surface's direction to the camera, so the body looks studio-
+ * lit from every angle with no lights, shadows or environment to compute.
+ * Cheaper than real lighting, and the soft occlusion baked into the model's
+ * vertex colours does the rest.
+ */
+function makeMatcap(dark) {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const g = c.getContext('2d');
+  const r = S / 2;
+  const base = dark ? [176, 168, 160] : [196, 188, 180];
+  const sphere = (x, y, rad, stops) => {
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    stops.forEach(([o, col]) => gr.addColorStop(o, col));
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(r, r, r, 0, Math.PI * 2); g.fill();
+  };
+  // body of the sphere: lit from high on the left, falling into shadow low right
+  sphere(r * 0.72, r * 0.6, r * 1.55, [
+    [0, `rgb(${base.map((v) => Math.min(255, v + 58)).join(',')})`],
+    [0.45, `rgb(${base.join(',')})`],
+    [0.85, `rgb(${base.map((v) => Math.round(v * 0.42)).join(',')})`],
+    [1, `rgb(${base.map((v) => Math.round(v * 0.3)).join(',')})`],
+  ]);
+  g.globalCompositeOperation = 'lighter';
+  // soft specular sheen
+  sphere(r * 0.62, r * 0.5, r * 0.55, [[0, 'rgba(255,248,240,.22)'], [1, 'rgba(255,248,240,0)']]);
+  // cool rim from behind on the right edge
+  const rim = g.createRadialGradient(r, r, r * 0.78, r, r, r);
+  rim.addColorStop(0, 'rgba(0,0,0,0)');
+  rim.addColorStop(0.75, 'rgba(150,170,205,.0)');
+  rim.addColorStop(1, 'rgba(150,170,205,.32)');
+  g.fillStyle = rim;
+  g.beginPath(); g.arc(r, r, r, -Math.PI * 0.55, Math.PI * 0.35); g.lineTo(r, r); g.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function Body({ map, selectedGroup, hovered, onPick, onHover, onReady }) {
+  const { scene } = useGLTF(BODY_URL);
+  const { invalidate } = useThree();
+  const theme = useMemo(() => ({
+    matcap: makeMatcap(isDark()),
+    white: new THREE.Color(1, 1, 1),
+    // The muscle you picked glows in the app's warm "effort" red: clearly
+    // a muscle, clearly picked, in either theme.
+    hot: cssColor('--m-energy', '#D97B84'),
+  }), []);
+  useEffect(() => () => theme.matcap.dispose(), [theme]);
+
+  // One material per region, so lighting one group never touches another.
   const meshes = useMemo(() => {
     const list = [];
-    scene.traverse((obj) => {
-      if (!obj.isMesh) return;
-      obj.material = obj.material.clone();
-      obj.userData.muscleId = stripSide(obj.name);
-      obj.userData.baseColor = obj.material.color.clone();
-      list.push(obj);
+    scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const id = muscleIdOf(o.name, map);
+      o.material = new THREE.MeshMatcapMaterial({
+        matcap: theme.matcap,
+        color: theme.white.clone(),
+        vertexColors: !!o.geometry.attributes.color,
+      });
+      o.userData.muscleId = id;
+      o.userData.group = map?.[id]?.exerciseMuscleGroup || null;
+      list.push(o);
     });
     return list;
-  }, [scene]);
+  }, [scene, map, theme]);
 
+  useEffect(() => { if (meshes.length) onReady?.(scene); }, [meshes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Paint the picked group, with one soft pulse so the tap is felt; it
+  // renders frames only for those ~0.45 s.
   useEffect(() => {
-    if (meshes.length) onReady?.(scene, meshes);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meshes]);
-
-  const accent = useMemo(() => readCssColor('--accent', '#B4C2CE'), []);
-
-  useEffect(() => {
-    for (const mesh of meshes) {
-      const info = map?.[mesh.userData.muscleId];
-      const group = info?.exerciseMuscleGroup;
-      const isSelected = selectedGroup && group === selectedGroup;
-      const isHovered = hovered && group === hovered;
-      if (isSelected) {
-        mesh.material.emissive = accent;
-        mesh.material.emissiveIntensity = 0.55;
-      } else if (isHovered) {
-        mesh.material.emissive = accent;
-        mesh.material.emissiveIntensity = 0.25;
-      } else {
-        mesh.material.emissive = new THREE.Color(0, 0, 0);
-        mesh.material.emissiveIntensity = 0;
+    const paint = (boost) => {
+      for (const m of meshes) {
+        const g = m.userData.group;
+        const on = !!g && g === selectedGroup;
+        const hover = !on && !!g && g === hovered;
+        m.material.color.copy(theme.white);
+        if (on) m.material.color.lerp(theme.hot, 0.86).multiplyScalar(1.1 + boost);
+        else if (hover) m.material.color.lerp(theme.hot, 0.32);
       }
-    }
-  }, [meshes, map, selectedGroup, hovered, accent]);
+      invalidate();
+    };
+    if (!selectedGroup) { paint(0); return undefined; }
+    const start = performance.now();
+    let raf = 0;
+    const step = (t) => {
+      const k = Math.min(1, (t - start) / 450);
+      paint(0.35 * Math.sin(Math.PI * k));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [meshes, selectedGroup, hovered, theme, invalidate]);
 
-  const handleClick = (e) => {
-    e.stopPropagation();
-    const id = stripSide(e.object.name);
-    const info = map?.[id];
-    if (!info) return;
-    onSelect?.(info.exerciseMuscleGroup, id, info.displayName);
-  };
-
-  const handleOver = (e) => {
-    e.stopPropagation();
-    const info = map?.[stripSide(e.object.name)];
-    if (info) setHovered(info.exerciseMuscleGroup);
-    document.body.style.cursor = 'pointer';
-  };
-  const handleOut = (e) => {
-    e.stopPropagation();
-    setHovered(null);
-    document.body.style.cursor = 'auto';
-  };
-
-  return <primitive object={scene} onClick={handleClick} onPointerOver={handleOver} onPointerOut={handleOut} />;
+  return (
+    <primitive
+      object={scene}
+      onClick={(e) => {
+        // A drag that ends over the body is not a tap.
+        if (e.delta > 8) return;
+        e.stopPropagation();
+        const id = e.object.userData.muscleId;
+        if (map?.[id]) onPick?.(id);
+      }}
+      onPointerOver={(e) => {
+        if (e.pointerType !== 'mouse') return;
+        e.stopPropagation();
+        onHover?.(e.object.userData.group);
+        document.body.style.cursor = e.object.userData.group ? 'pointer' : 'grab';
+      }}
+      onPointerOut={(e) => {
+        if (e.pointerType !== 'mouse') return;
+        onHover?.(null);
+        document.body.style.cursor = '';
+      }}
+    />
+  );
 }
 
-function CameraRig({ controlsRef, target, radius, view }) {
+/**
+ * The entrance: the body turns in from three-quarters to face you, once.
+ * That half-second of motion is the "you can turn this" -- no buttons.
+ */
+function Entrance({ controlsRef, frame, onDone }) {
+  const { camera, invalidate } = useThree();
   useEffect(() => {
-    if (!view || !controlsRef.current || !radius) return;
-    const controls = controlsRef.current;
-    const camera = controls.object;
-    const azimuth = view === 'rear' ? Math.PI : 0;
-    const polar = Math.PI / 2.35; // a touch above horizontal, not top-down
-    const spherical = new THREE.Spherical(radius, polar, azimuth);
-    const offset = new THREE.Vector3().setFromSpherical(spherical);
-    camera.position.copy(target).add(offset);
-    controls.target.copy(target);
-    controls.update();
-  }, [view, controlsRef, target, radius]);
+    const c = controlsRef.current;
+    if (!c || !frame) return undefined;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const phi = Math.PI / 2.15;
+    const from = reduce ? 0 : 0.95;
+    const start = performance.now();
+    let raf = 0;
+    const place = (theta) => {
+      camera.position.copy(frame.target).add(new THREE.Vector3().setFromSpherical(new THREE.Spherical(frame.radius, phi, theta)));
+      c.target.copy(frame.target);
+      c.update();
+      invalidate();
+    };
+    const step = (t) => {
+      const k = Math.min(1, (t - start) / 1100);
+      const e = 1 - (1 - k) ** 4;
+      place(from * (1 - e));
+      if (k < 1) raf = requestAnimationFrame(step); else onDone?.();
+    };
+    place(from);
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [frame]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
-export default function MuscleBody3DImpl({ map, selectedGroup, onSelect }) {
+/**
+ * @param labelFor  group -> name shown on the body ("Core", not whichever
+ *                  muscle of the group happens to be first in the map)
+ */
+export default function MuscleBody3DImpl({ map, selectedGroup, onSelect, labelFor, compact = false }) {
   const [hovered, setHovered] = useState(null);
-  const [view, setView] = useState('front');
-  const [frame, setFrame] = useState(null); // { target: Vector3, radius }
+  const [frame, setFrame] = useState(null);
+  const [moved, setMoved] = useState(false);
   const controlsRef = useRef(null);
 
-  const handleReady = (scene) => {
+  const onReady = (scene) => {
     const box = new THREE.Box3().setFromObject(scene);
-    const center = box.getCenter(new THREE.Vector3());
+    const target = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const radius = Math.max(size.x, size.y, size.z) * 1.6 || 3;
-    setFrame({ target: center, radius });
+    // Far enough to see head to feet in a short, wide panel.
+    setFrame({ target, radius: size.y * 1.62 });
   };
 
+  const nameOf = (g) => {
+    if (!g) return null;
+    if (labelFor?.[g]) return labelFor[g];
+    const k = map && Object.keys(map).find((id) => map[id].exerciseMuscleGroup === g);
+    return k ? map[k].displayName.replace(/\s*\(.*\)$/, '') : g;
+  };
+  const label = nameOf(selectedGroup);
+  const hoverLabel = nameOf(hovered);
+
   return (
-    <div className="relative w-full h-full">
+    <div className="mb3d">
       <Stage
         interactive
         maxTier="high"
-        className="w-full h-full"
-        camera={{ position: [0, 1.2, 3], fov: 40 }}
+        className="mb3d__canvas"
+        frameloop="demand"
+        dpr={[1, 1.75]}
+        camera={{ position: [0, 1, 3.4], fov: 32, near: 0.05, far: 30 }}
+        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        onCreated={({ gl }) => { gl.toneMapping = THREE.NoToneMapping; }}
       >
-        {/* Studio 3-point setup -- the grey clay material (see
-            scripts/anatomy/process_and_export.py) reads flat under a plain
-            ambient+key pair; the added rim light is what actually separates
-            the sculpted edges from the panel background. */}
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[3, 5, 4]} intensity={1.15} />
-        <directionalLight position={[-3, 2, -3]} intensity={0.4} />
-        <directionalLight position={[0, 2.5, -4]} intensity={0.6} />
-        <Body map={map} selectedGroup={selectedGroup} onSelect={onSelect} hovered={hovered} setHovered={setHovered} onReady={handleReady} />
+        <Body map={map} selectedGroup={selectedGroup} hovered={hovered}
+          onHover={setHovered} onReady={onReady}
+          onPick={(id) => { setMoved(true); onSelect?.(map[id].exerciseMuscleGroup, id, map[id].displayName); }} />
         <OrbitControls
           ref={controlsRef}
+          makeDefault
           enablePan={false}
-          minDistance={frame ? frame.radius * 0.4 : 1}
-          maxDistance={frame ? frame.radius * 2 : 8}
+          enableDamping
+          dampingFactor={0.09}
+          rotateSpeed={0.85}
+          minPolarAngle={Math.PI / 2.15}
+          maxPolarAngle={Math.PI / 2.15}
+          minDistance={frame ? frame.radius * 0.35 : 1}
+          maxDistance={frame ? frame.radius * 1.1 : 8}
           target={frame ? frame.target : undefined}
+          onStart={() => setMoved(true)}
         />
-        {frame && <CameraRig controlsRef={controlsRef} target={frame.target} radius={frame.radius} view={view} />}
+        {frame && <Entrance controlsRef={controlsRef} frame={frame} />}
       </Stage>
 
-      {/* front/rear snap controls -- 360 free rotation still works via drag */}
-      <div className="absolute top-2 right-2 flex gap-1 z-10">
-        {['front', 'rear'].map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            className={`chip !text-[10px] border capitalize ${view === v ? 'bg-gold/20 border-gold/40 text-gold' : 'border-line text-mute bg-panel/80'}`}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
+      {!frame && <div className="mb3d__loading" aria-hidden="true"><span /></div>}
 
-      {hovered && (
-        <div className="absolute bottom-2 left-2 chip !text-[10px] border-line bg-panel/90 text-ink pointer-events-none">
-          {map?.[Object.keys(map).find((k) => map[k].exerciseMuscleGroup === hovered)]?.displayName || hovered}
-        </div>
-      )}
+      {(label || hoverLabel) ? (
+        <div className="mb3d__label" aria-live="polite"><i aria-hidden="true" />{label || hoverLabel}</div>
+      ) : (!moved && frame && !compact) ? (
+        <div className="mb3d__hint"><Rotate3d size={15} strokeWidth={2} aria-hidden="true" />Swipe to turn · tap a muscle</div>
+      ) : null}
     </div>
   );
 }
 
-useGLTF.preload(GLB_URL);
+useGLTF.preload(BODY_URL);

@@ -81,13 +81,14 @@ function Ring({ radius, tube, color, trackColor, target }) {
   const head = useRef();
   const p = useRef(0);
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
     mat.uniforms.uColor.value.set(color);
     capMat.uniforms.uColor.value.set(color);
     // Critically damped ease toward the target: no overshoot on a number
     // someone is reading as "how much is left".
-    p.current += (target - p.current) * (1 - Math.exp(-dt * 3.2));
+    p.current += (target - p.current) * (1 - Math.exp(-Math.min(dt, 0.1) * 3.2));
     if (Math.abs(target - p.current) < 0.0005) p.current = target;
+    else state.invalidate(); // still filling: ask for the next frame
     mat.uniforms.uProgress.value = p.current;
     const a = p.current * Math.PI * 2;
     const visible = p.current > 0.004;
@@ -110,15 +111,28 @@ function Ring({ radius, tube, color, trackColor, target }) {
   );
 }
 
+/* How long the dial breathes after it appears or its numbers change, then
+   it rests. It used to breathe forever, and with it the canvas rendered
+   every frame for as long as Nutrition was open (see Stage's frameloop). */
+const BREATHE_S = 4;
+
 function Rings({ progress, over }) {
   const colors = useRingColors(over);
   const group = useRef();
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
+  const since = useRef(null);
+  const key = `${progress.calories}|${progress.protein}|${progress.carbs}|${progress.fat}|${over}`;
+  const lastKey = useRef(key);
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    if (since.current == null || lastKey.current !== key) { since.current = t; lastKey.current = key; }
     if (!group.current) return;
-    // Tilted back like a dial seen from above, breathing slightly.
-    group.current.rotation.x = -0.32 + Math.sin(t * 0.6) * 0.035;
-    group.current.rotation.y = Math.sin(t * 0.35) * 0.12;
+    // Tilted back like a dial seen from above, breathing slightly -- and
+    // the breath fades out, so the scene comes to rest and stops drawing.
+    const fade = Math.max(0, 1 - (t - since.current) / BREATHE_S);
+    const amp = fade * fade;
+    group.current.rotation.x = -0.32 + Math.sin(t * 0.6) * 0.035 * amp;
+    group.current.rotation.y = Math.sin(t * 0.35) * 0.12 * amp;
+    if (amp > 0) state.invalidate();
   });
   return (
     // Start at twelve o'clock and fill clockwise, like every ring people know.
@@ -135,7 +149,7 @@ function Rings({ progress, over }) {
 export default function FuelRingsScene({ size, progress, over, fallback }) {
   return (
     <Stage className="absolute inset-0" style={{ width: size, height: size }} fallback={fallback} maxTier="medium"
-           camera={{ position: [0, 0, 5.1], fov: 42 }}>
+           camera={{ position: [0, 0, 5.1], fov: 42 }} frameloop="demand">
       <Rings progress={progress} over={over} />
     </Stage>
   );

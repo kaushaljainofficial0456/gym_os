@@ -84,6 +84,39 @@ export async function materializeClientWorkout(db, { client, workoutId, schedule
       [client.id, scheduledDate]);
 }
 
+/** Make `days` (0=Monday..6=Sunday) exactly the days a saved workout
+ *  repeats on. Its other days are cleared; a listed day another workout
+ *  held is taken over, since the schedule holds one workout per day. */
+export async function setClientWorkoutDays(tx, clientId, workoutId, days) {
+  const want = [...new Set((days || []).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
+  await tx.run('DELETE FROM client_workout_schedule WHERE client_id = ? AND workout_id = ?', [clientId, workoutId]);
+  for (const dow of want) {
+    await tx.run('DELETE FROM client_workout_schedule WHERE client_id = ? AND day_of_week = ?', [clientId, dow]);
+    await tx.run('INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES (?,?,?)', [clientId, dow, workoutId]);
+  }
+  return want;
+}
+
+/** Is a session already under way today? Nothing should replace it. */
+export async function sessionInProgress(db, clientId, day) {
+  return !!(await db.q1(
+    `SELECT id FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'assigned' AND started_at IS NOT NULL LIMIT 1`,
+    [clientId, day]));
+}
+
+/**
+ * A saved workout becomes today's session now -- the builder's "today"
+ * and a shared workout's "Do it today". Never over a session already
+ * under way: that returns { today_skipped: 'in_progress' }.
+ */
+export async function scheduleSavedWorkoutToday(db, client, workoutId, tz) {
+  const orgTz = tz || await getOrgTz(db, client.org_id);
+  const today = dayKey(new Date(), orgTz);
+  if (await sessionInProgress(db, client.id, today)) return { today_workout_id: null, today_skipped: 'in_progress' };
+  const w = await materializeClientWorkout(db, { client, workoutId, scheduledDate: today });
+  return { today_workout_id: w?.id || null };
+}
+
 /**
  * Resolve "today's session" for a client:
  *   1. a workout still to do, scheduled for today (newest first)

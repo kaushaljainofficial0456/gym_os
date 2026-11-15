@@ -4,6 +4,16 @@
  * every role gets it without three separate instances fighting for the
  * same clicks. Canvas 2D, not WebGL -- always available, no capability
  * gate needed beyond prefers-reduced-motion.
+ *
+ * IT ONLY DRAWS WHILE A BURST IS ON SCREEN. The original ran its
+ * requestAnimationFrame loop forever, clearing the canvas every frame
+ * whether or not anything had been tapped -- and the canvas was sized to
+ * the whole app container, so on a long page that was a 390 x 3000 px
+ * bitmap cleared and re-uploaded to the GPU ~60-120 times a second on
+ * every screen, for as long as the app was open. That was a large part of
+ * "the app is lagging". Now a tap starts the loop, the loop stops itself
+ * once the last spark fades (~0.4 s), and the canvas is the size of the
+ * viewport it is fixed to.
  */
 import { useRef, useEffect, useCallback } from 'react';
 
@@ -19,39 +29,23 @@ const ClickSpark = ({
 }) => {
   const canvasRef = useRef(null);
   const sparksRef = useRef([]);
-  const startTimeRef = useRef(null);
+  const frameRef = useRef(0);
 
+  // The canvas is position: fixed over the viewport, so it matches the
+  // viewport -- never the (much taller) page.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const parent = canvas.parentElement;
-    if (!parent) return;
-
-    let resizeTimeout;
-
-    const resizeCanvas = () => {
-      const { width, height } = parent.getBoundingClientRect();
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-      }
+    if (!canvas) return undefined;
+    let t;
+    const size = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     };
-
-    const handleResize = () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(resizeCanvas, 100);
-    };
-
-    const ro = new ResizeObserver(handleResize);
-    ro.observe(parent);
-
-    resizeCanvas();
-
-    return () => {
-      ro.disconnect();
-      clearTimeout(resizeTimeout);
-    };
+    const onResize = () => { clearTimeout(t); t = setTimeout(size, 100); };
+    size();
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); clearTimeout(t); };
   }, []);
 
   const easeFunc = useCallback(
@@ -70,55 +64,36 @@ const ClickSpark = ({
     [easing]
   );
 
-  useEffect(() => {
+  const draw = useCallback((timestamp) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) { frameRef.current = 0; return; }
     const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let animationId;
+    sparksRef.current = sparksRef.current.filter(spark => {
+      const elapsed = timestamp - spark.startTime;
+      if (elapsed >= duration) return false;
+      const eased = easeFunc(Math.max(0, elapsed) / duration);
+      const distance = eased * sparkRadius * extraScale;
+      const lineLength = sparkSize * (1 - eased);
+      const x1 = spark.x + distance * Math.cos(spark.angle);
+      const y1 = spark.y + distance * Math.sin(spark.angle);
+      const x2 = spark.x + (distance + lineLength) * Math.cos(spark.angle);
+      const y2 = spark.y + (distance + lineLength) * Math.sin(spark.angle);
+      ctx.strokeStyle = sparkColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      return true;
+    });
 
-    const draw = timestamp => {
-      if (!startTimeRef.current) {
-        startTimeRef.current = timestamp;
-      }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Keep going only while something is still on screen.
+    frameRef.current = sparksRef.current.length ? requestAnimationFrame(draw) : 0;
+  }, [sparkColor, sparkSize, sparkRadius, duration, easeFunc, extraScale]);
 
-      sparksRef.current = sparksRef.current.filter(spark => {
-        const elapsed = timestamp - spark.startTime;
-        if (elapsed >= duration) {
-          return false;
-        }
-
-        const progress = elapsed / duration;
-        const eased = easeFunc(progress);
-
-        const distance = eased * sparkRadius * extraScale;
-        const lineLength = sparkSize * (1 - eased);
-
-        const x1 = spark.x + distance * Math.cos(spark.angle);
-        const y1 = spark.y + distance * Math.sin(spark.angle);
-        const x2 = spark.x + (distance + lineLength) * Math.cos(spark.angle);
-        const y2 = spark.y + (distance + lineLength) * Math.sin(spark.angle);
-
-        ctx.strokeStyle = sparkColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-
-        return true;
-      });
-
-      animationId = requestAnimationFrame(draw);
-    };
-
-    animationId = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(animationId);
-    };
-  }, [sparkColor, sparkSize, sparkRadius, sparkCount, duration, easeFunc, extraScale]);
+  useEffect(() => () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); }, []);
 
   const handleClick = e => {
     const canvas = canvasRef.current;
@@ -126,16 +101,11 @@ const ClickSpark = ({
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
     const now = performance.now();
-    const newSparks = Array.from({ length: sparkCount }, (_, i) => ({
-      x,
-      y,
-      angle: (2 * Math.PI * i) / sparkCount,
-      startTime: now
-    }));
-
-    sparksRef.current.push(...newSparks);
+    for (let i = 0; i < sparkCount; i += 1) {
+      sparksRef.current.push({ x, y, angle: (2 * Math.PI * i) / sparkCount, startTime: now });
+    }
+    if (!frameRef.current) frameRef.current = requestAnimationFrame(draw);
   };
 
   return (

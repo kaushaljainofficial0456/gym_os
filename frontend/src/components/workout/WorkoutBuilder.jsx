@@ -25,18 +25,9 @@ import ExerciseSearchList from './ExerciseSearchList.jsx';
 import { SortableExercises, Grip } from './SessionView.jsx';
 import { moveItem } from './useDragSort.js';
 import { groupsAfterMove, normalizeGroups, toggleLink } from './supersets.js';
+import { DAY_SHORT, DAY_LONG, plannerToday, dayList, DayPicker } from './days.jsx';
 
-export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-export const DAY_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-/** Today in the saved-workout schedule's numbering, 0=Monday..6=Sunday. */
-export const plannerToday = () => (new Date().getDay() + 6) % 7;
-
-/** "Mon, Wed and Fri" */
-export function dayList(days) {
-  const names = [...days].sort((a, b) => a - b).map((d) => DAY_SHORT[d]);
-  if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
+export { DAY_SHORT, DAY_LONG, plannerToday, dayList, DayPicker };
 
 const MUSCLE = (m) => {
   const s = String(m || '').replace(/_/g, ' ').toLowerCase();
@@ -92,37 +83,6 @@ function WhenCard({ id, on, icon: I, title, sub, onPick, children }) {
         <span className="wk-when__dot" aria-hidden="true" />
       </button>
       {on && children && <div className="wk-when__more">{children}</div>}
-    </div>
-  );
-}
-
-/**
- * Weekday chips. `taken` maps a day to the name of the saved workout on it
- * now (picking it moves the day here); `locked` are the coach's days.
- */
-export function DayPicker({ value, onToggle, taken = {}, locked = new Set(), label = 'Repeat on', compact }) {
-  const today = plannerToday();
-  return (
-    <div className={`wk-days${compact ? ' wk-days--compact' : ''}`} role="group" aria-label={label}>
-      {DAY_SHORT.map((d, i) => {
-        const on = value.has(i);
-        const isLocked = locked.has(i);
-        const other = !on && taken[i];
-        /* A coach's day cannot be picked: the program wins on it. One that
-           is ALREADY on (set before the coach planned that day) stays
-           tappable, struck through, so it can be cleared. */
-        const blocked = isLocked && on;
-        return (
-          <button key={d} type="button" className={`wk-dayc${i === today ? ' is-today' : ''}${blocked ? ' is-blocked' : ''}`} aria-pressed={on} disabled={isLocked && !on}
-            onClick={() => onToggle(i)}
-            title={blocked ? 'Your coach’s plan has this day, so this workout does not run on it. Tap to clear.'
-              : isLocked ? 'Your coach has this day' : other ? `${DAY_LONG[i]} has ${other} now — picking it moves the day here` : DAY_LONG[i]}
-            aria-label={`${DAY_LONG[i]}${i === today ? ' (today)' : ''}${isLocked ? ', your coach has this day' : other ? `, has ${other} now` : ''}`}>
-            {compact ? d[0] : d}
-            {other && !compact && <i className="wk-dayc__taken" aria-hidden="true" />}
-          </button>
-        );
-      })}
     </div>
   );
 }

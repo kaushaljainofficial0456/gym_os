@@ -13,7 +13,11 @@ import { Router } from 'express';
 import { requireAuth, orgScope, hashPassword, clearAuthCookie, invalidateUserActive } from '../auth.js';
 import { id, now } from '../ids.js';
 import { dayKey, getOrgTz, logDayKey, isBeforeDayStart, DEFAULT_DAY_START_HOUR, shiftDayKey, plannerDay } from '../utils/time.js';
-import { materializeClientWorkout } from '../services/trainingProgram.js';
+import { setClientWorkoutDays, scheduleSavedWorkoutToday } from '../services/trainingProgram.js';
+import {
+  SHARE_LINK_TTL_MS, workoutPayload, storeWorkoutSnapshot, loadWorkoutSnapshot, importWorkout,
+  mealItems, storeMealSnapshot, loadMealSnapshot, saveMealItem,
+} from '../services/sharing.js';
 import { invalidateDayStart } from '../services/logDay.js';
 import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
@@ -1537,17 +1541,7 @@ export default function meRoutes(db) {
    *  exercises that share one are done back to back. */
   const supersetGroup = (ex) => (ex?.superset_group ? String(ex.superset_group).slice(0, 20) : null);
 
-  /** Make `days` (0=Monday..6=Sunday) exactly the days a saved workout
-   *  repeats on. Its other days are cleared; a listed day another workout
-   *  held is taken over, since the schedule holds one workout per day. */
-  const setWorkoutDays = async (tx, clientId, workoutId, days) => {
-    const want = [...new Set((days || []).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
-    await tx.run('DELETE FROM client_workout_schedule WHERE client_id = ? AND workout_id = ?', [clientId, workoutId]);
-    for (const dow of want) {
-      await tx.run('DELETE FROM client_workout_schedule WHERE client_id = ? AND day_of_week = ?', [clientId, dow]);
-      await tx.run('INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES (?,?,?)', [clientId, dow, workoutId]);
-    }
-  };
+  const setWorkoutDays = setClientWorkoutDays;
 
   /** The builder's "today" half: when the member asked for it, or picked
    *  today among the repeat days, a saved workout becomes today's session
@@ -1557,12 +1551,7 @@ export default function meRoutes(db) {
     const today = dayKey(new Date(), tz);
     const wanted = forToday === true || (Array.isArray(days) && days.map(Number).includes(plannerDay(today)));
     if (!wanted) return { today_workout_id: null };
-    const busy = await db.q1(
-      `SELECT id FROM workouts WHERE client_id = ? AND scheduled_date = ? AND status = 'assigned' AND started_at IS NOT NULL LIMIT 1`,
-      [c.id, today]);
-    if (busy) return { today_workout_id: null, today_skipped: 'in_progress' };
-    const w = await materializeClientWorkout(db, { client: c, workoutId, scheduledDate: today });
-    return { today_workout_id: w?.id || null };
+    return scheduleSavedWorkoutToday(db, c, workoutId, tz);
   };
 
   r.post('/workouts', workoutWriteLimit, validate(schemas.clientWorkoutCreate), async (req, res) => {
@@ -2242,7 +2231,7 @@ export default function meRoutes(db) {
   // "doesn't outlive its usefulness forever". The sender can also revoke
   // a link early -- see DELETE /share/:id and DELETE /workout-share/:id
   // below.
-  const SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60_000;
+  // SHARE_LINK_TTL_MS: services/sharing.js.
 
   // POST /me/share: bundle one or more of the CLIENT'S OWN saved foods/
   // meals into one shareable snapshot (see database/schema.sql's
@@ -2257,53 +2246,11 @@ export default function meRoutes(db) {
     if (!mealIds.length && !foodIds.length) {
       return res.status(400).json({ error: 'Select at least one saved food or meal to share' });
     }
-
-    const items = [];
-    for (const mealId of mealIds) {
-      const meal = await db.q1('SELECT * FROM client_meal_templates WHERE id = ? AND client_id = ?', [mealId, c.id]);
-      if (!meal) continue; // silently skip an id that isn't (or no longer is) this client's own -- never error the whole share over one stale selection
-      const mealItems = await db.q('SELECT * FROM meal_items WHERE meal_template_id = ? ORDER BY position', [meal.id]);
-      items.push({
-        type: 'meal',
-        name: meal.name,
-        quantity: 1,
-        unit: 'serving',
-        calories: meal.calories, protein: meal.protein, carbs: meal.carbs, fat: meal.fat,
-        components: mealItems.map((it) => ({
-          name: it.name, quantity: it.quantity, unit: it.unit || 'serving',
-          calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
-        })),
-      });
-    }
-    for (const foodId of foodIds) {
-      const food = await db.q1('SELECT * FROM foods WHERE id = ? AND client_id = ?', [foodId, c.id]);
-      if (!food) continue;
-      items.push({
-        type: 'food',
-        name: food.name,
-        quantity: 1,
-        // foods.serving is the food's OWN full description of one unit --
-        // "100 g" for a gram-based item, "1 bowl" for a count-based one.
-        // Hardcoding quantity:100 + unit:'g' assumed every saved food is
-        // gram-based, which produced nonsense like "100 bowl" for anything
-        // that isn't. quantity:1 x this food's own descriptive serving
-        // means exactly the same thing the calories/protein/etc below
-        // already represent (one full serving as saved), for any unit type.
-        unit: food.serving || food.unit || 'serving',
-        calories: food.calories || 0, protein: food.protein || 0, carbs: food.carbs || 0, fat: food.fat || 0,
-        components: null,
-      });
-    }
+    const items = await mealItems(db, c, { mealIds, foodIds });
     if (!items.length) return res.status(404).json({ error: 'None of the selected items could be found' });
-
-    const shareId = id('shr');
-    const expiresAt = new Date(Date.now() + SHARE_LINK_TTL_MS).toISOString();
-    await db.run(
-      `INSERT INTO shared_meals (id, org_id, client_id, shared_by_name, items_json, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [shareId, c.org_id, c.id, c.name || null, JSON.stringify(items), now(), expiresAt]);
+    const snap = await storeMealSnapshot(db, c, items);
     track(db, 'meals_shared', req.user.org, req.user.sub, { client_id: c.id, item_count: items.length });
-    res.status(201).json({ id: shareId, expires_at: expiresAt });
+    res.status(201).json(snap);
   });
 
   // DELETE /me/share/:id: revoke a share link early, before its natural
@@ -2330,51 +2277,13 @@ export default function meRoutes(db) {
   // handling", explicitly not "overwrite" and not "block").
   r.post('/share/:id/save', validate(schemas.shareSave), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const share = await db.q1('SELECT * FROM shared_meals WHERE id = ?', [req.params.id]);
-    if (!share || (share.expires_at && Date.parse(share.expires_at) <= Date.now())) {
-      return res.status(404).json({ error: 'This shared link is invalid or has expired' });
-    }
-    let items = [];
-    try { items = JSON.parse(share.items_json) || []; } catch { items = []; }
-    const item = items[req.body.item_index];
+    const snap = await loadMealSnapshot(db, req.params.id);
+    if (!snap) return res.status(404).json({ error: 'This shared link is invalid or has expired' });
+    const item = snap.items[req.body.item_index];
     if (!item) return res.status(404).json({ error: 'That shared item was not found' });
-
-    if (item.type === 'meal') {
-      const existing = await db.q1(
-        'SELECT id FROM client_meal_templates WHERE client_id = ? AND lower(name) = ?', [c.id, item.name.toLowerCase()]);
-      const savedName = existing ? `${item.name} (shared)` : item.name;
-      const mealId = id('cmt');
-      await db.run(
-        `INSERT INTO client_meal_templates (id, org_id, client_id, slot, name, calories, protein, carbs, fat, position)
-         VALUES (?,?,?,?,?,?,?,?,?, COALESCE((SELECT MAX(position)+1 FROM client_meal_templates WHERE client_id = ?), 0))`,
-        [mealId, c.org_id, c.id, 'Meal', savedName.slice(0, 80), item.calories || 0, item.protein || 0, item.carbs || 0, item.fat || 0, c.id]);
-      for (const [i, comp] of (item.components || []).entries()) {
-        await db.run(
-          `INSERT INTO meal_items (id, meal_template_id, name, quantity, unit, calories, protein, carbs, fat, position)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
-          [id('mi'), mealId, String(comp.name || 'Item').slice(0, 80), Number(comp.quantity) || 1, comp.unit || null,
-           comp.calories || 0, comp.protein || 0, comp.carbs || 0, comp.fat || 0, i]);
-      }
-      track(db, 'shared_meal_saved', req.user.org, req.user.sub, { client_id: c.id, share_id: share.id, type: 'meal' });
-      return res.status(201).json({ ok: true, type: 'meal', id: mealId, saved_as: savedName, duplicate: !!existing });
-    }
-
-    // type === 'food'
-    const existing = await db.q1(
-      'SELECT id FROM foods WHERE client_id = ? AND lower(name) = ?', [c.id, item.name.toLowerCase()]);
-    const savedName = existing ? `${item.name} (shared)` : item.name;
-    const foodId = id('food');
-    // item.unit already carries the food's own full serving description
-    // (e.g. "100 g" or "1 bowl", see POST /share above) -- not a short
-    // unit suffix, so it maps straight to foods.serving, matching exactly
-    // what item.calories/etc already represent (one full serving).
-    await db.run(
-      `INSERT INTO foods (id, org_id, client_id, name, serving, calories, protein, carbs, fat, source, is_global)
-       VALUES (?,?,?,?,?,?,?,?,?,'USER_ENTERED',0)`,
-      [foodId, c.org_id, c.id, savedName.slice(0, 80), item.unit || '100 g',
-       item.calories || 0, item.protein || 0, item.carbs || 0, item.fat || 0]);
-    track(db, 'shared_meal_saved', req.user.org, req.user.sub, { client_id: c.id, share_id: share.id, type: 'food' });
-    res.status(201).json({ ok: true, type: 'food', id: foodId, saved_as: savedName, duplicate: !!existing });
+    const saved = await saveMealItem(db, c, item);
+    track(db, 'shared_meal_saved', req.user.org, req.user.sub, { client_id: c.id, share_id: snap.share.id, type: saved.type });
+    res.status(201).json({ ok: true, ...saved });
   });
 
   // ---------------- AI food estimate feedback ----------------
@@ -2413,74 +2322,11 @@ export default function meRoutes(db) {
     const c = await getClient(req, res); if (!c) return;
     const { workout_id, exercise_ids } = req.body || {};
     if (!workout_id) return res.status(400).json({ error: 'workout_id is required' });
-
-    // Try to find the workout in the client's personal planner first,
-    // then in today's assigned/custom workouts.
-    let workout = null;
-    let exercises = [];
-
-    // 1. Check personal planner (client_workouts)
-    const plannerW = await db.q1(
-      'SELECT * FROM client_workouts WHERE id = ? AND client_id = ?',
-      [workout_id, c.id]);
-    if (plannerW) {
-      workout = plannerW;
-      exercises = await db.q(
-        'SELECT * FROM client_workout_exercises WHERE workout_id = ? ORDER BY position',
-        [plannerW.id]);
-    }
-
-    // 2. Check assigned/custom workouts (workouts table)
-    if (!workout) {
-      const assignedW = await db.q1(
-        'SELECT * FROM workouts WHERE id = ? AND client_id = ?',
-        [workout_id, c.id]);
-      if (assignedW) {
-        workout = assignedW;
-        exercises = await db.q(
-          'SELECT * FROM workout_exercises WHERE workout_id = ? ORDER BY position',
-          [assignedW.id]);
-      }
-    }
-
-    if (!workout) return res.status(404).json({ error: 'Workout not found' });
-
-    // Filter exercises if specific IDs were provided
-    let selectedExercises = exercises;
-    if (exercise_ids && exercise_ids.length > 0) {
-      const idSet = new Set(exercise_ids);
-      selectedExercises = exercises.filter((ex) => idSet.has(ex.id));
-      if (selectedExercises.length === 0) {
-        return res.status(400).json({ error: 'No matching exercises found in this workout' });
-      }
-    }
-
-    // Build the immutable snapshot payload
-    const payload = {
-      type: 'workout',
-      name: workout.name || 'Workout',
-      notes: workout.notes || null,
-      exercises: selectedExercises.map((ex, i) => ({
-        exercise_id: ex.exercise_id || null,
-        name: ex.name,
-        sets: ex.sets,
-        reps: ex.reps,
-        weight: ex.weight,
-        rest_sec: ex.rest_sec,
-        tempo: ex.tempo || null,
-        notes: ex.notes || null,
-        position: i,
-      })),
-    };
-
-    const shareId = id('shr');
-    const expiresAt = new Date(Date.now() + SHARE_LINK_TTL_MS).toISOString();
-    await db.run(
-      `INSERT INTO shared_workouts (id, org_id, client_id, shared_by_name, workout_name, payload_json, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [shareId, c.org_id, c.id, c.name || null, payload.name, JSON.stringify(payload), now(), expiresAt]);
-    track(db, 'workout_shared', req.user.org, req.user.sub, { client_id: c.id, exercise_count: payload.exercises.length });
-    res.status(201).json({ id: shareId, expires_at: expiresAt });
+    const built = await workoutPayload(db, c, { workoutId: workout_id, exerciseIds: exercise_ids });
+    if (built.error) return res.status(built.status).json({ error: built.error });
+    const snap = await storeWorkoutSnapshot(db, c, built.payload);
+    track(db, 'workout_shared', req.user.org, req.user.sub, { client_id: c.id, exercise_count: built.payload.exercises.length });
+    res.status(201).json(snap);
   });
 
   // DELETE /me/workout-share/:id: revoke a shared workout link early.
@@ -2507,29 +2353,10 @@ export default function meRoutes(db) {
     const { exercise_indexes, destination, day_of_week, workout_name } = req.body || {};
     const { id: shareId } = req.params;
 
-    // 1. Validate the share exists (and hasn't expired -- see share.js's
-    //    own comment on the expires_at convention)
-    const share = await db.q1('SELECT * FROM shared_workouts WHERE id = ?', [shareId]);
-    if (!share || (share.expires_at && Date.parse(share.expires_at) <= Date.now())) {
-      return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
-    }
+    const snap = await loadWorkoutSnapshot(db, shareId);
+    if (!snap) return res.status(404).json({ error: 'This shared workout link is invalid or has expired' });
+    if (!(snap.payload.exercises || []).length) return res.status(400).json({ error: 'This shared workout has no exercises' });
 
-    // 2. Parse the snapshot
-    let payload = {};
-    try { payload = JSON.parse(share.payload_json) || {}; } catch { payload = {}; }
-    const allExercises = payload.exercises || [];
-    if (!allExercises.length) return res.status(400).json({ error: 'This shared workout has no exercises' });
-
-    // 3. Filter by selected indexes (or use all)
-    const indexes = (exercise_indexes && exercise_indexes.length > 0)
-      ? exercise_indexes
-      : allExercises.map((_, i) => i);
-    const selectedExercises = indexes
-      .filter((i) => i >= 0 && i < allExercises.length)
-      .map((i) => allExercises[i]);
-    if (!selectedExercises.length) return res.status(400).json({ error: 'No valid exercises selected' });
-
-    // 4. Validate destination
     const VALID_DEST = ['today', 'planner', 'planner_day'];
     if (!VALID_DEST.includes(destination)) {
       return res.status(400).json({ error: 'Invalid destination. Must be: today, planner, or planner_day' });
@@ -2543,164 +2370,24 @@ export default function meRoutes(db) {
         return res.status(400).json({ error: 'day_of_week must be 0-6 (Monday-Sunday)' });
       }
     }
-
-    // 5. Resolve exercise IDs against the recipient's library
-    //    (global or same-org only), fall back to name-based resolution.
-    // Batched into 2 queries total instead of up to 2 per exercise (was an
-    // unbounded N+1 — the sibling custom-workout-create route already caps
-    // at 20 exercises for the same reason; match that here too).
-    const MAX_IMPORT_EXERCISES = 20;
-    const capped = selectedExercises.slice(0, MAX_IMPORT_EXERCISES);
-
-    const idsToResolve = [...new Set(capped.map((ex) => ex.exercise_id).filter(Boolean))];
-    const byId = new Map();
-    if (idsToResolve.length) {
-      const rows = await db.q(
-        `SELECT id, name FROM exercise_library WHERE id IN (${idsToResolve.map(() => '?').join(',')}) AND (is_global = 1 OR org_id = ?)`,
-        [...idsToResolve, c.org_id]);
-      for (const row of rows) byId.set(row.id, row);
-    }
-
-    const namesToResolve = [...new Set(
-      capped.filter((ex) => !(ex.exercise_id && byId.has(ex.exercise_id)) && ex.name)
-        .map((ex) => ex.name.toLowerCase())
-    )];
-    const byName = new Map();
-    if (namesToResolve.length) {
-      const rows = await db.q(
-        `SELECT id, name FROM exercise_library WHERE lower(name) IN (${namesToResolve.map(() => '?').join(',')}) AND (is_global = 1 OR org_id = ?)`,
-        [...namesToResolve, c.org_id]);
-      for (const row of rows) {
-        const key = row.name.toLowerCase();
-        if (!byName.has(key)) byName.set(key, row); // first match wins, same as the old LIMIT 1
-      }
-    }
-
-    const resolvedExercises = capped.map((ex) => {
-      let resolvedExerciseId = null;
-      let resolvedName = ex.name || 'Exercise';
-
-      const lib = (ex.exercise_id && byId.get(ex.exercise_id)) || (ex.name && byName.get(ex.name.toLowerCase()));
-      if (lib) {
-        resolvedExerciseId = lib.id;
-        resolvedName = lib.name; // use the library's canonical name
-      }
-
-      return {
-        exercise_id: resolvedExerciseId,
-        name: resolvedName,
-        sets: Math.max(1, Math.min(12, parseInt(ex.sets, 10) || 3)),
-        reps: String(ex.reps ?? 10).slice(0, 12),
-        weight: String(ex.weight ?? 'BW').slice(0, 12),
-        rest_sec: Math.max(15, Math.min(600, parseInt(ex.rest_sec, 10) || 90)),
-        tempo: ex.tempo || null,
-        notes: ex.notes || null,
-      };
-    });
-
-    // 6. Disambiguate workout name if recipient already has one with the same name
-    const rawName = (workout_name || payload.name || 'Shared Workout').trim().slice(0, 80);
-    let finalName = rawName;
-
-    if (destination === 'today') {
-      // For today, check workouts table for existing name
-      const existing = await db.q1(
-        `SELECT id FROM workouts WHERE client_id = ? AND lower(name) = lower(?) AND scheduled_date = ? AND source IN ('client_custom', 'program')`,
-        [c.id, finalName, dayKey(new Date(), req.tz || 'Asia/Kolkata')]);
-      if (existing) finalName = `${rawName} (shared)`;
-    } else {
-      // For planner, check client_workouts for existing name
-      const existing = await db.q1(
-        'SELECT id FROM client_workouts WHERE client_id = ? AND lower(name) = lower(?)',
-        [c.id, finalName]);
-      if (existing) {
-        finalName = `${rawName} (shared)`;
-        // Check for further collision
-        const existing2 = await db.q1(
-          'SELECT id FROM client_workouts WHERE client_id = ? AND lower(name) = lower(?)',
-          [c.id, finalName]);
-        if (existing2) {
-          // Find the next available disambiguator
-          let n = 2;
-          while (n < 100) {
-            const candidate = `${rawName} (shared ${n})`;
-            const exists = await db.q1(
-              'SELECT id FROM client_workouts WHERE client_id = ? AND lower(name) = lower(?)',
-              [c.id, candidate]);
-            if (!exists) { finalName = candidate; break; }
-            n++;
-          }
-        }
-      }
-    }
-
-    // 7. Check planner access if needed
     if (destination !== 'today') {
       const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [c.org_id]);
-      const mode = s?.workout_mode_default || 'hybrid';
-      if (mode === 'prescribed') {
+      if ((s?.workout_mode_default || 'hybrid') === 'prescribed') {
         return res.status(403).json({ error: 'Workout creation is locked by your gym (prescribed mode)' });
       }
     }
 
-    // 8. Execute the import transactionally
     try {
-      const result = await db.tx(async (tx) => {
-        if (destination === 'today') {
-          // Create a workout for today
-          const tz = req.tz || 'Asia/Kolkata';
-          const d = dayKey(new Date(), tz);
-          const wId = id('wko');
-          await tx.run(
-            `INSERT INTO workouts (id, org_id, client_id, name, day_label, scheduled_date, status, source, notes, created_at)
-             VALUES (?,?,?,?,?,?,'assigned', 'client_custom', ?, ?)`,
-            [wId, c.org_id, c.id, finalName, finalName.slice(0, 40), d, payload.notes || null, now()]);
-          for (const [i, ex] of resolvedExercises.entries()) {
-            await tx.run(
-              `INSERT INTO workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-              [id('wxe'), wId, ex.exercise_id, i, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
-          }
-          // Remove any previous un-logged custom workout scheduled for today
-          await tx.run(
-            `DELETE FROM workouts WHERE client_id = ? AND source = 'client_custom' AND status = 'assigned' AND scheduled_date = ? AND id != ?
-               AND NOT EXISTS (SELECT 1 FROM workout_logs wl WHERE wl.workout_id = workouts.id)`,
-            [c.id, d, wId]);
-          return { id: wId, destination: 'today' };
-        }
-
-        // planner or planner_day — create a reusable client_workout
-        const cwId = id('cw');
-        await tx.run(
-          'INSERT INTO client_workouts (id, org_id, client_id, name, notes, created_at) VALUES (?,?,?,?,?,?)',
-          [cwId, c.org_id, c.id, finalName, payload.notes || null, now()]);
-        for (const [i, ex] of resolvedExercises.entries()) {
-          await tx.run(
-            `INSERT INTO client_workout_exercises (id, workout_id, exercise_id, position, name, sets, reps, weight, rest_sec, tempo, notes)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-            [id('cwe'), cwId, ex.exercise_id, i, ex.name, ex.sets, ex.reps, ex.weight, ex.rest_sec, ex.tempo, ex.notes]);
-        }
-
-        // If planner_day, assign to the selected day
-        if (destination === 'planner_day') {
-          const dow = parseInt(day_of_week, 10);
-          await tx.run(
-            'DELETE FROM client_workout_schedule WHERE client_id = ? AND day_of_week = ?',
-            [c.id, dow]);
-          await tx.run(
-            'INSERT INTO client_workout_schedule (client_id, day_of_week, workout_id) VALUES (?,?,?)',
-            [c.id, dow, cwId]);
-        }
-
-        return { id: cwId, destination, day_of_week: destination === 'planner_day' ? parseInt(day_of_week, 10) : undefined };
+      const result = await importWorkout(db, c, snap.payload, {
+        destination, dayOfWeek: day_of_week, exerciseIndexes: exercise_indexes, name: workout_name, tz: req.tz,
       });
-
       track(db, 'workout_shared_imported', req.user.org, req.user.sub, {
         client_id: c.id, share_id: shareId, destination: result.destination,
       });
       res.status(201).json({ ok: true, ...result });
     } catch (e) {
-      // Transaction failure — nothing is half-created
+      if (e?.status) return res.status(e.status).json({ error: e.error });
+      // Transaction failure -- nothing is half-created
       res.status(500).json({ error: 'Could not import workout. Please try again.' });
     }
   });

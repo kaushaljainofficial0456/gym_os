@@ -68,6 +68,11 @@ export default function MyDietCard({ clientId, onLogged, t, toast }) {
     api('/me/meals').then((r) => setMeals(r.meals || [])).catch(() => setMeals([]));
   };
   useEffect(load, [clientId]);
+  // A meal someone shared and the member just added (SharedInboxSheet).
+  useEffect(() => {
+    window.addEventListener('skos:meals-changed', load);
+    return () => window.removeEventListener('skos:meals-changed', load);
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (foods === null || meals === null) {
     return (

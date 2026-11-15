@@ -1553,6 +1553,33 @@ CREATE TABLE IF NOT EXISTS shared_workouts (
 );
 CREATE INDEX IF NOT EXISTS idx_shared_workouts_id ON shared_workouts(id);
 
+-- In-app shares: a workout or meal snapshot (shared_workouts /
+-- shared_meals, the same snapshots a link uses) sent straight to one
+-- person. The recipient gets a popup and a bell notification and either
+-- adds it (today / saved / chosen days, or to their meals) or dismisses
+-- it. Recipients are limited to people the sender can already see in the
+-- app (services/sharing.js shareAudience). Org columns are named for who
+-- they belong to: a friend community spans gyms, so sender and recipient
+-- can be in different organizations.
+CREATE TABLE IF NOT EXISTS app_shares (
+  id                  TEXT PRIMARY KEY,
+  kind                TEXT NOT NULL CHECK (kind IN ('workout','meal')),
+  snapshot_id         TEXT NOT NULL,            -- shared_workouts.id or shared_meals.id
+  title               TEXT NOT NULL,
+  message             TEXT,
+  sender_client_id    TEXT REFERENCES clients(id) ON DELETE SET NULL,
+  sender_name         TEXT,
+  sender_org_id       TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  recipient_client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  recipient_org_id    TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  status              TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','dismissed')),
+  outcome             TEXT,                     -- what the recipient did: today | planner | days | meal
+  created_at          TEXT NOT NULL,
+  acted_at            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_app_shares_recipient ON app_shares(recipient_client_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_app_shares_sender ON app_shares(sender_client_id, created_at);
+
 -- ============================================================
 -- SK OS ENTERPRISE — gym-owner SaaS billing, QR enrollment, payments
 -- ============================================================

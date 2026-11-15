@@ -7,6 +7,7 @@ import Logo from '../../components/Logo.jsx';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
+import SharedInboxGate from '../../components/share/SharedInboxGate.jsx';
 import AppTour, { isTourDone } from '../../components/AppTour.jsx';
 import Icon from '../../components/Icon.jsx';
 import GlassTabBar from '../../components/GlassTabBar.jsx';
@@ -164,7 +165,8 @@ export default function ClientLayout() {
   // The first-visit popup waits until /me/home has answered and nothing else
   // owns the screen: a brand-new member otherwise got the "Home" popup
   // stacked on top of the welcome wizard, burying it on the first screen.
-  const showFeaturePopup = featurePopup && clientData && !showOnboarding && !tourActive;
+  const [shareShowing, setShareShowing] = useState(false);
+  const showFeaturePopup = featurePopup && clientData && !showOnboarding && !tourActive && !shareShowing;
 
   // ClientLayout persists across client-page navigation (Outlet swaps only
   // the page below it), so /tracking/me/home is fetched once here and handed
@@ -403,6 +405,10 @@ export default function ClientLayout() {
 
       {/* ── FEATURE POPUP ── */}
       {showFeaturePopup && <FeaturePopup featureId={featurePopup} onClose={() => setFeaturePopup(null)} />}
+
+      {/* ── SHARED WITH YOU: a workout or meal someone sent in the app.
+          Waits until nothing else owns the screen. ── */}
+      <SharedInboxGate ready={!!clientData && !showOnboarding && !tourActive && !showLock && !showFeaturePopup} onShowing={setShareShowing} />
 
       {/* ── NOTIFICATION PERMISSION PROMPT ── */}
       <NotificationPermissionPrompt />

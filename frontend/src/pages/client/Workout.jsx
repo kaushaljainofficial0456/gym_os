@@ -292,7 +292,6 @@ export default function Workout() {
   const [shareCommunitiesFor, setShareCommunitiesFor] = useState(null);
   const [shareSheetData, setShareSheetData] = useState(null); // { workoutId, workoutName, exercises } (see ml/docs/SESSION_INTENSITY_DESIGN_NOTE.md)
   const [burnLoading, setBurnLoading] = useState(false);
-  const [elapsed, setElapsed] = useState(0); // ticking elapsed seconds during execute mode
   const [pausedAt, setPausedAt] = useState(0); // timestamp when pause began (0 = not paused)
   const [accumulatedPausedMs, setAccumulatedPausedMs] = useState(0); // total paused time so far
   // this week preview
@@ -339,6 +338,17 @@ export default function Workout() {
     return () => clearTimeout(h);
   }, [toast]);
 
+  // A workout someone shared and the member just added (SharedInboxSheet):
+  // today's session, the week and Saved workouts may all have changed.
+  useEffect(() => {
+    const changed = () => {
+      today.reload({ silent: true }); week.reload({ silent: true });
+      api('/me/planner').then(setPlanner).catch(() => {});
+    };
+    window.addEventListener('skos:plan-changed', changed);
+    return () => window.removeEventListener('skos:plan-changed', changed);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* Persist the checklist as it changes.
 
      Debounced at 800 ms: ticking four sets in quick succession should cost
@@ -371,20 +381,9 @@ export default function Workout() {
     return () => clearTimeout(h);
   }, [exSets, accumulatedPausedMs, mode, workout?.id, exState, removedIds, groups]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // session elapsed timer — ticks every second during execute mode
-  // Paused time is excluded: the timer freezes visually and the
-  // authoritative `elapsed` value stops advancing while paused.
-  useEffect(() => {
-    if (mode !== 'execute' || !startedAt || pausedAt) return;
-    const tick = () => {
-      const now = Date.now();
-      const wallClockMs = now - startedAt;
-      setElapsed(Math.floor((wallClockMs - accumulatedPausedMs) / 1000));
-    };
-    tick();
-    const h = setInterval(tick, 1000);
-    return () => clearInterval(h);
-  }, [mode, startedAt, pausedAt, accumulatedPausedMs]);
+  /* The session clock ticks inside PlayerHeader (SessionView.jsx), not
+     here: a second-by-second setState on this page re-rendered every card,
+     input and sheet in the session sixty times a minute. */
 
   // ── cardio timer — ticks every second while an exercise is active ──
   useEffect(() => {
@@ -463,7 +462,6 @@ export default function Workout() {
     setOpenEx((firstUnfinished || list[0])?.id ?? null);
     // Restore accumulated paused time from the persisted draft
     setAccumulatedPausedMs(restoredPausedMs);
-    setElapsed(0);
     // Reconstruct elapsed time from server started_at
     // Prefer the local session's startedAt (browser clock) over the server
     // timestamp so the timer reflects actual wall-clock time in this tab.
@@ -488,15 +486,14 @@ export default function Workout() {
     today.reload({ silent: true }); week.reload({ silent: true }); hist.reload({ silent: true });
   };
 
-  const duplicatePlan = async (w) => {
-    try {
-      await api(`/me/planner/workouts/${w.id}/duplicate`, { method: 'POST' });
-      setToast(`Copied ${w.name}`);
-      await loadPlanner();
-    } catch (e) { setToast(e.message); }
+  /** Share a saved workout: in the app, or as a link (ShareWorkoutSheet). */
+  const sharePlan = (w) => {
+    setShareSheetData({ workoutId: w.id, workoutName: w.name, exercises: w.exercises || [] });
+    setShareSheetOpen(true);
   };
 
   const deletePlan = async (w) => {
+    setToast(''); // an earlier message would sit over the question
     if (!(await confirm({ title: `Delete "${w.name}"?`, body: 'Its repeat days are cleared too. Sessions you already did stay in your history.', confirmLabel: 'Delete workout' }))) return;
     try {
       await api(`/me/planner/workouts/${w.id}`, { method: 'DELETE' });
@@ -659,7 +656,6 @@ export default function Workout() {
     setGroups(groupsFromExercises(state));
     setRemovedIds([]);
     setOpenEx(state[0]?.id ?? null);
-    setElapsed(0);
     const now = Date.now();
     setStartedAt(now);
     setPausedAt(0);
@@ -972,7 +968,6 @@ export default function Workout() {
       setStartedAt(0);
       setPausedAt(0);
       setAccumulatedPausedMs(0);
-      setElapsed(0);
       setExState(null);
       setGroups({});
       setRemovedIds([]);
@@ -1295,7 +1290,7 @@ export default function Workout() {
         onNew={() => { setSavedOpen(false); openBuilder({ defaultWhen: 'later' }); }}
         onEdit={(w, days) => { setSavedOpen(false); editPlan(w, days); }}
         onDoToday={startPlanToday}
-        onCopy={duplicatePlan}
+        onShare={sharePlan}
         onDelete={deletePlan}
         onSetDays={setPlanDays}
       />
@@ -1562,7 +1557,9 @@ export default function Workout() {
       <div className="wk-session">
         <PlayerHeader
           name={workout?.name}
-          elapsed={elapsed}
+          startedAt={startedAt}
+          pausedAt={pausedAt}
+          pausedMs={accumulatedPausedMs}
           paused={!!pausedAt}
           doneSets={doneSets}
           totalSets={totalSets}
@@ -1677,7 +1674,7 @@ export default function Workout() {
         }}
         onShareCommunities={() => setShareCommunitiesFor(result.workoutId)}
         onDone={() => {
-          clearActiveSession(); setMode('browse'); setResult(null); setExSets({}); setElapsed(0);
+          clearActiveSession(); setMode('browse'); setResult(null); setExSets({});
           setPausedAt(0); setAccumulatedPausedMs(0); setStartedAt(0); setExState(null); setGroups({}); setRemovedIds([]);
           setBurn(null); setBurnInput(null); setIntensity(null); setIntensitySkipped(false);
           setBurnSource(null); setSharing(false); setShareToast('');

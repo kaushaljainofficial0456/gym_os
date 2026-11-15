@@ -1,168 +1,176 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../api.js';
-import SavingOverlay from './SavingOverlay.jsx';
-import { Sheet } from './../UI.jsx';
-
 /**
- * SHARE MEALS — select saved foods/meals, bundle them into one shareable
- * link (POST /me/share), then hand off to whatever the platform actually
- * offers: navigator.share() (native share sheet -- WhatsApp, Messages,
- * etc. all show up there on a device that supports it) or a clipboard-copy
- * fallback. No fake direct WhatsApp button -- the platform decides what's
- * available, per spec ("Do NOT fake a direct WhatsApp integration if the
- * platform doesn't provide one").
+ * SHARE MEALS -- pick saved meals/foods, then:
+ *
+ *   Send in app   to people in your gym, friends and communities; they get
+ *                 a popup and a bell notification and can add them to their
+ *                 own meals in one tap (POST /app-shares).
+ *   Share link    the public link (POST /me/share), handed to the phone's
+ *                 own share sheet (WhatsApp, Messages... whatever the
+ *                 platform offers) or copied. No fake direct WhatsApp
+ *                 button: the platform decides what is available.
  */
-export default function ShareMealsSheet({ open, onClose, t }) {
+import { useEffect, useState } from 'react';
+import { Check, ChevronLeft, Copy, Link2, Send } from 'lucide-react';
+import { api } from '../../api.js';
+import { Sheet } from '../UI.jsx';
+import PeoplePicker from '../share/PeoplePicker.jsx';
+import { shareLink } from '../share/shareLink.js';
+import '../share/share.css';
+
+function PickRow({ on, name, meta, onClick }) {
+  return (
+    <button type="button" className="sh-pickrow" aria-pressed={on} onClick={onClick}>
+      <span className="sh-box" aria-hidden="true">{on && <Check size={13} strokeWidth={3} />}</span>
+      <span className="flex-1 min-w-0">
+        <span className="sh-pickrow__name truncate">{name}</span>
+        <span className="sh-pickrow__meta">{meta}</span>
+      </span>
+    </button>
+  );
+}
+
+export default function ShareMealsSheet({ open, onClose }) {
   const [meals, setMeals] = useState(null);
   const [foods, setFoods] = useState(null);
-  const [selectedMeals, setSelectedMeals] = useState(() => new Set());
-  const [selectedFoods, setSelectedFoods] = useState(() => new Set());
-  const [stage, setStage] = useState(null); // null | 'sharing' | 'success' | 'error' -- drives the OVERLAY only, auto-clears
-  const [shared, setShared] = useState(false); // persistent: "a link exists, show it" -- independent of the overlay's own lifetime
-  const [shareUrl, setShareUrl] = useState('');
+  const [selMeals, setSelMeals] = useState(() => new Set());
+  const [selFoods, setSelFoods] = useState(() => new Set());
+  const [view, setView] = useState('pick'); // pick | people | link
+  const [people, setPeople] = useState(() => new Map());
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    setSelectedMeals(new Set()); setSelectedFoods(new Set()); setStage(null); setShared(false); setShareUrl(''); setCopied(false);
+    setSelMeals(new Set()); setSelFoods(new Set()); setView('pick'); setPeople(new Map()); setNote('');
+    setBusy(false); setErr(''); setUrl(''); setCopied(false); setSent(null);
     api('/me/meals').then((r) => setMeals(r.meals || [])).catch(() => setMeals([]));
     api('/me/foods').then((r) => setFoods(r.mine || [])).catch(() => setFoods([]));
   }, [open]);
 
-  const toggle = (set, setSet, id) => {
-    const next = new Set(set);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSet(next);
-  };
+  const flip = (set, setSet, key) => setSet(() => { const n = new Set(set); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const count = selMeals.size + selFoods.size;
+  const body = { meal_ids: [...selMeals], food_ids: [...selFoods] };
 
-  const count = selectedMeals.size + selectedFoods.size;
-
-  const doShare = async () => {
-    setStage('sharing');
+  const send = async () => {
+    if (busy || !people.size) return;
+    setBusy(true); setErr('');
     try {
-      const res = await api('/me/share', {
-        method: 'POST',
-        body: JSON.stringify({ meal_ids: [...selectedMeals], food_ids: [...selectedFoods] }),
-      });
-      const url = `${window.location.origin}/share/${res.id}`;
-      setShareUrl(url);
-      setShared(true);
-      setStage('success');
-      // Success beat stays visible on its own, then the overlay clears --
-      // the share-link row underneath (copy/share-again) persists via
-      // `shared`, independent of the overlay's own lifetime.
-      setTimeout(async () => {
-        setStage(null);
-        if (navigator.share) {
-          try { await navigator.share({ title: 'My meal on Barbell', text: 'Check out what I logged on Barbell', url }); }
-          catch { /* user cancelled the native sheet -- not an error */ }
-        }
-      }, 900);
-    } catch (e) {
-      setStage('error');
-      setTimeout(() => setStage(null), 1600);
-    }
+      const r = await api('/app-shares', { method: 'POST', body: JSON.stringify({ kind: 'meal', ...body, recipients: [...people.keys()], message: note.trim() || undefined }) });
+      setSent([...people.values()].slice(0, r.sent || people.size));
+    } catch (e) { setErr(e.message || 'Could not send it'); }
+    setBusy(false);
   };
 
-  const copyLink = async () => {
-    try { await navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 1800); }
-    catch { /* clipboard unavailable -- link is still visible/selectable in the input */ }
+  const makeLink = async () => {
+    if (busy || !count) return;
+    setBusy(true); setErr('');
+    try {
+      const r = await api('/me/share', { method: 'POST', body: JSON.stringify(body) });
+      const link = `${window.location.origin}/share/${r.id}`;
+      setUrl(link); setView('link');
+      if ((await shareLink(link, 'My meal on Barbell', 'Try this on Barbell')) === 'copied') setCopied(true);
+    } catch (e) { setErr(e.message || 'Could not make a link'); }
+    setBusy(false);
   };
 
-  // Pinned under the list, so Share is reachable however many meals there are.
-  const footer = meals === null || foods === null ? null : (
-    <div className="space-y-2">
-      {shared && shareUrl && (
-        <div className="rounded-xl p-3 flex items-center gap-2 anim-fadeIn" style={{ background: t.glass, border: `1px solid ${t.border}` }}>
-          <input readOnly value={shareUrl} aria-label="Share link" className="flex-1 min-w-0 bg-transparent font-grotesk text-[11px] outline-none" style={{ color: t.mute }} onFocus={(e) => e.target.select()} />
-          <button onClick={copyLink} className="shrink-0 px-2.5 py-1.5 rounded-lg font-grotesk text-[10px] font-bold" style={{ background: t.accentDim, color: t.accent }}>
-            {copied ? 'Copied ✓' : 'Copy link'}
-          </button>
-        </div>
-      )}
-      <button onClick={doShare} disabled={count === 0 || stage === 'sharing'}
-              className="w-full py-3 rounded-xl font-grotesk text-[13px] font-bold transition-all active:scale-[.98]"
-              style={{
-                background: count === 0 ? t.surface : t.accent,
-                color: count === 0 ? t.mute : 'var(--accent-contrast)',
-                border: `1px solid ${count === 0 ? t.border : t.accent}`,
-                opacity: count === 0 ? 0.6 : 1, cursor: count === 0 ? 'not-allowed' : 'pointer',
-              }}>
-        {shared ? 'Share again' : `Share${count ? ` (${count})` : ''}`}
-      </button>
-    </div>
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* still visible */ }
+  };
+
+  const back = (
+    <button type="button" className="btn btn-sm justify-self-start" onClick={() => { setView('pick'); setErr(''); }}>
+      <ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />Back
+    </button>
   );
 
-  // The shared sheet: portalled over the screen, slides up, closes by
-  // button, Escape, swipe or a tap outside -- except mid-share, when the
-  // share is still being made (onClose withheld).
-  return (
-    <Sheet open={open} onClose={stage ? undefined : onClose} title="Share meals" footer={footer}>
-        <div className="space-y-4">
-          {meals === null || foods === null ? (
-            <div className="space-y-2 py-4">
-              {[0, 1, 2].map((i) => <div key={i} className="h-11 rounded-xl anim-pulse-soft" style={{ background: t.glass }} />)}
-            </div>
-          ) : (
-            <>
-              {meals.length > 0 && (
-                <div>
-                  <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.mute }}>Saved Meals</div>
-                  <div className="space-y-1.5">
-                    {meals.map((m) => {
-                      const sel = selectedMeals.has(m.id);
-                      return (
-                        <button key={m.id} onClick={() => toggle(selectedMeals, setSelectedMeals, m.id)}
-                                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
-                                style={{ background: sel ? t.accentDim : t.glass, border: `1px solid ${sel ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}` }}>
-                          <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all" style={{ background: sel ? t.accent : 'transparent', border: `2px solid ${sel ? t.accent : t.border}` }}>
-                            {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{m.name}</span>
-                            <span className="block font-grotesk text-[10px]" style={{ color: t.faint }}>{Math.round(m.calories || 0)} kcal</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {foods.length > 0 && (
-                <div>
-                  <div className="font-grotesk text-[10px] uppercase tracking-[.14em] font-semibold mb-2" style={{ color: t.mute }}>Saved Foods</div>
-                  <div className="space-y-1.5">
-                    {foods.map((f) => {
-                      const sel = selectedFoods.has(f.id);
-                      return (
-                        <button key={f.id} onClick={() => toggle(selectedFoods, setSelectedFoods, f.id)}
-                                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
-                                style={{ background: sel ? t.accentDim : t.glass, border: `1px solid ${sel ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : t.border}` }}>
-                          <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all" style={{ background: sel ? t.accent : 'transparent', border: `2px solid ${sel ? t.accent : t.border}` }}>
-                            {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-contrast)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-grotesk text-sm font-semibold truncate" style={{ color: t.ink }}>{f.name}</span>
-                            <span className="block font-grotesk text-[10px]" style={{ color: t.faint }}>{f.serving || '100 g'} · {Math.round(f.calories || 0)} kcal</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {meals.length === 0 && foods.length === 0 && (
-                <div className="text-center py-6 font-grotesk text-[12px]" style={{ color: t.mute }}>Save a food or meal first to share it</div>
-              )}
-            </>
-          )}
+  let content;
+  let footer = null;
+  if (sent) {
+    content = (
+      <div className="sh-done">
+        <span className="sh-done__icon"><Check size={26} strokeWidth={2.6} aria-hidden="true" /></span>
+        <div className="sh-done__title">Sent</div>
+        <p className="sh-done__body">{sent.length === 1 ? sent[0].name : `${sent.length} people`} can add {count === 1 ? 'it' : 'them'} to their meals in one tap.</p>
+      </div>
+    );
+    footer = <button type="button" className="btn-primary btn-block" onClick={onClose}>Done</button>;
+  } else if (view === 'people') {
+    content = (
+      <div className="grid gap-3">
+        {back}
+        <PeoplePicker selected={people} onChange={setPeople} />
+        <label className="grid gap-1.5">
+          <span className="text-[12.5px] font-semibold" style={{ color: 'var(--mute)' }}>Add a note (optional)</span>
+          <input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. High protein and quick to make" />
+        </label>
+        {err && <p className="text-[13px]" role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+      </div>
+    );
+    footer = (
+      <button type="button" className="btn-primary btn-block" disabled={!people.size || busy} onClick={send}>
+        <Send size={15} strokeWidth={2.2} aria-hidden="true" />
+        {busy ? 'Sending…' : people.size ? `Send to ${people.size === 1 ? [...people.values()][0].name.split(' ')[0] : `${people.size} people`}` : 'Pick someone'}
+      </button>
+    );
+  } else if (view === 'link') {
+    content = (
+      <div className="grid gap-3">
+        {back}
+        <p className="text-[13.5px]" style={{ color: 'var(--mute)' }}>Anyone with this link can see {count === 1 ? 'it' : 'them'} and save {count === 1 ? 'it' : 'them'} in Barbell. It works for 30 days.</p>
+        <div className="sh-link">
+          <input readOnly value={url} aria-label="Share link" onFocus={(e) => e.target.select()} />
+          <button type="button" className="btn btn-sm" onClick={copy}><Copy size={14} strokeWidth={2} aria-hidden="true" />{copied ? 'Copied' : 'Copy'}</button>
         </div>
+      </div>
+    );
+    footer = <button type="button" className="btn-primary btn-block" onClick={() => shareLink(url, 'My meal on Barbell', 'Try this on Barbell')}>Share link…</button>;
+  } else {
+    content = meals === null || foods === null ? (
+      <div className="grid gap-2 py-2">{[0, 1, 2].map((i) => <div key={i} className="sh-person sh-person--skeleton" />)}</div>
+    ) : (
+      <div className="grid gap-4">
+        {meals.length > 0 && (
+          <section className="grid gap-1.5">
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mute)' }}>Saved meals</span>
+            <div className="sh-pick">
+              {meals.map((m) => <PickRow key={m.id} on={selMeals.has(m.id)} name={m.name} meta={`${Math.round(m.calories || 0)} kcal`} onClick={() => flip(selMeals, setSelMeals, m.id)} />)}
+            </div>
+          </section>
+        )}
+        {foods.length > 0 && (
+          <section className="grid gap-1.5">
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--mute)' }}>Saved foods</span>
+            <div className="sh-pick">
+              {foods.map((f) => <PickRow key={f.id} on={selFoods.has(f.id)} name={f.name} meta={`${f.serving || '100 g'} · ${Math.round(f.calories || 0)} kcal`} onClick={() => flip(selFoods, setSelFoods, f.id)} />)}
+            </div>
+          </section>
+        )}
+        {meals.length === 0 && foods.length === 0 && <div className="sh-empty">Save a meal or food first, then you can share it.</div>}
+        {err && <p className="text-[13px]" role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+      </div>
+    );
+    if (meals && foods && (meals.length || foods.length)) {
+      footer = (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="btn" disabled={!count || busy} onClick={makeLink}>
+            <Link2 size={15} strokeWidth={2} aria-hidden="true" />{busy ? 'Making…' : 'Share link'}
+          </button>
+          <button type="button" className="btn-primary" disabled={!count} onClick={() => setView('people')}>
+            <Send size={15} strokeWidth={2.2} aria-hidden="true" />Send in app{count ? ` · ${count}` : ''}
+          </button>
+        </div>
+      );
+    }
+  }
 
-      <SavingOverlay open={stage === 'sharing' || stage === 'success' || stage === 'error'}
-                     stage={stage === 'sharing' ? 'saving' : stage === 'success' ? 'success' : 'error'}
-                     label={stage === 'sharing' ? 'Sharing' : stage === 'success' ? 'Meal Shared' : 'Could not share'}
-                     sublabel={stage === 'sharing' ? 'Preparing your meal…' : stage === 'success' ? 'Your meal is ready to share.' : 'Please try again'}
-                     mode="overlay" />
+  return (
+    <Sheet open={open} onClose={busy ? undefined : onClose} title="Share meals"
+      sub={view === 'people' ? 'Pick who gets it' : view === 'pick' ? 'Pick what to share' : undefined} footer={footer}>
+      {content}
     </Sheet>
   );
 }

@@ -646,7 +646,11 @@ body {
     radial-gradient(40rem 30rem at 94% 2%, rgb(var(--secondary-rgb) / .05), transparent 58%),
     radial-gradient(50rem 36rem at 38% 122%, rgb(var(--accent-rgb) / .04), transparent 60%),
     radial-gradient(28rem 20rem at 78% 62%, rgb(var(--secondary-rgb) / .03), transparent 62%);
-  animation: ambientDrift 52s ease-in-out infinite alternate;
+  /* STILL, on purpose. This used to drift (ambientDrift: 2% over 52s, never
+     ending). Nobody could see it move, but it changed what sits behind the
+     header's and the tab bar's backdrop blur, so the phone recomputed both
+     blurs on EVERY frame of EVERY page, ~145 compositor commits a second
+     while the app sat idle. That was the lag and the battery drain. */
 }
 
 .dark body::after {
@@ -657,11 +661,6 @@ body {
   pointer-events: none;
   opacity: .30;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-}
-
-@keyframes ambientDrift {
-  0%   { transform: translate3d(0, 0, 0) scale(1); }
-  100% { transform: translate3d(2%, 1%, 0) scale(1.04); }
 }
 
 /* Token-driven -- the light-mode variants these replaced were the last
@@ -1433,8 +1432,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
      bottom offset, the border colour and the radius all differed by page.
      `bottom` clears the tab bar and the home indicator on every screen.
      ═══════════════════════════════════════════ */
+  /* Above sheets and dialogs (z-60): a toast confirming something done
+     inside a sheet ("Copied Push A") was drawn under it, unseen. */
   .toast {
-    @apply fixed left-1/2 z-50 font-grotesk max-w-[calc(100vw-32px)];
+    @apply fixed left-1/2 z-[70] font-grotesk max-w-[calc(100vw-32px)];
     bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     padding: 10px 18px;
