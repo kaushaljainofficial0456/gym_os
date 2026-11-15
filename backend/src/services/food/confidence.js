@@ -90,7 +90,14 @@ export function confidenceBreakdown(ev = {}) {
   } else {
     por = 'low'; reasons.portion.push('a typical serving assumed');
   }
-  if (ev.sizes?.length && por !== 'high') {
+  if (ev.size_factor) {
+    // A size word was applied as a typical ratio: better than ignoring it,
+    // still not a weight -- at most 'medium'.
+    if (por === 'high') por = 'medium';
+    reasons.portion.push(ev.size_factor === 1
+      ? `“${ev.sizes?.[0] || 'size'}” is the standard size used`
+      : `“${ev.sizes?.[0] || 'size'}” applied as ×${ev.size_factor} of a standard piece (typical ratio, not a weight)`);
+  } else if (ev.sizes?.length && ev.sizes.some((w) => !['medium', 'regular'].includes(w)) && por !== 'high') {
     por = 'low'; reasons.portion.push(`“${ev.sizes.join('”, “')}” noted but a standard size was used`);
   }
 

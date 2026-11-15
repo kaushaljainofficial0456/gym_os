@@ -184,7 +184,11 @@ const STAPLES = [
   S('poha', 'Poha', 'grain', {
     ref: 'indb:BFP045',
     aliases: ['poha', 'pohe', 'aval', 'kanda poha', 'batata poha', 'vegetable poha'],
-    units: [BOWL, PLATE],
+    // Cooked poha is airy: ~0.7 g/ml loosely heaped (an assumption, shown
+    // as one -- not a measurement). INDB's own 98 g "bowl" was rejected as
+    // too small for any bowl (container rule, foodEstimator.js), and the
+    // catalogue's wet-dish density made a bowl 250 g and a plate 350 g.
+    units: [fix('bowl', 'bowl', 175), fix('plate', 'plate', 245), fix('katori', 'katori', 105)],
   }),
   S('upma', 'Upma', 'grain', {
     ref: 'usda:2709128',                         // the bare word; rava upma is its own staple

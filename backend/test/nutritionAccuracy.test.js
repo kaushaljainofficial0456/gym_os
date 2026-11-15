@@ -19,7 +19,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  estimateFood, getFoodSearch, resolveFoodQuantity, searchFoods,
+  estimateFood, getFoodSearch, resolveFoodQuantity, searchFoods, servingForContainer,
 } = await import('../src/services/foodEstimator.js');
 const { parseQuantity, perPieceDefaults } = await import('../src/services/intelligence/units.js');
 const { computeNutrition } = await import('../src/services/intelligence/nutrition.js');
@@ -97,26 +97,47 @@ test('narration prefix: "a"/"an" still count as the number one', { skip }, () =>
  *  BUG 2 — picker and parser disagreed on the same food + portion     *
  * ------------------------------------------------------------------ */
 
-test('portion sizing: resolveFoodQuantity uses the food\'s OWN measured serving', { skip }, () => {
-  // resolveFoodQuantity passed `servingGrams` where portionToGrams destructures
-  // `foodServingGrams`, so the picker silently fell back to a generic volume
-  // figure while the text parser used the measured one. Measured before, on
-  // "Arhar with spinach": parser 403.3 g (measured_serving) vs picker 250 g
-  // (generic volume) -- a 61% divergence on the same food and portion.
+test('portion sizing: resolveFoodQuantity uses the food\'s OWN measured serving -- when it is a plausible serving for THAT container', { skip }, () => {
+  // History: resolveFoodQuantity once passed `servingGrams` where
+  // portionToGrams destructures `foodServingGrams`, so the picker ignored
+  // the measured serving while the text parser used it (BUG 2; the
+  // agreement test below still guards that). Since the nutrition overhaul's
+  // Phase 2, a measured serving is used for a container only when its
+  // description names that container AND its weight lies inside the
+  // container's observed range (OBSERVED_SPREAD): INDB "bowls" run from
+  // 98 g to 403 g, and "Arhar dal aur palak" (403.3 g) is larger than any
+  // observed bowl, so it now prices at the bowl's defined volume.
   const candidates = search.foods
     .filter((f) => Number(f.serving_grams) > 0 && /dal|curry/i.test(f.food_name))
     .slice(0, 5);
   assert.ok(candidates.length, 'need at least one bowl-able food with a measured serving');
 
+  let usedMeasured = 0; let rejected = 0;
   for (const c of candidates) {
     const hit = searchFoods(c.food_name, { limit: 1, withPortions: false })[0];
     if (!hit || !(Number(hit.serving_grams) > 0)) continue;
     const resolved = resolveFoodQuantity(hit, { portionKey: 'bowl', count: 1 });
     assert.ok(resolved, `${hit.food_name} must resolve`);
-    assert.equal(resolved.grams, hit.serving_grams,
-      `${hit.food_name}: a bowl must use the row's measured serving, not a generic volume`);
-    assert.equal(resolved.grams_basis, 'measured_serving');
+    const plausible = servingForContainer(hit, 'bowl');
+    if (plausible) {
+      usedMeasured += 1;
+      assert.equal(resolved.grams, hit.serving_grams, `${hit.food_name}: a plausible bowl serving is used as measured`);
+      assert.equal(resolved.grams_basis, 'measured_serving');
+    } else {
+      rejected += 1;
+      assert.equal(resolved.grams_basis, 'volume', `${hit.food_name}: an implausible/other-vessel serving is not used`);
+      assert.notEqual(resolved.grams, hit.serving_grams);
+    }
   }
+  assert.ok(usedMeasured + rejected > 0);
+});
+
+test('portion sizing: a katori never takes a bowl-sized serving', { skip }, () => {
+  const sambar = searchFoods('sambar', { limit: 1, withPortions: false })[0];
+  const katori = resolveFoodQuantity(sambar, { portionKey: 'katori', count: 1 });
+  const bowl = resolveFoodQuantity(sambar, { portionKey: 'bowl', count: 1 });
+  assert.ok(katori.grams < bowl.grams, `katori ${katori.grams} g vs bowl ${bowl.grams} g`);
+  assert.ok(katori.grams <= 160, `a 150 ml katori, got ${katori.grams} g`);
 });
 
 test('portion sizing: the picker and the text parser agree on the same food', { skip }, () => {

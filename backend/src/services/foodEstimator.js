@@ -53,7 +53,7 @@ import {
   stapleUnitByPortionKey, unitGroup, leadingUnit, exactStaple,
 } from './food/staples.js';
 import {
-  CONTEXT_WORDS, contentTokens, uncoveredRuns, sharesFoodWord, isPreparationRun,
+  CONTEXT_WORDS, SIZE_WORDS, contentTokens, uncoveredRuns, sharesFoodWord, isPreparationRun,
 } from './food/coverage.js';
 import { confidenceBreakdown } from './food/confidence.js';
 
@@ -65,8 +65,52 @@ const PROC = path.join(ML, 'data', 'processed');
 const {
   FoodSearch, toGrams, scaleNutrition, portionToGrams, canonicalPortion,
   listPortions, adjustOil, OIL_LEVELS, normalize, SOURCE_RANK, nameContainsQuery,
-  COUNT_PORTIONS,
+  COUNT_PORTIONS, VOLUME_PORTIONS, OBSERVED_SPREAD,
 } = require(path.join(ML, 'models', 'skos-food-v1', 'foodEstimate.reference.js'));
+
+/* ------------------------------------------------------------------ *
+ *  WHICH SERVING A CONTAINER MEANS                                    *
+ * ------------------------------------------------------------------ *
+ * The shared model substitutes a dish's own measured serving
+ * (serving_grams) for bowl / katori / plate / piece whenever one exists.
+ * But an INDB "serving" is the yield of ONE recipe divided by its servings,
+ * not a standard vessel: INDB "bowls" run from 98 g (poha) to 353 g (dal
+ * makhani), and a request for a KATORI (150 ml) picked up the dish's BOWL
+ * weight -- 1 katori of sambar was 257 g, of dal makhani 353 g, and
+ * "1 plate poha" was 98 g.
+ *
+ * The measured serving is used only when (1) its description names the
+ * SAME container the person said, and (2) its weight falls inside that
+ * container's OBSERVED range (OBSERVED_SPREAD, from the model's portion
+ * calibration). Otherwise the container's defined volume x the food's
+ * density is used -- the same rule every food without a measured serving
+ * already gets. The shared reference file is not modified (it must stay
+ * byte-identical to the Python parity version); the choice is made here. */
+const CONTAINER_WORDS = {
+  katori: ['katori'],
+  bowl: ['bowl'], medium_bowl: ['bowl', 'medium bowl'], small_bowl: ['small bowl'],
+  soup_bowl: ['soup bowl'], large_bowl: ['large bowl'],
+  plate: ['plate'], full_plate: ['plate', 'full plate'], half_plate: ['half plate'], quarter_plate: ['quarter plate'],
+};
+const VESSEL_WORD = /\b(bowl|katori|plate|glass|cup|mug|jar|tablespoon|teaspoon|spoon|ladle|bottle|can)\b/i;
+
+export function servingForContainer(food, unitKey) {
+  const g = Number(food?.serving_grams);
+  if (!(g > 0)) return null;
+  const key = canonicalPortion(unitKey) || unitKey;
+  const desc = String(food.serving_description || '').toLowerCase().trim();
+  if (key === 'piece') {
+    // A piece is a piece of the food itself ("samosa", "parantha"), never a
+    // vessel's worth of it.
+    return desc && VESSEL_WORD.test(desc) ? null : g;
+  }
+  const words = CONTAINER_WORDS[key];
+  if (!words) return g;                         // not a container: unchanged
+  if (!words.includes(desc)) return null;       // a different vessel's weight
+  const spread = OBSERVED_SPREAD[key];
+  if (spread && (g < spread[0] || g > spread[1])) return null;
+  return g;
+}
 
 /**
  * Is this unit word a FOOD in its own right ("roti", "egg", "idli"), as
@@ -570,12 +614,36 @@ export function parseFragment(fragment) {
       tokens = tokens.slice(1);
     }
   }
+  /* SIZE WORDS. "2 medium rotis" was unresolved: "medium" sat where the
+     unit belongs, so the whole phrase was searched as one name. A size word
+     in front of a container is a SIZED CONTAINER the catalogue already
+     defines ("large bowl" -> large_bowl, 400 ml); anywhere else it is
+     removed from the name and kept as `size`, applied to the portion by
+     SIZE_FACTOR (see resolveParsed). */
+  let size = null;
+  let sizedContainer = null;
+  if (tokens.length >= 2 && SIZE_WORDS.has(tokens[0])) {
+    const pair = canonicalPortion(`${tokens[0]} ${tokens[1].replace(/s$/, '')}`);
+    if (pair && pair !== canonicalPortion(tokens[1].replace(/s$/, ''))) {
+      sizedContainer = pair;
+      tokens = tokens.slice(2);
+    }
+  }
+  let nameWithSize = null;
+  if (!sizedContainer && tokens.some((t) => SIZE_WORDS.has(t)) && tokens.some((t) => !SIZE_WORDS.has(t))) {
+    size = tokens.find((t) => SIZE_WORDS.has(t));
+    // Kept in its written order, so "McDonald's BIG Mac" can still be
+    // recognised as a name (resolveParsed) rather than a size.
+    nameWithSize = tokens.filter((t) => !NOISE.has(t)).join(' ');
+    tokens = tokens.filter((t) => !SIZE_WORDS.has(t));
+  }
+
   // What was said, before any word is taken as a unit -- see the
   // whole-dish check below the unit step.
   const spoken = tokens.filter((t) => !NOISE.has(t)).join(' ');
 
-  let unit = null;
-  if (tokens.length) {
+  let unit = sizedContainer;
+  if (!unit && tokens.length) {
     /* Singularise so "bowls"/"rotis" hit the same catalogue entry.
        Candidate forms, most literal first. A single `/(?:es|s)$/` rule was
        wrong for -es plurals: the alternation matches "es" before it can match
@@ -650,19 +718,19 @@ export function parseFragment(fragment) {
      plus a 580 g plate of pav bhaji. When the whole phrase is a curated
      everyday dish, it is that dish; a leading number counts servings of it. */
   if (name && unit && name !== unit && isCountableFood(unit) && isStapleName(spoken)) {
-    return { qty, unit: null, name: spoken, raw: fragment, context };
+    return { qty, unit: null, name: spoken, raw: fragment, context, size, nameWithSize };
   }
   if (name && unit && name !== unit && isCountableFood(unit)) {
     return {
-      qty, unit, name: unit, raw: fragment, context,
+      qty, unit, name: unit, raw: fragment, context, size, nameWithSize,
       companion: { qty: null, unit: null, name, raw: fragment, context },
     };
   }
 
   // A fragment that names no food even after that ("2 bowls" alone) is
   // genuinely ambiguous. Report it rather than guessing.
-  if (!name) return { qty, unit, name: null, raw: fragment, context };
-  return packGrams ? { qty, unit, name, raw: fragment, packGrams, context } : { qty, unit, name, raw: fragment, context };
+  if (!name) return { qty, unit, name: null, raw: fragment, context, size, nameWithSize };
+  return packGrams ? { qty, unit, name, raw: fragment, packGrams, context, size, nameWithSize } : { qty, unit, name, raw: fragment, context, size, nameWithSize };
 }
 
 /* ------------------------------------------------------------------ */
@@ -697,7 +765,7 @@ function stapleUnitPortion(food, unit, n = 1) {
   if (!unit) return null;
   if (unit.g) return { grams: round1(n * unit.g), basis: 'staple_unit' };
   const p = portionToGrams(unit.key, n, {
-    foodName: food.food_name, cookingState: food.cooking_state, foodServingGrams: food.serving_grams,
+    foodName: food.food_name, cookingState: food.cooking_state, foodServingGrams: servingForContainer(food, unit.key),
   });
   return p && p.grams > 0 ? { grams: p.grams, basis: p.basis } : null;
 }
@@ -791,7 +859,7 @@ function resolveGrams(parsedIn, food) {
     const p = portionToGrams(parsed.unit, qty, {
       foodName: food.food_name,
       cookingState: food.cooking_state,
-      foodServingGrams: food.serving_grams,
+      foodServingGrams: servingForContainer(food, parsed.unit),
     });
     if (p && p.grams > 0) {
       return { grams: p.grams, basis: p.basis, assumed: false,
@@ -1218,6 +1286,26 @@ export function estimateFood(text) {
 }
 
 /**
+ * small / large relative to the standard (medium) piece or serving. The
+ * average of USDA FoodData Central household-weight ratios for foods sold
+ * by size -- egg 38 / 44 / 50 g, banana 101 / 118 / 136 g, apple 149 / 182
+ * / 223 g: small ~0.85x, large ~1.17x medium. An approximation, recorded on
+ * the item and in its portion confidence -- not a measurement.
+ */
+const SIZE_FACTOR = { small: 0.85, mini: 0.85, medium: 1, regular: 1, large: 1.17, big: 1.17, huge: 1.17, jumbo: 1.17 };
+
+/* Eggs are the exception: the standard egg here (50 g) is already a USDA
+   LARGE egg, so sizes are relative to large -- USDA small 38 g, medium
+   44 g, large 50 g, extra-large/jumbo 56 g. Applying the generic "large"
+   ratio would have double-scaled "2 large eggs" to 117 g. */
+const EGG_SIZE_FACTOR = { small: 0.76, mini: 0.76, medium: 0.88, regular: 1, large: 1, big: 1, huge: 1.12, jumbo: 1.12 };
+
+function sizeFactorFor(size, food) {
+  const isEgg = /\begg/i.test(`${food?.staple_key || ''} ${food?.food_name || ''}`) && !/(curry|bhurji|omelet|rice|biryani|roll|sandwich|noodle)/i.test(food?.food_name || '');
+  return (isEgg ? EGG_SIZE_FACTOR : SIZE_FACTOR)[size] ?? 1;
+}
+
+/**
  * Resolve ONE parsed food to a priced item, or say exactly why it could not
  * be. Returns { item, food } or { unresolved }.
  */
@@ -1228,6 +1316,16 @@ function resolveParsed(parsed, fragment, search) {
      several equally good answers. This costs nothing: FoodSearch already
      scores all 21,353 rows on every query and `limit` only slices the
      result, so nothing extra is computed and no second search runs. */
+  // A size word can be part of a NAME ("big mac", "mini idli"): if the
+  // phrase WITH the size word is itself a food, it is that food, unsized.
+  if (parsed.size) {
+    const named = parsed.nameWithSize || `${parsed.size} ${parsed.name}`;
+    const whole = search.search(named, { limit: 1, staplePrefix: false })[0];
+    if (whole && !whole.query_relaxed && (whole.match_kind === 'exact_name' || whole.match_kind === 'alias_exact'
+        || whole.staple_match === 'exact') && isSameDish(named, whole)) {
+      parsed = { ...parsed, name: named, size: null };
+    }
+  }
   const hits = search.search(parsed.name, { limit: 4, staplePrefix: false });
   if (!hits.length) return { unresolved: { fragment, reason: `no match for "${parsed.name}"` } };
   const food = hits[0];
@@ -1262,7 +1360,15 @@ function resolveParsed(parsed, fragment, search) {
   }
 
   const alternatives = isStapleHit(food) ? stapleAlternatives(food, search) : ambiguousAlternatives(hits);
-  const q = resolveGrams(parsed, food);
+  const q0 = resolveGrams(parsed, food);
+  // A size word scales a piece or default serving -- never a weight or
+  // volume the person stated, which is already exact.
+  const factor = parsed.size && q0.basis !== 'measured' ? sizeFactorFor(parsed.size, food) : 1;
+  const sized = parsed.size && q0.basis !== 'measured';
+  const q = !sized ? q0
+    : factor !== 1
+      ? { ...q0, grams: round1(q0.grams * factor), description: `${q0.description} (${parsed.size})`, size_factor: factor }
+      : { ...q0, size_factor: 1 };   // the size said IS the standard piece
   const scaled = scaleNutrition(food, q.grams);
   if (!scaled) return { unresolved: { fragment, matched: food.food_name, reason: 'could not resolve a quantity' } };
 
@@ -1331,7 +1437,10 @@ function resolveParsed(parsed, fragment, search) {
       cooking_state: food.cooking_state,
       basis: food.basis || null,
       context: parsed.context || [],
-      sizes: contentTokens(parsed.raw || fragment).sizes,
+      // The size word the parser actually set aside (a sized container like
+      // "large bowl" is a unit, not a leftover size).
+      sizes: parsed.size ? [parsed.size] : [],
+      size_factor: q.size_factor || null,
     },
   };
   return { item, food };
@@ -1632,7 +1741,8 @@ export function resolveFoodQuantity(food, { portionKey, count = 1, grams, oilLev
       // portion: "1 bowl Arhar dal aur palak" resolved to 403.3 g through
       // the text estimator (measured_serving) but 250 g here (generic
       // volume) -- a 61% divergence between the picker and the parser.
-      foodServingGrams: food.serving_grams,
+      // Both now go through servingForContainer, so they still agree.
+      foodServingGrams: servingForContainer(food, portionKey),
     });
     if (p && p.grams > 0) {
       g = p.grams;

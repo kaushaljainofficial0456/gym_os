@@ -256,3 +256,39 @@ test('editDistance: transliterations are close, different foods are not', async 
   assert.equal(editDistance('khichdi', 'khichri'), 1);
   assert.ok(editDistance('sambar', 'rasam') > 2);
 });
+
+test('F4: a katori is a katori -- never a dish\'s bowl-sized INDB serving', { skip: !live }, () => {
+  for (const dish of ['sambar', 'dal makhani', 'rajma']) {
+    const k = estimateFood(`1 katori ${dish}`).items[0];
+    assert.ok(k.grams <= 160, `1 katori ${dish} = ${k.grams} g`);
+  }
+  // A matching, plausible bowl serving is still used as measured.
+  const bowl = estimateFood('1 bowl sambar').items[0];
+  assert.equal(bowl.grams_basis, 'measured_serving');
+  // Poha is airy: a plate is neither INDB's 98 g nor a 350 g wet dish.
+  const plate = estimateFood('1 plate poha').items[0];
+  assert.ok(plate.grams >= 200 && plate.grams <= 280, `1 plate poha = ${plate.grams} g`);
+});
+
+test('F5: size words are understood, applied to pieces only, and never to stated weights', { skip: !live }, () => {
+  const roti = estimateFood('2 medium rotis');
+  assert.equal(roti.items.length, 1);
+  assert.equal(roti.items[0].grams, 80, 'medium is the standard roti');
+  const large = estimateFood('1 large banana').items[0];
+  const std = estimateFood('1 banana').items[0];
+  assert.ok(large.grams > std.grams, `${large.grams} vs ${std.grams}`);
+  assert.equal(estimateFood('1 large bowl dal').items[0].unit_key ?? 'large_bowl', 'large_bowl');
+  assert.equal(estimateFood('200g large prawns').items[0].grams, 200, 'a stated weight is exact');
+  assert.equal(estimateFood('big mac').items[0].grams, estimateFood('big mac').items[0].grams);
+  assert.match(estimateFood('big mac').items[0].name, /big mac/i);
+  assert.ok(!/\(big\)/.test(estimateFood('big mac').items[0].unit), 'a size word that is part of a name is not a size');
+});
+
+test('F5: eggs size against USDA egg weights (the standard egg is already "large")', { skip: !live }, () => {
+  assert.equal(estimateFood('2 large eggs').items[0].grams, 100);
+  assert.equal(estimateFood('2 medium eggs').items[0].grams, 88);
+  assert.notEqual(estimateFood('2 large eggs').items[0].confidence_breakdown.portion, 'low', 'large IS the standard egg');
+  const mac = estimateFood("McDonald's Big Mac").items[0];
+  assert.match(mac.name, /big mac/i);
+  assert.ok(!/\(big\)/.test(mac.unit));
+});

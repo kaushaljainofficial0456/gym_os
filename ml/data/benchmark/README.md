@@ -26,6 +26,8 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 >   corrected because their regex rejected the correct USDA row on word order alone (`sng-026`, `sng-048`,
 >   `x-sng-018` "Beans, kidney/black, ..."; `x-bev-005` "Tea, iced, ..."); each carries a dated comment in the spec.
 >   v1 rebuilt (only those regexes changed) and re-baselined.
+> - 2026-11-15 — Phase 2 portion fixes (container servings, size words): v1 82.9% → 83.5%, v2 86.0% → 86.5%; 10 cases
+>   better, 3 worse (`amb-008` −0.04, `amb-011` −0.05, `x-mel-007` −0.01). No ground truth changed. Both baselines re-frozen.
 
 > **v2 dataset (534 cases)** — `npm run bench:build:v2` builds `food_eval_set.v2.json` = the v1 specs +
 > `case_specs.v2.mjs` (210 cases: Indian dishes/ingredients at explicit weights, weighed multi-food meals with the new
