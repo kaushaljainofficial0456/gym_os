@@ -51,6 +51,7 @@ import { round1 } from '../utils/time.js';
 import {
   ALL_STAPLES, matchStaples, stapleRow, stapleByKey, stapleUnit,
   stapleUnitByPortionKey, unitGroup, leadingUnit, exactStaple,
+  stapleState, rawVariantFor, cookedVariantFor,
 } from './food/staples.js';
 import {
   CONTEXT_WORDS, SIZE_WORDS, contentTokens, uncoveredRuns, sharesFoodWord, isPreparationRun,
@@ -485,7 +486,10 @@ function splitWithConjunction(fragment, search) {
     const hits = search.search(p.name, { limit: 1 });
     if (!hits.length || hits[0].trustworthy === false) return null;
   }
-  return halves;
+  // The accompaniment keeps its "with" (a noise word to the parser): it is
+  // how resolveParsed knows "peanuts" here is a topping on the poha, not a
+  // handful eaten on their own.
+  return [before, `with ${after}`];
 }
 
 /**
@@ -1179,13 +1183,50 @@ function attachQuantityPhrases(fragments) {
   return out;
 }
 
+/* An amount written AFTER the food: "chicken breast 200g", "rice 150
+   grams", "dal 1 bowl", "roti 2", "banana x2". The parser reads amounts
+   only in front, so these were lost: "chicken breast 200g" was logged as an
+   assumed 100 g, "paneer 100 g" and "dal 1 bowl" came back unresolved.
+   Bare numbers move only when small (a count, 1-12) -- "chicken 65" is a
+   dish, "britannia 50 50" a biscuit. */
+const GLUED_AMOUNT = /^(\d+(?:\.\d+)?)(g|gm|gms|gram|grams|kg|kgs|ml|l|oz|lb|lbs)$/i;
+const TIMES = /^(?:x(\d{1,2})|(\d{1,2})x)$/i;
+// Names that END in a number: "omega 3", "vitamin b 12", "vitamin d 3".
+const NUMBERED_NAME_WORDS = new Set(['omega', 'vitamin', 'b', 'd', 'k', 'coq', 'q']);
+function isAmountUnit(word) {
+  const forms = [word, word.replace(/s$/, ''), word.replace(/es$/, '')];
+  return forms.some((f) => MASS_VOLUME.test(f)) || forms.some((f) => canonicalPortion(f) && !isCountableFood(f));
+}
+export function moveTrailingQuantity(fragment) {
+  const f = String(fragment || '').trim();
+  const head = parseFragment(f);
+  if (!head || head.qty != null) return f;
+  const toks = f.split(/\s+/);
+  if (toks.length < 2) return f;
+  const last = toks[toks.length - 1].toLowerCase();
+  const prev = toks.length >= 3 ? toks[toks.length - 2].toLowerCase() : null;
+  let amount = null;
+  let keep = toks.length - 1;
+  if (GLUED_AMOUNT.test(last)) amount = last;
+  else if (TIMES.test(last)) { const m = last.match(TIMES); amount = m[1] || m[2]; }
+  else if (prev && /^\d+(?:\.\d+)?$/.test(prev) && isAmountUnit(last)) { amount = `${prev} ${last}`; keep = toks.length - 2; }
+  else if (prev === 'x' && /^\d{1,2}$/.test(last)) { amount = last; keep = toks.length - 2; }
+  else if (/^\d{1,2}$/.test(last) && Number(last) >= 1 && Number(last) <= 12
+    && !NUMBERED_NAME_WORDS.has(String(prev ?? toks[toks.length - 2]).toLowerCase())) amount = last;
+  if (!amount) return f;
+  const name = toks.slice(0, keep).join(' ');
+  if (!contentTokens(name).tokens.length) return f;
+  return `${amount} ${name}`;
+}
+
 export function expandFragments(text, search = getFoodSearch()) {
   const fragments = attachQuantityPhrases(splitItems(text));
-  if (!search) return fragments;
+  if (!search) return fragments.map(moveTrailingQuantity);
   return fragments
     .flatMap((f) => splitWithConjunction(f, search) || [f])
     .flatMap((f) => splitPairedDish(f, search) || [f])
-    .flatMap((f) => splitTwoStaples(f, search) || [f]);
+    .flatMap((f) => splitTwoStaples(f, search) || [f])
+    .map(moveTrailingQuantity);
 }
 
 export function estimateFood(text) {
@@ -1328,7 +1369,9 @@ function resolveParsed(parsed, fragment, search) {
   }
   const hits = search.search(parsed.name, { limit: 4, staplePrefix: false });
   if (!hits.length) return { unresolved: { fragment, reason: `no match for "${parsed.name}"` } };
-  const food = hits[0];
+  // A katori / bowl / plate of a DRY staple is the cooked food (see
+  // servedCooked): "1 bowl oats" was 250 g of dry flakes, 973 kcal.
+  const food = servedCooked(hits[0], parsed, fragment, search) || hits[0];
 
   // A row flagged unreliable must not contribute a NUMBER to a total the
   // user will trust -- see CONTRACT §5. It is reported, not silently
@@ -1359,8 +1402,25 @@ function resolveParsed(parsed, fragment, search) {
     } };
   }
 
-  const alternatives = isStapleHit(food) ? stapleAlternatives(food, search) : ambiguousAlternatives(hits);
-  const q0 = resolveGrams(parsed, food);
+  let alternatives = isStapleHit(food) ? stapleAlternatives(food, search) : ambiguousAlternatives(hits);
+  // A WEIGHT of rice or dal said without "cooked" or "dry" is genuinely
+  // ambiguous -- people who track often weigh the dry grain. The cooked
+  // staple stays the answer; the dry row is offered first, and when it
+  // would more than double (or halve) the number, the identification is
+  // not called certain.
+  const weighed = weighedStateAlternative(food, parsed, fragment, search);
+  if (weighed) {
+    alternatives = [weighed.alt, ...alternatives.filter((a) => a.source_id !== weighed.alt.source_id)].slice(0, 3);
+  }
+  /* A NUT ADDED "WITH" A DISH, NO AMOUNT SAID, IS A TOPPING. "poha with
+     peanuts" logged a 30 g handful (170 kcal) on top of a poha whose own
+     recipe may already include some; "oats with almonds" the same. A
+     sprinkle (~1 tbsp, 10 g) is the honest default, flagged as assumed --
+     "poha with a handful of peanuts" or "20 g peanuts" still count as said. */
+  const topping = parsed.qty == null && !parsed.unit && /^with\b/i.test(String(fragment).trim())
+    && isStapleHit(food) && stapleByKey(food.staple_key)?.kind === 'nut';
+  const qRaw = resolveGrams(topping ? { ...parsed, unit: 'garnish' } : parsed, food);
+  const q0 = topping && qRaw ? { ...qRaw, assumed: true, description: `${qRaw.description} (topping)` } : qRaw;
   // A size word scales a piece or default serving -- never a weight or
   // volume the person stated, which is already exact.
   const factor = parsed.size && q0.basis !== 'measured' ? sizeFactorFor(parsed.size, food) : 1;
@@ -1441,9 +1501,69 @@ function resolveParsed(parsed, fragment, search) {
       // "large bowl" is a unit, not a leftover size).
       sizes: parsed.size ? [parsed.size] : [],
       size_factor: q.size_factor || null,
+      state_unstated: weighed && (weighed.ratio >= 2 || weighed.ratio <= 0.5)
+        ? { name: weighed.alt.name, kcal: Math.round((weighed.alt.energy_kcal_per_100g * scaled.grams) / 100) }
+        : null,
+      served_cooked_from: food.served_cooked_from || null,
     },
   };
   return { item, food };
+}
+
+const STATE_WORD = /\b(raw|uncooked|unboiled|dry|dried|cooked|boiled|steamed)\b/i;
+const WEIGHT_UNIT = /^(g|gm|gms|gram|grams|kg|kgs|kilo|kilos|kilogram|kilograms|oz|ounce|ounces|lb|lbs|pound|pounds)$/i;
+
+/** A staple-chosen row re-dressed as another staple's row, keeping how it
+ *  was matched. */
+function asStapleHit(row, from, extra = {}) {
+  return {
+    ...row,
+    match_kind: from.match_kind,
+    _matchKind: from._matchKind,
+    staple_match: from.staple_match,
+    staple_vague: from.staple_vague,
+    confidence: from.staple_vague ? 'medium' : row.confidence,
+    ...extra,
+  };
+}
+
+/**
+ * A serving container (katori, bowl, plate) on a DRY staple means the
+ * cooked food: nobody eats a bowl of dry oats or a katori of dry soya
+ * chunks. Measured weights ("40 g oats") and spoons/cups stay dry -- those
+ * are how the dry ingredient is measured. Said "dry" or "raw", it stays dry.
+ */
+function servedCooked(food, parsed, fragment, search) {
+  if (!isStapleHit(food) || !parsed.unit || !CONTAINER_WORDS[parsed.unit]) return null;
+  const st = stapleByKey(food.staple_key);
+  if (!st || stapleState(st) !== 'dry' || STATE_WORD.test(fragment)) return null;
+  const cooked = cookedVariantFor(parsed.name);
+  const row = cooked && search.stapleRowByKey ? search.stapleRowByKey(cooked.key) : null;
+  return row ? asStapleHit(row, food, { served_cooked_from: st.key }) : null;
+}
+
+/** The dry/raw row for a cooked staple given by WEIGHT with no state word,
+ *  as an alternative, with the energy ratio dry : cooked. */
+function weighedStateAlternative(food, parsed, fragment, search) {
+  if (!isStapleHit(food) || !parsed.unit || !WEIGHT_UNIT.test(parsed.unit) || STATE_WORD.test(fragment)) return null;
+  const st = stapleByKey(food.staple_key);
+  if (!st || stapleState(st) !== 'cooked') return null;
+  const raw = rawVariantFor(parsed.name);
+  const row = raw && search.stapleRowByKey ? search.stapleRowByKey(raw.key) : null;
+  if (!row || row.source_id === food.source_id || !(Number(food.energy_kcal) > 0)) return null;
+  return {
+    ratio: Number(row.energy_kcal) / Number(food.energy_kcal),
+    alt: {
+      source_id: row.source_id,
+      name: row.staple_name || row.food_name,
+      brand: null,
+      energy_kcal_per_100g: row.energy_kcal ?? null,
+      protein_g_per_100g: row.protein_g ?? null,
+      source: row.source,
+      confidence: row.confidence,
+      staple_key: row.staple_key,
+    },
+  };
 }
 
 /**

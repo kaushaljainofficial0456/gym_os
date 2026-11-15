@@ -78,6 +78,7 @@ const ROW = Object.freeze({
   TOOR_DAL: 'ifct:B021',      // Red gram, dal (toor / arhar)
   MILK_TONED: 'usda:2705385', // the milk staple's row (USDA "Milk, whole", 61 kcal -- close to Indian toned milk ~58-60)
   CUMIN: 'ifct:G025',         // Cumin seeds
+  SOYA_CHUNKS: 'off:8906040412976', // Soya chunks, dry (packaged label; same row as the soya chunks staple)
   CARROT: 'ifct:F002',        // Carrot, orange
   CAULIFLOWER: 'ifct:D036',   // Cauliflower
   PEAS: 'ifct:D061',          // Peas, fresh
@@ -295,6 +296,14 @@ export const RECIPES = Object.freeze({
      Each replaces a typed [kcal, protein, carbs, fat] with a calculation from
      measured ingredients. The old hand value is in the comment, so the change
      can be checked. */
+  soya_chunks_boiled: {
+    name: 'Soya chunks (soaked / boiled)',
+    region: 'indian',
+    ingredients: [ing(ROW.SOYA_CHUNKS, 100, 'dry chunks')],
+    cooked_g: 300,
+    batch_serves: '~2 katoris',
+    basis: 'Dry chunks boiled or soaked and squeezed take up about twice their weight in water (100 g dry -> ~300 g). Nothing else is added; a curry adds its own gravy.',
+  },
   dal_home: {
     name: 'Dal (home, medium consistency)',
     region: 'indian',

@@ -77,6 +77,15 @@ export function confidenceBreakdown(ev = {}) {
   } else {
     id = 'low'; reasons.identification.push('weak name match');
   }
+  if (ev.state_unstated && id === 'high') {
+    // "100 g rice": cooked rice was used, but a weight is as often the dry
+    // weight, and dry rice is 2.8x the energy. Not a certain identification.
+    id = 'medium';
+    reasons.identification.push(`weighed without saying cooked or dry — if that was the dry weight (${ev.state_unstated.name}) it is about ${ev.state_unstated.kcal} kcal`);
+  }
+  if (ev.served_cooked_from) {
+    reasons.identification.push('a serving bowl/katori of a dry food is counted as the cooked food');
+  }
 
   /* ---- portion ---- */
   let por;

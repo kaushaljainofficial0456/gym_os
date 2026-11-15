@@ -83,8 +83,16 @@ const G100 = fix('g100', '100 g', 100);
  *                 confidence, because the person may have eaten a variant
  *   opts.alts     staple keys offered as "did you mean" when they would
  *                 change the answer (cow vs buffalo milk, boiled vs fried egg)
+ *   opts.state    the cooking state this row describes: 'cooked', 'raw',
+ *                 'dry', 'ripe' (a fruit whose "raw" means unripe -- a
+ *                 different food) or 'any' (paneer, ghee, sugar: a state
+ *                 word changes nothing). Defaults by kind -- see stapleState.
+ *   opts.forms    for a raw/dry or cooked VARIANT: the names it answers to
+ *                 when said with a state word. "raw rice", "uncooked toor
+ *                 dal", "cooked soya chunks" find these, never the other
+ *                 state's row (see stateVariant).
  */
-const S = (key, name, kind, opts) => ({ key, name, kind, ...opts });
+const S = (key, name, kind, opts) => ({ key, name, kind, aliases: [], ...opts });
 
 const STAPLES = [
   /* ---------------- breads ---------------- */
@@ -201,6 +209,7 @@ const STAPLES = [
     units: [BOWL, KATORI],
   }),
   S('oats', 'Oats (dry)', 'grain', {
+    state: 'dry',
     ref: 'usda:169705',
     aliases: ['oats', 'rolled oats', 'quaker oats', 'instant oats', 'oats dry'],
     units: [fix('half_cup', '½ cup', 40), fix('cup', 'cup', 80), TBSP],
@@ -366,6 +375,9 @@ const STAPLES = [
     units: [G100, fixCount('piece', 'breast', 170)],
   }),
   S('chicken_breast_raw', 'Chicken breast (raw)', 'protein', {
+    forms: ['chicken breast', 'chicken breasts', 'chicken'],
+    vague: ['chicken'],
+    state: 'raw',
     inline: [120, 22.5, 0, 2.6, 0], basis: 'usda', note: 'USDA SR raw skinless breast; not present in the index',
     aliases: ['raw chicken breast', 'chicken breast raw', 'uncooked chicken breast'],
     units: [G100],
@@ -425,6 +437,14 @@ const STAPLES = [
     alts: ['greek_yogurt'],
     units: [KATORI, fix('cup', 'cup', 245), TBSP],
   }),
+  S('raita', 'Raita (cucumber)', 'dairy', {
+    ref: 'indb:ASC273',                          // Cucumber raita (Kheere ka raita)
+    aliases: ['raita', 'cucumber raita', 'kheera raita', 'kheere ka raita', 'plain raita', 'veg raita', 'mix raita', 'mixed raita', 'onion raita', 'pyaz raita'],
+    // "raita" alone is the everyday cucumber/onion raita; boondi raita's INDB
+    // row counts the frying bath and is quarantined, so it is not offered.
+    vague: ['raita', 'veg raita', 'mix raita', 'mixed raita'],
+    units: [KATORI, BOWL, TBSP],
+  }),
   S('greek_yogurt', 'Greek yogurt', 'dairy', {
     ref: 'off:8904083302292',
     aliases: ['greek yogurt', 'greek yoghurt', 'hung curd'],
@@ -443,6 +463,7 @@ const STAPLES = [
     units: [G100],
   }),
   S('soya_chunks', 'Soya chunks (dry)', 'protein', {
+    state: 'dry',
     ref: 'off:8906040412976',
     aliases: ['soya chunks', 'soya', 'soy chunks', 'nutrela', 'meal maker', 'soya nuggets'],
     vague: ['soya'],
@@ -455,6 +476,7 @@ const STAPLES = [
     units: [KATORI, fix('cup', 'cup', 164)],
   }),
   S('sprouts', 'Moong sprouts', 'protein', {
+    state: 'any',
     ref: 'usda:2709764',
     aliases: ['sprouts', 'moong sprouts', 'sprouted moong', 'mung sprouts', 'sprout salad'],
     units: [KATORI, fix('cup', 'cup', 104)],
@@ -471,6 +493,125 @@ const STAPLES = [
     aliases: ['cheese slice', 'cheese', 'processed cheese'],
     vague: ['cheese'],
     units: [fixCount('slice', 'slice', 20)],
+  }),
+
+  /* ---------------- raw and dry ingredients (weighed before cooking) ----------------
+     A weight of rice or dal is, for many people who track, the DRY weight
+     -- and dry rice carries 2.8x the energy of cooked rice per gram. These
+     are the measured raw rows, found when a state word is said ("raw rice",
+     "uncooked moong dal", "dry chana"), and offered as the alternative when
+     a cooked staple is weighed with no state word (resolveParsed). */
+  S('rice_raw', 'Rice (raw, uncooked)', 'grain', {
+    ref: 'usda:169756',                          // Rice, white, long-grain, regular, raw
+    state: 'raw',
+    forms: ['rice', 'white rice', 'chawal', 'basmati rice', 'basmati', 'sona masoori rice', 'sona masuri rice', 'kolam rice', 'plain rice'],
+    units: [G100, fix('cup', 'cup (raw)', 185), fix('tablespoon', 'tbsp', 12), fix('katori', 'katori (raw)', 150)],
+  }),
+  S('brown_rice_raw', 'Brown rice (raw, uncooked)', 'grain', {
+    ref: 'usda:169703',
+    state: 'raw',
+    forms: ['brown rice'],
+    units: [G100, fix('cup', 'cup (raw)', 185)],
+  }),
+  S('toor_dal_raw', 'Toor dal (raw, dry)', 'grain', {
+    ref: 'ifct:B021',                            // Red gram, dal
+    state: 'dry',
+    forms: ['toor dal', 'tur dal', 'tuvar dal', 'toovar dal', 'arhar dal', 'arhar', 'toor', 'dal', 'daal', 'dahl', 'yellow dal', 'plain dal'],
+    vague: ['dal', 'daal', 'dahl', 'yellow dal', 'plain dal'],
+    units: [G100, fix('cup', 'cup (dry)', 200), fix('tablespoon', 'tbsp', 12), fix('katori', 'katori (dry)', 130)],
+  }),
+  S('moong_dal_raw', 'Moong dal (raw, dry)', 'grain', {
+    ref: 'ifct:B010',                            // Green gram, dal
+    state: 'dry',
+    forms: ['moong dal', 'mung dal', 'moong', 'yellow moong dal', 'dhuli moong dal', 'green gram dal'],
+    units: [G100, fix('cup', 'cup (dry)', 200), fix('tablespoon', 'tbsp', 12), fix('katori', 'katori (dry)', 130)],
+  }),
+  S('urad_dal_raw', 'Urad dal (raw, dry)', 'grain', {
+    ref: 'ifct:B003',                            // Black gram, dal
+    state: 'dry',
+    forms: ['urad dal', 'urad', 'dhuli urad dal', 'white urad dal', 'black gram dal'],
+    units: [G100, fix('cup', 'cup (dry)', 200), fix('tablespoon', 'tbsp', 12)],
+  }),
+  S('chana_dal_raw', 'Chana dal (raw, dry)', 'grain', {
+    ref: 'ifct:B001',                            // Bengal gram, dal
+    state: 'dry',
+    forms: ['chana dal', 'channa dal', 'bengal gram dal'],
+    units: [G100, fix('cup', 'cup (dry)', 200), fix('tablespoon', 'tbsp', 12)],
+  }),
+  S('masoor_dal_raw', 'Masoor dal (raw, dry)', 'grain', {
+    ref: 'ifct:B013',                            // Lentil dal
+    state: 'dry',
+    forms: ['masoor dal', 'masoor', 'red lentils', 'red lentil', 'lentils', 'lentil', 'malka masoor'],
+    units: [G100, fix('cup', 'cup (dry)', 192), fix('tablespoon', 'tbsp', 12)],
+  }),
+  S('chana_dry', 'Chana, whole (raw, dry)', 'grain', {
+    ref: 'ifct:B002',                            // Bengal gram, whole
+    state: 'dry',
+    forms: ['chana', 'channa', 'kala chana', 'kabuli chana', 'chickpeas', 'chickpea', 'chole', 'bengal gram', 'white chana'],
+    units: [G100, fix('cup', 'cup (dry)', 200), HANDFUL],
+  }),
+  S('rajma_dry', 'Rajma (raw, dry)', 'grain', {
+    ref: 'ifct:B020',                            // Rajmah, red
+    state: 'dry',
+    forms: ['rajma', 'rajmah', 'kidney beans', 'red kidney beans', 'kidney bean'],
+    units: [G100, fix('cup', 'cup (dry)', 184), HANDFUL],
+  }),
+  S('potato_raw', 'Potato (raw)', 'veg', {
+    ref: 'ifct:F006',                            // Potato, brown skin, big
+    state: 'raw',
+    forms: ['potato', 'potatoes', 'aloo', 'alu'],
+    units: [G100, fixCount('potato', 'potato', 170)],
+  }),
+  S('atta', 'Wheat flour (atta)', 'grain', {
+    ref: 'ifct:A019',                            // Wheat flour, atta
+    state: 'dry',
+    aliases: ['atta', 'wheat atta', 'chakki atta', 'gehu atta', 'gehun ka atta', 'whole wheat flour', 'wheat flour', 'chapati flour', 'roti flour'],
+    forms: ['atta', 'wheat flour', 'whole wheat flour'],
+    units: [G100, fix('cup', 'cup', 120), fix('tablespoon', 'tbsp', 8), fix('katori', 'katori', 100)],
+  }),
+  S('suji', 'Semolina (suji / rava, dry)', 'grain', {
+    ref: 'ifct:A022',                            // Wheat, semolina
+    state: 'dry',
+    aliases: ['suji', 'sooji', 'semolina', 'rava', 'bombay rava', 'upma rava', 'suji rava'],
+    forms: ['suji', 'sooji', 'semolina', 'rava'],
+    units: [G100, fix('cup', 'cup', 167), fix('tablespoon', 'tbsp', 10)],
+  }),
+  S('dalia_dry', 'Dalia / broken wheat (dry)', 'grain', {
+    ref: 'ifct:A021',                            // Wheat, bulgur
+    state: 'dry',
+    aliases: ['broken wheat', 'bulgur', 'bulgur wheat', 'cracked wheat'],
+    forms: ['dalia', 'daliya', 'broken wheat', 'bulgur', 'cracked wheat'],
+    units: [G100, fix('cup', 'cup', 140), fix('tablespoon', 'tbsp', 10)],
+  }),
+  S('sabudana_dry', 'Sabudana / sago pearls (dry)', 'grain', {
+    ref: 'usda:169717',                          // Tapioca, pearl, dry
+    state: 'dry',
+    aliases: ['sago pearls', 'tapioca pearls', 'sabudana pearls'],
+    forms: ['sabudana', 'sago', 'tapioca', 'sago pearls', 'tapioca pearls'],
+    units: [G100, fix('cup', 'cup', 152), fix('tablespoon', 'tbsp', 10)],
+  }),
+  S('oats_cooked', 'Oats (cooked in water)', 'grain', {
+    ref: 'usda:173905',                          // Cereals, oats, regular and quick, cooked with water
+    state: 'cooked',
+    alts: ['oats_porridge'],
+    forms: ['oats', 'rolled oats', 'quaker oats', 'instant oats', 'oatmeal'],
+    units: [BOWL, fix('cup', 'cup', 234), G100],
+  }),
+  S('sabudana_khichdi', 'Sabudana khichdi', 'grain', {
+    ref: 'indb:OSR099',                          // Sago khitchdi/khichri
+    aliases: ['sabudana khichdi', 'sabudana khichadi', 'sabudana khichri', 'sabudana khichdee', 'sago khichdi', 'sabudana khichdi with peanuts'],
+    units: [fix('plate', 'plate', 200), KATORI, BOWL],
+  }),
+  S('soya_curry', 'Soya chunk curry', 'dish', {
+    ref: 'indb:BFP204',                          // Soya chunks korma (Nutrinugget korma)
+    aliases: ['soya chunks curry', 'soya chunk curry', 'soya curry', 'soya sabzi', 'soya chunks sabzi', 'soya masala', 'soya chunks masala', 'meal maker curry', 'nutrela curry', 'soya korma', 'soya chunks gravy'],
+    units: [KATORI, BOWL],
+  }),
+  S('soya_chunks_cooked', 'Soya chunks (soaked / boiled)', 'protein', {
+    recipe: 'soya_chunks_boiled',
+    state: 'cooked',
+    forms: ['soya chunks', 'soya', 'soy chunks', 'nutrela', 'meal maker', 'soya nuggets'],
+    units: [KATORI, G100],
   }),
 
   /* ---------------- drinks ---------------- */
@@ -542,6 +683,7 @@ const STAPLES = [
 
   /* ---------------- fruit (IFCT for Indian cultivars where measured) ---------------- */
   S('banana', 'Banana', 'fruit', {
+    state: 'ripe',                                 // "raw banana" is the green cooking plantain
     ref: 'usda:2709224',
     aliases: ['banana', 'kela', 'bananas', 'ripe banana'],
     units: [catCount('banana'), fixCount('small', 'small banana', 100), fixCount('large', 'large banana', 136)],
@@ -557,6 +699,7 @@ const STAPLES = [
     units: [fixCount('orange', 'orange', 130)],
   }),
   S('mango', 'Mango', 'fruit', {
+    state: 'ripe',                                  // "raw mango" (kairi) is the unripe fruit
     ref: 'usda:2709242',
     aliases: ['mango', 'aam', 'mangoes', 'alphonso'],
     units: [fixCount('mango', 'mango', 200), fix('cup', 'cup (sliced)', 165)],
@@ -591,6 +734,13 @@ const STAPLES = [
     aliases: ['pineapple', 'ananas'],
     units: [fix('cup', 'cup', 165), fixCount('slice', 'slice', 84)],
   }),
+  S('raw_mango', 'Raw mango (green, kairi)', 'fruit', {
+    ref: 'ifct:D057',                            // Mango, green, raw
+    state: 'raw',
+    aliases: ['kairi', 'kacha aam', 'kachha aam', 'kachcha aam', 'green mango', 'unripe mango'],
+    forms: ['mango', 'aam', 'mangoes'],
+    units: [fixCount('mango', 'mango', 150), G100],
+  }),
   S('dates', 'Dates', 'fruit', {
     ref: 'ifct:E019',
     aliases: ['dates', 'date', 'khajur', 'khajoor', 'medjool'],
@@ -599,6 +749,7 @@ const STAPLES = [
 
   /* ---------------- vegetables (plain) ---------------- */
   S('salad', 'Green salad', 'veg', {
+    state: 'raw',
     inline: [20, 1.0, 4, 0.2, 1.6], basis: 'usda', note: 'cucumber, tomato, onion, lettuce, no dressing (USDA component values)',
     aliases: ['salad', 'green salad', 'cucumber salad', 'kachumber', 'veg salad', 'mixed salad'],
     units: [KATORI, BOWL],
@@ -619,27 +770,27 @@ const STAPLES = [
   S('almonds', 'Almonds', 'nut', {
     ref: 'usda:170567',
     aliases: ['almonds', 'almond', 'badam', 'soaked almonds'],
-    units: [fix('handful', 'handful', 28), fixCount('almond', 'almond', 1.2), fix('cup', 'cup', 143)],
+    units: [fix('handful', 'handful', 28), fixCount('almond', 'almond', 1.2), fix('cup', 'cup', 143), fix('garnish', 'sprinkle (~1 tbsp)', 10)],
   }),
   S('peanuts', 'Peanuts', 'nut', {
     ref: 'usda:2707514',
     aliases: ['peanuts', 'peanut', 'moongphali', 'mungfali', 'groundnuts', 'raw peanuts'],
-    units: [fix('handful', 'handful', 30), TBSP, fix('cup', 'cup', 146)],
+    units: [fix('handful', 'handful', 30), TBSP, fix('cup', 'cup', 146), fix('garnish', 'sprinkle (~1 tbsp)', 10)],
   }),
   S('peanuts_roasted', 'Peanuts (roasted)', 'nut', {
     ref: 'usda:2707519',
     aliases: ['roasted peanuts', 'roasted peanut', 'dry roasted peanuts', 'roasted groundnuts', 'bhuni moongphali'],
-    units: [fix('handful', 'handful', 30), TBSP, fix('cup', 'cup', 146)],
+    units: [fix('handful', 'handful', 30), TBSP, fix('cup', 'cup', 146), fix('garnish', 'sprinkle (~1 tbsp)', 10)],
   }),
   S('cashews', 'Cashews', 'nut', {
     ref: 'usda:2707494',
     aliases: ['cashews', 'cashew', 'kaju', 'cashew nuts'],
-    units: [fix('handful', 'handful', 28), fixCount('cashew', 'cashew', 1.5), fix('cup', 'cup', 137)],
+    units: [fix('handful', 'handful', 28), fixCount('cashew', 'cashew', 1.5), fix('cup', 'cup', 137), fix('garnish', 'sprinkle (~1 tbsp)', 10)],
   }),
   S('walnuts', 'Walnuts', 'nut', {
     ref: 'usda:170187',
     aliases: ['walnuts', 'walnut', 'akhrot'],
-    units: [fix('handful', 'handful', 28), fixCount('half', 'walnut half', 2), fix('cup', 'cup', 117)],
+    units: [fix('handful', 'handful', 28), fixCount('half', 'walnut half', 2), fix('cup', 'cup', 117), fix('garnish', 'sprinkle (~1 tbsp)', 10)],
   }),
   S('peanut_butter', 'Peanut butter', 'fat', {
     ref: 'usda:2707537',
@@ -664,11 +815,13 @@ const STAPLES = [
     units: [fix('teaspoon', 'tsp', 4.5), fix('tablespoon', 'tbsp', 13.5)],
   }),
   S('sugar', 'Sugar', 'sweet', {
+    state: 'any',
     ref: 'usda:169655',
     aliases: ['sugar', 'cheeni', 'white sugar'],
     units: [fix('teaspoon', 'tsp', 4), fix('tablespoon', 'tbsp', 12.5)],
   }),
   S('jam', 'Jam', 'sweet', {
+    state: 'any',
     ref: 'usda:2710301',
     aliases: ['jam', 'fruit jam', 'mixed fruit jam', 'jelly', 'preserve', 'kissan jam'],
     units: [fix('teaspoon', 'tsp', 7), fix('tablespoon', 'tbsp', 20)],
@@ -680,6 +833,7 @@ const STAPLES = [
     units: [fixCount('papad', 'papad', 10)],
   }),
   S('honey', 'Honey', 'sweet', {
+    state: 'any',
     ref: 'usda:169640',
     aliases: ['honey', 'shahad'],
     units: [fix('teaspoon', 'tsp', 7), fix('tablespoon', 'tbsp', 21)],
@@ -957,17 +1111,101 @@ export function leadingUnit(name) {
   return null;
 }
 
+/**
+ * The cooking state a staple's row describes. Fruit and nuts are eaten raw;
+ * dairy, fats and supplements are the same food whatever state word is said
+ * ("raw paneer", "boiled milk"); everything else is the food as eaten,
+ * prepared -- a dish, cooked rice, a boiled egg.
+ */
+const DEFAULT_STATE = { fruit: 'raw', nut: 'raw', dairy: 'any', fat: 'any', supplement: 'any' };
+export function stapleState(st) {
+  return st?.state || DEFAULT_STATE[st?.kind] || 'cooked';
+}
+
 const BY_ALIAS = new Map();     // normalized phrase -> staple
 const ALIAS_LIST = [];          // [{ phrase, tokens, staple }]
 const VAGUE = new Set();        // "<key>|<phrase>" for umbrella aliases
 for (const st of STAPLES) {
-  const phrases = new Set([normStaple(st.name), ...st.aliases.map(normStaple)]);
+  const phrases = new Set([normStaple(st.name), ...(st.aliases || []).map(normStaple)]);
   for (const v of st.vague || []) VAGUE.add(`${st.key}|${normStaple(v)}`);
   for (const p of phrases) {
     if (!p) continue;
     if (!BY_ALIAS.has(p)) BY_ALIAS.set(p, st);
     ALIAS_LIST.push({ phrase: p, tokens: p.split(' '), staple: st });
   }
+}
+
+/* State variants: "raw rice", "uncooked moong dal", "dry chana", "cooked
+   soya chunks". 'raw' and 'dry' rows answer raw/uncooked/dry; cooked rows
+   answer cooked/boiled/steamed. */
+const FORMS = { raw: new Map(), cooked: new Map() };
+for (const st of STAPLES) {
+  if (!st.forms) continue;
+  const bucket = stapleState(st) === 'cooked' ? FORMS.cooked : FORMS.raw;
+  for (const f of st.forms) {
+    const p = normStaple(f);
+    if (p && !bucket.has(p)) bucket.set(p, st);
+  }
+}
+
+const RAW_WORDS = new Set(['raw', 'uncooked', 'unboiled']);
+const COOKED_WORDS = new Set(['cooked', 'boiled', 'steamed']);
+// "dry" / "dried" mean the uncooked ingredient only in FRONT of the name
+// ("dry chana", "dried kidney beans"). Behind it ("chana dry", "chilli
+// chicken dry", "aloo dry") Indian menus mean a dish served without gravy,
+// so a trailing "dry" is left for the ordinary search.
+const LEADING_DRY_WORDS = new Set(['dry', 'dried']);
+
+const lookupPhrase = (map, phrase) => map.get(phrase) || singularForms(phrase).map((f) => map.get(f)).find(Boolean) || null;
+
+/**
+ * The staple a phrase with a cooking-state word means, or null.
+ *   1. a variant that answers to the rest of the phrase in that state
+ *      ("raw" + "rice" -> rice_raw), else
+ *   2. the ordinary staple for the rest of the phrase, if it already IS in
+ *      that state ("raw paneer", "boiled dal", "dry oats").
+ * Never the other state's row: "raw rajma" must not price cooked rajma.
+ */
+function stateVariant(q) {
+  const toks = q.split(' ');
+  let want = null;
+  const rest = [];
+  toks.forEach((t, i) => {
+    const raw = RAW_WORDS.has(t) || (i === 0 && LEADING_DRY_WORDS.has(t));
+    const cooked = COOKED_WORDS.has(t);
+    if (!want && (raw || cooked)) { want = raw ? 'raw' : 'cooked'; return; }
+    rest.push(t);
+  });
+  if (!want || !rest.length) return null;
+  const base = rest.join(' ');
+  const variant = lookupPhrase(FORMS[want], base);
+  if (variant) return { staple: variant, phrase: base };
+  const st = lookupPhrase(BY_ALIAS, base);
+  if (!st) return null;
+  const have = stapleState(st);
+  const fits = have === 'any' || have === want || (want === 'raw' && have === 'dry');
+  return fits ? { staple: st, phrase: base } : null;
+}
+
+/**
+ * The raw / dry variant of a food named WITHOUT a state word -- "masoor dal"
+ * -> Masoor dal (raw, dry) -- or null. Offered next to the cooked staple
+ * when the amount is a weight, because a weight is as often the dry weight.
+ */
+export function rawVariantFor(name) {
+  const q = stripLeadingUnits(normStaple(name));
+  return q ? lookupPhrase(FORMS.raw, q) : null;
+}
+
+/**
+ * The cooked variant of a DRY staple named without a state word -- "oats"
+ * -> Oats (cooked in water), "soya chunks" -> soaked / boiled -- or null.
+ * Used when a serving container is the amount: a bowl of oats is eaten
+ * cooked, not as 250 g of dry flakes.
+ */
+export function cookedVariantFor(name) {
+  const q = stripLeadingUnits(normStaple(name));
+  return q ? lookupPhrase(FORMS.cooked, q) : null;
 }
 
 /**
@@ -1003,6 +1241,15 @@ export function matchStaples(query, { limit = 3, allowPrefix = true } = {}) {
   // paratha staple and fell through to USDA "Potato pancake".
   const exact = BY_ALIAS.get(q) || singularForms(q).map((f) => BY_ALIAS.get(f)).find(Boolean);
   if (exact) take(exact, 1000, 'exact', BY_ALIAS.has(q) ? q : normStaple(exact.name));
+  else {
+    // "raw rice", "uncooked moong dal", "cooked soya chunks": the state
+    // word picks the row in THAT state. Without this, "raw rice" fell
+    // through to the search and priced puffed rice (113 kcal / 100 g
+    // against 365), and "50 g uncooked moong dal" a cooked dal at a fifth
+    // of its energy.
+    const sv = stateVariant(q);
+    if (sv) take(sv.staple, 1000, 'exact', sv.phrase);
+  }
 
   const qTokens = q.split(' ');
   for (const { phrase, tokens, staple } of ALIAS_LIST) {
@@ -1189,7 +1436,7 @@ export function stapleUnit(st, unitWord, { hadQuantity = true } = {}) {
     // "3 eggs" on Egg white, "2 pieces" on Samosa: a word naming the food
     // itself, or a generic piece, means one of its countable units.
     const countUnit = st.units.find((u) => u.count);
-    if (countUnit && (key === 'piece' || st.aliases.some((a) => canonUnit(a) === key))) return countUnit;
+    if (countUnit && (key === 'piece' || (st.aliases || []).some((a) => canonUnit(a) === key))) return countUnit;
     return null;
   }
   if (hadQuantity) return st.units.find((u) => u.count) || st.units[0];

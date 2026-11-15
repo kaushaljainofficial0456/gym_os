@@ -28,6 +28,16 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 >   v1 rebuilt (only those regexes changed) and re-baselined.
 > - 2026-11-15 — Phase 2 portion fixes (container servings, size words): v1 82.9% → 83.5%, v2 86.0% → 86.5%; 10 cases
 >   better, 3 worse (`amb-008` −0.04, `amb-011` −0.05, `x-mel-007` −0.01). No ground truth changed. Both baselines re-frozen.
+> - 2026-11-15 — Phase 2 everyday staples computed from recipes (dal 145 → 87 kcal/100 g etc.): headline unchanged
+>   (v1 83.5%, v2 86.5%) because staple ground truth is mostly the same database row -- these corrections are
+>   checked against INDB in `NUTRITION_ACCURACY_REPORT.md`, not claimed here. Not re-frozen.
+> - 2026-11-15 — Phase 2 raw / dry vs cooked (state-aware staples, trailing amounts, dry staple in a bowl = cooked,
+>   nut toppings). Engine only, old specs: v1 83.5% → 83.7%, v2 86.5% → 86.9%. Three v1 specs corrected, each with a
+>   dated comment: `sng-006` "200 g raw rice" was scored against USDA *wild* rice and its reject regex `cooked`
+>   matched "uncooked" (it now uses the published range for raw milled white rice); `sng-007` and `x-sng-014`
+>   "cooked white rice" were scored against *glutinous* rice (96 kcal/100 g) and are now the USDA long-grain row.
+>   With the corrected specs: v1 83.9%, v2 87.0%; kcal in-range v1 71.0% → 72.4%, v2 76.5% → 78.2%; no case worse
+>   than at the previous commit. Both baselines re-frozen.
 
 > **v2 dataset (534 cases)** — `npm run bench:build:v2` builds `food_eval_set.v2.json` = the v1 specs +
 > `case_specs.v2.mjs` (210 cases: Indian dishes/ingredients at explicit weights, weighed multi-food meals with the new

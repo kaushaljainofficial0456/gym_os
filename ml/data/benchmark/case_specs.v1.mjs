@@ -65,12 +65,19 @@ add('sng-005', '1 banana', 'single_ingredient', ['global', 'raw', 'generic', 'co
   std(n(80, 135, 0.7, 1.8, 20, 32, 0, 0.6), 118, 'USDA: 1 medium banana 118 g'));
 
 add('sng-006', '200 g raw rice', 'single_ingredient', ['global', 'raw', 'generic', 'explicit_grams'], 'medium',
-  { entity: { name_matches: 'rice', reject_name_matches: 'cooked|fried|pudding|cake|noodle|milk|krispies|bran' }, food_class: 'ingredient', prep_state: 'raw', portion: { grams: [196, 204] }, strategy: 'direct' },
-  db(['IFCT2017', 'USDA_FDC'], /rice.*raw|raw.*rice|rice, white.*regular/i, 'raw', 200, 0.20));
+  // 2026-11-15 spec fix: the row regex selected USDA "Wild rice, raw" (a different grain, 14.7 g
+  // protein / 100 g -- twice white rice's), and the reject regex 'cooked' also matched "uncooked",
+  // so the correct food was rejected and puffed rice outscored it. Ground truth is now the
+  // published range for raw milled white rice (USDA long-grain 365, IFCT milled rice ~345-356 kcal
+  // / 100 g; protein 6.5-8.5 g) -- independent of whichever row an engine uses.
+  { entity: { name_matches: 'rice', reject_name_matches: '(?<!un)cooked|fried|pudding|cake|noodle|milk|krispies|bran|wild|puffed|murmura' }, food_class: 'ingredient', prep_state: 'raw', portion: { grams: [196, 204] }, strategy: 'direct' },
+  std(n(680, 750, 13, 17, 150, 165, 0.8, 2.2), 200, 'raw milled white rice ≈ 345–370 kcal/100g (USDA long-grain, IFCT)'));
 
 add('sng-007', '100g cooked white rice', 'single_ingredient', ['global', 'boiled', 'generic', 'explicit_grams'], 'medium',
+  // 2026-11-15 spec fix: the row regex selected "Rice, white, cooked, GLUTINOUS" (96 kcal / 100 g),
+  // a sticky-rice variety, not the everyday cooked white rice (USDA long-grain 130 kcal / 100 g).
   { entity: { name_matches: 'rice', reject_name_matches: 'raw|fried|pudding|cake|krispies' }, food_class: 'ingredient', prep_state: 'boiled', portion: { grams: [98, 102] }, strategy: 'direct' },
-  db(['USDA_FDC', 'IFCT2017'], /rice, white.*cooked|cooked.*rice/i, 'cooked', 100, 0.22));
+  db(['USDA_FDC', 'IFCT2017'], /^rice, white, long-grain, regular, cooked/i, 'cooked', 100, 0.22));
 
 add('sng-008', '250g potato', 'single_ingredient', ['global', 'raw', 'generic', 'explicit_grams'], 'easy',
   { entity: { name_matches: 'potato', reject_name_matches: 'chip|crisp|fries|babyfood|salad|bread|sweet potato' }, food_class: 'ingredient', prep_state: 'raw', portion: { grams: [245, 255] }, strategy: 'direct' },

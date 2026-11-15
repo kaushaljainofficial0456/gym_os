@@ -63,7 +63,8 @@ add('x-sng-013', '30g flax seeds', 'single_ingredient', ['global', 'raw', 'gener
   db(['USDA_FDC'], /flaxseed|flax seed|linseed/i, null, 30, 0.20));
 add('x-sng-014', '150g cooked white rice', 'single_ingredient', ['global', 'boiled', 'generic', 'explicit_grams'], 'easy',
   { entity: { name_matches: 'rice', reject_name_matches: 'raw|fried|pudding|krispies|cake' }, prep_state: 'boiled', portion: { grams: [147, 153] }, strategy: 'direct' },
-  db(['USDA_FDC', 'IFCT2017'], /rice, white.*cooked|cooked.*white rice/i, 'cooked', 150, 0.22));
+  // 2026-11-15 spec fix: as sng-007 -- the regex selected glutinous (sticky) rice, 96 kcal / 100 g.
+  db(['USDA_FDC', 'IFCT2017'], /^rice, white, long-grain, regular, cooked/i, 'cooked', 150, 0.22));
 add('x-sng-015', '40g mixed nuts', 'single_ingredient', ['global', 'raw', 'generic', 'explicit_grams'], 'easy',
   { entity: { name_matches: 'mixed nuts|nuts, mixed', reject_name_matches: 'trail mix.*chocolate|bar|butter' }, prep_state: 'any', portion: { grams: [38, 42] }, strategy: 'direct' },
   db(['USDA_FDC'], /nuts, mixed|mixed nuts/i, null, 40, 0.22));
