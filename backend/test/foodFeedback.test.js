@@ -270,7 +270,12 @@ test('a no-op correction (within rounding) is not recorded as feedback', async (
 
 // ---------------- aggregation / promotion safeguards (direct unit tests) ----------------
 
-test('aggregateAndMaybePromote promotes to COMMUNITY_VALIDATED_CANDIDATE once >= MIN_FEEDBACK_COUNT consistent corrections exist, using the median', async () => {
+// Phase 2 of the nutrition overhaul: agreement among MIN_FEEDBACK_COUNT
+// distinct people creates a PROPOSAL; the shared value changes only when a
+// platform operator approves it. (This test previously asserted that the
+// shared value was rewritten automatically -- the behaviour that let a
+// single user poison a cross-tenant estimate.)
+test('aggregateAndMaybePromote queues a review proposal (median) once >= MIN_FEEDBACK_COUNT distinct people agree -- the shared value is NOT changed until approved', async () => {
   const db = await memDb();
   const clientIds = await seedClients(db, 6);
   const key = 'canon_promote_test';
@@ -299,16 +304,86 @@ test('aggregateAndMaybePromote promotes to COMMUNITY_VALIDATED_CANDIDATE once >=
     }));
   }
 
-  assert.equal(result.promoted, true);
+  assert.equal(result.promoted, false, 'never applied automatically');
+  assert.equal(result.queued, true);
   assert.equal(result.sampleCount, corrections.length);
 
-  const est = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [key]);
-  assert.equal(est.validation_status, 'COMMUNITY_VALIDATED_CANDIDATE');
-  assert.equal(est.version, 2, 'version incremented exactly once');
-  const nutrition = JSON.parse(est.nutrition_json);
+  // The shared value every user sees is untouched...
+  const before = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [key]);
+  assert.equal(before.validation_status, 'AI_ESTIMATED');
+  assert.equal(before.version, 1);
+  assert.equal(JSON.parse(before.nutrition_json).calories, 300);
+
+  // ...and exactly one pending proposal holds the median, not the outlier.
+  const reviews = await db.q(`SELECT * FROM food_data_reviews WHERE target_key = ? AND status = 'pending'`, [key]);
+  assert.equal(reviews.length, 1, 'older pending proposals are superseded, never stacked');
+  const proposed = JSON.parse(reviews[0].proposed_json);
   // median of [390,400,405,410,800] (the 6th slice element only applies if
   // MIN_FEEDBACK_COUNT > 5) must sit near 400, nowhere near the 800 outlier
-  assert.ok(nutrition.calories < 450, `median (${nutrition.calories}) must not be dragged by the outlier`);
+  assert.ok(proposed.calories < 450, `median (${proposed.calories}) must not be dragged by the outlier`);
+  assert.equal(reviews[0].distinct_contributors, corrections.length);
+
+  // Approval is what applies it -- recorded, versioned, marked reviewed.
+  const { decideFoodReview } = await import('../src/services/intelligence/foodFeedback.js');
+  const decision = await decideFoodReview(db, reviews[0].id, { approve: true, reviewerId: 'admin_1', note: 'checked against label' });
+  assert.equal(decision.status, 'approved');
+  const after = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [key]);
+  assert.equal(after.validation_status, 'VERIFIED_SHARED_FOOD');
+  assert.equal(after.version, 2, 'version incremented exactly once, on approval');
+  assert.equal(JSON.parse(after.nutrition_json).calories, proposed.calories);
+  const done = await db.q1('SELECT * FROM food_data_reviews WHERE id = ?', [reviews[0].id]);
+  assert.equal(done.status, 'approved');
+  assert.equal(done.reviewed_by, 'admin_1');
+});
+
+test('SECURITY: one person submitting many corrections counts once and can never move a shared value', async () => {
+  const db = await memDb();
+  const [solo] = await seedClients(db, 1);
+  const key = 'canon_single_user_flood';
+  await db.run(
+    `INSERT INTO ai_food_estimates (id, canonical_key, canonical_name, cuisine, component_template_json, nutrition_json, uncertainty_json, assumptions_json, source, ai_provider, ai_model, confidence, times_used, user_confirmation_count, created_at, updated_at)
+     VALUES ('afe_flood', ?, 'Flood Test Dish', 'Indian', '[]', ?, '{}', '[]', 'ai_estimated', 'groq', 'test-model', 'medium', 1, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+    [key, JSON.stringify({ calories: 300, protein: 10, carbs: 40, fat: 8 })]);
+  let last;
+  for (let i = 0; i < MIN_FEEDBACK_COUNT * 3; i += 1) {
+    ({ promotion: last } = await submitFeedback(db, {
+      canonicalKey: key, originalGrams: 100, adjustedGrams: 100,
+      original: { calories: 300, protein_g: 10, carbs_g: 40, fat_g: 8 },
+      adjusted: { calories: 900, protein_g: 5, carbs_g: 100, fat_g: 50 },
+      clientId: solo,
+    }));
+  }
+  assert.equal(last.queued, false);
+  assert.equal(last.reason, 'insufficient_evidence');
+  assert.equal(last.sampleCount, 1, 'one person, one voice');
+  const est = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [key]);
+  assert.equal(JSON.parse(est.nutrition_json).calories, 300);
+  assert.equal((await db.q('SELECT * FROM food_data_reviews WHERE target_key = ?', [key])).length, 0);
+});
+
+test('rejecting a proposal leaves the shared value untouched', async () => {
+  const db = await memDb();
+  const clientIds = await seedClients(db, MIN_FEEDBACK_COUNT);
+  const key = 'canon_reject_test';
+  await db.run(
+    `INSERT INTO ai_food_estimates (id, canonical_key, canonical_name, cuisine, component_template_json, nutrition_json, uncertainty_json, assumptions_json, source, ai_provider, ai_model, confidence, times_used, user_confirmation_count, created_at, updated_at)
+     VALUES ('afe_rej', ?, 'Reject Test Dish', 'Indian', '[]', ?, '{}', '[]', 'ai_estimated', 'groq', 'test-model', 'medium', 1, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+    [key, JSON.stringify({ calories: 300, protein: 10, carbs: 40, fat: 8 })]);
+  for (const cid of clientIds) {
+    await submitFeedback(db, {
+      canonicalKey: key, originalGrams: 100, adjustedGrams: 100,
+      original: { calories: 300, protein_g: 10, carbs_g: 40, fat_g: 8 },
+      adjusted: { calories: 400, protein_g: 13, carbs_g: 40, fat_g: 20 },
+      clientId: cid,
+    });
+  }
+  const { decideFoodReview } = await import('../src/services/intelligence/foodFeedback.js');
+  const pending = await db.q1(`SELECT id FROM food_data_reviews WHERE target_key = ? AND status = 'pending'`, [key]);
+  assert.ok(pending);
+  assert.equal((await decideFoodReview(db, pending.id, { approve: false, reviewerId: 'admin_1' })).status, 'rejected');
+  const est = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [key]);
+  assert.equal(JSON.parse(est.nutrition_json).calories, 300);
+  assert.equal(est.validation_status, 'AI_ESTIMATED');
 });
 
 test('aggregateAndMaybePromote never promotes below MIN_FEEDBACK_COUNT', async () => {

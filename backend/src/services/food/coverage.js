@@ -243,9 +243,34 @@ export function isExplained(tok, stems) {
   if (s.length >= 5) {
     for (const e of stems) {
       if (e.length >= 5 && (e.startsWith(s) || s.startsWith(e)) && Math.abs(e.length - s.length) <= 1) return true;
+      // Transliterations: one Indian word, several English spellings --
+      // "khichdi" / "khitchdi" / "khichri", "parantha" / "paratha". INDB
+      // titles use whichever spelling their source did, and treating a
+      // spelling difference as a MISSING food recovered "khichdi" as a
+      // second dish on top of "Sago khitchdi" (a double count). Small edit
+      // distance relative to length, on long words only.
+      if (e.length >= 5 && Math.abs(e.length - s.length) <= 2 && editDistance(s, e) <= (Math.min(s.length, e.length) >= 7 ? 2 : 1)) return true;
     }
   }
   return false;
+}
+
+/** Levenshtein distance, early-exit above 3 (only small distances matter). */
+export function editDistance(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 3) return 4;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i += 1) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (cur[j] < rowMin) rowMin = cur[j];
+    }
+    if (rowMin > 3) return 4;
+    prev = cur;
+  }
+  return prev[b.length];
 }
 
 /**

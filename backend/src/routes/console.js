@@ -411,14 +411,14 @@ export default function consoleRoutes(db) {
   });
 
   r.post('/intelligence/food/review-queue/:canonicalKey/verify', async (req, res) => {
-    const ok = await verifyFoodEstimate(db, { canonicalKey: req.params.canonicalKey });
+    const ok = await verifyFoodEstimate(db, { canonicalKey: req.params.canonicalKey, reviewerId: req.user.sub });
     if (!ok) return res.status(409).json({ error: 'Not a pending review candidate (already resolved or not found)' });
     await writeAuditLog(db, req, { action: 'food_estimate_verified', entityType: 'ai_food_estimate', entityId: req.params.canonicalKey });
     res.json({ ok: true });
   });
 
   r.post('/intelligence/food/review-queue/:canonicalKey/reject', async (req, res) => {
-    const ok = await rejectFoodEstimatePromotion(db, { canonicalKey: req.params.canonicalKey });
+    const ok = await rejectFoodEstimatePromotion(db, { canonicalKey: req.params.canonicalKey, reviewerId: req.user.sub });
     if (!ok) return res.status(409).json({ error: 'Not a pending review candidate (already resolved or not found)' });
     await writeAuditLog(db, req, { action: 'food_estimate_promotion_rejected', entityType: 'ai_food_estimate', entityId: req.params.canonicalKey });
     res.json({ ok: true });

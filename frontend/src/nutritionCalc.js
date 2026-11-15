@@ -42,3 +42,18 @@ export function sumEatenTotals(meals = []) {
     fat: s.fat + (Number(m.fat) || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 }
+
+/**
+ * The label for a shared AI food estimate, by its review state. Every one
+ * of these is still an ESTIMATE -- none is lab data -- so the words never
+ * claim more than that.
+ *   VERIFIED_SHARED_FOOD           a platform operator reviewed it
+ *   COMMUNITY_VALIDATED_CANDIDATE  changed by community corrections before
+ *                                  review was required (legacy, unreviewed)
+ *   anything else                  a plain AI estimate
+ */
+export function sharedEstimateLabel(status) {
+  if (status === 'VERIFIED_SHARED_FOOD') return '✓ Reviewed estimate';
+  if (status === 'COMMUNITY_VALIDATED_CANDIDATE') return 'Community estimate';
+  return 'AI Estimated';
+}

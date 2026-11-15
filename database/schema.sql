@@ -1116,6 +1116,28 @@ CREATE TABLE IF NOT EXISTS shared_meals (
 -- per-100g at write time so corrections logged at different quantities
 -- (100g vs 300g of the same dish) are actually comparable before they're
 -- ever aggregated together.
+-- Review queue for SHARED food data (nutrition overhaul, Phase 2). When
+-- enough DISTINCT people independently correct the same shared AI estimate
+-- the same way, their median is proposed here -- it is never applied to the
+-- shared value automatically. A platform operator (SUPER_ADMIN, routes/
+-- console.js) approves or rejects it. Platform-level like coupons: it holds
+-- no tenant data (per-100 g numbers and a contributor COUNT, never who), so
+-- it has no RLS policy.
+CREATE TABLE IF NOT EXISTS food_data_reviews (
+  id                    TEXT PRIMARY KEY,
+  target_type           TEXT NOT NULL,             -- ai_estimate
+  target_key            TEXT NOT NULL,             -- ai_food_estimates.canonical_key
+  proposed_json         TEXT NOT NULL,             -- per-100 g {calories, protein, carbs, fat}
+  current_json          TEXT,                      -- the shared value when the proposal was made
+  distinct_contributors INTEGER NOT NULL,
+  status                TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected | superseded
+  created_at            TEXT NOT NULL,
+  reviewed_by           TEXT,
+  reviewed_at           TEXT,
+  review_note           TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_food_data_reviews_status ON food_data_reviews(status, created_at);
+
 CREATE TABLE IF NOT EXISTS ai_food_feedback (
   id                  TEXT PRIMARY KEY,
   canonical_key       TEXT NOT NULL REFERENCES ai_food_estimates(canonical_key) ON DELETE CASCADE,

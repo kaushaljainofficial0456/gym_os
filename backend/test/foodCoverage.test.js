@@ -224,3 +224,35 @@ test('a drink measured in ml weighs like a liquid, not like the sugar in its nam
   // Not a liquid: the table's own density still applies.
   assert.ok(estimateFood('300 ml dal').items[0].grams < 300);
 });
+
+/* ---------------- Phase 2 regressions ---------------- */
+
+test('F2: an amount phrase is never a food ("chicken biryani, half a plate, with raita")', { skip: !live }, () => {
+  const r = estimateFood('Had chicken biryani, half a plate, with raita');
+  assert.ok(!r.items.some((i) => /veal|plate half/i.test(`${i.name} ${i.source_name}`)), names(r).join(' | '));
+  const biryani = r.items.find((i) => /biryani/i.test(i.name));
+  assert.equal(biryani.qty, 0.5, 'the half plate belongs to the biryani');
+  assert.ok(r.items.some((i) => /raita/i.test(i.name)));
+  // An amount with nothing to attach to is reported, never searched as a food.
+  for (const t of ['a plate', '2 bowls', 'half']) {
+    const x = estimateFood(t);
+    assert.equal(x.items.length, 0, `${t} -> ${names(x).join(' | ')}`);
+    assert.equal(x.unresolved.length, 1);
+  }
+  // Countable foods still name themselves.
+  assert.equal(estimateFood('2 rotis').items[0].qty, 2);
+  assert.equal(estimateFood('dal, 2 bowls').items[0].qty, 2);
+});
+
+test('F3: a spelling variant in a measured title is not a second food ("sabudana khichdi")', { skip: !live }, () => {
+  const r = estimateFood('sabudana khichdi');
+  assert.equal(r.items.length, 1, names(r).join(' | '));
+  assert.match(r.items[0].name, /sago|sabudana/i);
+});
+
+test('editDistance: transliterations are close, different foods are not', async () => {
+  const { editDistance } = await import('../src/services/food/coverage.js');
+  assert.equal(editDistance('khichdi', 'khitchdi'), 1);
+  assert.equal(editDistance('khichdi', 'khichri'), 1);
+  assert.ok(editDistance('sambar', 'rasam') > 2);
+});

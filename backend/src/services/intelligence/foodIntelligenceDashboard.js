@@ -26,6 +26,7 @@
 // ============================================================
 import { now } from '../../ids.js';
 import { foodAIConfigSummary } from './foodAI.js';
+import { listFoodReviews, decideFoodReview } from './foodFeedback.js';
 
 const AI_EVENT_TYPES = ['food_ai_cache_hit', 'food_ai_cache_miss', 'food_ai_tier4_call', 'food_ai_tier4_success', 'food_ai_tier4_failure'];
 
@@ -63,7 +64,10 @@ export async function getFoodIntelligenceOverview(db) {
     countEvents(db, 'food_ai_tier4_failure'),
     db.q1('SELECT COUNT(*) AS n FROM ai_food_estimates'),
     db.q1('SELECT COUNT(*) AS n FROM ai_food_feedback'),
-    db.q1(`SELECT COUNT(*) AS n FROM ai_food_estimates WHERE validation_status = 'COMMUNITY_VALIDATED_CANDIDATE'`),
+    // Needs review = pending proposals (food_data_reviews) + legacy
+    // candidates that were auto-applied before proposals required review.
+    db.q1(`SELECT (SELECT COUNT(*) FROM ai_food_estimates WHERE validation_status = 'COMMUNITY_VALIDATED_CANDIDATE')
+                + (SELECT COUNT(*) FROM food_data_reviews WHERE status = 'pending') AS n`),
   ]);
 
   return {
@@ -190,35 +194,67 @@ export async function getMostCorrectedFoods(db, { limit = 20 } = {}) {
   return result.slice(0, limit);
 }
 
-/** The "needs review" queue -- foods the system ITSELF already
- *  flagged as COMMUNITY_VALIDATED_CANDIDATE (>= MIN_FEEDBACK_COUNT
- *  independent, mutually-consistent corrections -- see
- *  foodFeedback.js's aggregateAndMaybePromote). Never auto-promoted to
- *  VERIFIED_SHARED_FOOD by anything in this codebase -- that status is
- *  reserved for exactly this human review step. */
+/** The "needs review" queue.
+ *
+ *  Since Phase 2 of the nutrition overhaul, community corrections are never
+ *  applied to a shared estimate on their own: enough DISTINCT people
+ *  agreeing creates a PROPOSAL (food_data_reviews, see foodFeedback.js
+ *  aggregateAndMaybePromote), and this queue is where a platform operator
+ *  approves or rejects it. `kind: 'proposal'` items carry the current and
+ *  proposed per-100 g values side by side.
+ *
+ *  `kind: 'legacy_applied'` items are estimates that WERE auto-updated by
+ *  the old rule (COMMUNITY_VALIDATED_CANDIDATE) before review was required;
+ *  they stay in the queue until an operator verifies or reverts them. */
 export async function getReviewQueue(db, { limit = 50 } = {}) {
-  const rows = await db.q(
+  const parse = (j) => { try { return j ? JSON.parse(j) : null; } catch { return null; } };
+  const proposals = (await listFoodReviews(db, { status: 'pending', limit })).map((r) => ({
+    kind: 'proposal',
+    review_id: r.id,
+    canonical_key: r.target_key,
+    canonical_name: r.canonical_name || r.target_key,
+    current: parse(r.current_json),
+    proposed: parse(r.proposed_json),
+    distinct_contributors: Number(r.distinct_contributors || 0),
+    feedback_count: Number(r.distinct_contributors || 0),
+    created_at: r.created_at,
+  }));
+  const legacy = await db.q(
     `SELECT e.*, (SELECT COUNT(*) FROM ai_food_feedback f WHERE f.canonical_key = e.canonical_key) AS feedback_count
        FROM ai_food_estimates e WHERE e.validation_status = 'COMMUNITY_VALIDATED_CANDIDATE'
       ORDER BY e.updated_at DESC LIMIT ?`, [limit]);
-  return rows.map((r) => ({ ...r, feedback_count: Number(r.feedback_count || 0) }));
+  return [...proposals, ...legacy.map((r) => ({ ...r, kind: 'legacy_applied', feedback_count: Number(r.feedback_count || 0) }))];
 }
 
-/** Approves a community-corrected estimate as human-verified. The ONE
- *  place VERIFIED_SHARED_FOOD is ever set -- never automatic. */
-export async function verifyFoodEstimate(db, { canonicalKey }) {
+/** Approve: a pending proposal is APPLIED and marked human-reviewed
+ *  (VERIFIED_SHARED_FOOD -- the status this codebase reserves for a human
+ *  review step; the value is still a community estimate, not lab data). A
+ *  legacy auto-applied candidate is marked reviewed as before. The ONE
+ *  place either change happens -- never automatic. */
+export async function verifyFoodEstimate(db, { canonicalKey, reviewerId = null }) {
+  const pending = await db.q1(
+    `SELECT id FROM food_data_reviews WHERE target_type = 'ai_estimate' AND target_key = ? AND status = 'pending'`, [canonicalKey]);
+  if (pending) {
+    const r = await decideFoodReview(db, pending.id, { approve: true, reviewerId });
+    return r.ok;
+  }
   const result = await db.run(
     `UPDATE ai_food_estimates SET validation_status = 'VERIFIED_SHARED_FOOD', updated_at = ? WHERE canonical_key = ? AND validation_status = 'COMMUNITY_VALIDATED_CANDIDATE'`,
     [now(), canonicalKey]);
   return result.changes === 1;
 }
 
-/** Rejects a promotion candidate -- the aggregate stays cached
- *  (nutrition_json was already updated when it was promoted), just no
- *  longer flagged for review; reverts to AI_ESTIMATED so a FUTURE
- *  fresh wave of feedback can re-trigger promotion instead of being
- *  permanently silenced. */
-export async function rejectFoodEstimatePromotion(db, { canonicalKey }) {
+/** Reject: a pending proposal is discarded and the shared value is NOT
+ *  touched. A legacy auto-applied candidate reverts to AI_ESTIMATED (its
+ *  numbers were changed before review existed; the original AI values are
+ *  in ai_food_feedback.original_* for anyone restoring them by hand). */
+export async function rejectFoodEstimatePromotion(db, { canonicalKey, reviewerId = null }) {
+  const pending = await db.q1(
+    `SELECT id FROM food_data_reviews WHERE target_type = 'ai_estimate' AND target_key = ? AND status = 'pending'`, [canonicalKey]);
+  if (pending) {
+    const r = await decideFoodReview(db, pending.id, { approve: false, reviewerId });
+    return r.ok;
+  }
   const result = await db.run(
     `UPDATE ai_food_estimates SET validation_status = 'AI_ESTIMATED', updated_at = ? WHERE canonical_key = ? AND validation_status = 'COMMUNITY_VALIDATED_CANDIDATE'`,
     [now(), canonicalKey]);

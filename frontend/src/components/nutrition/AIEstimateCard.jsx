@@ -16,6 +16,8 @@
  * labelled the same way (same rule FoodLogSheet.jsx's own fuller AI-
  * review screen follows for the identical field).
  */
+import { sharedEstimateLabel } from '../../nutritionCalc.js';
+
 export default function AIEstimateCard({ preview, grams, onGramsChange, onCancel, onAdd, disabled, t }) {
   const baseGrams = preview.serving?.estimated_weight_g || 100;
   const kcal = Math.round((preview.totals.calories || 0) * (Number(grams) || 0) / baseGrams);
@@ -25,7 +27,7 @@ export default function AIEstimateCard({ preview, grams, onGramsChange, onCancel
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 font-grotesk text-[11px] font-bold truncate" style={{ color: t.ink }}>{preview.food_name}</div>
         <span className="text-[7px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: t.accentDim, color: t.accent }}>
-          {preview.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ Barbell Estimated' : 'AI Estimated'}
+          {sharedEstimateLabel(preview.validation_status)}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">

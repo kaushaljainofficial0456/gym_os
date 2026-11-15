@@ -34,7 +34,7 @@ import { Pressable } from '../design/index.js';
 import Icon from './Icon.jsx';
 import BarcodeScanner from './BarcodeScanner.jsx';
 import PortionWheel from './PortionWheel.jsx';
-import { calculateCaloriesFromMacros } from '../nutritionCalc.js';
+import { calculateCaloriesFromMacros, sharedEstimateLabel } from '../nutritionCalc.js';
 import { XIcon, useDialog, useExitPresence } from './UI.jsx';
 
 const OIL_LEVELS = [
@@ -1734,7 +1734,7 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
                       the CACHED value -- a completely different concept
                       from a Tier-1/3 search-match percentage, never labelled
                       the same way. */}
-                  {aiResult.validation_status === 'COMMUNITY_VALIDATED_CANDIDATE' ? '✓ Barbell Estimated' : 'AI Estimated'}
+                  {sharedEstimateLabel(aiResult.validation_status)}
                 </span>
               </div>
 

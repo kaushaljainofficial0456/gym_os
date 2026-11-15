@@ -621,7 +621,15 @@ export function parseFragment(fragment) {
   // When stripping the unit leaves nothing behind, the unit IS the food.
   // Keep both: the name resolves the food, the unit gives the per-piece
   // weight for it.
-  if (!name && unit) name = unit;
+  // ...but only a COUNTABLE FOOD is its own name. A container ("half a
+  // plate", "2 bowls", "a katori") names no food: falling back to the unit
+  // word searched for "plate" and logged USDA "Veal, breast, plate half"
+  // for "chicken biryani, half a plate". Such a fragment is a quantity for
+  // the food beside it -- see attachQuantityPhrases.
+  if (!name && unit && isCountableFood(unit)) name = unit;
+  // A "name" made only of measurement / container / filler words ("a plate",
+  // "bowl", "half") is not a food. Left as a name it was searched as one.
+  if (name && contentTokens(name).tokens.length === 0 && !isCountableFood(name)) name = '';
 
   /* TWO FOODS IN ONE FRAGMENT: "two rotis with dal".
      `with` is a NOISE word, not a separator (unlike "and"), so this arrives
@@ -1068,8 +1076,43 @@ function segmentIntoStaples(words, start = 0) {
   return null;
 }
 
+/** A fragment that states an amount but names no food: "half a plate",
+ *  "2 bowls", "one katori". */
+function isQuantityOnly(fragment) {
+  const p = parseFragment(fragment);
+  return !!p && !p.name && (p.qty != null || p.unit != null) && contentTokens(fragment).tokens.length === 0;
+}
+
+/**
+ * "chicken biryani, half a plate, with raita" -> ["half a plate chicken
+ * biryani", "with raita"]. People put the amount AFTER the food, separated
+ * by a comma; split on its own the amount was either reported as a food-less
+ * fragment or, worse, resolved as a food in its own right. An amount-only
+ * fragment belongs to the food just before it (or, if it comes first, the
+ * food just after it), written the way the parser reads amounts: in front.
+ */
+function attachQuantityPhrases(fragments) {
+  const out = [];
+  let pending = null;
+  for (const f of fragments) {
+    if (isQuantityOnly(f)) {
+      if (out.length && !isQuantityOnly(out[out.length - 1]) && !parseFragment(out[out.length - 1])?.qty) {
+        out[out.length - 1] = `${f} ${out[out.length - 1]}`;
+      } else {
+        pending = pending ? `${pending} ${f}` : f;
+      }
+      continue;
+    }
+    if (pending && !parseFragment(f)?.qty) { out.push(`${pending} ${f}`); pending = null; continue; }
+    if (pending) { out.push(pending); pending = null; }
+    out.push(f);
+  }
+  if (pending) out.push(pending);   // nothing to attach to: reported, never dropped
+  return out;
+}
+
 export function expandFragments(text, search = getFoodSearch()) {
-  const fragments = splitItems(text);
+  const fragments = attachQuantityPhrases(splitItems(text));
   if (!search) return fragments;
   return fragments
     .flatMap((f) => splitWithConjunction(f, search) || [f])

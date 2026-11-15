@@ -106,3 +106,13 @@ describe('prescriptionLine', () => {
     expect(prescriptionLine({})).toBe('');
   });
 });
+
+import { sharedEstimateLabel } from '../src/nutritionCalc.js';
+describe('shared AI estimate labels never claim more than an estimate', () => {
+  it('distinguishes reviewed, legacy community and plain AI estimates', () => {
+    expect(sharedEstimateLabel('VERIFIED_SHARED_FOOD')).toBe('✓ Reviewed estimate');
+    expect(sharedEstimateLabel('COMMUNITY_VALIDATED_CANDIDATE')).toBe('Community estimate');
+    expect(sharedEstimateLabel('AI_ESTIMATED')).toBe('AI Estimated');
+    expect(sharedEstimateLabel(undefined)).toBe('AI Estimated');
+  });
+});

@@ -108,13 +108,23 @@ function median(nums) {
  * separate human review step this file does not perform.
  */
 export async function aggregateAndMaybePromote(db, canonicalKey) {
-  const rows = await db.q(
-    `SELECT adjusted_calories, adjusted_protein, adjusted_carbs, adjusted_fat
-       FROM ai_food_feedback WHERE canonical_key = ? AND adjusted_calories IS NOT NULL`,
+  /* ONE PERSON, ONE VOICE. Counting feedback ROWS let a single user submit
+     MIN_FEEDBACK_COUNT corrections (the route allows 10 a minute) and
+     rewrite a value every gym shares. Each person now counts once, with
+     their most recent correction; anonymous rows (deleted accounts) do not
+     count at all. */
+  const all = await db.q(
+    `SELECT client_id, adjusted_calories, adjusted_protein, adjusted_carbs, adjusted_fat, created_at
+       FROM ai_food_feedback
+      WHERE canonical_key = ? AND adjusted_calories IS NOT NULL AND client_id IS NOT NULL
+      ORDER BY created_at DESC`,
     [canonicalKey]);
+  const latestPerPerson = new Map();
+  for (const r of all) if (!latestPerPerson.has(r.client_id)) latestPerPerson.set(r.client_id, r);
+  const rows = [...latestPerPerson.values()];
   const sampleCount = rows.length;
   if (sampleCount < MIN_FEEDBACK_COUNT) {
-    return { promoted: false, reason: 'insufficient_evidence', sampleCount, required: MIN_FEEDBACK_COUNT };
+    return { promoted: false, queued: false, reason: 'insufficient_evidence', sampleCount, required: MIN_FEEDBACK_COUNT };
   }
 
   const agg = {
@@ -126,25 +136,69 @@ export async function aggregateAndMaybePromote(db, canonicalKey) {
 
   if (!atwaterConsistent(agg.calories, agg.protein_g, agg.carbs_g, agg.fat_g)) {
     // Enough people disagreed with the AI, but their OWN aggregate doesn't
-    // hold together physically either -- flag, don't apply. Centralized
-    // validation (the same check a fresh AI response must pass), per spec.
-    return { promoted: false, reason: 'aggregate_failed_plausibility_check', sampleCount };
+    // hold together physically either -- flag, don't propose.
+    return { promoted: false, queued: false, reason: 'aggregate_failed_plausibility_check', sampleCount };
   }
 
   const estimate = await db.q1('SELECT * FROM ai_food_estimates WHERE canonical_key = ?', [canonicalKey]);
-  if (!estimate) return { promoted: false, reason: 'estimate_not_found', sampleCount };
+  if (!estimate) return { promoted: false, queued: false, reason: 'estimate_not_found', sampleCount };
   if (estimate.validation_status === 'VERIFIED_SHARED_FOOD') {
-    return { promoted: false, reason: 'already_verified_leave_untouched', sampleCount };
+    return { promoted: false, queued: false, reason: 'already_verified_leave_untouched', sampleCount };
   }
 
+  /* NEVER APPLIED AUTOMATICALLY. The aggregate becomes a PROPOSAL in
+     food_data_reviews; the shared value changes only when a platform
+     operator approves it (approveFoodReview). One open proposal per food:
+     a newer aggregate supersedes the older pending one. */
+  const proposed = {
+    calories: Math.round(agg.calories), protein: Math.round(agg.protein_g * 10) / 10,
+    carbs: Math.round(agg.carbs_g * 10) / 10, fat: Math.round(agg.fat_g * 10) / 10,
+  };
+  await db.run(`UPDATE food_data_reviews SET status = 'superseded'
+                 WHERE target_type = 'ai_estimate' AND target_key = ? AND status = 'pending'`, [canonicalKey]);
+  const reviewId = id('fdr');
   await db.run(
-    `UPDATE ai_food_estimates
-       SET nutrition_json = ?, validation_status = 'COMMUNITY_VALIDATED_CANDIDATE',
-           version = version + 1, updated_at = ?
-     WHERE canonical_key = ?`,
-    [JSON.stringify({ calories: Math.round(agg.calories), protein: Math.round(agg.protein_g * 10) / 10,
-       carbs: Math.round(agg.carbs_g * 10) / 10, fat: Math.round(agg.fat_g * 10) / 10 }),
-     now(), canonicalKey]);
+    `INSERT INTO food_data_reviews (id, target_type, target_key, proposed_json, current_json, distinct_contributors, status, created_at)
+     VALUES (?, 'ai_estimate', ?, ?, ?, ?, 'pending', ?)`,
+    [reviewId, canonicalKey, JSON.stringify(proposed), estimate.nutrition_json || null, sampleCount, now()]);
 
-  return { promoted: true, sampleCount, aggregate: agg };
+  return { promoted: false, queued: true, reviewId, sampleCount, aggregate: agg };
+}
+
+/** Pending (or other) shared-data proposals, oldest first. */
+export async function listFoodReviews(db, { status = 'pending', limit = 100 } = {}) {
+  return db.q(
+    `SELECT r.*, e.canonical_name, e.validation_status AS current_status
+       FROM food_data_reviews r LEFT JOIN ai_food_estimates e ON e.canonical_key = r.target_key
+      WHERE r.status = ? ORDER BY r.created_at ASC LIMIT ?`,
+    [status, Math.min(500, Math.max(1, Number(limit) || 100))]);
+}
+
+/**
+ * A platform operator's decision on a proposal. Approval is the ONLY path
+ * by which community corrections change a shared AI estimate; it is
+ * recorded (who, when, note) and the estimate is marked VERIFIED_SHARED_FOOD,
+ * this codebase's existing "human-reviewed" status -- still a community
+ * estimate, not lab data.
+ */
+export async function decideFoodReview(db, reviewId, { approve, reviewerId, note = null }) {
+  const review = await db.q1('SELECT * FROM food_data_reviews WHERE id = ?', [reviewId]);
+  if (!review) return { ok: false, reason: 'not_found' };
+  if (review.status !== 'pending') return { ok: false, reason: `already_${review.status}` };
+  const at = now();
+  if (!approve) {
+    await db.run(`UPDATE food_data_reviews SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, review_note = ? WHERE id = ?`,
+      [reviewerId, at, note, reviewId]);
+    return { ok: true, status: 'rejected' };
+  }
+  await db.tx(async (tx) => {
+    await tx.run(
+      `UPDATE ai_food_estimates
+          SET nutrition_json = ?, validation_status = 'VERIFIED_SHARED_FOOD', version = version + 1, updated_at = ?
+        WHERE canonical_key = ?`,
+      [review.proposed_json, at, review.target_key]);
+    await tx.run(`UPDATE food_data_reviews SET status = 'approved', reviewed_by = ?, reviewed_at = ?, review_note = ? WHERE id = ?`,
+      [reviewerId, at, note, reviewId]);
+  });
+  return { ok: true, status: 'approved' };
 }
