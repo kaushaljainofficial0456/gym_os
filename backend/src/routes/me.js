@@ -30,6 +30,7 @@ import {
 } from '../services/food/index.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { writeMealLogs } from '../services/nutrition/mealLogWriter.js';
+import { computeTargets } from '../services/nutrition/targets.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import {
@@ -39,7 +40,6 @@ import {
 import { canonicalizeFoodQuery } from '../services/intelligence/foodAICache.js';
 import { submitFeedback } from '../services/intelligence/foodFeedback.js';
 import { listActiveAnnouncements } from '../services/platform/announcements.js';
-import { mifflinStJeorBmr } from '../services/intelligence/restingEnergy.js';
 import { isIndependentOrg } from '../services/orgKind.js';
 import {
   BALANCE_CONFIG, calculateFlexibleCaloriePlan, getBaseTargets, getActivePlan,
@@ -425,56 +425,25 @@ export default function meRoutes(db) {
       });
     }
 
-    // Mifflin-St Jeor BMR -- shared with the daily burn breakdown's
-    // resting-energy line (services/intelligence/restingEnergy.js) so the
-    // two can never drift apart. Behaviour is unchanged for the MALE/
-    // FEMALE values this app's UI actually writes.
-    const bmr = mifflinStJeorBmr({ weightKg: weight, heightCm: height, age, sex });
-
-    // Activity multiplier from experience
-    const activityMap = { BEGINNER: 1.375, INTERMEDIATE: 1.55, ADVANCED: 1.725 };
-    const experience = (profile?.experience || 'INTERMEDIATE').toUpperCase();
-    const activityMultiplier = activityMap[experience] || 1.55;
-
-    let tdee = Math.round(bmr * activityMultiplier);
-
-    // Goal adjustment
-    const goalAdjust = {
-      FAT_LOSS: -350,
-      MUSCLE_GAIN: 300,
-      RECOMP: 0,
-      STRENGTH: 200,
-      GENERAL: 0,
-    };
-    tdee += goalAdjust[goal] || 0;
-    tdee = Math.max(1200, Math.min(tdee, 6000));
-
-    // Macro split based on goal
-    let proteinG, carbG, fatG;
-    const leanMass = weight * 0.82; // rough lean mass estimate
-    if (goal === 'MUSCLE_GAIN' || goal === 'STRENGTH') {
-      proteinG = Math.round(leanMass * 2.0);      // 2g/kg lean mass
-      fatG = Math.round(tdee * 0.25 / 9);          // 25% from fat
-      carbG = Math.round((tdee - proteinG * 4 - fatG * 9) / 4);
-    } else if (goal === 'FAT_LOSS') {
-      proteinG = Math.round(leanMass * 2.2);        // higher protein for cut
-      fatG = Math.round(tdee * 0.25 / 9);
-      carbG = Math.round((tdee - proteinG * 4 - fatG * 9) / 4);
-    } else {
-      proteinG = Math.round(leanMass * 1.8);
-      fatG = Math.round(tdee * 0.28 / 9);
-      carbG = Math.round((tdee - proteinG * 4 - fatG * 9) / 4);
-    }
-
-    // Floor macros
-    proteinG = Math.max(proteinG, 50);
-    carbG = Math.max(carbG, 50);
-    fatG = Math.max(fatG, 30);
-
+    // Equations, safeguards and assumptions live in services/nutrition/
+    // targets.js (pure, tested). Mifflin-St Jeor is still shared with the
+    // daily burn breakdown (services/intelligence/restingEnergy.js). Same
+    // numbers as before for a typical adult; new: no deficit for minors or
+    // underweight users, adjusted-weight protein at BMI >= 30, calories
+    // always consistent with the macros, and the assumptions + a medical
+    // disclaimer returned with the numbers.
+    const t = computeTargets({
+      weight, height, age, sex, goal,
+      experience: profile?.experience || 'INTERMEDIATE',
+      medicalNotes: profile?.medical_notes || null,
+    });
     res.json({
-      targets: { calories: tdee, protein: proteinG, carbs: carbG, fat: fatG },
+      targets: t.targets,
       incomplete: false,
-      meta: { bmr: Math.round(bmr), activityMultiplier, experience, goal },
+      meta: t.meta,
+      safety: t.safety,
+      assumptions: t.assumptions,
+      disclaimer: t.disclaimer,
       client: { name: user?.name || '', sex, height_cm: height, current_weight: weight, age, goal }
     });
   });

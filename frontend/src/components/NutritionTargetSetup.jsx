@@ -71,6 +71,10 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
   const [saving, setSaving] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  // Safeguards, assumptions and the medical disclaimer that come with the
+  // calculated numbers (backend services/nutrition/targets.js).
+  const [safety, setSafety] = useState({ warnings: [], adjustments: [] });
+  const [disclaimer, setDisclaimer] = useState('');
 
   // Editable values
   const [calories, setCalories] = useState(0);
@@ -96,6 +100,8 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
           return;
         }
         setTargets(res.targets);
+        setSafety({ warnings: res.safety?.warnings || [], adjustments: res.safety?.adjustments || [] });
+        setDisclaimer(res.disclaimer || '');
 
         // In edit mode, start with the current plan values; otherwise use calculated
         if (isEdit && currentPlan) {
@@ -249,6 +255,16 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
                 </span>
               </div>
 
+              {/* What the calculation could not do safely, said before the numbers */}
+              {(safety.warnings.length > 0 || safety.adjustments.length > 0) && (
+                <div className="rounded-xl px-3 py-2.5 space-y-1" role="note"
+                     style={{ background: t.goldDim, border: `1px solid ${t.border}` }}>
+                  {[...safety.warnings, ...safety.adjustments].map((w) => (
+                    <p key={w} className="font-grotesk text-[11.5px] leading-snug" style={{ color: t.ink }}>{w}</p>
+                  ))}
+                </div>
+              )}
+
               {/* All macros — editable including calories */}
               <div className="space-y-3">
                 {[
@@ -280,6 +296,10 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
                 <div className="text-[11px] font-grotesk px-3 py-2 rounded-xl anim-fadeIn" style={{ background: `${t.danger}10`, border: `1px solid ${t.danger}25`, color: t.danger }}>
                   {saveError}
                 </div>
+              )}
+
+              {disclaimer && (
+                <p className="font-grotesk text-[10.5px] leading-snug text-center px-2" style={{ color: t.faint }}>{disclaimer}</p>
               )}
             </div>
           )}
