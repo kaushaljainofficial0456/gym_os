@@ -22,6 +22,7 @@ import { useState } from 'react';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, Kicker, ErrorState, PageSkeleton } from '../../components/UI.jsx';
+import { GymTrends } from '../../components/trainer/GymPulse.jsx';
 
 const WINDOWS = [[6, '6 months'], [12, '12 months'], [24, '24 months']];
 
@@ -37,8 +38,12 @@ export default function Analytics() {
   const [months, setMonths] = useState(6);
   const { data, loading, error, reload } = useFetch(
     () => api(`/admin/analytics?months=${months}`), [months]);
+  /* The membership mix and 30 days of check-ins, which owner Home used to
+     carry (GymPulse.jsx). Its own fetch, so a failure here costs this one
+     block, never the rest of the page. */
+  const pulse = useFetch(() => api('/dashboard/pulse'));
 
-  if (loading) return <PageSkeleton variant="dashboard" label="Loading analytics" />;
+  if (loading) return <PageSkeleton variant="dashboard" label="Loading reports" />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
 
   const { series = [], totals = {}, churnPct, activeMembers, hasRevenue, hasAttendance } = data || {};
@@ -47,8 +52,8 @@ export default function Analytics() {
     <div className="space-y-5 pb-8">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="t-title">Analytics</h1>
-          <p className="t-sub mt-1.5">Joins, departures, revenue and footfall.</p>
+          <h1 className="t-title">Reports</h1>
+          <p className="t-sub mt-1.5">Memberships, joins, departures, revenue and footfall.</p>
         </div>
         <div className="flex gap-1.5">
           {WINDOWS.map(([value, label]) => (
@@ -67,6 +72,10 @@ export default function Analytics() {
           ))}
         </div>
       </div>
+
+      {pulse.error && !pulse.data ? <ErrorState error={pulse.error} onRetry={pulse.reload} />
+        : pulse.data ? <GymTrends pulse={pulse.data} />
+          : <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">{[0, 1].map((i) => <div key={i} className="card" style={{ height: 214 }} />)}</div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Joined" value={totals.joined} hue="var(--m-body)" sub={`over ${months} months`} />

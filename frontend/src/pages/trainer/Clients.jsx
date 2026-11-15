@@ -65,6 +65,11 @@ export default function Clients() {
   const [money, setMoney] = useState('ALL');
   const [createOpen, setCreateOpen] = useState(false);
   useQueryAction('new', () => setCreateOpen(true));
+  /* Home's to-do rows land on the roster already filtered: "Renew" opens
+     the memberships ending soon (?money=EXPIRING), "See them" the inactive
+     clients (?status=INACTIVE). Unknown values are ignored. */
+  useQueryAction('status', (v) => { if (STATUS_FILTERS.includes(v)) setStatus(v); });
+  useQueryAction('money', (v) => { if (['ALL', 'OWING', 'EXPIRING', 'NONE'].includes(v)) setMoney(v); });
 
   /* The trainers who actually have clients here, built from the roster
      rather than fetched -- a filter listing coaches with nobody assigned

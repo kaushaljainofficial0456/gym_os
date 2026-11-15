@@ -64,7 +64,16 @@ const still = (s, target, eps) => Math.abs(s.x - target) < eps && Math.abs(s.v) 
 const at = (x) => ({ x, v: 0 });
 const copy = (st) => ({ l: { ...st.l }, r: { ...st.r }, lift: { ...st.lift } });
 
-export default function GlassTabBar({ items, ariaLabel = 'Main', tourId }) {
+/* A tab is lit on its own route, or -- when it carries `match` -- on any of
+   those route patterns, so a tab can stand for a whole section (the owner's
+   Members tab stays lit on Attendance and Live crowd). */
+const isTabActive = (it, pathname) => (it.match
+  ? it.match.some((path) => !!matchPath({ path, end: true }, pathname))
+  : !!matchPath({ path: it.to, end: !!it.end }, pathname));
+
+/* `accessory` is drawn beside the pill, not in it: a button (the owner's
+   "+ New") that is not a place, so the lens never lands on it. */
+export default function GlassTabBar({ items, ariaLabel = 'Main', tourId, accessory = null }) {
   const loc = useLocation();
   const navigate = useNavigate();
   const reduced = useReducedMotion();
@@ -86,7 +95,7 @@ export default function GlassTabBar({ items, ariaLabel = 'Main', tourId }) {
   // the bar answers the touch, not the router.
   const [pending, setPending] = useState(null);
 
-  const active = items.findIndex((it) => !!matchPath({ path: it.to, end: !!it.end }, loc.pathname));
+  const active = items.findIndex((it) => isTabActive(it, loc.pathname));
   const shown = pending ?? active;
   const activeRef = useRef(active);
   activeRef.current = active;
@@ -350,7 +359,7 @@ export default function GlassTabBar({ items, ariaLabel = 'Main', tourId }) {
   };
 
   return (
-    <nav className={`gtb${lifted ? ' is-lifted' : ''}`} aria-label={ariaLabel}>
+    <nav className={`gtb${lifted ? ' is-lifted' : ''}${accessory ? ' has-accessory' : ''}`} aria-label={ariaLabel}>
       <div
         ref={trackRef}
         className="gtb__track"
@@ -394,6 +403,7 @@ export default function GlassTabBar({ items, ariaLabel = 'Main', tourId }) {
           </NavLink>
         ))}
       </div>
+      {accessory && <div className="gtb__accessory">{accessory}</div>}
     </nav>
   );
 }

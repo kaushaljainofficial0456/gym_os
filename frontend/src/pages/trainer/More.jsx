@@ -1,24 +1,43 @@
 /**
- * MORE -- every part of the workspace on one screen, as big tiles. The
- * phone tab bar has room for four places; this is where the rest live, so
- * nothing is ever hidden behind a menu you have to remember to open.
+ * MORE -- every part of the workspace on one screen. The phone tab bar has
+ * room for a few places; this is where the rest live, so nothing is ever
+ * hidden behind a menu you have to remember to open.
+ *
+ * An owner's is every page grouped the way the sidebar groups them
+ * (workspaceNav.js everythingGroups), with a search box: type "fees",
+ * "diet" or "QR" and the page it lives on is the one left standing.
  */
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Avatar, Card } from '../../components/UI.jsx';
 import ThemeSwitch from '../../components/trainer/ThemeSwitch.jsx';
-import { workspaceSections, tileStyle } from '../../components/trainer/workspaceNav.js';
+import { workspaceSections, everythingGroups, tileStyle } from '../../components/trainer/workspaceNav.js';
 
 export default function More() {
   const { user, logout, isOwner } = useAuth();
-  const sections = workspaceSections(isOwner).filter((s) => s.title);
+  const [q, setQ] = useState('');
+
+  const groups = useMemo(() => {
+    const all = isOwner ? everythingGroups() : workspaceSections(false).filter((s) => s.title);
+    const needle = q.trim().toLowerCase();
+    if (!needle) return all;
+    return all
+      .map((g) => ({ ...g, items: g.items.filter((it) => `${it.label} ${g.title} ${it.keywords || ''}`.toLowerCase().includes(needle)) }))
+      .filter((g) => g.items.length);
+  }, [isOwner, q]);
 
   return (
     <div className="space-y-7">
       <h1 className="t-title">Everything</h1>
 
-      {sections.map((sec) => (
+      {isOwner && (
+        <input className="input w-full" type="search" placeholder="Search any feature" aria-label="Search any feature"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+      )}
+
+      {groups.map((sec) => (
         <section key={sec.title}>
           <div className="ws-section-head"><h2 className="ws-section-title">{sec.title}</h2></div>
           <div className="ws-more-grid">
@@ -31,6 +50,10 @@ export default function More() {
           </div>
         </section>
       ))}
+
+      {!groups.length && (
+        <p className="t-sub" role="status">Nothing matches &ldquo;{q.trim()}&rdquo;. Try another word, like payments or workouts.</p>
+      )}
 
       <section>
         <div className="ws-section-head"><h2 className="ws-section-title">You</h2></div>

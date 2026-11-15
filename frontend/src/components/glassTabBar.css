@@ -40,6 +40,12 @@
   .gtb__track { background: var(--panel); border-color: var(--line); }
 }
 
+/* A button beside the pill (the owner's "+ New"): the pill gives up the
+   room, the button keeps the pill's height so the row reads as one bar. */
+.gtb.has-accessory { gap: 10px; }
+.gtb.has-accessory .gtb__track { width: auto; flex: 1 1 0; min-width: 0; max-width: 400px; }
+.gtb__accessory { flex: none; pointer-events: auto; display: grid; place-items: center; }
+
 /* The lens: two half-pill caps and a middle that scales (GlassTabBar.jsx
    says why). Every moving part moves by `transform` alone, so a slide
    keeps running on the compositor while the next page renders.

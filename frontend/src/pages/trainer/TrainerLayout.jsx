@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -11,7 +11,9 @@ import GlassTabBar from '../../components/GlassTabBar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import Logo from '../../components/Logo.jsx';
-import { workspaceSections, workspaceTabs } from '../../components/trainer/workspaceNav.js';
+import { workspaceSections, workspaceTabs, hubForPath } from '../../components/trainer/workspaceNav.js';
+import SectionTabs from '../../components/trainer/SectionTabs.jsx';
+import NewMenu from '../../components/trainer/NewMenu.jsx';
 import '../../components/trainer/workspace.css';
 
 /**
@@ -25,7 +27,36 @@ import '../../components/trainer/workspace.css';
  *   - a phone gets a bottom tab bar for the four most-used places, and
  *     More, a page of every section as big tiles.
  * Both read the same list (workspaceNav.js).
+ *
+ * An owner's sidebar is eight plain sections rather than every page:
+ * the pages inside a section are tabs along its top (SectionTabs), and
+ * the quick actions sit behind "+ New" (NewMenu) -- beside the tab bar on
+ * a phone, on Home on a computer.
  */
+function OwnerNav({ pathname, badges }) {
+  const [home, ...hubs] = workspaceSections(true)[0].items;
+  const current = hubForPath(pathname);
+  const settings = hubs.find((h) => h.key === 'settings');
+  const item = (h) => {
+    const on = h === home ? pathname === home.to || pathname === `${home.to}/` : current?.key === h.key;
+    return (
+      <Link key={h.to} to={h.to} aria-current={on ? 'page' : undefined} className={`ws-nav-item${on ? ' is-active' : ''}`}>
+        <Icon name={h.icon} size={20} strokeWidth={1.8} />
+        <span className="flex-1 truncate">{h.label}</span>
+        {h.badgeKey && badges[h.badgeKey] > 0 && <span className="ws-badge">{badges[h.badgeKey]}</span>}
+      </Link>
+    );
+  };
+  return (
+    <nav className="ws-nav ws-nav--simple" data-tour="trainer-hamburger" aria-label="Main">
+      <div className="ws-nav-group">
+        {[home, ...hubs.filter((h) => h !== settings)].map(item)}
+      </div>
+      <div className="ws-nav-group ws-nav-group--sep">{item(settings)}</div>
+    </nav>
+  );
+}
+
 export default function TrainerLayout() {
   const { user, logout, isOwner, isTrainer } = useAuth();
   const nav = useNavigate();
@@ -83,6 +114,7 @@ export default function TrainerLayout() {
           </span>
         </button>
 
+        {isOwner ? <OwnerNav pathname={loc.pathname} badges={badges} /> : (
         <nav className="ws-nav" data-tour="trainer-hamburger" aria-label="Main">
           {sections.map((sec, i) => (
             <div key={sec.title || i} className="ws-nav-group">
@@ -97,6 +129,7 @@ export default function TrainerLayout() {
             </div>
           ))}
         </nav>
+        )}
 
         <div className="ws-side-foot">
           <ThemeSwitch compact />
@@ -125,7 +158,18 @@ export default function TrainerLayout() {
             <span className="ws-brand-gym truncate">{user?.orgName || 'Workspace'}</span>
           </span>
         </button>
-        <div className="ml-auto shrink-0"><ThemeSwitch compact /></div>
+        <div className="ml-auto shrink-0 flex items-center gap-2">
+          {/* An owner's phone tab bar is Home, Members, Payments and More,
+              so Messages -- and its unread count -- lives up here. */}
+          {isOwner && (
+            <Link to="/app/trainer/messages" className="ws-top-btn"
+              aria-label={badges.messages > 0 ? `Messages, ${badges.messages} unread` : 'Messages'}>
+              <Icon name="chat" size={19} strokeWidth={1.8} />
+              {badges.messages > 0 && <span className="ws-badge ws-top-badge" aria-hidden="true">{badges.messages}</span>}
+            </Link>
+          )}
+          <ThemeSwitch compact />
+        </div>
       </header>
 
       <main className="ws-main">
@@ -134,6 +178,9 @@ export default function TrainerLayout() {
               refetches or restarts its countdown) on every navigation. */}
           <DemoBanner />
           <AnnouncementBanner />
+          {/* Outside the keyed div too: switching tabs within a section
+              animates the page, not the tabs above it. */}
+          {isOwner && <SectionTabs badges={badges} />}
           <div key={loc.pathname} className="anim-route">
             <Outlet />
           </div>
@@ -142,7 +189,8 @@ export default function TrainerLayout() {
 
       {/* ── phone & tablet: the bottom tab bar ── */}
       <div className="ws-tabs">
-        <GlassTabBar items={workspaceTabs(isOwner)} ariaLabel="Workspace" tourId="trainer-hamburger" />
+        <GlassTabBar items={workspaceTabs(isOwner)} ariaLabel="Workspace" tourId="trainer-hamburger"
+          accessory={isOwner ? <NewMenu variant="fab" /> : null} />
       </div>
 
       <AppTour
