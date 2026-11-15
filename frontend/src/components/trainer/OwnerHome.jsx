@@ -30,22 +30,28 @@ import { TINT, tileStyle } from './workspaceNav.js';
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const monthName = (key) => new Date(`${key}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'long' });
 
-/* The header is the gym and the day, the way a dashboard is titled, not a
-   chat-style greeting. A name stored in capitals ("IRONFORGE FITNESS") is
-   shown in title case; one in mixed case is left exactly as the owner typed it. */
+/* The header greets the owner by name, with the day and the gym beneath
+   it in one quiet line -- not a chatty "here's how your gym is doing"
+   sentence. A gym name stored in capitals ("IRONFORGE FITNESS") is shown
+   in title case; one in mixed case is left exactly as the owner typed it. */
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+};
 const gymTitle = (name) => {
   const n = String(name || '').trim();
-  if (!n) return 'Overview';
   return n === n.toUpperCase() ? n.toLowerCase().replace(/(^|[\s\-/&(])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase()) : n;
 };
-const todayLabel = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const todayLabel = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
 function Header({ user, children }) {
   return (
     <div className="oh-head">
       <div className="min-w-0">
-        <p className="oh-date">{todayLabel()}</p>
-        <h1 className="t-title oh-title">{gymTitle(user?.orgName)}</h1>
+        <h1 className="t-title oh-title">{greeting()}, {user?.name?.split(' ')[0] || 'there'}</h1>
+        <p className="oh-sub">{[todayLabel(), gymTitle(user?.orgName)].filter(Boolean).join(' · ')}</p>
       </div>
       {children}
     </div>
