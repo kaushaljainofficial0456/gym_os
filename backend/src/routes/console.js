@@ -22,7 +22,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole, invalidateOrgBillingCache } from '../auth.js';
-import { validate } from '../validate.js';
+import { validate, schemas } from '../validate.js';
 import { config } from '../config.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
@@ -34,6 +34,9 @@ import {
   getFoodIntelligenceOverview, getActivityTimeSeries, getProviderPerformance,
   getTopFoods, getMostCorrectedFoods, getReviewQueue, verifyFoodEstimate, rejectFoodEstimatePromotion, getDataQuality,
 } from '../services/intelligence/foodIntelligenceDashboard.js';
+import {
+  correctionCandidates, approveMapping, revokeMapping, MIN_DISTINCT_CLIENTS,
+} from '../services/nutrition/corrections.js';
 import { runRiskScan, listRiskEvents, markReviewing, resolveRiskEvent } from '../services/risk/riskEngine.js';
 import { getMlMonitoringOverview, getEstimateStats, getEstimateActivity, getMlHealth } from '../services/intelligence/mlMonitoringDashboard.js';
 import { listFeatureFlags, createFeatureFlag, updateFeatureFlag, deleteFeatureFlag } from '../services/platform/featureFlags.js';
@@ -422,6 +425,28 @@ export default function consoleRoutes(db) {
     if (!ok) return res.status(409).json({ error: 'Not a pending review candidate (already resolved or not found)' });
     await writeAuditLog(db, req, { action: 'food_estimate_promotion_rejected', entityType: 'ai_food_estimate', entityId: req.params.canonicalKey });
     res.json({ ok: true });
+  });
+
+  // ---- shared phrase -> food mappings from user corrections (F9) ----
+  // Candidates are swaps made by at least 3 DIFFERENT people (counts only,
+  // never who or which gym). Nothing applies to anyone until approved here;
+  // a person's own corrections only ever apply to that person.
+  r.get('/intelligence/food/correction-candidates', async (req, res) => {
+    res.json({ candidates: await correctionCandidates(db, { limit: 50 }), min_distinct_people: MIN_DISTINCT_CLIENTS });
+  });
+
+  r.post('/intelligence/food/correction-candidates/approve', validate(schemas.correctionMappingApprove), async (req, res) => {
+    const out = await approveMapping(db, { phrase: req.body.phrase, sourceId: req.body.source_id, reviewerId: req.user.sub });
+    if (!out.ok) return res.status(409).json({ error: out.error });
+    await writeAuditLog(db, req, { action: 'food_correction_mapping_approved', entityType: 'food_correction_mapping', entityId: req.body.phrase });
+    res.json(out);
+  });
+
+  r.post('/intelligence/food/correction-candidates/revoke', validate(schemas.correctionMappingRevoke), async (req, res) => {
+    const out = await revokeMapping(db, { phrase: req.body.phrase, reviewerId: req.user.sub });
+    if (!out.ok) return res.status(404).json({ error: 'No approved mapping for that phrase' });
+    await writeAuditLog(db, req, { action: 'food_correction_mapping_revoked', entityType: 'food_correction_mapping', entityId: req.body.phrase });
+    res.json(out);
   });
 
   r.get('/intelligence/food/data-quality', async (req, res) => {

@@ -209,6 +209,8 @@ ALTER TABLE meal_logs          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meal_logs          FORCE ROW LEVEL SECURITY;
 ALTER TABLE meal_log_requests  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meal_log_requests  FORCE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_corrections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nutrition_corrections FORCE ROW LEVEL SECURITY;
 ALTER TABLE water_logs         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE water_logs         FORCE ROW LEVEL SECURITY;
 ALTER TABLE sleep_logs         ENABLE ROW LEVEL SECURITY;
@@ -353,7 +355,7 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'client_profiles','goals','weight_logs','measurements','progress_photos','workout_logs',
-    'exercise_set_logs','personal_records','meal_logs','meal_log_requests','water_logs','sleep_logs','supplements',
+    'exercise_set_logs','personal_records','meal_logs','meal_log_requests','nutrition_corrections','water_logs','sleep_logs','supplements',
     'adherence_records','dashboard_preferences','client_workout_schedule'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);

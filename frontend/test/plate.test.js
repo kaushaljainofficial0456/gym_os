@@ -271,3 +271,25 @@ describe('provenanceOf — where a logged item\'s numbers came from', () => {
     expect(provenanceOf('something_new')).toBe(null);
   });
 });
+
+describe('corrections — the plate remembers what it showed', () => {
+  const shown = fromPlateItem({
+    name: 'Dal', source_id: 'recipe:dal_home', staple_key: 'dal', confidence: 'medium', assumed: true,
+    matched_from: 'dal', qty: 1, grams: 150, calories: 131, unit_key: 'staple_katori',
+    per100: { calories: 87, protein: 4.6, carbs: 12, fat: 2.1 },
+    units: [{ key: 'staple_katori', label: 'katori', grams: 150 }, { key: 'g', label: 'g', grams: 1 }],
+    personalized: [{ kind: 'amount', scope: 'personal', note: 'Your usual amount (2 times)' }],
+  });
+  it('keeps a snapshot of the proposal and sends it with the log', () => {
+    expect(shown.proposed).toMatchObject({ source_id: 'recipe:dal_home', grams: 150, qty: 1, unit: 'katori', assumed: true, matched_from: 'dal' });
+    const changed = { ...shown, qty: stepQty(shown, 1) };
+    const [log] = toLogItems([changed]);
+    expect(log.proposed.grams).toBe(150);
+    expect(log.grams).toBeGreaterThan(150);
+    expect(shown.personalized[0].note).toMatch(/usual amount/);
+  });
+  it('sends no proposal for a food the person searched for themselves', () => {
+    const own = { ...shown, origin: 'search' };
+    expect(toLogItems([own])[0].proposed).toBeUndefined();
+  });
+});

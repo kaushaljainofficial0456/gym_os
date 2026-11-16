@@ -76,9 +76,29 @@ export function fromPlateItem(it) {
     // identification / portion / composition, each with reasons -- see
     // backend food/confidence.js.
     breakdown: it.confidence_breakdown || null,
+    // Why this item differs from the engine's own answer: the person's own
+    // repeated corrections, or a reviewed shared mapping (server:
+    // services/nutrition/corrections.js). Shown on the row.
+    personalized: Array.isArray(it.personalized) ? it.personalized : [],
+    // What the plate SHOWED, kept through swaps and amount changes, so the
+    // server can record what this person changed (their corrections are
+    // only ever applied to themselves).
+    proposed: {
+      source_id: it.source_id || null,
+      staple_key: it.staple_key || null,
+      name: String(it.name || '').slice(0, 100),
+      grams: Number(it.grams) > 0 ? Number(it.grams) : null,
+      qty: Number(it.qty) > 0 ? Number(it.qty) : null,
+      unit: (it.units || []).find((u) => u.key === it.unit_key)?.label?.slice(0, 30) || null,
+      calories: Number.isFinite(Number(it.calories)) ? Number(it.calories) : null,
+      confidence: CONFIDENCE_LEVELS.has(it.confidence) ? it.confidence : null,
+      assumed: !!it.assumed,
+      matched_from: it.matched_from ? String(it.matched_from).slice(0, 200) : null,
+    },
     origin: 'model',
   };
 }
+const CONFIDENCE_LEVELS = new Set(['high', 'medium', 'low', 'unreliable']);
 
 const LEVEL_WORD = { high: 'sure', medium: 'likely', low: 'unsure', unreliable: 'unsure' };
 
@@ -352,6 +372,9 @@ export function toLogItems(items) {
             ...(it.stapleKey ? { staple_key: String(it.stapleKey).slice(0, 60) } : {}),
             ...(it.oilKey ? { oil: it.oilKey } : {}) }
         : {}),
+      // Only model items carry the snapshot; a food the person searched
+      // for or typed in has no proposal to have corrected.
+      ...(it.proposed && it.origin === 'model' ? { proposed: it.proposed } : {}),
     };
   });
 }

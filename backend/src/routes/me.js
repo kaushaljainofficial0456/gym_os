@@ -30,6 +30,7 @@ import {
 } from '../services/food/index.js';
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { writeMealLogs } from '../services/nutrition/mealLogWriter.js';
+import { applyCorrections, personalPreferences, approvedMappings, recordCorrections, phraseOf } from '../services/nutrition/corrections.js';
 import { computeTargets } from '../services/nutrition/targets.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
@@ -1142,7 +1143,14 @@ export default function meRoutes(db) {
   r.post('/nutrition/describe', plateLimit, validate(schemas.plateDescribe), async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
     if (!foodModelAvailable()) return res.status(503).json({ error: 'Food model not available' });
-    res.json(describeMeal(req.body.text));
+    const described = describeMeal(req.body.text);
+    // Reviewed shared mappings, then THIS person's own repeated corrections
+    // (services/nutrition/corrections.js). Never another person's.
+    const [personal, approved] = await Promise.all([
+      personalPreferences(db, c.id).catch(() => new Map()),
+      approvedMappings(db).catch(() => new Map()),
+    ]);
+    res.json(applyCorrections(described, { personal, approved }));
   });
 
   r.post('/nutrition/item', plateLimit, validate(schemas.plateItem), async (req, res) => {
@@ -1167,6 +1175,7 @@ export default function meRoutes(db) {
       clientId: c.id, date, slot, items: req.body.items,
       requestId: req.body.client_request_id || null,
       excluded: req.body.acknowledged_unresolved || [],
+      orgId: c.org_id, userId: req.user.sub,
     });
     if (replayed) return res.status(200).json({ ...response, replayed: true });
     track(db, 'meal_logged', req.user.org, req.user.sub, { client_id: c.id, source: 'plate', items: response.ids.length, slot: mealGroup(slot) });
@@ -1439,6 +1448,20 @@ export default function meRoutes(db) {
       'UPDATE meal_logs SET quantity = ?, unit = ?, calories = ?, protein = ?, carbs = ?, fat = ? WHERE id = ? AND client_id = ?',
       [newQty, newUnit, newCalories, newProtein, newCarbs, newFat, logId, c.id]
     );
+    // Recorded as a correction (audit + personal history), not applied to
+    // anyone else and not used for learning: an amount edited after the
+    // fact is as often "I ate more" as "the estimate was wrong".
+    if (Number(log.quantity) !== newQty || (log.unit ?? null) !== (newUnit ?? null)) {
+      recordCorrections(db, {
+        orgId: c.org_id, clientId: c.id, userId: req.user.sub, source: 'meal_log_edit', mealLogId: logId,
+        corrections: [{
+          kind: 'quantity_edit', phrase: phraseOf(log.name) || 'unknown',
+          original: { name: log.name, source_id: log.source_id ?? null, qty: log.quantity ?? null, unit: log.unit ?? null, calories: log.calories },
+          corrected: { name: log.name, source_id: log.source_id ?? null, qty: newQty, unit: newUnit, calories: newCalories },
+          confidence: log.confidence ?? null,
+        }],
+      }).catch(() => {});
+    }
     track(db, 'meal_log_updated', req.user.org, req.user.sub, { clientId: c.id, logId });
     // Retroactive Flexible Calorie Balance correction -- see the DELETE
     // route above for why this is a safe, best-effort, mostly-no-op call.

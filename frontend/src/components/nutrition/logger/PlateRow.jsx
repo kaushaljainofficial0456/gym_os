@@ -101,6 +101,14 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
               {summary && (
                 <p className="font-grotesk text-[11px]" style={{ color: 'var(--faint)' }}>{summary}</p>
               )}
+              {item.personalized?.length > 0 && (
+                // Why this differs from the standard answer: your own past
+                // corrections, or a reviewed mapping. The standard food is the
+                // first alternative below -- one tap back.
+                <p className="font-grotesk text-[11px]" style={{ color: 'var(--mute)' }}>
+                  {item.personalized.map((p) => p.note).join(' · ')}
+                </p>
+              )}
 
               {item.units.length > 1 && (
                 <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5" role="group" aria-label={`Unit for ${item.name}`}>

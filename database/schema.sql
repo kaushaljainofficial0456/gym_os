@@ -1138,6 +1138,50 @@ CREATE TABLE IF NOT EXISTS food_data_reviews (
 );
 CREATE INDEX IF NOT EXISTS idx_food_data_reviews_status ON food_data_reviews(status, created_at);
 
+-- What a person changed about what the food engine proposed (nutrition
+-- overhaul, Phase 2 / F9 -- services/nutrition/corrections.js): a different
+-- food, or their own amount where the engine assumed one, or a later
+-- quantity edit. Original and corrected values, who, when, from where, the
+-- engine's confidence, and a review status. PERSONAL: read back only for the
+-- same client_id, never for anyone else. Client-scoped RLS (rls.sql).
+CREATE TABLE IF NOT EXISTS nutrition_corrections (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  client_id      TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  user_id        TEXT,                              -- who made it (the member, or staff for them)
+  phrase         TEXT NOT NULL,                     -- the food words as typed, normalised ("dal")
+  kind           TEXT NOT NULL,                     -- food_swap | amount | quantity_edit
+  original_json  TEXT NOT NULL,                     -- what was proposed / logged before
+  corrected_json TEXT NOT NULL,                     -- what the person chose
+  source         TEXT NOT NULL,                     -- plate | meal_log_edit
+  confidence     TEXT,                              -- the engine's confidence in its proposal
+  scope          TEXT NOT NULL DEFAULT 'personal',  -- personal (this client only)
+  review_status  TEXT NOT NULL DEFAULT 'unreviewed',-- unreviewed | contributed (to an approved mapping)
+  meal_log_id    TEXT,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nutrition_corrections_client ON nutrition_corrections(client_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_nutrition_corrections_phrase ON nutrition_corrections(kind, phrase);
+
+-- Phrase -> food mappings a platform operator APPROVED for everyone, after
+-- at least 3 different people made the same swap. Platform-level like
+-- food_data_reviews: a food phrase, a catalogue id and a COUNT of people --
+-- never who -- so it has no RLS policy.
+CREATE TABLE IF NOT EXISTS food_correction_approvals (
+  id               TEXT PRIMARY KEY,
+  phrase           TEXT NOT NULL,
+  source_id        TEXT NOT NULL,
+  staple_key       TEXT,
+  name             TEXT,
+  distinct_clients INTEGER NOT NULL,
+  status           TEXT NOT NULL DEFAULT 'approved',  -- approved | superseded | revoked
+  approved_by      TEXT NOT NULL,
+  approved_at      TEXT NOT NULL,
+  revoked_by       TEXT,
+  revoked_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_food_correction_approvals_phrase ON food_correction_approvals(phrase, status);
+
 CREATE TABLE IF NOT EXISTS ai_food_feedback (
   id                  TEXT PRIMARY KEY,
   canonical_key       TEXT NOT NULL REFERENCES ai_food_estimates(canonical_key) ON DELETE CASCADE,

@@ -158,7 +158,11 @@ export default function PlateSheet({ open, onClose, initialSlot = 'snack', initi
       else if (oldUnit?.grams) kept = { ...next, unitKey: 'g', qty: Math.round(oldUnit.grams * item.qty) };
       // The swapped-out food is offered back, so a wrong tap is one tap to undo.
       kept.alternatives = [{ source_id: item.sourceId, staple_key: item.stapleKey, name: item.name }, ...next.alternatives.filter((a) => a.source_id !== item.sourceId)].filter((a) => a.source_id).slice(0, 3);
-      setItems((cur) => cur.map((x) => (x.id === item.id ? { ...kept, id: item.id, assumed: item.assumed } : x)));
+      // The snapshot of what the plate first showed stays with the row, so
+      // the swap is recorded as this person's correction when logged.
+      setItems((cur) => cur.map((x) => (x.id === item.id
+        ? { ...kept, id: item.id, assumed: item.assumed, proposed: item.proposed, origin: item.origin, personalized: [] }
+        : x)));
     } catch (e) {
       setError(e.message || 'Could not switch food');
     } finally { setBusy(null); }

@@ -22,6 +22,7 @@
 
 import { id, now } from '../../ids.js';
 import { resolveLoggedNutrition } from './provenance.js';
+import { detectCorrections, recordCorrections } from './corrections.js';
 
 // 'ai' is the older photo/text estimate flow; it was always stored as an
 // estimate with its provider, and still is.
@@ -46,7 +47,7 @@ async function storedResponse(db, clientId, requestId) {
  *          mealId?:string|null}} opts
  * @returns {Promise<{replayed:boolean, response:object}>}
  */
-export async function writeMealLogs(db, { clientId, date, slot, items, requestId = null, excluded = [], eaten = true, mealId = null }) {
+export async function writeMealLogs(db, { clientId, date, slot, items, requestId = null, excluded = [], eaten = true, mealId = null, orgId = null, userId = null }) {
   if (requestId) {
     const prior = await storedResponse(db, clientId, requestId);
     if (prior) return { replayed: true, response: prior };
@@ -92,6 +93,13 @@ export async function writeMealLogs(db, { clientId, date, slot, items, requestId
           id: lId, name: it.name, calories: n.calories, protein: n.protein, carbs: n.carbs, fat: n.fat,
           nutrition_source: n.nutrition_source, repriced: n.repriced,
         });
+        // What the person changed about what the engine proposed (F9) --
+        // in the same transaction, so a correction exists iff its log does.
+        if (orgId && it.proposed) {
+          await recordCorrections(tx, {
+            orgId, clientId, userId, source: 'plate', mealLogId: lId, corrections: detectCorrections(it, n),
+          });
+        }
       }
       await tx.run(
         'UPDATE meal_log_requests SET response_json = ? WHERE client_id = ? AND request_id = ?',

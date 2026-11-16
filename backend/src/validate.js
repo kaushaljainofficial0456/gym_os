@@ -145,6 +145,12 @@ export const schemas = {
     oil_level: z.enum(['none', 'low', 'moderate', 'high', 'very_high']).optional(),
     client_request_id: z.string().trim().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   }),
+  // ---- shared correction mappings (SUPER_ADMIN console) ----
+  correctionMappingApprove: z.object({
+    phrase: z.string().trim().min(1).max(80),
+    source_id: z.string().trim().min(1).max(80),
+  }).strict(),
+  correctionMappingRevoke: z.object({ phrase: z.string().trim().min(1).max(80) }).strict(),
   // ---- the plate logger: describe -> adjust -> log, one meal at a time ----
   plateDescribe: z.object({ text: z.string().trim().min(1).max(300) }),
   plateItem: z.object({
@@ -194,6 +200,21 @@ export const schemas = {
       fiber: z.number().finite().min(0).max(500).optional(),
       sugar: z.number().finite().min(0).max(1000).optional(),
       sodium: z.number().finite().min(0).max(50000).optional(),
+      // What the plate SHOWED for this item before the person changed it
+      // (services/nutrition/corrections.js). Used only to record that
+      // person's own correction; never trusted for pricing.
+      proposed: z.object({
+        source_id: z.string().trim().min(1).max(80).nullable().optional(),
+        staple_key: z.string().trim().min(1).max(60).nullable().optional(),
+        name: z.string().trim().max(100).optional(),
+        grams: z.number().finite().nonnegative().max(20000).nullable().optional(),
+        qty: z.number().finite().nonnegative().max(100000).nullable().optional(),
+        unit: z.string().trim().max(30).nullable().optional(),
+        calories: z.number().finite().min(0).max(20000).nullable().optional(),
+        confidence: z.enum(['high', 'medium', 'low', 'unreliable']).nullable().optional(),
+        assumed: z.boolean().optional(),
+        matched_from: z.string().trim().max(200).nullable().optional(),
+      }).strict().optional(),
     })).min(1).max(30),
     // Idempotency key: generated once per plate by the client and REUSED on
     // retry, so a retried request returns the first result instead of

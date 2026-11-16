@@ -139,8 +139,30 @@ test('meal logging on PostgreSQL', { skip, concurrency: false }, async (t) => {
     assert.equal(n.rows[0].n, 0, 'nothing was written');
   });
 
+  await t.test('RLS: a person\'s corrections are recorded with the log and invisible to another gym', async () => {
+    const asA = appDb(ORG.A);
+    const proposed = { source_id: 'recipe:dal_home', name: 'Dal', grams: 150, qty: 1, unit: 'katori', calories: 131, assumed: true, matched_from: 'dal' };
+    const { response } = await writeMealLogs(asA, {
+      clientId: CLIENT.A, orgId: ORG.A, userId: `${TAG}_uA`, date: '2026-11-15', slot: 'lunch',
+      items: [item({ name: 'Dal makhani', source_id: 'indb:ASC160', grams: 150, proposed })],
+    });
+    const mine = await asA.q('SELECT kind, phrase, meal_log_id FROM nutrition_corrections WHERE client_id = ?', [CLIENT.A]);
+    assert.equal(mine.length, 1);
+    assert.equal(mine[0].kind, 'food_swap');
+    assert.equal(mine[0].meal_log_id, response.ids[0]);
+    const asB = appDb(ORG.B);
+    assert.deepEqual(await asB.q('SELECT id FROM nutrition_corrections WHERE client_id = ?', [CLIENT.A]), [], 'gym B sees none of gym A\'s corrections');
+    await assert.rejects(
+      () => asB.run(`INSERT INTO nutrition_corrections (id, org_id, client_id, phrase, kind, original_json, corrected_json, source, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?)`, [`${TAG}_ncor_x`, ORG.A, CLIENT.A, 'dal', 'food_swap', '{}', '{}', 'plate', NOW]),
+      /row-level security|violates/i, 'gym B cannot write a correction for gym A\'s client');
+    const rls = await p.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'nutrition_corrections'`);
+    assert.deepEqual(rls.rows[0], { relrowsecurity: true, relforcerowsecurity: true });
+  });
+
   await t.after(async () => {
     try {
+      await p.query(`DELETE FROM nutrition_corrections WHERE client_id = ANY($1::text[])`, [Object.values(CLIENT)]);
       await p.query(`DELETE FROM meal_logs WHERE client_id = ANY($1::text[])`, [Object.values(CLIENT)]);
       await p.query(`DELETE FROM meal_log_requests WHERE client_id = ANY($1::text[])`, [Object.values(CLIENT)]);
       await p.query(`DELETE FROM clients WHERE id = ANY($1::text[])`, [Object.values(CLIENT)]);
