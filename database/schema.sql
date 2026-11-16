@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS client_profiles (
   food_exclusions  TEXT,          -- e.g. "paneer, eggs"
   cuisine          TEXT,
   diet_type        TEXT,          -- VEG | NON_VEG | VEGAN | EGGETARIAN
+  activity_level   TEXT,          -- SEDENTARY | LIGHT | MODERATE | ACTIVE | VERY_ACTIVE (null: from experience)
   meals_per_day    INTEGER DEFAULT 5,
   sleep_target_h   REAL DEFAULT 8,
   water_target_l   REAL DEFAULT 3,

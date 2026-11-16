@@ -6,11 +6,12 @@
 // are UNCHANGED from the previous inline version:
 //
 //   BMR       Mifflin-St Jeor (services/intelligence/restingEnergy.js)
-//   TDEE      BMR x activity multiplier. The multiplier still comes from the
-//             profile's training EXPERIENCE (beginner 1.375 / intermediate
-//             1.55 / advanced 1.725) -- the profile has no activity-level
-//             field yet; this is stated in `assumptions` so it can be
-//             reviewed, not hidden.
+//   TDEE      BMR x activity multiplier: the person's own ACTIVITY LEVEL
+//             when they have set one (Phase 2: sedentary 1.2 / light 1.375 /
+//             moderate 1.55 / active 1.725 / very active 1.9), otherwise --
+//             exactly as before -- from training EXPERIENCE (beginner 1.375 /
+//             intermediate 1.55 / advanced 1.725). Which one was used is
+//             stated in `assumptions`.
 //   goal      fat loss -350 kcal, muscle gain +300, strength +200, else 0
 //   protein   1.8-2.2 g per kg of estimated lean mass (0.82 x weight)
 //   fat       25-28% of energy; carbs the remainder
@@ -34,6 +35,9 @@
 import { mifflinStJeorBmr } from '../intelligence/restingEnergy.js';
 
 export const ACTIVITY_BY_EXPERIENCE = Object.freeze({ BEGINNER: 1.375, INTERMEDIATE: 1.55, ADVANCED: 1.725 });
+/** Standard physical-activity multipliers for total daily energy. */
+export const ACTIVITY_LEVELS = Object.freeze({ SEDENTARY: 1.2, LIGHT: 1.375, MODERATE: 1.55, ACTIVE: 1.725, VERY_ACTIVE: 1.9 });
+const ACTIVITY_WORDS = { SEDENTARY: 'mostly sitting', LIGHT: 'lightly active', MODERATE: 'moderately active', ACTIVE: 'very active', VERY_ACTIVE: 'extremely active' };
 export const GOAL_ADJUST_KCAL = Object.freeze({ FAT_LOSS: -350, MUSCLE_GAIN: 300, RECOMP: 0, STRENGTH: 200, GENERAL: 0 });
 export const CALORIE_FLOOR = 1200;
 export const CALORIE_CEILING = 6000;
@@ -50,13 +54,15 @@ export const TARGETS_DISCLAIMER = 'A general starting point from standard equati
  *            meta:object, safety:{warnings:string[], adjustments:string[]},
  *            assumptions:string[], disclaimer:string}}
  */
-export function computeTargets({ weight, height, age, sex, goal = 'GENERAL', experience = 'INTERMEDIATE', medicalNotes = null }) {
+export function computeTargets({ weight, height, age, sex, goal = 'GENERAL', experience = 'INTERMEDIATE', activityLevel = null, medicalNotes = null }) {
   const warnings = [];
   const adjustments = [];
   const exp = String(experience || 'INTERMEDIATE').toUpperCase();
   const g = String(goal || 'GENERAL').toUpperCase();
+  const level = activityLevel ? String(activityLevel).toUpperCase() : null;
   const bmr = mifflinStJeorBmr({ weightKg: weight, heightCm: height, age, sex });
-  const activityMultiplier = ACTIVITY_BY_EXPERIENCE[exp] || 1.55;
+  const fromLevel = level && ACTIVITY_LEVELS[level] != null;
+  const activityMultiplier = fromLevel ? ACTIVITY_LEVELS[level] : (ACTIVITY_BY_EXPERIENCE[exp] || 1.55);
   const bmi = height > 0 ? weight / ((height / 100) ** 2) : null;
 
   let goalAdjust = GOAL_ADJUST_KCAL[g] || 0;
@@ -117,11 +123,17 @@ export function computeTargets({ weight, height, age, sex, goal = 'GENERAL', exp
 
   return {
     targets: { calories, protein, carbs, fat },
-    meta: { bmr: Math.round(bmr), activityMultiplier, experience: exp, goal: g, bmi: bmi == null ? null : Math.round(bmi * 10) / 10 },
+    meta: {
+      bmr: Math.round(bmr), activityMultiplier, activityLevel: fromLevel ? level : null,
+      activitySource: fromLevel ? 'activity_level' : 'experience',
+      experience: exp, goal: g, bmi: bmi == null ? null : Math.round(bmi * 10) / 10,
+    },
     safety: { warnings, adjustments },
     assumptions: [
       'Resting energy: Mifflin-St Jeor equation.',
-      `Activity: ×${activityMultiplier}, taken from your training experience (${exp.toLowerCase()}) — adjust if your daily activity is very different.`,
+      fromLevel
+        ? `Activity: ×${activityMultiplier}, from the activity level you set (${ACTIVITY_WORDS[level]}).`
+        : `Activity: ×${activityMultiplier}, taken from your training experience (${exp.toLowerCase()}) — set your activity level if your day is very different.`,
       `Goal adjustment: ${goalAdjust >= 0 ? '+' : ''}${goalAdjust} kcal/day.`,
       'Protein from estimated lean mass; fat 25–28% of energy; carbs make up the rest.',
     ],

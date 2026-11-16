@@ -80,6 +80,11 @@ export function fromPlateItem(it) {
     // repeated corrections, or a reviewed shared mapping (server:
     // services/nutrition/corrections.js). Shown on the row.
     personalized: Array.isArray(it.personalized) ? it.personalized : [],
+    // A food the person listed to avoid (profile), matched by name or by a
+    // computed recipe's ingredients; `avoidUnchecked` when the dish's
+    // ingredients are not known and so could not be checked.
+    avoid: it.avoid?.note ? { terms: it.avoid.terms || [], note: String(it.avoid.note) } : null,
+    avoidUnchecked: !!it.avoid_unchecked,
     // What the plate SHOWED, kept through swaps and amount changes, so the
     // server can record what this person changed (their corrections are
     // only ever applied to themselves).

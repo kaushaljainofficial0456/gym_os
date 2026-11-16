@@ -31,7 +31,8 @@ import {
 import { validateFoodRecord } from '../services/foodValidation.js';
 import { writeMealLogs } from '../services/nutrition/mealLogWriter.js';
 import { applyCorrections, personalPreferences, approvedMappings, recordCorrections, phraseOf } from '../services/nutrition/corrections.js';
-import { computeTargets } from '../services/nutrition/targets.js';
+import { computeTargets, ACTIVITY_LEVELS } from '../services/nutrition/targets.js';
+import { applyDietAndExclusions, DIET_TYPES } from '../services/nutrition/personalization.js';
 import { validate, schemas } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import {
@@ -284,7 +285,7 @@ export default function meRoutes(db) {
 
   r.put('/profile', async (req, res) => {
     const c = await getClient(req, res); if (!c) return;
-    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed, unit_system, day_start_hour } = req.body || {};
+    const { goal, target_weight, goal_date, experience, equipment, water_target_l, sleep_target_h, height_cm, sex, age, current_weight, name, phone, onboarding_completed, unit_system, day_start_hour, activity_level, diet_type, food_exclusions } = req.body || {};
     const GOALS = ['FAT_LOSS', 'MUSCLE_GAIN', 'RECOMP', 'STRENGTH', 'GENERAL'];
     const EXP = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
     const SEX = ['MALE', 'FEMALE', 'OTHER'];
@@ -382,6 +383,30 @@ export default function meRoutes(db) {
       psets.push('day_start_hour = ?'); pparams.push(h);
       invalidateDayStart(c.id);
     }
+    /* Nutrition personalization (Phase 2). Each is validated here -- an
+       unknown value is refused with a message, never stored -- and an
+       empty value clears it (null = "not set": targets fall back to
+       training experience; the food engine applies no diet default). */
+    if (activity_level !== undefined) {
+      const v = activity_level === null || activity_level === '' ? null : String(activity_level).toUpperCase();
+      if (v !== null && !Object.keys(ACTIVITY_LEVELS).includes(v)) {
+        return res.status(400).json({ error: `activity_level must be one of ${Object.keys(ACTIVITY_LEVELS).join(', ')}` });
+      }
+      psets.push('activity_level = ?'); pparams.push(v);
+    }
+    if (diet_type !== undefined) {
+      const v = diet_type === null || diet_type === '' ? null : String(diet_type).toUpperCase();
+      if (v !== null && !DIET_TYPES.includes(v)) {
+        return res.status(400).json({ error: `diet_type must be one of ${DIET_TYPES.join(', ')}` });
+      }
+      psets.push('diet_type = ?'); pparams.push(v);
+    }
+    if (food_exclusions !== undefined) {
+      const v = food_exclusions === null ? '' : String(food_exclusions);
+      if (v.length > 300) return res.status(400).json({ error: 'food_exclusions is limited to 300 characters' });
+      const clean = v.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 20).join(', ');
+      psets.push('food_exclusions = ?'); pparams.push(clean || null);
+    }
     if (psets.length) {
       const cols = psets.map(s => s.split(' = ')[0]);
       await db.run(
@@ -436,6 +461,7 @@ export default function meRoutes(db) {
     const t = computeTargets({
       weight, height, age, sex, goal,
       experience: profile?.experience || 'INTERMEDIATE',
+      activityLevel: profile?.activity_level || null,
       medicalNotes: profile?.medical_notes || null,
     });
     res.json({
@@ -1146,11 +1172,17 @@ export default function meRoutes(db) {
     const described = describeMeal(req.body.text);
     // Reviewed shared mappings, then THIS person's own repeated corrections
     // (services/nutrition/corrections.js). Never another person's.
-    const [personal, approved] = await Promise.all([
+    const [personal, approved, profile] = await Promise.all([
       personalPreferences(db, c.id).catch(() => new Map()),
       approvedMappings(db).catch(() => new Map()),
+      db.q1('SELECT diet_type, food_exclusions FROM client_profiles WHERE client_id = ?', [c.id]).catch(() => null),
     ]);
-    res.json(applyCorrections(described, { personal, approved }));
+    // Their diet's default for an umbrella word ("biryani" -> veg biryani
+    // for a vegetarian), and a flag on anything matching a food they listed
+    // to avoid (services/nutrition/personalization.js).
+    res.json(applyDietAndExclusions(applyCorrections(described, { personal, approved }), {
+      dietType: profile?.diet_type || null, exclusions: profile?.food_exclusions || null,
+    }));
   });
 
   r.post('/nutrition/item', plateLimit, validate(schemas.plateItem), async (req, res) => {

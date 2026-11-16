@@ -30,7 +30,7 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
   const weak = item.confidence === 'low' || item.confidence === 'unreliable';
   const note = confidenceNote(item);
   const summary = confidenceSummary(item);
-  const flag = item.assumed || weak || item.unmatchedTerms?.length > 0 || !!note;
+  const flag = item.assumed || weak || item.unmatchedTerms?.length > 0 || !!note || !!item.avoid;
   // Any change to the amount is the person setting it.
   const onChange = (next) => change({ ...next, assumed: false });
   const amount = unit?.key === 'g' ? `${fmtQty(item.qty)} g` : `${unit?.label || 'serving'}${p.grams != null ? ` · ${Math.round(p.grams)} g` : ''}`;
@@ -59,6 +59,12 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
           <span className="block font-grotesk text-[11.5px] truncate tabular-nums" style={{ color: 'var(--mute)' }}>{amount}</span>
           {/* Words from the description this match does not cover -- the
               person is told, not left to assume the number includes them. */}
+          {/* A food the person listed to avoid: visible without opening the row. */}
+          {item.avoid && (
+            <span className="block font-grotesk text-[11px] leading-snug mt-0.5 font-semibold" style={{ color: 'var(--warn)' }} role="note">
+              Contains “{item.avoid.terms.join('”, “')}”? — on your list to avoid
+            </span>
+          )}
           {item.unmatchedTerms?.length > 0 && (
             <span className="block font-grotesk text-[11px] leading-snug mt-0.5" style={{ color: 'var(--warn)' }} role="note">
               “{item.unmatchedTerms.join('”, “')}” not reflected{onAskAI ? ' — open to estimate with AI' : ''}
@@ -95,6 +101,12 @@ export default function PlateRow({ item, onChange: change, onRemove, onSwap, onA
             className="overflow-hidden"
           >
             <div className="pb-3 space-y-2.5">
+              {item.avoid && (
+                <p className="font-grotesk text-[11.5px] font-semibold" role="note" style={{ color: 'var(--warn)' }}>{item.avoid.note}</p>
+              )}
+              {!item.avoid && item.avoidUnchecked && (
+                <p className="font-grotesk text-[11px]" style={{ color: 'var(--faint)' }}>Ingredients not known — not checked against your foods to avoid.</p>
+              )}
               {note && (
                 <p className="font-grotesk text-[11.5px]" style={{ color: 'var(--warn)' }}>{note}</p>
               )}

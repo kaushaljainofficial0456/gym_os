@@ -200,6 +200,10 @@ const MIGRATIONS = [
   ['meal_logs', 'sodium', `sodium REAL`],
   ['meal_logs', 'confidence', `confidence TEXT`],
   ['meal_logs', 'request_id', `request_id TEXT`],
+  // Phase 2 personalization: the person's own activity level drives TDEE
+  // when set (services/nutrition/targets.js); null keeps the experience-based
+  // multiplier exactly as before.
+  ['client_profiles', 'activity_level', `activity_level TEXT`],
 
   // --- AI-estimated ingredients inside a custom meal (Customize My Meals'
   // AI fallback) -- distinguishes a "✨ AI Estimated" meal_item from a

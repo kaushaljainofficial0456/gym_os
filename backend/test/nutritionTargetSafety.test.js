@@ -81,3 +81,34 @@ test('medical notes are acknowledged; the disclaimer and assumptions are always 
   assert.ok(r.assumptions.some((a) => /Mifflin-St Jeor/.test(a)));
   assert.ok(r.assumptions.some((a) => /training experience/.test(a)), 'the activity proxy is disclosed');
 });
+
+/* ---- Phase 2: the person's own activity level ---- */
+
+test('an activity level the person set drives TDEE; unset keeps the experience multiplier', () => {
+  const adult = { weight: 70, height: 175, age: 30, sex: 'MALE', goal: 'GENERAL', experience: 'BEGINNER' };
+  const bmr = mifflinStJeorBmr({ weightKg: 70, heightCm: 175, age: 30, sex: 'MALE' });
+  const unset = computeTargets(adult);
+  assert.equal(unset.meta.activityMultiplier, 1.375);
+  assert.equal(unset.meta.activitySource, 'experience');
+  const desk = computeTargets({ ...adult, activityLevel: 'SEDENTARY' });
+  assert.equal(desk.meta.activityMultiplier, 1.2);
+  assert.equal(desk.meta.activitySource, 'activity_level');
+  assert.equal(desk.targets.calories, Math.round(bmr * 1.2));
+  assert.ok(desk.assumptions.some((a) => /activity level you set/.test(a)));
+  const labourer = computeTargets({ ...adult, activityLevel: 'very_active' });
+  assert.equal(labourer.meta.activityMultiplier, 1.9);
+  assert.ok(labourer.targets.calories > unset.targets.calories);
+  // An unknown value is ignored, never guessed.
+  assert.equal(computeTargets({ ...adult, activityLevel: 'BANANAS' }).meta.activitySource, 'experience');
+});
+
+test('the safeguards still hold with an activity level set', () => {
+  const teen = computeTargets({ weight: 60, height: 170, age: 16, sex: 'MALE', goal: 'FAT_LOSS', activityLevel: 'ACTIVE' });
+  assert.ok(teen.safety.warnings.some((w) => /Under 18/.test(w)));
+  const bmr = mifflinStJeorBmr({ weightKg: 60, heightCm: 170, age: 16, sex: 'MALE' });
+  assert.equal(teen.targets.calories, Math.round(bmr * 1.725), 'maintenance, no deficit');
+  const thin = computeTargets({ weight: 48, height: 172, age: 25, sex: 'FEMALE', goal: 'FAT_LOSS', activityLevel: 'SEDENTARY' });
+  assert.ok(thin.safety.adjustments.some((a) => /No calorie deficit/.test(a)));
+  const low = computeTargets({ weight: 45, height: 150, age: 70, sex: 'FEMALE', goal: 'FAT_LOSS', activityLevel: 'SEDENTARY' });
+  assert.ok(low.targets.calories >= 1200, 'floor still applies');
+});

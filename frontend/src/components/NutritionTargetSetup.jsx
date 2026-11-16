@@ -85,6 +85,39 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
   // Track whether the current plan is manual or calculated
   const isManual = currentPlan?.name?.includes('(Manual)');
 
+  // Personalization (Phase 2): the person's own activity level drives the
+  // calculation when set; diet type and foods to avoid shape what the
+  // plate proposes and flags. All three live on the profile.
+  const [activity, setActivity] = useState('');
+  const [diet, setDiet] = useState('');
+  const [avoidText, setAvoidText] = useState('');
+  const [avoidSaved, setAvoidSaved] = useState('');
+  const [prefsBusy, setPrefsBusy] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    api('/me/profile').then((r) => {
+      setActivity(r?.profile?.activity_level || '');
+      setDiet(r?.profile?.diet_type || '');
+      setAvoidText(r?.profile?.food_exclusions || '');
+      setAvoidSaved(r?.profile?.food_exclusions || '');
+    }).catch(() => {});
+  }, [open]);
+
+  const savePref = async (patch, { recalc = false } = {}) => {
+    setPrefsBusy(true);
+    setSaveError(null);
+    try {
+      await api('/me/profile', { method: 'PUT', body: JSON.stringify(patch) });
+      if (recalc) setReloadTick((n) => n + 1);
+      return true;
+    } catch (e) {
+      setSaveError(e.message || 'Could not save that');
+      return false;
+    } finally { setPrefsBusy(false); }
+  };
+
   useEffect(() => {
     if (!open) return;
     setLoading(true);
@@ -103,8 +136,10 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
         setSafety({ warnings: res.safety?.warnings || [], adjustments: res.safety?.adjustments || [] });
         setDisclaimer(res.disclaimer || '');
 
-        // In edit mode, start with the current plan values; otherwise use calculated
-        if (isEdit && currentPlan) {
+        // In edit mode, start with the current plan values; otherwise use
+        // calculated. A changed activity level re-fetches, and then the
+        // recalculated numbers are what the person is shown.
+        if (isEdit && currentPlan && reloadTick === 0) {
           setCalories(currentPlan.calories || res.targets.calories);
           setProtein(currentPlan.protein || res.targets.protein);
           setCarbs(currentPlan.carbs || res.targets.carbs);
@@ -118,7 +153,7 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [open, isEdit, currentPlan?.calories]);
+  }, [open, isEdit, currentPlan?.calories, reloadTick]);
 
   const handleSave = async () => {
     // Validation
@@ -265,6 +300,29 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
                 </div>
               )}
 
+              {/* How active a normal day is -- drives the calculation. */}
+              <label className="flex items-center gap-3">
+                <span className="flex-1 font-grotesk text-[11px] font-semibold" style={{ color: t.mute }}>Daily activity</span>
+                <select
+                  value={activity}
+                  disabled={prefsBusy}
+                  onChange={async (e) => {
+                    const v = e.target.value;
+                    const prev = activity;
+                    setActivity(v);
+                    if (!(await savePref({ activity_level: v || null }, { recalc: true }))) setActivity(prev);
+                  }}
+                  className="px-2 py-1.5 rounded-lg font-grotesk text-[12px] outline-none"
+                  style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>
+                  <option value="">From my training level</option>
+                  <option value="SEDENTARY">Mostly sitting</option>
+                  <option value="LIGHT">Lightly active</option>
+                  <option value="MODERATE">Moderately active</option>
+                  <option value="ACTIVE">Very active</option>
+                  <option value="VERY_ACTIVE">Physical job + training</option>
+                </select>
+              </label>
+
               {/* All macros — editable including calories */}
               <div className="space-y-3">
                 {[
@@ -297,6 +355,49 @@ export default function NutritionTargetSetup({ open, onComplete, onClose, curren
                   {saveError}
                 </div>
               )}
+
+              {/* What the food logger should know about how you eat. */}
+              <div className="space-y-2 pt-1" style={{ borderTop: `1px solid ${t.border}` }}>
+                <label className="flex items-center gap-3 pt-3">
+                  <span className="flex-1 font-grotesk text-[11px] font-semibold" style={{ color: t.mute }}>Diet</span>
+                  <select
+                    value={diet}
+                    disabled={prefsBusy}
+                    onChange={async (e) => {
+                      const v = e.target.value;
+                      const prev = diet;
+                      setDiet(v);
+                      if (!(await savePref({ diet_type: v || null }))) setDiet(prev);
+                    }}
+                    className="px-2 py-1.5 rounded-lg font-grotesk text-[12px] outline-none"
+                    style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }}>
+                    <option value="">Not set</option>
+                    <option value="VEG">Vegetarian</option>
+                    <option value="EGGETARIAN">Vegetarian + eggs</option>
+                    <option value="VEGAN">Vegan</option>
+                    <option value="NON_VEG">Non-vegetarian</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="font-grotesk text-[11px] font-semibold" style={{ color: t.mute }}>Foods to avoid (allergies, dislikes)</span>
+                  <input
+                    type="text"
+                    maxLength={300}
+                    placeholder="e.g. peanuts, dairy"
+                    value={avoidText}
+                    disabled={prefsBusy}
+                    onChange={(e) => setAvoidText(e.target.value)}
+                    onBlur={async () => {
+                      if (avoidText.trim() === avoidSaved.trim()) return;
+                      if (await savePref({ food_exclusions: avoidText })) setAvoidSaved(avoidText);
+                    }}
+                    className="mt-1 w-full px-2.5 py-2 rounded-lg font-grotesk text-[12px] outline-none"
+                    style={{ background: t.glass, border: `1px solid ${t.border}`, color: t.ink }} />
+                  <span className="block mt-1 font-grotesk text-[10.5px] leading-snug" style={{ color: t.faint }}>
+                    The logger flags foods that match. It can only see what a dish is named and, for our own recipes, its ingredients — it is not an allergy check.
+                  </span>
+                </label>
+              </div>
 
               {disclaimer && (
                 <p className="font-grotesk text-[10.5px] leading-snug text-center px-2" style={{ color: t.faint }}>{disclaimer}</p>
