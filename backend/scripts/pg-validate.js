@@ -48,7 +48,9 @@ console.log(`init-db.js will run as admin role: ${String(adminUrl).replace(/:[^:
 const results = [];
 async function check(name, fn) {
   try {
-    await fn();
+    // Validation is operator work across both fixture orgs: an explicit
+    // platform context (a statement with none sees no tenant rows).
+    await runAsPlatform('pg-validate', fn);
     results.push({ name, ok: true });
     console.log(`  ✓ ${name}`);
   } catch (e) {
@@ -61,7 +63,7 @@ async function check(name, fn) {
 console.log('\n[init] applying schema.sql + guarded migrations + RLS (real init-db.js) as admin role…');
 execFileSync(process.execPath, [path.join(__dirname, 'init-db.js')], { cwd: root, env: { ...process.env, DATABASE_URL: adminUrl }, stdio: 'inherit' });
 
-const { getDb } = await import('../src/db.js');
+const { getDb, runAsPlatform, runWithOrg } = await import('../src/db.js');
 const db = await getDb();
 
 // ---- 2. fixture ----
@@ -71,6 +73,7 @@ const u1 = 'usr_valid_1', u2 = 'usr_valid_2';
 const c1 = 'cli_valid_1', c2 = 'cli_valid_2';
 const libA = 'lib_valid_a', libB = 'lib_valid_b';
 
+await runAsPlatform('pg-validate-fixture', async () => {
 // Fixture uses fixed ids — ON CONFLICT (id) DO NOTHING keeps re-runs against the
 // same database idempotent (rows already present are skipped, same values).
 await db.run('INSERT INTO organizations (id, name, slug, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO NOTHING', [o1, 'Org A', 'org-a-valid', '2026-01-01T00:00:00Z']);
@@ -83,6 +86,7 @@ await db.run('INSERT INTO clients (id, user_id, org_id, goal, created_at) VALUES
   [c2, u2, o2, 'MUSCLE_GAIN', '2026-01-01T00:00:00Z']);
 await db.run(`INSERT INTO exercise_library (id, name, primary_muscle, equipment, movement, ex_type, is_global) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (id) DO NOTHING`, [libA, 'Bench Press', 'CHEST', 'BARBELL', 'horizontal_push', 'compound']);
 await db.run(`INSERT INTO exercise_library (id, name, primary_muscle, equipment, movement, ex_type, is_global) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT (id) DO NOTHING`, [libB, 'Lat Pulldown', 'LATS', 'CABLE', 'vertical_pull', 'compound']);
+});
 
 // ---- 3. checks ----
 console.log('\n[checks]');
@@ -178,9 +182,17 @@ await check('RLS + SET LOCAL app.org_id isolates orgs inside a transaction', asy
     }
   }
   if (idsInA.includes(c2)) throw new Error(`org A can see org B client via RLS (${JSON.stringify(idsInA)})`);
-  // the documented caveat: OUTSIDE a transaction RLS is not engaged (no SET LOCAL)
-  const all = await db.q('SELECT id FROM clients ORDER BY id');
-  if (!all.some((r) => r.id === c2)) throw new Error('expected non-tx reads to bypass RLS (documented app-level filtering is the control)');
+  // Plain statements are tenant-scoped too (db.js gives every statement a
+  // transaction-local context): the old "outside a transaction RLS is not
+  // engaged" caveat is gone.
+  const plain = await runWithOrg(o1, () => db.q('SELECT id FROM clients ORDER BY id'));
+  if (!plain.some((r) => r.id === c1) || plain.some((r) => r.id === c2)) throw new Error(`plain tenant read not isolated (${JSON.stringify(plain.map((r) => r.id))})`);
+  // And a statement with NO context sees nothing: fail closed.
+  const raw = await db.raw.connect();
+  try {
+    const n = (await raw.query('SELECT count(*)::int AS n FROM clients')).rows[0].n;
+    if (n !== 0) throw new Error(`a statement with no context saw ${n} client rows (expected 0: fail closed)`);
+  } finally { raw.release(); }
 });
 
 await check('workout start + complete: duration and calorie persisted (route-level)', async () => {

@@ -253,14 +253,19 @@ test('community PostgreSQL integration', { skip, concurrency: false }, async (t)
     });
   });
 
-  await t.test('unset app.org_id keeps the application working (the path the app uses)', async () => {
-    // community.js reads via db.q()/db.run(), never db.tx(), so app.org_id is
-    // never set for these tables. The policy's "unset => visible" branch is
-    // what keeps the feature working; assert it explicitly so a future policy
-    // tightening cannot silently reintroduce the original 500s.
+  await t.test('no context fails CLOSED; only an explicit platform context reads both orgs', async () => {
+    // Before docs/security/RLS_SECURITY_AUDIT.md, "app.org_id unset" meant
+    // every row, and every plain db.q() ran unset. Now db.js gives every
+    // statement a context (community.js runs as its member's tenant), and a
+    // statement with none sees nothing.
     await asTenant(null, async (c) => {
       const r = await c.query(`SELECT count(*)::int n FROM community_workout_shares WHERE org_id IN ($1,$2)`, [ORG_A, ORG_B]);
-      assert.equal(r.rows[0].n, 2, 'with no org context the app role still reads both orgs');
+      assert.equal(r.rows[0].n, 0, 'with no context the app role reads nothing');
+    });
+    await asTenant(null, async (c) => {
+      await c.query(`SELECT set_config('app.platform', 'on', true)`);
+      const r = await c.query(`SELECT count(*)::int n FROM community_workout_shares WHERE org_id IN ($1,$2)`, [ORG_A, ORG_B]);
+      assert.equal(r.rows[0].n, 2, 'the explicit platform context reads both orgs');
     });
   });
 

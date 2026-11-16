@@ -206,18 +206,20 @@ test('financial/membership PostgreSQL RLS integration', { skip, concurrency: fal
     });
   });
 
-  await t.test('unset app.org_id keeps admin/reconciliation cross-org reads working (the path they use today)', async () => {
-    // Every write into these tables today happens via plain db.run()/db.q()
-    // outside any db.tx() (verified before writing these policies), so
-    // app.org_id is never set for them -- the SAME "unset => visible" branch
-    // that already keeps community.js and the admin console working for the
-    // pre-existing RLS'd tables. Assert it explicitly so a future policy
-    // tightening cannot silently break cross-org admin reads.
+  await t.test('no context fails CLOSED; admin/reconciliation read cross-org only as explicit platform', async () => {
+    // The SUPER_ADMIN console, webhooks and the reconciliation sweep run as
+    // the platform context (db.js); a statement with NO context -- the old
+    // "unset => visible" path -- now sees no financial rows at all.
     await asTenant(null, async (c) => {
       const r = await c.query(`SELECT count(*)::int n FROM support_tickets WHERE org_id IN ($1,$2)`, [ORG_A, ORG_B]);
-      assert.equal(r.rows[0].n, 2, 'with no org context, cross-org admin reads still see both orgs');
+      assert.equal(r.rows[0].n, 0, 'with no context, nothing');
       const inv = await c.query(`SELECT count(*)::int n FROM invoices WHERE org_id IN ($1,$2)`, [ORG_A, ORG_B]);
-      assert.equal(inv.rows[0].n, 2, 'same for invoices');
+      assert.equal(inv.rows[0].n, 0, 'same for invoices');
+    });
+    await asTenant(null, async (c) => {
+      await c.query(`SELECT set_config('app.platform', 'on', true)`);
+      const r = await c.query(`SELECT count(*)::int n FROM invoices WHERE org_id IN ($1,$2)`, [ORG_A, ORG_B]);
+      assert.equal(r.rows[0].n, 2, 'the explicit platform context sees both orgs');
     });
   });
 

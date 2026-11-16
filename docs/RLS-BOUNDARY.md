@@ -1,6 +1,12 @@
 # Row-Level Security boundary — what it covers, what it doesn't, and how to close the gap
 
-**Status:** documented, not fixed. Written during a security review on
+> **SUPERSEDED (2026-11-16, branch `security/rls-tenant-isolation-hardening`).**
+> The gap described below is closed: every PostgreSQL statement now runs with a
+> transaction-local tenant or platform context, and the policies fail closed.
+> Current model and evidence: [`docs/security/RLS_SECURITY_AUDIT.md`](security/RLS_SECURITY_AUDIT.md).
+> This file is kept as the historical record of the original finding.
+
+**Status (original):** documented, not fixed. Written during a security review on
 2026-09-03 after confirming there is no safe, localized code change for
 this — see "Why this isn't a quick fix" below before attempting one.
 

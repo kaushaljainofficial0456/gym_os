@@ -280,6 +280,13 @@ export async function createPgDb({ connectionString, max, options, mode } = {}) 
     const conn = await pool.connect();
     const tStart = metricsOn ? performance.now() : 0;
     let broken;
+    // A connection that dies WHILE checked out (Neon dropping it, a killed
+    // backend) emits 'error' on the client itself; the pool's own handler
+    // only covers idle clients, so without this an unlucky network blip
+    // mid-statement is an uncaught exception that exits the process. The
+    // in-flight query rejects on its own; this just marks the client broken.
+    const onError = (err) => { broken = broken || err; };
+    conn.on('error', onError);
     try {
       await conn.query(scopePreamble(conn, ctx));
       const out = await fn(conn);
@@ -289,6 +296,7 @@ export async function createPgDb({ connectionString, max, options, mode } = {}) 
       try { await conn.query('ROLLBACK'); } catch (rollbackError) { broken = rollbackError; }
       throw e;
     } finally {
+      conn.removeListener('error', onError);
       conn.release(broken);
       if (metricsOn) {
         const waitMs = tStart - tWait;

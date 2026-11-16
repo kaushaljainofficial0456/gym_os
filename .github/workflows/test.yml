@@ -72,6 +72,15 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://skos_test:skos_test@localhost:5432/skos_test
         run: node --test backend/test/financialRls.test.js
+      # Tenant isolation through the REAL db.js adapter on a NOBYPASSRLS
+      # login role: cross-gym reads/writes, fail-closed with no context,
+      # pooled-connection reuse (pool of one), concurrency, rollback and a
+      # killed connection, forged tenant ownership, the migration's
+      # down->up path and the runtime-role posture check. Own schema + role.
+      - name: tenant isolation (RLS fail-closed, pooled connections)
+        env:
+          TEST_DATABASE_URL: postgres://skos_test:skos_test@localhost:5432/skos_test
+        run: node --test backend/test/rlsTenantIsolation.test.js
       # Queries that repeat a parameterised expression in GROUP BY pass on
       # SQLite and fail on Postgres; this holds the ones that broke.
       - name: GROUP BY with bound parameters on PostgreSQL
