@@ -234,3 +234,62 @@ test('log-batch rejects a malformed request id and a fake "verified" claim', { s
   });
   assert.equal(claim.status, 422);
 });
+
+/* ---------------- the classic sheet's route (Phase 2, F7) ---------------- */
+
+async function startClassic() {
+  const db = await memDb();
+  const nutritionRoutes = (await import('../src/routes/nutrition.js')).default;
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { req.tz = TZ; next(); });
+  app.use('/api/nutrition', nutritionRoutes(db));
+  const server = app.listen(0);
+  await new Promise((r) => server.on('listening', r));
+  const port = server.address().port;
+  const token = jwt.sign({ sub: 'u1', role: 'CLIENT', org: 'o1', name: 'u1' }, config.jwtSecret, { expiresIn: '1h' });
+  const call = async (body) => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/nutrition/clients/c1/meals/log`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+  const close = () => new Promise((r) => { server.closeAllConnections(); server.close(r); });
+  return { db, call, close };
+}
+
+test('the classic picker log is re-priced at the oil level it showed, labelled, and idempotent', { skip: !live }, async (t) => {
+  const { db, call, close } = await startClassic(); t.after(close);
+  const { getFoodSearch, resolveFoodQuantity } = await import('../src/services/foodEstimator.js');
+  const dal = getFoodSearch().search('dal', { limit: 1 })[0];
+  const shown = resolveFoodQuantity(dal, { grams: 150, oilLevel: 'high' });   // what /me/foods/resolve showed
+  const body = {
+    name: 'Dal', slot: 'lunch', calories: 1, protein: 0, carbs: 0, fat: 0, eaten: true, source: 'manual',
+    quantity: 150, unit: 'g', source_id: dal.source_id, grams: 150, oil_level: 'high',
+    client_request_id: 'classic_retry_0001',
+  };
+  const a = await call(body);
+  assert.equal(a.status, 201, JSON.stringify(a.json));
+  const row = await db.q1('SELECT * FROM meal_logs WHERE id = ?', [a.json.id]);
+  assert.equal(row.calories, Math.round(shown.totals.energy_kcal), 'the number the picker showed, priced by the server');
+  assert.equal(row.nutrition_source, 'recipe_calculation');
+  assert.equal(row.source_id, dal.source_id);
+  // Retried (network failure after the write): one row, not two.
+  const b = await call(body);
+  assert.equal(b.status, 200);
+  assert.equal(b.json.replayed, true);
+  const n = await db.q1("SELECT COUNT(*) AS n FROM meal_logs WHERE client_id = 'c1' AND name = 'Dal'");
+  assert.equal(Number(n.n), 1);
+});
+
+test('a replayed past log is labelled previous_log, never verified', { skip: !live }, async (t) => {
+  const { db, call, close } = await startClassic(); t.after(close);
+  const r = await call({ name: 'Poha', slot: 'breakfast', calories: 250, protein: 5, carbs: 40, fat: 8, eaten: true, source: 'manual', nutrition_source: 'previous_log' });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  const row = await db.q1('SELECT nutrition_source FROM meal_logs WHERE id = ?', [r.json.id]);
+  assert.equal(row.nutrition_source, 'previous_log');
+  const bad = await call({ name: 'Poha', slot: 'breakfast', calories: 250, protein: 5, carbs: 40, fat: 8, eaten: true, nutrition_source: 'verified_database' });
+  assert.equal(bad.status, 422, 'a client cannot claim verified data');
+  const badOil = await call({ name: 'Dal', calories: 100, protein: 1, carbs: 1, fat: 1, oil_level: 'extra_crispy' });
+  assert.equal(badOil.status, 422);
+});

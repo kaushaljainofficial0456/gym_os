@@ -86,7 +86,9 @@ const r1 = (n) => (n == null || !Number.isFinite(Number(n)) ? null : Math.round(
 export function resolveLoggedNutrition(it) {
   const isAI = ['ai', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated'].includes(it.source);
   if (it.source_id && Number(it.grams) > 0 && !isAI) {
-    const p = priceBySourceId(it.source_id, Number(it.grams), { stapleKey: it.staple_key || null, oil: it.oil || null });
+    const p = priceBySourceId(it.source_id, Number(it.grams), {
+      stapleKey: it.staple_key || null, oil: it.oil || null, oilLevel: it.oil_level || null,
+    });
     if (p) {
       const t = p.totals;
       const kcal = Math.round(Number(t.calories) || 0);

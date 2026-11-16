@@ -140,6 +140,9 @@ export const schemas = {
     fiber: z.number().finite().min(0).max(500).optional(),
     sugar: z.number().finite().min(0).max(1000).optional(),
     sodium: z.number().finite().min(0).max(50000).optional(),
+    // The classic picker's absolute oil level (resolveFoodQuantity), so the
+    // server re-prices exactly the number the person saw.
+    oil_level: z.enum(['none', 'low', 'moderate', 'high', 'very_high']).optional(),
     client_request_id: z.string().trim().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   }),
   // ---- the plate logger: describe -> adjust -> log, one meal at a time ----

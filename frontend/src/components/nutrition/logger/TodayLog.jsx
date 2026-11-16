@@ -17,7 +17,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from '../../../design/motion/index.jsx';
 import { CheckIcon } from '../../UI.jsx';
-import { dayList } from './plate.js';
+import { dayList, provenanceOf } from './plate.js';
 
 const fmt = (q) => (Number.isInteger(Number(q)) ? Number(q) : Math.round(Number(q) * 10) / 10);
 const amount = (m) => (m.quantity != null && m.unit ? `${fmt(m.quantity)} ${m.unit}` : m.quantity != null ? `${fmt(m.quantity)} serving` : null);
@@ -29,6 +29,8 @@ const FOLD = 6;
 function Row({ m, first, onToggle, onEdit, onDelete, reduced }) {
   const plan = isPlanMeal(m);
   const dim = plan && !m.eaten;
+  // Where the numbers came from (measured data, recipe, AI, your own).
+  const prov = plan ? null : provenanceOf(m.nutrition_source);
   return (
     <motion.li
       layout={!reduced}
@@ -52,9 +54,9 @@ function Row({ m, first, onToggle, onEdit, onDelete, reduced }) {
       <button type="button" disabled={plan} onClick={() => !plan && onEdit(m)}
               className="min-w-0 flex-1 text-left" aria-label={plan ? undefined : `Edit amount of ${m.name}`}>
         <span className="block font-grotesk text-[13.5px] font-semibold truncate" style={{ color: dim ? 'var(--faint)' : 'var(--ink)' }}>{m.name}</span>
-        {(amount(m) || plan) && (
+        {(amount(m) || plan || prov) && (
           <span className="block font-grotesk text-[11px] truncate" style={{ color: 'var(--mute)' }}>
-            {plan ? 'Plan' : amount(m)}
+            {plan ? 'Plan' : [amount(m), prov?.label].filter(Boolean).join(' · ')}
           </span>
         )}
       </button>

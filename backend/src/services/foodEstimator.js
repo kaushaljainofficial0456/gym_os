@@ -2292,7 +2292,7 @@ export function describeMeal(text) {
  * positive number -- the caller then stores the client's numbers under a
  * cautious provenance class instead (services/nutrition/provenance.js).
  */
-export function priceBySourceId(sourceId, grams, { stapleKey = null, oil = null } = {}) {
+export function priceBySourceId(sourceId, grams, { stapleKey = null, oil = null, oilLevel = null } = {}) {
   const search = getFoodSearch();
   if (!search || !sourceId) return null;
   const g = Number(grams);
@@ -2304,16 +2304,21 @@ export function priceBySourceId(sourceId, grams, { stapleKey = null, oil = null 
   const t = scaled.totals;
   const f = g / 100;
   const opt = oil ? plateOil(row)?.options.find((o) => o.key === oil) : null;
+  // The classic picker's absolute oil level: priced by the SAME function
+  // that showed the number (resolveFoodQuantity), so the stored value is
+  // the one the person saw, not a re-derivation that could drift.
+  const classic = !opt && oilLevel ? resolveFoodQuantity(row, { grams: g, oilLevel }) : null;
+  const ct = classic?.oil?.applied ? classic.totals : null;
   const totals = {
-    calories: opt ? opt.per100.calories * f : (t.energy_kcal ?? 0),
-    protein: opt ? opt.per100.protein * f : (t.protein_g ?? 0),
-    carbs: opt ? opt.per100.carbs * f : (t.carb_g ?? 0),
-    fat: opt ? opt.per100.fat * f : (t.fat_g ?? 0),
+    calories: opt ? opt.per100.calories * f : ct ? ct.energy_kcal : (t.energy_kcal ?? 0),
+    protein: opt ? opt.per100.protein * f : ct ? ct.protein_g : (t.protein_g ?? 0),
+    carbs: opt ? opt.per100.carbs * f : ct ? ct.carb_g : (t.carb_g ?? 0),
+    fat: opt ? opt.per100.fat * f : ct ? ct.fat_g : (t.fat_g ?? 0),
     fiber: t.fiber_g ?? null,
     sugar: t.sugar_g ?? null,
     sodium: t.sodium_mg ?? null,
   };
-  return { row, grams: g, totals, oil_applied: !!opt };
+  return { row, grams: g, totals, oil_applied: !!opt || !!ct };
 }
 
 /**

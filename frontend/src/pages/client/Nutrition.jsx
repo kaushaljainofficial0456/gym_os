@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useEffect, useState, useMemo, useRef, Suspense } from 'react';
 import { lazyWithReload as lazy } from '../../lazyWithReload.js';
 import { useOutletContext } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -17,7 +17,7 @@ import CustomizeMealSheet from '../../components/nutrition/CustomizeMealSheet.js
 import MealInfoSheet from '../../components/nutrition/MealInfoSheet.jsx';
 import FuelRings from '../../components/nutrition/FuelRings.jsx';
 import LogCard from '../../components/nutrition/logger/LogCard.jsx';
-import { slotForTime, mealGroup } from '../../components/nutrition/logger/plate.js';
+import { slotForTime, mealGroup, newRequestId } from '../../components/nutrition/logger/plate.js';
 import { motion, AnimatePresence } from '../../design/motion/index.jsx';
 
 // The logger is the heaviest thing on this page and nobody needs it until
@@ -385,6 +385,11 @@ export default function Nutrition() {
               source: ['manual', 'ai', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated'].includes(log.source) ? log.source : 'manual',
               ...(log.quantity != null ? { quantity: Number(log.quantity) } : {}),
               ...(log.unit ? { unit: String(log.unit).slice(0, 30) } : {}),
+              // Putting back what was there: re-priced from its catalogue row
+              // when it had one, otherwise labelled a replay of a past log.
+              ...(log.source_id && Number(log.grams) > 0 ? { source_id: String(log.source_id), grams: Number(log.grams) } : {}),
+              nutrition_source: 'previous_log',
+              client_request_id: newRequestId(),
             }),
           });
           home.reload({ silent: true });
@@ -433,8 +438,15 @@ export default function Nutrition() {
   // "estimated" badge would have inherited the bad data.
   const ESTIMATED_SOURCES = new Set(['ai', 'ai_estimated', 'ai_estimated_user_adjusted', 'knn_estimated']);
 
+  // One request id per distinct entry until it is logged, so a retry after
+  // a network failure (or a double tap) is recognised by the server as the
+  // SAME log (meal_log_requests), never a second row.
+  const pendingLogIds = useRef(new Map());
   const logEntry = async (entry) => {
     const source = entry.source || 'manual';
+    const signature = JSON.stringify([entry.name, entry.calories, entry.quantity, entry.unit, entry.source_id, entry.oil_level, source, plate.slot || mealGroup(nowSlot)]);
+    if (!pendingLogIds.current.has(signature)) pendingLogIds.current.set(signature, newRequestId());
+    const clientRequestId = pendingLogIds.current.get(signature);
     // Round ONCE, here, at the only point every food log passes through.
     // Callers scale macros by arbitrary factors (1.5 bowls, 3 servings,
     // 245/100 g), so binary floating point routinely produced values like
@@ -467,8 +479,21 @@ export default function Nutrition() {
         // absent rather than becoming 0.
         quantity: entry.quantity ?? undefined,
         unit: entry.unit ?? undefined,
+        // Server pricing + provenance (services/nutrition/provenance.js):
+        // with a catalogue row and weight the server re-prices and labels
+        // the log by its source; without, the numbers are stored as sent
+        // under a cautious label. A client may only CLAIM user_provided,
+        // previous_log or ai_estimate -- never "verified".
+        source_id: entry.source_id || undefined,
+        grams: entry.source_id && Number(entry.grams) > 0 ? r1v(entry.grams) : undefined,
+        staple_key: entry.staple_key || undefined,
+        oil_level: entry.oil_level || undefined,
+        nutrition_source: entry.nutrition_source || undefined,
+        client_request_id: clientRequestId,
       }),
     });
+    // Logged: the next identical entry is a new meal, with a new id.
+    pendingLogIds.current.delete(signature);
     home.reload({ silent: true });
   };
 

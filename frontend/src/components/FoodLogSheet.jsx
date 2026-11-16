@@ -671,6 +671,12 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         carbs: totals.carb_g ?? 0,
         fat: totals.fat_g ?? 0,
         quantity: g, unit: 'g',
+        // The catalogue row and weight, so the server re-prices and stamps
+        // provenance (verified database / recipe) instead of storing the
+        // client's arithmetic as "user provided". Absent for the person's
+        // own foods (food_id path), which have no catalogue row.
+        source_id: resolvedRow?.source_id || undefined,
+        grams: resolvedRow?.source_id ? g : undefined,
       }, { keepOpen: true });
       // "+" -> "✓" (Sections 5-7/20) -- the row's own button flips to a
       // checkmark as an immediate, local confirmation. The success TOAST
@@ -707,6 +713,8 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         name: r.name, calories: Math.round(r.calories || 0),
         protein: r.protein || 0, carbs: r.carbs || 0, fat: r.fat || 0,
         source: r.source && r.source !== 'plan' ? r.source : 'manual',
+        // A replay of an earlier log, and labelled so.
+        nutrition_source: 'previous_log',
       }, { keepOpen: true });
       setRecentChecked((prev) => ({ ...prev, [key]: true }));
       setTimeout(() => setRecentChecked((prev) => ({ ...prev, [key]: false })), 1400);
@@ -745,6 +753,11 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
       // dashboard) -- Flow B: search -> food detail -> choose portion ->
       // log -> back to search, ready for the next food.
       const grams = isBarcode ? Number(barcodeGrams) : resolved?.grams;
+      // A catalogue food resolved by the server: send its row, weight and
+      // oil level so the logged numbers are re-priced by the same model
+      // that showed them (and labelled by where they came from). A barcode
+      // label is not in the catalogue index, so it keeps its own numbers.
+      const sourceId = !isBarcode && resolved?.source_id ? resolved.source_id : undefined;
       await onAdd({
         name,
         calories: Math.round(totals.energy_kcal ?? 0),
@@ -753,6 +766,9 @@ export default function FoodLogSheet({ open, onClose, onAdd, autoScan = false, m
         fat: totals.fat_g ?? 0,
         quantity: grams > 0 ? grams : undefined,
         unit: grams > 0 ? 'g' : undefined,
+        source_id: sourceId,
+        grams: sourceId && grams > 0 ? grams : undefined,
+        oil_level: sourceId && resolved?.oil?.applied ? resolved.oil.level : undefined,
       }, { keepOpen: true });
       backToSearch();
     } catch (e) {

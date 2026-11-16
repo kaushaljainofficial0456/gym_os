@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fromPlateItem, fromSearchFood, fromUsual, priceItem, plateTotals, stepQty, switchUnit,
-  amountLabel, toLogItems, dayList, mealGroup, slotForTime, looksLikeMeal, setOil, unitGramsHint, fromAIEstimate,
+  amountLabel, toLogItems, dayList, mealGroup, slotForTime, looksLikeMeal, setOil, unitGramsHint, fromAIEstimate, provenanceOf,
 } from '../src/components/nutrition/logger/plate.js';
 
 // Shapes as POST /me/nutrition/describe returns them.
@@ -253,5 +253,21 @@ describe('confidence in words', () => {
     expect(confidenceNote(restaurant)).toBe('Restaurant preparation — oil and portions often higher.');
     const fine = fromPlateItem({ ...base, confidence_breakdown: { identification: 'high', portion: 'medium', composition: 'high', overall: 'medium', reasons: {} } });
     expect(confidenceNote(fine)).toBeNull();
+  });
+});
+
+describe('provenanceOf — where a logged item\'s numbers came from', () => {
+  it('labels every server provenance class, and marks estimates', () => {
+    expect(provenanceOf('verified_database')).toEqual({ label: 'Measured data', estimated: false });
+    expect(provenanceOf('recipe_calculation')).toEqual({ label: 'Recipe estimate', estimated: true });
+    expect(provenanceOf('ai_estimate').estimated).toBe(true);
+    expect(provenanceOf('user_provided').label).toBe('Your numbers');
+    expect(provenanceOf('brand_label').estimated).toBe(false);
+    expect(provenanceOf('previous_log').label).toBe('Repeated log');
+  });
+  it('shows nothing for rows logged before provenance existed, rather than guessing', () => {
+    expect(provenanceOf(null)).toBe(null);
+    expect(provenanceOf(undefined)).toBe(null);
+    expect(provenanceOf('something_new')).toBe(null);
   });
 });

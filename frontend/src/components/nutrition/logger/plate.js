@@ -403,3 +403,24 @@ export function dayList(meals) {
 /** Whether to look the text up as one food (type-ahead) or parse it as a
  *  meal: a number, a comma or "and" means the person is describing. */
 export const looksLikeMeal = (text) => /\d|,|\band\b|\bwith\b|\+/i.test(String(text || ''));
+
+/**
+ * Where a LOGGED item's numbers came from (meal_logs.nutrition_source,
+ * stamped by the server -- services/nutrition/provenance.js), as the short
+ * label shown next to it. `estimated` marks the classes whose numbers are
+ * not a measurement of this food, so the UI can render them quieter.
+ * Rows logged before provenance existed have no class: nothing is shown,
+ * rather than a guess.
+ */
+const PROVENANCE = {
+  verified_database: { label: 'Measured data', estimated: false },
+  brand_label: { label: 'Pack label', estimated: false },
+  recipe_calculation: { label: 'Recipe estimate', estimated: true },
+  ai_estimate: { label: 'AI estimate', estimated: true },
+  user_provided: { label: 'Your numbers', estimated: true },
+  previous_log: { label: 'Repeated log', estimated: false },
+  plan: { label: 'Plan', estimated: false },
+};
+export function provenanceOf(nutritionSource) {
+  return PROVENANCE[nutritionSource] || null;
+}

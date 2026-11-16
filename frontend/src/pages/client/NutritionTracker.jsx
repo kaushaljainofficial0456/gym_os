@@ -5,6 +5,7 @@ import { useFetch, cls } from '../../utils.js';
 import { ErrorState, Empty, Seg, Kpi, Bar, PageSkeleton } from '../../components/UI.jsx';
 import { WeekBars, TrendChart } from '../../components/charts.jsx';
 import Icon from '../../components/Icon.jsx';
+import { provenanceOf } from '../../components/nutrition/logger/plate.js';
 
 /* ════════════════════════════════════════════════════════════════
    Local-date helpers — plain YYYY-MM-DD arithmetic only, NEVER through
@@ -269,6 +270,12 @@ export default function NutritionTracker() {
                       <span className="font-grotesk font-semibold text-sm" style={{ color: 'var(--ink)' }}>{l.name}</span>
                       {l.slot && <span className="chip border-line !text-[8px] capitalize">{l.slot.replace(/_/g, ' ')}</span>}
                       {!l.eaten && <span className="chip border-line !text-[8px]">not eaten</span>}
+                      {provenanceOf(l.nutrition_source) && (
+                        <span className="chip border-line !text-[8px]" title="Where these numbers came from"
+                              style={provenanceOf(l.nutrition_source).estimated ? { color: 'var(--mute)' } : undefined}>
+                          {provenanceOf(l.nutrition_source).label}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-mute mt-0.5">
                       {Math.round(l.calories)} kcal · P {Math.round(l.protein)}g · C {Math.round(l.carbs)}g · F {Math.round(l.fat)}g
