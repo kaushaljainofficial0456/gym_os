@@ -118,6 +118,14 @@ function isUniqueViolation(e) {
 
 export default function authRoutes(db) {
   const r = Router();
+  // Routes that act ONLY on the caller's own identity (keyed by the verified
+  // token's sub) run as an explicit, narrow platform context. That identity
+  // can span gyms (memberships elsewhere; after /switch-gym a users row whose
+  // org_id is the primary gym, not this session's), and a signed-in user with
+  // NO gym yet otherwise runs restricted (auth.js) and could not read their
+  // own users row to accept terms, change a password or go independent.
+  // Every handler using it must key every statement by req.user.sub.
+  const ownIdentity = platformScope('own-identity');
   // Per-IP ceiling on auth endpoints (login + org setup) — 30/min.
   r.post('/login', rateLimit({ windowMs: 60_000, max: 30 }),
     validate(z.object({
@@ -490,7 +498,7 @@ export default function authRoutes(db) {
   // Independent org instead. Scanning a gym's QR later still works: an
   // Independent client brings their whole history into the gym (see
   // enrollment.js's activateClientMembership).
-  r.post('/independent', requireAuth, rateLimit({ windowMs: 60_000, max: 10 }), async (req, res) => {
+  r.post('/independent', requireAuth, ownIdentity, rateLimit({ windowMs: 60_000, max: 10 }), async (req, res) => {
     const user = await db.q1('SELECT id, org_id, role, name, email, active FROM users WHERE id = ?', [req.user.sub]);
     if (!user || !user.active) return res.status(403).json({ error: 'Account disabled' });
     if (user.role !== 'CLIENT') return res.status(403).json({ error: 'Only a client account can train independently.' });
@@ -778,7 +786,7 @@ export default function authRoutes(db) {
   });
 
   // ---- password change (authenticated) ----
-  r.post('/change-password', requireAuth, validate(z.object({
+  r.post('/change-password', requireAuth, ownIdentity, validate(z.object({
     current_password: z.string().min(1),
     new_password: z.string().min(6)
   })), async (req, res) => {
@@ -812,12 +820,7 @@ export default function authRoutes(db) {
   // id) re-sign a fresh token scoped to it for this session. Switching
   // never mutates users.org_id/role -- it's a per-session context
   // change, not a permanent identity change.
-  // These three read only the CALLER's own identity (keyed by the verified
-  // token's sub), but that identity spans gyms: memberships at other gyms,
-  // and -- after /switch-gym -- a users row whose org_id is the primary gym,
-  // not the one this session is in. As one tenant they would see a partial
-  // or empty answer, so they run as an explicit platform context.
-  const ownIdentity = platformScope('own-identity');
+  // (ownIdentity: see the top of authRoutes.)
   r.get('/my-gyms', requireAuth, ownIdentity, async (req, res) => {
     const memberships = await listUserMemberships(db, req.user.sub);
     res.json({ memberships, currentOrgId: req.user.org || null });
@@ -916,7 +919,7 @@ export default function authRoutes(db) {
   // address supplied in the body -- there is no account-enumeration
   // concern to guard against here the way forgot-password has to.
   const resendVerifyLimit = rateLimit({ windowMs: 60_000, max: 3, keyFn: (req) => req.user?.sub || 'anon' });
-  r.post('/resend-verification', requireAuth, resendVerifyLimit, async (req, res) => {
+  r.post('/resend-verification', requireAuth, ownIdentity, resendVerifyLimit, async (req, res) => {
     const user = await db.q1('SELECT id, email, name, email_verified FROM users WHERE id = ?', [req.user.sub]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (user.email_verified) return res.json({ ok: true, alreadyVerified: true });
@@ -995,7 +998,7 @@ export default function authRoutes(db) {
   const REQUIRED_TERMS_VERSION = '1.0';
 
   // Returns the user's terms acceptance status.
-  r.get('/terms/status', requireAuth, async (req, res) => {
+  r.get('/terms/status', requireAuth, ownIdentity, async (req, res) => {
     const user = await db.q1(
       'SELECT terms_accepted_at, terms_version FROM users WHERE id = ?',
       [req.user.sub]);
@@ -1010,7 +1013,7 @@ export default function authRoutes(db) {
   });
 
   // Record the user's acceptance of the current terms version.
-  r.post('/terms/accept', requireAuth, async (req, res) => {
+  r.post('/terms/accept', requireAuth, ownIdentity, async (req, res) => {
     const { version } = req.body || {};
     if (version !== REQUIRED_TERMS_VERSION) {
       return res.status(400).json({ error: 'Invalid terms version' });

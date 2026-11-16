@@ -81,6 +81,15 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://skos_test:skos_test@localhost:5432/skos_test
         run: node --test backend/test/rlsTenantIsolation.test.js
+      # The features that are SUPPOSED to cross gyms, end to end through the
+      # real app on the same NOBYPASSRLS setup: no-gym sign-up, independent
+      # -> QR join -> removal, a friend community and a share across two
+      # gyms, a tournament, and export/deletion of cross-gym rows. SQLite
+      # has no RLS, so only this catches a cross-gym path that RLS blocks.
+      - name: cross-gym product flows under RLS (end to end)
+        env:
+          TEST_DATABASE_URL: postgres://skos_test:skos_test@localhost:5432/skos_test
+        run: node --test backend/test/crossGymFlowsPg.test.js
       # Queries that repeat a parameterised expression in GROUP BY pass on
       # SQLite and fail on Postgres; this holds the ones that broke.
       - name: GROUP BY with bound parameters on PostgreSQL

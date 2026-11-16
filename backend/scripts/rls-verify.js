@@ -35,11 +35,9 @@ import path from 'node:path';
 /** Tables with an org_id/client_id column that are deliberately NOT under
  *  RLS -- the same reviewed list as the end of database/rls.sql. */
 export const RLS_EXEMPT_TABLES = new Set([
-  // per-user / platform rows keyed by the authenticated user, no tenant column
+  // per-user feedback on the shared food-estimation cache, keyed by the
+  // authenticated member; reviewed in database/rls.sql's exemption list.
   'ai_food_feedback',
-  // friend communities: cross-gym by design (services/friendCommunities)
-  'communities', 'community_memberships', 'community_invites', 'community_events',
-  'community_event_reactions', 'community_event_comments', 'community_group_challenges',
 ]);
 
 /** Library tables whose NULL-org rows are shared reference data. */
@@ -89,11 +87,11 @@ export async function verifyRls({ connectionString, schema = null, probe = true,
     const tables = (await c.query(`
       SELECT c.relname AS t, c.relrowsecurity AS rls, c.relforcerowsecurity AS forced,
              (SELECT count(*)::int FROM pg_policy p WHERE p.polrelid = c.oid) AS policies,
-             EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname IN ('org_id','client_id') AND NOT a.attisdropped) AS tenant_col
+             EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname ~ '(^|_)(org|client)_id$' AND NOT a.attisdropped) AS tenant_col
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = $1 AND c.relkind = 'r'`, [sch])).rows;
     const uncovered = tables.filter((r) => r.tenant_col && !RLS_EXEMPT_TABLES.has(r.t) && !(r.rls && r.forced && r.policies > 0));
-    check('every table with org_id/client_id has RLS enabled, forced and a policy', uncovered.length === 0,
+    check('every table with an org/client id column (org_id, client_id, sender_org_id, ...) has RLS enabled, forced and a policy', uncovered.length === 0,
       uncovered.map((r) => `${r.t}(rls=${r.rls},forced=${r.forced},policies=${r.policies})`).join(', '));
     const unforced = tables.filter((r) => r.policies > 0 && !(r.rls && r.forced));
     check('every table with a policy has RLS enabled and forced', unforced.length === 0, unforced.map((r) => r.t).join(', '));

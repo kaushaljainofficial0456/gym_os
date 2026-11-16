@@ -20,6 +20,16 @@ BEGIN
             WHERE n.nspname = current_schema() LOOP
     EXECUTE format('DROP POLICY %I ON %I', r.polname, r.relname);
   END LOOP;
+  -- Then switch RLS OFF everywhere; the old file below switches it back on
+  -- for exactly the tables it covered. Without this, a table the new model
+  -- added (friend communities, tournaments, app_shares, ...) would be left
+  -- with RLS enabled and NO policy -- deny-all -- and those features would
+  -- break on rollback.
+  FOR r IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = current_schema() AND c.relkind = 'r' AND (c.relrowsecurity OR c.relforcerowsecurity) LOOP
+    EXECUTE format('ALTER TABLE %I NO FORCE ROW LEVEL SECURITY', r.relname);
+    EXECUTE format('ALTER TABLE %I DISABLE ROW LEVEL SECURITY', r.relname);
+  END LOOP;
 END $down$;
 -- >>> database/rls.sql @ 3fab43a
 -- ============================================================

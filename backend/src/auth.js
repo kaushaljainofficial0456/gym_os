@@ -318,6 +318,16 @@ export async function requireAuth(req, res, next) {
   return runAsPlatform('auth-gate', () => authGate(req, res, next));
 }
 
+/** True only if this user is, right now, an active org-less SUPER_ADMIN in
+ *  the database. Any failure answers false: platform scope fails closed. */
+async function isCurrentSuperAdmin(db, userId) {
+  if (!userId) return false;
+  try {
+    const u = await db.q1('SELECT role, org_id, active FROM users WHERE id = ?', [userId]);
+    return !!u && u.role === 'SUPER_ADMIN' && !u.org_id && Number(u.active) !== 0;
+  } catch { return false; }
+}
+
 async function authGate(req, res, next) {
   let db;
   try {
@@ -425,7 +435,19 @@ async function authGate(req, res, next) {
   // transaction-locally (db.js scoped()). The org is the signed token's
   // claim, never anything from the request. Must wrap next() so the
   // AsyncLocalStorage context covers everything downstream.
-  return runWithOrg(req.user.org || null, () => next());
+  if (req.user.org) return runWithOrg(req.user.org, () => next());
+  // No org on the token. Platform visibility (RLS bypassed by design) is
+  // granted ONLY to a SUPER_ADMIN, and only when the users row still says so
+  // right now -- the token's role claim alone is not enough, so a demoted
+  // admin's unexpired token loses it on the next request. Everyone else
+  // without a gym (a member or trainer who signed up and has not joined
+  // one yet) runs RESTRICTED: no tenant rows at all. The routes they
+  // legitimately use (/auth/me, terms, change-password, /enrollment/*) opt
+  // in to their own narrow platform scope.
+  if (req.user.role === 'SUPER_ADMIN' && db && await isCurrentSuperAdmin(db, req.user.sub)) {
+    return runAsPlatform('super-admin', () => next());
+  }
+  return runWithOrg(null, () => next());
 }
 
 // Role gate. Call AFTER requireAuth.

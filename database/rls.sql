@@ -43,6 +43,15 @@
 --             (and share snapshots whose org was deleted). Everyone reads
 --             NULL-org rows; only platform may write them.
 --   demo      demo_sessions, keyed on demo_org_id.
+--   platform  Cross-gym-by-design data (friend communities, gym-wars
+--             tournaments). No gym owns it, so no gym context may touch it:
+--             only an explicit platform scope (routes/communities.js,
+--             routes/tournaments.js, the public invite/QR routes) reads or
+--             writes it, and that code authorises per community/tournament.
+--             A tenant route that forgets a filter sees none of it.
+--   shares    app_shares: one row links two gyms (sender_org_id,
+--             recipient_org_id). Either side reads it; a gym may only send
+--             from itself, as one of its own members.
 --
 -- FORCE ROW LEVEL SECURITY makes every policy apply to the table owner too.
 -- The runtime role must still be NOBYPASSRLS, not a superuser, not the
@@ -300,6 +309,38 @@ ALTER TABLE shared_workouts          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shared_workouts          FORCE ROW LEVEL SECURITY;
 ALTER TABLE demo_sessions            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE demo_sessions            FORCE ROW LEVEL SECURITY;
+ALTER TABLE communities              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE communities              FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_memberships    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_memberships    FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_invites        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_invites        FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_events         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_events         FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_event_reactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_event_reactions FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_event_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_event_comments FORCE ROW LEVEL SECURITY;
+ALTER TABLE community_group_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_group_challenges FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournaments              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournaments              FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_hosts         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_hosts         FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_entrants      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_entrants      FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_entries       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_entries       FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_events        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_events        FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_results       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_results       FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_teams         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_teams         FORCE ROW LEVEL SECURITY;
+ALTER TABLE tournament_audit         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_audit         FORCE ROW LEVEL SECURITY;
+ALTER TABLE app_shares               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_shares               FORCE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- POLICY BUILDER. Session-temporary (pg_temp): it leaves no object behind
@@ -328,7 +369,7 @@ BEGIN
     CASE WHEN check_expr IS NULL THEN '' ELSE format(' WITH CHECK (%s)', check_expr) END);
 END $fn$;
 
--- kind: org | personal | personal_user | client | parent | global | demo
+-- kind: org | personal | personal_user | client | parent | global | demo | platform | shares
 -- arg:  for 'parent', the predicate tying a row to its (RLS-filtered) parent.
 CREATE OR REPLACE FUNCTION pg_temp.rls_apply(t text, kind text, arg text DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql AS $fn$
@@ -405,6 +446,17 @@ BEGIN
       format('%s OR (%s AND %s)%s', p, own_org, ref_ok, CASE WHEN has_client THEN ' OR ' || mine_client ELSE '' END));
     PERFORM pg_temp.rls_policy(t, 'tenant_delete', 'DELETE',
       format('%s OR %s%s', p, own_org, CASE WHEN has_client THEN ' OR ' || mine_client ELSE '' END), NULL);
+
+  ELSIF kind = 'platform' THEN
+    PERFORM pg_temp.rls_policy(t, 'platform_only', 'ALL', p, p);
+
+  ELSIF kind = 'shares' THEN
+    readable := format('%s OR sender_org_id = %s OR recipient_org_id = %s', p, o, o);
+    PERFORM pg_temp.rls_policy(t, 'tenant_select', 'SELECT', readable, NULL);
+    PERFORM pg_temp.rls_policy(t, 'tenant_insert', 'INSERT', NULL,
+      format('%s OR (sender_org_id = %s AND (sender_client_id IS NULL OR sender_client_id IN (SELECT c.id FROM clients c WHERE c.org_id = %s)))', p, o, o));
+    PERFORM pg_temp.rls_policy(t, 'tenant_update', 'UPDATE', readable, readable);
+    PERFORM pg_temp.rls_policy(t, 'tenant_delete', 'DELETE', readable, NULL);
 
   ELSIF kind = 'demo' THEN
     PERFORM pg_temp.rls_policy(t, 'tenant_isolation', 'ALL',
@@ -520,6 +572,21 @@ SELECT pg_temp.rls_apply(t, 'global') FROM unnest(ARRAY[
 -- ============================================================
 SELECT pg_temp.rls_apply('demo_sessions', 'demo');
 
+-- ============================================================
+-- platform -- cross-gym by design; no tenant context reaches these rows.
+-- ============================================================
+SELECT pg_temp.rls_apply(t, 'platform') FROM unnest(ARRAY[
+  'communities','community_memberships','community_invites','community_events',
+  'community_event_reactions','community_event_comments','community_group_challenges',
+  'tournaments','tournament_hosts','tournament_entrants','tournament_entries',
+  'tournament_events','tournament_results','tournament_teams','tournament_audit'
+]) AS t;
+
+-- ============================================================
+-- shares -- a row belongs to both the sending and the receiving gym.
+-- ============================================================
+SELECT pg_temp.rls_apply('app_shares', 'shares');
+
 DROP FUNCTION pg_temp.rls_apply(text, text, text);
 DROP FUNCTION pg_temp.rls_policy(text, text, text, text, text);
 DROP FUNCTION pg_temp.rls_reset(text);
@@ -550,16 +617,4 @@ DROP FUNCTION pg_temp.rls_reset(text);
 --                                  audit trail, a person's own Barbell plan
 --                                  purchase); every read is keyed by the
 --                                  authenticated user id.
---   communities, community_memberships, community_invites, community_events,
---   community_event_reactions, community_event_comments,
---   community_group_challenges     FRIEND COMMUNITIES: cross-gym by design;
---                                  access is an active membership row,
---                                  enforced in services/friendCommunities
---                                  (routes run under platformScope).
---   tournaments, tournament_*      GYM WARS: one tournament spans gyms;
---                                  access per tournament in
---                                  services/tournaments/access.js.
---   app_shares                     in-app sharing between people who may be
---                                  in different gyms; every read is keyed by
---                                  the caller's own client id.
 -- ============================================================

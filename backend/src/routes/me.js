@@ -22,6 +22,7 @@ import { invalidateDayStart } from '../services/logDay.js';
 import { balanceRange } from '../services/energyBalance.js';
 import { rebuildPRsForExercise } from '../services/personalRecords.js';
 import { track, trackOnce } from '../services/events.js';
+import { runAsPlatform } from '../db.js';
 import { crowdHistory } from '../services/occupancy.js';
 import { liveCrowd, hasLiveAccessFeed } from '../services/access/liveCrowd.js';
 import {
@@ -129,9 +130,11 @@ export default function meRoutes(db) {
       for (const t of EXPORT_CLIENT_TABLES) { const rows = await rowsOf(t, 'client_id', client.id); if (rows) data[t] = rows; }
     }
     for (const t of EXPORT_USER_TABLES) { const rows = await rowsOf(t, 'user_id', req.user.sub); if (rows) data[t] = rows; }
-    data.tournaments = await db.q(
+    // Tournaments are cross-gym (platform-only under RLS): read as an explicit
+    // platform scope, keyed by the caller's own user id and nothing else.
+    data.tournaments = await runAsPlatform('own-account-export', () => db.q(
       `SELECT t.name, t.starts_at, p.gym_label, p.body_weight, p.status, p.created_at
-         FROM tournament_entrants p JOIN tournaments t ON t.id = p.tournament_id WHERE p.user_id = ?`, [req.user.sub]).catch(() => []);
+         FROM tournament_entrants p JOIN tournaments t ON t.id = p.tournament_id WHERE p.user_id = ?`, [req.user.sub])).catch(() => []);
     await track(db, { orgId: req.user.org || null, userId: req.user.sub, type: 'data_exported', data: {} }).catch(() => {});
     res.setHeader('Content-Disposition', `attachment; filename="barbell-my-data-${dayKey(new Date(), req.tz)}.json"`);
     res.json({
@@ -197,13 +200,20 @@ export default function meRoutes(db) {
     // deployment does not have is skipped, never a reason to stop halfway
     // through someone's deletion.
     const wipe = async (sql, params) => { try { await db.run(sql, params); } catch { /* table absent */ } };
+    // Friend-community and tournament rows are platform-only under RLS (no
+    // gym owns them), so the member's OWN rows there are erased in an explicit
+    // platform scope -- every such statement is keyed by this member's own
+    // client or user id. In the member's tenant scope they would silently
+    // match nothing and the deletion would be incomplete.
+    const CROSS_GYM_TABLES = new Set(['community_event_comments', 'community_event_reactions', 'community_memberships', 'community_invites', 'community_events']);
+    const wipeOwn = (sql, params) => runAsPlatform('own-account-deletion', () => wipe(sql, params));
     if (client) {
       await wipe('DELETE FROM progress_photos WHERE client_id = ?', [client.id]);
       // Posts the member authored, and anything hanging off them.
-      await wipe('DELETE FROM community_event_comments WHERE event_id IN (SELECT id FROM community_events WHERE client_id = ?)', [client.id]);
-      await wipe('DELETE FROM community_event_reactions WHERE event_id IN (SELECT id FROM community_events WHERE client_id = ?)', [client.id]);
-      for (const t of CLIENT_DATA_TABLES) await wipe(`DELETE FROM ${t} WHERE client_id = ?`, [client.id]);
-      await wipe('DELETE FROM community_events WHERE client_id = ?', [client.id]);
+      await wipeOwn('DELETE FROM community_event_comments WHERE event_id IN (SELECT id FROM community_events WHERE client_id = ?)', [client.id]);
+      await wipeOwn('DELETE FROM community_event_reactions WHERE event_id IN (SELECT id FROM community_events WHERE client_id = ?)', [client.id]);
+      for (const t of CLIENT_DATA_TABLES) await (CROSS_GYM_TABLES.has(t) ? wipeOwn : wipe)(`DELETE FROM ${t} WHERE client_id = ?`, [client.id]);
+      await wipeOwn('DELETE FROM community_events WHERE client_id = ?', [client.id]);
       await wipe("DELETE FROM workouts WHERE client_id = ? AND status <> 'completed'", [client.id]);
       await wipe('UPDATE workouts SET name = ?, progress_json = NULL WHERE client_id = ?', ['Workout', client.id]);
       await wipe('DELETE FROM client_profiles WHERE client_id = ?', [client.id]);
@@ -220,8 +230,8 @@ export default function meRoutes(db) {
     await wipe('UPDATE users SET google_id = NULL WHERE id = ?', [user.id]);
     // Past leaderboards keep their shape, not the person: the place stays,
     // the name and body weight go. Hosting ends with the account.
-    await wipe(`UPDATE tournament_entrants SET name = 'Deleted member', gym_label = NULL, body_weight = NULL, gender = NULL WHERE user_id = ?`, [user.id]);
-    await wipe(`DELETE FROM tournament_hosts WHERE user_id = ? AND role <> 'prime'`, [user.id]);
+    await wipeOwn(`UPDATE tournament_entrants SET name = 'Deleted member', gym_label = NULL, body_weight = NULL, gender = NULL WHERE user_id = ?`, [user.id]);
+    await wipeOwn(`DELETE FROM tournament_hosts WHERE user_id = ? AND role <> 'prime'`, [user.id]);
     await wipe('UPDATE users SET username = NULL, findable = 0 WHERE id = ?', [user.id]);
     // Stored photo files go after the rows: a storage hiccup must not
     // leave the account half-deleted, and the rows no longer point at them.

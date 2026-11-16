@@ -398,11 +398,15 @@ export async function allowedRecipients(db, client, ids) {
       `SELECT c.id FROM community_members cm JOIN clients c ON c.id = cm.client_id
         WHERE cm.client_id IN (${ph}) AND cm.enabled = 1 AND cm.org_id = ? AND c.org_id = ?`,
       [...want, client.org_id, client.org_id]) : [],
-    db.q(
+    // Friend communities are platform-only under RLS (cross-gym by design),
+    // so this one read runs in an explicit platform scope. It is anchored on
+    // the caller's OWN active membership: it can only ever return people who
+    // share a community with them.
+    runAsPlatform('share-recipients', () => db.q(
       `SELECT DISTINCT them.client_id AS id FROM community_memberships mine
          JOIN community_memberships them ON them.community_id = mine.community_id AND them.status = 'active'
         WHERE mine.client_id = ? AND mine.status = 'active' AND them.client_id IN (${ph})`,
-      [client.id, ...want]),
+      [client.id, ...want])),
   ]);
   return new Set([...gym, ...friends].map((r) => r.id));
 }

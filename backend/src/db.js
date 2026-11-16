@@ -46,11 +46,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ============================================================
 export const als = new AsyncLocalStorage();
 
-/** Run fn as `orgId`'s tenant. A falsy orgId (SUPER_ADMIN, or a user who has
- *  no org yet) is an explicit platform context -- application code is the
- *  control there, exactly as it always has been for those users. */
+/** Run fn as `orgId`'s tenant. A falsy orgId is a RESTRICTED context: no
+ *  tenant and no platform, so row-level security gives it no tenant rows at
+ *  all. Being signed in without a gym is NOT a reason to see every gym --
+ *  that is what this used to do, and a self-registered member waiting to
+ *  join a gym ran with platform visibility on every route. SUPER_ADMIN gets
+ *  platform only through auth.js's explicit, database-checked grant. */
 export const runWithOrg = (orgId, fn) => als.run(
-  orgId ? { kind: 'tenant', orgId: String(orgId) } : { kind: 'platform', reason: 'authenticated-without-org', orgId: null },
+  orgId ? { kind: 'tenant', orgId: String(orgId) } : { kind: 'restricted', reason: 'authenticated-without-org', orgId: null },
   fn);
 
 /** Run fn with cross-tenant (platform) visibility. `reason` names the
@@ -67,7 +70,7 @@ export const currentOrg = () => {
   const s = als.getStore();
   return s && s.kind === 'tenant' ? s.orgId : null;
 };
-/** 'tenant' | 'platform' | 'none' -- for tests and diagnostics. */
+/** 'tenant' | 'platform' | 'restricted' | 'none' -- for tests and diagnostics. */
 export const currentScope = () => als.getStore()?.kind || 'none';
 
 // Org ids are app-generated tokens (ids.js: prefix_ + 10 alphanumerics).
@@ -108,7 +111,11 @@ export function resolveContext({ txOrgId = null, inTx = false, mode = 'enforce' 
     if (mode === 'off' && !inTx) return { org: null, platform: true };
     return { org: assertOrgId(s.orgId), platform: false };
   }
-  return { org: null, platform: true };
+  // Deliberately context-free (a signed-in user with no gym): no tenant, no
+  // platform. Flagged so the "forgot a context" log line stays meaningful.
+  if (s.kind === 'restricted') return { org: null, platform: false, restricted: true };
+  if (s.kind === 'platform') return { org: null, platform: true };
+  return { org: null, platform: false };
 }
 
 async function createSqlite() {
@@ -310,7 +317,7 @@ export async function createPgDb({ connectionString, max, options, mode } = {}) 
 
   async function runQuery(sql, params) {
     const ctx = resolveContext({ mode: scopeMode });
-    if (!ctx.org && !ctx.platform) noteUnscoped(sql);
+    if (!ctx.org && !ctx.platform && !ctx.restricted) noteUnscoped(sql);
     return scoped(ctx, (conn) => conn.query(translateSql(sql), params), metricsOn ? `sql=${sql.trim().slice(0, 80)}` : '');
   }
   const client = { driver: 'postgres', rlsMode: scopeMode };

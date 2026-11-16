@@ -57,13 +57,13 @@ test('the versioned migration is rls.sql verbatim, with a self-check, and has a 
   assert.match(down, /DROP POLICY %I ON %I/, 'down drops every new policy before restoring the old file');
 });
 
-test('every table with an org_id or client_id column is protected or deliberately exempt', () => {
+test('every table with an org/client id column (incl. sender_org_id, host_org_id, ...) is protected or deliberately exempt', () => {
   const src = read('database/schema.sql') + '\n' + read('backend/scripts/init-db.js');
   const enabled = new Set([...rlsSql.matchAll(/^ALTER TABLE (\w+)\s+ENABLE ROW LEVEL SECURITY/gm)].map((m) => m[1]));
   const missing = [];
   for (const m of src.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)\s*\(([\s\S]*?)\n\s*\);/g)) {
     const [, table, body] = m;
-    if (/^\s*(org_id|client_id)\s/m.test(body) && !enabled.has(table) && !RLS_EXEMPT_TABLES.has(table)) missing.push(table);
+    if (/^\s*(\w+_)?(org|client)_id\s/m.test(body) && !enabled.has(table) && !RLS_EXEMPT_TABLES.has(table)) missing.push(table);
   }
   assert.deepEqual([...new Set(missing)], [], 'unprotected tenant tables');
   for (const t of RLS_EXEMPT_TABLES) assert.ok(rlsSql.includes(t), `${t} is exempt in code but not documented in rls.sql`);
@@ -82,7 +82,12 @@ test('context resolution: tenant, platform, none, and refusals', async () => {
     assert.deepEqual(resolveContext(), { org: null, platform: true });
     assert.deepEqual(resolveContext({ txOrgId: 'org_b', inTx: true }), { org: 'org_b', platform: false }, 'platform may narrow to one gym');
   });
-  await runWithOrg(null, async () => assert.equal(currentScope(), 'platform', 'org-less user (SUPER_ADMIN) is explicit platform'));
+  // A signed-in user with no gym is RESTRICTED, never platform: being
+  // org-less used to mean RLS-bypassed. Platform is runAsPlatform only.
+  await runWithOrg(null, async () => {
+    assert.equal(currentScope(), 'restricted', 'org-less user is restricted, not platform');
+    assert.deepEqual(resolveContext(), { org: null, platform: false, restricted: true });
+  });
   for (const bad of ["x' OR '1'='1", '', 'a b', 'org;DROP', 'x'.repeat(129), "o\\'", null]) {
     assert.throws(() => assertOrgId(bad), /invalid tenant context/, `refused: ${JSON.stringify(bad)}`);
   }
@@ -116,7 +121,15 @@ function contextApp(db) {
   app.post('/widened', requireAuth, platformScope('test-cross-gym'), report);
   return app;
 }
-const fakeDb = { driver: 'sqlite', q1: async () => null, q: async () => [], run: async () => ({ changes: 0 }) };
+// Users the auth gate can look up: 'sa' is a real SUPER_ADMIN; 'demoted' still
+// carries a SUPER_ADMIN token but the row says otherwise.
+const FAKE_USERS = { sa: { role: 'SUPER_ADMIN', org_id: null, active: 1 }, demoted: { role: 'CLIENT', org_id: null, active: 1 } };
+const fakeDb = {
+  driver: 'sqlite',
+  q1: async (sql, params = []) => (/SELECT role, org_id, active FROM users/.test(sql) ? FAKE_USERS[params[0]] || null : null),
+  q: async () => [],
+  run: async () => ({ changes: 0 }),
+};
 const tokenFor = (claims, secret = config.jwtSecret) => jwt.sign({ name: 'x', email: 'x@test.invalid', ...claims }, secret, { algorithm: 'HS256', expiresIn: '1h' });
 
 async function withServer(app, fn) {
@@ -143,6 +156,15 @@ test('HTTP: context survives the body parser and requireAuth; the request cannot
     assert.equal((await post(base, '/tenant', { token: tokenFor({ sub: 'u', role: 'GYM_OWNER', org: 'org_b' }, 'wrong-secret-wrong-secret') })).status, 401);
     assert.deepEqual((await post(base, '/widened', { token: a })).json, { scope: 'platform', org: null });
     assert.deepEqual((await post(base, '/tenant', { token: tokenFor({ sub: 'sa', role: 'SUPER_ADMIN', org: null }) })).json, { scope: 'platform', org: null });
+    // Privilege escalation: being signed in WITHOUT a gym is not platform.
+    assert.deepEqual((await post(base, '/tenant', { token: tokenFor({ sub: 'pending', role: 'CLIENT', org: null }) })).json, { scope: 'restricted', org: null },
+      'a member who has not joined a gym gets no tenant rows, not every gym');
+    assert.deepEqual((await post(base, '/tenant', { token: tokenFor({ sub: 'pending_t', role: 'TRAINER', org: null }) })).json, { scope: 'restricted', org: null });
+    // A SUPER_ADMIN claim is checked against the users row on every request.
+    assert.deepEqual((await post(base, '/tenant', { token: tokenFor({ sub: 'demoted', role: 'SUPER_ADMIN', org: null }) })).json, { scope: 'restricted', org: null },
+      'a demoted admin token loses platform scope');
+    assert.deepEqual((await post(base, '/tenant', { token: tokenFor({ sub: 'ghost', role: 'SUPER_ADMIN', org: null }) })).json, { scope: 'restricted', org: null },
+      'a SUPER_ADMIN claim with no users row is not platform');
     // Concurrency across real sockets.
     const results = await Promise.all(Array.from({ length: 60 }, (_, i) => {
       const org = i % 2 ? 'org_a' : 'org_b';
@@ -194,6 +216,12 @@ test('PostgreSQL: cross-gym attacks against the real adapter on a NOBYPASSRLS ro
       const policies = async () => (await c.query(`SELECT count(*)::int n FROM pg_policy p JOIN pg_class k ON k.oid = p.polrelid JOIN pg_namespace s ON s.oid = k.relnamespace WHERE s.nspname = $1`, [S])).rows[0].n;
       const fresh = await policies();
       await c.query(read('database/migrations/2026-11-16_rls_fail_closed/down.sql'));
+      // Rollback must not leave any table locked: RLS on with no policy is
+      // deny-all (the tables this change newly protected, e.g. communities).
+      const locked = (await c.query(`SELECT k.relname FROM pg_class k JOIN pg_namespace s ON s.oid = k.relnamespace
+         WHERE s.nspname = $1 AND k.relkind = 'r' AND k.relrowsecurity
+           AND NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = k.oid)`, [S])).rows.map((r) => r.relname);
+      assert.deepEqual(locked, [], 'after down.sql no table is RLS-enabled with no policy');
       const up = read('database/migrations/2026-11-16_rls_fail_closed/up.sql');
       const verify = up.slice(up.indexOf('DO $verify$'), up.indexOf('END $verify$;') + 'END $verify$;'.length);
       await assert.rejects(c.query(verify), /fail-open policy still present/, 'the self-check refuses the old policies');
@@ -246,7 +274,19 @@ test('PostgreSQL: cross-gym attacks against the real adapter on a NOBYPASSRLS ro
       await ins('followup_consent_log', { id: id(org, 'cl'), org_id: org, client_id: id(org, 'c'), channel: 'sms', action: 'granted', source: 'owner', created_at: now });
       await ins('health_records', { id: id(org, 'hr'), user_id: id(org, 'u'), org_id: org, provider: 'skos', data_type: 'steps', start_time: now, synced_at: now, created_at: now, updated_at: now });
       await ins('foods', { id: id(org, 'food'), org_id: org, client_id: id(org, 'c'), name: 'F', is_global: 0 });
+      // AI Communication configuration: the gym's calling numbers and settings.
+      await ins('followup_settings', { org_id: org, updated_at: now });
+      await ins('followup_numbers', { id: id(org, 'num'), org_id: org, number: `+9100000${org.length}`, created_at: now, updated_at: now });
     }
+    // Cross-gym-by-design rows: a friend community and a tournament with
+    // members from A and B, and in-app shares A->B and B->independent.
+    await ins('communities', { id: `${tag}_comm`, name: 'Friends', created_by: id(A, 'c'), created_at: now, updated_at: now });
+    for (const org of [A, B]) await ins('community_memberships', { id: id(org, 'cm'), community_id: `${tag}_comm`, client_id: id(org, 'c'), joined_at: now, updated_at: now });
+    await ins('tournaments', { id: `${tag}_tour`, host_org_id: A, created_by: id(A, 'owner'), name: 'Gym Wars', code: `${tag}_code`, created_at: now, updated_at: now });
+    for (const org of [A, B]) await ins('tournament_entrants', { id: id(org, 'te'), tournament_id: `${tag}_tour`, user_id: id(org, 'u'), name: 'm', created_at: now, updated_at: now });
+    await ins('app_shares', { id: `${tag}_share_ab`, kind: 'workout', snapshot_id: 's1', title: 't', sender_client_id: id(A, 'c'), sender_org_id: A, recipient_client_id: id(B, 'c'), recipient_org_id: B, created_at: now });
+    await ins('app_shares', { id: `${tag}_share_bi`, kind: 'workout', snapshot_id: 's2', title: 't', sender_client_id: id(B, 'c'), sender_org_id: B, recipient_client_id: id(I, 'c'), recipient_org_id: I, created_at: now });
+    await ins('exercise_library', { id: `${tag}_global_ex`, org_id: null, name: 'Squat', primary_muscle: 'quads', equipment: 'barbell' });
     await ins('foods', { id: `${tag}_global_food`, org_id: null, client_id: null, name: 'Rice', is_global: 1 });
 
     await admin.query(`CREATE ROLE ${ROLE} LOGIN PASSWORD '${PW}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`);
@@ -265,7 +305,7 @@ test('PostgreSQL: cross-gym attacks against the real adapter on a NOBYPASSRLS ro
     ['payment_transactions', 'ptxn'], ['invoices', 'inv'], ['refunds', 'ref'], ['support_tickets', 'tkt'],
     ['support_messages', 'tmsg'], ['attendance', 'att'], ['attendance_events', 'ae'], ['followup_jobs', 'job'],
     ['followup_consent_log', 'cl'], ['workouts', 'w'], ['workout_exercises', 'wx'], ['weight_logs', 'wt'],
-    ['health_records', 'hr'], ['foods', 'food'],
+    ['health_records', 'hr'], ['foods', 'food'], ['followup_numbers', 'num'],
   ];
 
   await t.test('1/4/5. Gym A cannot SELECT any of Gym B\'s rows (financial, attendance, AI Communication, training)', async () => {
@@ -433,6 +473,82 @@ test('PostgreSQL: cross-gym attacks against the real adapter on a NOBYPASSRLS ro
       const r = await post(base, '/leaky', { token: tokenFor({ sub: id(A, 'owner'), role: 'GYM_OWNER', org: A }), body: { org_id: B }, headers: { 'x-org-id': B } });
       assert.equal(r.status, 200);
       assert.deepEqual([...new Set(r.json.map((x) => x.org_id))], [A], 'the database itself kept B\'s clients out');
+    });
+  });
+
+  await t.test('11. AI Communication: a gym sees only its own calling numbers and settings', async () => {
+    await runWithOrg(A, async () => {
+      assert.deepEqual((await db1.q('SELECT org_id FROM followup_settings')).map((r) => r.org_id), [A], 'settings: own gym only');
+      assert.deepEqual([...new Set((await db1.q('SELECT org_id FROM followup_numbers')).map((r) => r.org_id))], [A], 'numbers: own gym only');
+      assert.equal((await db1.run('UPDATE followup_settings SET enabled = 1 WHERE org_id = ?', [B])).changes, 0, 'cannot switch on B\'s calling');
+      await assert.rejects(db1.run('INSERT INTO followup_numbers (id, org_id, number, created_at, updated_at) VALUES (?,?,?,?,?)', ['xn', B, '+1', now, now]), /row-level security/, 'cannot add a number to B');
+    });
+    // A worker draining jobs for several gyms: each job runs in its own gym.
+    const seen = [];
+    for (const org of [A, B, A, B]) {
+      seen.push(await runWithOrg(org, async () => (await db1.q('SELECT DISTINCT org_id FROM followup_jobs')).map((r) => r.org_id).join()));
+    }
+    assert.deepEqual(seen, [A, B, A, B], 'one pooled connection, alternating gyms, never mixed');
+  });
+
+  await t.test('12. friend communities and tournaments are platform-only: no gym context can read or write them', async () => {
+    const RLS = /row-level security/;
+    for (const org of [A, B]) {
+      await runWithOrg(org, async () => {
+        for (const tbl of ['communities', 'community_memberships', 'tournaments', 'tournament_entrants']) {
+          assert.equal((await db1.q(`SELECT 1 FROM ${tbl}`)).length, 0, `${tbl}: invisible to a gym context`);
+        }
+        await assert.rejects(db1.run('INSERT INTO communities (id, name, created_at, updated_at) VALUES (?,?,?,?)', [`x_${org}`, 'n', now, now]), RLS);
+        assert.equal((await db1.run('DELETE FROM tournament_entrants')).changes, 0, 'a blanket DELETE from a gym context touches nothing');
+      });
+    }
+    // The explicit platform workflow (routes/communities.js, routes/tournaments.js) still works.
+    await runAsPlatform('friend-communities', async () => {
+      assert.equal((await db1.q('SELECT id FROM community_memberships WHERE community_id = ?', [`${tag}_comm`])).length, 2);
+      assert.equal((await db1.q('SELECT id FROM tournament_entrants WHERE tournament_id = ?', [`${tag}_tour`])).length, 2);
+    });
+  });
+
+  await t.test('13. in-app shares: each gym sees only shares it sent or received, and can only send as itself', async () => {
+    const RLS = /row-level security/;
+    await runWithOrg(A, async () => {
+      assert.deepEqual((await db1.q('SELECT id FROM app_shares')).map((r) => r.id), [`${tag}_share_ab`], 'A sees its outgoing share, not B->independent');
+      await assert.rejects(db1.run(`INSERT INTO app_shares (id, kind, snapshot_id, title, sender_client_id, sender_org_id, recipient_client_id, recipient_org_id, created_at)
+        VALUES (?, 'workout', 's', 't', ?, ?, ?, ?, ?)`, ['xs1', id(B, 'c'), B, id(A, 'c'), A, now]), RLS, 'cannot forge a share from B');
+      await assert.rejects(db1.run(`INSERT INTO app_shares (id, kind, snapshot_id, title, sender_client_id, sender_org_id, recipient_client_id, recipient_org_id, created_at)
+        VALUES (?, 'workout', 's', 't', ?, ?, ?, ?, ?)`, ['xs2', id(B, 'c'), A, id(B, 'c'), B, now]), RLS, 'cannot send as B\'s member under its own org');
+      assert.equal((await db1.run("UPDATE app_shares SET status = 'dismissed' WHERE id = ?", [`${tag}_share_bi`])).changes, 0);
+    });
+    await runWithOrg(B, async () => {
+      assert.deepEqual((await db1.q('SELECT id FROM app_shares ORDER BY id')).map((r) => r.id), [`${tag}_share_ab`, `${tag}_share_bi`], 'B sees what it received and sent');
+      assert.equal((await db1.run("UPDATE app_shares SET status = 'accepted' WHERE id = ?", [`${tag}_share_ab`])).changes, 1, 'the recipient can act on it');
+    });
+  });
+
+  await t.test('14. privilege escalation: a signed-in user with no gym gets nothing (restricted), not platform', async () => {
+    await runWithOrg(null, async () => {
+      const leaks = [];
+      // Shared (NULL-org) library rows are public reference data; count gym rows only.
+      for (const [table] of B_ROWS) if ((await db1.q1(`SELECT count(*)::int AS n FROM ${table} ${RLS_GLOBAL_TABLES.has(table) ? 'WHERE org_id IS NOT NULL' : ''}`)).n) leaks.push(table);
+      for (const tbl of ['communities', 'tournaments', 'app_shares', 'followup_settings']) if ((await db1.q1(`SELECT count(*)::int AS n FROM ${tbl}`)).n) leaks.push(tbl);
+      assert.deepEqual(leaks, [], 'no tenant rows of any gym');
+      await assert.rejects(db1.run('INSERT INTO payments (id, org_id, client_id, amount) VALUES (?,?,?,?)', ['xr', A, id(A, 'c'), 1]), /row-level security/);
+      assert.equal((await db1.run("UPDATE users SET role = 'SUPER_ADMIN'")).changes, 0, 'cannot promote anyone');
+    });
+    // The request cannot widen itself: a tenant context cannot set app.platform.
+    await runWithOrg(A, async () => {
+      await db1.q("SELECT set_config('app.platform', 'on', true)");
+      assert.deepEqual([...new Set((await db1.q('SELECT org_id FROM payments')).map((r) => r.org_id))], [A],
+        'a set_config in one statement dies with that statement\'s own transaction');
+    });
+  });
+
+  await t.test('15. global exercise library: every gym reads it, no gym edits it', async () => {
+    await runWithOrg(A, async () => {
+      assert.equal((await db1.q('SELECT id FROM exercise_library WHERE id = ?', [`${tag}_global_ex`])).length, 1);
+      assert.equal((await db1.run("UPDATE exercise_library SET name = 'pwned' WHERE id = ?", [`${tag}_global_ex`])).changes, 0);
+      assert.equal((await db1.run('DELETE FROM exercise_library WHERE id = ?', [`${tag}_global_ex`])).changes, 0);
+      await assert.rejects(db1.run("INSERT INTO exercise_library (id, org_id, name, primary_muscle, equipment) VALUES ('xe', NULL, 'x', 'x', 'x')"), /row-level security/);
     });
   });
 
