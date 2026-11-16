@@ -188,3 +188,11 @@ test('every raw/dry staple is a measured row and is linked from the names people
   assert.equal(cookedVariantFor('oats')?.key, 'oats_cooked');
   assert.equal(cookedVariantFor('soya chunks')?.key, 'soya_chunks_cooked');
 });
+
+test('a nutrient a source never measured is named, not presented as a measured zero', { skip: !live }, () => {
+  const r = estimateFood('100g paneer and 2 roti');
+  const paneer = r.items.find((i) => i.staple_key === 'paneer');
+  assert.equal(paneer.carbs, null, 'IFCT paneer has no carbohydrate value: null, not 0');
+  assert.deepEqual(r.total_incomplete, { carbs: ['Paneer'] });
+  assert.equal(estimateFood('2 roti').total_incomplete, undefined);
+});

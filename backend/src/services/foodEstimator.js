@@ -1273,8 +1273,15 @@ export function estimateFood(text) {
   }
 
   const total = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  // A nutrient a source never measured (IFCT has no carbohydrate value for
+  // paneer) is null on the item and adds nothing to the total -- so the
+  // total is a LOWER BOUND for that nutrient, and says so, by name.
+  const incomplete = {};
   let worst = 'high';
   for (const it of items) {
+    for (const k of ['protein', 'carbs', 'fat']) {
+      if (it[k] == null) (incomplete[k] ||= []).push(it.name);
+    }
     /* CONFIDENCE BY DIMENSION (food/confidence.js). `confidence` becomes the
        weakest of identification / portion / composition, each computed from
        evidence -- not the matched row's own label, which said nothing about
@@ -1307,6 +1314,9 @@ export function estimateFood(text) {
       carbs: round1(total.carbs),
       fat: round1(total.fat),
     },
+    // { carbs: ['Paneer'] } -- nutrients the total under-states because a
+    // listed item's source did not measure them. Absent when complete.
+    ...(Object.keys(incomplete).length ? { total_incomplete: incomplete } : {}),
     estimate: true,
     schema_version: 'food-v1',
     tier: 1,
