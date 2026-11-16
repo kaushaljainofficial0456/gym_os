@@ -20,6 +20,7 @@
 // failed/abandoned payment can be retried against the SAME payment_order
 // (see /client/payment/order's idempotency) without needing a new QR.
 // ============================================================
+import { brandingForOrg } from '../services/branding.js';
 import { Router } from 'express';
 import { effectiveMembershipStatus } from '../services/enterprise/membershipLifecycle.js';
 import { z } from 'zod';
@@ -334,6 +335,8 @@ export default function enrollmentRoutes(db) {
     res.json({
       purpose: verified.token.purpose,
       gym: { id: org.id, name: org.name },
+      // The gym's own look, so the "join this gym" screen already wears it.
+      branding: await brandingForOrg(db, org.id).catch(() => null),
       membershipPlan: plan,
       expiresAt: verified.token.expires_at,
     });

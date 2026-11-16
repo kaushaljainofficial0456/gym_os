@@ -218,8 +218,8 @@ const OWNER_STEPS = [
   {
     route: '/app/trainer/enterprise',
     target: '[data-tour="trainer-enterprise"]',
-    title: 'Enterprise dashboard',
-    body: 'Your Barbell subscription: package details, client capacity, QR onboarding codes, and billing. This is where you manage your gym\'s Barbell membership.',
+    title: 'Plan & billing',
+    body: 'Your Barbell plan: how many clients it covers, renewals and receipts. Everything else you set up -- your gym, branding, join codes, getting paid -- is in Settings.',
     placement: 'bottom',
   },
 ];

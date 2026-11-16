@@ -42,6 +42,7 @@ import communityRoutes from './routes/community.js';
 import communitiesRoutes from './routes/communities.js';
 import appShareRoutes from './routes/appShares.js';
 import communityInviteRoutes from './routes/communityInvite.js';
+import brandingRoutes from './routes/branding.js';
 import tournamentRoutes, { tournamentPublicRoutes } from './routes/tournaments.js';
 import receiptRoutes from './routes/receipts.js';
 import planRoutes, { planGate } from './routes/plan.js';
@@ -301,6 +302,7 @@ app.use('/api/receipts', receiptRoutes(db)); // the PDF receipt for a payment: t
 app.use('/api/tournaments-public', tournamentPublicRoutes(db)); // PUBLIC: what a tournament QR opens, with guest sign-up
 app.use('/api/tournaments', tournamentRoutes(db)); // gym wars: hosting, QR enrolment, co-hosts, live scoring, results
 app.use('/api/community-invite', communityInviteRoutes(db)); // PUBLIC: what an invite link leads to (no auth) -- joining requires auth, see POST /api/communities/join
+app.use('/api/branding', brandingRoutes(db)); // a gym's own colours and logo: PUBLIC by gym code for sign-up screens, owner-set -- see routes/branding.js
 app.use('/api/attendance', attendanceRoutes(db)); // TRAINER attendance: shifts, check-in/out, corrections (distinct from client attendance)
 app.use('/api/enterprise', enterpriseRoutes(db)); // gym-owner SaaS billing: onboarding, packages, payment, invoices -- see enterprise.js
 app.use('/api/enrollment', enrollmentRoutes(db)); // QR-based client/trainer onboarding -- see enrollment.js

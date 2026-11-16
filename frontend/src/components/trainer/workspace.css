@@ -265,6 +265,9 @@ html.ws :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger) {
   font-size: .9375rem; font-weight: 600; letter-spacing: -.01em; min-height: 44px; padding: 10px 20px;
 }
 html.ws .btn-sm { font-size: .875rem !important; min-height: 36px !important; padding: 7px 14px !important; }
+/* An icon-only small button keeps theme.css's zero padding: the rule above
+   out-ranks it, and squeezed a 15px icon in a 36px button down to 6px. */
+html.ws .btn-sm.btn-icon { padding: 0 !important; }
 html.ws .btn-lg { font-size: 1.0625rem !important; min-height: 52px !important; }
 
 /* Inputs as iOS fields: filled, borderless until focused, 16px text (any
@@ -303,3 +306,156 @@ html.ws .empty-state-body { font-size: .9375rem; max-width: 34ch; line-height: 1
 
 /* Number-tile labels: sentence case and readable, like every other label here. */
 html.ws .stat-label { font-size: .8125rem; font-weight: 500; letter-spacing: -.004em; text-transform: none; color: var(--mute); }
+
+/* ═══════════════════════════════════════════════════════════════
+   OWNER: EIGHT SECTIONS, SECTION TABS, "+ NEW", AND A SIMPLE HOME.
+   The owner sidebar is sections, not pages (workspaceNav.js); the
+   pages of a section are tabs (SectionTabs.jsx); the shortcuts sit
+   behind "+ New" (NewMenu.jsx); Home is three numbers and a to-do
+   list (OwnerHome.jsx).
+   ═══════════════════════════════════════════════════════════════ */
+.ws-nav--simple { gap: 0; }
+.ws-nav--simple .ws-nav-group { gap: 3px; }
+.ws-nav--simple .ws-nav-item { min-height: 44px; font-size: 15.5px; }
+.ws-nav-group--sep { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* Phone top bar: Messages, with its unread count. */
+.ws-top-btn {
+  position: relative; width: 40px; height: 40px; border-radius: 12px;
+  display: grid; place-items: center; color: var(--ink);
+  background: rgb(var(--tint-rgb) / .06); border: 1px solid var(--line);
+}
+.ws-top-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-top-badge {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 19px; height: 19px; padding: 0 5px; font-size: 11px;
+  background: var(--bad); color: var(--bg); box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* Section tabs: the pages inside one section. */
+.ws-subnav {
+  display: flex; gap: 2px; overflow-x: auto;
+  margin-bottom: 20px; border-bottom: 1px solid var(--line);
+}
+.ws-subnav-item {
+  position: relative; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 14px;
+  font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap;
+  color: var(--mute); border-radius: 10px 10px 0 0;
+  transition: color .15s ease, background-color .15s ease;
+}
+.ws-subnav-item:first-child { padding-left: 4px; }
+.ws-subnav-item:hover { color: var(--ink); }
+.ws-subnav-item.is-active { color: var(--ink); }
+.ws-subnav-item.is-active::after {
+  content: ''; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2.5px;
+  border-radius: 3px 3px 0 0; background: var(--ink);
+}
+.ws-subnav-item:first-child.is-active::after { left: 4px; }
+.ws-subnav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+/* "+ New": a round button beside the phone tab bar, a button on Home. */
+.ws-fab {
+  width: 64px; height: 64px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-contrast);
+  box-shadow: 0 20px 44px -20px rgba(0, 0, 0, .5), 0 6px 18px -8px rgba(0, 0, 0, .4);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s ease;
+}
+.ws-fab:active { transform: scale(.94); }
+.ws-fab:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.ws-new-btn { display: inline-flex; align-items: center; gap: 8px; }
+.ws-new-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ws-new-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  min-height: 104px; padding: 12px 6px; border-radius: 16px; text-align: center;
+  background: rgb(var(--tint-rgb) / .04); border: 1px solid var(--line); color: var(--ink);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.ws-new-item:hover { border-color: rgb(var(--tint-rgb) / .22); background: rgb(var(--tint-rgb) / .07); }
+.ws-new-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-new-label { font-size: 13.5px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; }
+
+/* ── Owner Home ── */
+.oh { display: flex; flex-direction: column; gap: 28px; }
+.oh-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.oh-sub { margin-top: 6px; font-size: 15px; font-weight: 500; color: var(--mute); }
+.oh-title { overflow-wrap: anywhere; }
+.oh-new { display: none; flex-shrink: 0; }
+@media (min-width: 1024px) { .oh-new { display: block; } }
+.oh-label { font-size: 15px; font-weight: 600; color: var(--mute); margin-bottom: 12px; }
+
+.oh-glance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.oh-glance > :first-child { grid-column: 1 / -1; }
+@media (min-width: 768px) {
+  .oh-glance { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .oh-glance > :first-child { grid-column: auto; }
+}
+.oh-card {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: 18px 18px 0; border-radius: 20px;
+  transition: border-color .15s ease;
+}
+.oh-card:hover { border-color: rgb(var(--tint-rgb) / .2); }
+.oh-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oh-card-top { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; color: var(--mute); min-width: 0; }
+.oh-value {
+  margin-top: 14px; font-size: clamp(1.75rem, 1.45rem + 1.3vw, 2.5rem);
+  font-weight: 700; letter-spacing: -.035em; line-height: 1; color: var(--ink);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.oh-say { margin-top: 10px; display: flex; align-items: flex-start; gap: 6px; font-size: 14.5px; line-height: 1.35; color: var(--ink); opacity: .86; }
+.oh-say svg { flex-shrink: 0; margin-top: 1px; }
+.oh-more {
+  margin-top: auto; padding-top: 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 48px; border-top: 1px solid var(--line); margin-bottom: 0;
+  font-size: 14px; font-weight: 600; color: var(--mute);
+}
+.oh-card-body { padding-bottom: 16px; }
+
+.oh-todo { border-radius: 20px; overflow: hidden; }
+.oh-todo-head { display: flex; align-items: center; gap: 10px; padding: 18px 20px 14px; }
+.oh-todo-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
+.oh-row { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-top: 1px solid var(--line); }
+.oh-row-main { flex: 1; min-width: 0; }
+.oh-row-title { font-size: 16px; font-weight: 600; letter-spacing: -.012em; color: var(--ink); }
+.oh-row-sub { margin-top: 2px; font-size: 14px; color: var(--mute); }
+.oh-row-act { flex-shrink: 0; min-width: 96px; justify-content: center; }
+@media (min-width: 640px) { .oh-row-act { min-width: 132px; } }
+.oh-followups { border-top: 1px solid var(--line); background: rgb(var(--tint-rgb) / .025); }
+.oh-done { display: flex; align-items: center; gap: 14px; padding: 18px 20px 20px; border-top: 1px solid var(--line); font-size: 16px; font-weight: 600; color: var(--ink); }
+.oh-card-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oh-go { display: none; margin-left: auto; color: var(--faint); flex-shrink: 0; }
+
+/* A phone shows the numbers and the whole to-do list without a long
+   scroll: each card is already a link, so its "See …" footer becomes a
+   chevron, and the two half-width cards drop their icon to keep the label
+   whole. */
+@media (max-width: 767px) {
+  .oh { gap: 22px; }
+  .oh-card { padding: 14px 16px 0; }
+  .oh-card-body { padding-bottom: 14px; }
+  .oh-more { display: none; }
+  .oh-go { display: flex; }
+  .oh-value { margin-top: 10px; }
+  .oh-say { margin-top: 8px; font-size: 13.5px; }
+  .oh-glance > :not(:first-child) :is(.ws-tile, .oh-go) { display: none; }
+  .oh-row-act { min-width: 0; }
+  .oh-glance > :not(:first-child) .oh-card-top { font-size: 14px; }
+  .oh-row { padding: 12px 16px; gap: 12px; }
+  .oh-todo-head { padding: 16px 16px 12px; }
+  .oh-row-title { font-size: 15px; }
+  .oh-row-sub { font-size: 13px; }
+}
+
+/* A long single word ("Communication") has to fit a More tile on a 375px
+   phone, where icon-beside-label leaves it ~98px: there the icon sits
+   above the label, which gets the tile's whole width. */
+.ws-more-tile > span:last-child { overflow-wrap: break-word; }
+@media (max-width: 400px) {
+  .ws-more-tile { flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; min-height: 84px; }
+  .ws-more-tile .ws-action-icon.ws-tile { --s: 32px; }
+}

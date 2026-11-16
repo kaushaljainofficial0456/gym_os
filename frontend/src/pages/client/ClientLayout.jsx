@@ -4,6 +4,8 @@ import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import Logo from '../../components/Logo.jsx';
+import { useBrand } from '../../brand/BrandProvider.jsx';
+import GymLockup from '../../brand/GymLockup.jsx';
 import CoachBriefDrawer from '../../components/CoachBriefDrawer.jsx';
 import OnboardingWizard from '../../components/OnboardingWizard.jsx';
 import FeaturePopup from '../../components/FeaturePopup.jsx';
@@ -89,6 +91,7 @@ const PROFILE_MENU = [
 
 export default function ClientLayout() {
   const { user, logout, isIndependent } = useAuth();
+  const { brand } = useBrand();
   const units = useUnits();
   const loc = useLocation();
   const nav = useNavigate();
@@ -306,11 +309,19 @@ export default function ClientLayout() {
             )}
           </div>
 
-          {/* CENTER: SK OS branding */}
-          <div className="flex items-center gap-2">
-            <Logo alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
-            <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>Barbell</span>
-          </div>
+          {/* CENTER: the gym's own name -- "<Gym> × Barbell" -- for anyone
+              in a gym; plain Barbell for an independent member. min-w-0 so
+              a long gym name truncates instead of pushing the bell off. */}
+          {brand ? (
+            <div className="flex items-center justify-center min-w-0 flex-1 px-1">
+              <GymLockup brand={brand} markSize={26} />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Logo alt="" aria-hidden="true" className="w-7 h-7 rounded-lg object-cover" />
+              <span className="font-brand text-[13px] font-bold leading-none" style={{ color: 'var(--ink)', letterSpacing: '.02em' }}>Barbell</span>
+            </div>
+          )}
 
           {/* RIGHT: ONE bell. It previously sat beside a second,
               identical-looking bell for the Coach brief -- the comment

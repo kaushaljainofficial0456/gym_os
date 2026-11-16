@@ -57,6 +57,10 @@ export const SETTING_KEYS = new Set([
   // GET gave it) was refused with a 422 and nothing saved.
   'crowd_trainer_visible', 'crowd_open_time', 'crowd_close_time',
   'access_auto_close_hours', 'access_grace_days', 'access_sync_enabled',
+  // And for the gym's own look, owned by PUT /api/branding (which checks
+  // the colours are real colours and the logo is a real image). GET below
+  // leaves the logo itself out -- it is an image, not a setting.
+  'brand_primary', 'brand_secondary', 'brand_logo', 'brand_updated_at',
 ]);
 
 export default function adminRoutes(db) {
@@ -806,6 +810,9 @@ export default function adminRoutes(db) {
   // ---- gym settings (branding, crowd capacity, default client permissions) ----
   r.get('/settings', async (req, res) => {
     const s = await db.q1('SELECT * FROM gym_settings WHERE org_id = ?', [req.orgId]);
+    // The logo is up to 300 kB of image; the settings screen neither shows
+    // nor edits it (Branding does), so it is not sent here.
+    if (s) delete s.brand_logo;
     res.json({ settings: s || { org_id: req.orgId, brand_name: 'Barbell', tagline: 'Your fitness OS.', crowd_capacity: 150, crowd_enabled: 1, workout_mode_default: 'hybrid', allow_substitute: 1, allow_add_exercise: 1, allow_edit_targets: 1, community_enabled: 1, community_leaderboard_enabled: 1 } });
   });
 

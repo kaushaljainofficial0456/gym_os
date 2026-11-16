@@ -24,12 +24,16 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BrandMark from '../brand/BrandMark.jsx';
 import Wordmark from '../brand/Wordmark.jsx';
+import { useBrand } from '../../brand/BrandProvider.jsx';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion.js';
 import './auth.css';
 
 // Desktop only, decorative, and late to arrive anyway (its cards fly in
 // after a second), so it stays out of the first download -- a phone never
 // fetches it -- and if its file ever fails to load the stage goes without.
+// A gym's own stage (its mark and name): a lazy chunk, fetched only when a
+// gym is being shown.
+const GymStage = lazy(() => import('../../brand/GymStage.jsx'));
 const Showcase = lazy(() => import('./Showcase.jsx').catch(() => ({ default: () => null })));
 
 const LEGAL = [
@@ -98,17 +102,26 @@ export default function AuthShell({ variant = 'compact', headline, showcase = 'w
   const wide = useWide();
   const stageRef = useRef(null);
   useParallax(stageRef, reduced || !wide);
+  // A gym's own sign-in, sign-up and setup screens lead with the gym:
+  // its mark and name, Barbell as the "× Barbell" beneath.
+  const { brand } = useBrand();
 
   return (
-    <div className="auth-root" data-variant={variant}>
+    <div className="auth-root" data-variant={variant} data-gym={brand ? '' : undefined}>
       <section className="auth-stage" ref={stageRef}>
         <div className="auth-aurora" />
-        <div className="auth-brand">
-          <div className="auth-mark-slot">
-            <BrandMark animate glint className="auth-mark-svg" />
+        {brand ? (
+          <Suspense fallback={<div className="auth-brand" />}>
+            <GymStage key={brand.code} brand={brand} />
+          </Suspense>
+        ) : (
+          <div className="auth-brand">
+            <div className="auth-mark-slot">
+              <BrandMark animate glint className="auth-mark-svg" />
+            </div>
+            <Wordmark animate delay={900} className="auth-wordmark" />
           </div>
-          <Wordmark animate delay={900} className="auth-wordmark" />
-        </div>
+        )}
         {showcase && wide && <Suspense fallback={null}><Showcase set={showcase} /></Suspense>}
         {headline && <Headline lines={headline} />}
         <div className="auth-stage__grain" />

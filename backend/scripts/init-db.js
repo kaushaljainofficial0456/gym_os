@@ -378,6 +378,12 @@ const MIGRATIONS = [
   // superset built once survives being repeated every week.
   ['workout_exercises', 'superset_group', `superset_group TEXT`],
   ['client_workout_exercises', 'superset_group', `superset_group TEXT`],
+  // White-label branding: a gym's own two colours and logo, shown to its
+  // members, trainers and owner. See services/branding.js.
+  ['gym_settings', 'brand_primary', `brand_primary TEXT`],
+  ['gym_settings', 'brand_secondary', `brand_secondary TEXT`],
+  ['gym_settings', 'brand_logo', `brand_logo TEXT`],
+  ['gym_settings', 'brand_updated_at', `brand_updated_at TEXT`],
 ];
 
 // Backfill per-set rows for existing aggregate workout_logs (idempotent).

@@ -9,8 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, Bar, ErrorState, PageSkeleton } from '../../components/UI.jsx';
-import GymSettingsCard from '../../components/trainer/GymSettingsCard.jsx';
-import PayoutSetup from '../../components/trainer/PayoutSetup.jsx';
+import { SettingsBack } from './SettingsGym.jsx';
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -53,8 +52,9 @@ export default function EnterpriseDashboard() {
   return (
     <div className="space-y-6" data-tour="trainer-enterprise">
       <div>
-        <h1 className="t-title">Setup & billing</h1>
-        <p className="t-sub mt-1.5">Your Barbell plan, getting paid, join codes and gym settings.</p>
+        <SettingsBack />
+        <h1 className="t-title">Plan & billing</h1>
+        <p className="t-sub mt-1.5">Your Barbell plan, how many clients it covers, and your receipts.</p>
       </div>
 
       {alerts.length > 0 && (
@@ -87,20 +87,15 @@ export default function EnterpriseDashboard() {
             <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>Renew or upgrade</button>
           </div>
         </Card>
-        <PayoutSetup />
+        <Card className="p-5 sm:p-6 flex flex-col">
+          <h2 className="ws-section-title">Receipts & invoices</h2>
+          <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>Every payment you have made to Barbell, as a PDF you can download or email.</p>
+          <div className="mt-auto pt-5">
+            <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>See receipts</button>
+          </div>
+        </Card>
       </div>
 
-      <Card className="p-5 sm:p-6">
-        <h2 className="ws-section-title">Join QR codes</h2>
-        <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>New clients and trainers scan one to join your gym.</p>
-        <div className="flex flex-wrap gap-2 mt-4">
-          <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/qr')}>Client QR code</button>
-          {/* Opened the Client tab, so "Onboard trainer" made a client code. */}
-          <button className="btn" onClick={() => nav('/app/trainer/enterprise/qr?for=trainer')}>Trainer QR code</button>
-        </div>
-      </Card>
-
-      <GymSettingsCard />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { MotionConfig, motion } from 'framer-motion';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth.jsx';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
@@ -11,8 +12,14 @@ import GlassTabBar from '../../components/GlassTabBar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import Logo from '../../components/Logo.jsx';
-import { workspaceSections, workspaceTabs } from '../../components/trainer/workspaceNav.js';
+import { useBrand } from '../../brand/BrandProvider.jsx';
+import GymLockup from '../../brand/GymLockup.jsx';
+import { workspaceSections, workspaceTabs, hubForPath } from '../../components/trainer/workspaceNav.js';
+import SectionTabs from '../../components/trainer/SectionTabs.jsx';
+import NewMenu from '../../components/trainer/NewMenu.jsx';
+import { GLIDE } from '../../components/trainer/wsMotion.jsx';
 import '../../components/trainer/workspace.css';
+import '../../components/trainer/workspace-premium.css';
 
 /**
  * THE OWNER & TRAINER WORKSPACE SHELL.
@@ -25,9 +32,44 @@ import '../../components/trainer/workspace.css';
  *   - a phone gets a bottom tab bar for the four most-used places, and
  *     More, a page of every section as big tiles.
  * Both read the same list (workspaceNav.js).
+ *
+ * An owner's sidebar is eight plain sections rather than every page:
+ * the pages inside a section are tabs along its top (SectionTabs), and
+ * the quick actions sit behind "+ New" (NewMenu) -- beside the tab bar on
+ * a phone, on Home on a computer.
  */
+function OwnerNav({ pathname, badges }) {
+  const [home, ...hubs] = workspaceSections(true)[0].items;
+  const current = hubForPath(pathname);
+  const settings = hubs.find((h) => h.key === 'settings');
+  const item = (h) => {
+    const on = h === home ? pathname === home.to || pathname === `${home.to}/` : current?.key === h.key;
+    return (
+      <Link key={h.to} to={h.to} aria-current={on ? 'page' : undefined} className={`ws-nav-item${on ? ' is-active' : ''}`}>
+        {/* The highlight glides to the section you open (one shared pill,
+            not one per item), the way a selection moves in macOS. */}
+        {on && <motion.span layoutId="ws-nav-pill" className="ws-nav-pill" transition={GLIDE} aria-hidden="true" />}
+        <Icon name={h.icon} size={20} strokeWidth={1.8} />
+        <span className="flex-1 truncate">{h.label}</span>
+        {h.badgeKey && badges[h.badgeKey] > 0 && <span className="ws-badge">{badges[h.badgeKey]}</span>}
+      </Link>
+    );
+  };
+  return (
+    <nav className="ws-nav ws-nav--simple" data-tour="trainer-hamburger" aria-label="Main">
+      <div className="ws-nav-group">
+        {[home, ...hubs.filter((h) => h !== settings)].map(item)}
+      </div>
+      <div className="ws-nav-group ws-nav-group--sep">{item(settings)}</div>
+    </nav>
+  );
+}
+
 export default function TrainerLayout() {
   const { user, logout, isOwner, isTrainer } = useAuth();
+  // The gym's own name and mark -- "<Gym> × Barbell" -- once the trainer
+  // or owner belongs to a gym; before that, Barbell and the workspace.
+  const { brand } = useBrand();
   const nav = useNavigate();
   const loc = useLocation();
 
@@ -71,32 +113,75 @@ export default function TrainerLayout() {
   const sections = workspaceSections(isOwner);
   const roleLabel = user?.role === 'GYM_OWNER' ? 'Gym owner' : user?.role === 'TRAINER' ? 'Trainer' : 'Admin';
 
+  /* THE LARGE TITLE, iOS-STYLE. Each page opens on its big title; on a
+     phone, once that has scrolled under the top bar, the bar shows the
+     title small. Pages render their h1 after their data arrives, so the
+     h1 is looked for as the page fills in, then watched. */
+  const [compactTitle, setCompactTitle] = useState('');
+  useEffect(() => {
+    setCompactTitle('');
+    const root = document.querySelector('.ws-content');
+    if (!root) return undefined;
+    let io = null;
+    let watched = null;
+    // A page's skeleton has its own h1 that the loaded page replaces, so
+    // the heading is re-found whenever the page's DOM changes.
+    const watch = () => {
+      const h = root.querySelector('.ws-route h1');
+      if (h === watched) return;
+      io?.disconnect();
+      watched = h;
+      if (!h) { setCompactTitle(''); return; }
+      io = new IntersectionObserver(([e]) => {
+        if (!h.isConnected) return;
+        setCompactTitle(e.isIntersecting || e.boundingClientRect.top > 0 ? '' : h.textContent.trim());
+      }, { rootMargin: '-64px 0px 0px 0px' });
+      io.observe(h);
+    };
+    watch();
+    const mo = new MutationObserver(watch);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => { mo.disconnect(); io?.disconnect(); };
+  }, [loc.pathname]);
+
   return (
+    <MotionConfig reducedMotion="user">
     <div className="ws-shell min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
       {/* ── computer: the permanent sidebar ── */}
       <aside className="ws-side" aria-label="Workspace">
-        <button className="ws-brand" onClick={() => nav('/app/trainer')}>
-          <Logo alt="" aria-hidden="true" className="w-9 h-9 rounded-xl object-cover shrink-0" />
-          <span className="min-w-0 text-left">
-            <span className="ws-brand-name">Barbell</span>
-            <span className="ws-brand-gym">{user?.orgName || 'Workspace'}</span>
-          </span>
+        <button className="ws-brand" onClick={() => nav('/app/trainer')} aria-label={brand ? `${brand.gymName} home` : 'Home'}>
+          {brand ? <GymLockup brand={brand} variant="stack" markSize={36} /> : (
+            <>
+              <Logo alt="" aria-hidden="true" className="w-9 h-9 rounded-xl object-cover shrink-0" />
+              <span className="min-w-0 text-left">
+                <span className="ws-brand-name">Barbell</span>
+                <span className="ws-brand-gym">{user?.orgName || 'Workspace'}</span>
+              </span>
+            </>
+          )}
         </button>
 
+        {isOwner ? <OwnerNav pathname={loc.pathname} badges={badges} /> : (
         <nav className="ws-nav" data-tour="trainer-hamburger" aria-label="Main">
           {sections.map((sec, i) => (
             <div key={sec.title || i} className="ws-nav-group">
               {sec.title && <div className="ws-nav-title">{sec.title}</div>}
               {sec.items.filter((it) => it.sidebar !== false).map((it) => (
                 <NavLink key={it.to} to={it.to} end={!!it.end} className={({ isActive }) => `ws-nav-item${isActive ? ' is-active' : ''}`}>
-                  <Icon name={it.icon} size={19} strokeWidth={1.8} />
-                  <span className="flex-1 truncate">{it.label}</span>
-                  {it.badgeKey && badges[it.badgeKey] > 0 && <span className="ws-badge">{badges[it.badgeKey]}</span>}
+                  {({ isActive }) => (
+                    <>
+                      {isActive && <motion.span layoutId="ws-nav-pill" className="ws-nav-pill" transition={GLIDE} aria-hidden="true" />}
+                      <Icon name={it.icon} size={19} strokeWidth={1.8} />
+                      <span className="flex-1 truncate">{it.label}</span>
+                      {it.badgeKey && badges[it.badgeKey] > 0 && <span className="ws-badge">{badges[it.badgeKey]}</span>}
+                    </>
+                  )}
                 </NavLink>
               ))}
             </div>
           ))}
         </nav>
+        )}
 
         <div className="ws-side-foot">
           <ThemeSwitch compact />
@@ -116,16 +201,33 @@ export default function TrainerLayout() {
       </aside>
 
       {/* ── phone & tablet: a slim top bar ── */}
-      <header className="ws-top app-header">
-        <button className="flex items-center gap-2.5 min-w-0" onClick={() => nav('/app/trainer')}>
-          <Logo alt="" aria-hidden="true" className="w-8 h-8 rounded-lg object-cover shrink-0" />
-          <span className="min-w-0 text-left">
-            <span className="ws-brand-name">Barbell</span>
-            {/* truncate: a long gym name must not push the bar wider than a 360px phone */}
-            <span className="ws-brand-gym truncate">{user?.orgName || 'Workspace'}</span>
-          </span>
+      <header className={`ws-top app-header${compactTitle ? ' is-compact' : ''}`}>
+        <button className="ws-top-home flex items-center gap-2.5 min-w-0" onClick={() => nav('/app/trainer')} aria-label={brand ? `${brand.gymName} home` : 'Home'}>
+          {brand ? <GymLockup brand={brand} variant="stack" markSize={32} className="min-w-0" /> : (
+            <>
+              <Logo alt="" aria-hidden="true" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+              <span className="min-w-0 text-left">
+                <span className="ws-brand-name">Barbell</span>
+                {/* truncate: a long gym name must not push the bar wider than a 360px phone */}
+                <span className="ws-brand-gym truncate">{user?.orgName || 'Workspace'}</span>
+              </span>
+            </>
+          )}
         </button>
-        <div className="ml-auto shrink-0"><ThemeSwitch compact /></div>
+        {/* The page's own title, once its large title has scrolled away --
+            the iOS navigation bar. Decorative: the page's h1 is the real one. */}
+        <span className="ws-top-title" aria-hidden="true">{compactTitle}</span>
+        <div className="ml-auto shrink-0 flex items-center gap-2">
+          {/* An owner's phone tab bar is Home, Members, Payments and More,
+              so Messages -- and its unread count -- lives up here. */}
+          {isOwner && (
+            <Link to="/app/trainer/messages" className="ws-top-btn"
+              aria-label={badges.messages > 0 ? `Messages, ${badges.messages} unread` : 'Messages'}>
+              <Icon name="chat" size={19} strokeWidth={1.8} />
+              {badges.messages > 0 && <span className="ws-badge ws-top-badge" aria-hidden="true">{badges.messages}</span>}
+            </Link>
+          )}
+        </div>
       </header>
 
       <main className="ws-main">
@@ -134,7 +236,10 @@ export default function TrainerLayout() {
               refetches or restarts its countdown) on every navigation. */}
           <DemoBanner />
           <AnnouncementBanner />
-          <div key={loc.pathname} className="anim-route">
+          {/* Outside the keyed div too: switching tabs within a section
+              animates the page, not the tabs above it. */}
+          {isOwner && <SectionTabs badges={badges} />}
+          <div key={loc.pathname} className="ws-route">
             <Outlet />
           </div>
         </div>
@@ -142,7 +247,8 @@ export default function TrainerLayout() {
 
       {/* ── phone & tablet: the bottom tab bar ── */}
       <div className="ws-tabs">
-        <GlassTabBar items={workspaceTabs(isOwner)} ariaLabel="Workspace" tourId="trainer-hamburger" />
+        <GlassTabBar items={workspaceTabs(isOwner)} ariaLabel="Workspace" tourId="trainer-hamburger"
+          accessory={isOwner ? <NewMenu variant="fab" /> : null} />
       </div>
 
       <AppTour
@@ -153,5 +259,6 @@ export default function TrainerLayout() {
         isOwner={isOwner}
       />
     </div>
+    </MotionConfig>
   );
 }
