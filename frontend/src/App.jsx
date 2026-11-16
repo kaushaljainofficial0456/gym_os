@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 // Route screens: a screen whose code vanished in a deploy reloads into the
 // new version instead of failing (see lazyWithReload.js).
 import { lazyWithReload as lazy } from './lazyWithReload.js';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useAuth, isTrainerRole } from './auth.jsx';
 import { getStoredUser } from './api.js';
 import { Spinner } from './components/UI.jsx';
@@ -65,6 +65,7 @@ const Business = lazy(() => import('./pages/trainer/Business.jsx'));
 const EnterpriseOnboarding = lazy(() => import('./pages/trainer/EnterpriseOnboarding.jsx'));
 const EnterpriseDashboard = lazy(() => import('./pages/trainer/EnterpriseDashboard.jsx'));
 const EnterpriseQR = lazy(() => import('./pages/trainer/EnterpriseQR.jsx'));
+const GymBranding = lazy(() => import('./pages/trainer/GymBranding.jsx'));
 const EnterpriseBilling = lazy(() => import('./pages/trainer/EnterpriseBilling.jsx'));
 const Home = lazy(() => import('./pages/client/Home.jsx'));
 const Workout = lazy(() => import('./pages/client/Workout.jsx'));
@@ -149,6 +150,12 @@ const authPage = (El) => <ErrorBoundary><Suspense fallback={PanelFallback}><El /
  * security boundary -- every one of these endpoints enforces the role
  * itself, and still would if this component were deleted.
  */
+/** /g/<gym code> -> the sign-up form, in that gym's colours, code filled in. */
+function GymLinkRedirect() {
+  const { code } = useParams();
+  return <Navigate to={`/signup?gym=${encodeURIComponent(code || '')}`} replace />;
+}
+
 function OwnerOnly({ ok, ready, children }) {
   if (!ready) return <div className="min-h-screen grid place-items-center"><Spinner /></div>;
   if (!ok) return <Navigate to="/app/trainer" replace />;
@@ -265,6 +272,9 @@ export default function App() {
       <Route path="/demo" element={page(DemoRequest)} />
       <Route path="/demo/:token" element={page(DemoStart)} />
       <Route path="/demo-expired" element={page(DemoExpired)} />
+      {/* A gym's join link (shared from Branding): sign-up in the gym's own
+          colours with its code filled in. See SignUp's ?gym=. */}
+      <Route path="/g/:code" element={<GymLinkRedirect />} />
       {/* QR-based gym join -- any authenticated CLIENT or TRAINER with no
           org yet lands here (see needsGymJoin above) instead of a normal
           dashboard, which would otherwise 404/empty-state on every
@@ -354,6 +364,7 @@ export default function App() {
         <Route path="enterprise" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseDashboard)}</OwnerOnly>} />
         <Route path="enterprise/onboarding" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseOnboarding)}</OwnerOnly>} />
         <Route path="enterprise/qr" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseQR)}</OwnerOnly>} />
+        <Route path="enterprise/brand" element={<OwnerOnly ok={isOwner} ready={ready}>{page(GymBranding)}</OwnerOnly>} />
         <Route path="enterprise/billing" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseBilling)}</OwnerOnly>} />
       </Route>
       <Route path="/app/client" element={

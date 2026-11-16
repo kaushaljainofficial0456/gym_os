@@ -1,11 +1,16 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { api } from '../api.js';
+import { useBrand } from '../brand/BrandProvider.jsx';
 import { useAuth } from '../auth.jsx';
 import { consumeReturnTo } from '../api.js';
 import { announceArrival } from '../components/ArrivalHost.jsx';
 import { PasswordInput } from '../components/UI.jsx';
 import { useAuthStage } from '../components/auth/AuthLayout.jsx';
 import { AuthTitle, Cta, ErrorNote, Field } from '../components/auth/authKit.jsx';
+
+// Lazy: most sign-ups have no gym code, and this form is in the first download.
+const GymFound = lazy(() => import('../brand/GymFound.jsx'));
 
 const HEADLINE = [{ text: 'Your gym.' }, { text: 'Your progress.', accent: true }];
 
@@ -16,6 +21,11 @@ const HEADLINE = [{ text: 'Your gym.' }, { text: 'Your progress.', accent: true 
 // onboarding_completed = false. With no code the account is created
 // without a gym and App.jsx's needsGymJoin sends them to /join to scan
 // their gym's QR -- so the code sits behind a tap rather than on the form.
+//
+// A GYM'S OWN SIGN-UP: opened from the gym's join link (/g/<code> ->
+// ?gym=<code>), or once a typed code is recognised, the whole screen turns
+// into that gym's app -- its colours, mark and name -- and says which gym
+// the account is joining, before it is created.
 export default function SignUp() {
   useAuthStage('compact', HEADLINE, 'member');
   const { register } = useAuth();
@@ -23,10 +33,31 @@ export default function SignUp() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [gymCode, setGymCode] = useState('');
-  const [hasCode, setHasCode] = useState(false);
+  const [params] = useSearchParams();
+  const { brand, setGuestBrand } = useBrand();
+  const linked = params.get('gym') || '';
+  const [gymCode, setGymCode] = useState(linked || brand?.code || '');
+  const [hasCode, setHasCode] = useState(!!(linked || brand?.code));
+  // The gym the typed code belongs to, once the server has recognised it.
+  const [gym, setGym] = useState(brand?.code && brand.code === (linked || brand.code) ? brand : null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Look the code up as it is typed (debounced), and theme the screen
+  // with it. An unknown code just shows nothing; the server explains on
+  // submit, as it always has.
+  useEffect(() => {
+    const code = gymCode.trim().toLowerCase();
+    if (code.length < 2) { setGym(null); setGuestBrand(null); return undefined; }
+    if (gym?.code === code) return undefined;
+    let alive = true;
+    const t = setTimeout(() => {
+      api(`/branding/gym/${encodeURIComponent(code)}`)
+        .then(({ branding }) => { if (!alive) return; setGym(branding); setGuestBrand(branding); })
+        .catch(() => { if (alive) { setGym(null); setGuestBrand(null); } });
+    }, linked && code === linked.toLowerCase() ? 0 : 450);
+    return () => { alive = false; clearTimeout(t); };
+  }, [gymCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e) => {
     e.preventDefault();
@@ -42,7 +73,7 @@ export default function SignUp() {
 
   return (
     <>
-      <AuthTitle title="Create your account" onBack={() => nav('/login', { state: { view: 'signin' } })} />
+      <AuthTitle eyebrow={gym ? `Join ${gym.gymName}` : undefined} title="Create your account" onBack={() => nav('/login', { state: { view: 'signin' } })} />
       <form onSubmit={submit} className="auth-form">
         <Field id="name" label="Full name">
           <input id="name" className="input auth-input" type="text" value={name} onChange={(e) => setName(e.target.value)}
@@ -59,7 +90,8 @@ export default function SignUp() {
         {hasCode ? (
           <Field id="gymCode" label="Gym code">
             <input id="gymCode" className="input auth-input" type="text" value={gymCode} onChange={(e) => setGymCode(e.target.value)}
-              autoCapitalize="none" placeholder="From your gym" autoFocus />
+              autoCapitalize="none" placeholder="From your gym" autoFocus={!linked} aria-describedby={gym ? 'gym-found' : undefined} />
+            {gym && <Suspense fallback={null}><GymFound id="gym-found" gym={gym} /></Suspense>}
           </Field>
         ) : (
           <button type="button" className="auth-aside text-left" onClick={() => setHasCode(true)}>

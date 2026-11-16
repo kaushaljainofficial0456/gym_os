@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './auth.jsx';
 import { ThemeProvider } from './themeContext.jsx';
+import { BrandProvider } from './brand/BrandProvider.jsx';
 import { UnitsProvider } from './unitsContext.jsx';
 import { CookieConsentProvider } from './components/CookieConsent.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
@@ -31,6 +32,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
+        {/* A gym's own colours, name and logo -- inside both providers it
+            reads: the signed-in user's gym, and light or dark. */}
+        <BrandProvider>
           {/* Inside AuthProvider because it reads the signed-in user's own
               profile; outside the router so one fetch serves every page
               and no two screens can disagree about which unit they are
@@ -48,6 +52,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <IntroSplash />
           </CookieConsentProvider>
           </UnitsProvider>
+        </BrandProvider>
         </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>

@@ -265,6 +265,9 @@ html.ws :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger) {
   font-size: .9375rem; font-weight: 600; letter-spacing: -.01em; min-height: 44px; padding: 10px 20px;
 }
 html.ws .btn-sm { font-size: .875rem !important; min-height: 36px !important; padding: 7px 14px !important; }
+/* An icon-only small button keeps theme.css's zero padding: the rule above
+   out-ranks it, and squeezed a 15px icon in a 36px button down to 6px. */
+html.ws .btn-sm.btn-icon { padding: 0 !important; }
 html.ws .btn-lg { font-size: 1.0625rem !important; min-height: 52px !important; }
 
 /* Inputs as iOS fields: filled, borderless until focused, 16px text (any

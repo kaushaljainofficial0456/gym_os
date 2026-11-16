@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { brandingForOrg } from '../services/branding.js';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
@@ -845,7 +846,11 @@ export default function authRoutes(db) {
     // app shell reads those -- after a page refresh, which goes through
     // here, the workspace header lost the gym's name and showed
     // "Workspace", and Billing sent no gym name to the payment sheet.
-    const body = { user: { ...user, orgId: user.org_id, orgName: user.org_name, orgSlug: user.org_slug } };
+    // The gym's own look (colours, logo URL, display name), or null for no
+    // gym / an independent client -- see services/branding.js. On the user
+    // so the cached copy paints the right theme before this even answers.
+    const branding = await brandingForOrg(db, user.org_id).catch(() => null);
+    const body = { user: { ...user, orgId: user.org_id, orgName: user.org_name, orgSlug: user.org_slug, branding } };
     if (req.demoSession) {
       body.demo = {
         persona: req.user.persona || 'OWNER',
