@@ -1,112 +1,223 @@
 # PostgreSQL RLS Tenant Isolation — Security Audit
 
-**Branch:** `security/rls-tenant-isolation-hardening` (from `origin/main` 3fab43a) · **Date:** 2026-11-16 · **Not merged, not deployed.**
+**Branch:** `security/rls-tenant-isolation-hardening` (latest `origin/main` ff8a7c8 merged in) · **Date:** 2026-11-16 · **Not merged to main, not deployed.**
 
-**Final status: CONDITIONAL PASS — SPECIFIC RISKS REMAIN** (see [Unresolved risks](#unresolved-risks)). The database-level isolation is fixed and proven by adversarial tests on PostgreSQL. What remains is staging validation of cross-gym product flows that could not be exercised end to end offline, a load test of the added round trips, and verification of the *production* role, which this audit could not reach.
+**Final status: CONDITIONAL PASS.** The implementation is complete and every locally executable gate passes. Three external release gates remain: production runtime-role verification, staging validation, and an agreed latency budget for the measured cost. See [§9](#9-release-gates-and-remaining-risks).
 
 ---
 
-## 1. Summary of findings
+## 1. Findings
 
 | # | Severity | Finding | Status |
 |---|---|---|---|
 | F1 | **High** | RLS was effectively off for most of the app. `db.q()/q1()/run()` used `pool.query()` with no tenant context, and every policy had an `app.org_id unset ⇒ every row` branch. Only `db.tx()` was scoped. | **Fixed** |
 | F2 | **High** | Policies failed **open**: any statement without context (a script, a raw connection, a new code path) saw every gym's rows and could write into any gym. | **Fixed:** fail closed |
+| F8 | **High** (privilege escalation; found in this pass) | A signed-in user **without a gym** ran with **platform** (RLS-bypassing) visibility on every authenticated route. That covers anyone who self-registers as a member or trainer without a gym code, reachable by public sign-up. Any route that forgot its own filter would have served every gym's rows to that account. Separately, a `SUPER_ADMIN` role claim in a token was trusted without re-checking the user's current role. | **Fixed:** gym-less users run *restricted* (no tenant rows); platform scope only for a SUPER_ADMIN whose `users` row still says so, checked on every request. Own-account routes opt in to a narrow `own-identity` scope. |
+| F9 | Medium (found in this pass) | **16 cross-gym tables had no RLS at all**: friend communities (7), tournaments (8), `app_shares`. Any gym's request could read every gym's community feed, tournament entries (names, body weight) and shares through a single forgotten filter. The coverage check only looked for columns named exactly `org_id`/`client_id`, so `app_shares.sender_org_id`/`recipient_org_id` and `tournaments.host_org_id` escaped it. | **Fixed:** communities and tournaments are **platform-only** (no gym context can touch them); `app_shares` is visible to the sending or receiving gym only, and a gym can only send as itself. Coverage checks match any `*org_id`/`*client_id` column. |
+| F10 | Medium (operational) | The established deploy habit ("`npm run db:init` against production, then push") would have applied the fail-closed policies under the **old** code and blanked the app. | **Fixed:** `init-db.js` refuses to replace fail-open policies unless `RLS_FAIL_CLOSED=apply` (tested). |
+| F11 | Medium (rollback) | `down.sql` restored the old policies but left newly covered tables with RLS on and **no policy** (deny-all), which would have broken communities and tournaments on rollback. | **Fixed:** `down.sql` switches RLS off before restoring; tested that no table is left locked. |
 | F3 | Medium | No reference check on writes: a gym could insert a row stamped with its own org that points at **another gym's client** (payments, workouts, …). | **Fixed:** WITH CHECK requires the client to be the writer's own |
 | F4 | Medium | Global library rows (`foods`, `exercise_library`, …; `org_id NULL`) were **insertable, editable and deletable by any gym**, affecting every gym. | **Fixed:** only platform writes shared rows |
-| F5 | Medium (bug, pre-existing) | An independent member joining a gym ran activation inside a `db.tx()` scoped to their **old** (independent) org: the gym's enrollment token was invisible (free join silently did nothing), and a paid checkout-return failed WITH CHECK on a non-bypass role. | **Fixed:** join routes run as explicit platform |
-| F6 | Medium (robustness) | A connection dying while checked out emitted an unhandled `error` event, an **uncaught exception that exits the process**. Found by test 9. | **Fixed** |
-| F7 | Info | Stale tenant context on pooled connections: **not exploitable before or after.** `db.tx()` already used `set_config(…, true)`; the new path keeps it transaction-local and also overwrites any session-level value planted on a connection. | Proven by tests 7 and 9 |
+| F5 | Medium (pre-existing bug) | An independent member joining a gym ran activation in a transaction scoped to their **old** org: a free join silently did nothing, and a paid checkout return failed on a non-bypass role. | **Fixed:** join routes run as explicit platform |
+| F6 | Medium (robustness) | A connection dying while checked out was an **uncaught exception that exited the process**. | **Fixed** |
+| F12 | Low (performance, pre-existing) | `attendance` and `payments` had no index by member. The member account view's attendance lookup was a full table scan: 28 ms at 200k rows. | **Fixed:** `idx_att_client`, `idx_payments_client`: 0.17 ms and 0.05 ms |
+| F7 | Info | Stale tenant context on pooled connections: **not exploitable before or after.** | Proven by tests 7 and 9 |
 
-The documented issue in `docs/RLS-BOUNDARY.md` was real, though not in the "stale context" form one might suspect. It was a **missing backstop**: application `WHERE org_id = ?` clauses were the only control on most queries, so one forgotten filter (an IDOR) would leak across gyms. The pre-change test suites pinned the fail-open behaviour on purpose (`'unset app.org_id keeps the application working'`).
+Regressions found and fixed **by the new end-to-end PostgreSQL flow suite** before they shipped: sending a share to a friend in another gym (the recipient check read friend-community membership from inside the sender's gym context), and the member export and account deletion (their tournament and community rows would have been silently skipped). SQLite cannot catch this class of bug because it has no RLS. That is why the flow suite now runs in CI.
 
-## 2. How tenant context reaches PostgreSQL now
+## 2. How tenant context reaches PostgreSQL
 
-1. `index.js` installs `platformScope('http-request')` **after** the body parsers. They resume on socket stream callbacks, which do not carry an AsyncLocalStorage context set before them; this ordering is covered by a test.
-2. `requireAuth` verifies the JWT (HS256 pinned). Its own gate lookups (suspension, deactivation, demo session) run as an explicit platform context, then `runWithOrg(req.user.org)` **narrows** the rest of the request to that tenant. The org comes only from the signed token; body fields and headers are ignored (tested).
-3. `db.js` `scoped()` is the single path to PostgreSQL. It checks out **one** connection, sends `BEGIN; SELECT set_config('app.org_id', <org>, true), set_config('app.platform', <flag>, true)` in one round trip, runs the statement (or the whole `db.tx` callback) on that connection, then `COMMIT`, or `ROLLBACK` on error, and releases. If ROLLBACK fails, the client is **destroyed** (`release(err)`) instead of being reused.
-4. Both settings are always written. The org id is validated against `[A-Za-z0-9_.:-]{1,128}` and passed through `escapeLiteral` (the simple-query protocol cannot bind parameters); invalid ids throw before any SQL runs.
-5. `db.tx(fn, { orgId })` may narrow a platform context to one gym (the AI Communication wallet does this). It **cannot** point a tenant request at another gym (`tenant context mismatch`).
-6. Policies (`database/rls.sql`) grant rows only for `app.org_id = <org>` or `app.platform = 'on'`. **Neither ⇒ nothing.**
+1. `index.js` installs `platformScope('http-request')` **after** the body parsers, so public routes (login, sign-up, public previews, signed webhooks) have an explicit context.
+2. `requireAuth` verifies the JWT (HS256 pinned). Its own gate lookups run as platform. It then **narrows** the request:
+   - a token with an org → **tenant** (`app.org_id` = that org; the org comes only from the signed token, never from the body, query or headers; tested);
+   - `SUPER_ADMIN` with no org, **and** the `users` row currently says `SUPER_ADMIN`, active, with no org → **platform**;
+   - anyone else without an org → **restricted**: neither setting, so no tenant rows.
+3. `db.js` `scoped()` is the single path to PostgreSQL. It checks out **one** connection and sends `BEGIN; SELECT set_config('app.org_id', <org>, true), set_config('app.platform', <flag>, true)` in one round trip. It then runs the statement (or the whole `db.tx` callback) on that same connection, `COMMIT`s (or `ROLLBACK`s) and releases. A connection whose rollback fails is destroyed, not reused.
+4. Org ids are validated (`[A-Za-z0-9_.:-]{1,128}`) and escaped; invalid ids throw before any SQL runs. A tenant request cannot open a transaction for another gym (`tenant_context_mismatch`).
+5. Policies grant rows only for `app.org_id = <org>` or `app.platform = 'on'`. **Neither ⇒ nothing.**
 
-**Platform context** is used only where application code is the authorisation:
+### Platform scope: every grant, and what authorises it
 
-| Where | Why |
+| Where | Authorisation (application level) |
 |---|---|
-| Every request until `requireAuth` narrows it | Login, sign-up, public share previews, signed webhooks (Razorpay, WHOOP, access hook, ADMS `/iclock`, follow-ups hooks), the follow-ups scheduler tick |
-| Users with no org (SUPER_ADMIN console) | Platform operator, cross-gym by role |
-| `routes/communities.js`, `routes/tournaments.js` | Cross-gym by design; membership/tournament checks in services |
-| `routes/enrollment.js`: `/preview`, `/client/join`, `/client/payment/verify`, `/trainer/join` | Joining moves rows between orgs; the signed single-use token is the control (fixes F5) |
-| `routes/auth.js`: `/me`, `/my-gyms`, `/switch-gym` | The caller's own identity spans gyms |
-| `sharing.js` snapshot loads, people search; `appShares.js` delivery | Sender/recipient in different gyms; unguessable share id and `allowedRecipients()` |
-| `gymExit.js` `endGymMembership` | Moves the member out of the gym (after the owner's org-scoped check) |
-| `barcodeLookup.js` global cache insert | The only writer of shared (`org_id NULL`) food rows |
-| `create-super-admin.js`, `export-training-data.js`, `pg-validate.js` | Operator tools |
+| Public routes until `requireAuth` | Login/sign-up rate limits; signed webhooks (Razorpay, WHOOP, access hook, ADMS `/iclock`, follow-ups hooks); unguessable share and invite codes |
+| `SUPER_ADMIN` | Role re-checked against `users` on every request; `/api/console` and admin routes also check the role |
+| `routes/communities.js` (`friend-communities`) | Active membership row per community (`services/friendCommunities`) |
+| `routes/tournaments.js` (`tournaments`), public QR routes | Per-tournament access (`services/tournaments/access.js`) |
+| `routes/enrollment.js` join routes | Signed, single-use enrollment token |
+| `routes/auth.js` `own-identity`: `/me`, `/my-gyms`, `/switch-gym`, `/terms/*`, `/change-password`, `/independent`, `/resend-verification` | Every statement keyed by the verified token's `sub` |
+| `sharing.js` snapshot loads, audience, recipient check; `appShares.js` delivery | Caller's own client id; recipients must share a gym or community |
+| `routes/me.js` `own-account-export` / `own-account-deletion` | Statements keyed by the caller's own client/user id |
+| `gymExit.js` | Owner's org-scoped check first |
+| `barcodeLookup.js` | Only writer of shared food rows |
+| Operator scripts | Run by an operator |
 
-Every site is greppable: `runAsPlatform` / `platformScope`.
+Every grant is greppable (`runAsPlatform` / `platformScope`) and named.
 
-## 3. Policy model (summary — full table list in the matrix)
+## 3. Policy model
 
-| Category | Tables | Read | Write |
-|---|---|---|---|
-| **org** | 75 gym-owned and financial tables | own org | own org, and any `client_id` must be own client |
-| **personal** | 11 member-history tables (workouts, client workouts, cardio, AI memory, …) | own org **or** member currently in own org | insert: own org + own client; update/delete: rows readable |
-| **personal_user** | 5 wearable tables + `notification_preferences` | own org or user currently in own org | as above, by user |
-| **client** | 15 tables with only `client_id` | client in own org | same |
-| **parent** | 10 child tables | parent visible (subquery runs under the parent's policy) | same |
-| **global** | foods, exercise libraries, share snapshots | shared rows + own (+ own member's) | **never** a shared row outside platform |
-| **demo** | `demo_sessions` | `demo_org_id` = own | same |
+**139 of 159 tables protected** (RLS enabled **and forced**), **211 policies**. The full per-table list, generated from the live catalog, is in [`RLS_TENANT_ISOLATION_MATRIX.md`](RLS_TENANT_ISOLATION_MATRIX.md).
 
-"Personal" exists because members move: independent → gym on join, gym → independent on leave. The code promises their history moves with them ("BRING YOUR ACCOUNT WITH YOU", `enrollment.js`), and rows keep the org they were created in. Strict org scoping would have hidden a joining member's entire pre-gym history from them. Financial and operational rows (payments, subscriptions, attendance, messages, AI Communication) stay strictly with the gym where they happened. This broadens what the **policy text** allows for those 16 tables compared with the old file. The old policies were never applied to `db.q()` reads, so the effective exposure is far smaller than before. The trade-off is deliberate and tested ("history follows a member").
+| Class (brief) | Category | Tables | Read | Write |
+|---|---|---|---|---|
+| A gym-owned | **org** | 74 (financial, attendance, AI Communication incl. calling numbers and settings, staff, settings and branding, …) | own org | own org; any `client_id` must be own client |
+| A | **client** | 15 | client in own org | same |
+| A | **parent** | 10 | parent visible | same |
+| A | **demo** | 1 | `demo_org_id` = own | same |
+| B user-owned | **personal** | 11 member-history tables | own org **or** member now in own org | insert: own org and own client |
+| B | **personal_user** | 6 | own org or user now in own org | by user |
+| C global | **global** | 6 library/snapshot tables | shared (NULL-org) rows + own | never a shared row |
+| D cross-gym | **platform** | 15 (communities, tournaments) | **nothing** from a gym context | **nothing** |
+| D | **shares** | `app_shares` | sending or receiving gym | send only as itself and as its own member |
 
-## 4. Database role (runtime vs admin)
+"Personal" exists because members move (independent → gym on joining, gym → independent on leaving), and their own history moves with them, as the product promises. Payments, subscriptions, attendance, messages and AI Communication stay with the gym where they happened. Tested both ways, at the database and through the real routes.
 
-`backend/scripts/rls-verify.js` (read-only; run as the runtime role) checks: not superuser; not BYPASSRLS; no CREATEROLE/CREATEDB/REPLICATION; owns no table; is not a member of an owner, superuser or BYPASSRLS role; no CREATE on the schema; **no TRUNCATE** on any table (TRUNCATE ignores RLS); every `org_id`/`client_id` table has RLS enabled, forced and a policy (or is on the reviewed exemption list); no fail-open policy remains; and a live probe that a statement with no context sees no tenant row in any of the 123 protected tables.
+**20 tables deliberately unprotected**, each reviewed. They are: the tenant root (`organizations`), platform configuration and pricing, global reference data, the shared food-estimation cache and its feedback, and per-**user** rows with no tenant column (`account_tokens`, `health_reconciliation_log`, `barbell_plan_orders`), every read of which is keyed by the authenticated user. CI, `rls-verify.js` and the migration self-check all fail if a table with any `*org_id`/`*client_id` column falls outside the lists.
 
-- **Local, verified:** a fresh database with an admin role for init and a separate `NOBYPASSRLS` DML-only runtime role: **12/12**. A deliberately bad role (BYPASSRLS + TRUNCATE) fails the BYPASSRLS, TRUNCATE and probe checks (tested).
-- **Production, NOT verified:** this audit had no access to Neon. `config.js` refuses only the role name `neondb_owner`. Whether production's `skos_app` is `NOBYPASSRLS`, owns no table and lacks TRUNCATE is **unknown** until `rls-verify.js` runs there (runbook step 1).
+**Inventory beyond tables (live catalog):** 0 views, 0 materialized views, 0 functions, 0 triggers, 321 foreign keys. Raw `pg` usage outside `db.js` exists only in operator scripts (`init-db.js`, `db-check.js`: catalog reads; `rls-verify.js`: read-only probes). No caching layer holds tenant rows across requests. The only in-process caches are per-org timezone, billing status, deactivation and demo-org flags, keyed by org or user id.
 
-Migrations stay on the admin role (`init-db.js`, `up.sql`); nothing in this change grants the runtime role anything.
+## 4. Database role
 
-## 5. Tests and results (all executed on 2026-11-16)
+`backend/scripts/rls-verify.js` (read-only; run as the runtime role) checks the following:
+- the role is not a superuser and not BYPASSRLS;
+- it has no CREATEROLE, CREATEDB or REPLICATION;
+- it owns no table;
+- it is not a member of an owner, superuser or BYPASSRLS role;
+- it has no CREATE on the schema and no TRUNCATE on any table;
+- every tenant table is protected and forced;
+- no fail-open policy remains;
+- a live probe of every protected table with no context finds nothing.
 
-Environment: embedded PostgreSQL **17.10** (Windows), Node 22.23.4. CI runs PostgreSQL 16 and now includes the new suite.
+- **Local, verified: 12/12** on a NOBYPASSRLS DML-only role. A deliberately bad role (BYPASSRLS and TRUNCATE) fails, as tested.
+- **Production: NOT verified.** No production credentials are available to this audit (none on this machine, and the office network's DNS refuses `*.neon.tech`). This is release gate 1.
+
+Migrations stay on the admin role. Nothing in this change grants the runtime role anything.
+
+## 5. Tests and results (all executed 2026-11-16, PostgreSQL 17.10 local; CI runs 16)
 
 | Suite | Result |
 |---|---|
-| `rlsTenantIsolation.test.js` (new; 6 static/context + 14 PostgreSQL) | **20 / 20 pass** |
-| `communityPg.test.js` (updated: fail-closed assertion) | 11 / 11 pass |
-| `financialRls.test.js` (updated: fail-closed assertion) | 11 / 11 pass |
-| `groupByParamsPg.test.js` | 4 / 4 pass |
+| `rlsTenantIsolation.test.js`: 6 static/HTTP-context tests + PostgreSQL suite of 19 subtests | **26 / 26 pass** |
+| `crossGymFlowsPg.test.js` (new): real app over HTTP, NOBYPASSRLS role, 8 flows | **9 / 9 pass** |
+| `communityPg`, `financialRls`, `groupByParamsPg` | 11 / 11, 11 / 11, 4 / 4 pass |
 | AI Communication on PostgreSQL (`followups`, `followupsHardening`, `followupsPg`) | 58 / 58 pass |
-| `pg-validate.js` (updated) with separate admin / NOBYPASSRLS runtime roles | **8 / 8** |
-| `rls-verify.js` as the runtime role | **12 / 12** |
-| Full backend suite (SQLite), `node --test` | **2,122 pass, 0 fail, 14 skipped** (the PG-gated tests above) |
-| Migration round trip (down → self-check rejects old policies → up → up) | pass (in the new suite) |
-| Frontend / admin tests | **Not run**: no frontend or admin file changed |
+| `pg-validate.js` (admin / NOBYPASSRLS runtime roles) | **8 / 8** |
+| `rls-verify.js` as the runtime role | **12 / 12** (211 policies; 139 tables probed) |
+| Full backend suite (SQLite) | **2,131 pass, 0 fail, 15 skipped** (the PostgreSQL-gated files above; they self-skip without `TEST_DATABASE_URL`) |
+| Frontend unit tests (Vitest) | 286 / 286 pass (27 files) |
+| Frontend production build + bundle budget | pass; all bundle budgets met |
 
-The adversarial suite covers all ten requested attacks, using the **real `db.js` adapter** on a login role without BYPASSRLS and **pools of size one**: SELECT/UPDATE/DELETE of Gym B rows by id and by unfiltered query; INSERT into B, with B's client, on B's parent rows, re-pointing own rows at B; financial, attendance, AI Communication, wearable and training tables; **no context ⇒ zero rows on all 123 protected tables** and no writes, including through a raw connection that bypasses `db.js`; reuse of a single connection across 40 alternating A/B requests, with a session-level value planted on it; 120 concurrent A/B requests on pools of 4 and 1, with `pg_sleep` interleaving and transactions; rollback, a failed statement and a **backend killed mid-transaction**; webhook-style platform transactions scoped to one gym, tenant→other-gym transactions, injection-shaped org ids; and an Express + `requireAuth` route whose SQL **forgot its org filter**, called with `org_id`/`x-org-id` claiming Gym B (it still only returned Gym A's clients).
+**Adversarial coverage** (real `db.js`, NOBYPASSRLS login role, pools of size 1 and 4):
+- **Gym B's rows from gym A:** SELECT, UPDATE and DELETE, by id and by an unfiltered query, across financial, attendance, AI Communication (jobs, consent, calling numbers, settings), wearable, training and identity tables.
+- **Writes aimed at gym B:** INSERT into B, with B's member, under B's parent rows; re-pointing own rows at B; moving a member between gyms.
+- **Shared reference data:** writing global foods and the exercise library.
+- **No context:** zero rows on every protected table and no writes, including over a raw connection.
+- **Connection pool:** reuse across alternating gyms with a planted session value; 120 concurrent mixed requests; a background worker alternating gyms on one connection.
+- **Failures:** rollback, a failed statement, a backend killed mid-transaction.
+- **Forged ownership:** webhook-style transactions; a tenant opening another gym's transaction; injection-shaped org ids; a tenant calling `set_config('app.platform','on')`.
+- **Cross-gym data:** platform-only tables from a gym context; shares forged from another gym.
+- **Gym-less users:** they see nothing and cannot promote anyone.
+- **HTTP:** an Express route whose SQL forgot its org filter, called with `org_id`/`x-org-id` claiming gym B; gym-less, demoted-admin and ghost-admin tokens.
+- **Deployment:** the deploy-order guard, and the migration round trip (down → self-check rejects → up → up), with no table left locked after down.
 
-## 6. Affected files
+**Cross-gym flows tested end to end** (`crossGymFlowsPg`):
+- sign-up with no gym → terms → independent;
+- QR join of gym A (free plan), with history visible to A and not to B;
+- the owner removes the member, who keeps their history while A keeps its books;
+- a friend community spanning gyms A and B;
+- an A → B share with the content intact;
+- a tournament hosted by A and entered from B;
+- export and deletion of cross-gym rows;
+- the public gym-branding logo route.
 
-- `backend/src/db.js`: context model, `scoped()` execution path, kill switch, unscoped-statement log, checked-out-connection error handling
-- `backend/src/auth.js`: gate lookups as platform; tenant narrowing
+**Not executed:**
+- paid checkout return (needs Razorpay sandbox);
+- wearable sync;
+- eSSL push;
+- AI Communication calls through providers;
+- multi-gym `switch-gym`;
+- staging;
+- production.
+
+## 6. Performance (measured)
+
+**Method.**
+- **Database:** `skos_bench` was built by `init-db.js` and seeded with **50 gyms and 10,000 members**: 200k workouts, 300k weight logs, 60k payments, 200k attendance rows.
+- **Workload:** each "gym" is a concurrent worker issuing requests for 8 s. 80% are **member home** requests (5 statements) and 20% are **owner dashboard** requests (4 aggregate statements).
+- **OLD:** today's adapter (one pooled round trip, no context), on a role RLS does not filter. That is the same row work as production's fail-open policies.
+- **NEW:** this branch's `db.js` on a NOBYPASSRLS role with the fail-closed policies.
+- **Network latency:** simulated with a local TCP proxy adding a fixed delay each way (1 ms and 5 ms round trip), because the database is local. **These are local measurements, not staging**, and absolute numbers depend on the machine. The ratios are what transfer.
+
+**Per request, member/owner mix (p50 / p95 / p99 ms; throughput in requests/s):**
+
+| DB round trip | Pool | Concurrent gyms | OLD | NEW (per statement) | NEW, request in one `db.tx` |
+|---|---|---|---|---|---|
+| ~0 (local) | 5 | 2 | 0.7 / 1.3 / 1.7 · 2,663/s | 1.9 / 3.3 / 4.0 · 982/s | — |
+| ~0 (local) | 5 | 50 | 14.6 / 21.0 / 23.1 · 3,411/s | 30.0 / 45.6 / 52.1 · 1,614/s | — |
+| 1 ms | 5 | 2 | 7.1 / 8.3 / 9.1 · 282/s | 21.6 / 23.7 / 25.2 · 95/s | 9.9 / 11.4 / 11.9 · 202/s |
+| 1 ms | 5 | 10 | 14.0 / 15.7 / 16.6 · 725/s | 41.7 / 46.4 / 48.1 · 245/s | 20.1 / 21.9 / 22.9 · 501/s |
+| 1 ms | 5 | 25 | 36.1 / 41.0 / 43.1 · 699/s | 109.2 / 119.3 / 121.6 · 237/s | 50.8 / 54.8 / 59.6 · 497/s |
+| 1 ms | 5 | 50 | 72.8 / 79.2 / 81.4 · 706/s | 212.0 / 228.6 / 234.3 · 244/s | 100.4 / 106.0 / 107.4 · 509/s |
+| 1 ms | 10 | 10 | 6.5 / 7.7 / 8.2 · 1,526/s | 18.8 / 20.5 / 21.3 · 541/s | 10.0 / 11.1 / 11.7 · 1,009/s |
+| 1 ms | 10 | 25 | 16.0 / 18.0 / 19.7 · 1,580/s | 46.3 / 49.2 / 50.8 · 556/s | 24.4 / 28.7 / 30.4 · 1,021/s |
+| 1 ms | 10 | 50 | 32.2 / 34.2 / 35.8 · 1,587/s | 93.6 / 98.1 / 101.5 · 552/s | 49.0 / 52.0 / 53.4 · 1,036/s |
+| 5 ms | 5 | 50 | 284.9 / 290.4 / 295.2 · 184/s | 848.1 / 852.5 / 855.1 · 63/s | — |
+| 5 ms | 10 | 10 | 28.7 / 30.2 / 34.8 · 358/s | 84.3 / 88.7 / 93.0 · 123/s | 40.2 / 41.4 / 42.0 · 255/s |
+| 5 ms | 10 | 50 | 141.9 / 146.8 / 153.0 · 368/s | 418.6 / 421.8 / 422.3 · 126/s | 199.8 / 203.1 / 205.4 · 261/s |
+
+Across every run (about 1.2 million requests): **0 errors, 0 wrong-gym rows** (each request checked that it saw exactly its own gym), and no connection exhaustion. Waiting requests queue in the pool (`max pool wait` equals concurrency minus pool size, identical for old and new).
+
+**What it means.**
+- **The cost is round trips, not policy evaluation.** Every statement now takes 3 round trips (BEGIN + context; statement; COMMIT) instead of 1, so database time per request is about **3×**, and a pool sustains about **⅓ of the statements per second**. Policy evaluation itself is cheap: every benchmark query ran in **0.03–0.25 ms** under RLS once indexed.
+- **Grouping a request's reads into one `db.tx`** costs N + 2 round trips instead of 3N. That brings the overhead down to about **1.4×** (1 ms round trip, pool 10, 50 gyms: p50 49 ms against 32 ms today and 94 ms per-statement). It uses the existing API and needs no security trade-off.
+- **Pool size** matters more than before. `PG_POOL_MAX` defaults to 5; at 10, queueing halves.
+- **Rejected optimisations**, because they weaken security: session-level `SET` with a reset on release (forbidden: a missed reset leaks a tenant); interpolating parameters client-side to put everything in one simple-protocol round trip (an injection surface); deferring COMMIT to the next checkout (holds open transactions and breaks read-your-writes). node-postgres cannot pipeline, so 3 round trips is the floor for an isolated single statement.
+
+**Slow queries found:** `attendance` by member was a full scan (28 ms at 200k rows) and `payments` by member was too (4 ms). Both are now indexed: 0.17 ms and 0.05 ms. No N+1 pattern appeared in the benchmarked paths. The member and owner request shapes above are representative, not a trace of production traffic, so the staging load test (`scripts/loadtest.mjs`, runbook step 5) is still the acceptance measurement.
+
+**Reproduce** (local or staging hardware; never against production). Scripts are in `backend/scripts/rls-bench/`:
+1. Build a database named `skos_bench` with `init-db.js` and load `seed.sql` as admin.
+2. Create a `bench_app` LOGIN NOBYPASSRLS role (password `benchpw`) with SELECT, INSERT, UPDATE and DELETE.
+3. Optionally run `node latency-proxy.mjs <port> <pg-port> <one-way-ms>`.
+4. Run `node bench-load.mjs <repo-root> <port> <label> <pool> <seconds> 2,10,25,50` (set `MODES=old,new,new-tx`). The `old` mode connects as `postgres:postgres` to model today's unfiltered reads; adjust for your environment.
+
+**Recommendation before production:**
+1. Set `PG_POOL_MAX=10` if Neon's pooled endpoint is in use.
+2. Wrap the 3–5 hottest read endpoints (member home, owner dashboard, member list) in one `db.tx` each. This is a small follow-up, measured above at about 2× faster than per-statement.
+3. Agree a latency budget and confirm it on staging.
+
+## 7. Affected files
+
+- `backend/src/db.js`: context model (tenant / platform / restricted), `scoped()`, kill switch, unscoped log, connection error handling
+- `backend/src/auth.js`: gate lookups as platform; tenant / platform (DB-checked SUPER_ADMIN) / restricted narrowing
 - `backend/src/index.js`: request-wide platform scope after the body parsers
-- `backend/src/routes/{communities,tournaments,enrollment,auth,appShares}.js`, `backend/src/services/{sharing,barcodeLookup}.js`, `backend/src/services/enterprise/gymExit.js`: named platform scopes
-- `database/rls.sql`: rewritten fail-closed policies
-- `database/migrations/2026-11-16_rls_fail_closed/{up,down}.sql`: versioned migration and exact rollback
-- `backend/scripts/rls-verify.js` (new), `pg-validate.js`, `create-super-admin.js`, `export-training-data.js`
-- `backend/test/rlsTenantIsolation.test.js` (new); `communityPg.test.js`, `financialRls.test.js` (assertions flipped to fail-closed)
-- `.github/workflows/test.yml`: new CI step; `docs/RLS-BOUNDARY.md` marked superseded
+- `backend/src/routes/{auth,communities,tournaments,enrollment,appShares,me}.js`, `backend/src/services/{sharing,barcodeLookup}.js`, `services/enterprise/gymExit.js`: named, narrow platform scopes
+- `database/rls.sql`: fail-closed policies; `platform` and `shares` categories
+- `database/schema.sql`: `idx_payments_client`, `idx_att_client`
+- `database/migrations/2026-11-16_rls_fail_closed/{up,down}.sql`: versioned migration with self-checks; exact rollback
+- `backend/scripts/init-db.js`: deploy-order guard. `rls-verify.js`: posture check. `pg-validate.js`, `create-super-admin.js`, `export-training-data.js`: updated.
+- Tests: `rlsTenantIsolation.test.js`, `crossGymFlowsPg.test.js` (new), `communityPg.test.js`, `financialRls.test.js`
+- `.github/workflows/test.yml`: tenant-isolation and cross-gym-flow steps
 
-## 7. Unresolved risks
+## 8. Frontend and API
 
-1. **Cross-gym flows not exercised end to end.** I found the cross-gym features by code review (friend communities, tournaments, sharing, join/exit, multi-gym switching). Any cross-gym read I missed inside a tenant request now returns **no rows** or fails WITH CHECK. That is fail-closed, so it surfaces as a functional bug rather than a leak, but it must be checked in staging (runbook step 4). Most backend tests use in-memory SQLite and cannot catch it.
-2. **Performance.** Each statement now costs 3 round trips instead of 1 (measured locally: +0.10 ms; real cost ≈ 2 × the app↔DB round-trip time per statement). Policies with client subqueries also add planner work. **Load test required** before production (`scripts/loadtest.mjs`).
-3. **Production role posture unknown** (section 4).
-4. **Platform context is broad.** Unauthenticated routes, webhooks, SUPER_ADMIN and the named features above see all gyms at the database level; application checks and signatures are their control, exactly as before. Narrowing each route is follow-up work.
-5. **RLS is tenant-level, not user-level.** Members of the same gym, and **all independent members (one shared `independent` org)**, are separated only by application checks.
-6. **GUC-based RLS and SQL injection.** Any SQL the runtime role executes can call `set_config('app.platform','on',true)`. Every query found is parameterised; RLS is not a defence against SQL injection.
-7. **Behaviour changes to note:** a member's receipts, notifications and messages from a *previous* gym are no longer reachable from their new gym (financial/operational data stays with the gym). `followup_member_prefs` is keyed by `client_id` alone, so a member who moves between two gyms that both use AI Communication cannot have prefs saved by the second gym (conflict on a row it cannot see). That needs a schema change to `(org_id, client_id)`. A "switched" multi-gym session whose token org differs from `users.org_id` sees only its own identity via `/auth/*`.
-8. **Personal tables:** a gym can UPDATE its *current* member's older rows; WITH CHECK cannot compare old and new `org_id`, so a malicious update could re-stamp such a row to another org (a push, not a read). No code path writes `org_id` on these tables.
-9. **Merge conflicts:** `feat/ai-communication` adds follow-up tables and `rls.sql` entries; they must be added to the `org` list (and `up.sql` regenerated) when that branch merges.
+Gym identity is server-side only: the org comes from the signed JWT (cookie or bearer), and `localStorage` holds display data only. Changing a URL parameter, body field or header cannot select a gym, as tested over HTTP. Owner and admin pages call org-scoped routes, so a URL with another gym's member id returns 403/404 (tested for weights and member lists). The branding logo route is still public and still works (tested). No frontend file changed in this work.
+
+## 9. Release gates and remaining risks
+
+**External release gates (cannot be completed from here):**
+1. **Production runtime role** (`rls-verify.js` as `skos_app`): needs production credentials, run by the owner (runbook step 1).
+2. **Staging**: no staging database or credentials available. Run the runbook's checklist, including paid checkout in sandbox, wearable sync, eSSL, AI Communication calls and `switch-gym`.
+3. **Latency budget**: agree a budget against the numbers in §6 and confirm with the staging load test.
+
+**Remaining risks:**
+1. **Added latency** scales with the database round-trip time (§6). This is the price of per-statement isolation with node-postgres, which cannot pipeline. The kill switch `RLS_TENANT_SCOPE=off` exists for emergencies only.
+2. **Platform scope is still broad where it is granted.** Public routes, webhooks, SUPER_ADMIN and the named features see all gyms at the database level; application checks and signatures are their control. The gyms' *private* tables are no longer reachable from ordinary gym requests or from gym-less accounts.
+3. **RLS is tenant-level, not user-level.** Members of the same gym, and **all independent members** (one shared `independent` org), are separated only by application checks.
+4. **GUC-based RLS does not stop SQL injection.** Any SQL the runtime role executes can call `set_config('app.platform','on',true)` for its own transaction. Every query found is parameterised.
+5. **Behaviour changes:**
+   - a member's receipts, notifications and messages from a *previous* gym stay with that gym;
+   - shares received while at a previous gym stay with that gym's copy;
+   - `followup_member_prefs` is keyed by `client_id` alone, so a member who moves between two gyms that both use AI Communication cannot have prefs saved by the second (needs `(org_id, client_id)`).
+6. **Personal tables:** a gym can UPDATE its *current* member's older rows. WITH CHECK cannot compare old and new `org_id`; no code path writes `org_id` on those tables.
+7. **AI Communication 2.0** (`feat/ai-communication`, unmerged) adds tables that must join `rls.sql`'s `org` list when it merges. CI and the migration self-check will refuse it otherwise.

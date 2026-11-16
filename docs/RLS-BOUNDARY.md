@@ -2,9 +2,26 @@
 
 > **SUPERSEDED (2026-11-16, branch `security/rls-tenant-isolation-hardening`).**
 > The gap described below is closed: every PostgreSQL statement now runs with a
-> transaction-local tenant or platform context, and the policies fail closed.
-> Current model and evidence: [`docs/security/RLS_SECURITY_AUDIT.md`](security/RLS_SECURITY_AUDIT.md).
+> transaction-local tenant, platform or restricted context, and the policies
+> fail closed. All four steps of the remediation plan at the end of this file
+> were carried out: per-statement `BEGIN; set_config(..., true)` on one checked-out
+> connection (step 1), a measured load comparison (step 2, with results), the
+> `IS NULL` escape removed in favour of an explicit `app.platform` flag (step 3),
+> and pooled-connection reuse tests (step 4).
+>
+> Current model, boundary and evidence: [`docs/security/RLS_SECURITY_AUDIT.md`](security/RLS_SECURITY_AUDIT.md).
+> Every table: [`RLS_TENANT_ISOLATION_MATRIX.md`](security/RLS_TENANT_ISOLATION_MATRIX.md).
+> Rollout: [`RLS_DEPLOYMENT_RUNBOOK.md`](security/RLS_DEPLOYMENT_RUNBOOK.md).
 > This file is kept as the historical record of the original finding.
+>
+> **What the boundary is now, in one table** (replaces the table below):
+>
+> | Code path | Context | RLS effect |
+> |---|---|---|
+> | Any `db.q/q1/run/tx` in an authenticated gym request | `app.org_id` = the token's org | own gym only (+ the member's own history, shared library rows) |
+> | Signed in, no gym yet (pending member/trainer) | restricted: neither setting | **nothing**; own-account routes opt in to `own-identity` |
+> | SUPER_ADMIN (re-checked against `users` each request), public routes, webhooks, named cross-gym features | `app.platform = 'on'` | everything; application checks are the control |
+> | Code with no context at all (a forgotten script) | neither | **nothing** (logged as `[rls]`) |
 
 **Status (original):** documented, not fixed. Written during a security review on
 2026-09-03 after confirming there is no safe, localized code change for

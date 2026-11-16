@@ -1,8 +1,12 @@
 # RLS Tenant Isolation Matrix
 
-Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `database/rls.sql` through the real `init-db.js` path. It shows what PostgreSQL enforces, not what was intended. **123 tables protected** (RLS enabled **and forced** on every one), **192 policies**, 36 tables deliberately unprotected.
+Generated on 2026-11-16 from the **live PostgreSQL catalog** of a database built by the real `init-db.js` path (schema, migrations, `database/rls.sql`) on the merged branch. It shows what PostgreSQL enforces, not what was intended. **139 of 159 tables protected** (RLS enabled **and forced** on every one), **211 policies**, 20 tables deliberately unprotected.
 
-**Every protected table fails closed:** a statement with neither `app.org_id` nor `app.platform = 'on'` sees **zero** tenant rows and can write none. Verified for all 123 tables by `rlsTenantIsolation.test.js` test 6 and by `rls-verify.js`'s live probe. `app.platform = 'on'` (explicit, see the audit §2) sees and writes everything. "Tested" means the table is attacked directly by name in the adversarial suite (cross-gym SELECT/UPDATE/DELETE/INSERT); every table is covered by the no-context probe.
+By category: org 74 · client 15 · platform 15 · personal 11 · parent 10 · global 6 · personal_user 6 · shares 1 · demo 1.
+
+**Every protected table fails closed:** a statement with neither `app.org_id` nor `app.platform = 'on'` sees **zero** tenant rows and can write none. Verified for every protected table by `rlsTenantIsolation.test.js` test 6 and `rls-verify.js`'s live probe. `app.platform = 'on'` (explicit, see the audit §2) sees and writes everything. "Attacked by name" means the adversarial suite attacks that table directly (cross-gym SELECT/UPDATE/DELETE/INSERT); every table is covered by the no-context probe.
+
+**Ownership classes** (the brief's A–D): A gym-owned = `org`, `client`, `parent`, `demo`; B user-owned = `personal`, `personal_user` (history follows the member); C platform-global = `global` (shared rows) plus the unprotected reference tables below; D explicit cross-gym = `platform` (communities, tournaments) and `shares`.
 
 | Table | Category | Sensitivity | Tenant can read | Tenant can write | Forced | Policies | Attacked by name |
 |---|---|---|---|---|---|---|---|
@@ -18,6 +22,7 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `ai_feedback` | personal |  | own org, or member now in own org | insert: own org + own client; update/delete: readable rows | yes | 4 |  |
 | `ai_memory` | personal |  | own org, or member now in own org | insert: own org + own client; update/delete: readable rows | yes | 4 |  |
 | `alerts` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
+| `app_shares` | shares | Cross-gym sharing | sender or recipient org = own | insert: sender org = own and sender is own member; update/delete: readable rows | yes | 4 | yes |
 | `attendance` | org | Attendance / doors | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `attendance_events` | org | Attendance / doors | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `billing_quotes` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 |  |
@@ -31,10 +36,17 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `client_workouts` | personal |  | own org, or member now in own org | insert: own org + own client; update/delete: readable rows | yes | 4 |  |
 | `clients` | org | Identity / PII | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `coach_insights` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
+| `communities` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 | yes |
 | `community_challenges` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `community_comments` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
+| `community_event_comments` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `community_event_reactions` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `community_events` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
 | `community_follows` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
+| `community_group_challenges` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `community_invites` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
 | `community_members` | org |  | own org | own org; client_id ∈ own clients | yes | 1 | yes |
+| `community_memberships` | platform | Cross-gym social | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 | yes |
 | `community_reactions` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `community_workout_shares` | org |  | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `coupon_redemptions` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 |  |
@@ -44,8 +56,8 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `demo_sessions` | demo |  | demo_org_id = own | demo_org_id = own | yes | 1 |  |
 | `enrollment_tokens` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `events` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
-| `exercise_aliases` | global |  | shared (NULL-org) + own (+ own member's) | own only; shared rows platform-only | yes | 4 |  |
-| `exercise_library` | global |  | shared (NULL-org) + own (+ own member's) | own only; shared rows platform-only | yes | 4 |  |
+| `exercise_aliases` | global |  | shared (NULL-org) rows + own | own rows only; never a shared row | yes | 4 |  |
+| `exercise_library` | global |  | shared (NULL-org) rows + own | own rows only; never a shared row | yes | 4 | yes |
 | `exercise_set_logs` | client |  | client ∈ own org | client ∈ own org | yes | 1 |  |
 | `followup_agent_versions` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `followup_agents` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
@@ -58,7 +70,7 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `followup_ledger` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `followup_line_terms` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `followup_member_prefs` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 | yes |
-| `followup_numbers` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
+| `followup_numbers` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `followup_orders` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `followup_rules` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `followup_script_versions` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
@@ -67,8 +79,8 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `followup_sms_templates` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `followup_templates` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `followup_voices` | org | AI Communication | own org | own org; client_id ∈ own clients | yes | 1 |  |
-| `food_aliases` | global |  | shared (NULL-org) + own (+ own member's) | own only; shared rows platform-only | yes | 4 |  |
-| `foods` | global |  | shared (NULL-org) + own (+ own member's) | own only; shared rows platform-only | yes | 4 | yes |
+| `food_aliases` | global |  | shared (NULL-org) rows + own | own rows only; never a shared row | yes | 4 |  |
+| `foods` | global |  | shared (NULL-org) rows + own | own rows only; never a shared row | yes | 4 | yes |
 | `goals` | client |  | client ∈ own org | client ∈ own org | yes | 1 |  |
 | `gym_memberships` | org |  | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `gym_onboarding` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
@@ -109,13 +121,21 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `reconciliation_issues` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `refunds` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `risk_events` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 |  |
-| `shared_meals` | global |  | shared (NULL-org) + own (+ own member's) | own only; shared rows platform-only | yes | 4 | yes |
-| `shared_workouts` | global |  | shared (NULL-org) + own (+ own member's) | own only; shared rows platform-only | yes | 4 |  |
+| `shared_meals` | global |  | shared (NULL-org) rows + own | own rows only; never a shared row | yes | 4 | yes |
+| `shared_workouts` | global |  | shared (NULL-org) rows + own | own rows only; never a shared row | yes | 4 |  |
 | `sleep_logs` | client |  | client ∈ own org | client ∈ own org | yes | 1 |  |
 | `subscriptions` | org | Financial | own org | own org; client_id ∈ own clients | yes | 1 | yes |
 | `supplements` | client |  | client ∈ own org | client ∈ own org | yes | 1 |  |
 | `support_messages` | parent via `ticket_id → support_tickets` |  | parent visible | parent visible | yes | 1 | yes |
 | `support_tickets` | org |  | own org | own org; client_id ∈ own clients | yes | 1 | yes |
+| `tournament_audit` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `tournament_entrants` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 | yes |
+| `tournament_entries` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `tournament_events` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `tournament_hosts` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `tournament_results` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `tournament_teams` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 |  |
+| `tournaments` | platform | Cross-gym (gym wars) | **nothing** (platform scope only) | **nothing** (platform scope only) | yes | 1 | yes |
 | `trainer_attendance` | org | Attendance / doors | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `trainer_attendance_audit` | org | Attendance / doors | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `trainer_shifts` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
@@ -130,11 +150,11 @@ Generated on 2026-11-16 from the **live PostgreSQL catalog** after applying `dat
 | `workout_templates` | org |  | own org | own org; client_id ∈ own clients | yes | 1 |  |
 | `workouts` | personal |  | own org, or member now in own org | insert: own org + own client; update/delete: readable rows | yes | 4 | yes |
 
-## Deliberately not protected (36)
+## Deliberately not protected (20)
 
-Reviewed one by one; the reasons are in the closing comment of `database/rls.sql`. None holds one gym's data keyed by an `org_id` or `client_id` except the friend-community tables (cross-gym by design, enforced in `services/friendCommunities`) and `ai_food_feedback` (the shared food-estimation cache). `rlsTenantIsolation.test.js` fails if a new table with `org_id`/`client_id` is added to either list's blind spot.
+Reviewed one by one; the reasons are in the closing comment of `database/rls.sql`. None holds one gym's private data: they are the tenant root (`organizations`: name, slug, currency, timezone), platform configuration and pricing, global reference data, the shared food-estimation cache and its feedback, and per-**user** rows with no tenant column (`account_tokens`, `health_reconciliation_log`, `barbell_plan_orders`), every read of which is keyed by the authenticated user id. `rlsTenantIsolation.test.js`, `rls-verify.js` and the migration's self-check all fail if a table carrying any `*org_id`/`*client_id` column is added outside these lists.
 
-`account_tokens`, `admin_audit_logs`, `ai_food_estimates`, `ai_food_feedback`, `ai_provider_cost_state`, `app_shares`, `barbell_plan_orders`, `communities`, `community_event_comments`, `community_event_reactions`, `community_events`, `community_group_challenges`, `community_invites`, `community_memberships`, `coupons`, `demo_requests`, `exercise_muscles`, `exercise_relations`, `feature_flags`, `followup_platform`, `followup_price_versions`, `health_reconciliation_log`, `muscles`, `organizations`, `platform_announcements`, `sk_capacity_addons`, `sk_packages`, `sk_pricing_rules`, `tournament_audit`, `tournament_entrants`, `tournament_entries`, `tournament_events`, `tournament_hosts`, `tournament_results`, `tournament_teams`, `tournaments`
+`account_tokens`, `admin_audit_logs`, `ai_food_estimates`, `ai_food_feedback`, `ai_provider_cost_state`, `barbell_plan_orders`, `coupons`, `demo_requests`, `exercise_muscles`, `exercise_relations`, `feature_flags`, `followup_platform`, `followup_price_versions`, `health_reconciliation_log`, `muscles`, `organizations`, `platform_announcements`, `sk_capacity_addons`, `sk_packages`, `sk_pricing_rules`
 
 ## Indirect (parent-child) relationships
 

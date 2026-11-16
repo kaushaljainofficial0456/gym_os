@@ -929,7 +929,30 @@ if (config.databaseUrl) {
   await seedDefaultFeatureFlags((s) => pool.query(s));
   // Defense-in-depth: Row-Level Security policies (PG only; idempotent).
   const rlsPath = path.join(root, 'database', 'rls.sql');
+  // DEPLOY-ORDER GUARD. rls.sql is FAIL-CLOSED: a statement without the
+  // tenant/platform context that only the new backend/src/db.js sends sees
+  // no rows. The usual habit is "db:init against production, then push" --
+  // which, on a database still running the old FAIL-OPEN policies, would
+  // switch the policies on underneath the OLD code and every page would
+  // come back empty. So upgrading an existing fail-open database is refused
+  // unless RLS_FAIL_CLOSED=apply says the new code is already deployed
+  // (docs/security/RLS_DEPLOYMENT_RUNBOOK.md). Schema changes above are
+  // still applied; only the policy swap waits. Fresh databases (no policies)
+  // and already-fail-closed ones are unaffected.
+  let failOpen = 0;
   if (fs.existsSync(rlsPath)) {
+    failOpen = Number((await pool.query(`
+      SELECT count(*)::int AS n FROM pg_policy p
+        JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = current_schema()
+         AND (coalesce(pg_get_expr(p.polqual, p.polrelid), '') ~* 'nullif\\(current_setting\\(''app\\.org_id''::text, true\\), ''''::text\\) IS NULL'
+           OR coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '') ~* 'nullif\\(current_setting\\(''app\\.org_id''::text, true\\), ''''::text\\) IS NULL')`)).rows[0].n);
+  }
+  if (fs.existsSync(rlsPath) && failOpen > 0 && process.env.RLS_FAIL_CLOSED !== 'apply') {
+    console.warn(`RLS policies NOT changed: this database still has ${failOpen} fail-open policies (the pre-2026-11-16 model).`);
+    console.warn('  Applying the fail-closed policies before the matching backend is live would hide every row from the running app.');
+    console.warn('  Deploy the code first, then: RLS_FAIL_CLOSED=apply npm run db:init  (or psql -f database/migrations/2026-11-16_rls_fail_closed/up.sql).');
+  } else if (fs.existsSync(rlsPath)) {
     await pool.query(fs.readFileSync(rlsPath, 'utf8'));
     console.log('RLS policies applied to PostgreSQL');
   }

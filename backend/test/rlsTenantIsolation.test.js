@@ -231,6 +231,26 @@ test('PostgreSQL: cross-gym attacks against the real adapter on a NOBYPASSRLS ro
     } finally { c.release(); }
   });
 
+  await t.test('deploy-order guard: db:init will not swap fail-open policies for fail-closed ones unless told the code is live', async () => {
+    const c = await admin.connect();
+    const failOpen = async () => (await c.query(`SELECT count(*)::int n FROM pg_policy p JOIN pg_class k ON k.oid = p.polrelid JOIN pg_namespace s ON s.oid = k.relnamespace
+       WHERE s.nspname = $1 AND coalesce(pg_get_expr(p.polqual, p.polrelid), '') ~* $2`, [S, String.raw`nullif\(current_setting\('app\.org_id'::text, true\), ''::text\) IS NULL`])).rows[0].n;
+    const initDb = (extra = {}) => execFileAsync(process.execPath, [path.join(root, 'backend', 'scripts', 'init-db.js')],
+      { env: { ...process.env, DATABASE_URL: urlWith(), NODE_ENV: 'development', RLS_FAIL_CLOSED: '', ...extra }, cwd: root });
+    try {
+      await c.query(read('database/migrations/2026-11-16_rls_fail_closed/down.sql')); // production as it is today
+      assert.ok(await failOpen() > 0);
+      const refused = await initDb();
+      assert.match(refused.stdout + refused.stderr, /RLS policies NOT changed/, 'the routine "db:init before push" leaves the policies alone');
+      assert.ok(await failOpen() > 0, 'still the old policies: the old code keeps working');
+      const applied = await initDb({ RLS_FAIL_CLOSED: 'apply' });
+      assert.match(applied.stdout, /RLS policies applied/);
+      assert.equal(await failOpen(), 0, 'with the explicit go-ahead, fail-closed');
+      const again = await initDb();
+      assert.match(again.stdout, /RLS policies applied/, 'an already fail-closed database is maintained normally');
+    } finally { c.release(); }
+  });
+
   // ---- fixture (as the superuser, which bypasses RLS) ----
   const colCache = new Map();
   async function ins(table, row) {
