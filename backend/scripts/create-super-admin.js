@@ -15,7 +15,7 @@
 // scoped to any single gym (see auth.js's orgScope: SUPER_ADMIN gets
 // req.orgId from the request, never from a fixed home org).
 // ============================================================
-import { getDb } from '../src/db.js';
+import { getDb, runAsPlatform } from '../src/db.js';
 import { hashPassword } from '../src/auth.js';
 import { id, now } from '../src/ids.js';
 
@@ -70,4 +70,6 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Operator bootstrap: a platform-level write by definition (a SUPER_ADMIN
+// has no org), so it asks for the platform context explicitly.
+runAsPlatform('create-super-admin', main).catch((e) => { console.error(e); process.exit(1); });

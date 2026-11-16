@@ -18,6 +18,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, orgScope } from '../auth.js';
+import { runAsPlatform } from '../db.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
@@ -131,25 +132,32 @@ export default function appShareRoutes(db) {
     }
 
     const from = (await senderName(db, c)) || 'A member';
-    const recips = await db.q(
-      `SELECT c.id, c.org_id, c.user_id FROM clients c WHERE c.id IN (${to.map(() => '?').join(',')})`, to);
     const note = message ? String(message).trim().slice(0, 200) : null;
-    const sent = [];
-    for (const rc of recips) {
-      const shareId = id('ash');
-      await db.run(
-        `INSERT INTO app_shares (id, kind, snapshot_id, title, message, sender_client_id, sender_name, sender_org_id,
-                                 recipient_client_id, recipient_org_id, status, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,'pending',?)`,
-        [shareId, kind, snapshotId, String(title).slice(0, 120), note, c.id, from, c.org_id, rc.id, rc.org_id, now()]);
-      await notify(db, {
-        orgId: rc.org_id, userId: rc.user_id, type: 'share_received',
-        title: `${from} shared ${kind === 'workout' ? 'a workout' : 'a meal'} with you`,
-        body: note ? `${title} — “${note}”` : title,
-        data: { share_id: shareId, kind, link: `/app/client?share=${shareId}` },
-      });
-      sent.push(shareId);
-    }
+    // DELIVERY crosses gyms: a friend-community recipient's client row and
+    // the notification written for them belong to THEIR gym. Every id in
+    // `to` already passed allowedRecipients() above, which is the control;
+    // only this delivery step runs as platform.
+    const sent = await runAsPlatform('app-share-deliver', async () => {
+      const recips = await db.q(
+        `SELECT c.id, c.org_id, c.user_id FROM clients c WHERE c.id IN (${to.map(() => '?').join(',')})`, to);
+      const ids = [];
+      for (const rc of recips) {
+        const shareId = id('ash');
+        await db.run(
+          `INSERT INTO app_shares (id, kind, snapshot_id, title, message, sender_client_id, sender_name, sender_org_id,
+                                   recipient_client_id, recipient_org_id, status, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,'pending',?)`,
+          [shareId, kind, snapshotId, String(title).slice(0, 120), note, c.id, from, c.org_id, rc.id, rc.org_id, now()]);
+        await notify(db, {
+          orgId: rc.org_id, userId: rc.user_id, type: 'share_received',
+          title: `${from} shared ${kind === 'workout' ? 'a workout' : 'a meal'} with you`,
+          body: note ? `${title} — “${note}”` : title,
+          data: { share_id: shareId, kind, link: `/app/client?share=${shareId}` },
+        });
+        ids.push(shareId);
+      }
+      return ids;
+    });
     track(db, 'app_share_sent', req.user.org, req.user.sub, { client_id: c.id, kind, recipients: sent.length });
     res.status(201).json({ ok: true, sent: sent.length, ids: sent });
   });

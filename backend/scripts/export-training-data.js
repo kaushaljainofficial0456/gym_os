@@ -23,7 +23,7 @@
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { getDb } from '../src/db.js';
+import { getDb, runAsPlatform } from '../src/db.js';
 import { extractTrainingDataset, assertOrgExists, DEFAULT_BATCH_SIZE } from '../src/services/intelligence/trainingData.js';
 
 const args = process.argv.slice(2);
@@ -65,9 +65,14 @@ if (outFile) {
 const sink = fd || process.stdout;
 
 try {
-  for await (const rec of extractTrainingDataset(db, { limit, stats, orgId })) {
-    sink.write(JSON.stringify(rec) + '\n');
-  }
+  // Cross-org by contract (docs/training-data-contract.md §1.1), so it asks
+  // for the platform context explicitly: on PostgreSQL a statement with no
+  // context sees no tenant rows (database/rls.sql).
+  await runAsPlatform('training-data-export', async () => {
+    for await (const rec of extractTrainingDataset(db, { limit, stats, orgId })) {
+      sink.write(JSON.stringify(rec) + '\n');
+    }
+  });
 } catch (e) {
   console.error(`[sk-os] training-data export FAILED: ${String(e?.message || e).slice(0, 300)}`);
   if (fd) fd.destroy();

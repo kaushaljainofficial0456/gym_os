@@ -24,6 +24,7 @@ import { Router } from 'express';
 import { effectiveMembershipStatus } from '../services/enterprise/membershipLifecycle.js';
 import { z } from 'zod';
 import { requireAuth, requireRole, orgScope, signToken, setAuthCookie } from '../auth.js';
+import { platformScope } from '../db.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { id, now } from '../ids.js';
@@ -242,6 +243,15 @@ export default function enrollmentRoutes(db) {
   const clientOnly = requireRole('CLIENT');
   const trainerOnlyRole = requireRole('TRAINER');
   const qrGenLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
+  // JOINING A GYM CROSSES TENANTS BY DEFINITION: the scanned token, its plan
+  // and its order belong to the gym being joined, while the person's token
+  // still names the org they are leaving (usually the shared independent
+  // org) -- and activation MOVES their client and user rows from one org to
+  // the other, which no single-tenant context can do (RLS would hide the
+  // row from the new gym, or refuse the write from the old one). The
+  // control is the signed, single-use enrollment token and its consumer
+  // check, so these four routes run as an explicit platform context.
+  const joinScope = platformScope('enrollment-join');
 
   /* ================= OWNER: generate / list / revoke QR ================= */
   r.post('/qr/client', ...ownerOnly, qrGenLimit, validate(z.object({ membershipPlanId: z.string().min(1) })), async (req, res) => {
@@ -313,7 +323,7 @@ export default function enrollmentRoutes(db) {
 
   /* ================= SCAN: preview a QR before committing ================= */
   const scanLimit = rateLimit({ windowMs: 60_000, max: 30, keyFn: (req) => req.user?.sub || 'anon' });
-  r.post('/preview', scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
+  r.post('/preview', joinScope, scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
     const verified = await verifyEnrollmentToken(db, req.body.payload);
     if (!verified.ok) return res.status(422).json({ error: verified.reason });
     const org = await db.q1('SELECT o.*, bs.status AS billing_status FROM organizations o LEFT JOIN org_billing_state bs ON bs.org_id = o.id WHERE o.id = ?', [verified.token.org_id]);
@@ -330,7 +340,7 @@ export default function enrollmentRoutes(db) {
   });
 
   /* ================= CLIENT: join + pay ================= */
-  r.post('/client/join', clientOnly, scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
+  r.post('/client/join', clientOnly, joinScope, scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
     /* AN EXISTING ACCOUNT IS THE NORMAL CASE, not an error.
      *
      * This used to refuse anyone who already had a client row
@@ -462,7 +472,7 @@ export default function enrollmentRoutes(db) {
     res.json({ order, gym: { id: org.id, name: org.name }, membershipPlan: plan });
   });
 
-  r.post('/client/payment/verify', clientOnly, scanLimit, validate(z.object({
+  r.post('/client/payment/verify', clientOnly, joinScope, scanLimit, validate(z.object({
     orderId: z.string().min(1), providerPaymentId: z.string().min(1), signature: z.string().min(1),
   })), async (req, res) => {
     const order = await db.q1(`SELECT * FROM payment_orders WHERE id = ? AND subject_type = 'CLIENT_MEMBERSHIP'`, [req.body.orderId]);
@@ -645,7 +655,7 @@ export default function enrollmentRoutes(db) {
   });
 
   /* ================= TRAINER: join (no payment) ================= */
-  r.post('/trainer/join', trainerOnlyRole, scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
+  r.post('/trainer/join', trainerOnlyRole, joinScope, scanLimit, validate(z.object({ payload: z.string().min(1) })), async (req, res) => {
     if (req.user.org) return res.status(409).json({ error: 'already_in_a_gym' });
     const alreadyTrainer = await db.q1('SELECT user_id FROM trainers WHERE user_id = ?', [req.user.sub]);
     if (alreadyTrainer) return res.status(409).json({ error: 'already_a_trainer' });

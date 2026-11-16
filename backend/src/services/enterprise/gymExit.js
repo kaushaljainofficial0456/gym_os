@@ -23,6 +23,7 @@
  * leaving, and the client's own list of sessions still shows them.
  */
 import { id, now } from '../../ids.js';
+import { runAsPlatform } from '../../db.js';
 import { notify } from './notifications.js';
 import { track } from '../events.js';
 
@@ -52,7 +53,17 @@ export async function ensureIndependentOrgId(db) {
  * @param reason 'revoked' when the gym ended it, 'left' when they did.
  * @param endedBy the user id who performed it, for the audit trail.
  */
-export async function endGymMembership(db, { clientId, reason = 'revoked', endedBy = null }) {
+export async function endGymMembership(db, opts) {
+  // Moving a client OUT of a gym writes rows that belong to two tenants:
+  // the client/user rows change org, and the notification is the
+  // independent org's. A single-tenant context cannot do that (RLS would
+  // refuse the moved row), so this one operation runs as platform. The
+  // caller is the control: admin.js only reaches here for its own gym's
+  // client (owner/admin route, org-scoped lookup first).
+  return runAsPlatform('gym-exit', () => endGymMembershipInner(db, opts));
+}
+
+async function endGymMembershipInner(db, { clientId, reason = 'revoked', endedBy = null }) {
   const client = await db.q1('SELECT * FROM clients WHERE id = ?', [clientId]);
   if (!client) return { ok: false, reason: 'client_not_found' };
 

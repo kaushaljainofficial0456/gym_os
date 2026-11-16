@@ -22,6 +22,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, orgScope } from '../auth.js';
+import { platformScope } from '../db.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import {
@@ -42,7 +43,12 @@ const idParam = z.string().min(1).max(64);
 
 export default function communitiesRoutes(db) {
   const r = Router();
-  r.use(requireAuth, orgScope);
+  // Friend communities are cross-gym BY DESIGN (rls.sql lists their tables
+  // as deliberately unscoped): members' names, workouts and records come
+  // from other gyms. Access is an active community membership, checked in
+  // services/friendCommunities on every read and write -- so these routes
+  // run as an explicit platform context, as they effectively always have.
+  r.use(requireAuth, orgScope, platformScope('friend-communities'));
 
   // Per authenticated user, not per IP: friends on one gym's wifi must not
   // throttle each other.

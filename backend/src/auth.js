@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { config } from './config.js';
-import { getDb, runWithOrg } from './db.js';
+import { getDb, runWithOrg, runAsPlatform } from './db.js';
 import { getOrgTzCached, DEFAULT_TZ } from './utils/time.js';
 import { enforceSession, touchSession } from './services/demo/session.js';
 
@@ -310,6 +310,15 @@ export async function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+  // The gate's own lookups below read by ids taken from the VERIFIED token,
+  // before any tenant is in force -- so they run as an explicit platform
+  // context, never as "no context" (which row-level security answers with
+  // no rows, and which would quietly switch the suspension and
+  // deactivation checks off).
+  return runAsPlatform('auth-gate', () => authGate(req, res, next));
+}
+
+async function authGate(req, res, next) {
   let db;
   try {
     // The APP's own database handle when one has been registered
@@ -411,9 +420,12 @@ export async function requireAuth(req, res, next) {
       }
     } catch { /* lookup failure must never itself block a login -- fail open, same as the tz lookup above */ }
   }
-  // Scope the authenticated org for the rest of this request (db.tx uses it to
-  // engage PostgreSQL RLS). Must wrap next() so the ALS context covers downstream.
-  runWithOrg(req.user.org || null, () => next());
+  // Scope the authenticated org for the rest of this request: on PostgreSQL
+  // EVERY statement downstream runs with app.org_id set to this org,
+  // transaction-locally (db.js scoped()). The org is the signed token's
+  // claim, never anything from the request. Must wrap next() so the
+  // AsyncLocalStorage context covers everything downstream.
+  return runWithOrg(req.user.org || null, () => next());
 }
 
 // Role gate. Call AFTER requireAuth.

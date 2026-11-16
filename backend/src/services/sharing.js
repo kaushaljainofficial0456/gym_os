@@ -15,6 +15,7 @@
 // both active in. Nobody is findable by name merely for having an account.
 // ============================================================
 import { id, now } from '../ids.js';
+import { runAsPlatform } from '../db.js';
 import { dayKey, plannerDay } from '../utils/time.js';
 import { setClientWorkoutDays, scheduleSavedWorkoutToday, sessionInProgress } from './trainingProgram.js';
 
@@ -88,9 +89,12 @@ export async function storeWorkoutSnapshot(db, client, payload) {
   return { id: shareId, expires_at: expiresAt };
 }
 
-/** A workout snapshot that still exists and has not expired, or null. */
+/** A workout snapshot that still exists and has not expired, or null.
+ *  Read as platform: the sender is very often in another gym, and the
+ *  unguessable share id (plus expiry) is the capability -- exactly what the
+ *  public preview route already relies on. */
 export async function loadWorkoutSnapshot(db, shareId) {
-  const share = await db.q1('SELECT * FROM shared_workouts WHERE id = ?', [shareId]);
+  const share = await runAsPlatform('share-snapshot', () => db.q1('SELECT * FROM shared_workouts WHERE id = ?', [shareId]));
   if (!share || expired(share)) return null;
   let payload = {};
   try { payload = JSON.parse(share.payload_json) || {}; } catch { payload = {}; }
@@ -270,7 +274,8 @@ export async function storeMealSnapshot(db, client, items) {
 }
 
 export async function loadMealSnapshot(db, shareId) {
-  const share = await db.q1('SELECT * FROM shared_meals WHERE id = ?', [shareId]);
+  // Platform for the same reason as loadWorkoutSnapshot above.
+  const share = await runAsPlatform('share-snapshot', () => db.q1('SELECT * FROM shared_meals WHERE id = ?', [shareId]));
   if (!share || expired(share)) return null;
   let items = [];
   try { items = JSON.parse(share.items_json) || []; } catch { items = []; }
@@ -320,7 +325,14 @@ const like = (q) => `%${String(q).toLowerCase().replace(/[%_]/g, '')}%`;
  * with before, people they follow, friend-community members, then the rest
  * of their gym's community. Each says how they are connected.
  */
-export async function shareAudience(db, client, { q = '', limit = 40 } = {}) {
+export async function shareAudience(db, client, opts = {}) {
+  // Friend-community members are in other gyms, so their names come from
+  // `clients`/`users` rows another tenant owns. Who appears is decided by
+  // the community_memberships join below (application code), not by RLS.
+  return runAsPlatform('share-audience', () => shareAudienceInner(db, client, opts));
+}
+
+async function shareAudienceInner(db, client, { q = '', limit = 40 } = {}) {
   const search = String(q || '').trim().slice(0, 60);
   const nameClause = search ? 'AND lower(u.name) LIKE ?' : '';
   const nameParam = search ? [like(search)] : [];

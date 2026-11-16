@@ -11,6 +11,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth.js';
+import { platformScope } from '../db.js';
 import { validate } from '../validate.js';
 import { rateLimit } from '../rateLimit.js';
 import { track } from '../services/events.js';
@@ -78,7 +79,11 @@ const handle = (fn) => async (req, res, next) => {
 
 export default function tournamentRoutes(db) {
   const r = Router();
-  r.use(requireAuth);
+  // One tournament spans gyms (see the header): entrants' names and results,
+  // and notifications for people in other gyms. Authorisation is per
+  // tournament in services/tournaments/access.js, so these routes run as an
+  // explicit platform context rather than as the caller's gym.
+  r.use(requireAuth, platformScope('tournaments'));
 
   const perUser = (req) => req.user?.sub || 'anon';
   // Live boards poll, and a scorer writes on every tap: sized for a host

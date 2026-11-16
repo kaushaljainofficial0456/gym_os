@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
-import { getDb } from './db.js';
+import { getDb, platformScope } from './db.js';
 import { config } from './config.js';
 import { requireAuth } from './auth.js';
 import { setRateLimitStore } from './rateLimit.js';
@@ -231,6 +231,16 @@ export async function buildApp() {
   // text/plain or not labelled at all -- read every body there as text.
   app.use('/iclock', express.text({ type: () => true, limit: '1mb' }));
   app.use(express.json({ limit: '1mb' }));
+
+  // ROW-LEVEL SECURITY CONTEXT. Every request starts as an explicit platform
+  // context: the unauthenticated surface (login, sign-up, public share
+  // previews, signed provider webhooks, the follow-ups scheduler tick, eSSL
+  // terminals) is authorised in application code, as it always has been.
+  // requireAuth then NARROWS an authenticated user with an org to that one
+  // tenant for everything downstream (db.js). Registered AFTER the body
+  // parsers on purpose: they finish on the socket's stream callbacks, which
+  // do not carry an AsyncLocalStorage context set before them.
+  app.use(platformScope('http-request'));
 
 app.get(['/health', '/api/health'], (_req, res) => res.json({ ok: true, db: db.driver, ts: new Date().toISOString() }));
 

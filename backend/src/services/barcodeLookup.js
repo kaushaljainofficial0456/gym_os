@@ -25,6 +25,7 @@
 // product data came from — see CONTRACT §3.6.
 // ============================================================
 import { id } from '../ids.js';
+import { runAsPlatform } from '../db.js';
 import { config } from '../config.js';
 import { getBarcodeIndex, cleanCode, canonicalEan13, resolveServing } from './foodEstimator.js';
 import { validateFoodRecord } from './foodValidation.js';
@@ -250,7 +251,11 @@ export async function cacheProduct(db, record) {
 
   const fId = id('food');
   try {
-    await db.run(
+    // A GLOBAL row (org_id NULL) is shared library data no tenant owns, and
+    // rls.sql lets only a platform context write one -- otherwise any gym
+    // could plant or edit food every other gym sees. This validated cache
+    // fill is the one path that does it on a member's behalf.
+    await runAsPlatform('barcode-global-cache', () => db.run(
       `INSERT INTO foods (id, org_id, client_id, name, unit, serving, piece_g,
                           calories, protein, carbs, fat, fiber, sugar, sodium,
                           brand, source, category, cuisine, is_global,
@@ -263,7 +268,7 @@ export async function cacheProduct(db, record) {
        record.fiber_g ?? null, record.sugar_g ?? null, record.sodium_mg ?? null,
        record.brand ?? null, record.source || 'PACKAGING_LABEL', record.category ?? null, record.cuisine ?? null,
        record.source_id ?? null, record.cooking_state ?? null, record.serving_size_label ?? null, record.serving_grams ?? null,
-       record.calcium_mg ?? null, record.iron_mg ?? null, record.barcode, record.ingredients_text ?? null, record.image_url ?? null]);
+       record.calcium_mg ?? null, record.iron_mg ?? null, record.barcode, record.ingredients_text ?? null, record.image_url ?? null]));
   } catch {
     // Lost the race to a concurrent insert of the same barcode (unique index
     // violation) -- the winning row is exactly what we would have written.

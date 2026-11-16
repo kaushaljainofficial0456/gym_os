@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
 import { hashPassword, verifyPassword, needsRehash, signToken, setAuthCookie, clearAuthCookie, requireAuth } from '../auth.js';
+import { platformScope } from '../db.js';
 import { rateLimit, getRateLimitStore } from '../rateLimit.js';
 import { validate } from '../validate.js';
 import { id, now } from '../ids.js';
@@ -810,12 +811,18 @@ export default function authRoutes(db) {
   // id) re-sign a fresh token scoped to it for this session. Switching
   // never mutates users.org_id/role -- it's a per-session context
   // change, not a permanent identity change.
-  r.get('/my-gyms', requireAuth, async (req, res) => {
+  // These three read only the CALLER's own identity (keyed by the verified
+  // token's sub), but that identity spans gyms: memberships at other gyms,
+  // and -- after /switch-gym -- a users row whose org_id is the primary gym,
+  // not the one this session is in. As one tenant they would see a partial
+  // or empty answer, so they run as an explicit platform context.
+  const ownIdentity = platformScope('own-identity');
+  r.get('/my-gyms', requireAuth, ownIdentity, async (req, res) => {
     const memberships = await listUserMemberships(db, req.user.sub);
     res.json({ memberships, currentOrgId: req.user.org || null });
   });
 
-  r.post('/switch-gym', requireAuth, validate(z.object({ orgId: z.string().min(1) })), async (req, res) => {
+  r.post('/switch-gym', requireAuth, ownIdentity, validate(z.object({ orgId: z.string().min(1) })), async (req, res) => {
     const membership = await getActiveMembership(db, { userId: req.user.sub, orgId: req.body.orgId });
     if (!membership) return res.status(403).json({ error: 'You do not have an active membership at that gym' });
     const user = await db.q1('SELECT id, name, email FROM users WHERE id = ?', [req.user.sub]);
@@ -826,7 +833,7 @@ export default function authRoutes(db) {
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: membership.role, orgId: membership.org_id, orgName: org?.name || null, orgSlug: org?.slug || null } });
   });
 
-  r.get('/me', requireAuth, async (req, res) => {
+  r.get('/me', requireAuth, ownIdentity, async (req, res) => {
     const user = await db.q1(
       `SELECT u.id, u.name, u.email, u.role, u.org_id, u.avatar, u.phone,
               u.terms_accepted_at, u.terms_version,
