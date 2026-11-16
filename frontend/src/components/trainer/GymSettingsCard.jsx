@@ -30,7 +30,7 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
-export default function GymSettingsCard() {
+export default function GymSettingsCard({ heading = true }) {
   const { user } = useAuth();
   const settings = useFetch(() => api('/admin/settings'));
   const [form, setForm] = useState(null);
@@ -55,7 +55,7 @@ export default function GymSettingsCard() {
 
   return (
     <Card className="p-5 sm:p-6">
-      <h2 className="ws-section-title">Gym settings</h2>
+      {heading && <h2 className="ws-section-title">Gym settings</h2>}
       {settings.error ? <div className="mt-3"><ErrorState error={settings.error} onRetry={settings.reload} /></div> : null}
 
       {code && (

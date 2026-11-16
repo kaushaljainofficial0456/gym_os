@@ -26,6 +26,7 @@ import NewMenu from './NewMenu.jsx';
 import FollowUps from './FollowUps.jsx';
 import { money, monthAxis } from './GymPulse.jsx';
 import { TINT, tileStyle } from './workspaceNav.js';
+import { CountUp } from './wsMotion.jsx';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const monthName = (key) => new Date(`${key}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'long' });
@@ -209,52 +210,120 @@ export default function OwnerHome({ user, kpis, pulse, pulseError, onPulseRetry,
   }
   const count = rows.length + (attentionError ? 1 : 0);
 
+  /* ── market-standard health numbers (Gymdesk, Glofox, MyStudio all
+     lead with these): revenue per member, renewals, engagement ── */
+  const months = pulse ? monthAxis(series.revenue || [], today.date) : [];
+  const peak = Math.max(1, ...months.map((x) => Number(x.value) || 0));
+  const perMember = pulse && kpis?.activeClients > 0 ? (Number(m.collectedThisMonth) || 0) / kpis.activeClients : null;
+  // Where the month is heading at today's rate -- shown once a week of it
+  // has passed, before that a projection is a guess.
+  const day = today ? Number(today.date.slice(8, 10)) : 0;
+  const monthDays = today ? new Date(Number(today.date.slice(0, 4)), Number(today.date.slice(5, 7)), 0).getDate() : 30;
+  const pace = pulse && day >= 7 && m.collectedThisMonth > 0 ? (m.collectedThisMonth / day) * monthDays : null;
+  const cur = m?.currency || 'INR';
+  const spark = (series?.attendance || []).map((p) => Number(p.value) || 0);
+  const sparkPeak = Math.max(1, ...spark);
+
   return (
-    <div className="oh">
+    <div className="td">
       <Header user={user}><div className="oh-new"><NewMenu /></div></Header>
 
-      <section aria-labelledby="oh-glance" data-tour="trainer-dashboard-hero">
-        <h2 id="oh-glance" className="sr-only">Key numbers</h2>
-        <div className="oh-glance">
-          {pulseError && !pulse ? <GlanceError onRetry={onPulseRetry} /> : (
-            <>
-              <Glance to="/app/trainer/business" icon="rupee" tint={TINT.green} label="Money this month"
-                value={pulse ? money(m.collectedThisMonth, m.currency) : '—'} say={moneySay} up={moneyUp} more="See payments" />
-              <Glance to="/app/trainer/clients" icon="users" tint={TINT.blue} label="Active members"
-                value={kpis?.activeClients ?? '—'}
-                say={kpis?.newClients != null ? `${kpis.newClients} joined in the last 30 days` : kpis ? `${kpis.totalClients} in total` : null}
-                up={kpis?.newClients > 0 ? true : null} more="See members" />
-              <Glance to="/app/trainer/attendance" icon="door" tint={TINT.purple} label="Came in today"
-                value={today ? today.checkIns : '—'}
-                say={pulse ? (perDay > 0 ? `Usually about ${perDay} a day` : 'No check-ins in the last 30 days') : null}
-                more="See attendance" />
-            </>
-          )}
+      {pulseError && !pulse ? <GlanceError onRetry={onPulseRetry} /> : (
+        <div className="td-top">
+          {/* THE HERO: this month's money, and the months before it. */}
+          <Link to="/app/trainer/business" className="td-hero" data-tour="trainer-dashboard-hero" aria-label={`Collected in ${monthName(today?.date?.slice(0, 7) || '2026-01')}: ${pulse ? money(m.collectedThisMonth, cur) : 'loading'}`}>
+            <div className="td-hero-head">
+              <span className="ws-tile" style={{ ...tileStyle(TINT.green), '--s': '34px' }}><Icon name="rupee" size={17} strokeWidth={1.8} /></span>
+              <span>Collected in {today ? monthName(today.date.slice(0, 7)) : 'this month'}</span>
+              <span className="oh-go td-go"><Chevron /></span>
+            </div>
+            <div className="td-hero-value">{pulse ? <CountUp value={m.collectedThisMonth} format={(n) => money(n, cur)} /> : '—'}</div>
+            {moneySay && <div className="td-hero-say">{moneyUp != null && <Arrow up={moneyUp} />}<span>{moneySay}</span></div>}
+            <div className="td-hero-foot">
+              {(moneyUp != null || pace) && <span>{[moneyUp != null ? plural(m?.paymentsThisMonth || 0, 'payment') : null, pace ? `on pace for ${money(pace, cur)}` : null].filter(Boolean).join(' · ')}</span>}
+              {m?.outstandingAmount > 0 && <span className="td-due">{money(m.outstandingAmount, cur)} to collect</span>}
+            </div>
+            {months.length > 0 && (
+              <div className="td-bars" aria-hidden="true">
+                {months.map((x, i) => (
+                  <div key={x.month} className={`td-bar${i === months.length - 1 ? ' is-now' : ''}`}>
+                    <i style={{ '--h': `${Math.max(3, Math.round(((Number(x.value) || 0) / peak) * 100))}%`, animationDelay: `${120 + i * 45}ms` }} />
+                    <span>{new Date(`${x.month}-01T12:00:00`).toLocaleDateString('en-IN', { month: 'short' })}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Link>
+
+          {/* RIGHT NOW: the floor, today. */}
+          <Link to="/app/trainer/attendance" className="td-now">
+            <div className="td-now-head"><span className="td-live" aria-hidden="true" />Today at the gym<span className="oh-go td-go"><Chevron /></span></div>
+            <div className="td-now-grid">
+              <div><div className="td-now-value">{today ? <CountUp value={today.checkIns} /> : '—'}</div><div className="td-now-label">checked in</div></div>
+              <div><div className="td-now-value">{today ? `${today.trainersIn}/${today.trainersTotal}` : '—'}</div><div className="td-now-label">trainers in</div></div>
+            </div>
+            {spark.length > 0 && (
+              <div className="td-spark" aria-hidden="true">
+                {spark.map((v, i) => <i key={i} style={{ '--h': `${Math.max(4, Math.round((v / sparkPeak) * 100))}%` }} className={i === spark.length - 1 ? 'is-now' : undefined} />)}
+              </div>
+            )}
+            <div className="td-now-say">{pulse ? (perDay > 0 ? `Check-ins, last 30 days · about ${perDay} a day` : visits > 0 ? `${plural(visits, 'check-in')} in the last 30 days` : 'No check-ins in the last 30 days') : ''}</div>
+          </Link>
+        </div>
+      )}
+
+      {/* FOUR HEALTH NUMBERS -- each one a link to where it lives. */}
+      <section aria-labelledby="td-health">
+        <h2 id="td-health" className="sr-only">Gym health</h2>
+        <div className="td-kpis">
+          <Link to="/app/trainer/clients" className="td-kpi">
+            <span className="td-kpi-label">Active members</span>
+            <span className="td-kpi-value">{kpis ? <CountUp value={kpis.activeClients} /> : '—'}</span>
+            <span className="td-kpi-say">{kpis?.newClients > 0 ? <><Arrow up />{kpis.newClients} joined in 30 days</> : 'No new members in 30 days'}</span>
+          </Link>
+          <Link to="/app/trainer/analytics" className="td-kpi">
+            <span className="td-kpi-label">Revenue per member</span>
+            <span className="td-kpi-value">{perMember != null ? <CountUp value={perMember} format={(n) => money(n, cur)} /> : '—'}</span>
+            <span className="td-kpi-say">This month so far</span>
+          </Link>
+          <Link to="/app/trainer/clients?money=EXPIRING" className="td-kpi">
+            <span className="td-kpi-label">Renewals due</span>
+            <span className="td-kpi-value">{pulse ? <CountUp value={pulse.members?.expiringSoon || 0} /> : '—'}</span>
+            <span className="td-kpi-say">In the next 30 days</span>
+          </Link>
+          <Link to="/app/trainer/alerts" className="td-kpi">
+            <span className="td-kpi-label">Workouts done</span>
+            <span className="td-kpi-value">{kpis?.workoutCompletion != null ? <><CountUp value={kpis.workoutCompletion} />%</> : '—'}</span>
+            <span className="td-kpi-say">{kpis?.atRisk > 0 ? `${plural(kpis.atRisk, 'member')} at risk` : 'Of what was scheduled'}</span>
+          </Link>
         </div>
       </section>
 
-      <section aria-labelledby="oh-todo" className="card oh-todo" data-tour="trainer-dashboard-kpis">
-        <div className="oh-todo-head">
-          <h2 id="oh-todo" className="oh-todo-title">To do today</h2>
+      {/* NEEDS YOU: every row is real -- a count came back above zero. */}
+      <section aria-labelledby="oh-todo" className="td-todo" data-tour="trainer-dashboard-kpis">
+        <div className="td-todo-head">
+          <h2 id="oh-todo" className="td-todo-title">Needs you today</h2>
           {count > 0 && <span className="ws-count">{count}</span>}
         </div>
-        {rows.map(({ key, after, ...row }) => (
-          <div key={key}>
-            <TodoRow {...row} />
-            {after}
-          </div>
-        ))}
-        {attentionError && (
-          <div style={{ borderTop: '1px solid var(--line)' }}>
-            <ErrorState error={attentionError} onRetry={onAttentionRetry} />
-          </div>
-        )}
-        {count === 0 && (
-          <div className="oh-done">
-            <span className="ws-tile" style={{ ...TINT.green, '--s': '42px' }}><Icon name="check" size={19} strokeWidth={2} /></span>
-            All done. Nothing needs you right now.
-          </div>
-        )}
+        <div className="ws-group">
+          {rows.map(({ key, after, ...row }) => (
+            <div key={key} className="td-row-wrap">
+              <TodoRow {...row} />
+              {after}
+            </div>
+          ))}
+          {attentionError && (
+            <div className="td-row-wrap">
+              <ErrorState error={attentionError} onRetry={onAttentionRetry} />
+            </div>
+          )}
+          {count === 0 && (
+            <div className="oh-done">
+              <span className="ws-tile" style={{ ...TINT.green, '--s': '42px' }}><Icon name="check" size={19} strokeWidth={2} /></span>
+              All done. Nothing needs you right now.
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -264,16 +333,20 @@ export default function OwnerHome({ user, kpis, pulse, pulseError, onPulseRetry,
    numbers land (e2e/performance.spec.js holds Home to a CLS under 0.1). */
 export function OwnerHomeSkeleton({ user }) {
   return (
-    <div className="oh" aria-busy="true">
+    <div className="td" aria-busy="true">
       <Header user={user} />
-      <section>
-        <div className="oh-glance">
-          {[0, 1, 2].map((i) => <div key={i} className="card oh-card" style={{ minHeight: 190 }}><div className="skeleton h-3 w-32" /><div className="skeleton h-9 w-40 mt-5" /><div className="skeleton h-3 w-44 mt-4" /></div>)}
+      <div className="td-top">
+        <div className="td-hero"><div className="skeleton h-4 w-44" /><div className="skeleton h-12 w-56 mt-5" /><div className="skeleton h-3 w-52 mt-4" /><div className="td-bars td-bars--ghost" /></div>
+        <div className="td-now"><div className="skeleton h-4 w-36" /><div className="skeleton h-10 w-40 mt-6" /><div className="skeleton h-3 w-48 mt-5" /></div>
+      </div>
+      <div className="td-kpis">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="td-kpi"><div className="skeleton h-3 w-28" /><div className="skeleton h-8 w-20 mt-3" /><div className="skeleton h-3 w-32 mt-3" /></div>)}
+      </div>
+      <section className="td-todo">
+        <div className="td-todo-head"><div className="skeleton h-5 w-36" /></div>
+        <div className="ws-group" style={{ minHeight: 220 }}>
+          {[0, 1, 2].map((i) => <div key={i} className="oh-row"><div className="skeleton rounded-full" style={{ width: 42, height: 42 }} /><div className="flex-1"><div className="skeleton h-3.5 w-48" /><div className="skeleton h-3 w-32 mt-2" /></div></div>)}
         </div>
-      </section>
-      <section className="card oh-todo" style={{ minHeight: 280 }}>
-        <div className="oh-todo-head"><div className="skeleton h-5 w-36" /></div>
-        {[0, 1, 2].map((i) => <div key={i} className="oh-row"><div className="skeleton rounded-full" style={{ width: 42, height: 42 }} /><div className="flex-1"><div className="skeleton h-3.5 w-48" /><div className="skeleton h-3 w-32 mt-2" /></div></div>)}
       </section>
     </div>
   );

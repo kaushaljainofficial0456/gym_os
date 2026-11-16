@@ -11,6 +11,7 @@ import { useBrand } from '../../brand/BrandProvider.jsx';
 import BrandStudio from '../../brand/BrandStudio.jsx';
 import GymLockup from '../../brand/GymLockup.jsx';
 import { Card, PageHeader, Toast } from '../../components/UI.jsx';
+import { SettingsBack } from './SettingsGym.jsx';
 
 export default function GymBranding() {
   const { user } = useAuth();
@@ -31,8 +32,11 @@ export default function GymBranding() {
 
   return (
     <div className="space-y-6 pb-6">
-      <PageHeader eyebrow="Your gym" title="Branding"
-        sub="Your gym’s colours and logo. Your members, trainers and you see the app in them, with your gym’s name on top." />
+      <div>
+        <SettingsBack />
+        <PageHeader title="Branding"
+          sub="Your gym’s colours and logo. Your members, trainers and you see the app in them, with your gym’s name on top." />
+      </div>
 
       <Card className="p-5 sm:p-7">
         {/* Remounted on save (a new version), so it starts from what was saved. */}

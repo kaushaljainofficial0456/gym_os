@@ -7,10 +7,13 @@ import { Card, Kicker, ErrorState, Empty, PageSkeleton } from '../../components/
 import Icon from '../../components/Icon.jsx';
 
 const SEV = {
-  high: ['HIGH', 'text-bad border-bad/40 bg-bad/10'],
-  medium: ['MED', 'text-warn border-warn/40 bg-warn/10'],
-  low: ['LOW', 'text-mute border-line bg-tint/5']
+  high: ['High', 'text-bad border-bad/40 bg-bad/10'],
+  medium: ['Medium', 'text-warn border-warn/40 bg-warn/10'],
+  low: ['Low', 'text-mute border-line bg-tint/5']
 };
+
+// Rule codes (LOW_WORKOUT) read as a label: "Low workout".
+const sentence = (code) => { const t = String(code || '').replace(/_/g, ' ').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 const FILTERS = [
   ['all', 'All'], ['open', 'Open'], ['read', 'Read'], ['followed_up', 'Followed up'], ['dismissed', 'Dismissed']
@@ -52,7 +55,7 @@ export default function Alerts() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="t-title">Alerts</h1>
+          <h1 className="t-title">Needs attention</h1>
           <p className="t-sub mt-1.5">Clients whose data says they are slipping.</p>
         </div>
         <div className="chip border-bad/40 bg-bad/10 text-bad">{openCount} open</div>
@@ -93,7 +96,7 @@ export default function Alerts() {
                       </span>
                     )}
                     <span className={`chip border ${sev[1]}`}>{sev[0]}</span>
-                    <span className="text-[10px] text-faint font-grotesk uppercase tracking-wider">{a.type?.replace(/_/g, ' ')}</span>
+                    <span className="text-[10px] text-faint font-grotesk uppercase tracking-wider">{sentence(a.type)}</span>
                     <span className="text-[10px] text-faint font-grotesk">{daysAgoLabel(a.created_at)}</span>
                   </div>
                   <div className="text-sm mt-1">{a.title}</div>

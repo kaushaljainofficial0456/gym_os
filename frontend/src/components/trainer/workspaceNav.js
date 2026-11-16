@@ -51,7 +51,7 @@ const CLIENTS = { to: '/app/trainer/clients', label: 'Clients', icon: 'users', t
 const WORKOUTS = { to: '/app/trainer/workouts', label: 'Workouts', icon: 'strength', tint: TINT.indigo };
 const NUTRITION = { to: '/app/trainer/nutrition', label: 'Nutrition', icon: 'plate', tint: TINT.mint };
 const REPORTS = { to: '/app/trainer/reports', label: 'Client reports', icon: 'doc', tint: TINT.cyan };
-const ALERTS = { to: '/app/trainer/alerts', label: 'Alerts', icon: 'bell', tint: TINT.red };
+const ALERTS = { to: '/app/trainer/alerts', label: 'Needs attention', icon: 'bell', tint: TINT.red };
 const MESSAGES = { to: '/app/trainer/messages', label: 'Messages', icon: 'chat', tint: TINT.teal, badgeKey: 'messages' };
 const TOURNAMENTS = { to: '/app/trainer/tournaments', label: 'Tournaments', icon: 'trophy', tint: TINT.gold };
 const MORE = { to: '/app/trainer/more', label: 'More', icon: 'grid' };
@@ -65,12 +65,21 @@ const page = (to, label, icon, tint, extra = {}) => ({ to, label, icon, tint, ..
 
 export const OWNER_HUBS = [
   {
+    // The people: who they are, and who is slipping.
     key: 'members', label: 'Members', icon: 'users',
     pages: [
-      page('/app/trainer/clients', 'Clients', 'users', TINT.blue, { also: ['/app/trainer/clients/:id'], keywords: 'members roster people add client' }),
+      page('/app/trainer/clients', 'Members', 'users', TINT.blue, { also: ['/app/trainer/clients/:id'], keywords: 'clients roster people add client member profile' }),
+      page('/app/trainer/alerts', 'Needs attention', 'bell', TINT.red, { keywords: 'alerts at risk slipping inactive adherence warnings follow up' }),
+    ],
+  },
+  {
+    // The building: who came in, who is inside, the doors, and how people join.
+    key: 'desk', label: 'Front desk', icon: 'door',
+    pages: [
       page('/app/trainer/attendance', 'Attendance', 'calendar', TINT.orange, { keywords: 'check in check-in present mark trainers roster' }),
-      page('/app/trainer/crowd', 'Live crowd', 'body', TINT.pink, { keywords: 'occupancy inside now busy floor' }),
+      page('/app/trainer/crowd', 'Live crowd', 'body', TINT.pink, { keywords: 'occupancy inside now busy floor capacity' }),
       page('/app/trainer/access', 'Access control', 'shield', TINT.graphite, { keywords: 'door biometric device essl entry gate' }),
+      page('/app/trainer/enterprise/qr', 'Join QR codes', 'qr', TINT.graphite, { keywords: 'invite join qr code trainer member signup' }),
     ],
   },
   {
@@ -81,8 +90,7 @@ export const OWNER_HUBS = [
     key: 'messages', label: 'Messages', icon: 'chat', badgeKey: 'messages',
     pages: [
       page('/app/trainer/messages', 'Messages', 'chat', TINT.teal, { badgeKey: 'messages', keywords: 'chat inbox conversation' }),
-      page('/app/trainer/communication', 'AI Communication', 'phone', TINT.purple, { keywords: 'ai calls follow-ups follow up sms whatsapp renewal voice' }),
-      page('/app/trainer/alerts', 'Alerts', 'bell', TINT.red, { keywords: 'notifications warnings' }),
+      page('/app/trainer/communication', 'AI Communication', 'phone', TINT.purple, { keywords: 'ai calls follow-ups follow up sms whatsapp renewal voice campaigns' }),
     ],
   },
   {
@@ -99,16 +107,21 @@ export const OWNER_HUBS = [
     pages: [page('/app/trainer/trainers', 'Trainers', 'whistle', TINT.purple, { keywords: 'staff coaches shifts team' })],
   },
   {
-    key: 'reports', label: 'Reports', icon: 'chart',
-    pages: [page('/app/trainer/analytics', 'Reports', 'chart', TINT.brown, { keywords: 'analytics revenue growth churn charts memberships check-ins' })],
+    // Was "Reports", which sat beside "Client reports" and read as the same thing.
+    key: 'insights', label: 'Insights', icon: 'chart',
+    pages: [page('/app/trainer/analytics', 'Insights', 'chart', TINT.brown, { keywords: 'analytics reports revenue growth churn charts memberships check-ins' })],
   },
   {
-    key: 'settings', label: 'Settings', icon: 'settings',
+    // ONE place for every setting, like the Settings app: a list of groups
+    // (SettingsHub.jsx) that opens each one. Not tabs -- five tabs is a
+    // second menu; a list with a line under each row says what is inside.
+    key: 'settings', label: 'Settings', icon: 'settings', tabs: false,
     pages: [
-      page('/app/trainer/enterprise', 'Setup & billing', 'settings', TINT.gray, { also: ['/app/trainer/enterprise/billing', '/app/trainer/enterprise/onboarding'], keywords: 'subscription barbell plan billing receipts account' }),
-      page('/app/trainer/enterprise/qr', 'Join QR codes', 'qr', TINT.graphite, { keywords: 'invite join qr code trainer member signup' }),
-      // The gym's own colours and logo -- what makes the app theirs.
+      page('/app/trainer/settings', 'Settings', 'settings', TINT.gray, { keywords: 'settings preferences account appearance' }),
+      page('/app/trainer/settings/gym', 'Gym & member app', 'home', TINT.blue, { keywords: 'gym name tagline capacity workout mode swap exercises permissions community leaderboards gym code' }),
       page('/app/trainer/enterprise/brand', 'Branding', 'palette', TINT.accent, { keywords: 'brand colours colors logo theme look white label own app join link' }),
+      page('/app/trainer/settings/payouts', 'Getting paid', 'receipt', TINT.green, { keywords: 'payouts bank account razorpay route online payments' }),
+      page('/app/trainer/enterprise', 'Plan & billing', 'card', TINT.gray, { also: ['/app/trainer/enterprise/billing', '/app/trainer/enterprise/onboarding'], keywords: 'subscription barbell plan billing receipts capacity renew upgrade invoices' }),
     ],
   },
 ].map((h) => ({ ...h, to: h.pages[0].to }));
@@ -150,7 +163,9 @@ export function workspaceSections(isOwner) {
  */
 export function workspaceTabs(isOwner) {
   if (!isOwner) return [HOME, CLIENTS, WORKOUTS, MESSAGES, MORE];
-  const [members, payments, ...rest] = OWNER_HUBS;
+  const members = OWNER_HUBS.find((h) => h.key === 'members');
+  const payments = OWNER_HUBS.find((h) => h.key === 'payments');
+  const rest = OWNER_HUBS.filter((h) => h !== members && h !== payments);
   return [
     HOME,
     { to: members.to, label: members.label, icon: members.icon, match: patternsOf(members) },
@@ -189,7 +204,7 @@ export function quickActions(isOwner) {
       { to: '/app/trainer/workouts?new=1', label: 'New workout', icon: 'strength', tint: TINT.indigo },
       { to: '/app/trainer/nutrition?new=1', label: 'New meal plan', icon: 'plate', tint: TINT.mint },
       { to: '/app/trainer/messages', label: 'Messages', icon: 'chat', tint: TINT.teal, badgeKey: 'messages' },
-      { to: '/app/trainer/alerts', label: 'Alerts', icon: 'bell', tint: TINT.red },
+      { to: '/app/trainer/alerts', label: 'Needs attention', icon: 'bell', tint: TINT.red },
       { to: '/app/trainer/attendance', label: 'My attendance', icon: 'calendar', tint: TINT.orange },
     ];
   }

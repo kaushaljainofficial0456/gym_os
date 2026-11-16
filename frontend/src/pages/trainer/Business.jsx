@@ -166,7 +166,7 @@ export default function Business() {
               <div className="text-[15px] font-bold" style={{ color: 'var(--ink)' }}>Online payments are off</div>
               <p className="text-[13.5px] mt-0.5" style={{ color: 'var(--mute)' }}>Set up payouts so members can pay you online. Until then, record desk payments here.</p>
             </div>
-            <button type="button" className="btn btn-sm shrink-0" onClick={() => nav('/app/trainer/enterprise')}>Set up payouts</button>
+            <button type="button" className="btn btn-sm shrink-0" onClick={() => nav('/app/trainer/settings/payouts')}>Set up payouts</button>
           </div>
         </Card>
       )}

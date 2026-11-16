@@ -16,9 +16,18 @@ const OWNER_PAGES_BEFORE = [
 
 const allPages = OWNER_HUBS.flatMap((h) => h.pages.map((p) => p.to));
 
-describe('owner navigation: eight sections, nothing lost', () => {
-  it('is Members, Payments, Messages, Coaching, Trainers, Reports and Settings (plus Home)', () => {
-    expect(OWNER_HUBS.map((h) => h.label)).toEqual(['Members', 'Payments', 'Messages', 'Coaching', 'Trainers', 'Reports', 'Settings']);
+describe('owner navigation: plain sections, nothing lost', () => {
+  it('is Members, Front desk, Payments, Messages, Coaching, Trainers, Insights and Settings (plus Home)', () => {
+    expect(OWNER_HUBS.map((h) => h.label)).toEqual(['Members', 'Front desk', 'Payments', 'Messages', 'Coaching', 'Trainers', 'Insights', 'Settings']);
+  });
+
+  it('gathers every setting under Settings, as a list rather than tabs', () => {
+    const settings = OWNER_HUBS.find((h) => h.key === 'settings');
+    expect(settings.tabs).toBe(false);
+    expect(settings.pages.map((p) => p.to)).toEqual([
+      '/app/trainer/settings', '/app/trainer/settings/gym', '/app/trainer/enterprise/brand',
+      '/app/trainer/settings/payouts', '/app/trainer/enterprise',
+    ]);
   });
 
   it('keeps every page the old sidebar had, each in exactly one section', () => {
@@ -33,17 +42,19 @@ describe('owner navigation: eight sections, nothing lost', () => {
 
   it('keeps a section lit on its deeper screens', () => {
     expect(hubForPath('/app/trainer/clients/42')?.key).toBe('members');
-    expect(hubForPath('/app/trainer/crowd')?.key).toBe('members');
+    expect(hubForPath('/app/trainer/alerts')?.key).toBe('members');
+    expect(hubForPath('/app/trainer/crowd')?.key).toBe('desk');
     expect(hubForPath('/app/trainer/tournaments/abc')?.key).toBe('coaching');
     expect(hubForPath('/app/trainer/enterprise/billing')?.key).toBe('settings');
-    expect(hubForPath('/app/trainer/enterprise/qr')?.key).toBe('settings');
+    expect(hubForPath('/app/trainer/enterprise/brand')?.key).toBe('settings');
+    expect(hubForPath('/app/trainer/enterprise/qr')?.key).toBe('desk');
     expect(hubForPath('/app/trainer')).toBeNull();
     expect(hubForPath('/app/trainer/more')).toBeNull();
   });
 
   it('shows section tabs on a section\'s own pages only', () => {
     expect(tabPageForPath('/app/trainer/attendance')?.page.label).toBe('Attendance');
-    expect(tabPageForPath('/app/trainer/enterprise')?.page.label).toBe('Setup & billing');
+    expect(tabPageForPath('/app/trainer/enterprise')?.page.label).toBe('Plan & billing');
     expect(tabPageForPath('/app/trainer/enterprise/qr')?.page.label).toBe('Join QR codes');
     expect(tabPageForPath('/app/trainer/clients/42')).toBeNull();
     expect(tabPageForPath('/app/trainer/tournaments/abc')).toBeNull();
@@ -60,10 +71,12 @@ describe('owner phone tab bar', () => {
   });
 
   it('lights exactly one tab on every owner page', () => {
-    for (const to of [...OWNER_PAGES_BEFORE, '/app/trainer', '/app/trainer/more']) {
+    for (const to of [...OWNER_PAGES_BEFORE, ...allPages, '/app/trainer', '/app/trainer/more']) {
       expect(lit(to), to).toHaveLength(1);
     }
-    expect(lit('/app/trainer/crowd')).toEqual(['Members']);
+    expect(lit('/app/trainer/alerts')).toEqual(['Members']);
+    expect(lit('/app/trainer/crowd')).toEqual(['More']);
+    expect(lit('/app/trainer/settings/gym')).toEqual(['More']);
     expect(lit('/app/trainer/workouts')).toEqual(['More']);
   });
 
