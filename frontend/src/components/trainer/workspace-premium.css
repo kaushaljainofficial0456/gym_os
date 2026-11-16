@@ -1,0 +1,299 @@
+/* ═══════════════════════════════════════════════════════════════
+   PREMIUM PASS (2026-11-16) -- Apple's grammar, applied to the whole
+   owner & trainer workspace: one spring for every movement, a floating
+   sidebar whose highlight glides, segmented controls for a section's
+   pages, grouped lists for settings, large titles that tuck into the
+   phone bar. Loaded with TrainerLayout after workspace.css (lazy -- the
+   client app never downloads it). Colours are theme tokens only, so the
+   gym's own branding and both themes hold everywhere.
+   ═══════════════════════════════════════════════════════════════ */
+html.ws {
+  /* The workspace spring (wsMotion.jsx SPRING), sampled for CSS:
+     ~0.6 s, bounce 0.15 -- a quick start, a soft landing. */
+  --ws-spring: linear(0, 0.0336, 0.1145, 0.2197, 0.3336, 0.4457, 0.5498, 0.6423, 0.722, 0.7888, 0.8434, 0.887, 0.9211, 0.9471, 0.9666, 0.9808, 0.9908, 0.9975, 1.0019, 1.0045, 1.0058, 1.0063, 1.0062, 1.0057, 1.0051, 1.0044, 1.0037, 1.003, 1);
+  --ws-spring-t: .62s;
+  --ws-ease: cubic-bezier(.2, .9, .25, 1);
+  --ws-hair: color-mix(in srgb, var(--ink) 9%, transparent);
+  --ws-raise: 0 1px 0 rgb(var(--tint-rgb) / .05) inset, 0 1px 2px rgb(0 0 0 / .18), 0 10px 30px -18px rgb(0 0 0 / .45);
+}
+html.ws.light {
+  --ws-hair: color-mix(in srgb, var(--ink) 10%, transparent);
+  --ws-raise: 0 1px 2px rgb(0 0 0 / .05), 0 10px 30px -18px rgb(0 0 0 / .16);
+}
+@supports not (transition-timing-function: linear(0, 1)) {
+  html.ws { --ws-spring: var(--ws-ease); --ws-spring-t: .45s; }
+}
+
+/* ── page arrival: rises into place on the spring ── */
+.ws-route { animation: wsArrive var(--ws-spring-t) var(--ws-spring) backwards; }
+@keyframes wsArrive { from { opacity: 0; transform: translateY(12px); } }
+
+/* ── the large title ── */
+html.ws .t-title {
+  font-size: clamp(2rem, 1.55rem + 1.5vw, 2.5rem);
+  font-weight: 750; letter-spacing: -.032em; line-height: 1.08;
+}
+html.ws .t-sub { font-size: 1rem; }
+
+/* ── computer: a floating sidebar, its highlight a gliding pill ── */
+@media (min-width: 1024px) {
+  .ws-side {
+    inset: 12px auto 12px 12px; width: 252px;
+    border-radius: 22px; border: 1px solid var(--ws-hair);
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    box-shadow: var(--ws-raise);
+    padding: 18px 12px 14px;
+  }
+  .ws-main { padding-left: 276px; }
+  .ws-content { padding: 36px 44px 64px; max-width: 1240px; }
+}
+.ws-nav-item { position: relative; isolation: isolate; transition: color .2s ease; }
+.ws-nav-item:hover, .ws-nav-item.is-active, .ws-nav-item.is-active:hover { background: transparent; }
+.ws-nav-item:hover:not(.is-active) { color: var(--ink); }
+.ws-nav-item > :not(.ws-nav-pill) { position: relative; z-index: 1; }
+.ws-nav-pill {
+  position: absolute; inset: 0; z-index: 0; border-radius: 12px;
+  background: rgb(var(--tint-rgb) / .09);
+  box-shadow: 0 0 0 1px rgb(var(--tint-rgb) / .05) inset;
+}
+.ws-nav-item.is-active svg { color: var(--accent); }
+.ws-nav--simple .ws-nav-item { min-height: 42px; font-size: 15px; font-weight: 550; }
+.ws-nav--simple .ws-nav-item.is-active { font-weight: 650; }
+.ws-brand { padding: 4px 8px 18px; margin-bottom: 4px; }
+.ws-side-foot { border-top-color: var(--ws-hair); }
+
+/* ── the segmented control: a section's pages ── */
+.ws-seg-wrap { margin: 0 0 26px; }
+.ws-seg {
+  display: inline-flex; max-width: 100%; overflow-x: auto; gap: 2px;
+  padding: 4px; border-radius: 14px;
+  background: rgb(var(--tint-rgb) / .07);
+  box-shadow: 0 0 0 1px rgb(var(--tint-rgb) / .04) inset;
+  scroll-padding: 4px;
+}
+.ws-seg-item {
+  position: relative; isolation: isolate; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 38px; padding: 0 18px; border-radius: 10px;
+  font-size: 14.5px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap;
+  color: var(--mute); transition: color .2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.ws-seg-item:hover, .ws-seg-item.is-active { color: var(--ink); }
+.ws-seg-item > :not(.ws-seg-thumb) { position: relative; z-index: 1; }
+.ws-seg-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ws-seg-thumb {
+  position: absolute; inset: 0; z-index: 0; border-radius: 10px;
+  background: var(--panel2);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .22), 0 4px 12px -4px rgb(0 0 0 / .3), 0 0 0 1px rgb(var(--tint-rgb) / .06) inset;
+}
+html.ws.light .ws-seg-thumb { background: var(--panel); box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 3px 10px -3px rgb(0 0 0 / .12); }
+@media (max-width: 640px) {
+  .ws-seg { display: flex; }
+  .ws-seg-item { padding: 0 14px; font-size: 14px; }
+}
+
+/* ── cards: depth, and a lift you can feel on a computer ── */
+html.ws .card { border-color: var(--ws-hair); }
+@media (hover: hover) and (pointer: fine) {
+  html.ws :is(a.card, .oh-card, .ws-more-tile, .ws-action) {
+    transition: transform .45s var(--ws-spring), box-shadow .3s ease, border-color .2s ease;
+  }
+  html.ws :is(a.card, .oh-card, .ws-more-tile, .ws-action):hover {
+    transform: translateY(-2px); box-shadow: var(--ws-raise);
+  }
+}
+html.ws :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .ws-row, .ws-seg-item, a.card):active:not(:disabled) {
+  transform: scale(.98); transition: transform .12s ease;
+}
+
+/* ── phone: the large title tucks into the bar ── */
+.ws-top-home { transition: opacity .25s ease; }
+.ws-top-title {
+  position: absolute; left: 50%; bottom: 16px; transform: translate(-50%, 4px);
+  max-width: 50%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 17px; font-weight: 650; letter-spacing: -.02em; color: var(--ink);
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s ease, transform .45s var(--ws-spring);
+}
+.ws-top.is-compact .ws-top-title { opacity: 1; transform: translate(-50%, 0); }
+.ws-top-home :is(.gym-lockup__text, .ws-brand-name, .ws-brand-gym) { transition: opacity .2s ease; }
+.ws-top.is-compact .ws-top-home :is(.gym-lockup__text, .ws-brand-name, .ws-brand-gym) { opacity: 0; }
+
+/* ── back to Settings, the way a navigation stack goes back ── */
+.ws-back {
+  display: inline-flex; align-items: center; gap: 2px; margin: 0 0 8px -6px;
+  min-height: 36px; padding: 0 10px 0 2px; border-radius: 10px;
+  font-size: 16px; font-weight: 550; color: var(--accent);
+}
+.ws-back:hover { background: rgb(var(--accent-rgb) / .08); }
+
+/* ═══ SETTINGS: grouped lists, the Settings-app way ═══ */
+.ws-settings { display: flex; flex-direction: column; gap: 28px; max-width: 760px; }
+.ws-profile {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 18px; border-radius: 22px;
+  background: var(--panel); border: 1px solid var(--ws-hair); box-shadow: var(--card-shadow);
+}
+.ws-profile-name { font-size: 21px; font-weight: 750; letter-spacing: -.025em; line-height: 1.15; color: var(--ink); overflow-wrap: anywhere; }
+.ws-profile-sub { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 14px; font-weight: 600; color: var(--faint); }
+.ws-profile-sub > i { font-style: normal; color: var(--accent); }
+.ws-swatches { display: inline-flex; margin-left: 8px; }
+.ws-swatches i { width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--ws-hair); }
+.ws-swatches i + i { margin-left: -4px; }
+.ws-code {
+  display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; text-align: left;
+  padding: 10px 14px; border-radius: 14px; min-height: 52px;
+  background: rgb(var(--tint-rgb) / .06); color: var(--mute);
+  transition: background-color .2s ease;
+}
+.ws-code:hover { background: rgb(var(--tint-rgb) / .1); }
+.ws-code-label { grid-column: 1; font-size: 12px; font-weight: 600; color: var(--faint); }
+.ws-code-value { grid-column: 1; font-size: 15px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.ws-code svg { grid-column: 2; grid-row: 1 / 3; }
+@media (max-width: 520px) { .ws-code { width: 100%; } }
+
+.ws-group-wrap { display: flex; flex-direction: column; gap: 10px; }
+.ws-group-title { padding: 0 6px; font-size: 15px; font-weight: 650; letter-spacing: -.012em; color: var(--mute); }
+.ws-group {
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 20px; background: var(--panel); border: 1px solid var(--ws-hair); box-shadow: var(--card-shadow);
+}
+.ws-row {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  min-height: 64px; padding: 12px 16px; text-align: left; width: 100%;
+  color: var(--ink); background: transparent;
+  transition: background-color .15s ease;
+}
+/* Separators start after the icon, like iOS. */
+.ws-row + .ws-row::before {
+  content: ""; position: absolute; top: 0; right: 0; left: 66px;
+  border-top: 1px solid var(--ws-hair);
+}
+a.ws-row:hover, button.ws-row:hover { background: rgb(var(--tint-rgb) / .045); }
+.ws-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.ws-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ws-row-title { font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.ws-row-sub { font-size: 13.5px; color: var(--mute); line-height: 1.35; }
+.ws-row-value { flex-shrink: 0; max-width: 46%; text-align: right; font-size: 14px; font-weight: 550; color: var(--faint); }
+.ws-row-value.is-warn { color: rgb(var(--warn-rgb)); }
+.ws-row-value.is-good { color: rgb(var(--good-rgb)); }
+.ws-row-chev { flex-shrink: 0; color: var(--faint); transition: transform .3s var(--ws-spring); }
+a.ws-row:hover .ws-row-chev { transform: translateX(2px); }
+.ws-row--static { cursor: default; }
+.ws-row--danger { justify-content: center; min-height: 54px; font-size: 16px; font-weight: 600; color: rgb(var(--bad-rgb)); }
+.ws-row--danger::before { left: 0 !important; }
+@media (max-width: 520px) {
+  .ws-row-value { display: none; }
+  .ws-settings { gap: 24px; }
+}
+
+/* ── Reduce Motion: things appear; nothing travels ── */
+@media (prefers-reduced-motion: reduce) {
+  .ws-route { animation: wsFade .2s ease backwards; }
+  html.ws :is(a.card, .oh-card, .ws-more-tile, .ws-action, .ws-row-chev, .ws-top-title) { transition: none; }
+  html.ws :is(a.card, .oh-card, .ws-more-tile, .ws-action):hover { transform: none; }
+}
+@keyframes wsFade { from { opacity: 0; } }
+
+/* ═══ HOME ("Today"): a hero, the floor right now, four health numbers,
+   and what needs you -- Apple Fitness's summary, for a gym. ═══ */
+.td { display: flex; flex-direction: column; gap: 30px; }
+.td > * { animation: wsArrive var(--ws-spring-t) var(--ws-spring) backwards; }
+.td > :nth-child(2) { animation-delay: 50ms; }
+.td > :nth-child(3) { animation-delay: 110ms; }
+.td > :nth-child(4) { animation-delay: 170ms; }
+.td-top { display: grid; gap: 16px; }
+@media (min-width: 1024px) { .td-top { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); } }
+
+.td-hero, .td-now, .td-kpi {
+  position: relative; display: flex; flex-direction: column; min-width: 0;
+  border-radius: 24px; background: var(--panel); border: 1px solid var(--ws-hair);
+  box-shadow: var(--card-shadow); color: var(--ink);
+}
+.td-hero {
+  padding: 22px 24px 20px; min-height: 300px; overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgb(var(--accent-rgb) / .10), transparent 55%),
+    var(--panel);
+}
+.td-hero-head, .td-now-head { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: -.012em; color: var(--mute); }
+.td-go { display: flex; margin-left: auto; color: var(--faint); }
+.td-hero-value {
+  margin-top: 18px; font-size: clamp(2.75rem, 1.9rem + 3.2vw, 4.25rem); font-weight: 760;
+  letter-spacing: -.045em; line-height: .95; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.td-hero-say { display: flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 15.5px; font-weight: 500; color: var(--ink); opacity: .9; }
+.td-hero-foot { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; font-size: 14px; color: var(--mute); }
+.td-due { color: rgb(var(--warn-rgb)); font-weight: 600; }
+.td-bars {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items: end;
+  height: 104px; margin-top: auto; padding-top: 24px;
+}
+.td-bars--ghost { height: 104px; }
+.td-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 7px; height: 100%; min-width: 0; }
+.td-bar i {
+  display: block; width: 100%; max-width: 46px; height: var(--h); border-radius: 8px 8px 5px 5px;
+  background: rgb(var(--tint-rgb) / .13); transform-origin: bottom;
+  animation: tdGrow .8s var(--ws-spring) backwards;
+}
+.td-bar.is-now i { background: rgb(var(--accent-rgb)); box-shadow: 0 6px 18px -8px rgb(var(--accent-rgb) / .7); }
+.td-bar span { font-size: 12px; font-weight: 600; color: var(--faint); }
+.td-bar.is-now span { color: var(--ink); }
+@keyframes tdGrow { from { transform: scaleY(0); } }
+
+.td-now { padding: 20px 22px; }
+.td-live { width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--good-rgb)); box-shadow: 0 0 0 4px rgb(var(--good-rgb) / .18); }
+.td-now-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.td-now-value { font-size: 2.5rem; font-weight: 750; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.td-now-label { margin-top: 6px; font-size: 14px; color: var(--mute); }
+.td-now-say { margin-top: auto; padding-top: 18px; font-size: 14px; color: var(--mute); border-top: 1px solid var(--ws-hair); }
+.td-now-grid + .td-now-say { margin-top: 24px; }
+
+.td-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 900px) { .td-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+.td-kpi { gap: 4px; padding: 16px 18px 18px; min-height: 124px; border-radius: 20px; }
+.td-kpi-label { font-size: 14px; font-weight: 600; letter-spacing: -.01em; color: var(--mute); }
+.td-kpi-value { margin-top: 6px; font-size: 2rem; font-weight: 750; letter-spacing: -.035em; line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-kpi-say { display: flex; align-items: center; gap: 5px; margin-top: auto; padding-top: 8px; font-size: 13.5px; color: var(--mute); }
+
+.td-todo-head { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0 2px; }
+.td-todo-title { font-size: 1.375rem; font-weight: 720; letter-spacing: -.024em; color: var(--ink); }
+.td .oh-row { border-top: 0; padding: 14px 18px; }
+.td-row-wrap { position: relative; }
+.td-row-wrap + .td-row-wrap::before { content: ""; position: absolute; top: 0; right: 0; left: 74px; border-top: 1px solid var(--ws-hair); }
+.td .oh-followups { border-top-color: var(--ws-hair); }
+
+@media (hover: hover) and (pointer: fine) {
+  :is(.td-hero, .td-now, .td-kpi) { transition: transform .45s var(--ws-spring), box-shadow .3s ease; }
+  :is(.td-hero, .td-now, .td-kpi):hover { transform: translateY(-2px); box-shadow: var(--ws-raise); }
+}
+:is(.td-hero, .td-now, .td-kpi):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .td { gap: 24px; }
+  .td-hero { padding: 18px 18px 16px; min-height: 0; }
+  .td-bars { height: 84px; gap: 8px; }
+  .td-now-value { font-size: 2.125rem; }
+  .td-kpi { min-height: 112px; padding: 14px 16px 16px; }
+  .td-kpi-value { font-size: 1.75rem; }
+  .td .oh-row { padding: 12px 14px; }
+  .td-row-wrap + .td-row-wrap::before { left: 68px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .td > *, .td-bar i { animation: none; }
+  :is(.td-hero, .td-now, .td-kpi):hover { transform: none; }
+}
+
+.td-spark { display: flex; align-items: flex-end; gap: 3px; height: 64px; margin-top: auto; padding-top: 20px; }
+.td-spark i { flex: 1; min-width: 2px; height: var(--h); border-radius: 3px; background: rgb(var(--tint-rgb) / .14); transform-origin: bottom; animation: tdGrow .7s var(--ws-spring) backwards; }
+.td-spark i.is-now { background: rgb(var(--good-rgb)); }
+.td-spark + .td-now-say { margin-top: 14px; }
+@media (prefers-reduced-motion: reduce) { .td-spark i { animation: none; } }
+@media (min-width: 1024px) { .td-bars { height: 120px; } }
+
+/* More: rows are shorter than settings rows -- a label, no second line. */
+.ws-row--nav { min-height: 54px; padding-top: 9px; padding-bottom: 9px; }
+.ws-row--nav + .ws-row::before, .ws-row + .ws-row--nav::before { left: 64px; }
+.ws-more { max-width: 760px; }

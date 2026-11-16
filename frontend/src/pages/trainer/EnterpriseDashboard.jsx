@@ -9,10 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useFetch } from '../../utils.js';
 import { Card, Bar, ErrorState, PageSkeleton } from '../../components/UI.jsx';
-import GymSettingsCard from '../../components/trainer/GymSettingsCard.jsx';
-import PayoutSetup from '../../components/trainer/PayoutSetup.jsx';
-import { useBrand } from '../../brand/BrandProvider.jsx';
-import GymLockup from '../../brand/GymLockup.jsx';
+import { SettingsBack } from './SettingsGym.jsx';
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -22,7 +19,6 @@ function daysUntil(iso) {
 export default function EnterpriseDashboard() {
   const nav = useNavigate();
   const status = useFetch(() => api('/enterprise/status'));
-  const { brand } = useBrand();
 
   if (status.loading) return <PageSkeleton variant="detail" label="Loading your gym's billing status" />;
   if (status.error) return <ErrorState error={status.error} onRetry={status.reload} />;
@@ -56,8 +52,9 @@ export default function EnterpriseDashboard() {
   return (
     <div className="space-y-6" data-tour="trainer-enterprise">
       <div>
-        <h1 className="t-title">Setup & billing</h1>
-        <p className="t-sub mt-1.5">Your Barbell plan, getting paid, join codes and gym settings.</p>
+        <SettingsBack />
+        <h1 className="t-title">Plan & billing</h1>
+        <p className="t-sub mt-1.5">Your Barbell plan, how many clients it covers, and your receipts.</p>
       </div>
 
       {alerts.length > 0 && (
@@ -90,47 +87,15 @@ export default function EnterpriseDashboard() {
             <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>Renew or upgrade</button>
           </div>
         </Card>
-        <PayoutSetup />
-      </div>
-
-      <Card className="p-5 sm:p-6">
-        <h2 className="ws-section-title">Join QR codes</h2>
-        <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>New clients and trainers scan one to join your gym.</p>
-        <div className="flex flex-wrap gap-2 mt-4">
-          <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/qr')}>Client QR code</button>
-          {/* Opened the Client tab, so "Onboard trainer" made a client code. */}
-          <button className="btn" onClick={() => nav('/app/trainer/enterprise/qr?for=trainer')}>Trainer QR code</button>
-        </div>
-      </Card>
-
-      {/* The gym's own look: what members, trainers and the owner see. */}
-      {brand && (
-        <Card className="p-5 sm:p-6">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="min-w-0 flex-1">
-              <h2 className="ws-section-title">Your gym’s app</h2>
-              <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>
-                {brand.primary ? 'Your members, trainers and you see the app in your colours, with your gym’s name on top.'
-                  : 'Give the app your gym’s colours and logo, so it feels like your gym’s own app.'}
-              </p>
-            </div>
-            <span className="flex items-center gap-3 px-4 py-3 rounded-2xl" style={{ background: 'var(--bg2)', border: '1px solid var(--line)' }}>
-              <GymLockup brand={brand} variant="stack" markSize={36} />
-              {brand.primary && (
-                <span className="flex -space-x-1.5" aria-label={`Colours ${brand.primary} and ${brand.secondary}`}>
-                  <i className="w-6 h-6 rounded-full" style={{ background: brand.primary, boxShadow: '0 0 0 2px var(--bg2)' }} />
-                  <i className="w-6 h-6 rounded-full" style={{ background: brand.secondary, boxShadow: '0 0 0 2px var(--bg2), inset 0 0 0 1px rgb(var(--tint-rgb) / .2)' }} />
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            <button className="btn-primary" onClick={() => nav('/app/trainer/enterprise/brand')}>{brand.primary ? 'Change colours & logo' : 'Choose your colours'}</button>
+        <Card className="p-5 sm:p-6 flex flex-col">
+          <h2 className="ws-section-title">Receipts & invoices</h2>
+          <p className="text-[15px] mt-1" style={{ color: 'var(--mute)' }}>Every payment you have made to Barbell, as a PDF you can download or email.</p>
+          <div className="mt-auto pt-5">
+            <button className="btn" onClick={() => nav('/app/trainer/enterprise/billing')}>See receipts</button>
           </div>
         </Card>
-      )}
+      </div>
 
-      <GymSettingsCard />
     </div>
   );
 }

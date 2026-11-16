@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryAction } from '../../components/trainer/useQueryAction.js';
 import { api } from '../../api.js';
+import { useAuth } from '../../auth.jsx';
 import { useFetch, GOAL_LABEL, STATUS_META, kg1 } from '../../utils.js';
 import { Card, ErrorState, Modal, StatusChip, PageSkeleton, Avatar } from '../../components/UI.jsx';
 import Select from '../../components/Select.jsx';
@@ -57,6 +58,7 @@ function MembershipPill({ membership }) {
 }
 
 export default function Clients() {
+  const { isOwner } = useAuth();
   const { data, loading, error, reload } = useFetch(() => api('/clients'));
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('ALL');
@@ -161,10 +163,13 @@ export default function Clients() {
     <div className="space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3 anim-fadeUp">
         <div>
-          <h1 className="t-title">Clients</h1>
-          <p className="t-sub mt-1.5">{filtered.length === data.clients.length ? `${data.clients.length} clients` : `${filtered.length} of ${data.clients.length} shown`}</p>
+          {/* An owner runs a gym of members; a trainer coaches clients.
+              Same list, each in their own word (the owner's section is
+              called Members). */}
+          <h1 className="t-title">{isOwner ? 'Members' : 'Clients'}</h1>
+          <p className="t-sub mt-1.5">{filtered.length === data.clients.length ? `${data.clients.length} ${isOwner ? 'members' : 'clients'}` : `${filtered.length} of ${data.clients.length} shown`}</p>
         </div>
-        <button className="btn-primary" onClick={() => setCreateOpen(true)} data-tour="trainer-clients-new">+ New client</button>
+        <button className="btn-primary" onClick={() => setCreateOpen(true)} data-tour="trainer-clients-new">{isOwner ? '+ New member' : '+ New client'}</button>
       </div>
 
       <div className="space-y-2">

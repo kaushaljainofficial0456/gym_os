@@ -66,6 +66,9 @@ const EnterpriseOnboarding = lazy(() => import('./pages/trainer/EnterpriseOnboar
 const EnterpriseDashboard = lazy(() => import('./pages/trainer/EnterpriseDashboard.jsx'));
 const EnterpriseQR = lazy(() => import('./pages/trainer/EnterpriseQR.jsx'));
 const GymBranding = lazy(() => import('./pages/trainer/GymBranding.jsx'));
+const SettingsHub = lazy(() => import('./pages/trainer/SettingsHub.jsx'));
+const SettingsGym = lazy(() => import('./pages/trainer/SettingsGym.jsx'));
+const SettingsPayouts = lazy(() => import('./pages/trainer/SettingsPayouts.jsx'));
 const EnterpriseBilling = lazy(() => import('./pages/trainer/EnterpriseBilling.jsx'));
 const Home = lazy(() => import('./pages/client/Home.jsx'));
 const Workout = lazy(() => import('./pages/client/Workout.jsx'));
@@ -365,6 +368,11 @@ export default function App() {
         <Route path="enterprise/onboarding" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseOnboarding)}</OwnerOnly>} />
         <Route path="enterprise/qr" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseQR)}</OwnerOnly>} />
         <Route path="enterprise/brand" element={<OwnerOnly ok={isOwner} ready={ready}>{page(GymBranding)}</OwnerOnly>} />
+        {/* Settings: one list of every setting (SettingsHub), and the two
+            screens that used to be cards on Setup & billing. */}
+        <Route path="settings" element={<OwnerOnly ok={isOwner} ready={ready}>{page(SettingsHub)}</OwnerOnly>} />
+        <Route path="settings/gym" element={<OwnerOnly ok={isOwner} ready={ready}>{page(SettingsGym)}</OwnerOnly>} />
+        <Route path="settings/payouts" element={<OwnerOnly ok={isOwner} ready={ready}>{page(SettingsPayouts)}</OwnerOnly>} />
         <Route path="enterprise/billing" element={<OwnerOnly ok={isOwner} ready={ready}>{page(EnterpriseBilling)}</OwnerOnly>} />
       </Route>
       <Route path="/app/client" element={
