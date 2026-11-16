@@ -1,150 +1,142 @@
-# Gym OS Nutrition — Commercial Readiness Report
+# Gym OS Nutrition — Commercial Readiness Report (Phase 2)
 
-**Branch:** `feature/nutrition-engine-overhaul` (from `main` @ `04c0389`; `main` never modified) · **Date:** 2026-11-15
-**Companion documents:** `NUTRITION_COMPLETE_TECHNICAL_AUDIT.md` (Phase 0), `NUTRITION_BENCHMARK_REPORT.md` (all measurements), `NUTRITION_PROGRESS.md` (log).
+**Branch:** `feature/nutrition-engine-overhaul`, at `8b5f93d` plus this report. It branched from `main` @ `04c0389`. `main` was never modified, merged into, or pushed to. **Date:** 2026-11-16.
+
+**Companion documents:**
+- `NUTRITION_PHASE2_AUDIT.md`: findings F1–F14
+- `NUTRITION_ACCURACY_REPORT.md`
+- `NUTRITION_DATA_LICENSING.md`
+- `NUTRITION_REAL_WORLD_VALIDATION.md`
+- `NUTRITION_PHASE2_PROGRESS.md`
+- Phase 1: `NUTRITION_COMPLETE_TECHNICAL_AUDIT.md`, `NUTRITION_BENCHMARK_REPORT.md`
 
 ## Verdict
 
-**Score: 7.0 / 10** (audit estimate before the overhaul: about 5.5).
-**Recommendation: ready for a controlled pilot, not for general commercial release.** A pilot means one or two gyms, with values labelled as estimates and weighed-meal validation data collected. The engineering blockers found in the audit are fixed and measured. What separates this from a 9 is **evidence that doesn't exist yet**:
+**Weighted score: 7.4 / 10.** On the same weighted scorecard, the end of Phase 1 re-scores at about 6.5. Phase 1 reported 7.0 on a different, unweighted rubric; §4 explains the difference.
 
-- real users' meals with weighed portions;
-- independent validation of the recipe-priced dishes;
-- legal clearance of two datasets.
+**Recommendation: ready for a controlled pilot. Not ready for general commercial release.** Two things block release, and neither is engineering:
 
-Plus a few features the brief asked for that were not built (§6).
+1. **Data licensing.** IFCT 2017 needs NIN's written permission for product use, INDB's dataset licence is unconfirmed, and the Open Food Facts and CNF attribution notices are not shown. IFCT and INDB alone price about 37% of benchmark items. See `NUTRITION_DATA_LICENSING.md`.
+2. **No real-world validation.** Every accuracy number comes from typed benchmark descriptions, not weighed real meals. See `NUTRITION_REAL_WORLD_VALIDATION.md`.
+
+A genuine 9/10 is not reachable from this repository alone. The scorecard marks every dimension that rests on unverified evidence, and §6 lists what would close the gap.
 
 ---
 
-## 1. Final architecture
-
-```
-POST /me/nutrition/describe ─► describeMeal ─► estimateFood (foodEstimator.js, the live engine)
-   │   splitItems → expandFragments ─┬─ "X with Y" split (only if the whole-phrase row names both)      [fixed]
-   │                                 ├─ curry+rice / roti pairs
-   │                                 └─ N curated foods side by side; amounts never dropped           [new]
-   │   parseFragment (context words "homemade" recorded, not searched)                                 [new]
-   │   search: 144 curated staples (incl. 18 recipe-priced dishes) → 21,353-row measured index
-   │   guard: a match sharing no food word with the input is unresolved, not summed                  [new]
-   │   resolveGrams → scaleNutrition (per-100 g × grams; liquids in ml weigh ~1 g/ml)                  [fixed]
-   │   food/coverage.js: every food word → an item, `unresolved`, or `needs_clarification`             [new]
-   │   food/confidence.js: identification · portion · composition; overall = weakest                   [new]
-   ▼
-Plate (PlateSheet / LogCard) — "not found" needs a second, deliberate tap; weakest dimension in words
-   ▼
-POST /me/nutrition/log-batch  (and the classic /nutrition/clients/:id/meals/log)
-   services/nutrition/mealLogWriter.js — one transaction: meal_log_requests (idempotency + what was
-   knowingly excluded) + meal_logs; services/nutrition/provenance.js re-prices database items on the
-   SERVER and stamps nutrition_source (verified_database | brand_label | recipe_calculation |
-   ai_estimate | user_provided | previous_log | plan) — a client can never claim a trusted class.
-
-food/recipes.js — dishes with no usable row, priced from ingredient rows pinned by source_id
-services/nutrition/targets.js — Mifflin-St Jeor targets with safeguards, assumptions, disclaimer
-Tier 4 AI (intelligence/foodAI.js) — unchanged: AI proposes components, the database prices them
-```
-
-## 2. What was implemented (commit by commit, all on this branch)
+## 1. What Phase 2 changed (all on the feature branch)
 
 | Commit | Change |
 |---|---|
-| `e461ddb` | Phase 0 audit; baseline benchmark preserved. |
-| `082ed82` | **Zero silent drops**: coverage accounting; "X with Y" fix; context words; no-shared-word guard; plural staples. |
-| `1ea6668` | **Logging**: idempotent transactional writer; server re-pricing; provenance + grams + fibre/sugar/sodium persisted; "log anyway" confirmation for unresolved items; supplements validation. |
-| `df503eb` | **Indian coverage**: 16 standard recipes from measured ingredients; puran poli, pav, jam, papad; N-food segmentation with customary pairs (misal pav → 2 pav). |
-| `72d7b6b` | **Calibrated confidence by dimension**, shown in plain words. |
-| `2004e4d` | **534-case v2 benchmark** (+ CI gate). Fixed what it exposed: weighed amounts lost by the segmenter; sugar-in-the-name liquid density. |
-| `d410882` | Benchmark report (original vs improved, same scorer). |
-| `4b4b494` | **Target safeguards**: minors, underweight, BMI ≥ 30 protein, calorie/macro consistency, medical notes, disclaimer. |
-| `e4988f4` | **PostgreSQL proof**: concurrent idempotency + RLS isolation test, added to CI. |
-| `518789d` | Egg-led dishes (egg fried rice / biryani / roll / sandwich) no longer double count. |
+| `ab44aae` | Phase 2 audit: 14 findings, top 5 obstacles |
+| `a6dcda5` | **Critical defects.** One user could rewrite a shared AI value (now a review queue keyed on distinct people). "Half a plate" was logged as USDA veal. "Sabudana khichdi" was counted twice. |
+| `08c98e6` | Container sizes consistent with the food (a katori is no longer a bowl-sized serving); size words applied ("2 large eggs", "1 big bowl") |
+| `2e671ac` | 14 hand-typed staples recomputed from measured ingredients. Dal 145 → 87 kcal/100 g and mutton curry 198 → 138, both now inside INDB's ranges. Oil choices use each recipe's known cooking oil. |
+| `8569add` | **Raw/dry vs cooked** ("raw rice" was puffed rice; "uncooked moong dal" a cooked dal at a fifth of its energy). Amounts written after the food; a bowl of a dry food counts as cooked; nut toppings |
+| `1e316b6` | Accuracy report; estimate totals name nutrients a source never measured |
+| `b3eb7a3` | The classic food sheet is now server-priced and idempotent, like the plate. Logged items show where their numbers came from. |
+| `c4422e7` | **User corrections**: recorded with full audit fields; personal learning applies only to that person; shared mappings need 3+ people and an admin; RLS verified on PostgreSQL |
+| `317fd36` | **Personalization**: activity level drives TDEE; diet-aware defaults; foods-to-avoid flags; safeguards intact |
+| `267fba3` | **Benchmark v3, 945 cases**: multi-source ground truth; metrics for false identification, portion error and calibration by category. Engine fixes it exposed (raw vegetables, cup weights, spellings, narration, tomato rice) |
+| `8b5f93d` | Data licensing, real-world validation protocol, image-estimation decision |
 
-## 3. Results (full detail in `NUTRITION_BENCHMARK_REPORT.md`)
+## 2. Results
 
-| v2 benchmark, 534 cases | Original | Improved |
-|---|---|---|
-| Silent food drops (multi-food cases) | 28.1% | **0%** (CI-enforced) |
-| Food identity | 92.2% | **95.3%** |
-| Indian food identity (255 cases) | 90.9% | **96.8%** |
-| International food identity (267 cases) | 93.3% | 93.8% |
-| Multi-food meals: items identified | 93.0% | **98.8%** |
-| Confident-wrong answers | 8.2% | **3.6%** |
-| Unresolved | 4.2% | **2.3%** |
-| Fabrication | 0% | 0% |
-| Calibration error, independently measurable cases | 0.133 | **0.078** |
-| kcal in reference range | 75.5% | 75.5% (unchanged) |
-| Median kcal error, explicit-weight cases | 1.3% | 1.2% (optimistic: 113 same-row cases) |
-| Cases worse than the original engine | — | **0** (v1: 28 better; v2: 74 better) |
+Same scorer, same 945-case v3 dataset, Phase 1 final engine vs now:
 
-## 4. Score by dimension (evidence-based)
+| Metric | Phase 1 final | Now |
+|---|---:|---:|
+| Weighted benchmark score | 86.5% | **90.4%** |
+| Food identification | 95.2% | **97.5%** |
+| False identification (resolved cases) | — | **2.5%**, and 0 of 252 at "high" confidence |
+| Unresolved | 6.5% | **1.3%** |
+| Silent food drops (multi-food) | 0% | 0% (CI-enforced) |
+| Fabrication (number for a non-food) | 0% | 0% (CI-enforced) |
+| Portion accuracy | 87.1% | **93.0%** (89% within 25% of reference grams) |
+| kcal in reference range, all nutrition-scored (n=675) | 73.6% | **83.5%** |
+| kcal MAE, resolved | 37.5 kcal | **25.3 kcal** |
+| kcal in range, **independent references only** | 63.6% | **72.1%** (MAE 53 → 43 kcal) |
+| Confidently wrong cases | 31 | **18** |
+| Calibration error (ECE), all cases | 0.189 | **0.213 (worse)** |
+| ECE, independent nutrition references | — | **0.063** |
+| Cases better / worse than Phase 1 final | — | **147 better / 7 worse** (worst −0.05) |
 
-| Dimension | Before | Now | Evidence | What holds it back |
-|---|---:|---:|---|---|
-| Food identification & meal decomposition | 6 | **8.5** | 95.3% identity, 98.8% meal items, 0 silent drops (534 cases) | International 93.8%; synthetic inputs only |
-| Nutrition calculation & provenance | 6 | **8.5** | Server-priced, deterministic, Σ items = total (tested), provenance persisted, Atwater-consistent recipes | — |
-| Indian food coverage | 6 | **8** | 96.8% identity; misal, thalipeeth, pithla, bhakri, pongal, bhatura, kachori… now resolve | **Recipe calories have no independent validation**; 23 staples still hand-entered |
-| Portion estimation | 6 | **6.5** | Assumed amounts flagged; food-specific units; container counts | Defaults unvalidated against weighed meals; size words recorded but not applied; no photo estimation |
-| Confidence & uncertainty | 4 | **8** | ECE 0.133 → 0.078; "high" right 81% (was 70%); reasons in plain words | Mild under-confidence on medium/low |
-| AI estimation layer | 6.5 | **6.5** | Unchanged: grounded components, 4-provider failover, cooldowns | No meal-level AI decomposition; cost tracked as call counts, not money |
-| Corrections & learning | 5 | **5** | Unchanged: corrections stored separately, aggregated | No reviewed release pipeline; shared AI cache auto-updates after 5 agreeing corrections |
-| Personalisation & safety | 5 | **6.5** | Safeguards + disclaimer (tested); medical notes acknowledged | Activity level inferred from training experience; diet type / exclusions unused in suggestions |
-| Logging UX | 6.5 | **7** | Unresolved needs explicit confirmation; weakest dimension shown | Not browser-tested end to end |
-| Backend security & reliability | 6.5 | **8** | Idempotency incl. 6-way concurrency on PostgreSQL; RLS isolation on PostgreSQL; validation; transactions | No production-like load test |
-| Performance | 7 | **7** | 47 meals/s per core; p50 13 ms, p95 69 ms, p99 106 ms | 641 ms + ~75 MB index load per cold start (serverless) |
-| Real-world validation | 2 | **3** | 534-case benchmark with documented references | **No real users' weighed meals** |
+**How to read this:**
 
-Overall 7.0 is the judgement across these, weighted towards what a paying user experiences (identification, totals, honesty about uncertainty) and capped by the absence of real-world validation. It isn't an average dressed up as a measurement.
+- The "independent references" rows exclude cases whose reference is the row the engine itself uses; those score about 99% by construction.
+- The independent sets differ slightly in composition between the two engines (481 vs 399 cases), because "same-row" depends on the engine's choice. The engine-independent subsets are fixed:
+  - standard portions: 62.6% → 67.0% in range;
+  - published ranges: 75.6% → 76.7%.
+- Calibration got **worse overall**. The engine became more accurate without its labels becoming more confident, so it is now *under*-confident: meals labelled "low" are right about 95% of the time. That is the safe direction, but it is still miscalibrated. It is listed as open work, not tuned to the benchmark at the last minute.
+
+## 3. Status against the Phase 2 brief
+
+| Area | Status |
+|---|---|
+| Repo/branch verification, remote-tracking issue | **Completed** (Phase 2 audit) |
+| Phase 2 audit with severities | **Completed** |
+| Calorie/macro accuracy: raw vs cooked, dry vs prepared, oil, yield, double counting | **Completed** for the listed staples and recipes; **Partially completed** for database dishes (oil approximated) |
+| Missing values never zero | **Completed** in items, recipes and estimate totals; **Not implemented** in stored logs (macros are `NOT NULL`) |
+| Indian recipe coverage | **Completed**: 35 computed recipes, 13 raw/dry staples, 9 raw vegetables; **Requires external validation** of recipe proportions |
+| Realistic portions | **Completed** (containers, sizes, trailing amounts, toppings, USDA cup weights); **Requires external validation** for real kitchens |
+| Multi-food sentences (the brief's four examples) | **Completed**, pinned by tests |
+| Image estimation | **Not implemented**: kept unexposed; a paid provider needs owner approval; grounded design recorded |
+| Confidence by category | **Completed** (metric 21); under-confidence is open |
+| Benchmark toward 1,000 with independent ground truth | **Completed**: 945 cases, multi-source ranges, independence split reported |
+| Corrections system (audit fields, isolation, review, RLS) | **Completed** |
+| Data licensing document | **Completed**; two **Blocked** items await the owner and third parties |
+| Personalization | **Completed** |
+| UX improvements | **Completed** for provenance, personalised notes, avoid flags and the raw/dry alternative; **Unverified** in a browser end-to-end |
+| Backend security/performance tests | **Partially completed**: idempotency, RLS, validation and concurrency tested on PostgreSQL; no load test |
+| Tests for every change, none weakened | **Completed** (one oil assertion made *more* precise for recipe dishes; documented) |
+
+## 4. Weighted scorecard
+
+Weights are those in the brief. Scores are 0–10. "Unverified" marks a dimension whose score rests on benchmark or synthetic evidence only; those scores are capped below 9 for that reason.
+
+| # | Dimension | Weight | P1 end* | Now | Evidence | Caps / unverified |
+|---|---|---:|---:|---:|---|---|
+| 1 | Food identification | 15% | 8.0 | **8.5** | v3: 97.5% identity; 2.5% false ID, 0/252 at high confidence; 1.3% unresolved; 0 silent drops | **Unverified** on real typed logs |
+| 2 | Calorie & macro accuracy | 20% | 6.0 | **7.0** | 83.5% in range (all), 72.1% on independent references, MAE 25 kcal; dal/mutton corrected against INDB; raw/cooked fixed | **Unverified** on weighed meals; recipe proportions curated; stored logs turn unmeasured macros into 0 |
+| 3 | Portion estimation | 15% | 6.0 | **7.0** | 93% portion accuracy; 89% within 25%; containers, sizes and trailing amounts; USDA cup weights | **Unverified** real katori/bowl sizes; standard-portion MAE still 104 kcal |
+| 4 | Indian food & recipe coverage | 10% | 7.5 | **8.5** | 35 computed recipes, raw/dry staples and vegetables; Indian identity high on v2/v3 | Recipe calories **unverified**; data licences counted under #10 |
+| 5 | AI intelligence & meal understanding | 10% | 6.5 | **7.5** | The brief's sentences, narration, trailing amounts, toppings, raw/dry alternatives; personal learning | No AI meal decomposition for unresolved sentences; no photo path |
+| 6 | Confidence & uncertainty | 5% | 7.5 | **7.5** | ECE 0.063 on independent references; 0 wrong at "high" on v3; reasons in words | Overall ECE 0.213 (under-confident); meal-level labels too low |
+| 7 | User experience | 10% | 6.0 | **7.0** | Provenance on every logged item; personalised and avoid notes; one-tap back; retry-safe classic logging | **Unverified** in a browser end-to-end |
+| 8 | Backend reliability & security | 5% | 7.5 | **8.0** | Both logging paths idempotent; corrections RLS verified on PostgreSQL; strict validation; transactions; trial merge with `main` passes 2,226 tests | No load test; no penetration test |
+| 9 | Personalization | 5% | 5.0 | **8.0** | Activity level, diet defaults, avoid flags, personal corrections; safeguards tested | Avoid flags see names/recipes only (stated in UI) |
+| 10 | Commercial readiness & data compliance | 5% | 3.0 | **3.0** | Licensing researched and documented; attribution drafted | **Blocked**: IFCT permission, INDB licence, OFF/CNF attribution not shown |
+| | **Weighted total** | 100% | **6.5** | **7.4** | | |
+
+\* "P1 end" re-scores the Phase 1 final state on this weighted rubric, using the same v3 measurements. Phase 1's own report said 7.0 on an unweighted rubric that did not separate licensing and gave more weight to engineering.
+
+**Why not higher.** Dimensions 2, 3 and 10 carry 40% of the weight, and each is capped by evidence this repository cannot produce: weighed real meals, and licences signed by third parties. With both resolved and the engineering unchanged, the same rubric would put this at about 8.2–8.5. Reaching 9 also needs the work in §6.
 
 ## 5. Security assessment
 
-- **Isolation:** every nutrition query is scoped by the authenticated client. The new `meal_log_requests` table is under forced RLS, **verified on PostgreSQL**: one gym cannot read another's requests or write a log for another gym's client. A request id is scoped to its owner (tested), so one member's id can never replay another's log.
-- **Integrity:** the server re-prices database items and ignores client calories for them (a tampered 9,999 kcal is stored as the real value; tested). "Verified" provenance can't be claimed by a client (schema-rejected; tested).
-- **Duplicates:** retries and concurrent duplicates write once (SQLite and PostgreSQL tests).
-- **Validation:** all new fields zod-validated; the supplements route, previously unvalidated, now is.
-- **Secrets:** AI provider keys remain server-only (no `VITE_*` AI keys).
-- **Not done:** no independent penetration test; rate limits unchanged (40/min plate, AI limited).
+- **Tenant isolation.** `meal_log_requests` and the new `nutrition_corrections` are under forced RLS, **verified on PostgreSQL 16**: another gym can neither read nor write either table for a client that isn't theirs. Personal corrections are read only for the same `client_id` (tested with two members of one gym and members of different gyms).
+- **One user cannot change shared values.** A shared AI value changes only through an admin-approved proposal backed by distinct people. A shared phrase→food mapping needs 3+ distinct people *and* an operator's approval, and can be revoked. The candidate list shows counts only, never who.
+- **Integrity.** The server re-prices catalogue items on both logging paths, including at the classic picker's oil level. A client cannot claim a "verified" provenance (schema-rejected; tested). The plate's proposal snapshot is strictly validated and never used for pricing.
+- **Duplicates.** Retries and concurrent duplicates write once on both paths (SQLite and PostgreSQL).
+- **Profile fields.** Activity level and diet are validated against enums, exclusions are length-limited, and unknown values are refused with a message.
+- **Not done:** penetration test, load test.
 
-## 6. Outstanding risks, remaining bugs and known limitations
+## 6. What it takes to reach 9/10
 
-**Release blockers (not engineering):**
-1. **Data licences.** Open Food Facts (ODbL) requires attribution and share-alike; **the app shows no attribution**. INDB ("open academic") and IFCT 2017 (NIN/ICMR) commercial terms are **unverified**. Needs a legal decision; I didn't change any product text.
-2. **Recipe-priced dish calories are unvalidated** (18 dishes). They identify correctly and are computed transparently from measured ingredients, but proportions, yields and absorbed oil are curated assumptions.
+1. **Resolve licensing** (L1–L5 in `NUTRITION_DATA_LICENSING.md`): NIN permission, INDB confirmation, approved attribution.
+2. **Run the weighed-plate validation** (`NUTRITION_REAL_WORLD_VALIDATION.md` §2) and fix what it finds, especially katori/bowl sizes and restaurant oil.
+3. **Calibrate meal-level confidence** on real data, so that "low" stops meaning 95% right.
+4. **Nullable stored macros**, so an unmeasured carbohydrate is never stored as 0.
+5. **Convert the remaining inline values and the most-logged INDB dishes** to computed recipes, which gives a known oil baseline.
+6. **AI meal decomposition** for sentences the engine cannot resolve, through the grounded pipeline. **Photo estimation** only if a paid provider is approved, priced by the database.
+7. **Browser end-to-end tests** for the plate and classic flows, and a load test on PostgreSQL.
 
-**Not built from the brief:** AI meal-level decomposition; the corrections → review → benchmark-gated release pipeline (the shared AI cache still auto-updates after 5 agreeing corrections, which is a policy decision for you); supplement intake tracking (list only); use of diet type / food exclusions; an activity-level field; photo-based portion estimation in the live UI; refactoring the 2,304-line `FoodLogSheet.jsx`; removing the dead `AskSK.jsx`.
-
-**Known bugs / limitations still present:**
-- **23 curated staples still carry hand-entered per-100 g values** (vada pav, dal, kadhi, chai, butter chicken and others), each with a one-line basis note. The audit flagged them; they were not converted to computed recipes in this pass.
-- Nutrition history compares every past day with the *current* plan target (audit B12).
-- `water_logs` uses check-then-insert with no unique key (B13; low impact).
-- Size words ("large roti") are recorded and lower portion confidence, but don't change grams.
-- Default spreads (1 tsp butter/jam) can under-count. The plate flags them as guessed.
-- International composite dishes: median kcal error 17.3%, identity 93.8%.
-- A leading countable food in front of an *uncurated* dish can still be read as two foods. Fixed for egg fried rice, egg biryani, egg roll and egg sandwich only.
-- V2/V3 engine layers remain opt-in. All live improvements are in the live engine.
-
-**Branch hygiene:** `main` has since advanced (teammates merged [kaushaljainofficial0456/gym_os#23](https://github.com/kaushaljainofficial0456/gym_os/pull/23), [#25](https://github.com/kaushaljainofficial0456/gym_os/pull/25), [#26](https://github.com/kaushaljainofficial0456/gym_os/pull/26)). A trial merge of this branch with the latest `main` is **conflict-free**.
-
-## 7. Performance assessment
-
-- **Meal parsing:** 47 meals/second per CPU core, measured over every v2 benchmark input three times. Median 13 ms, p95 69 ms, p99 106 ms, max 148 ms. In the benchmark harness the median per-meal time rose from 8.1 ms (original engine) to 13.9 ms, the cost of the coverage and segmentation passes. That is still far below anything a user can perceive.
-- **Cold start:** loading the food index takes 641 ms and about 75 MB per process. Fine on a long-running server; on serverless it is paid on every cold start (already true before this work).
-- **Not done:** HTTP load test of the nutrition endpoints (they sit behind a 40/min per-user limit, so a load test would mostly measure the limiter), and a Postgres pool test under concurrent logging.
-
-## 8. What it takes to reach 9/10
-
-1. **Real-world validation.** 50–100 real logged meals with weighed portions, Indian and international, scored with the existing harness. This is the single largest gap.
-2. **Validate the recipe dishes**, either against weighed home recipes or lab values, and adjust proportions, yields and oil.
-3. **Legal sign-off** on INDB / IFCT terms and add Open Food Facts attribution.
-4. **International coverage pass** (identity ≥ 95%), using the same staple/recipe approach that lifted Indian food.
-5. **AI meal decomposition** for sentences the engine can't resolve, through the existing grounded pipeline.
-6. **Corrections pipeline:** reviewer approval plus a benchmark gate before any shared value changes.
-7. **Browser end-to-end tests** for the plate flow (Playwright is already set up), and a load test on Postgres.
-
-## 9. Test status at hand-off
+## 7. Test status at hand-off
 
 | Suite | Result |
 |---|---|
-| Backend `node --test` (SQLite) | 2,114 tests, **0 failures**, 6 skipped (Postgres-only tests without a database URL) |
-| Postgres integration (local PostgreSQL 16, at `e4988f4`) | communityPg, financialRls, groupByParamsPg, mealLogPg: **33/33 pass** |
-| Frontend `vitest` | 213 tests, **0 failures** |
+| Backend `node --test` (SQLite) | 2,161 tests: **2,155 pass, 0 fail**, 6 skipped (Postgres-only without a URL) |
+| PostgreSQL 16 integration (temporary local cluster, removed after) | mealLogPg 8/8 (incl. corrections RLS), communityPg 11/11, financialRls 11/11, groupByParamsPg 4/4 |
+| Frontend `vitest` | 218 tests, **0 fail** |
 | Frontend production build | OK |
-| Benchmark gates v1 / v2 | PASS; v2 invariants: 0 silent drops, 0 fabrication |
+| Benchmark gates | v1 PASS, v2 PASS, v3 PASS; 0 silent drops and 0 fabrication enforced on v2 and v3 |
+| Trial merge with current `main` (`3fb3907`) | **Not performed on any branch.** In a throwaway detached worktree: one trivial conflict in `.github/workflows/test.yml` (both sides added a CI step; keep both); with it resolved, backend 2,226 pass / 0 fail |

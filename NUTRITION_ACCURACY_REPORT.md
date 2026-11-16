@@ -220,3 +220,32 @@ Phase 2 added a new reason: a weighed staple with no stated state is not called 
 | Missing values in stored logs | **Not implemented** |
 | Dry poha, green plantain | **Blocked** (no measured row in the index) |
 | Accuracy on real user meals | **Requires external validation** |
+
+---
+
+## Addendum — benchmark v3 and the fixes after this report (2026-11-16)
+
+After this report was written, benchmark v3 (945 cases, `267fba3`) added a **multi-source** reference: the same food as measured by IFCT, USDA and CNF, with a band running from the lowest to the highest reading. It also exposed further accuracy defects, all now fixed and tested:
+
+- "1 tomato" was a 20 g slice of green tomato;
+- a cup of mushrooms was weighed as 240 g;
+- "beetroot" was a beetroot-egg salad;
+- "1 slice cheddar" was 100 g;
+- "tomato rice" was a beef-and-rice dish.
+
+Final numbers on v3, comparing the Phase 1 final engine with now:
+
+| | Phase 1 final | Now |
+|---|---:|---:|
+| kcal in range, all nutrition-scored (n=675) | 73.6% | 83.5% |
+| kcal MAE (resolved) | 37.5 kcal | 25.3 kcal |
+| kcal in range, independent references | 63.6% (n=481) | 72.1% (n=399) |
+| Portion error: share within 25% of reference grams | — | 89.2% |
+| False identification | — | 2.5% (0 of 252 at "high") |
+
+The status table in §10 still stands, with two additions:
+
+- **raw vegetables at USDA reference weights: Completed**;
+- **calibration: Partially completed**. On independent references it is good (ECE 0.063), but overall the engine is under-confident (ECE 0.213, meals 0.45).
+
+See `NUTRITION_COMMERCIAL_READINESS.md` for the weighted scorecard.
