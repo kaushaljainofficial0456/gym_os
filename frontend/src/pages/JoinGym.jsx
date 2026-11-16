@@ -3,11 +3,12 @@
 // needsGymJoin) scans their gym's enrollment QR. Three stages:
 // scan -> preview (no commitment yet) -> join (+pay, for a client).
 // ============================================================
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ScanLine } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { useBrand } from '../brand/BrandProvider.jsx';
 import QrScanner from '../components/QrScanner.jsx';
 import PaymentCheckout from '../components/PaymentCheckout.jsx';
 import { Spinner } from '../components/UI.jsx';
@@ -43,6 +44,13 @@ export default function JoinGym() {
   // Joined a gym that takes payments at the desk for now: in, with this due.
   const [dueAtDesk, setDueAtDesk] = useState(null);
   const isClient = user?.role === 'CLIENT';
+  // The scanned gym's own look, from the moment its preview is on screen:
+  // "join this gym" already looks like that gym's app. Dropped when the
+  // person goes back to scan a different code, and on leaving -- by then
+  // a successful join has made it their own brand anyway.
+  const { setPreviewBrand } = useBrand();
+  useEffect(() => { setPreviewBrand(preview?.branding || null); }, [preview, setPreviewBrand]);
+  useEffect(() => () => setPreviewBrand(null), [setPreviewBrand]);
 
   const onScanned = async (value) => {
     setScanning(false);

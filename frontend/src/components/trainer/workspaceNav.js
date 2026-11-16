@@ -107,6 +107,8 @@ export const OWNER_HUBS = [
     pages: [
       page('/app/trainer/enterprise', 'Setup & billing', 'settings', TINT.gray, { also: ['/app/trainer/enterprise/billing', '/app/trainer/enterprise/onboarding'], keywords: 'subscription barbell plan billing receipts account' }),
       page('/app/trainer/enterprise/qr', 'Join QR codes', 'qr', TINT.graphite, { keywords: 'invite join qr code trainer member signup' }),
+      // The gym's own colours and logo -- what makes the app theirs.
+      page('/app/trainer/enterprise/brand', 'Branding', 'palette', TINT.accent, { keywords: 'brand colours colors logo theme look white label own app join link' }),
     ],
   },
 ].map((h) => ({ ...h, to: h.pages[0].to }));

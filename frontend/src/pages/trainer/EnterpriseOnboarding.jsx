@@ -27,6 +27,9 @@ import { CouponField, PriceSummary } from '../../components/billing/CouponChecko
 import AuthShell from '../../components/auth/AuthShell.jsx';
 import '../../components/auth/auth-flow.css';
 import { AuthTitle, Cta, ErrorNote, Steps } from '../../components/auth/authKit.jsx';
+import { useAuth } from '../../auth.jsx';
+import { useBrand } from '../../brand/BrandProvider.jsx';
+import BrandStudio from '../../brand/BrandStudio.jsx';
 
 const HEADLINE = [{ text: 'Your gym,' }, { text: 'live in minutes.', accent: true }];
 
@@ -42,10 +45,12 @@ const ACCESS_OPTIONS = [
 const OFFERS = [['personalTraining', 'Personal training'], ['groupClasses', 'Group classes'], ['membershipPlans', 'Membership plans'], ['nutritionPlans', 'Nutrition plans'], ['workoutPlans', 'Workout plans']];
 const BILLING_CYCLES = [['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['half_yearly', 'Half-yearly'], ['yearly', 'Yearly'], ['mixed', 'Mixed']];
 
-// The questions, then the plan. Payment and "done" are not counted as steps.
+// The questions, the gym's own look, then the plan. Payment and "done" are
+// not counted as steps.
 const QUESTIONS = 4;
-const PLAN = 4;
-const STEP_COUNT = 5;
+const BRAND = 4;
+const PLAN = 5;
+const STEP_COUNT = 6;
 
 function Tile({ label, icon: I, on, onClick }) {
   return (
@@ -82,6 +87,8 @@ const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
 
 export default function EnterpriseOnboarding() {
   const nav = useNavigate();
+  const { user } = useAuth();
+  const { brand } = useBrand();
   const status = useFetch(() => api('/enterprise/status'));
   const [step, setStep] = useState(0);              // 0..3 questions, 4 plan, 'checkout', 'done'
   const [dir, setDir] = useState('fwd');
@@ -143,7 +150,7 @@ export default function EnterpriseOnboarding() {
         expectedSkOsUsers: form.expectedSkOsUsers === '' ? undefined : Number(form.expectedSkOsUsers),
       };
       await api('/enterprise/onboarding', { method: 'POST', body: JSON.stringify(payload) });
-      go(PLAN);
+      go(BRAND);
     } catch (ex) { setErr(ex.message); }
     finally { setSaving(false); }
   };
@@ -283,12 +290,20 @@ export default function EnterpriseOnboarding() {
               {BILLING_CYCLES.map(([v, l]) => <Chip key={v} label={l} on={form.billingCycle === v} onClick={() => set({ billingCycle: v })} />)}
             </div>
             <div className="mt-6"><ErrorNote>{err}</ErrorNote></div>
-            <Cta busy={saving} onClick={submitWizard}>Continue to plans</Cta>
+            <Cta busy={saving} onClick={submitWizard}>Continue</Cta>
+          </>
+        )}
+        {s === BRAND && (
+          <>
+            <AuthTitle eyebrow={`Step 5 of ${STEP_COUNT}`} title="Make it yours"
+              sub="Your gym’s colours. Your members, trainers and you will see the app in them, with your gym’s name on top." onBack={back} />
+            <BrandStudio initial={brand} gymName={user?.orgName} saveLabel="Save and continue"
+              onSaved={() => go(PLAN)} onSkip={() => go(PLAN)} />
           </>
         )}
         {s === PLAN && (
           <>
-            <AuthTitle eyebrow={`Step 5 of ${STEP_COUNT}`} title="Choose your plan" sub="Priced by how many clients you coach." onBack={back} />
+            <AuthTitle eyebrow={`Step 6 of ${STEP_COUNT}`} title="Choose your plan" sub="Priced by how many clients you coach." onBack={back} />
             {packages.loading ? <div className="py-10 grid place-items-center"><Spinner /></div> : packages.error ? (
               // Without this the plan list simply rendered empty, leaving an
               // owner mid-setup with nothing to choose and no reason why.

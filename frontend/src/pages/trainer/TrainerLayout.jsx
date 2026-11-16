@@ -11,6 +11,8 @@ import GlassTabBar from '../../components/GlassTabBar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { Avatar } from '../../components/UI.jsx';
 import Logo from '../../components/Logo.jsx';
+import { useBrand } from '../../brand/BrandProvider.jsx';
+import GymLockup from '../../brand/GymLockup.jsx';
 import { workspaceSections, workspaceTabs, hubForPath } from '../../components/trainer/workspaceNav.js';
 import SectionTabs from '../../components/trainer/SectionTabs.jsx';
 import NewMenu from '../../components/trainer/NewMenu.jsx';
@@ -59,6 +61,9 @@ function OwnerNav({ pathname, badges }) {
 
 export default function TrainerLayout() {
   const { user, logout, isOwner, isTrainer } = useAuth();
+  // The gym's own name and mark -- "<Gym> × Barbell" -- once the trainer
+  // or owner belongs to a gym; before that, Barbell and the workspace.
+  const { brand } = useBrand();
   const nav = useNavigate();
   const loc = useLocation();
 
@@ -106,12 +111,16 @@ export default function TrainerLayout() {
     <div className="ws-shell min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
       {/* ── computer: the permanent sidebar ── */}
       <aside className="ws-side" aria-label="Workspace">
-        <button className="ws-brand" onClick={() => nav('/app/trainer')}>
-          <Logo alt="" aria-hidden="true" className="w-9 h-9 rounded-xl object-cover shrink-0" />
-          <span className="min-w-0 text-left">
-            <span className="ws-brand-name">Barbell</span>
-            <span className="ws-brand-gym">{user?.orgName || 'Workspace'}</span>
-          </span>
+        <button className="ws-brand" onClick={() => nav('/app/trainer')} aria-label={brand ? `${brand.gymName} home` : 'Home'}>
+          {brand ? <GymLockup brand={brand} variant="stack" markSize={36} /> : (
+            <>
+              <Logo alt="" aria-hidden="true" className="w-9 h-9 rounded-xl object-cover shrink-0" />
+              <span className="min-w-0 text-left">
+                <span className="ws-brand-name">Barbell</span>
+                <span className="ws-brand-gym">{user?.orgName || 'Workspace'}</span>
+              </span>
+            </>
+          )}
         </button>
 
         {isOwner ? <OwnerNav pathname={loc.pathname} badges={badges} /> : (
@@ -150,13 +159,17 @@ export default function TrainerLayout() {
 
       {/* ── phone & tablet: a slim top bar ── */}
       <header className="ws-top app-header">
-        <button className="flex items-center gap-2.5 min-w-0" onClick={() => nav('/app/trainer')}>
-          <Logo alt="" aria-hidden="true" className="w-8 h-8 rounded-lg object-cover shrink-0" />
-          <span className="min-w-0 text-left">
-            <span className="ws-brand-name">Barbell</span>
-            {/* truncate: a long gym name must not push the bar wider than a 360px phone */}
-            <span className="ws-brand-gym truncate">{user?.orgName || 'Workspace'}</span>
-          </span>
+        <button className="flex items-center gap-2.5 min-w-0" onClick={() => nav('/app/trainer')} aria-label={brand ? `${brand.gymName} home` : 'Home'}>
+          {brand ? <GymLockup brand={brand} variant="stack" markSize={32} className="min-w-0" /> : (
+            <>
+              <Logo alt="" aria-hidden="true" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+              <span className="min-w-0 text-left">
+                <span className="ws-brand-name">Barbell</span>
+                {/* truncate: a long gym name must not push the bar wider than a 360px phone */}
+                <span className="ws-brand-gym truncate">{user?.orgName || 'Workspace'}</span>
+              </span>
+            </>
+          )}
         </button>
         <div className="ml-auto shrink-0 flex items-center gap-2">
           {/* An owner's phone tab bar is Home, Members, Payments and More,

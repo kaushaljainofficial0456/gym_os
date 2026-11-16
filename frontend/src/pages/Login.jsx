@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { ArrowRight, Building2, Dumbbell, UserRound } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
+import { readLastGym, useBrand } from '../brand/BrandProvider.jsx';
 import { consumeReturnTo } from '../api.js';
 import { announceArrival } from '../components/ArrivalHost.jsx';
 import { PasswordInput } from '../components/UI.jsx';
@@ -63,6 +64,14 @@ export default function Login() {
   useAuthStage(view === 'landing' ? 'hero' : 'compact');
 
   const [role, setRoleState] = useState(lastRole);
+  // THE GYM'S OWN SIGN-IN. A device that last signed in to a gym (or that
+  // arrived from the gym's link) shows that gym's screen -- its colours,
+  // mark and name -- after a sign-out or an expired session, the way a
+  // gym's own app would. "Not a member of <gym>?" forgets it.
+  const { brand: gym, setGuestBrand, forgetLastGym } = useBrand();
+  useEffect(() => {
+    if (!gym) { const last = readLastGym(); if (last) setGuestBrand(last); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
@@ -100,9 +109,11 @@ export default function Login() {
     try { go(await signInWithGoogle(credential)); } catch (ex) { setGoogleErr(ex.message); } finally { setBusy(false); }
   };
 
+  // Setting up a new gym, or training without one, is not this gym's.
+  const leaveGym = (to) => { setGuestBrand(null); nav(to); };
   const pickPath = (id) => {
-    if (id === 'enterprise') return nav('/setup-org');
-    if (id === 'independent') return nav('/independent');
+    if (id === 'enterprise') return leaveGym('/setup-org');
+    if (id === 'independent') return leaveGym('/independent');
     setErr('');
     return nav('/login', { state: { view: 'signin' } });
   };
@@ -112,7 +123,19 @@ export default function Login() {
 
   return (
     <>
-      {view === 'landing' ? (
+      {view === 'landing' && gym ? (
+        <div key="gym-landing" className={stepClass} data-dir={dir}>
+          <AuthTitle eyebrow="Welcome back" title={gym.gymName} sub="Sign in to your gym’s app." />
+          <div className="auth-rise">
+            <Cta type="button" onClick={() => pickPath('ecosystem')}>Sign in</Cta>
+            <p className="auth-foot">New member? <Link to={`/signup?gym=${encodeURIComponent(gym.code)}`}>Create an account</Link></p>
+            <Divider />
+            <button type="button" className="auth-ghost" onClick={forgetLastGym}>
+              Not a member of {gym.gymName}?
+            </button>
+          </div>
+        </div>
+      ) : view === 'landing' ? (
         <div key="landing" className={stepClass} data-dir={dir}>
           <AuthTitle eyebrow="Welcome" title="How will you use Barbell?" />
           <div className="auth-rows auth-rise">
@@ -123,7 +146,7 @@ export default function Login() {
         </div>
       ) : (
         <div key="signin" className={stepClass} data-dir={dir}>
-          <AuthTitle title="Sign in" onBack={back} />
+          <AuthTitle eyebrow={gym?.gymName} title="Sign in" onBack={back} />
           <RoleSwitch label="I'm signing in as" options={ROLES} value={role} onChange={setRole} />
 
           <form onSubmit={submit} className="auth-form">
@@ -163,7 +186,15 @@ export default function Login() {
             </p>
           )}
 
-          <p className="auth-foot">{newQ} <Link to={newTo}>{newA}</Link></p>
+          <p className="auth-foot">
+            {newQ}{' '}
+            {gym && newTo === '/signup' ? <Link to={`/signup?gym=${encodeURIComponent(gym.code)}`}>{newA}</Link>
+              : newTo === '/setup-org' ? <Link to={newTo} onClick={() => setGuestBrand(null)}>{newA}</Link>
+                : <Link to={newTo}>{newA}</Link>}
+          </p>
+          {gym && (
+            <button type="button" className="auth-aside auth-not-gym" onClick={forgetLastGym}>Not a member of {gym.gymName}?</button>
+          )}
 
           <Divider />
           <button type="button" className="auth-ghost" onClick={demo} disabled={busy}>

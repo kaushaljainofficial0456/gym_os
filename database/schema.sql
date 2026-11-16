@@ -649,6 +649,16 @@ CREATE TABLE IF NOT EXISTS gym_settings (
   access_auto_close_hours  INTEGER NOT NULL DEFAULT 12,
   access_grace_days        INTEGER NOT NULL DEFAULT 3,
   access_sync_enabled      INTEGER NOT NULL DEFAULT 1,
+  -- WHITE-LABEL BRANDING: the gym's own two colours (#RRGGBB) and an
+  -- optional logo, so its members, trainers and owner see the app as the
+  -- gym's own. NULL colours mean the Barbell look. The logo is a small
+  -- data URL served by GET /api/branding/logo/:slug -- never sent inside
+  -- /auth/me -- and brand_updated_at versions its URL so it can be cached.
+  -- See services/branding.js.
+  brand_primary            TEXT,
+  brand_secondary          TEXT,
+  brand_logo               TEXT,
+  brand_updated_at         TEXT,
   updated_at   TEXT
 );
 

@@ -58,6 +58,7 @@ const PATHS = {
      of this file describes: different artwork per platform, unmanageable
      colour, and inconsistent baselines. */
   bolt: 'M13 2 4 14h6l-1 8 9-12h-6z',
+  palette: 'M12 21a9 9 0 1 1 9-9c0 2.2-1.8 3.5-3.6 3.5H16a1.6 1.6 0 0 0-1.15 2.75A1.6 1.6 0 0 1 13.7 21ZM7.5 11.5h.01M10 7.5h.01M14.5 7.5h.01M17 11h.01',
   flame: 'M12 22a7 7 0 0 0 7-7c0-4-3-6-4.5-9.5C13 8 12 9 10 9.5 8 10 7 8.5 7 6.5 5.5 9 5 11.5 5 15a7 7 0 0 0 7 7Z',
   heart: 'M12 20s-7-4.35-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 2.5c0 5.15-7 9.5-7 9.5Z',
   clap: 'M8 13 5.5 10.5a1.8 1.8 0 0 1 2.5-2.5l2 2M11 6.5 9.5 5a1.8 1.8 0 0 1 2.5-2.5l4 4M14 5.5a1.8 1.8 0 0 1 2.5 2.5M9 20a6 6 0 0 0 8.5-1l2-2.5a1.8 1.8 0 0 0-2.5-2.5',
