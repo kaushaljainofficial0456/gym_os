@@ -29,9 +29,11 @@ const DB_PATH = path.join(ROOT, 'ml', 'data', 'processed', 'unified_food_db.json
 
 const args = process.argv.slice(2);
 // v1 = the original frozen 324-case set; v2 = v1 + the nutrition-overhaul
-// expansion (case_specs.v2.mjs). v1 is never rewritten by a v2 build.
+// expansion (case_specs.v2.mjs); v3 = v2 + the Phase 2 expansion toward
+// 1,000 cases (case_specs.v3.mjs). Earlier versions are never rewritten by
+// a later build.
 const VERSION = argVal('--version') || 'v1';
-if (!['v1', 'v2'].includes(VERSION)) { console.error(`unknown --version ${VERSION}`); process.exit(2); }
+if (!['v1', 'v2', 'v3'].includes(VERSION)) { console.error(`unknown --version ${VERSION}`); process.exit(2); }
 const OUT = argVal('--out') || path.join(HERE, `food_eval_set.${VERSION}.json`);
 const STRICT = args.includes('--strict');
 function argVal(flag) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : null; }
@@ -43,8 +45,9 @@ const VALID_PRIMARY = new Set([
 
 const specsA = (await import('./case_specs.v1.mjs')).default;
 const specsB = (await import('./case_specs.v1.extra.mjs')).default;
-const specsC = VERSION === 'v2' ? (await import('./case_specs.v2.mjs')).default : [];
-const SPECS = [...specsA, ...specsB, ...specsC];
+const specsC = VERSION === 'v2' || VERSION === 'v3' ? (await import('./case_specs.v2.mjs')).default : [];
+const specsD = VERSION === 'v3' ? (await import('./case_specs.v3.mjs')).default : [];
+const SPECS = [...specsA, ...specsB, ...specsC, ...specsD];
 
 const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
 console.error(`loaded ${db.length} DB rows from ${path.relative(ROOT, DB_PATH)}`);
@@ -76,6 +79,21 @@ function findAuthoritativeRow({ prefer, name, cs }) {
 }
 
 const round = (x, d = 1) => { const m = 10 ** d; return Math.round(x * m) / m; };
+
+/* One measured row from ONE named source, by the spec's own criteria. Used
+   by the multi-source method (xsrc): each database contributes its own
+   reading of the same food, chosen without the estimator. */
+function findRowInSource(src, { name, cs, reject }) {
+  const pool = db.filter((f) => f.source === src && name.test(String(f.food_name || ''))
+    && !(reject && reject.test(String(f.food_name || '')))
+    && f.energy_kcal != null && !f.data_quality_flag && !f.per_100g_unreliable);
+  if (!pool.length) return null;
+  const score = (f) => (cs && String(f.cooking_state || '') === cs ? -400 : cs && f.cooking_state ? 150 : 0)
+    + String(f.food_name || '').length * 0.3;
+  pool.sort((a, b) => score(a) - score(b));
+  return pool[0];
+}
+const XSRC_SOURCES = ['IFCT2017', 'USDA_FDC', 'CNF_CANADA'];
 
 function bandFromRow(row, grams, tol) {
   const f = grams / 100;
@@ -168,6 +186,41 @@ for (const spec of SPECS) {
         source: rows.map(({ pt, row }) => `${row.source_id} "${row.food_name}" × ${pt.grams}g`).join(' + ') + ` ±${Math.round(tol * 100)}%`,
         components: rows.map(({ pt, row }) => ({ source_id: row.source_id, name: row.food_name, grams: pt.grams })),
         reference_grams: rows.reduce((s, x) => s + x.pt.grams, 0),
+      };
+      dbMatched.push(id);
+    }
+  } else if (gt.m === 'xsrc') {
+    // MULTI-SOURCE RANGE: the same food as measured by each of IFCT 2017,
+    // USDA FDC and CNF (each row chosen by this spec's own criteria). The
+    // band runs from the lowest to the highest source reading, scaled to
+    // the reference grams, +/- tolerance. With fewer than 2 sources it falls
+    // back to that single row (db_row_scaled) and says so.
+    const rows = XSRC_SOURCES.map((src) => findRowInSource(src, gt)).filter(Boolean);
+    const tol = gt.tol ?? 0.15;
+    if (!rows.length) {
+      c.expect.nutrition = null;
+      c.ground_truth = { method: 'db_unmatched', source: `NO ROW for /${gt.name.source}/ in any measured source — nutrition not scored` };
+      dbUnmatched.push(id);
+      problems.push(`${id}: xsrc criteria matched no row (/${gt.name.source}/)`);
+    } else {
+      const f = gt.grams / 100;
+      const range = (k) => {
+        const vals = rows.map((r) => r[k]).filter((v) => v != null && Number.isFinite(Number(v))).map(Number);
+        if (vals.length !== rows.length) return null;     // a source did not measure it: not scored
+        return [round(Math.max(0, Math.min(...vals) * f * (1 - tol))), round(Math.max(...vals) * f * (1 + tol))];
+      };
+      c.expect.nutrition = { kcal: range('energy_kcal') };
+      for (const [k, key] of [['protein_g', 'protein_g'], ['carb_g', 'carb_g'], ['fat_g', 'fat_g']]) {
+        const r = range(key); if (r) c.expect.nutrition[k] = r;
+      }
+      if (!c.expect.portion) c.expect.portion = { grams: [round(gt.grams * 0.92), round(gt.grams * 1.08)] };
+      c.ground_truth = {
+        method: rows.length >= 2 ? 'multi_source_range' : 'db_row_scaled',
+        source: rows.map((r) => `${r.source_id} "${r.food_name}" ${round(r.energy_kcal)} kcal/100g`).join(' | ') + ` × ${gt.grams}g ±${Math.round(tol * 100)}%`,
+        ...(rows.length === 1 ? { resolved_source_id: rows[0].source_id, resolved_name: rows[0].food_name } : {}),
+        components: rows.map((r) => ({ source_id: r.source_id, name: r.food_name, source: r.source })),
+        n_sources: rows.length,
+        reference_grams: gt.grams,
       };
       dbMatched.push(id);
     }

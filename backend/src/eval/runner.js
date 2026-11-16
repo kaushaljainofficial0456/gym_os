@@ -145,6 +145,53 @@ export function runBenchmark(dataset, adapter, opts = {}) {
     if (x.n && observed != null) ece += (x.n / totalBinned) * Math.abs(observed - CONF_NOMINAL[band]);
   }
 
+  /* ---------- 19: false identification (any confidence) ---- */
+  // A resolved case whose matched food is NOT the food named: the error a
+  // person cannot see from the number alone. Reported overall and at each
+  // confidence band, because a wrong food labelled "high" is the costly one.
+  const idGraded = resolved.filter((g) => g.identity_ok != null);
+  const idWrong = idGraded.filter((g) => g.identity_ok < 0.5);
+  const false_identification = {
+    rate: r3(rate(idWrong.length, idGraded.length)), count: idWrong.length, eligible: idGraded.length,
+    by_band: Object.fromEntries(['high', 'medium', 'low', 'unreliable'].map((b) => {
+      const inBand = idGraded.filter((g) => g.confidence_band === b);
+      return [b, { n: inBand.length, wrong: inBand.filter((g) => g.identity_ok < 0.5).length }];
+    })),
+  };
+
+  /* ---------- 20: portion error, separately from composition ---- */
+  const pe = grades.filter((g) => g.resolved && g.grams_ref > 0 && g.grams_got > 0)
+    .map((g) => Math.abs(g.grams_got - g.grams_ref) / g.grams_ref);
+  const portion_error = {
+    n: pe.length,
+    median_abs_pct: r3(median(pe)), mean_abs_pct: r3(mean(pe)),
+    within_10pct_rate: r3(rate(pe.filter((x) => x <= 0.10).length, pe.length)),
+    within_25pct_rate: r3(rate(pe.filter((x) => x <= 0.25).length, pe.length)),
+  };
+
+  /* ---------- 21: calibration by food category ---- */
+  const calibrationOf = (gs) => {
+    const b = {};
+    for (const band of ['high', 'medium', 'low', 'unreliable']) b[band] = { n: 0, correct: 0 };
+    for (const g of gs) {
+      if (!b[g.confidence_band]) continue;
+      b[g.confidence_band].n++;
+      const idOk = (g.identity_ok ?? 0) >= 0.5;
+      const nutOk = !g.nutrition || (g.nutrition.kcal ? g.nutrition.kcal.in_range : true);
+      if (idOk && nutOk) b[g.confidence_band].correct++;
+    }
+    const tot = Object.values(b).reduce((acc, x) => acc + x.n, 0);
+    let e = 0;
+    for (const [band, x] of Object.entries(b)) if (x.n) e += (x.n / tot) * Math.abs(x.correct / x.n - CONF_NOMINAL[band]);
+    return { n: tot, ece: tot ? r3(e) : null,
+      observed: Object.fromEntries(Object.entries(b).filter(([, x]) => x.n).map(([k, x]) => [k, r3(x.correct / x.n)])) };
+  };
+  const calibration_by_category = {};
+  for (const cat of Object.keys(PRIMARY_CATEGORIES)) {
+    const gs = resolved.filter((g) => g.primary === cat);
+    if (gs.length) calibration_by_category[cat] = calibrationOf(gs);
+  }
+
   /* ---------- 16–18: latency / llm / cost ---- */
   const lat = grades.map((g) => g.latency_ms);
   const latency = {
@@ -262,6 +309,9 @@ export function runBenchmark(dataset, adapter, opts = {}) {
       '16_latency': latency,
       '17_llm_escalation_rate': llm_escalation_rate,
       '18_est_cost_usd_per_estimate': est_cost_usd_per_estimate,
+      '19_false_identification': false_identification,
+      '20_portion_error': portion_error,
+      '21_calibration_by_category': calibration_by_category,
     },
     categories, tag_slices, difficulty_slices, worst_cases,
     per_case: grades.map((g) => ({

@@ -103,7 +103,7 @@ const STAPLES = [
   }),
   S('paratha', 'Paratha (plain)', 'bread', {
     ref: 'indb:ASC097',
-    aliases: ['paratha', 'parantha', 'plain paratha', 'lachha paratha', 'tawa paratha'],
+    aliases: ['paratha', 'parantha', 'prantha', 'paratha plain', 'plain paratha', 'lachha paratha', 'tawa paratha'],
     vague: ['paratha', 'parantha'],
     alts: ['aloo_paratha'],
     units: [catCount('paratha')],
@@ -150,6 +150,11 @@ const STAPLES = [
     ref: 'usda:169704',
     aliases: ['brown rice'],
     units: [KATORI, PLATE, fix('cup', 'cup', 160)],
+  }),
+  S('tomato_rice', 'Tomato rice', 'grain', {
+    recipe: 'tomato_rice',
+    aliases: ['tomato rice', 'thakkali sadam', 'thakkali rice', 'tomato bath', 'tomato baath', 'tomato pulao'],
+    units: [KATORI, PLATE],
   }),
   S('jeera_rice', 'Jeera rice', 'grain', {
     recipe: 'jeera_rice',                          // computed from measured ingredients (food/recipes.js); was a hand-entered value
@@ -439,7 +444,7 @@ const STAPLES = [
   }),
   S('raita', 'Raita (cucumber)', 'dairy', {
     ref: 'indb:ASC273',                          // Cucumber raita (Kheere ka raita)
-    aliases: ['raita', 'cucumber raita', 'kheera raita', 'kheere ka raita', 'plain raita', 'veg raita', 'mix raita', 'mixed raita', 'onion raita', 'pyaz raita'],
+    aliases: ['raita', 'raitha', 'cucumber raita', 'kheera raita', 'kheere ka raita', 'plain raita', 'veg raita', 'mix raita', 'mixed raita', 'onion raita', 'pyaz raita'],
     // "raita" alone is the everyday cucumber/onion raita; boondi raita's INDB
     // row counts the frying bath and is quarantined, so it is not offered.
     vague: ['raita', 'veg raita', 'mix raita', 'mixed raita'],
@@ -452,7 +457,7 @@ const STAPLES = [
   }),
   S('paneer', 'Paneer', 'dairy', {
     ref: 'ifct:L003',
-    aliases: ['paneer', 'cottage cheese', 'panir', 'raw paneer'],
+    aliases: ['paneer', 'cottage cheese', 'panir', 'raw paneer', 'panner', 'paner', 'paneeer'],
     // A "piece" is tikka-sized (~6 to a 180 g restaurant portion); a cube is
     // the smaller dice that goes into a curry.
     units: [G100, fixCount('piece', 'piece', 30), fixCount('cube', 'cube', 20)],
@@ -487,6 +492,11 @@ const STAPLES = [
     aliases: ['whey', 'whey protein', 'protein powder', 'protein shake', 'whey isolate', 'scoop whey', 'protein'],
     vague: ['protein', 'protein shake', 'protein powder'],
     units: [fix('scoop', 'scoop', 32), fix('half_scoop', '½ scoop', 16)],
+  }),
+  S('cheddar', 'Cheddar cheese', 'dairy', {
+    ref: 'usda:173414',                          // Cheese, cheddar
+    aliases: ['cheddar', 'cheddar cheese', 'cheddar slice', 'cheddar cheese slice'],
+    units: [fixCount('slice', 'slice (1 oz)', 28), fix('cup', 'cup (shredded)', 113), G100],
   }),
   S('cheese_slice', 'Cheese slice', 'dairy', {
     ref: 'off:8901648004264',
@@ -753,6 +763,57 @@ const STAPLES = [
     inline: [20, 1.0, 4, 0.2, 1.6], basis: 'usda', note: 'cucumber, tomato, onion, lettuce, no dressing (USDA component values)',
     aliases: ['salad', 'green salad', 'cucumber salad', 'kachumber', 'veg salad', 'mixed salad'],
     units: [KATORI, BOWL],
+  }),
+  /* Raw vegetables people weigh or count for a salad or a recipe. Measured
+     IFCT rows (USDA where IFCT has none); count and cup weights are USDA
+     reference portions. Hindi names that also start dish names ("gajar
+     halwa", "kanda poha", "matar paneer") are deliberately NOT aliases:
+     they would split a dish into its vegetable plus the dish. */
+  S('tomato', 'Tomato (raw)', 'veg', {
+    ref: 'ifct:D075', state: 'raw',
+    aliases: ['tomato', 'tomatoes', 'raw tomato', 'tamatar'],
+    units: [fixCount('tomato', 'tomato', 123), fix('cup', 'cup (chopped)', 180), G100],
+  }),
+  S('onion', 'Onion (raw)', 'veg', {
+    ref: 'ifct:G017', state: 'raw',
+    aliases: ['onion', 'onions', 'raw onion', 'sliced onion'],
+    units: [fixCount('onion', 'onion', 110), fix('cup', 'cup (chopped)', 160), G100],
+  }),
+  S('cucumber', 'Cucumber (raw)', 'veg', {
+    ref: 'ifct:D044', state: 'raw',
+    aliases: ['cucumber', 'cucumbers', 'kheera', 'khira', 'kakdi'],
+    units: [G100, fix('cup', 'cup (sliced)', 104)],
+  }),
+  S('carrot', 'Carrot (raw)', 'veg', {
+    ref: 'ifct:F002', state: 'raw',
+    aliases: ['carrot', 'carrots', 'raw carrot'],
+    units: [fixCount('carrot', 'carrot', 61), fix('cup', 'cup (chopped)', 128), G100],
+  }),
+  S('beetroot', 'Beetroot (raw)', 'veg', {
+    ref: 'ifct:F001', state: 'raw',
+    aliases: ['beetroot', 'beet root', 'beets', 'beet', 'chukandar'],
+    units: [fixCount('beet', 'beet', 82), fix('cup', 'cup', 136), G100],
+  }),
+  S('okra_raw', 'Okra / bhindi (raw)', 'veg', {
+    ref: 'ifct:D056', state: 'raw',
+    aliases: ['okra', 'raw okra', 'ladies finger', 'lady finger'],
+    forms: ['bhindi', 'bhendi', 'okra', 'ladies finger'],
+    units: [G100, fix('cup', 'cup', 100)],
+  }),
+  S('mushroom', 'Mushrooms (raw)', 'veg', {
+    ref: 'usda:2709793', state: 'raw',
+    aliases: ['mushroom', 'mushrooms', 'button mushroom', 'button mushrooms', 'raw mushrooms'],
+    units: [fix('cup', 'cup (pieces)', 70), fixCount('mushroom', 'mushroom', 18), G100],
+  }),
+  S('green_peas', 'Green peas (fresh)', 'veg', {
+    ref: 'ifct:D061', state: 'raw',
+    aliases: ['green peas', 'fresh peas', 'peas', 'raw peas'],
+    units: [fix('cup', 'cup', 145), KATORI, G100],
+  }),
+  S('cabbage', 'Cabbage (raw)', 'veg', {
+    ref: 'ifct:C015', state: 'raw',
+    aliases: ['cabbage', 'raw cabbage', 'patta gobhi', 'band gobhi', 'chopped cabbage'],
+    units: [fix('cup', 'cup (chopped)', 89), G100],
   }),
   S('potato_boiled', 'Potato (boiled)', 'veg', {
     ref: 'usda:170114',

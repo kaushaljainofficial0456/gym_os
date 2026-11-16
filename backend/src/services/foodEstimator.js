@@ -397,6 +397,9 @@ const NOISE = new Set([
   'of', 'with', 'and', 'plus', 'some', 'my', 'the', 'a', 'an', 'had', 'ate',
   'eaten', 'for', 'breakfast', 'lunch', 'dinner', 'snack', 'today', 'i',
   'also', 'then', 'about', 'approx', 'approximately', 'around',
+  // Narration around a meal: "breakfast WAS 2 idli", "lunch IS dal rice",
+  // "SNACKS: chai". Without these the amount after them was never read.
+  'was', 'were', 'is', 'snacks', 'brunch', 'supper', 'just', 'only',
 ]);
 
 /**
@@ -586,6 +589,8 @@ export function parseFragment(fragment) {
   while (tokens.length > 1 && NOISE.has(tokens[0]) && WORD_NUMBERS[tokens[0]] === undefined) {
     tokens = tokens.slice(1);
   }
+  // "a couple of rotis" is 2 rotis, not 1 "couple rotis".
+  if (tokens.length > 2 && (tokens[0] === 'a' || tokens[0] === 'an') && tokens[1] === 'couple') tokens = tokens.slice(1);
 
   /* CONTEXT WORDS ARE NOT PART OF THE NAME. "2 homemade aloo parathas" was
      searched as "homemade aloo parathas" and matched USDA "Potato pancake,
@@ -1028,6 +1033,10 @@ function splitPairedDish(fragment, search) {
   const head = words.slice(0, -1).join(' ');
   if (!tail || !isStapleName(head) || !isStapleName(tail)) return null;
   if (isStapleName(p.name)) return null;
+  // "tomato rice", "onion roti": a raw vegetable in front names the dish
+  // (see splitTwoStaples) -- it is not a raw tomato beside the rice.
+  const lead = exactStaple(head);
+  if (lead && lead.kind === 'veg' && stapleState(lead) === 'raw') return null;
   // The index's word for the whole phrase counts only if that row really is
   // the pair. Its alias expansion reports "rajma chawal" as an alias_exact
   // hit on RAW DRIED rajma, and "sambar rice" as an exact hit on plain
@@ -1082,6 +1091,11 @@ function splitTwoStaples(fragment, search) {
   if (whole && !whole.query_relaxed && isSameDish(p.name, whole)) return null;
   const segs = segmentIntoStaples(words);
   if (!segs || segs.length < 2) return null;
+  // A RAW VEGETABLE in front of another food names the dish it flavours
+  // ("tomato rice", "mushroom curry", "onion pakora", "cabbage sabzi") --
+  // never a raw tomato eaten beside the rice.
+  const lead = exactStaple(segs[0]);
+  if (lead && lead.kind === 'veg' && stapleState(lead) === 'raw') return null;
   // Two names for the SAME food ("parle g biscuits" -> parle g + biscuits,
   // both curated aliases of one biscuit) are one food, not two.
   const keys = segs.map((sg) => exactStaple(sg)?.key);
@@ -1612,7 +1626,12 @@ function accountForFragment(fragment, fragItems, items, needsClarification, sear
   for (const run of runs) {
     const phrase = run.join(' ');
     const staple = isPreparationRun(run) ? null : matchStaples(phrase, { limit: 1, allowPrefix: false })[0];
-    if (staple?.kind === 'exact' && !staple.vague) {
+    // A raw vegetable left over beside a matched dish ("TOMATO rice",
+    // "MUSHROOM curry") flavours that dish; it is flagged for the person to
+    // check, never added as a raw tomato on the side.
+    const flavour = staple?.staple && staple.staple.kind === 'veg' && stapleState(staple.staple) === 'raw'
+      && fragItems.some(({ food }) => food?.staple_key !== staple.staple.key);
+    if (staple?.kind === 'exact' && !staple.vague && !flavour) {
       const r = resolveParsed({ qty: null, unit: null, name: phrase, raw: fragment }, fragment, search);
       if (r.item) {
         items.push({ ...r.item, grams_assumed: true, recovered_from: phrase });

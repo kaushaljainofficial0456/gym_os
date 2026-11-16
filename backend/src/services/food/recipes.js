@@ -386,6 +386,16 @@ export const RECIPES = Object.freeze({
     batch_serves: '2 katoris',
     basis: 'Rice cooked to ~3x its raw weight, tempered with ghee and cumin.',
   },
+  tomato_rice: {
+    name: 'Tomato rice',
+    region: 'south_indian',
+    // No measured row exists for tomato rice (thakkali sadam); "tomato
+    // rice" matched USDA beef-and-rice or a canned tomato-rice soup.
+    ingredients: [ing(ROW.RICE, 100), ing(ROW.TOMATO, 150), ing(ROW.ONION, 40), ing(ROW.OIL, 12, 'tempering')],
+    cooked_g: 420,
+    batch_serves: '2-3 katoris',
+    basis: 'Rice cooked to ~3x its raw weight with tomatoes and onion cooked down in oil, the way thakkali sadam / tomato bath is made at home.',
+  },
   oats_porridge: {
     name: 'Oats porridge (with milk)',
     region: 'global',

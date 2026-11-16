@@ -23,7 +23,9 @@
     "bench": "node backend/scripts/food-benchmark.js --engine v1",
     "bench:gate": "node backend/scripts/food-benchmark.js --engine v2 --baseline ml/data/benchmark/baseline.v1.json --gate",
     "bench:build:v2": "node ml/data/benchmark/build.mjs --version v2",
-    "bench:v2": "node backend/scripts/food-benchmark.js --engine v1 --dataset ml/data/benchmark/food_eval_set.v2.json --baseline ml/data/benchmark/baseline.v2.json"
+    "bench:v2": "node backend/scripts/food-benchmark.js --engine v1 --dataset ml/data/benchmark/food_eval_set.v2.json --baseline ml/data/benchmark/baseline.v2.json",
+    "bench:build:v3": "node ml/data/benchmark/build.mjs --version v3",
+    "bench:v3": "node backend/scripts/food-benchmark.js --engine v1 --dataset ml/data/benchmark/food_eval_set.v3.json --baseline ml/data/benchmark/baseline.v3.json"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"

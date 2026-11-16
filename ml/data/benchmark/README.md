@@ -38,6 +38,17 @@ and `backend/src/eval/` + `backend/scripts/food-benchmark.js`.
 >   "cooked white rice" were scored against *glutinous* rice (96 kcal/100 g) and are now the USDA long-grain row.
 >   With the corrected specs: v1 83.9%, v2 87.0%; kcal in-range v1 71.0% → 72.4%, v2 76.5% → 78.2%; no case worse
 >   than at the previous commit. Both baselines re-frozen.
+> - 2026-11-16 — **v3 dataset (945 cases)** — `npm run bench:build:v3` builds `food_eval_set.v3.json` = v2 +
+>   `case_specs.v3.mjs` (411 cases). New ground-truth method `multi_source_range`: the same food as measured by IFCT
+>   2017, USDA FDC and CNF, each row picked by the spec's own pattern, band = lowest to highest source reading at the
+>   reference grams ±15% (a single source falls back to `db_row_scaled`). Also USDA reference portions, raw/dry vs
+>   cooked, spellings, drinks/packaged, weighed and natural-language meals, amount syntax, non-food. Three spec slips
+>   were fixed before freezing, not after a run: the raw-rice reject pattern matched "uncooked", "bhindi" alone is the
+>   cooked sabzi (the raw case now says "raw bhindi"), and two US produce sizes (cucumber 301 g, potato 213 g) were
+>   dropped as unfair to Indian produce. New metrics 19-21 (false identification, portion error, calibration by
+>   category). Engine fixes found by v3 (raw vegetables, cup weights, cheddar slice, spellings, narration, tomato
+>   rice): v1 83.9% → 84.0%, v2 87.0% → 87.1%, no v1/v2 case worse. Baselines v1/v2 re-frozen; `baseline.v3.json`
+>   frozen at 90.4%; `foodBenchmarkV3Gate.test.js` enforces zero silent drops / fabrication on v3.
 
 > **v2 dataset (534 cases)** — `npm run bench:build:v2` builds `food_eval_set.v2.json` = the v1 specs +
 > `case_specs.v2.mjs` (210 cases: Indian dishes/ingredients at explicit weights, weighed multi-food meals with the new

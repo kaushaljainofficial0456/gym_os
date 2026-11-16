@@ -196,3 +196,41 @@ test('a nutrient a source never measured is named, not presented as a measured z
   assert.deepEqual(r.total_incomplete, { carbs: ['Paneer'] });
   assert.equal(estimateFood('2 roti').total_incomplete, undefined);
 });
+
+/* ---- found by benchmark v3 ---- */
+
+test('raw vegetables are themselves, at USDA reference sizes', { skip: !live }, () => {
+  const cases = [
+    ['1 tomato', 'tomato', 123], ['1 onion', 'onion', 110], ['1 carrot', 'carrot', 61],
+    ['100g beetroot', 'beetroot', 100], ['1 cup raw mushrooms', 'mushroom', 70],
+    ['1 cup green peas', 'green_peas', 145], ['1 cup chopped cabbage', 'cabbage', 89],
+    ['raw bhindi 100g', 'okra_raw', 100], ['1 slice cheddar cheese', 'cheddar', 28],
+  ];
+  for (const [text, key, grams] of cases) {
+    const it = one(text);
+    assert.equal(it.staple_key, key, `${text}: ${it.name}`);
+    assert.equal(it.grams, grams, text);
+  }
+});
+
+test('a vegetable that names a dish is not split off as a raw vegetable', { skip: !live }, () => {
+  const rice = estimateFood('tomato rice');
+  assert.equal(rice.items.length, 1, rice.items.map((i) => i.name).join(' + '));
+  assert.equal(rice.items[0].staple_key, 'tomato_rice');
+  for (const text of ['mushroom curry', 'onion pakora']) {
+    assert.ok(!estimateFood(text).items.some((i) => ['mushroom', 'onion'].includes(i.staple_key)), text);
+  }
+  // ...while a list of vegetables is still a list.
+  assert.deepEqual(estimateFood('2 eggs and 1 tomato').items.map((i) => i.staple_key), ['egg_boiled', 'tomato']);
+});
+
+test('common spellings and narration are understood', { skip: !live }, () => {
+  assert.equal(one('100g panner').staple_key, 'paneer');
+  assert.equal(one('1 prantha').staple_key, 'paratha');
+  assert.equal(one('1 katori raitha').staple_key, 'raita');
+  assert.equal(one('a couple of rotis').qty, 2);
+  const b = estimateFood('breakfast was 2 idli with sambar');
+  assert.deepEqual(b.unresolved, []);
+  assert.equal(b.items[0].qty, 2);
+  assert.equal(estimateFood('dinner was jeera rice with dal tadka').items.length, 2);
+});

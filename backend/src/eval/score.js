@@ -245,6 +245,11 @@ export function gradeCase(c, r) {
   if (c.expect?.portion && primaryItem) {
     const p = scorePortion(primaryItem.grams, c.expect.portion);
     if (p) { g.portion_ok = p.score; g.portion_in_range = p.in_range; if (p.note) g.notes.push(p.note); }
+    // Portion error on its own (metric 20): grams resolved vs the reference
+    // grams (exact, or the middle of the accepted range).
+    const ref = Number.isFinite(c.expect.portion.grams_exact) ? c.expect.portion.grams_exact
+      : Array.isArray(c.expect.portion.grams) ? (c.expect.portion.grams[0] + c.expect.portion.grams[1]) / 2 : null;
+    if (ref > 0 && Number(primaryItem.grams) > 0) { g.grams_got = Number(primaryItem.grams); g.grams_ref = ref; }
   }
 
   /* ---- nutrition (case totals vs acceptable ranges) ---- */

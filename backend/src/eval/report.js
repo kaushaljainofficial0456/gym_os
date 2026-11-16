@@ -142,6 +142,20 @@ export function formatReport(rep, cmp) {
   p(` 16  Latency ..................... p50 ${m['16_latency'].p50_ms}ms · p95 ${m['16_latency'].p95_ms}ms · mean ${m['16_latency'].mean_ms}ms · max ${m['16_latency'].max_ms}ms`);
   p(` 17  LLM escalation rate ......... ${pct(m['17_llm_escalation_rate'])}`);
   p(` 18  Est. cost / estimate ........ $${m['18_est_cost_usd_per_estimate'].toFixed(6)}`);
+  if (m['19_false_identification']) {
+    const fi = m['19_false_identification'];
+    p(` 19  False identification ........ ${pct(fi.rate)}   (${fi.count}/${fi.eligible}; at high conf ${fi.by_band.high.wrong}/${fi.by_band.high.n})`);
+  }
+  if (m['20_portion_error']) {
+    const pe = m['20_portion_error'];
+    p(` 20  Portion error (grams) ....... median ${pct(pe.median_abs_pct)} · mean ${pct(pe.mean_abs_pct)} · within 10% ${pct(pe.within_10pct_rate)} · within 25% ${pct(pe.within_25pct_rate)}   (n=${pe.n})`);
+  }
+  if (m['21_calibration_by_category']) {
+    p(' 21  Calibration (ECE) by category:');
+    for (const [cat, x] of Object.entries(m['21_calibration_by_category'])) {
+      p(`        ${cat.padEnd(22)} n=${String(x.n).padStart(3)}  ECE ${x.ece == null ? '—' : x.ece.toFixed(3)}  ${Object.entries(x.observed).map(([b, v]) => `${b} ${pct(v)}`).join(' · ')}`);
+    }
+  }
   p('');
   p(' ── PER-CATEGORY (all visible; weighted into overall) ─────────────────');
   p('   category                 n   score   identity  kcalMAPEmid  kcalInRng  unres   cWrong  fab');
