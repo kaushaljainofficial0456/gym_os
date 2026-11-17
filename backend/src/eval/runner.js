@@ -100,6 +100,19 @@ export function runBenchmark(dataset, adapter, opts = {}) {
       mape_mid_resolved_median: r3(median(pctResMid)),
       mape_mid_all_median: r3(median(pctAllMid)),
       mape_mid_all_mean: r3(mean(pctAllMid)),
+      // POINT error against the reference value (the band's midpoint), not
+      // the distance to the band's edge. `mae_resolved` above is 0 for any
+      // answer inside the band, so it is NOT an "average error"; these are.
+      point_error: (() => {
+        const abs = resolvedWith.map((g) => g.nutrition[key].err_abs_mid);
+        return {
+          mae: r1(mean(abs)),
+          median_abs: r1(median(abs)),
+          within_10pct: r3(rate(pctResMid.filter((x) => x <= 0.10).length, pctResMid.length)),
+          within_20pct: r3(rate(pctResMid.filter((x) => x <= 0.20).length, pctResMid.length)),
+          within_30pct: r3(rate(pctResMid.filter((x) => x <= 0.30).length, pctResMid.length)),
+        };
+      })(),
     };
   }
 
