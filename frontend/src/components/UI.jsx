@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCountUp } from '../utils.js';
 import { cls } from '../utils.js';
@@ -197,9 +197,30 @@ export function StatusChip({ status }) {
 
 /** A true segmented control (track + thumb), not free-floating pills —
  *  these are alternative views of one thing, not separate destinations. */
+/**
+ * A segmented control with Apple's sliding selection: one raised thumb
+ * that glides to the option you pick (measured from the option itself, so
+ * options of different widths work), instead of the highlight blinking
+ * from one to the next.
+ */
 export function Seg({ options, value, onChange }) {
+  const track = useRef(null);
+  const [thumb, setThumb] = useState(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = track.current?.querySelector('[aria-selected="true"]');
+      if (!el) { setThumb(null); return; }
+      setThumb({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    place();
+    if (typeof ResizeObserver === 'undefined' || !track.current) return undefined;
+    const ro = new ResizeObserver(place);
+    ro.observe(track.current);
+    return () => ro.disconnect();
+  }, [value, options.length]);
   return (
-    <div className="segmented" role="tablist">
+    <div className={`segmented${thumb ? ' has-thumb' : ''}`} role="tablist" ref={track}>
+      {thumb && <span className="segmented-thumb" aria-hidden="true" style={{ transform: `translateX(${thumb.left}px)`, width: thumb.width }} />}
       {options.map((o) => (
         <button key={o.value} role="tab" aria-selected={value === o.value}
           className="segmented-item" onClick={() => onChange(o.value)}>
@@ -653,26 +674,10 @@ export function Toast({ message, tone = 'success', onDone, duration = 2600 }) {
   }, [message, duration, onDone]);
 
   if (!message) return null;
-  const meta = {
-    success: ['rgb(var(--good-rgb))', 'M20 6 9 17l-5-5'],
-    error: ['rgb(var(--bad-rgb))', 'M18 6 6 18M6 6l12 12'],
-    info: ['var(--accent)', 'M12 16v-4M12 8h.01'],
-  }[tone] || ['rgb(var(--good-rgb))', 'M20 6 9 17l-5-5'];
-  return (
-    <div className="fixed bottom-5 left-1/2 z-[90] flex items-center gap-2.5 anim-toast"
-      style={{
-        transform: 'translateX(-50%)',
-        padding: '10px 16px', borderRadius: 'var(--r-pill)',
-        background: 'var(--panel)', color: 'var(--ink)',
-        border: '1px solid var(--line)', boxShadow: 'var(--e-3)',
-      }}
-      role="status" aria-live="polite">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={meta[0]} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-        <path d={meta[1]} />
-      </svg>
-      <span className="font-grotesk" style={{ fontSize: '.8125rem', fontWeight: 550 }}>{message}</span>
-    </div>
-  );
+  // One look for every toast in the app (theme.css .toast): a capsule at
+  // the top, its tone a small dot.
+  const cls = tone === 'error' ? 'toast-bad' : tone === 'info' ? '' : 'toast-good';
+  return <div className={`toast anim-toast ${cls}`} role="status" aria-live="polite">{message}</div>;
 }
 
 /**

@@ -695,7 +695,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 @keyframes softPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes checkPop { 0% { transform: scale(.6); } 55% { transform: scale(1.12); } 100% { transform: scale(1); } }
-@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px) scale(.98); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 @keyframes sheen { 0% { transform: translateX(-260%) skewX(-18deg); } 100% { transform: translateX(360%) skewX(-18deg); } }
 
 .anim-fadeUp { animation: fadeUp .3s cubic-bezier(.22,.8,.3,1) both; }
@@ -731,7 +730,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .sheet-scrim, .sheet-panel, .sheet-scrim.is-closing, .sheet-panel.is-closing { animation: none !important; }
 }
 .anim-pop { animation: checkPop .3s cubic-bezier(.22,.8,.3,1) both; }
-.anim-toast { animation: toastIn .28s cubic-bezier(.22,.8,.3,1) both; }
+/* A toast's whole life in one animation: drops in on a spring, holds,
+   lifts away. 2.35 s -- every toast is removed at 2.4-2.8 s, so it has
+   always finished leaving before it is gone. */
+@keyframes toastLife {
+  0% { opacity: 0; transform: translate(-50%, -18px) scale(.94); }
+  10% { opacity: 1; transform: translate(-50%, 2px) scale(1.01); }
+  16% { transform: translate(-50%, 0) scale(1); }
+  88% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(.96); }
+}
+.anim-toast { animation: toastLife 2.35s cubic-bezier(.2,.8,.3,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes toastFade { 0%, 100% { opacity: 0; } 8%, 90% { opacity: 1; } }
+  .anim-toast { animation: toastFade 2.35s linear both; }
+}
 .anim-pulse-soft { animation: softPulse 1.8s ease-in-out infinite; }
 
 /* ── Workout animation enhancements ── */
@@ -1211,6 +1224,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     scroll-snap-type: x proximity;
   }
   .segmented::-webkit-scrollbar { display: none; }
+  /* Seg's sliding thumb: one raised pill under the selected option. */
+  .segmented-thumb {
+    position: absolute; top: 4px; bottom: 4px; left: 0; z-index: 0;
+    border-radius: calc(var(--r-md) - 4px); background: var(--panel); box-shadow: var(--e-1);
+    transition: transform .42s cubic-bezier(.2,.9,.25,1), width .42s cubic-bezier(.2,.9,.25,1);
+  }
+  .segmented.has-thumb .segmented-item { z-index: 1; }
+  .segmented.has-thumb .segmented-item[aria-selected="true"] { background: transparent; box-shadow: none; }
   /* A sideways chip row (units on a plate item) that scrolls by touch
      without drawing a scrollbar under every row. */
   .no-scrollbar { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
@@ -1438,20 +1459,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
      ═══════════════════════════════════════════ */
   /* Above sheets and dialogs (z-60): a toast confirming something done
      inside a sheet ("Copied Push A") was drawn under it, unseen. */
+  /* NOW AT THE TOP, AS A FLOATING CAPSULE (iOS's own confirmations).
+     At the bottom it landed on whatever was there -- the Finish bar, the
+     tab bar, the card being edited -- and read as a smudge over the
+     content. Up here it covers only the header for two seconds, on a
+     frosted material, and never takes a tap (pointer-events: none). */
   .toast {
-    @apply fixed left-1/2 z-[70] font-grotesk max-w-[calc(100vw-32px)];
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    @apply fixed left-1/2 z-[70] font-grotesk;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
     transform: translateX(-50%);
-    padding: 10px 18px;
-    font-size: .8125rem; font-weight: 550;
+    display: flex; align-items: center; gap: 10px;
+    width: max-content; max-width: min(calc(100vw - 24px), 440px);
+    padding: 11px 18px 11px 15px;
+    font-size: .875rem; font-weight: 600; line-height: 1.35; letter-spacing: -.01em;
     color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r-pill);
-    box-shadow: var(--e-3);
+    background: color-mix(in srgb, var(--panel2) 84%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.6);
+    backdrop-filter: blur(22px) saturate(1.6);
+    border: 1px solid rgb(var(--tint-rgb) / .1);
+    border-radius: 22px;
+    box-shadow: 0 18px 40px -16px rgb(0 0 0 / .55), 0 2px 6px rgb(0 0 0 / .16);
+    pointer-events: none;
   }
-  .toast-good { border-color: rgb(var(--good-rgb) / .45); }
-  .toast-bad  { border-color: rgb(var(--bad-rgb) / .45); }
+  .toast::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .18); }
+  .toast-good::before { background: rgb(var(--good-rgb)); box-shadow: 0 0 0 4px rgb(var(--good-rgb) / .18); }
+  .toast-bad::before  { background: rgb(var(--bad-rgb)); box-shadow: 0 0 0 4px rgb(var(--bad-rgb) / .18); }
+}
+
+/* ── No zoom on tap ──
+   iOS Safari zooms the page in when a field under 16px is focused, and
+   leaves it zoomed: the screen then looks shifted sideways with both edges
+   cut off, which is what members kept reporting as a "broken layout". Any
+   field, on any touch screen, is at least 16px. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea, .input { font-size: max(16px, 1em) !important; }
 }
 
 /* ── Scrollbars ──

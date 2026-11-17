@@ -1,0 +1,73 @@
+/* ═══════════════════════════════════════════════════════════════
+   MEMBER APP: APPLE'S MOTION (2026-11-17).
+
+   Loaded with ClientLayout (a lazy chunk), never with the first page, so
+   the initial-CSS budget is untouched. It changes HOW things move, not
+   what they are: every existing animation in theme.css keeps its name and
+   its keyframes, and runs on a spring instead of a fixed curve --
+   the same spring as the owner workspace (workspace-premium.css), so the
+   two halves of the product move alike.
+
+   Apple's rules, as applied here (WWDC "Designing Fluid Interfaces"):
+     - springs, not durations; a quick start and a soft landing;
+     - sheets glide up with NO bounce (an overshoot would show the gap
+       under them); small things -- a tick, a pill -- may bounce a little;
+     - a press answers on the same frame (scale down) and springs back;
+     - nothing loops; Reduce Motion gets plain fades.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  /* bounce .15, ~0.6 s */
+  --app-spring: linear(0, 0.0336, 0.1145, 0.2197, 0.3336, 0.4457, 0.5498, 0.6423, 0.722, 0.7888, 0.8434, 0.887, 0.9211, 0.9471, 0.9666, 0.9808, 0.9908, 0.9975, 1.0019, 1.0045, 1.0058, 1.0063, 1.0062, 1.0057, 1.0051, 1.0044, 1.0037, 1.003, 1);
+  /* bounce 0, ~0.56 s: for sheets and anything that must not overshoot */
+  --app-glide: linear(0, 0.0327, 0.1092, 0.2062, 0.309, 0.409, 0.5015, 0.584, 0.656, 0.7177, 0.7698, 0.8133, 0.8493, 0.8788, 0.9029, 0.9225, 0.9383, 0.951, 0.9612, 0.9693, 0.9758, 0.9809, 0.985, 0.9882, 0.9908, 0.9928, 0.9944, 0.9956, 1);
+}
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root { --app-spring: cubic-bezier(.2, .9, .25, 1); --app-glide: cubic-bezier(.2, .9, .25, 1); }
+}
+
+/* ── arrivals: pages, cards, rows ── */
+.anim-route { animation: fadeUp .6s var(--app-spring) backwards; }
+.anim-fadeUp { animation: fadeUp .55s var(--app-spring) both; }
+.anim-slideUp { animation: slideUp .6s var(--app-spring) both; }
+.anim-scaleIn { animation: scaleIn .45s var(--app-spring) both; }
+.anim-pop, .anim-checkBounce, .anim-confirmPop { animation-timing-function: var(--app-spring); animation-duration: .45s; }
+
+/* ── sheets: up on a glide, away quickly ── */
+.sheet-panel { animation: sheetUp .52s var(--app-glide) both; }
+.sheet-panel.is-closing { animation: sheetDown .26s cubic-bezier(.4, 0, 1, 1) both; }
+@media (min-width: 640px) {
+  .sheet-panel { animation: scaleIn .42s var(--app-spring) both; }
+}
+.sheet-panel[data-dragged] { animation: none; }
+
+/* ── presses: answer at once, spring back ── */
+:is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .chip, .segmented-item, .wk-tool, .wk-iconbtn, .wk-check) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: .2s, .2s, .2s, .2s, .2s, .5s;
+  transition-timing-function: ease, ease, ease, ease, ease, var(--app-spring);
+}
+:is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .chip, .wk-tool, .wk-iconbtn):active:not(:disabled) {
+  transform: scale(.96);
+  transition-duration: .2s, .2s, .2s, .2s, .2s, .08s;
+}
+
+/* ── things you can tap lift a little under a mouse ── */
+@media (hover: hover) and (pointer: fine) {
+  :is(a.card, .card-hover) { transition: transform .5s var(--app-spring), box-shadow .3s ease, border-color .2s ease; }
+  :is(a.card, .card-hover):hover { transform: translateY(-2px); }
+}
+
+/* ── a set ticked: the button pops, the row settles ── */
+.wk-check[aria-pressed="true"] svg { animation: checkPop .45s var(--app-spring) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-route, .anim-fadeUp, .anim-slideUp, .anim-scaleIn { animation: fadeIn .2s ease both; }
+  .sheet-panel, .sheet-panel.is-closing { animation: none; }
+  :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .chip, .wk-tool, .wk-iconbtn):active:not(:disabled) { transform: none; }
+  :is(a.card, .card-hover):hover { transform: none; }
+  .wk-check[aria-pressed="true"] svg { animation: none; }
+}
+
+/* The member app's header reaches the screen edges (it sat 16px in, and
+   the page scrolled past visibly on both sides of it). */
+.client-header { margin-inline: -1rem; padding-inline: calc(1rem + .25rem); }

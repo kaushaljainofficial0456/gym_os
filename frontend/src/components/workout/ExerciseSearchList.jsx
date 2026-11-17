@@ -13,7 +13,7 @@
  * and the list underneath is that muscle's exercises (MusclePicker).
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, PersonStanding, Plus, Search } from 'lucide-react';
+import { Check, Info, PersonStanding, Plus, Search } from 'lucide-react';
 import { api } from '../../api.js';
 import { exerciseLabel } from '../../utils.js';
 
@@ -53,7 +53,14 @@ function ChipRow({ options, value, onChange, label }) {
   );
 }
 
-export default function ExerciseSearchList({ fallback, addedIds, onPick, onQuickAdd, placeholder = 'Search exercises — e.g. incline, DB curl' }) {
+/**
+ * MULTI-SELECT (`selected` + `onToggle`): a row tap selects or deselects,
+ * the circle on the left shows the order the exercises will be added in,
+ * and the "i" opens the detail (`onPick`). The session uses this, so a
+ * member can pick several exercises in one go instead of re-opening the
+ * search for each.
+ */
+export default function ExerciseSearchList({ fallback, addedIds, onPick, onQuickAdd, selected, onToggle, placeholder = 'Search exercises — e.g. incline, DB curl' }) {
   const [mode, setMode] = useState('search'); // search | body
   const [muscle, setMuscle] = useState(null);
   const [q, setQ] = useState('');
@@ -92,7 +99,7 @@ export default function ExerciseSearchList({ fallback, addedIds, onPick, onQuick
 
   const list = mode === 'body' ? byMuscle : (results ?? (fallback || []));
   return (
-    <div className="grid gap-2.5">
+    <div className="grid grid-cols-1 gap-2.5">
       <div className="wk-modes" role="tablist" aria-label="Find exercises">
         <button type="button" role="tab" aria-selected={mode === 'search'} onClick={() => setMode('search')}>
           <Search size={15} strokeWidth={2} aria-hidden="true" />Search
@@ -134,6 +141,31 @@ export default function ExerciseSearchList({ fallback, addedIds, onPick, onQuick
         {list.slice(0, 40).map((x) => {
           const added = addedIds?.has(x.id);
           const meta = `${pretty(x.primary_muscle)}${x.equipment ? ` · ${pretty(x.equipment)}` : ''}`;
+          if (onToggle) {
+            const order = selected ? selected.indexOf(x.id) : -1;
+            const on = order >= 0;
+            const name = exerciseLabel(x.name);
+            return (
+              <div key={x.id} className={`wk-pick__row wk-pick__row--sel${on ? ' is-selected' : ''}`} aria-disabled={added || undefined}>
+                <button type="button" className="wk-pick__main" aria-pressed={on} disabled={added}
+                  aria-label={added ? `${name}, already in your workout` : on ? `${name}, selected ${order + 1}. Tap to remove` : `Select ${name}`}
+                  onClick={() => onToggle(x)}>
+                  <span className="wk-pick__tick" aria-hidden="true">
+                    {added ? <Check size={14} strokeWidth={3} /> : on ? <b key={order}>{order + 1}</b> : null}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="wk-pick__name truncate">{name}</span>
+                    <span className="wk-pick__meta">{added ? 'In your workout' : meta}</span>
+                  </span>
+                </button>
+                {onPick && (
+                  <button type="button" className="wk-iconbtn wk-iconbtn--sm" aria-label={`About ${name}`} onClick={() => onPick(x)}>
+                    <Info size={16} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            );
+          }
           if (!onQuickAdd) {
             return (
               <button key={x.id} type="button" className="wk-pick__row" disabled={added} aria-disabled={added || undefined} onClick={() => onPick(x)}>
