@@ -242,6 +242,8 @@ export default function Workout() {
   const [addExOpen, setAddExOpen] = useState(false);
   const [addExSelected, setAddExSelected] = useState(null); // library exercise selected in detail view
   const [addExSaving, setAddExSaving] = useState(false);
+  // Several exercises picked in one go, in the order they will be added.
+  const [addExPicks, setAddExPicks] = useState([]);
   // Saved workouts -- reusable workouts and the days they repeat on (/me/planner).
   const [savedOpen, setSavedOpen] = useState(false);
   const [logPastOpen, setLogPastOpen] = useState(false);
@@ -746,41 +748,48 @@ export default function Workout() {
     }
   };
 
-  // ---- add exercise during active session ----
-  const addExerciseToSession = async (libEx) => {
-    if (!workout?.id || addExSaving) return;
+  // ---- add exercises during an active session (one or several) ----
+  const toggleAddPick = (x) => setAddExPicks((prev) => (prev.some((p) => p.id === x.id) ? prev.filter((p) => p.id !== x.id) : [...prev, x]));
+  const addExercisesToSession = async (list) => {
+    if (!workout?.id || addExSaving || !list.length) return;
     setAddExSaving(true);
-    try {
-      const res = await api(`/workouts/${workout.id}/exercises`, {
-        method: 'POST',
-        body: JSON.stringify({
-          exercise_id: libEx.id,
-          name: libEx.name,
-          sets: 3,
-          reps: '10',
-          weight: 'BW',
-        }),
+    const added = [];
+    let failed = null;
+    // One at a time, in the order picked: the server appends each to the
+    // end, so the session reads in the order the member chose.
+    for (const libEx of list) {
+      try {
+        const res = await api(`/workouts/${workout.id}/exercises`, {
+          method: 'POST',
+          body: JSON.stringify({ exercise_id: libEx.id, name: libEx.name, sets: 3, reps: '10', weight: 'BW' }),
+        });
+        added.push(res.exercise);
+      } catch (e) { failed = { name: libEx.name, message: e.message }; break; }
+    }
+    if (added.length) {
+      setExState((prev) => [...(prev || state), ...added]);
+      setExSets((prev) => {
+        const next = { ...prev };
+        for (const ex of added) {
+          next[ex.id] = Array.from({ length: Math.max(1, Number(ex.sets) || 3) }, () => ({
+            reps: parseFloat(ex.reps) || 0, weight: parseFloat(ex.weight) || 0, done: false,
+          }));
+        }
+        return next;
       });
-      const newEx = res.exercise;
-      // Add to state (exercises list)
-      setExState((prev) => [...(prev || state), newEx]);
-      // Seed sets in exSets
-      setExSets((prev) => ({
-        ...prev,
-        [newEx.id]: Array.from({ length: Math.max(1, Number(newEx.sets) || 3) }, () => ({
-          reps: parseFloat(newEx.reps) || 0,
-          weight: parseFloat(newEx.weight) || 0,
-          done: false,
-        })),
-      }));
-      // Open the new exercise so user can start editing immediately
-      setOpenEx(newEx.id);
-      // Close the picker
+      // Open the first new one, ready to go.
+      setOpenEx(added[0].id);
+    }
+    if (failed) {
+      setToast(added.length
+        ? `Added ${added.length} of ${list.length}. Couldn’t add ${exerciseLabel(failed.name)}`
+        : (failed.message || `Couldn’t add ${exerciseLabel(failed.name)}`));
+      setAddExPicks((prev) => prev.filter((p) => !added.some((a) => a.exercise_id === p.id)));
+    } else {
       setAddExOpen(false);
       setAddExSelected(null);
-      setToast(`${newEx.name} added`);
-    } catch (e) {
-      setToast(e.message || 'Could not add exercise');
+      setAddExPicks([]);
+      setToast(added.length === 1 ? `${exerciseLabel(added[0].name)} added` : `${added.length} exercises added`);
     }
     setAddExSaving(false);
   };
@@ -1178,9 +1187,10 @@ export default function Workout() {
   const openAddExercise = () => {
     if (!libList) api('/workouts/exercises').then((r) => setLibList(r.exercises || [])).catch(() => setToast('Could not load exercises'));
     setAddExSelected(null);
+    setAddExPicks([]);
     setAddExOpen(true);
   };
-  const closeAddExercise = () => { setAddExOpen(false); setAddExSelected(null); };
+  const closeAddExercise = () => { setAddExOpen(false); setAddExSelected(null); setAddExPicks([]); };
   const shareToday = () => { setShareSheetData({ workoutId: workout.id, workoutName: workout.name, exercises }); setShareSheetOpen(true); };
   const askRemoveExercise = async (ex) => {
     if (await confirm({ title: `Remove ${exerciseLabel(ex.name)}?`, body: 'Sets you have ticked for it are not logged.', confirmLabel: 'Remove' })) removeExercise(ex.id);
@@ -1371,16 +1381,24 @@ export default function Workout() {
         </div>
       </Sheet>
 
-      {/* ADD AN EXERCISE, mid-session */}
+      {/* ADD EXERCISES, mid-session: pick as many as you like, then add
+          them all at once. Tap again to deselect; the tray shows the
+          picks in order; "i" opens an exercise's detail. */}
       <Sheet open={addExOpen} onClose={closeAddExercise}
-        title={addExSelected ? exerciseLabel(addExSelected.name) : 'Add exercise'}
-        sub={addExSelected ? 'Added with 3 sets of 10 — change them as you go' : 'Search the exercise library'}
+        title={addExSelected ? exerciseLabel(addExSelected.name) : 'Add exercises'}
+        sub={addExSelected ? 'Added with 3 sets of 10 — change them as you go'
+          : addExPicks.length ? `${addExPicks.length} selected — tap one again to remove it` : 'Tap to select. Pick as many as you like.'}
         footer={addExSelected ? (
-          <button className="btn-primary btn-block" disabled={addExSaving} onClick={() => addExerciseToSession(addExSelected)}>
-            {addExSaving ? 'Adding…' : 'Add to session'}
+          <button className={addExPicks.some((p) => p.id === addExSelected.id) ? 'btn btn-block' : 'btn-primary btn-block'}
+            onClick={() => { toggleAddPick(addExSelected); setAddExSelected(null); }}>
+            {addExPicks.some((p) => p.id === addExSelected.id) ? 'Remove from selection' : 'Select'}
+          </button>
+        ) : addExPicks.length ? (
+          <button className="btn-primary btn-block" disabled={addExSaving} onClick={() => addExercisesToSession(addExPicks)}>
+            {addExSaving ? 'Adding…' : `Add ${addExPicks.length} ${addExPicks.length === 1 ? 'exercise' : 'exercises'}`}
           </button>
         ) : null}>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {addExSelected ? (
             <>
               <button onClick={() => setAddExSelected(null)} className="btn btn-sm justify-self-start">
@@ -1397,14 +1415,27 @@ export default function Workout() {
               )}
             </>
           ) : (
-            /* The builder's search: aliases ("DB curl"), muscle and
-               equipment chips, and "+" to add without opening the detail. */
-            <ExerciseSearchList
-              fallback={libList}
-              addedIds={new Set(state.map((e) => e.exercise_id).filter(Boolean))}
-              onPick={setAddExSelected}
-              onQuickAdd={(x) => { if (!addExSaving) addExerciseToSession(x); }}
-            />
+            <>
+              {addExPicks.length > 0 && (
+                <div className="wk-tray" aria-label="Selected exercises">
+                  {addExPicks.map((x, i) => (
+                    <button key={x.id} type="button" className="wk-tray__chip" onClick={() => toggleAddPick(x)}
+                      aria-label={`Remove ${exerciseLabel(x.name)} from the selection`}>
+                      <b>{i + 1}</b>{exerciseLabel(x.name)}<X size={14} strokeWidth={2.4} aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* The builder's search: aliases ("DB curl"), muscle and
+                  equipment chips, and the 3D body to find by muscle. */}
+              <ExerciseSearchList
+                fallback={libList}
+                addedIds={new Set(state.map((e) => e.exercise_id).filter(Boolean))}
+                selected={addExPicks.map((x) => x.id)}
+                onToggle={toggleAddPick}
+                onPick={setAddExSelected}
+              />
+            </>
           )}
         </div>
       </Sheet>

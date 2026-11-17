@@ -254,7 +254,10 @@ export default function WorkoutBuilder({
     <Sheet open={open} onClose={onClose} title={title} sub={sub} footer={footer}>
       {step === 'what' ? (
         picking ? (
-          <div className="grid gap-3">
+          /* grid-cols-1 = one column of minmax(0, 1fr): a long row (the
+             added-exercises summary, the muscle chips) truncates or
+             scrolls inside itself instead of widening the whole sheet. */
+          <div className="grid grid-cols-1 gap-3">
             {exs.length > 0 && (
               <button type="button" className="wk-added" onClick={() => { setDetail(null); setPicking(false); }}>
                 <span className="wk-added__n">{exs.length}</span>
@@ -265,7 +268,7 @@ export default function WorkoutBuilder({
             {picker}
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="wk-label">Your workout · {exs.length}</span>
               <span className="text-[12px]" style={{ color: 'var(--faint)' }}>{totalSets} sets{supersets ? ` · ${supersets} superset${supersets > 1 ? 's' : ''}` : ''}</span>

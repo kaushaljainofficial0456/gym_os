@@ -207,10 +207,14 @@
 
 /* ── session ───────────────────────────────────────────────────────── */
 .wk-session { display: grid; gap: 12px; padding-bottom: 120px; }
+.wk-player-sentinel { height: 0; margin-bottom: -12px; } /* cancels the grid gap it would add */
 .wk-player {
   position: sticky;
-  top: 8px;
+  /* Under the app header, never beneath it (--app-top is the header's
+     height, kept current by ClientLayout). */
+  top: var(--app-top, 64px);
   z-index: 20;
+  transition: padding .4s cubic-bezier(.2, .9, .25, 1), margin .4s cubic-bezier(.2, .9, .25, 1), box-shadow .3s ease, border-radius .4s ease;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -233,7 +237,25 @@
   font-variant-numeric: tabular-nums;
 }
 .wk-clock--md { font-size: 30px; margin-top: 4px; }
-.wk-player__ring { position: relative; display: grid; place-items: center; }
+.wk-player__ring { position: relative; display: grid; place-items: center; transition: transform .4s cubic-bezier(.2, .9, .25, 1), margin .4s cubic-bezier(.2, .9, .25, 1); }
+.wk-clock, .wk-player__label { transition: font-size .4s cubic-bezier(.2, .9, .25, 1), opacity .25s ease; }
+.wk-player .wk-iconbtn--lg { transition: transform .4s cubic-bezier(.2, .9, .25, 1); }
+/* Stuck under the header: a slim bar. */
+.wk-player.is-stuck {
+  /* Docked: full width, straight under the header, like an iOS toolbar --
+     nothing scrolls past above it or beside it. (-1rem undoes the page's
+     side padding; the header does the same.) */
+  margin-inline: -1rem; padding: 8px calc(1rem + 2px) 8px calc(1rem + 4px);
+  border-radius: 0 0 22px 22px; border-top-color: transparent;
+  box-shadow: 0 16px 30px -18px rgb(0 0 0 / .65);
+}
+.wk-player.is-stuck .wk-clock { font-size: 26px; }
+.wk-player.is-stuck .wk-player__label { font-size: 11px; }
+.wk-player.is-stuck .wk-player__ring { transform: scale(.68); margin: -10px -6px; }
+.wk-player.is-stuck .wk-iconbtn--lg { transform: scale(.84); }
+@media (prefers-reduced-motion: reduce) {
+  .wk-player, .wk-player__ring, .wk-clock, .wk-player__label, .wk-player .wk-iconbtn--lg { transition: none; }
+}
 .wk-player__count { position: absolute; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
 .wk-player__count b { font-size: 15px; color: var(--ink); }
 
@@ -301,37 +323,61 @@
 .wk-exlist.is-sorting .wk-bex { transition: transform .2s cubic-bezier(.2, .8, .3, 1); }
 .wk-exlist .is-dragging { transition: box-shadow .15s ease !important; box-shadow: 0 22px 44px -18px rgba(0, 0, 0, .5); border-color: rgb(var(--accent-rgb) / .55); }
 
-/* Superset: a rail down the left of every card in it, and the link
-   between two cards turning solid. */
-.wk-exc.is-ss, .wk-bex.is-ss { box-shadow: inset 3px 0 0 var(--accent); }
-.wk-exc.is-ss.is-open { box-shadow: inset 3px 0 0 var(--accent), var(--card-shadow); }
-.wk-exc.is-ss.is-done { box-shadow: inset 3px 0 0 var(--good); }
-.wk-link { position: relative; display: flex; align-items: center; justify-content: center; height: 38px; }
-.wk-link::before {
-  content: '';
-  position: absolute;
-  top: 0; bottom: 0; left: 50%;
-  border-left: 1.5px dashed var(--line);
-}
-.wk-link.is-on::before { border-left: 2px solid var(--accent); }
+/* Superset: the cards in it carry a quiet accent edge, and the pair is
+   joined by a line that curves INTO the pill from the card above and OUT
+   of it to the card below (see SupersetLink). The old straight rule ran
+   through the pill's label. */
+.wk-exc.is-ss, .wk-bex.is-ss { border-color: rgb(var(--accent-rgb) / .32); }
+.wk-exc.is-ss.is-done { border-color: rgb(var(--good-rgb) / .35); }
+.wk-link { position: relative; display: flex; align-items: center; justify-content: center; height: 46px; }
+.wk-link__pill { position: relative; display: inline-flex; }
 .wk-link__btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   min-height: 30px;
-  padding: 0 11px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px dashed var(--line);
   background: var(--bg);
   font-size: 11.5px;
   font-weight: 650;
   color: var(--faint);
-  transition: color var(--dur-base) ease, border-color var(--dur-base) ease, background-color var(--dur-base) ease;
+  transition: color var(--dur-base) ease, border-color var(--dur-base) ease, background-color var(--dur-base) ease, transform .35s cubic-bezier(.34, 1.4, .64, 1);
 }
 .wk-link__btn:hover { color: var(--ink); border-color: rgb(var(--accent-rgb) / .45); }
+.wk-link__btn:active { transform: scale(.95); }
 .wk-link__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .wk-link.is-on .wk-link__btn { color: var(--accent); border: 1px solid rgb(var(--accent-rgb) / .45); background: var(--accent-soft); }
+/* The two curves. The pill is 30px tall in a 46px row, so 8px of line
+   above and below it; each arc is a quarter-round corner of a box drawn
+   with two borders. */
+.wk-link__arc {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 0 solid var(--accent);
+  pointer-events: none;
+}
+.wk-link__arc--in {
+  left: 100%;
+  top: -8px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+  border-bottom-right-radius: 18px;
+  animation: wkArcIn .45s cubic-bezier(.2, .9, .25, 1) both;
+}
+.wk-link__arc--out {
+  right: 100%;
+  top: 14px;
+  border-left-width: 2px;
+  border-top-width: 2px;
+  border-top-left-radius: 18px;
+  animation: wkArcOut .45s cubic-bezier(.2, .9, .25, 1) .16s both;
+}
+@keyframes wkArcIn { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+@keyframes wkArcOut { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
 
 .wk-sets { display: grid; gap: 4px; padding: 0 12px 12px; }
 .wk-hint {
@@ -529,6 +575,11 @@
   font-weight: 800;
 }
 .wk-added__go { flex: none; font-size: 12.5px; font-weight: 700; color: var(--accent); }
+/* A grid or flex item's automatic minimum width is its content's: with
+   four exercise names on one line, this row stretched the whole builder
+   sheet sideways (tabs, 3D body and list cut off at the right). These
+   rows may only ever be as wide as the sheet. */
+.wk-added, .wk-tray, .wk-fchips { min-width: 0; max-width: 100%; }
 
 /* One exercise in the builder: remove, name + three fields, handle. */
 .wk-bex {
@@ -624,6 +675,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .wk-ring__fill, .wk-check, .wk-tool, .wk-iconbtn, .wk-exc__chev, .wk-link__btn { transition: none; }
+  .wk-link__arc { animation: none; }
   .wk-exlist.is-sorting .wk-exc, .wk-exlist.is-sorting .wk-bex { transition: none; }
   .wk-check[aria-pressed="true"] { animation: none; }
 }
@@ -650,3 +702,42 @@
 .wk-body3d.is-ready .wk-body3d__canvas { opacity: 1; }
 @media (max-width: 340px) { .wk-body3d { width: 108px; height: 140px; } }
 @media (prefers-reduced-motion: reduce) { .wk-body3d__flat, .wk-body3d__canvas { transition: none; } }
+
+/* Multi-select rows: a round tick on the left that fills with the order
+   the exercise will be added in, and pops when it does. */
+.wk-pick__row--sel { padding: 0; gap: 0; }
+.wk-pick__main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 10px 6px 10px 12px; text-align: left; border-radius: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.wk-pick__row--sel > .wk-iconbtn { margin-right: 8px; flex: none; }
+.wk-pick__tick {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 2px solid rgb(var(--tint-rgb) / .28);
+  font-size: 12.5px; color: var(--accent-contrast);
+  transition: background-color .2s ease, border-color .2s ease, transform .35s cubic-bezier(.34, 1.56, .64, 1);
+}
+.wk-pick__tick b { animation: wkTick .35s cubic-bezier(.34, 1.56, .64, 1) both; }
+.wk-pick__row--sel.is-selected { border-color: rgb(var(--accent-rgb) / .55); background: var(--accent-soft); }
+.wk-pick__row--sel.is-selected .wk-pick__tick { background: var(--accent); border-color: var(--accent); transform: scale(1.04); }
+.wk-pick__row--sel[aria-disabled="true"] .wk-pick__tick { background: rgb(var(--good-rgb) / .16); border-color: transparent; color: var(--good); }
+.wk-pick__main:active .wk-pick__tick { transform: scale(.88); }
+@keyframes wkTick { from { transform: scale(.4); opacity: 0; } }
+
+/* The picked exercises, above the search: tap one to drop it. */
+.wk-tray { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; margin: 0 -2px; scrollbar-width: none; }
+.wk-tray::-webkit-scrollbar { display: none; }
+.wk-tray__chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 34px; padding: 0 8px 0 12px; border-radius: 999px;
+  background: var(--accent-soft); border: 1px solid rgb(var(--accent-rgb) / .4);
+  font-size: 13px; font-weight: 650; color: var(--ink); white-space: nowrap;
+  animation: wkTick .3s cubic-bezier(.34, 1.4, .64, 1) both;
+}
+.wk-tray__chip b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.wk-tray__chip svg { color: var(--mute); }
+@media (prefers-reduced-motion: reduce) {
+  .wk-pick__tick, .wk-pick__tick b, .wk-tray__chip { transition: none; animation: none; }
+}

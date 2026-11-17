@@ -20,6 +20,7 @@ import { Avatar } from '../../components/UI.jsx';
 import NotificationBell from '../../components/NotificationBell.jsx';
 import NotificationPermissionPrompt from '../../components/NotificationPermissionPrompt.jsx';
 import { useUnits } from '../../unitsContext.jsx';
+import './client-premium.css';
 
 // The Barbell plan screen, also shown in place of any page once an
 // independent client's free trial is over (see below). Lazy, so gym members
@@ -92,6 +93,18 @@ const PROFILE_MENU = [
 export default function ClientLayout() {
   const { user, logout, isIndependent } = useAuth();
   const { brand } = useBrand();
+  /* The header's real height (it grows with the phone's safe area), for
+     anything that sticks under it -- the workout clock. */
+  const headerRef = useRef(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const set = () => document.documentElement.style.setProperty('--app-top', `${Math.round(el.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty('--app-top'); };
+  }, []);
   const units = useUnits();
   const loc = useLocation();
   const nav = useNavigate();
@@ -240,7 +253,7 @@ export default function ClientLayout() {
   return (
     <div className={`min-h-screen mx-auto px-4 pb-28 pt-0 ${wide ? 'max-w-lg xl:max-w-6xl' : 'max-w-lg'}`}>
       {/* ── TOP HEADER ── */}
-      <header className="app-header px-1">
+      <header className="app-header client-header px-1" ref={headerRef}>
         <div className="flex items-center justify-between gap-2">
           {/* LEFT: Profile button */}
           <div className="relative" ref={dropdownRef}>

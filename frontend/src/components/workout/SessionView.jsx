@@ -15,7 +15,7 @@
  *
  * Presentation only -- every change goes back through Workout.jsx.
  */
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Link2, Menu, Minus, Pause, Play, Plus, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { exerciseLabel } from '../../utils.js';
 import WeightInput from '../WeightInput.jsx';
@@ -63,8 +63,26 @@ export function PlayerHeader({ name, startedAt, pausedAt, pausedMs, paused, done
     const h = setInterval(tick, 1000);
     return () => clearInterval(h);
   }, [startedAt, pausedAt, pausedMs]);
+  /* STUCK = COMPACT. The card sticks just under the app header (it used to
+     stick 8px from the top, UNDER the header, and was cut in half once the
+     page scrolled), and while stuck it folds into a slim bar: the clock
+     smaller, the ring and button tucked in -- the way an iOS large title
+     becomes the navigation bar. A sentinel above it says when. */
+  const sentinel = useRef(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-top')) || 64;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < top + 20),
+      { rootMargin: `-${Math.round(top + 1)}px 0px 0px 0px` });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   return (
-    <section className={`wk-player${paused ? ' is-paused' : ''}`} aria-label="Session">
+    <>
+    <div ref={sentinel} className="wk-player-sentinel" aria-hidden="true" />
+    <section className={`wk-player${paused ? ' is-paused' : ''}${stuck ? ' is-stuck' : ''}`} aria-label="Session">
       <div className="wk-player__main">
         <div className="wk-player__label">{paused ? 'Paused' : name || 'Session'}</div>
         <div className="wk-clock" role="timer" aria-live="off">{clock(elapsed)}</div>
@@ -80,6 +98,7 @@ export function PlayerHeader({ name, startedAt, pausedAt, pausedMs, paused, done
           : <Pause size={18} strokeWidth={2.2} fill="currentColor" aria-hidden="true" />}
       </button>
     </section>
+    </>
   );
 }
 
@@ -218,17 +237,29 @@ export function ExerciseCard({
   );
 }
 
-/** Between two cards: tap to do them as a superset, tap again to undo. */
+/**
+ * Between two cards: tap to do them as a superset, tap again to undo.
+ *
+ * Linked, the pair is joined by one line that runs THROUGH the pill: it
+ * drops from the exercise above and curves into the pill's right end, and
+ * leaves from its left end, curving down into the exercise below -- so it
+ * reads as "this, then that" instead of a rule struck through the label.
+ * The curves draw themselves in when the link is made.
+ */
 export function SupersetLink({ linked, onToggle, a, b, hidden }) {
   return (
     <div className={`wk-link${linked ? ' is-on' : ''}`} style={hidden ? { visibility: 'hidden' } : undefined}>
-      <button type="button" className="wk-link__btn" aria-pressed={linked} onClick={onToggle}
-        aria-label={linked ? `${a} and ${b} are a superset. Tap to separate them.` : `Make ${a} and ${b} a superset`}
-        title={linked ? 'Tap to separate' : 'Do these back to back, then rest'}>
-        <Link2 size={13} strokeWidth={2.2} aria-hidden="true" />
-        Superset
-        {linked && <X size={12} strokeWidth={2.6} aria-hidden="true" />}
-      </button>
+      <span className="wk-link__pill">
+        {linked && <span className="wk-link__arc wk-link__arc--in" aria-hidden="true" />}
+        <button type="button" className="wk-link__btn" aria-pressed={linked} onClick={onToggle}
+          aria-label={linked ? `${a} and ${b} are a superset. Tap to separate them.` : `Make ${a} and ${b} a superset`}
+          title={linked ? 'Tap to separate' : 'Do these back to back, then rest'}>
+          <Link2 size={13} strokeWidth={2.2} aria-hidden="true" />
+          Superset
+          {linked && <X size={12} strokeWidth={2.6} aria-hidden="true" />}
+        </button>
+        {linked && <span className="wk-link__arc wk-link__arc--out" aria-hidden="true" />}
+      </span>
     </div>
   );
 }
