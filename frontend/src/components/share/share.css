@@ -172,3 +172,16 @@
 .sh-done__icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: rgb(var(--good-rgb) / .14); color: var(--good); }
 .sh-done__title { font-size: 17px; font-weight: 750; color: var(--ink); }
 .sh-done__body { max-width: 300px; margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--mute); }
+
+/* ONE COLUMN THAT FITS THE SCREEN, NEVER ITS CONTENT. A grid with no
+   column template gets one `auto` column, which grows to the widest
+   child's minimum width -- on iPhone Safari the three workout tool tiles
+   added up wider than the screen, every card on the page stretched with
+   them and was cut off on the right. minmax(0, 1fr) cannot grow past its
+   container; a too-wide child now wraps, truncates or scrolls inside
+   itself instead. */
+.sh-people,
+.sh-ways,
+.sh-pick,
+.sh-actions,
+.sh-done { grid-template-columns: minmax(0, 1fr); }

@@ -741,3 +741,30 @@
 @media (prefers-reduced-motion: reduce) {
   .wk-pick__tick, .wk-pick__tick b, .wk-tray__chip { transition: none; animation: none; }
 }
+
+/* ONE COLUMN THAT FITS THE SCREEN, NEVER ITS CONTENT. A grid with no
+   column template gets one `auto` column, which grows to the widest
+   child's minimum width -- on iPhone Safari the three workout tool tiles
+   added up wider than the screen, every card on the page stretched with
+   them and was cut off on the right. minmax(0, 1fr) cannot grow past its
+   container; a too-wide child now wraps, truncates or scrolls inside
+   itself instead. */
+.wk,
+.wk-stats,
+.wk-day,
+.wk-tool,
+.wk-ex__info,
+.wk-session,
+.wk-exlist,
+.wk-sets,
+.wk-cardio,
+.wk-cardio__burn,
+.wk-segments,
+.wk-cardio-list,
+.wk-params,
+.wk-pick,
+.wk-bex__body,
+.wk-bex__f,
+.wk-saved,
+.wk-saved__days,
+.wk-empty { grid-template-columns: minmax(0, 1fr); }

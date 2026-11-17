@@ -48,3 +48,12 @@
   .cpn-chip { padding-right: 12px; padding-bottom: 40px; }
   .cpn-remove { top: auto; bottom: 8px; right: 8px; }
 }
+
+/* ONE COLUMN THAT FITS THE SCREEN, NEVER ITS CONTENT. A grid with no
+   column template gets one `auto` column, which grows to the widest
+   child's minimum width -- on iPhone Safari the three workout tool tiles
+   added up wider than the screen, every card on the page stretched with
+   them and was cut off on the right. minmax(0, 1fr) cannot grow past its
+   container; a too-wide child now wraps, truncates or scrolls inside
+   itself instead. */
+.cpn-applied { grid-template-columns: minmax(0, 1fr); }

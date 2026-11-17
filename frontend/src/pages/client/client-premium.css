@@ -71,3 +71,26 @@
 /* The member app's header reaches the screen edges (it sat 16px in, and
    the page scrolled past visibly on both sides of it). */
 .client-header { margin-inline: -1rem; padding-inline: calc(1rem + .25rem); }
+
+/* THE SAME RULE FOR EVERY UTILITY GRID IN THE MEMBER APP. A Tailwind
+   `grid` with no `grid-cols-*` has one `auto` column that grows to its
+   widest child's minimum width, so one wide row (a long name, three tiles,
+   a chip strip) could make every card on a page wider than the screen --
+   the "page shifted right, edge cut off" members kept seeing on iPhones.
+   minmax(0, 1fr) is the screen's width and never more. :where() keeps
+   this at zero specificity, so any explicit column template still wins. */
+:where(.anim-route, .sheet-panel) :where(.grid:not([class*="grid-cols-"]):not([class*="grid-flow-col"]):not([class*="auto-cols"])) {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* And no page can be wider than the column it sits in. */
+.anim-route { min-width: 0; max-width: 100%; }
+
+/* THE LAST LINE OF DEFENCE. Whatever a page holds, nothing reaches past
+   the screen's edge or makes the page wider than the screen: overflow is
+   clipped here, at the app's own frame. `clip`, not `hidden` -- hidden
+   would make this a scroll container and break every sticky thing inside
+   it (the header, the docked workout clock). Full-bleed pieces (the
+   header, the docked clock) sit inside the frame's padding, so they are
+   not cut. A window-level overflow rule is not enough on iPhone: Safari
+   still widens the page for an overflowing child. */
+.client-shell { overflow-x: clip; }

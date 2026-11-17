@@ -251,7 +251,7 @@ export default function ClientLayout() {
   const wide = WIDE_ROUTES.some((r) => loc.pathname.startsWith(r));
 
   return (
-    <div className={`min-h-screen mx-auto px-4 pb-28 pt-0 ${wide ? 'max-w-lg xl:max-w-6xl' : 'max-w-lg'}`}>
+    <div className={`client-shell min-h-screen mx-auto px-4 pb-28 pt-0 ${wide ? 'max-w-lg xl:max-w-6xl' : 'max-w-lg'}`}>
       {/* ── TOP HEADER ── */}
       <header className="app-header client-header px-1" ref={headerRef}>
         <div className="flex items-center justify-between gap-2">
